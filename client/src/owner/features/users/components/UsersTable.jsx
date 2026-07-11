@@ -1,5 +1,12 @@
 // Icons
-import { KeyRound, Archive, RotateCcw, ChevronUp, ChevronDown } from "lucide-react";
+import {
+  KeyRound,
+  Archive,
+  RotateCcw,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react";
 
 // Router
 import { Link, useNavigate } from "react-router-dom";
@@ -275,6 +282,19 @@ const UsersTable = ({
                         </Button>
                       </>
                     )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                      onClick={() =>
+                        openModal(MODAL.USER_PERMANENT_DELETE, { user: u })
+                      }
+                      aria-label="Butunlay o'chirish"
+                      title="Butunlay o'chirish"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
                 </td>
               </tr>

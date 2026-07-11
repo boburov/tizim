@@ -1,6 +1,7 @@
 import User from "../../../models/user.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import TeacherGroupPeriod from "../../../models/teacherGroupPeriod.model.js";
+import TeacherSalary from "../../../models/teacherSalary.model.js";
 import Group from "../../../models/group.model.js";
 import ArchiveReason from "../../../models/archiveReason.model.js";
 import RefreshToken from "../../../models/refreshToken.model.js";
@@ -423,9 +424,38 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
   const isStudent = user.role === ROLES.STUDENT;
   const isTeacher = user.role === ROLES.TEACHER;
 
-  // O'qituvchining faol guruhi bo'lsa BUTUNLAY O'CHIRIB ham bo'lmaydi - avval uni
-  // boshqa o'qituvchiga almashtirish yoki guruhdan chiqarish kerak (arxivlash bilan bir xil qoida).
-  await assertTeacherHasNoActiveGroup(user, "o'chiring");
+  // O'qituvchini o'chirish sharti: (1) faol guruhi bo'lmasin, (2) to'lanmagan
+  // (olmagan) oyliklari bo'lmasin.
+  if (isTeacher) {
+    await assertTeacherHasNoActiveGroup(user, "o'chiring");
+    const owed = await TeacherSalary.exists({
+      teacher: user._id,
+      isDeleted: { $ne: true },
+      $expr: { $lt: ["$paidAmount", "$expectedAmount"] },
+    });
+    if (owed) {
+      throw new ApiError(
+        400,
+        "O'qituvchining to'lanmagan (olmagan) oyliklari bor. Avval maoshlarni to'liq to'lang, so'ng o'chiring.",
+      );
+    }
+  }
+
+  // O'quvchini o'chirish sharti: hech qanday guruhga biriktirilmagan bo'lsin (faol
+  // a'zolik bo'lmasin). Guruhda bo'lsa - avval guruhdan chiqarish kerak.
+  if (isStudent) {
+    const inGroup = await GroupMembership.exists({
+      student: user._id,
+      leftAt: null,
+      isDeleted: { $ne: true },
+    });
+    if (inGroup) {
+      throw new ApiError(
+        400,
+        "O'quvchi guruhga biriktirilgan. Avval uni guruh(lar)dan chiqaring, so'ng o'chiring.",
+      );
+    }
+  }
 
   if (isStudent || isTeacher) {
     const fullName = `${user.firstName} ${user.lastName}`.trim();

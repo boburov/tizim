@@ -7,6 +7,7 @@ import UserStatusFilter from "../components/UserStatusFilter";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import UserCreateModal from "../components/UserCreateModal";
 import UserDeleteModal from "../components/UserDeleteModal";
+import UserPermanentDeleteModal from "../components/UserPermanentDeleteModal";
 import UserRestoreModal from "../components/UserRestoreModal";
 import UserEditModal from "../components/UserEditModal";
 import UserPasswordModal from "../components/UserPasswordModal";
@@ -59,6 +60,9 @@ const UsersListPage = () => {
       </ModalWrapper>
       <ModalWrapper name={MODAL.USER_DELETE} title="Foydalanuvchini arxivlash">
         <UserDeleteModal />
+      </ModalWrapper>
+      <ModalWrapper name={MODAL.USER_PERMANENT_DELETE} title="Butunlay o'chirish">
+        <UserPermanentDeleteModal />
       </ModalWrapper>
       <ModalWrapper name={MODAL.USER_RESTORE} title="Foydalanuvchini tiklash">
         <UserRestoreModal />
