@@ -8,9 +8,9 @@ import useUsersListQuery from "../hooks/useUsersListQuery";
 
 const LIMIT = 20;
 
-// role - route element orqali (teacher/student); archived - layout (Outlet context).
+// role - route element orqali (teacher/student/null=hammasi); status - layout (Outlet context).
 const UsersTab = ({ role }) => {
-  const { archived = false } = useOutletContext() || {};
+  const { status = "active" } = useOutletContext() || {};
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("createdAt");
@@ -18,9 +18,9 @@ const UsersTab = ({ role }) => {
   const debouncedSearch = useDebounce(search);
 
   const { data, isLoading } = useUsersListQuery({
-    role,
+    role: role || undefined,
     search: debouncedSearch || undefined,
-    archived: archived ? "1" : undefined,
+    status,
     sort,
     order,
     page,
@@ -63,7 +63,7 @@ const UsersTab = ({ role }) => {
         <>
           <UsersTable
             users={users}
-            archived={archived}
+            status={status}
             role={role}
             sort={sort}
             order={order}

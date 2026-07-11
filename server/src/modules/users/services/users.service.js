@@ -101,14 +101,19 @@ const enrichStudents = async (items) => {
 export const list = async ({
   role,
   search,
-  archived = false,
+  status = "active",
   page = 1,
   limit = 20,
   sort = "createdAt",
   order = "desc",
 }) => {
-  const filter = { isActive: archived ? false : true, isDeleted: { $ne: true } };
-  if (role) filter.role = role;
+  // status: "active" → faqat faol, "archived" → faqat arxiv, "all" → hammasi.
+  const filter = { isDeleted: { $ne: true } };
+  if (status === "active") filter.isActive = true;
+  else if (status === "archived") filter.isActive = false;
+  // Rol berilsa - o'sha rol; berilmasa ("Hammasi") - faqat o'quvchi/o'qituvchi
+  // (owner Foydalanuvchilar ro'yxatida ko'rsatilmaydi).
+  filter.role = role || { $in: [ROLES.STUDENT, ROLES.TEACHER] };
 
   if (search && search.trim()) {
     const rx = new RegExp(escapeRegex(search.trim()), "i");

@@ -4,10 +4,16 @@ import { parsePagination, buildMeta } from "../../../utils/pagination.js";
 
 const list = asyncHandler(async (req, res) => {
   const { page, limit } = parsePagination(req.query);
+  // Holat: yangi `status` (active|archived|all) ustun; eski `archived` bilan ham mos.
+  const status =
+    req.query.status ||
+    (req.query.archived === "1" || req.query.archived === "true"
+      ? "archived"
+      : "active");
   const { items, total } = await usersService.list({
     role: req.query.role,
     search: req.query.search,
-    archived: req.query.archived === "1" || req.query.archived === "true",
+    status,
     sort: req.query.sort,
     order: req.query.order,
     page,

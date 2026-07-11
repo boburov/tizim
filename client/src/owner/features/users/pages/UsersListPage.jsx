@@ -3,7 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { Plus } from "lucide-react";
 import Button from "@/shared/components/ui/button/Button";
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
-import ArchiveToggle from "@/shared/components/ui/archive/ArchiveToggle";
+import UserStatusFilter from "../components/UserStatusFilter";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import UserCreateModal from "../components/UserCreateModal";
 import UserDeleteModal from "../components/UserDeleteModal";
@@ -20,13 +20,19 @@ const BASE = "/owner/users";
 // shu yerda - Outlet context orqali tab panellariga uzatiladi.
 const UsersListPage = () => {
   const { pathname } = useLocation();
-  const [archived, setArchived] = useState(false);
+  const [status, setStatus] = useState("active");
   const { openModal } = useModal();
 
-  const currentRole = pathname.endsWith("/teachers") ? ROLES.TEACHER : ROLES.STUDENT;
+  // Joriy rol (yaratish tugmasi uchun): teachers/students, "Hammasi"da - o'quvchi.
+  const currentRole = pathname.endsWith("/teachers")
+    ? ROLES.TEACHER
+    : pathname.endsWith("/students")
+      ? ROLES.STUDENT
+      : ROLES.STUDENT;
 
   const items = [
-    { to: BASE, label: "O'quvchilar", exact: true },
+    { to: BASE, label: "Hammasi", exact: true },
+    { to: `${BASE}/students`, label: "O'quvchilar" },
     { to: `${BASE}/teachers`, label: "O'qituvchilar" },
   ];
 
@@ -34,7 +40,7 @@ const UsersListPage = () => {
     <div className="space-y-4">
       <header className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Foydalanuvchilar</h1>
-        {!archived && (
+        {status !== "archived" && (
           <Button onClick={() => openModal(MODAL.USER_CREATE, { defaultRole: currentRole })}>
             <Plus className="size-4" />
             Yangi foydalanuvchi
@@ -44,9 +50,9 @@ const UsersListPage = () => {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <TabsLinks items={items} />
-        <ArchiveToggle value={archived} onChange={setArchived} />
+        <UserStatusFilter value={status} onChange={setStatus} />
       </div>
-      <Outlet context={{ archived }} />
+      <Outlet context={{ status }} />
 
       <ModalWrapper name={MODAL.USER_CREATE} title="Yangi foydalanuvchi">
         <UserCreateModal />
