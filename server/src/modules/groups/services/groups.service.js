@@ -586,6 +586,19 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
   const group = await Group.findById(id);
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
+  // Faqat YAKUNLANGAN (tugagan) kursni o'chirish mumkin. Aktiv guruh (o'quvchilari
+  // bo'lishi mumkin) to'g'ridan-to'g'ri o'chirilmaydi - avval kursni yakunlab
+  // (tugash sanasini belgilab) keyin o'chiriladi.
+  const ended =
+    group.endDate &&
+    toUtcMidnight(group.endDate).getTime() <= localTodayMidnight().getTime();
+  if (group.isActive && !ended) {
+    throw new ApiError(
+      400,
+      "Avval kursni yakunlang (tugash sanasini belgilang), so'ngra guruhni o'chiring",
+    );
+  }
+
   const name = (group.name || "").trim();
   if (!confirmName || confirmName.trim() !== name) {
     throw new ApiError(400, "Tasdiqlash uchun guruh nomini to'g'ri kiriting");
