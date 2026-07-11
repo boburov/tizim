@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import Button from "@/shared/components/ui/button/Button";
-import TeacherSinglePicker from "../TeacherSinglePicker";
+import SelectField from "@/shared/components/ui/select/SelectField";
 import useGroupUpdateMutation from "../../hooks/useGroupUpdateMutation";
+import useAvailableTeachersQuery from "../../hooks/useAvailableTeachersQuery";
 
 // Guruhga o'qituvchi biriktirish / almashtirish.
 // - Guruhda o'qituvchi bo'lmasa: "Biriktirish".
@@ -19,6 +20,20 @@ const GroupAssignTeacherModal = ({ group, close, isLoading, setIsLoading }) => {
   const isReplace = Boolean(currentId);
 
   const [teacher, setTeacher] = useState("");
+
+  // Faqat guruh jadvalidagi vaqtlarda BO'SH o'qituvchilar (band bo'lganlar chiqmaydi).
+  const { data: available, isLoading: loadingTeachers } =
+    useAvailableTeachersQuery(group?._id);
+  const teacherOptions = useMemo(
+    () =>
+      (available || [])
+        .filter((t) => t._id !== currentId)
+        .map((t) => ({
+          value: t._id,
+          label: `${t.firstName} ${t.lastName || ""}`.trim(),
+        })),
+    [available, currentId],
+  );
 
   const { mutate } = useGroupUpdateMutation({
     onSuccess: () => {
@@ -52,15 +67,24 @@ const GroupAssignTeacherModal = ({ group, close, isLoading, setIsLoading }) => {
         </p>
       )}
 
-      <TeacherSinglePicker
+      <SelectField
+        searchable
+        required
+        label="O'qituvchi"
         value={teacher}
         onChange={setTeacher}
-        disabled={isLoading}
+        options={teacherOptions}
+        placeholder={
+          loadingTeachers ? "Yuklanmoqda..." : "Bo'sh o'qituvchini tanlang"
+        }
+        searchPlaceholder="O'qituvchi qidirish..."
+        emptyText="Bu vaqtlarda bo'sh o'qituvchi yo'q"
+        disabled={isLoading || loadingTeachers}
       />
 
       <p className="text-xs text-muted-foreground">
-        O'qituvchi guruh jadvalidagi kun/vaqtlarda bo'sh bo'lishi kerak. Maosh
-        stavkasi "O'qituvchi maoshlari" sahifasida belgilanadi.
+        Ro'yxatda faqat guruh jadvalidagi kun/vaqtlarda bo'sh o'qituvchilar
+        ko'rinadi. Maosh stavkasi "O'qituvchi maoshlari" sahifasida belgilanadi.
       </p>
 
       <div className="flex gap-2 pt-1">

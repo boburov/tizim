@@ -41,6 +41,7 @@ import history from "./handlers/history.handler.js";
 import myActive from "./handlers/myActive.handler.js";
 import myTeach from "./handlers/myTeach.handler.js";
 import markRemovalNoticeSeen from "./handlers/markRemovalNoticeSeen.handler.js";
+import availableTeachers from "./handlers/availableTeachers.handler.js";
 import teacherPeriodList from "./handlers/teacherPeriod.list.handler.js";
 import teacherPeriodCreate from "./handlers/teacherPeriod.create.handler.js";
 import teacherPeriodUpdate from "./handlers/teacherPeriod.update.handler.js";
@@ -147,6 +148,14 @@ router.get(
   requirePermission(PERMISSIONS.GROUPS_READ),
   validate(historyQuerySchema),
   history,
+);
+
+// Guruhga biriktirish uchun BO'SH (jadvali to'qnashmaydigan) o'qituvchilar.
+router.get(
+  "/:id/available-teachers",
+  requireAuth,
+  requirePermission(PERMISSIONS.GROUPS_READ),
+  availableTeachers,
 );
 
 // ── O'qituvchi dars berish DAVRLARI (manba haqiqati - timeline) ──

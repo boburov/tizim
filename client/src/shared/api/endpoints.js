@@ -53,6 +53,7 @@ export const ENDPOINTS = Object.freeze({
     myActive: "/groups/me/active",
     myTeach: "/groups/me/teach",
     removalNoticeSeen: "/groups/me/removal-notice/seen",
+    availableTeachers: (id) => `/groups/${id}/available-teachers`,
     teacherPeriods: (id) => `/groups/${id}/teacher-periods`,
     teacherPeriodById: (id, pid) => `/groups/${id}/teacher-periods/${pid}`,
   },

@@ -84,6 +84,62 @@ export const assertTeacherScheduleFree = async (
   }
 };
 
+// Guruhga biriktirish uchun BO'SH o'qituvchilar ro'yxati - guruh jadvalidagi
+// kun/vaqtlarda boshqa (o'z boshqa guruhida) darsi bo'lmagan aktiv o'qituvchilar.
+// Band (jadvali to'qnashadigan) o'qituvchilar chiqarib tashlanadi.
+export const listAvailableTeachers = async (groupId) => {
+  const group = await Group.findById(groupId, { schedule: 1 }).lean();
+  if (!group) throw new ApiError(404, "Guruh topilmadi");
+  const slots = scheduleActiveOn(group.schedule || []);
+
+  const teachers = await User.find(
+    { role: ROLES.TEACHER, isActive: true, isDeleted: { $ne: true } },
+    { firstName: 1, lastName: 1, username: 1 },
+  )
+    .sort({ firstName: 1, lastName: 1 })
+    .lean();
+
+  // Guruh jadvali bo'sh - to'qnashuv bo'lmaydi, hamma bo'sh.
+  if (!slots.length) return teachers;
+
+  const teacherIds = teachers.map((t) => t._id);
+  // Har bir o'qituvchining BOSHQA guruhlaridagi ochiq davrlari.
+  const periods = await TeacherGroupPeriod.find(
+    {
+      teacher: { $in: teacherIds },
+      endDate: null,
+      isDeleted: { $ne: true },
+      group: { $ne: toObjectId(groupId) },
+    },
+    { teacher: 1, group: 1 },
+  ).lean();
+
+  const otherGroupIds = [...new Set(periods.map((p) => String(p.group)))];
+  const otherGroups = await Group.find(
+    { _id: { $in: otherGroupIds }, isActive: true, isDeleted: { $ne: true } },
+    { schedule: 1 },
+  ).lean();
+  const schedByGroup = new Map(
+    otherGroups.map((g) => [String(g._id), scheduleActiveOn(g.schedule || [])]),
+  );
+
+  const busyByTeacher = new Map();
+  for (const p of periods) {
+    const sched = schedByGroup.get(String(p.group));
+    if (!sched?.length) continue;
+    const key = String(p.teacher);
+    const arr = busyByTeacher.get(key) || [];
+    arr.push(...sched);
+    busyByTeacher.set(key, arr);
+  }
+
+  // Guruh jadvali bilan to'qnashadigan (band) o'qituvchilarni chiqarib tashlaymiz.
+  return teachers.filter((t) => {
+    const busy = busyByTeacher.get(String(t._id));
+    return !busy || !findSlotConflict(slots, busy);
+  });
+};
+
 // Maosh stavkasini turiga qarab normallashtiradi (fixed→foiz 0, percent→fiksa 0).
 const normalizeRate = (salaryType, fixedAmount, percentRate) => ({
   salaryType: salaryType || "fixed",
@@ -290,7 +346,7 @@ export const create = async (
   { teacher, group, startDate, endDate = null, salaryType, fixedAmount, percentRate },
   currentUser,
 ) => {
-  await assertTeacher(teacher);
+  const teacherDoc = await assertTeacher(teacher);
   const grp = await Group.findById(group);
   assertGroupActive(grp);
 
@@ -301,6 +357,17 @@ export const create = async (
   const existing = await loadScope(teacher, group);
   assertPeriodInvariants(candidate, existing, "date");
   assertWithinGroupBounds(candidate, grp);
+  // Davr o'qituvchi ishga olingan sanadan OLDIN boshlanmasin (mas. guruh o'qituvchi
+  // ishga qabul qilinishidan avval boshlangan bo'lsa - uni biriktirib bo'lmaydi).
+  if (teacherDoc.hiredAt) {
+    const hire = toUtcMidnight(teacherDoc.hiredAt).getTime();
+    if (candidate.startDate.getTime() < hire) {
+      throw new ApiError(
+        400,
+        `Dars davri o'qituvchining ishga olingan sanasidan (${fmtDate(hire)}) oldin boshlanishi mumkin emas`,
+      );
+    }
+  }
   // O'qituvchining boshqa guruhdagi darsi bilan bir vaqtga tushmasin.
   await assertTeacherScheduleFree(teacher, grp.schedule, group);
 

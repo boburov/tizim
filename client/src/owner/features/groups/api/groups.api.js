@@ -27,6 +27,9 @@ export const groupsAPI = {
 
   history: (id, params) => http.get(ENDPOINTS.groups.history(id), { params }),
 
+  // Guruhga biriktirish uchun bo'sh (jadvali to'qnashmaydigan) o'qituvchilar
+  availableTeachers: (id) => http.get(ENDPOINTS.groups.availableTeachers(id)),
+
   // O'qituvchi dars berish DAVRLARI (manba haqiqati - timeline)
   teacherPeriods: (id) => http.get(ENDPOINTS.groups.teacherPeriods(id)),
   createTeacherPeriod: (id, body) =>

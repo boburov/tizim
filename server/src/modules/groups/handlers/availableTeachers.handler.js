@@ -1,0 +1,11 @@
+import asyncHandler from "../../../middleware/asyncHandler.js";
+import * as teacherGroupPeriodService from "../services/teacherGroupPeriod.service.js";
+
+const availableTeachers = asyncHandler(async (req, res) => {
+  const data = await teacherGroupPeriodService.listAvailableTeachers(
+    req.params.id,
+  );
+  res.json({ success: true, data });
+});
+
+export default availableTeachers;

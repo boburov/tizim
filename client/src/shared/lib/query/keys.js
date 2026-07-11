@@ -53,6 +53,7 @@ export const qk = Object.freeze({
     one: (id) => ["groups", "detail", id],
     history: (id, params) => ["groups", id, "history", params],
     teacherPeriods: (id) => ["groups", id, "teacherPeriods"],
+    availableTeachers: (id) => ["groups", id, "availableTeachers"],
     memberships: (id, sid) => ["groups", id, "memberships", sid],
     myActive: () => ["groups", "me", "active"],
     myTeach: () => ["groups", "me", "teach"],

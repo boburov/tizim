@@ -308,6 +308,24 @@ const mergeScheduleVersion = (existing, incoming, effectiveFromInput) => {
 
 export const create = async (body) => {
   await ensureTeachers(body.teachers);
+  // O'qituvchi ishga olingan sanasi guruh boshlanish sanasidan KEYIN bo'lsa -
+  // biriktirib bo'lmaydi (guruh boshlanganda o'qituvchi hali ishga qabul qilinmagan).
+  const gStart = body.startDate ? toUtcMidnight(body.startDate) : null;
+  if (gStart && body.teachers?.length) {
+    const tDocs = await User.find(
+      { _id: { $in: body.teachers } },
+      { hiredAt: 1, firstName: 1, lastName: 1 },
+    ).lean();
+    for (const t of tDocs) {
+      if (t.hiredAt && toUtcMidnight(t.hiredAt).getTime() > gStart.getTime()) {
+        const nm = `${t.firstName} ${t.lastName || ""}`.trim();
+        throw new ApiError(
+          400,
+          `${nm}ning ishga olingan sanasi guruh boshlanish sanasidan keyin - bu o'qituvchini biriktirib bo'lmaydi`,
+        );
+      }
+    }
+  }
   // Jadval to'qnashuvi: o'qituvchi bir vaqtda ikkita guruhda dars bera olmaydi.
   for (const teacherId of body.teachers || []) {
     await teacherGroupPeriodService.assertTeacherScheduleFree(
