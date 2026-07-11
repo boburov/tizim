@@ -76,7 +76,9 @@ const GroupDetailPage = () => {
   const todayKey = new Date().toISOString().slice(0, 10);
   const endKey = group.endDate ? String(group.endDate).slice(0, 10) : null;
   const isEnded = !group.isActive || (endKey && endKey <= todayKey);
-  const canDelete = (group.studentsCount || 0) === 0;
+  // Faqat YAKUNLANGAN kursni o'chirish mumkin - avval kursni yakunlab (tugash
+  // sanasini belgilab), so'ng guruhni o'chirish kerak (o'quvchisi bo'lsa ham).
+  const canDelete = isEnded;
 
   return (
     <div className="space-y-4">

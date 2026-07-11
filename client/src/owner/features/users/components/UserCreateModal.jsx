@@ -48,10 +48,14 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
     onError: () => setIsLoading(false),
   });
 
+  // Username kamida 3 ta belgi bo'lishi kerak (server bilan bir xil qoida).
+  const usernameShort =
+    obj.username.trim().length > 0 && obj.username.trim().length < 3;
+
   const isValid = () =>
     obj.firstName.trim() &&
     obj.lastName.trim() &&
-    obj.username.trim() &&
+    obj.username.trim().length >= 3 &&
     obj.password &&
     obj.role &&
     // O'qituvchi uchun ishga olingan sana majburiy.
@@ -111,6 +115,10 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
         label="Login (username)"
         value={obj.username}
         onChange={(e) => obj.setField("username", e.target.value)}
+        description={
+          usernameShort ? "Kamida 3 ta belgi kiriting" : "Kamida 3 ta belgi"
+        }
+        error={usernameShort}
         required
         disabled={isLoading}
       />

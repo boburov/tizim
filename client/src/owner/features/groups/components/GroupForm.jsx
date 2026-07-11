@@ -144,10 +144,24 @@ const GroupForm = ({
       toast.error("Jadvalda bir kun bir necha marta takrorlangan");
       return;
     }
-    // Yangi guruh - o'qituvchi tanlash majburiy (aniq 1ta)
-    if (!isEdit && !teacher) {
-      toast.error("O'qituvchi tanlang");
-      return;
+    // Yangi guruh - kurs tugash sanasidan boshqa hamma maydon majburiy.
+    if (!isEdit) {
+      if (schedule.length === 0) {
+        toast.error("Kamida bitta dars kuni qo'shing");
+        return;
+      }
+      if (!startDate) {
+        toast.error("Dars boshlanish sanasini kiriting");
+        return;
+      }
+      if (!teacher) {
+        toast.error("O'qituvchi tanlang");
+        return;
+      }
+      if (monthlyPrice === "" || monthlyPrice == null) {
+        toast.error("Oylik to'lovni kiriting");
+        return;
+      }
     }
     if (startDate && endDate && endDate < startDate) {
       toast.error("Kurs tugash sanasi boshlanish sanasidan oldin bo'lmasin");
@@ -197,6 +211,7 @@ const GroupForm = ({
           label="Dars boshlanish sanasi"
           value={startDate}
           onChange={(e) => setField("startDate", e.target.value)}
+          required={!isEdit}
           disabled={isLoading}
         />
         <InputField
@@ -233,6 +248,7 @@ const GroupForm = ({
             placeholder="Masalan: 500 000"
             value={monthlyPrice}
             onChange={(e) => setField("monthlyPrice", e.target.value)}
+            required
             disabled={isLoading}
           />
         </div>
