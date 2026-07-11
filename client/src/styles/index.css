@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: 33 33% 35%;
+    --background: 36 50% 98%;
+  
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: var(--background);
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: var(--background);
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  body {
+    /* color: hwb(33 24% 53%); */
+    @apply bg-background font-sans;
+  }
+
+  input,
+  select {
+    @apply h-11;
+  }
+
+  ol li * {
+    @apply font-sans;
+  }
+
+  table {
+    @apply min-w-[934px] lg:min-w-full;
+  }
+
+  table {
+    thead {
+      @apply bg-gray-50;
+    }
+
+    thead th {
+      @apply px-6 py-3 text-gray-500 uppercase text-xs font-medium align-middle border-b border-gray-200;
+      text-align: left;
+    }
+
+    thead th.text-right {
+      text-align: right;
+    }
+
+    thead th.text-center {
+      text-align: center;
+    }
+
+    tbody {
+      @apply divide-y divide-gray-200;
+    }
+
+    tbody tr {
+      @apply bg-white;
+    }
+
+    tbody td {
+      @apply align-middle;
+    }
+  }
+}
+
+@layer utilities {
+  .container {
+    @apply max-w-7xl mx-auto px-4;
+  }
+}
+
+@layer components {
+  .page-title {
+    @apply text-lg font-semibold md:leading-normal md:text-[22px];
+  }
+
+  .section-title {
+    @apply font-semibold xs:text-lg md:text-xl;
+  }
+}
+
+.bottom-navigation {
+  box-shadow: 0 0 4px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Removes 'X' from Chrome, Safari, and Edge (Chromium) */
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+  display: none;
+  -webkit-appearance: none;
+}
+
+/* Removes 'X' from Internet Explorer 10+ */
+input[type="search"]::-ms-clear,
+input[type="search"]::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Number inputlardagi spinner (yuqori/past) tugmalarini olib tashlash */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+  /* Yengil border radius */
+  border-radius: 6px;
+}

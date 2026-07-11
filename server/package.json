@@ -1,0 +1,50 @@
+{
+  "name": "bayyina-server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "lint": "eslint .",
+    "seed:permissions": "node src/seeds/permissions.seed.js",
+    "seed:owner": "node src/seeds/owner.seed.js",
+    "seed:communication": "node src/seeds/communicationDefaults.seed.js",
+    "seed:fake-data": "node src/seeds/fakeData.seed.js",
+    "seed:fake-extras": "node src/seeds/fakeExtras.seed.js",
+    "seed:fake-extras2": "node src/seeds/fakeExtras2.seed.js",
+    "migrate:attendance-slot": "node src/seeds/migrateAttendanceSlot.seed.js",
+    "migrate:remove-plain-passwords": "node src/seeds/removePlainPasswords.seed.js",
+    "migrate:membership-index": "node src/seeds/migrateMembershipIndex.seed.js",
+    "migrate:backfill-user-role": "node src/seeds/backfillUserRole.seed.js",
+    "migrate:botuser-index": "node src/seeds/migrateBotUserIndex.seed.js",
+    "migrate:finance-periods": "node src/seeds/migrateFinancePeriods.seed.js",
+    "migrate:teacher-periods": "node src/seeds/migrateTeacherGroupPeriods.seed.js",
+    "migrate:group-enddate": "node src/seeds/migrateGroupEndDate.seed.js",
+    "migrate:student-completedat": "node src/seeds/backfillStudentCompletedAt.seed.js",
+    "seed:all": "npm run seed:permissions && npm run seed:owner && npm run seed:communication && npm run seed:fake-data && npm run seed:fake-extras && npm run seed:fake-extras2"
+  },
+  "dependencies": {
+    "agenda": "^5.0.0",
+    "bcrypt": "^5.1.1",
+    "compression": "^1.7.4",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.8.0",
+    "morgan": "^1.10.0",
+    "node-telegram-bot-api": "^0.67.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^10.4.0",
+    "eslint": "^9.13.0",
+    "nodemon": "^3.1.7"
+  }
+}
