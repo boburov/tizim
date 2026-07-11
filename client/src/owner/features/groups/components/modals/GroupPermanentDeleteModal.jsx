@@ -98,6 +98,7 @@ const GroupPermanentDeleteModal = ({ group, close, isLoading, setIsLoading }) =>
         value={obj.confirmName}
         placeholder={name}
         autoComplete="off"
+        maxLength={120}
         onChange={(e) => obj.setField("confirmName", e.target.value)}
         disabled={isLoading}
       />

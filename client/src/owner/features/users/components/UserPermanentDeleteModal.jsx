@@ -149,6 +149,7 @@ const UserPermanentDeleteModal = ({ user, close, isLoading, setIsLoading }) => {
         value={obj.confirmName}
         placeholder={fullName}
         autoComplete="off"
+        maxLength={100}
         onChange={(e) => obj.setField("confirmName", e.target.value)}
         disabled={isLoading}
       />
