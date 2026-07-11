@@ -7,6 +7,7 @@ import {
   Trash2,
   CalendarCheck,
   CalendarRange,
+  CalendarX,
   MoreHorizontal,
 } from "lucide-react";
 
@@ -24,6 +25,8 @@ import {
   DropdownMenuSeparator,
 } from "@/shared/components/shadcn/dropdown-menu";
 import GroupEditModal from "../components/modals/GroupEditModal";
+import GroupAssignTeacherModal from "../components/modals/GroupAssignTeacherModal";
+import GroupFinishModal from "../components/modals/GroupFinishModal";
 import GroupPermanentDeleteModal from "../components/modals/GroupPermanentDeleteModal";
 import GroupAddStudentModal from "../components/modals/GroupAddStudentModal";
 import GroupRemoveStudentModal from "../components/modals/GroupRemoveStudentModal";
@@ -76,9 +79,8 @@ const GroupDetailPage = () => {
   const todayKey = new Date().toISOString().slice(0, 10);
   const endKey = group.endDate ? String(group.endDate).slice(0, 10) : null;
   const isEnded = !group.isActive || (endKey && endKey <= todayKey);
-  // Faqat YAKUNLANGAN kursni o'chirish mumkin - avval kursni yakunlab (tugash
-  // sanasini belgilab), so'ng guruhni o'chirish kerak (o'quvchisi bo'lsa ham).
-  const canDelete = isEnded;
+  // O'chirish faqat: o'quvchi bo'lmasa (0 ta) YOKI kurs yakunlangan bo'lsa.
+  const canDelete = (group.studentsCount || 0) === 0 || isEnded;
 
   return (
     <div className="space-y-4">
@@ -126,6 +128,14 @@ const GroupDetailPage = () => {
                 <CalendarRange className="size-4" />
                 O'qituvchi davrlari
               </DropdownMenuItem>
+              {!isEnded && (
+                <DropdownMenuItem
+                  onSelect={() => openModal(MODAL.GROUP_FINISH, { group })}
+                >
+                  <CalendarX className="size-4" />
+                  Kursni yakunlash
+                </DropdownMenuItem>
+              )}
               {canDelete && (
                 <>
                   <DropdownMenuSeparator />
@@ -173,6 +183,15 @@ const GroupDetailPage = () => {
         className="max-w-4xl"
       >
         <GroupEditModal />
+      </ModalWrapper>
+      <ModalWrapper
+        name={MODAL.GROUP_ASSIGN_TEACHER}
+        title="O'qituvchi biriktirish / almashtirish"
+      >
+        <GroupAssignTeacherModal />
+      </ModalWrapper>
+      <ModalWrapper name={MODAL.GROUP_FINISH} title="Kursni yakunlash">
+        <GroupFinishModal />
       </ModalWrapper>
       <ModalWrapper name={MODAL.GROUP_PERMANENT_DELETE} title="Guruhni butunlay o'chirish">
         <GroupPermanentDeleteModal />

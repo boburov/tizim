@@ -113,11 +113,9 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
       <InputField
         name="username"
         label="Login (username)"
+        placeholder="Kamida 3 ta belgi"
         value={obj.username}
         onChange={(e) => obj.setField("username", e.target.value)}
-        description={
-          usernameShort ? "Kamida 3 ta belgi kiriting" : "Kamida 3 ta belgi"
-        }
         error={usernameShort}
         required
         disabled={isLoading}

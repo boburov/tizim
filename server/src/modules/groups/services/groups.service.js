@@ -308,6 +308,14 @@ const mergeScheduleVersion = (existing, incoming, effectiveFromInput) => {
 
 export const create = async (body) => {
   await ensureTeachers(body.teachers);
+  // Jadval to'qnashuvi: o'qituvchi bir vaqtda ikkita guruhda dars bera olmaydi.
+  for (const teacherId of body.teachers || []) {
+    await teacherGroupPeriodService.assertTeacherScheduleFree(
+      teacherId,
+      body.schedule,
+      null,
+    );
+  }
   const group = await Group.create({
     name: body.name.trim(),
     schedule: normalizeSchedule(body.schedule, { dropEffective: true }),
@@ -373,6 +381,33 @@ export const update = async (id, body) => {
   if (!group || group.isDeleted) throw new ApiError(404, "Guruh topilmadi");
 
   if (body.teachers !== undefined) await ensureTeachers(body.teachers);
+
+  // Jadval to'qnashuvi tekshiruvi - o'zgartirishdan OLDIN (toza rad etish uchun).
+  // Jadval o'zgarsa: joriy o'qituvchilar; o'qituvchi qo'shilsa: yangi qo'shilganlar -
+  // hammasi incoming (yangi yoki mavjud) jadval bilan solishtiriladi.
+  {
+    const scheduleForCheck =
+      body.schedule !== undefined ? body.schedule : group.schedule;
+    const currentTeacherIds = (group.teachers || []).map(String);
+    const toCheck = new Set();
+    if (body.schedule !== undefined) {
+      currentTeacherIds.forEach((t) => toCheck.add(t));
+    }
+    if (body.teachers !== undefined && group.isActive) {
+      (body.teachers || [])
+        .map(String)
+        .filter((t) => !currentTeacherIds.includes(t))
+        .forEach((t) => toCheck.add(t));
+    }
+    for (const teacherId of toCheck) {
+      await teacherGroupPeriodService.assertTeacherScheduleFree(
+        teacherId,
+        scheduleForCheck,
+        group._id,
+      );
+    }
+  }
+
   if (body.name !== undefined) group.name = body.name.trim();
   // Versiyalash: client HOZIRGI versiya qatorlarini + bitta "amal qilish sanasi"
   // (scheduleEffectiveFrom) yuboradi. Yangi jadval joriy amaldagi versiyadan farq
@@ -586,17 +621,25 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
   const group = await Group.findById(id);
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
-  // Faqat YAKUNLANGAN (tugagan) kursni o'chirish mumkin. Aktiv guruh (o'quvchilari
-  // bo'lishi mumkin) to'g'ridan-to'g'ri o'chirilmaydi - avval kursni yakunlab
-  // (tugash sanasini belgilab) keyin o'chiriladi.
+  // O'chirish faqat: (a) guruhda AKTIV o'quvchi bo'lmasa (0 ta) YOKI (b) kurs
+  // yakunlangan bo'lsa. Aktiv kursda o'quvchilar bo'lsa - avval o'quvchilarni
+  // chiqaring yoki kursni yakunlang.
   const ended =
     group.endDate &&
     toUtcMidnight(group.endDate).getTime() <= localTodayMidnight().getTime();
-  if (group.isActive && !ended) {
-    throw new ApiError(
-      400,
-      "Avval kursni yakunlang (tugash sanasini belgilang), so'ngra guruhni o'chiring",
-    );
+  const finished = !group.isActive || ended;
+  if (!finished) {
+    const activeStudents = await GroupMembership.countDocuments({
+      group: toObjectId(id),
+      leftAt: null,
+      isDeleted: { $ne: true },
+    });
+    if (activeStudents > 0) {
+      throw new ApiError(
+        400,
+        "Guruhda o'quvchilar bor. Avval o'quvchilarni chiqaring yoki kursni yakunlang, so'ngra o'chiring",
+      );
+    }
   }
 
   const name = (group.name || "").trim();

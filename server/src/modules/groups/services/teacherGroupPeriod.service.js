@@ -7,9 +7,82 @@ import User from "../../../models/user.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
-import { toUtcMidnight, localTodayMidnight } from "../../../helpers/attendance.helper.js";
+import {
+  toUtcMidnight,
+  localTodayMidnight,
+  scheduleActiveOn,
+} from "../../../helpers/attendance.helper.js";
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
+
+const DAY_LABEL_UZ = {
+  mon: "Dushanba",
+  tue: "Seshanba",
+  wed: "Chorshanba",
+  thu: "Payshanba",
+  fri: "Juma",
+  sat: "Shanba",
+  sun: "Yakshanba",
+};
+
+// Ikki vaqt oralig'i kesishadimi ("HH:mm" - nol to'ldirilgani uchun string solishtiruv
+// ishlaydi). Yopiq-ochiq: 14:00-15:00 va 15:00-16:00 kesishmaydi.
+const timesOverlap = (aStart, aEnd, bStart, bEnd) =>
+  aStart < bEnd && bStart < aEnd;
+
+// A jadvalidagi biror slot B dagi slot bilan bir kun + kesishuvchi vaqtga tushsa,
+// o'sha B slotini qaytaradi (aks holda null).
+const findSlotConflict = (slotsA, slotsB) => {
+  for (const a of slotsA) {
+    for (const b of slotsB) {
+      if (
+        a.day === b.day &&
+        timesOverlap(a.startTime, a.endTime, b.startTime, b.endTime)
+      ) {
+        return b;
+      }
+    }
+  }
+  return null;
+};
+
+// Bitta o'qituvchiga bir kun/bir vaqtda ikkita guruh darsi belgilanmasligini
+// ta'minlaydi. incomingSchedule - tekshirilayotgan guruh jadvali (versiyalangan
+// bo'lishi mumkin); excludeGroupId - o'sha guruhning o'zi (o'z-o'ziga to'qnashmasin).
+// O'qituvchi HOZIR dars berayotgan (ochiq davr, aktiv guruh) jadvallar bilan solishtiradi.
+export const assertTeacherScheduleFree = async (
+  teacher,
+  incomingSchedule,
+  excludeGroupId = null,
+) => {
+  const slots = scheduleActiveOn(incomingSchedule || []);
+  if (!slots.length) return;
+
+  const periods = await TeacherGroupPeriod.find(
+    { teacher: toObjectId(teacher), endDate: null, isDeleted: { $ne: true } },
+    { group: 1 },
+  ).lean();
+  const groupIds = periods
+    .map((p) => p.group)
+    .filter((g) => !excludeGroupId || String(g) !== String(excludeGroupId));
+  if (!groupIds.length) return;
+
+  const groups = await Group.find(
+    { _id: { $in: groupIds }, isActive: true, isDeleted: { $ne: true } },
+    { name: 1, schedule: 1 },
+  ).lean();
+
+  for (const g of groups) {
+    const conflict = findSlotConflict(slots, scheduleActiveOn(g.schedule || []));
+    if (conflict) {
+      const dayLabel = DAY_LABEL_UZ[conflict.day] || conflict.day;
+      throw new ApiError(
+        400,
+        `O'qituvchining bu vaqtda darsi bor: "${g.name}" — ${dayLabel} ${conflict.startTime}-${conflict.endTime}. Bir o'qituvchiga bir vaqtda ikkita dars belgilab bo'lmaydi.`,
+      );
+    }
+  }
+};
 
 // Maosh stavkasini turiga qarab normallashtiradi (fixed→foiz 0, percent→fiksa 0).
 const normalizeRate = (salaryType, fixedAmount, percentRate) => ({
@@ -228,6 +301,8 @@ export const create = async (
   const existing = await loadScope(teacher, group);
   assertPeriodInvariants(candidate, existing, "date");
   assertWithinGroupBounds(candidate, grp);
+  // O'qituvchining boshqa guruhdagi darsi bilan bir vaqtga tushmasin.
+  await assertTeacherScheduleFree(teacher, grp.schedule, group);
 
   const doc = await TeacherGroupPeriod.create({
     teacher,

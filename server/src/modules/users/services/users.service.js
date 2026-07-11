@@ -1,5 +1,7 @@
 import User from "../../../models/user.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
+import TeacherGroupPeriod from "../../../models/teacherGroupPeriod.model.js";
+import Group from "../../../models/group.model.js";
 import ArchiveReason from "../../../models/archiveReason.model.js";
 import RefreshToken from "../../../models/refreshToken.model.js";
 import ApiError from "../../../utils/ApiError.js";
@@ -25,6 +27,37 @@ import logger from "../../../config/logger.js";
 
 const STUDENT_ONLY_FIELDS = ["enrolledAt", "completedAt"];
 const TEACHER_ONLY_FIELDS = ["hiredAt"];
+
+// O'qituvchining FAOL guruhi bo'lsa arxivlash/faolsizlantirishni bloklaydi.
+// Ikkala manba tekshiriladi: Group.teachers keshi (UI shuni ko'rsatadi) VA ochiq
+// dars davri (TeacherGroupPeriod) - biror-birida bo'lsa ham bloklanadi. Avval
+// o'qituvchini boshqa (bo'sh vaqti mos) o'qituvchiga almashtirish yoki guruhdan
+// chiqarish kerak.
+const assertTeacherHasNoActiveGroup = async (user, actionVerb = "arxivlang") => {
+  if (!user || user.role !== ROLES.TEACHER) return;
+  const openPeriods = await TeacherGroupPeriod.find(
+    { teacher: user._id, endDate: null, isDeleted: { $ne: true } },
+    { group: 1 },
+  ).lean();
+  const activeGroups = await Group.find(
+    {
+      $or: [
+        { teachers: user._id },
+        { _id: { $in: openPeriods.map((p) => p.group) } },
+      ],
+      isActive: true,
+      isDeleted: { $ne: true },
+    },
+    { name: 1 },
+  ).lean();
+  if (activeGroups.length) {
+    const names = activeGroups.map((g) => g.name).join(", ");
+    throw new ApiError(
+      400,
+      `O'qituvchining faol guruhi bor (${names}). Avval uni boshqa o'qituvchiga almashtiring yoki guruh(lar)dan chiqaring, so'ng ${actionVerb}.`,
+    );
+  }
+};
 
 // Ro'yxatda saralash mumkin bo'lgan maydonlar (xavfsiz oq ro'yxat).
 const USER_SORT_FIELDS = {
@@ -139,7 +172,11 @@ export const update = async (id, body) => {
   // Asosiy maydonlar
   if (body.firstName !== undefined) user.firstName = body.firstName.trim();
   if (body.lastName !== undefined) user.lastName = body.lastName.trim();
-  if (body.isActive !== undefined) user.isActive = !!body.isActive;
+  if (body.isActive !== undefined) {
+    // Faolsizlantirish ham arxivlash kabi - faol guruhi bor o'qituvchiga ruxsat yo'q.
+    if (body.isActive === false) await assertTeacherHasNoActiveGroup(user, "arxivlang");
+    user.isActive = !!body.isActive;
+  }
 
   if (body.phone !== undefined) {
     const phone = body.phone ? normalizePhone(body.phone) : null;
@@ -328,6 +365,9 @@ export const softRemove = async (id, { reasonId, archiveDate, by } = {}) => {
       // log yozilmasa ham arxivlash buzilmasin
     }
   } else {
+    // O'qituvchining faol guruhi bo'lsa arxivlab bo'lmaydi (almashtirish/chiqarish kerak).
+    await assertTeacherHasNoActiveGroup(user, "arxivlang");
+
     user.isActive = false;
     user.archivedAt = archivedAt;
     await user.save();
@@ -377,6 +417,10 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
 
   const isStudent = user.role === ROLES.STUDENT;
   const isTeacher = user.role === ROLES.TEACHER;
+
+  // O'qituvchining faol guruhi bo'lsa BUTUNLAY O'CHIRIB ham bo'lmaydi - avval uni
+  // boshqa o'qituvchiga almashtirish yoki guruhdan chiqarish kerak (arxivlash bilan bir xil qoida).
+  await assertTeacherHasNoActiveGroup(user, "o'chiring");
 
   if (isStudent || isTeacher) {
     const fullName = `${user.firstName} ${user.lastName}`.trim();

@@ -183,8 +183,8 @@ const GroupForm = ({
     // "Almashtirish" orqali boshqariladi - bu yerda tegmaymiz.
     if (!isEdit) {
       payload.teachers = [teacher];
-      // Oylik narx (ixtiyoriy) - berilsa joriy oy GroupFee summasi bo'ladi.
-      if (monthlyPrice !== "") payload.monthlyPrice = Number(monthlyPrice);
+      // Oylik narx majburiy - joriy oy GroupFee summasi bo'ladi.
+      payload.monthlyPrice = Number(monthlyPrice);
     }
 
     onSubmit(payload);

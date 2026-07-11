@@ -12,6 +12,9 @@ import Pagination from "@/shared/components/ui/pagination/Pagination";
 import ArchiveToggle from "@/shared/components/ui/archive/ArchiveToggle";
 import GroupCard from "../components/GroupCard";
 import GroupCreateModal from "../components/modals/GroupCreateModal";
+import GroupEditModal from "../components/modals/GroupEditModal";
+import GroupFinishModal from "../components/modals/GroupFinishModal";
+import GroupPermanentDeleteModal from "../components/modals/GroupPermanentDeleteModal";
 
 // Hooks
 import useModal from "@/shared/hooks/useModal";
@@ -111,6 +114,22 @@ const GroupsListPage = () => {
         className="max-w-4xl"
       >
         <GroupCreateModal />
+      </ModalWrapper>
+      <ModalWrapper
+        name={MODAL.GROUP_EDIT}
+        title="Guruhni tahrirlash"
+        className="max-w-4xl"
+      >
+        <GroupEditModal />
+      </ModalWrapper>
+      <ModalWrapper name={MODAL.GROUP_FINISH} title="Kursni yakunlash">
+        <GroupFinishModal />
+      </ModalWrapper>
+      <ModalWrapper
+        name={MODAL.GROUP_PERMANENT_DELETE}
+        title="Guruhni butunlay o'chirish"
+      >
+        <GroupPermanentDeleteModal />
       </ModalWrapper>
     </div>
   );

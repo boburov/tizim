@@ -2,12 +2,19 @@
 import { Link } from "react-router-dom";
 
 // Icons
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, UserPlus, Repeat } from "lucide-react";
 
 // Components
 import Card from "@/shared/components/ui/card/Card";
+import Button from "@/shared/components/ui/button/Button";
 import GroupStatsPanel from "../GroupStatsPanel";
 import GroupHistoryList from "../GroupHistoryList";
+
+// Hooks
+import useModal from "@/shared/hooks/useModal";
+
+// Constants
+import { MODAL } from "@/shared/constants/modals";
 
 // Utils
 import { DAY_LABELS_FULL_UZ, sortSchedule } from "@/shared/utils/formatSchedule";
@@ -18,7 +25,14 @@ import { formatDateUz } from "@/shared/utils/formatDate";
 // O'qituvchini belgilash/almashtirish endi "Maosh belgilash" sahifasida
 // davrlar (TeacherGroupPeriod) orqali - bu yerda faqat ko'rsatiladi.
 const GroupInfoTab = ({ group }) => {
+  const { openModal } = useModal();
   const teachers = group.teachers || [];
+  const hasTeacher = teachers.length > 0;
+
+  // Kurs yakunlangan bo'lsa o'qituvchi biriktirish/almashtirishni ko'rsatmaymiz.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const endKey = group.endDate ? String(group.endDate).slice(0, 10) : null;
+  const isEnded = !group.isActive || (endKey && endKey <= todayKey);
 
   return (
     <div className="space-y-4 pt-3">
@@ -34,8 +48,32 @@ const GroupInfoTab = ({ group }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
-          <p className="text-xs text-muted-foreground mb-2">O'qituvchi</p>
-          {teachers.length === 0 ? (
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">O'qituvchi</p>
+            {!isEnded && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  openModal(MODAL.GROUP_ASSIGN_TEACHER, { group })
+                }
+              >
+                {hasTeacher ? (
+                  <>
+                    <Repeat className="size-4" />
+                    Almashtirish
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="size-4" />
+                    Biriktirish
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+          {!hasTeacher ? (
             <p className="text-sm text-muted-foreground">Tayinlanmagan</p>
           ) : (
             <div className="space-y-1">
