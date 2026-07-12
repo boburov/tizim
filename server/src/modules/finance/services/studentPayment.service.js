@@ -20,6 +20,10 @@ import {
   localTodayMidnight,
 } from "../../../helpers/attendance.helper.js";
 import { holidayKeySetForRange } from "../../holidays/services/holidays.service.js";
+import {
+  loadFreezeWindows,
+  isFrozenOn,
+} from "../../../helpers/studentFreeze.helper.js";
 
 const safeStudentProjection = {
   firstName: 1,
@@ -73,12 +77,14 @@ const loadMonthLessonDates = async (groupDoc, year, month) => {
 // A'zolik davrlariga (leftAt EXCLUSIVE) to'g'ri keladigan va asOf sanasigacha
 // (shu kun inklyuziv) O'TIB BO'LGAN darslar sonini sanaydi. Davrlar a'zolik
 // bo'yicha kesishmaydi, shuning uchun bir dars faqat bir marta sanaladi.
-const countElapsedLessons = (lessonDates, periods, asOf) => {
+const countElapsedLessons = (lessonDates, periods, asOf, freezeWindows = []) => {
   const cutoff = asOf ? asOf.getTime() : Infinity;
   let count = 0;
   for (const d of lessonDates) {
     const t = d.getTime();
     if (t > cutoff) continue; // hali bo'lib o'tmagan dars - accrual qilinmaydi
+    // Muzlatilgan kundagi dars accrual qilinmaydi (o'quvchi to'lamaydi).
+    if (freezeWindows.length && isFrozenOn(freezeWindows, t)) continue;
     for (const p of periods) {
       const start = p.joinedAt ? toUtcMidnight(p.joinedAt).getTime() : -Infinity;
       const endExcl = p.leftAt ? toUtcMidnight(p.leftAt).getTime() : Infinity;
@@ -98,7 +104,7 @@ const countElapsedLessons = (lessonDates, periods, asOf) => {
 // bo'lmasa (yoki oyda dars yo'q bo'lsa) eski kalendar-kun proratsiyasiga qaytadi
 // - shunda jadvalsiz guruhlarda billing yo'qolib qolmaydi.
 const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = null, periods = null }) => {
-  const [feeDoc, discounts, groupDoc] = await Promise.all([
+  const [feeDoc, discounts, groupDoc, freezeWindows] = await Promise.all([
     GroupFee.findOne({ group, year, month }),
     Discount.find({
       student,
@@ -108,6 +114,8 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
       $or: [{ scope: "permanent" }, { scope: "monthly", year, month }],
     }),
     Group.findById(group, { schedule: 1, startDate: 1, endDate: 1 }).lean(),
+    // Muzlatish o'quvchi darajasida (barcha guruhlarga taalluqli).
+    loadFreezeWindows({ student }),
   ]);
 
   const baseFee = feeDoc ? feeDoc.amount : 0;
@@ -128,6 +136,7 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
       leftAt,
       periods,
       discounts,
+      freezeWindows,
     });
     return { ...snap, fullExpectedAmount: snap.expectedAmount };
   }
@@ -142,7 +151,12 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
   const asOf = monthIdx >= todayIdx ? today : monthEnd;
 
   const totalLessons = lessonDates.length;
-  const elapsedLessons = countElapsedLessons(lessonDates, effPeriods, asOf);
+  const elapsedLessons = countElapsedLessons(
+    lessonDates,
+    effPeriods,
+    asOf,
+    freezeWindows,
+  );
 
   const snap = computeLessonSnapshot({
     baseFee,
@@ -155,7 +169,12 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
   // barcha darslar (asOf=oy oxiri). Oldindan (avans) to'lovni depozitga
   // qaytarmaslik uchun ISHLATILADI: haqiqiy ortiqcha to'lov = paid - fullExpected,
   // accrued expected'dan emas (aks holda avans har kuni depozitga ko'chib ketardi).
-  const fullElapsed = countElapsedLessons(lessonDates, effPeriods, monthEnd);
+  const fullElapsed = countElapsedLessons(
+    lessonDates,
+    effPeriods,
+    monthEnd,
+    freezeWindows,
+  );
   const full = computeLessonSnapshot({
     baseFee,
     totalLessons,

@@ -6,6 +6,8 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
+  Snowflake,
+  Sun,
 } from "lucide-react";
 
 // Router
@@ -157,6 +159,11 @@ const UsersTable = ({
                     {showStatusBadge && rowArchived && (
                       <Badge className="bg-gray-200 text-gray-700">Arxiv</Badge>
                     )}
+                    {!rowArchived && u.isFrozen && (
+                      <Badge className="bg-sky-100 text-sky-700">
+                        Muzlatilgan
+                      </Badge>
+                    )}
                   </div>
                 </td>
                 {isStudentTab && (
@@ -267,6 +274,36 @@ const UsersTable = ({
                         >
                           <KeyRound className="size-4" />
                         </Button>
+                        {isStudentRow &&
+                          (u.isFrozen ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-sky-600 hover:bg-sky-50 hover:text-sky-700"
+                              onClick={() =>
+                                openModal(MODAL.USER_UNFREEZE, { user: u })
+                              }
+                              aria-label="Muzlatishdan chiqarish"
+                              title="Muzlatishdan chiqarish"
+                            >
+                              <Sun className="size-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-sky-600 hover:bg-sky-50 hover:text-sky-700"
+                              onClick={() =>
+                                openModal(MODAL.USER_FREEZE, { user: u })
+                              }
+                              aria-label="Muzlatish"
+                              title="Muzlatish"
+                            >
+                              <Snowflake className="size-4" />
+                            </Button>
+                          ))}
                         <Button
                           type="button"
                           variant="ghost"

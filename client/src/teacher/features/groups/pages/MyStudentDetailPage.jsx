@@ -1,7 +1,8 @@
 import { Outlet, useParams } from "react-router-dom";
-import { ArrowLeft, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import Card from "@/shared/components/ui/card/Card";
 import Badge from "@/shared/components/ui/badge/Badge";
+import BackLink from "@/shared/components/ui/link/BackLink";
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import useGoBack from "@/shared/hooks/useGoBack";
@@ -68,13 +69,7 @@ const MyStudentDetailPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={goBack}
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border bg-white hover:bg-gray-50 cursor-pointer"
-        >
-          <ArrowLeft className="size-4" />
-        </button>
+        <BackLink to={`/teacher/groups/${id}`} className="shrink-0" />
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="min-w-0 break-words text-xl font-semibold sm:text-2xl">
             {student.firstName} {student.lastName}

@@ -14,12 +14,18 @@ export const daysInMonth = (year, month) =>
 // leftExclusive=true (a'zolik: leftAt kuni endi a'zo emas - removeStudent/transfer
 // va davomat bilan bir xil encoding) → oxirgi to'lanadigan kun = leftAt - 1.
 // NARX butun oyga doimiy (oy+yil darajasi) - mid-month tarif/effectiveFrom yo'q.
+// freezeWindows: [{start, end}] (UTC yarim tun ms, end EXCLUSIVE). Muzlatilgan
+// kunlar to'lanadigan kunlardan ayriladi (o'quvchi o'sha kunlar uchun to'lamaydi).
+const isFrozenDayMs = (freezeWindows, dMs) =>
+  freezeWindows.some((w) => dMs >= w.start && dMs < w.end);
+
 export const computeProration = ({
   year,
   month,
   joinedAt,
   leftAt = null,
   leftExclusive = false,
+  freezeWindows = [],
 }) => {
   const totalDays = daysInMonth(year, month);
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
@@ -50,7 +56,18 @@ export const computeProration = ({
     endDay = left.getTime() >= monthEnd.getTime() ? totalDays : left.getUTCDate();
   }
 
-  const payable = Math.max(0, endDay - startDay + 1);
+  let payable = Math.max(0, endDay - startDay + 1);
+
+  // Muzlatilgan kunlarni ayiramiz (oraliqdagi har bir kunni tekshiramiz).
+  if (freezeWindows && freezeWindows.length) {
+    let frozen = 0;
+    for (let day = startDay; day <= endDay; day += 1) {
+      if (isFrozenDayMs(freezeWindows, Date.UTC(year, month - 1, day))) {
+        frozen += 1;
+      }
+    }
+    payable = Math.max(0, payable - frozen);
+  }
 
   return {
     factor: clamp(payable / totalDays, 0, 1),
@@ -77,7 +94,7 @@ export const resolveDiscountAmount = (discounts, proratedFee) => {
 // davr alohida proratsiya qilinib, kunlar QO'SHILADI (bir kun ikki marta
 // sanalmaydi: davrlar a'zolik bo'yicha kesishmaydi). periods bo'sh bo'lsa
 // bitta {joinedAt, leftAt} davr sifatida qaraladi.
-const sumPayableDays = ({ year, month, periods }) => {
+const sumPayableDays = ({ year, month, periods, freezeWindows = [] }) => {
   let payableDays = 0;
   let totalDays = 0;
   for (const p of periods) {
@@ -87,6 +104,7 @@ const sumPayableDays = ({ year, month, periods }) => {
       joinedAt: p.joinedAt,
       leftAt: p.leftAt || null,
       leftExclusive: true,
+      freezeWindows,
     });
     totalDays = r.totalDays;
     payableDays += r.payableDays;
@@ -109,10 +127,11 @@ export const computePaymentSnapshot = ({
   leftAt = null,
   periods = null,
   discounts = [],
+  freezeWindows = [],
 }) => {
   const effPeriods = periods === null ? [{ joinedAt, leftAt }] : periods;
 
-  const main = sumPayableDays({ year, month, periods: effPeriods });
+  const main = sumPayableDays({ year, month, periods: effPeriods, freezeWindows });
   const totalDays = main.totalDays || daysInMonth(year, month);
 
   const proratedFee = Math.round(

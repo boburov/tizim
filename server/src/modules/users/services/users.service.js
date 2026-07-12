@@ -21,6 +21,7 @@ import {
 } from "../../../helpers/userRelations.helper.js";
 import { logAction as logArchiveAction } from "../../archiveReasons/services/archiveReasons.service.js";
 import * as financePaymentService from "../../finance/services/studentPayment.service.js";
+import * as studentFreezeService from "../../studentFreeze/services/studentFreeze.service.js";
 import * as teacherSalaryService from "../../teacherSalary/services/teacherSalary.service.js";
 import * as systemNotificationsService from "../../systemNotifications/services/systemNotifications.service.js";
 import { runFinanceTxn } from "../../finance/services/financeTxn.helper.js";
@@ -75,12 +76,15 @@ const enrichStudents = async (items) => {
     .map((u) => u._id);
   if (studentIds.length === 0) return items.map((u) => u.toObject());
 
-  const membershipRows = await GroupMembership.find({
-    student: { $in: studentIds },
-    leftAt: null,
-  })
-    .populate("group", { name: 1 })
-    .lean();
+  const [membershipRows, freezeMap] = await Promise.all([
+    GroupMembership.find({
+      student: { $in: studentIds },
+      leftAt: null,
+    })
+      .populate("group", { name: 1 })
+      .lean(),
+    studentFreezeService.getActiveFreezeMap(studentIds),
+  ]);
 
   const groupsMap = new Map();
   for (const m of membershipRows) {
@@ -94,6 +98,9 @@ const enrichStudents = async (items) => {
     const obj = u.toObject();
     if (u.role === ROLES.STUDENT) {
       obj.activeGroups = groupsMap.get(String(u._id)) || [];
+      const fr = freezeMap.get(String(u._id));
+      obj.isFrozen = !!fr;
+      obj.frozenSince = fr ? fr.startDate : null;
     }
     return obj;
   });
@@ -108,10 +115,15 @@ export const list = async ({
   sort = "createdAt",
   order = "desc",
 }) => {
-  // status: "active" → faqat faol, "archived" → faqat arxiv, "all" → hammasi.
+  // status: "active" → faqat faol, "archived" → faqat arxiv,
+  // "frozen" → hozir muzlatilgan (faol o'quvchilar ichida), "all" → hammasi.
   const filter = { isDeleted: { $ne: true } };
   if (status === "active") filter.isActive = true;
   else if (status === "archived") filter.isActive = false;
+  else if (status === "frozen") {
+    filter.isActive = true;
+    filter._id = { $in: await studentFreezeService.getActiveFrozenStudentIds() };
+  }
   // Rol berilsa - o'sha rol; berilmasa ("Hammasi") - faqat o'quvchi/o'qituvchi
   // (owner Foydalanuvchilar ro'yxatida ko'rsatilmaydi).
   filter.role = role || { $in: [ROLES.STUDENT, ROLES.TEACHER] };

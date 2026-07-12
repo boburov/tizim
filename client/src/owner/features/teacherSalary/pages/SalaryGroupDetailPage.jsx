@@ -1,6 +1,6 @@
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { useParams } from "react-router-dom";
 import useGroupQuery from "@/owner/features/groups/hooks/useGroupQuery";
+import BackLink from "@/shared/components/ui/link/BackLink";
 import SalaryPeriodsManager from "../components/SalaryPeriodsManager";
 
 const SalaryGroupDetailPage = () => {
@@ -10,13 +10,7 @@ const SalaryGroupDetailPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <Link
-          to="/owner/finance/teacher-salaries/maosh-belgilash"
-          className="text-muted-foreground hover:text-foreground"
-          aria-label="Orqaga"
-        >
-          <ArrowLeft className="size-5" />
-        </Link>
+        <BackLink to="/owner/finance/teacher-salaries/maosh-belgilash" />
         <h2 className="text-lg font-semibold">{group?.name || "Guruh"}</h2>
       </div>
 

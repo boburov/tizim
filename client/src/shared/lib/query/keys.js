@@ -15,6 +15,10 @@ export const qk = Object.freeze({
     password: (id) => ["users", "password", id],
     groupHistory: (id, params) => ["users", id, "group-history", params],
   },
+  studentFreezes: {
+    all: () => ["studentFreezes"],
+    byStudent: (id) => ["studentFreezes", id],
+  },
   archiveReasons: {
     all: () => ["archiveReasons"],
     list: (params) => ["archiveReasons", "list", params],

@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 import Attendance from "../../../models/attendance.model.js";
-import AttendanceExemption from "../../../models/attendanceExemption.model.js";
 import AttendanceSettings from "../../../models/attendanceSettings.model.js";
 import Group from "../../../models/group.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
@@ -22,6 +21,7 @@ import {
   isHolidayOn,
 } from "../../../helpers/attendance.helper.js";
 import { holidayKeySetForRange } from "../../holidays/services/holidays.service.js";
+import { loadExemptionsWithFreezes } from "../../../helpers/studentFreeze.helper.js";
 import { listForTeacher } from "../../groups/services/groups.service.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
 import logger from "../../../config/logger.js";
@@ -103,10 +103,7 @@ export const listForGroupOnDate = async (groupId, dateInput, slotInput = null) =
       slot: selectedSlot,
       isDeleted: { $ne: true },
     }),
-    AttendanceExemption.find({
-      student: { $in: studentIds },
-      isActive: true,
-    }),
+    loadExemptionsWithFreezes({ student: { $in: studentIds } }),
   ]);
 
   const attMap = new Map();
@@ -507,10 +504,7 @@ const buildStudentClassDays = async (
   );
 
   const [exemptions, holidaySet] = await Promise.all([
-    AttendanceExemption.find({
-      student: studentId,
-      isActive: true,
-    }),
+    loadExemptionsWithFreezes({ student: studentId }),
     holidayKeySetForRange(rangeStart, rangeEnd),
   ]);
 
@@ -685,10 +679,7 @@ export const getGroupMonthly = async (groupId, { year, month }) => {
       dateKey: { $in: Array.from(dateKeys) },
       isDeleted: { $ne: true },
     }).lean(),
-    AttendanceExemption.find({
-      student: { $in: studentIds },
-      isActive: true,
-    }),
+    loadExemptionsWithFreezes({ student: { $in: studentIds } }),
   ]);
 
   // student|dateKey -> Map(slot -> att) - slot-fallback (jadval o'zgarishi) uchun
@@ -1006,7 +997,7 @@ export const getStudentSummary = async (
 
   const [memberships, exemptions, holidaySet] = await Promise.all([
     GroupMembership.find(membershipFilter).populate("group"),
-    AttendanceExemption.find({ student: studentId, isActive: true }),
+    loadExemptionsWithFreezes({ student: studentId }),
     holidayKeySetForRange(from, to),
   ]);
 
@@ -1048,10 +1039,7 @@ export const getGroupSummary = async (groupId, { fromDate, toDate }) => {
 
   const studentIds = memberships.filter((m) => m.student).map((m) => m.student._id);
   const [exemptions, holidaySet] = await Promise.all([
-    AttendanceExemption.find({
-      student: { $in: studentIds },
-      isActive: true,
-    }),
+    loadExemptionsWithFreezes({ student: { $in: studentIds } }),
     holidayKeySetForRange(from, to),
   ]);
   const exempByStudent = new Map();
@@ -1204,7 +1192,7 @@ export const getDashboardStats = async ({ fromDate, toDate, page = 1, limit = 20
         $or: [{ leftAt: null }, { leftAt: { $gte: from } }],
         isDeleted: { $ne: true },
       }).populate("group"),
-      AttendanceExemption.find({ student: { $in: studentIds }, isActive: true }),
+      loadExemptionsWithFreezes({ student: { $in: studentIds } }),
       // dateKey bo'yicha filtrlaymiz (date emas) - summary yo'llari bilan bir xil
       // kun semantikasi. Aks holda `date` maydonida vaqt komponenti bo'lgan
       // (seed/legacy) yozuvlar oraliq oxirgi kunida tushib qolib, dashboard

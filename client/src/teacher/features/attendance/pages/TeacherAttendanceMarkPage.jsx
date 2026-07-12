@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
 import InputField from "@/shared/components/ui/input/InputField";
+import BackLink from "@/shared/components/ui/link/BackLink";
 import { AttendanceGrid, SessionTabs } from "@/shared/components/attendance";
 import useAttendanceForGroupDateQuery from "@/owner/features/attendance/hooks/useAttendanceForGroupDateQuery";
 import useBulkRecordMutation from "@/owner/features/attendance/hooks/useBulkRecordMutation";
-import useGoBack from "@/shared/hooks/useGoBack";
 import { todayInput } from "@/shared/utils/formatDate";
 
 const TeacherAttendanceMarkPage = () => {
@@ -15,7 +14,6 @@ const TeacherAttendanceMarkPage = () => {
 
   const { data, isLoading } = useAttendanceForGroupDateQuery(groupId, date, slot);
   const { mutate, isPending } = useBulkRecordMutation();
-  const goBack = useGoBack("/teacher/attendance");
 
   const effectiveSlot = slot ?? data?.slot ?? "";
 
@@ -28,13 +26,7 @@ const TeacherAttendanceMarkPage = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          <button
-            type="button"
-            onClick={goBack}
-            className="size-9 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50 cursor-pointer"
-          >
-            <ArrowLeft className="size-4" />
-          </button>
+          <BackLink to="/teacher/attendance" className="shrink-0" />
           <h1 className="text-2xl font-semibold truncate">
             {data?.group?.name || "Davomat"}
           </h1>

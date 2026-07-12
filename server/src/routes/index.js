@@ -1,6 +1,7 @@
 import { Router } from "express";
 import authRouter from "../modules/auth/auth.routes.js";
 import usersRouter from "../modules/users/users.routes.js";
+import studentFreezeRouter from "../modules/studentFreeze/studentFreeze.routes.js";
 import archiveReasonsRouter from "../modules/archiveReasons/archiveReasons.routes.js";
 import leadsRouter from "../modules/leads/leads.routes.js";
 import leadOptionsRouter from "../modules/leadOptions/leadOptions.routes.js";
@@ -34,6 +35,7 @@ router.get("/health", (_req, res) =>
 router.use("/auth", authRouter);
 router.use("/search", searchRouter);
 router.use("/users", usersRouter);
+router.use("/student-freezes", studentFreezeRouter);
 router.use("/archive-reasons", archiveReasonsRouter);
 router.use("/leads", leadsRouter);
 router.use("/lead-options", leadOptionsRouter);

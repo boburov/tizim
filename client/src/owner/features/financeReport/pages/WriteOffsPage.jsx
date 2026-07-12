@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import useObjectState from "@/shared/hooks/useObjectState";
+import BackLink from "@/shared/components/ui/link/BackLink";
 import SelectField from "@/shared/components/ui/select/SelectField";
 import { formatMoney } from "@/shared/utils/formatMoney";
 import useGroupsListQuery from "@/owner/features/groups/hooks/useGroupsListQuery";
@@ -38,13 +39,16 @@ const WriteOffsPage = () => {
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-zinc-900">
-            Undirilmagan to'lovlar
-          </h1>
-          <p className="mt-0.5 text-sm text-zinc-500">
-            Qarzi bilan chiqib ketgan o'quvchilar - hisobdan chiqarilgan (zarar)
-          </p>
+        <div className="flex items-center gap-3">
+          <BackLink to="/owner/finance/accounting" />
+          <div>
+            <h1 className="text-2xl font-semibold text-zinc-900">
+              Undirilmagan to'lovlar
+            </h1>
+            <p className="mt-0.5 text-sm text-zinc-500">
+              Qarzi bilan chiqib ketgan o'quvchilar - hisobdan chiqarilgan (zarar)
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-44">

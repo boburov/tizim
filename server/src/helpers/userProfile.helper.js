@@ -71,11 +71,19 @@ export const buildUserProfile = async (userInput) => {
       toDate: monthEnd,
     });
 
+    // Muzlatish holati (hozir muzlatilganmi) - lazy import (circular oldini olish)
+    const { getActiveFreeze } = await import(
+      "../modules/studentFreeze/services/studentFreeze.service.js"
+    );
+    const activeFreeze = await getActiveFreeze(user._id);
+
     return {
       ...base,
       activeGroups,
       attendanceSummary,
       removalNotice,
+      isFrozen: !!activeFreeze,
+      activeFreeze: activeFreeze || null,
       telegram,
     };
   }

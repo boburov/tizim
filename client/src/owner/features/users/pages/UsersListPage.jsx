@@ -11,6 +11,8 @@ import UserPermanentDeleteModal from "../components/UserPermanentDeleteModal";
 import UserRestoreModal from "../components/UserRestoreModal";
 import UserEditModal from "../components/UserEditModal";
 import UserPasswordModal from "../components/UserPasswordModal";
+import UserFreezeModal from "../components/UserFreezeModal";
+import UserUnfreezeModal from "../components/UserUnfreezeModal";
 import useModal from "@/shared/hooks/useModal";
 import { MODAL } from "@/shared/constants/modals";
 import { ROLES } from "@/shared/constants/roles";
@@ -72,6 +74,15 @@ const UsersListPage = () => {
       </ModalWrapper>
       <ModalWrapper name={MODAL.USER_PASSWORD} title="Foydalanuvchi paroli">
         <UserPasswordModal />
+      </ModalWrapper>
+      <ModalWrapper name={MODAL.USER_FREEZE} title="O'quvchini muzlatish">
+        <UserFreezeModal />
+      </ModalWrapper>
+      <ModalWrapper
+        name={MODAL.USER_UNFREEZE}
+        title="Muzlatishdan chiqarish"
+      >
+        <UserUnfreezeModal />
       </ModalWrapper>
     </div>
   );

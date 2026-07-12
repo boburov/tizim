@@ -1,5 +1,5 @@
 import { Outlet, useParams } from "react-router-dom";
-import { Pencil, Trash2, Archive } from "lucide-react";
+import { Pencil, Trash2, Archive, Snowflake, Sun } from "lucide-react";
 
 import Button from "@/shared/components/ui/button/Button";
 import Badge from "@/shared/components/ui/badge/Badge";
@@ -11,6 +11,9 @@ import UserEditModal from "../components/UserEditModal";
 import UserDeleteModal from "../components/UserDeleteModal";
 import UserPermanentDeleteModal from "../components/UserPermanentDeleteModal";
 import UserPasswordModal from "../components/UserPasswordModal";
+import UserFreezeModal from "../components/UserFreezeModal";
+import UserUnfreezeModal from "../components/UserUnfreezeModal";
+import UserFreezeHistory from "../components/UserFreezeHistory";
 import {
   ExemptionCreateModal,
   ExemptionDeleteModal,
@@ -85,6 +88,9 @@ const UserDetailPage = () => {
           <Badge variant={hasValidRole(profile.role) ? "secondary" : "destructive"}>
             {getRoleLabel(profile.role)}
           </Badge>
+          {isStudent && profile.isFrozen && (
+            <Badge className="bg-sky-100 text-sky-700">Muzlatilgan</Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -92,6 +98,27 @@ const UserDetailPage = () => {
             <Pencil className="size-4" />
             Tahrirlash
           </Button>
+          {isStudent && profile.isActive && (
+            profile.isFrozen ? (
+              <Button
+                variant="outline"
+                className="text-sky-600"
+                onClick={() => openModal(MODAL.USER_UNFREEZE, { user: profile })}
+              >
+                <Sun className="size-4" />
+                Muzlatishdan chiqarish
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="text-sky-600"
+                onClick={() => openModal(MODAL.USER_FREEZE, { user: profile })}
+              >
+                <Snowflake className="size-4" />
+                Muzlatish
+              </Button>
+            )
+          )}
           <Button
             variant="outline"
             className="text-amber-600"
@@ -111,6 +138,8 @@ const UserDetailPage = () => {
         </div>
       </div>
 
+      {isStudent && <UserFreezeHistory studentId={id} />}
+
       <TabsLinks items={tabs} />
       <Outlet context={{ profile, historyData, historyLoading, noActiveGroup }} />
 
@@ -127,6 +156,21 @@ const UserDetailPage = () => {
       <ModalWrapper name={MODAL.USER_PASSWORD} title="Foydalanuvchi paroli">
         <UserPasswordModal />
       </ModalWrapper>
+
+      {/* Muzlatish modallari (faqat o'quvchi) */}
+      {isStudent && (
+        <>
+          <ModalWrapper name={MODAL.USER_FREEZE} title="O'quvchini muzlatish">
+            <UserFreezeModal />
+          </ModalWrapper>
+          <ModalWrapper
+            name={MODAL.USER_UNFREEZE}
+            title="Muzlatishdan chiqarish"
+          >
+            <UserUnfreezeModal />
+          </ModalWrapper>
+        </>
+      )}
 
       {/* O'quvchini guruhga qo'shish */}
       {isStudent && (

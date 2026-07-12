@@ -22,6 +22,8 @@ export const MODAL = Object.freeze({
   USER_RESTORE: "user:restore",
   USER_PERMANENT_DELETE: "user:permanentDelete",
   USER_PASSWORD: "user:password",
+  USER_FREEZE: "user:freeze",
+  USER_UNFREEZE: "user:unfreeze",
 
   // Archive reasons
   ARCHIVE_REASON_CREATE: "archiveReason:create",

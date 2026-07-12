@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
 import InputField from "@/shared/components/ui/input/InputField";
+import BackLink from "@/shared/components/ui/link/BackLink";
 import { SessionTabs } from "@/shared/components/attendance";
 import { GradeGrid } from "@/owner/features/grades";
 import useGradesForGroupDateQuery from "@/owner/features/grades/hooks/useGradesForGroupDateQuery";
 import useGradeBulkRecordMutation from "@/owner/features/grades/hooks/useGradeBulkRecordMutation";
-import useGoBack from "@/shared/hooks/useGoBack";
 import { todayInput } from "@/shared/utils/formatDate";
 
 const TeacherGradesMarkPage = () => {
@@ -16,7 +15,6 @@ const TeacherGradesMarkPage = () => {
 
   const { data, isLoading } = useGradesForGroupDateQuery(groupId, date, slot);
   const { mutate, isPending } = useGradeBulkRecordMutation();
-  const goBack = useGoBack("/teacher/grades");
 
   const effectiveSlot = slot ?? data?.slot ?? "";
 
@@ -29,13 +27,7 @@ const TeacherGradesMarkPage = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          <button
-            type="button"
-            onClick={goBack}
-            className="size-9 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50 cursor-pointer"
-          >
-            <ArrowLeft className="size-4" />
-          </button>
+          <BackLink to="/teacher/grades" className="shrink-0" />
           <h1 className="text-2xl font-semibold truncate">
             {data?.group?.name || "Baholash"}
           </h1>
