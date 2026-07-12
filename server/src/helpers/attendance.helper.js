@@ -100,21 +100,19 @@ export const scheduleActiveOn = (schedule, onDate = null) => {
   const effTs = (it) =>
     it.effectiveFrom ? toUtcMidnight(it.effectiveFrom).getTime() : -Infinity;
 
-  // Har kun uchun amal qilgan (<= target) eng so'nggi effectiveFrom ni topamiz
-  const latestEffByDay = new Map();
+  // Butun-versiya (snapshot): amal qilgan (<= target) versiyalar orasidan ENG
+  // SO'NGGI effectiveFrom ni topamiz va FAQAT o'sha versiyaning qatorlarini
+  // qaytaramiz. Har effectiveFrom - to'liq jadval snapshoti bo'lgani uchun, kun
+  // olib tashlansa yangi versiyada bo'lmaydi va haqiqatan yo'qoladi (per-day
+  // fallback eski kunni tiriltirib qo'ymaydi).
+  let activeEff = null;
   for (const it of items) {
     const ts = effTs(it);
     if (ts > target) continue; // bu versiya hali amal qilmaydi
-    const cur = latestEffByDay.get(it.day);
-    if (cur === undefined || ts > cur) latestEffByDay.set(it.day, ts);
+    if (activeEff === null || ts > activeEff) activeEff = ts;
   }
-
-  // Faqat o'sha kunning eng so'nggi amal qilayotgan versiyasidagi slotlar
-  return items.filter((it) => {
-    const ts = effTs(it);
-    if (ts > target) return false;
-    return latestEffByDay.get(it.day) === ts;
-  });
+  if (activeEff === null) return [];
+  return items.filter((it) => effTs(it) === activeEff);
 };
 
 // Guruh schedule asosida diapazondagi class SESSIYALARI (har biri alohida).
@@ -124,50 +122,20 @@ export const scheduleActiveOn = (schedule, onDate = null) => {
 // group.startDate bo'lsa - undan oldingi kunlar hisoblanmaydi.
 // holidaySet berilsa - bayram kunlari hisoblanmaydi.
 export const getClassDaysInRange = (group, fromDate, toDate, holidaySet = null) => {
-  // Versiyalash: har bir kun (dow) uchun slotlarni effectiveFrom bo'yicha
-  // guruhlaymiz, shunda har sanada o'sha sanada AMAL QILGAN versiyani tanlaymiz.
-  // dayMap: dow -> [{ effTs, slots: [{startTime,endTime}] }] (effTs bo'yicha o'suvchi)
-  const byDayEff = new Map(); // dow -> Map(effTs -> slots[])
-  for (const item of group?.schedule || []) {
-    const effTs = item.effectiveFrom
-      ? toUtcMidnight(item.effectiveFrom).getTime()
-      : -Infinity;
-    if (!byDayEff.has(item.day)) byDayEff.set(item.day, new Map());
-    const versions = byDayEff.get(item.day);
-    if (!versions.has(effTs)) versions.set(effTs, []);
-    versions.get(effTs).push({ startTime: item.startTime, endTime: item.endTime });
-  }
-  // Har versiya slotlarini vaqt bo'yicha tartiblaymiz + versiyalarni effTs o'suvchi
-  const dayMap = new Map(); // dow -> [{ effTs, slots }]
-  for (const [dow, versions] of byDayEff) {
-    const arr = [];
-    for (const [effTs, slots] of versions) {
-      slots.sort((a, b) => a.startTime.localeCompare(b.startTime));
-      arr.push({ effTs, slots });
-    }
-    arr.sort((a, b) => a.effTs - b.effTs);
-    dayMap.set(dow, arr);
-  }
-
-  // Berilgan sana (ts) uchun o'sha kunda amal qilgan versiyaning slotlari
-  const slotsActiveOn = (dow, ts) => {
-    const versions = dayMap.get(dow);
-    if (!versions) return null;
-    let active = null;
-    for (const v of versions) {
-      if (v.effTs <= ts) active = v.slots;
-      else break; // o'suvchi tartib - keyingilari kelajakda
-    }
-    return active;
-  };
-
+  // Versiyalash: har sanada AMAL QILGAN butun versiyani (snapshot) scheduleActiveOn
+  // orqali olamiz - shunda olib tashlangan kunlar per-day fallback bilan
+  // tiriltirilmaydi (kun o'chirilsa haqiqatan yo'qoladi).
+  const schedule = group?.schedule || [];
   const startTs = group?.startDate ? toUtcMidnight(group.startDate).getTime() : null;
   const result = [];
   for (const d of iterateDays(fromDate, toDate)) {
     if (startTs !== null && d.getTime() < startTs) continue;
     const dow = dayOfWeekOf(d);
-    const slots = slotsActiveOn(dow, d.getTime());
-    if (!slots || slots.length === 0) continue;
+    const slots = scheduleActiveOn(schedule, d)
+      .filter((s) => s.day === dow)
+      .map((s) => ({ startTime: s.startTime, endTime: s.endTime }))
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    if (slots.length === 0) continue;
     const dKey = dateKeyOf(d);
     if (holidaySet && holidaySet.has(dKey)) continue;
     const multi = slots.length > 1;

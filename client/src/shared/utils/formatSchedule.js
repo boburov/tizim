@@ -39,28 +39,49 @@ const dayTs = (d) => {
   return Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
 };
 
+// "Bugun" ni Asia/Tashkent kalendar kuni bo'yicha UTC-yarim tun timestampiga
+// keltiradi (server localTodayMidnight (+5) bilan mos). Oddiy `dayTs(new Date())`
+// UTC kunini olgani uchun mahalliy yarim tundan keyin (00:00–05:00) hali kechagi
+// UTC kun bo'lib qoladi - shunda bugundan amal qiluvchi yangi jadval versiyasi
+// "hali amal qilmaydi" deb noto'g'ri hisoblanib, olib tashlangan kun tiriladi.
+const localTodayTs = () => {
+  try {
+    // en-CA → YYYY-MM-DD (Asia/Tashkent)
+    const [y, m, d] = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Tashkent",
+    })
+      .format(new Date())
+      .split("-")
+      .map(Number);
+    return Date.UTC(y, m - 1, d);
+  } catch {
+    const n = new Date();
+    return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+};
+
 // Versiyalash: berilgan sanada (default - bugun) AMAL QILGAN jadval versiyasini
 // qaytaradi. Har kun uchun effectiveFrom <= sana bo'lgan slotlardan eng so'nggi
 // effectiveFrom ga ega bo'lganlari (null = boshidan). Backend scheduleActiveOn
 // bilan bir xil mantiq.
 export const scheduleActiveOn = (schedule = [], onDate = null) => {
   if (!Array.isArray(schedule) || schedule.length === 0) return [];
-  const target = onDate ? dayTs(onDate) : dayTs(new Date());
+  const target = onDate ? dayTs(onDate) : localTodayTs();
   const effTs = (it) =>
     it.effectiveFrom ? dayTs(it.effectiveFrom) : -Infinity;
 
-  const latestEffByDay = new Map();
+  // Butun-versiya (snapshot): amal qilgan (<= target) versiyalar orasidan eng
+  // so'nggi effectiveFrom ni topib, faqat o'sha versiya qatorlarini qaytaramiz.
+  // Shunda jadvaldan kun olib tashlansa, u haqiqatan yo'qoladi (eski versiyadan
+  // per-day fallback bilan tiriltirilmaydi).
+  let activeEff = null;
   for (const it of schedule) {
     const ts = effTs(it);
     if (ts > target) continue;
-    const cur = latestEffByDay.get(it.day);
-    if (cur === undefined || ts > cur) latestEffByDay.set(it.day, ts);
+    if (activeEff === null || ts > activeEff) activeEff = ts;
   }
-  return schedule.filter((it) => {
-    const ts = effTs(it);
-    if (ts > target) return false;
-    return latestEffByDay.get(it.day) === ts;
-  });
+  if (activeEff === null) return [];
+  return schedule.filter((it) => effTs(it) === activeEff);
 };
 
 // Jadvalni hafta kuni, so'ng boshlanish vaqti bo'yicha saralaydi (nusxa qaytaradi).

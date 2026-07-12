@@ -1,7 +1,6 @@
 import Card from "@/shared/components/ui/card/Card";
 import Tooltip from "@/shared/components/ui/tooltip/Tooltip";
 import {
-  ATTENDANCE_STATUSES,
   STATUS_LABEL,
   STATUS_DOT_CLASS,
   DAY_SHORT,
@@ -11,17 +10,36 @@ import useMatrixCellMutation from "../hooks/useMatrixCellMutation";
 
 const bgOf = (status) => STATUS_DOT_CLASS[status] || "bg-slate-300";
 
-// Katakni bosganda status shu tartibda aylanadi (belgilanmagan → present → ...)
-const CYCLE = ATTENDANCE_STATUSES; // ["present", "absent", "excused", "exempt"]
+// Bu jadvalda faqat Keldi/Kelmadi ko'rinadi. Sababli(excused) va
+// Sababsiz(absent) - ikkalasi ham "Kelmadi" deb ko'rsatiladi.
+const asBinary = (status) => (status === "excused" ? "absent" : status);
+
+// Har kun sarlavhasidagi mini hisob: faqat Keldi va Kelmadi.
+// Kelmadi = jami kelmagan (sababli + sababsiz).
+const HEADER_STATS = [
+  { key: "present", label: "Keldi", text: "text-emerald-600", value: (c) => c.present },
+  {
+    key: "notcome",
+    label: "Kelmadi",
+    text: "text-rose-600",
+    value: (c) => c.absent + c.excused,
+  },
+];
+
+// Faqat Keldi/Kelmadi - legend, tsikl va katakda
+const VISIBLE_STATUSES = ["present", "absent"];
+// Katakni bosganda status shu tartibda aylanadi (belgilanmagan → Keldi → Kelmadi → ...)
+const CYCLE = VISIBLE_STATUSES;
 const nextStatus = (current) => {
   if (!current) return CYCLE[0];
-  const i = CYCLE.indexOf(current);
+  // excused ham Kelmadi hisoblanadi → keyingisi Keldi
+  const i = CYCLE.indexOf(asBinary(current));
   return CYCLE[(i + 1) % CYCLE.length];
 };
 
 const tooltipText = (dateKey, status, cell) => {
-  const parts = [`${dateKey} - ${STATUS_LABEL[status]}`];
-  if (status === "excused" && cell.reason) parts.push(cell.reason);
+  const parts = [`${dateKey} - ${STATUS_LABEL[asBinary(status)]}`];
+  if (cell.reason) parts.push(cell.reason);
   return parts.join(" · ");
 };
 
@@ -34,7 +52,7 @@ const LegendItem = ({ swatch, children }) => (
 
 const Legend = () => (
   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-600">
-    {ATTENDANCE_STATUSES.map((s) => (
+    {VISIBLE_STATUSES.map((s) => (
       <LegendItem
         key={s}
         swatch={<span className={`block w-2.5 h-2.5 rounded-full ${bgOf(s)}`} />}
@@ -110,6 +128,20 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
     );
   }
 
+  // Har bir kun (ustun) uchun status bo'yicha hisob - ustun ostida ko'rsatiladi
+  const countsByCol = {};
+  for (const d of dates) {
+    const colKey = d.colKey || d.dateKey;
+    const c = { present: 0, absent: 0, excused: 0, exempt: 0 };
+    for (const row of data.students) {
+      const cell = row.cells?.[colKey];
+      if (!cell) continue;
+      const st = cell.status || cell.defaultStatus;
+      if (st && c[st] !== undefined) c[st] += 1;
+    }
+    countsByCol[colKey] = c;
+  }
+
   return (
     <Card className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -127,6 +159,8 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
               </th>
               {dates.map((d) => {
                 const day = d.dateKey.slice(8);
+                const colKey = d.colKey || d.dateKey;
+                const c = countsByCol[colKey];
                 const headerCls = d.isHoliday
                   ? "text-rose-300"
                   : d.isClassDay
@@ -134,7 +168,7 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                     : "text-gray-300";
                 return (
                   <th
-                    key={d.colKey || d.dateKey}
+                    key={colKey}
                     title={
                       d.isHoliday
                         ? "Bayram/dam olish kuni"
@@ -142,11 +176,28 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                           ? `${day}-kun, ${d.startTime}`
                           : undefined
                     }
-                    className={`w-12 min-w-[3rem] border-b border-r border-gray-200 px-0 py-2.5 text-center font-semibold ${headerCls}`}
+                    className={`w-16 min-w-[4rem] border-b border-r border-gray-200 px-0 py-2 text-center font-semibold ${headerCls}`}
                   >
                     <div className="text-[13px] leading-none">{day}</div>
-                    <div className="mt-1 text-[10px] font-normal uppercase tracking-wide text-gray-400">
+                    <div className="mt-0.5 text-[10px] font-normal uppercase tracking-wide text-gray-400">
                       {d.slot ? d.startTime : DAY_SHORT[d.dayOfWeek]}
+                    </div>
+                    {/* Kunlik hisob - doim 4 ta slot (0 bo'lsa ham), tekis turadi */}
+                    <div className="mt-1 flex items-center justify-center gap-1 font-semibold">
+                      {HEADER_STATS.map((s) => {
+                        const v = s.value(c);
+                        return (
+                          <span
+                            key={s.key}
+                            title={`${s.label}: ${v}`}
+                            className={`text-[10px] leading-none tabular-nums ${
+                              v ? s.text : "text-gray-300"
+                            }`}
+                          >
+                            {v}
+                          </span>
+                        );
+                      })}
                     </div>
                   </th>
                 );
@@ -165,7 +216,7 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                   {dates.map((d) => {
                     const colKey = d.colKey || d.dateKey;
                     const cell = row.cells?.[colKey];
-                    const cellCls = `w-12 h-11 border-b border-r border-gray-200 ${
+                    const cellCls = `w-16 h-11 border-b border-r border-gray-200 ${
                       d.isHoliday ? "bg-rose-50/50" : ""
                     } group-hover:bg-gray-50`;
                     if (!d.isClassDay || cell === null || cell === undefined) {
@@ -173,8 +224,9 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                     }
                     const displayed = cell.status || cell.defaultStatus;
                     const label = d.slot ? `${d.dateKey} ${d.startTime}` : d.dateKey;
+                    // Sababli(excused) → Kelmadi(absent) rangida ko'rsatiladi
                     const dotCls = displayed
-                      ? `w-4 h-4 ${bgOf(displayed)}`
+                      ? `w-4 h-4 ${bgOf(asBinary(displayed))}`
                       : "w-3 h-3 border-2 border-gray-300 group-hover/cell:border-gray-400";
                     return (
                       <td key={colKey} className={cellCls}>
