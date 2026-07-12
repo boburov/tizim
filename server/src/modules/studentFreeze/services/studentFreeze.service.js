@@ -1,5 +1,6 @@
 import StudentFreeze from "../../../models/studentFreeze.model.js";
 import User from "../../../models/user.model.js";
+import GroupMembership from "../../../models/groupMembership.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
 import {
@@ -55,6 +56,27 @@ export const freeze = async (studentId, { startDate, reason, by } = {}) => {
   const start = startDate ? toUtcMidnight(startDate) : localTodayMidnight();
   if (start.getTime() > localTodayMidnight().getTime()) {
     throw new ApiError(400, "Muzlatish sanasi kelajakda bo'lishi mumkin emas");
+  }
+
+  // Muzlatish sanasi o'quvchi guruhga qo'shilgan (kelgan) kundan oldin bo'lmasin.
+  // Bir nechta faol guruh bo'lsa - eng erta qo'shilgan sana bilan cheklanadi;
+  // faol a'zolik bo'lmasa - ro'yxatga olingan sana (enrolledAt) bilan.
+  const firstJoin = await GroupMembership.findOne(
+    { student: studentId, leftAt: null, isDeleted: { $ne: true } },
+    { joinedAt: 1 },
+  )
+    .sort({ joinedAt: 1 })
+    .lean();
+  const joinBound = firstJoin
+    ? toUtcMidnight(firstJoin.joinedAt)
+    : student.enrolledAt
+      ? toUtcMidnight(student.enrolledAt)
+      : null;
+  if (joinBound && start.getTime() < joinBound.getTime()) {
+    throw new ApiError(
+      400,
+      "Muzlatish sanasi o'quvchi guruhga qo'shilgan kundan oldin bo'lishi mumkin emas",
+    );
   }
 
   const created = await StudentFreeze.create({

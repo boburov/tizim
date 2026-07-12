@@ -46,6 +46,7 @@ const UserFreezeModal = ({ user, close, isLoading, setIsLoading }) => {
         name="startDate"
         label="Muzlatish sanasi"
         value={obj.startDate}
+        min={user?.enrolledAt ? toDateInput(user.enrolledAt) : undefined}
         max={today}
         onChange={(e) => obj.setField("startDate", e.target.value)}
         disabled={isLoading}

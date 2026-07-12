@@ -924,6 +924,14 @@ export const addStudent = async (
   if (left && left.getTime() < join.getTime()) {
     throw new ApiError(400, "Tugatgan sana boshlash sanasidan oldin bo'lishi mumkin emas");
   }
+  // O'quvchini guruh boshlangan sanadan OLDIN qo'shib bo'lmaydi.
+  const groupStart = toUtcMidnight(group.startDate || group.createdAt);
+  if (join.getTime() < groupStart.getTime()) {
+    throw new ApiError(
+      400,
+      "O'quvchini guruh boshlangan sanadan oldin qo'shib bo'lmaydi",
+    );
+  }
 
   // A'zolik davrlari kesishmasligi + bitta ochiq (tugamagan) bo'lishi shart.
   const otherMems = await GroupMembership.find(
@@ -978,6 +986,18 @@ const applyMembershipDates = async (membership, { joinedAt, leftAt } = {}) => {
 
   if (newLeft && newLeft.getTime() < newJoin.getTime()) {
     throw new ApiError(400, "Tugatgan sana boshlash sanasidan oldin bo'lishi mumkin emas");
+  }
+
+  // A'zolik boshlanish sanasi guruh boshlangan sanadan oldin bo'lmasin.
+  const groupDoc = await Group.findById(groupId, { startDate: 1, createdAt: 1 }).lean();
+  if (groupDoc) {
+    const groupStart = toUtcMidnight(groupDoc.startDate || groupDoc.createdAt);
+    if (newJoin.getTime() < groupStart.getTime()) {
+      throw new ApiError(
+        400,
+        "A'zolik boshlanish sanasi guruh boshlangan sanadan oldin bo'lmasin",
+      );
+    }
   }
 
   // Qulf: joinedAt oldinga surilyaptimi (yangi sana eskidan kech)?

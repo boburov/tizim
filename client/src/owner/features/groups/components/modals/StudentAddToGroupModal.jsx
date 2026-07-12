@@ -41,6 +41,14 @@ const StudentAddToGroupModal = ({
   const available = groups.filter((g) => !excluded.has(String(g._id)));
   const options = available.map((g) => ({ value: g._id, label: g.name }));
 
+  // Boshlash sanasi guruh boshlangan sanadan oldin bo'lmasin (min).
+  const selectedGroup = available.find(
+    (g) => String(g._id) === String(groupId),
+  );
+  const joinMin = selectedGroup?.startDate
+    ? toDateInput(selectedGroup.startDate)
+    : undefined;
+
   // Guruh tanlanganda boshlash sanasini guruh boshlangan sanaga moslaymiz.
   const onSelectGroup = (v) => {
     const g = available.find((x) => String(x._id) === String(v));
@@ -89,6 +97,7 @@ const StudentAddToGroupModal = ({
         name="joinedAt"
         label="Boshlash sanasi"
         value={joinedAt}
+        min={joinMin}
         max={joinedAt > todayInput() ? joinedAt : todayInput()}
         onChange={(e) => setField("joinedAt", e.target.value)}
         disabled={isLoading}

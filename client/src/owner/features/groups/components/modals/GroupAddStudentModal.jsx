@@ -158,6 +158,7 @@ const GroupAddStudentModal = ({
         name="joinedAt"
         label="Boshlash sanasi"
         value={joinedAt}
+        min={groupStartedAt ? toDateInput(groupStartedAt) : undefined}
         max={joinedAt > todayInput() ? joinedAt : todayInput()}
         onChange={(e) => setField("joinedAt", e.target.value)}
         disabled={isLoading}
