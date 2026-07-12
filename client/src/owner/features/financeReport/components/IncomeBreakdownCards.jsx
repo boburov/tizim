@@ -63,19 +63,19 @@ const IncomeBreakdownCards = ({ income }) => (
   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
     <Card
       icon={CalendarClock}
-      label="Kelishi kerak bo'lgan summa"
+      label="Yig'ilishi kerak bo'lgan summa"
       value={income?.billed}
       hint="Bu oy hisoblangan (reja)"
     />
     <Card
       icon={Coins}
-      label="Kelgan summa"
+      label="Yig'ilgan summa"
       value={income?.collected}
       hint="Bu oy yig'ilgan"
     />
     <Card
       icon={Wallet}
-      label="Qarz"
+      label="Qarzdorlik"
       value={income?.outstanding}
       hint="Undiriladigan qoldiq"
       tone="debt"
