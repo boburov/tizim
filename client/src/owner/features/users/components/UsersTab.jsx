@@ -68,6 +68,7 @@ const UsersTab = ({ role }) => {
             sort={sort}
             order={order}
             onSort={handleSort}
+            startIndex={(page - 1) * LIMIT}
           />
           {totalPages > 1 && (
             <Pagination

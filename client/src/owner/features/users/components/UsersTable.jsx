@@ -66,6 +66,7 @@ const UsersTable = ({
   sort,
   order,
   onSort,
+  startIndex = 0,
 }) => {
   const { openModal } = useModal();
   const navigate = useNavigate();
@@ -135,7 +136,9 @@ const UsersTable = ({
                 onClick={() => navigate(`/owner/users/${u._id}`)}
                 className="border-t cursor-pointer transition-colors hover:bg-gray-50"
               >
-                <td className="px-4 py-2 text-muted-foreground">{i + 1}</td>
+                <td className="px-4 py-2 text-muted-foreground">
+                  {startIndex + i + 1}
+                </td>
                 <td className="px-4 py-2">
                   <Link
                     to={`/owner/users/${u._id}`}
