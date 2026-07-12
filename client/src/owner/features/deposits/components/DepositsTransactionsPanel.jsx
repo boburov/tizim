@@ -154,7 +154,7 @@ const DepositsTransactionsPanel = () => {
         <div className="flex gap-2">
           <Button onClick={() => openModal(MODAL.DEPOSIT_ADD, { mode: "add" })}>
             <Plus className="size-4" />
-            Depozit qo'shish
+            To'lov qo'shish
           </Button>
           <Button variant="outline" onClick={() => openModal(MODAL.DEPOSIT_WITHDRAW, { mode: "withdraw" })}>
             <Minus className="size-4" />
@@ -172,10 +172,10 @@ const DepositsTransactionsPanel = () => {
         empty={<EmptyState title="Tranzaksiyalar yo'q" />}
       />
 
-      <ModalWrapper name={MODAL.DEPOSIT_ADD} title="Depozit qo'shish" className="max-w-md">
+      <ModalWrapper name={MODAL.DEPOSIT_ADD} title="To'lov qo'shish" className="max-w-md">
         <DepositFormModal />
       </ModalWrapper>
-      <ModalWrapper name={MODAL.DEPOSIT_WITHDRAW} title="Depozitdan yechib olish" className="max-w-md">
+      <ModalWrapper name={MODAL.DEPOSIT_WITHDRAW} title="To'lovdan yechib olish" className="max-w-md">
         <DepositFormModal />
       </ModalWrapper>
     </div>

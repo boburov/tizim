@@ -59,7 +59,7 @@ const DepositsReportPanel = () => {
           value={data?.heldTotal ?? 0}
           icon={Wallet}
           isMoney
-          hint="Hozir depozitda"
+          hint="Hozir to'lovda"
         />
         <StatCard
           label="Jami kirim"

@@ -39,7 +39,7 @@ const UserDepositPanel = () => {
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => openModal(MODAL.DEPOSIT_ADD, { mode: "add", student })}>
           <Plus className="size-4" />
-          Depozit qo'shish
+          To'lov qo'shish
         </Button>
         <Button
           variant="outline"
@@ -63,10 +63,10 @@ const UserDepositPanel = () => {
         <DepositHistoryList rows={history} isLoading={isLoading} />
       </div>
 
-      <ModalWrapper name={MODAL.DEPOSIT_ADD} title="Depozit qo'shish" className="max-w-md">
+      <ModalWrapper name={MODAL.DEPOSIT_ADD} title="To'lov qo'shish" className="max-w-md">
         <DepositFormModal />
       </ModalWrapper>
-      <ModalWrapper name={MODAL.DEPOSIT_WITHDRAW} title="Depozitdan yechib olish" className="max-w-md">
+      <ModalWrapper name={MODAL.DEPOSIT_WITHDRAW} title="To'lovdan yechib olish" className="max-w-md">
         <DepositFormModal />
       </ModalWrapper>
     </div>

@@ -56,7 +56,7 @@ const GroupPermanentDeleteModal = ({ group, close, isLoading, setIsLoading }) =>
           </ul>
           <p className="mt-2">
             O'quvchilar va o'qituvchilar o'chmaydi - faqat ushbu guruh bilan bog'liq
-            ma'lumotlar. Depozitdan qoplangan to'lovlar o'quvchilar depozitiga qaytariladi.
+            ma'lumotlar. To'lovdan qoplangan to'lovlar o'quvchilar to'loviga qaytariladi.
           </p>
         </div>
 

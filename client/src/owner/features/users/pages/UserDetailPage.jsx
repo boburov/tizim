@@ -72,7 +72,7 @@ const UserDetailPage = () => {
       { to: `${BASE}/davomat`, label: "Davomat" },
       { to: `${BASE}/baholar`, label: "Baholar" },
       { to: `${BASE}/ozod`, label: "Davomatdan ozod" },
-      { to: `${BASE}/depozit`, label: "Depozit" },
+      { to: `${BASE}/depozit`, label: "To'lov" },
       { to: `${BASE}/tarix`, label: "Guruhlar tarixi" },
       { to: `${BASE}/arxiv`, label: "Arxiv" },
     );

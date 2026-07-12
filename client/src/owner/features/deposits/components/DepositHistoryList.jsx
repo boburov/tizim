@@ -16,7 +16,7 @@ const DepositHistoryList = ({ rows = [], isLoading }) => {
     return <div className="p-4 text-center text-muted-foreground">Yuklanmoqda...</div>;
   }
   if (!rows.length) {
-    return <EmptyState title="Tranzaksiyalar yo'q" description="Hali depozit harakati yo'q." />;
+    return <EmptyState title="Tranzaksiyalar yo'q" description="Hali to'lov harakati yo'q." />;
   }
 
   return (

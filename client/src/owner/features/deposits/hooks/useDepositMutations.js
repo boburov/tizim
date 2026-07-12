@@ -31,17 +31,17 @@ const makeMutation = (fn, successMsg) => (options = {}) => {
 
 export const useDepositTopupMutation = makeMutation(
   (body) => depositsAPI.topup(body).then((r) => r.data.data),
-  "Depozit qo'shildi",
+  "To'lov qo'shildi",
 );
 
 export const useDepositWithdrawMutation = makeMutation(
   (body) => depositsAPI.withdraw(body).then((r) => r.data.data),
-  "Depozitdan yechib olindi",
+  "To'lovdan yechib olindi",
 );
 
 export const useDepositApplyMutation = makeMutation(
   (body) => depositsAPI.apply(body).then((r) => r.data.data),
-  "Depozitdan qoplandi",
+  "To'lovdan qoplandi",
 );
 
 export const useDepositTxnRemoveMutation = makeMutation(

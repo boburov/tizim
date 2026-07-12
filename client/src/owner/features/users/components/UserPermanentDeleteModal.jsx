@@ -19,7 +19,7 @@ const CASCADE_INFO = {
     subject: "o'quvchi",
     items: [
       "To'lovlar va to'lov tranzaksiyalari",
-      "Depozit (garov) va depozit tranzaksiyalari",
+      "To'lov (garov) va to'lov tranzaksiyalari",
       "Guruh a'zoliklari (o'qish davrlari)",
       "Davomat va baholar",
       "Chegirmalar va fikr-mulohazalar",

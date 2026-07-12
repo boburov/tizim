@@ -681,7 +681,7 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
       if (total > 0) {
         await depositService.refundToDeposit(sid, total, {
           session,
-          note: "Guruh o'chirildi - depozitga qaytarildi",
+          note: "Guruh o'chirildi - to'lovga qaytarildi",
         });
       }
     }

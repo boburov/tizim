@@ -11,7 +11,7 @@ const DepositsPage = () => {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Depozitlar</h1>
+      <h1 className="text-2xl font-semibold">To'lovlar</h1>
       <TabsLinks items={items} />
       <Outlet />
     </div>

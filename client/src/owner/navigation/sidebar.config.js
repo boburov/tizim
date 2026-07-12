@@ -69,7 +69,7 @@ const ownerSidebar = [
         permission: "finance.read",
       },
       {
-        title: "Depozitlar",
+        title: "To'lovlar",
         url: "/owner/finance/deposits",
         permission: "finance.read",
       },

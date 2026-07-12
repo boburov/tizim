@@ -109,7 +109,7 @@ export const withdraw = async (studentId, { amount, method, paidAt, note }, curr
   const deposit = await getOrCreate(studentId);
   const updated = await applyBalanceDelta(deposit._id, -amt);
   if (!updated) {
-    throw new ApiError(400, `Depozitda yetarli mablag' yo'q (balans: ${deposit.balance} so'm)`);
+    throw new ApiError(400, `To'lovda yetarli mablag' yo'q (balans: ${deposit.balance} so'm)`);
   }
   await DepositTransaction.create({
     student: deposit.student,
@@ -159,7 +159,7 @@ const applyToPayment = async (deposit, payment, amount, currentUser) => {
       source: "deposit",
       method: "cash",
       paidAt: localTodayMidnight(),
-      note: "Depozitdan qoplandi",
+      note: "To'lovdan qoplandi",
       createdBy: currentUser?._id || null,
     });
   } catch (err) {
@@ -220,7 +220,7 @@ export const autoApplyForMonth = async (year, month) => {
 const refundOverpayChunk = async (deposit, planId, take, note) => {
   await studentPaymentService.applyPaidDelta(planId, -take);
   const balUpd = await applyBalanceDelta(deposit._id, take);
-  if (!balUpd) throw new ApiError(500, "Depozitga qaytarib bo'lmadi");
+  if (!balUpd) throw new ApiError(500, "To'lovga qaytarib bo'lmadi");
   await DepositTransaction.create({
     student: deposit.student,
     deposit: deposit._id,
@@ -274,7 +274,7 @@ export const reconcileDepositOverpay = async (paymentId, { capAmount } = {}) => 
       deposit,
       plan._id,
       take,
-      "Oylik to'lov kamayishi - depozitga qaytarildi",
+      "Oylik to'lov kamayishi - to'lovga qaytarildi",
     );
     reversed += take;
   }
@@ -286,7 +286,7 @@ export const reconcileDepositOverpay = async (paymentId, { capAmount } = {}) => 
       deposit,
       plan._id,
       directExcess,
-      "Ortiqcha to'lov - depozitga qaytarildi",
+      "Ortiqcha to'lov - to'lovga qaytarildi",
     );
   }
 };
@@ -302,7 +302,7 @@ export const refundToDeposit = async (
 ) => {
   const deposit = await getOrCreate(studentId, { session });
   const upd = await applyBalanceDelta(deposit._id, amount, { session });
-  if (!upd) throw new ApiError(500, "Depozitga qaytarib bo'lmadi");
+  if (!upd) throw new ApiError(500, "To'lovga qaytarib bo'lmadi");
   await DepositTransaction.create(
     [
       {
@@ -311,7 +311,7 @@ export const refundToDeposit = async (
         type: "refund",
         amount,
         balanceAfter: upd.balance,
-        note: note || "To'lov bekor qilindi - depozitga qaytarildi",
+        note: note || "To'lov bekor qilindi - to'lovga qaytarildi",
         paidAt: localTodayMidnight(),
       },
     ],

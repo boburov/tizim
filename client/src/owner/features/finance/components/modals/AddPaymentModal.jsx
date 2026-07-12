@@ -163,7 +163,7 @@ const AddPaymentModal = ({ payment, close, setIsLoading }) => {
         {overflow > 0 && (
           <p className="text-xs text-muted-foreground">
             Ortig'i ({formatMoney(overflow)}) keyingi qoldiq oylarga, undan ortig'i
-            esa garovga (depozit) o'tadi.
+            esa garovga (to'lov) o'tadi.
           </p>
         )}
         <div className="grid grid-cols-2 gap-3">
