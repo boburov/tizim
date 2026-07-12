@@ -69,6 +69,11 @@ const ownerSidebar = [
         permission: "finance.read",
       },
       {
+        title: "Undirilmagan to'lovlar",
+        url: "/owner/finance/write-offs",
+        permission: "finance.read",
+      },
+      {
         title: "Depozitlar",
         url: "/owner/finance/deposits",
         permission: "finance.read",

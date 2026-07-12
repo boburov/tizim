@@ -83,7 +83,7 @@ import {
   SalaryConfigsPage,
   SalaryGroupDetailPage,
 } from "@/owner/features/teacherSalary";
-import { FinanceReportPage } from "@/owner/features/financeReport";
+import { FinanceReportPage, WriteOffsPage } from "@/owner/features/financeReport";
 import { ProfilePage } from "@/owner/features/profile";
 import { StudentStatsPage } from "@/owner/features/studentStats";
 import {
@@ -181,6 +181,9 @@ const OwnerRoutes = () => (
 
     {/* Moliyaviy hisob-kitob - umumiy hisobot sahifasi */}
     <Route path="finance/accounting" element={<FinanceReportPage />} />
+
+    {/* Undirilmagan to'lovlar (hisobdan chiqarilgan qarzlar) - oy/yil/guruh filtri */}
+    <Route path="finance/write-offs" element={<WriteOffsPage />} />
 
     {/* O'quvchi to'lovlari - tablar route darajasida */}
     <Route path="finance/student-payments" element={<StudentPaymentsPage />}>

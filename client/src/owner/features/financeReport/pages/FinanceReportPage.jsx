@@ -91,7 +91,11 @@ const FinanceReportPage = () => {
       </div>
 
       {/* Undirilmagan to'lovlar (hisobdan chiqarilgan) - alohida bo'lim */}
-      <WriteOffsTable data={writeOffs} isLoading={writeOffsLoading} />
+      <WriteOffsTable
+        data={writeOffs}
+        isLoading={writeOffsLoading}
+        href="/owner/finance/write-offs"
+      />
 
       {/* So'nggi tranzaksiyalar */}
       <LedgerTable items={ledger || []} isLoading={ledgerLoading} />

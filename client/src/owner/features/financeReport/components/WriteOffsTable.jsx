@@ -1,4 +1,5 @@
-import { AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, ArrowUpRight } from "lucide-react";
 import { formatMoney } from "@/shared/utils/formatMoney";
 
 const monthLabel = (breakdown = []) =>
@@ -13,8 +14,9 @@ const fmtDate = (d) => {
   }
 };
 
-// Yomon qarzlar (hisobdan chiqarilgan) bo'limi - undirilmaydigan moliyaviy zararlar.
-const WriteOffsTable = ({ data, isLoading }) => {
+// Undirilmagan to'lovlar (hisobdan chiqarilgan) bo'limi - moliyaviy zararlar.
+// href berilsa - sarlavhada to'liq sahifaga "Batafsil" havolasi ko'rsatiladi.
+const WriteOffsTable = ({ data, isLoading, href }) => {
   const items = data?.items || [];
   const total = data?.total || 0;
 
@@ -34,11 +36,22 @@ const WriteOffsTable = ({ data, isLoading }) => {
             </p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-zinc-500">Jami</p>
-          <p className="text-lg font-semibold text-amber-700">
-            {formatMoney(total)}
-          </p>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-xs text-zinc-500">Jami</p>
+            <p className="text-lg font-semibold text-amber-700">
+              {formatMoney(total)}
+            </p>
+          </div>
+          {href && (
+            <Link
+              to={href}
+              className="group inline-flex items-center gap-0.5 text-sm font-medium text-zinc-600 transition hover:text-primary"
+            >
+              Batafsil
+              <ArrowUpRight className="size-4 text-zinc-400 transition group-hover:text-primary" />
+            </Link>
+          )}
         </div>
       </div>
 
