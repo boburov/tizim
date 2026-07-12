@@ -196,7 +196,7 @@ const GroupDetailPage = () => {
       <ModalWrapper name={MODAL.GROUP_PERMANENT_DELETE} title="Guruhni butunlay o'chirish">
         <GroupPermanentDeleteModal />
       </ModalWrapper>
-      <ModalWrapper name={MODAL.GROUP_ADD_STUDENT} title="O'quvchi qo'shish">
+      <ModalWrapper name={MODAL.GROUP_ADD_STUDENT} title="O'quvchilar qo'shish">
         <GroupAddStudentModal />
       </ModalWrapper>
       <ModalWrapper

@@ -8,6 +8,7 @@ import { listSchema } from "./validators/list.validator.js";
 import { createSchema } from "./validators/create.validator.js";
 import { updateSchema } from "./validators/update.validator.js";
 import { addStudentSchema } from "./validators/addStudent.validator.js";
+import { addStudentsBulkSchema } from "./validators/addStudentsBulk.validator.js";
 import { updateMembershipSchema } from "./validators/updateMembership.validator.js";
 import {
   idParamSchema,
@@ -32,6 +33,7 @@ import update from "./handlers/update.handler.js";
 import permanentRemove from "./handlers/permanentRemove.handler.js";
 import undelete from "./handlers/undelete.handler.js";
 import addStudent from "./handlers/addStudent.handler.js";
+import addStudentsBulk from "./handlers/addStudentsBulk.handler.js";
 import updateMembership from "./handlers/updateMembership.handler.js";
 import removeStudent from "./handlers/removeStudent.handler.js";
 import membershipList from "./handlers/membership.list.handler.js";
@@ -103,6 +105,14 @@ router.post(
   requirePermission(PERMISSIONS.GROUPS_MANAGE_STUDENTS),
   validate(addStudentSchema),
   addStudent,
+);
+// Bir nechta o'quvchini bir martada qo'shish (dars to'qnashuvi tasdiqi bilan).
+router.post(
+  "/:id/students/bulk",
+  requireAuth,
+  requirePermission(PERMISSIONS.GROUPS_MANAGE_STUDENTS),
+  validate(addStudentsBulkSchema),
+  addStudentsBulk,
 );
 router.patch(
   "/:id/students/:studentId",

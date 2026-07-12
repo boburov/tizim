@@ -12,6 +12,15 @@ export const groupsAPI = {
 
   addStudent: (id, studentId, joinedAt, leftAt) =>
     http.post(ENDPOINTS.groups.students(id), { studentId, joinedAt, leftAt }),
+  // Bir nechta o'quvchini bir martada qo'shish. force=true - dars to'qnashuviga
+  // qaramay baribir qo'shish.
+  addStudentsBulk: (id, { studentIds, joinedAt, leftAt, force }) =>
+    http.post(ENDPOINTS.groups.studentsBulk(id), {
+      studentIds,
+      joinedAt,
+      leftAt,
+      force,
+    }),
   removeStudent: (id, studentId, reasonId) =>
     http.delete(ENDPOINTS.groups.studentById(id, studentId), {
       data: reasonId ? { reasonId } : {},

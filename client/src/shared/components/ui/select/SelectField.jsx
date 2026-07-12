@@ -6,9 +6,11 @@ import {
   FieldDescription,
 } from "@/shared/components/shadcn/field";
 import SelectSearch from "./SelectSearch";
+import MultiSelectSearch from "./MultiSelectSearch";
 import { cn } from "@/shared/utils/cn";
 
 const SelectComponent = ({ ...props }) => {
+  if (props.multiple) return <MultiSelectSearch {...props} />;
   if (props.searchable) return <SelectSearch {...props} />;
   return <Select {...props} />;
 };

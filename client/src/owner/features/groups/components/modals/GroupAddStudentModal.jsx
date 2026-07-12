@@ -1,3 +1,6 @@
+// Icons
+import { AlertTriangle } from "lucide-react";
+
 // Hooks
 import useObjectState from "@/shared/hooks/useObjectState";
 
@@ -8,7 +11,7 @@ import InputField from "@/shared/components/ui/input/InputField";
 
 // Hooks
 import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
-import useGroupAddStudentMutation from "../../hooks/useGroupAddStudentMutation";
+import useGroupAddStudentsBulkMutation from "../../hooks/useGroupAddStudentsBulkMutation";
 
 // Utils
 import { todayInput, toDateInput } from "@/shared/utils/formatDate";
@@ -25,11 +28,14 @@ const GroupAddStudentModal = ({
 }) => {
   // Default boshlash sanasi - guruh boshlangan sana (owner o'zgartira oladi).
   // leftAt (tugatgan sana) ixtiyoriy: bo'sh bo'lsa o'quvchi "o'qimoqda".
-  const { studentId, joinedAt, leftAt, setField, resetState } = useObjectState({
-    studentId: "",
-    joinedAt: groupStartedAt ? toDateInput(groupStartedAt) : todayInput(),
-    leftAt: "",
-  });
+  // conflicts - dars to'qnashuvi tasdiq oynasi uchun (bo'sh bo'lsa forma ko'rinadi).
+  const { studentIds, joinedAt, leftAt, conflicts, setField, resetState } =
+    useObjectState({
+      studentIds: [],
+      joinedAt: groupStartedAt ? toDateInput(groupStartedAt) : todayInput(),
+      leftAt: "",
+      conflicts: [],
+    });
 
   const { data, isLoading: loadingStudents } = useUsersListQuery({
     role: ROLES.STUDENT,
@@ -42,37 +48,100 @@ const GroupAddStudentModal = ({
     label: `${s.firstName} ${s.lastName} (@${s.username})`,
   }));
 
-  const { mutate } = useGroupAddStudentMutation({
-    onSuccess: () => {
+  const { mutate } = useGroupAddStudentsBulkMutation({
+    onSuccess: (res) => {
       setIsLoading(false);
+      // Dars to'qnashuvi topildi - tasdiq oynasini ko'rsatamiz.
+      if (res?.requiresConfirmation) {
+        setField("conflicts", res.conflicts || []);
+        return;
+      }
       resetState();
       close?.();
     },
     onError: () => setIsLoading(false),
   });
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // joinedAt majburiy - bo'sh bo'lsa yubormaymiz.
-    if (!studentId || !joinedAt) return;
+  const submit = (force) => {
+    if (!studentIds.length || !joinedAt) return;
     setIsLoading(true);
     mutate({
       id: groupId,
-      studentId,
+      studentIds,
       joinedAt,
       leftAt: leftAt || undefined,
+      force,
     });
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submit(false);
+  };
+
+  // ── Dars to'qnashuvi tasdiq oynasi ──
+  if (conflicts.length) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-start gap-2.5 rounded-md bg-amber-50 p-3 text-amber-800">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+          <p className="text-sm">
+            Quyidagi o'quvchilarning shu kun va soatda boshqa guruhda darsi bor.
+            Baribir qo'shasizmi?
+          </p>
+        </div>
+
+        <ul className="max-h-64 space-y-2 overflow-y-auto hidden-scroll">
+          {conflicts.map((c) => (
+            <li
+              key={c.studentId}
+              className="rounded-md border border-gray-200 p-2.5 text-sm"
+            >
+              <p className="font-medium text-black">{c.studentName}</p>
+              <ul className="mt-1 space-y-0.5 text-gray-600">
+                {c.conflicts.map((x, i) => (
+                  <li key={i}>
+                    {x.groupName} — {x.dayLabel} {x.startTime}-{x.endTime}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setField("conflicts", [])}
+            disabled={isLoading}
+            className="flex-1"
+          >
+            Bekor qilish
+          </Button>
+          <Button
+            type="button"
+            onClick={() => submit(true)}
+            disabled={isLoading}
+            className="flex-1"
+          >
+            {isLoading ? "Qo'shilmoqda..." : "Baribir qo'shish"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Asosiy forma ──
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <SelectField
-        searchable
-        label="O'quvchi"
-        placeholder="O'quvchini tanlang"
+        multiple
+        label="O'quvchilar"
+        placeholder="O'quvchilarni tanlang"
         emptyText="O'quvchilar topilmadi"
-        value={studentId}
-        onChange={(v) => setField("studentId", v)}
+        value={studentIds}
+        onChange={(v) => setField("studentIds", v)}
         options={options}
         isLoading={loadingStudents}
         required
@@ -114,7 +183,7 @@ const GroupAddStudentModal = ({
         </Button>
         <Button
           type="submit"
-          disabled={isLoading || !studentId || !joinedAt}
+          disabled={isLoading || !studentIds.length || !joinedAt}
           className="flex-1"
         >
           {isLoading ? "Qo'shilmoqda..." : "Qo'shish"}

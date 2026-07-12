@@ -28,8 +28,8 @@ const initialState = (defaultRole) => ({
 
   gender: "",
 
-  // student
-  enrolledAt: "",
+  // student — ro'yxatga olingan sana majburiy, default bugun.
+  enrolledAt: todayInput(),
 
   // teacher
   birthDate: "",
@@ -58,8 +58,9 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
     obj.username.trim().length >= 3 &&
     obj.password &&
     obj.role &&
-    // O'qituvchi uchun ishga olingan sana majburiy.
-    (obj.role !== ROLES.TEACHER || obj.hiredAt);
+    // O'qituvchi uchun ishga olingan sana, o'quvchi uchun ro'yxatga olingan sana majburiy.
+    (obj.role !== ROLES.TEACHER || obj.hiredAt) &&
+    (obj.role !== ROLES.STUDENT || obj.enrolledAt);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -79,8 +80,8 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
     if (obj.gender) body.gender = obj.gender;
 
     if (isStudent) {
-      // Bo'sh qoldirilsa backend bugungi sanani belgilaydi.
-      if (obj.enrolledAt) body.enrolledAt = obj.enrolledAt;
+      // Ro'yxatga olingan sana majburiy (isValid tekshiradi).
+      body.enrolledAt = obj.enrolledAt;
     } else {
       if (obj.birthDate) body.birthDate = obj.birthDate;
       if (obj.hiredAt) body.hiredAt = obj.hiredAt;
@@ -163,6 +164,8 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
             value={obj.enrolledAt}
             max={todayInput()}
             onChange={(e) => obj.setField("enrolledAt", e.target.value)}
+            required
+            error={isStudent && !obj.enrolledAt}
             disabled={isLoading}
           />
         </div>

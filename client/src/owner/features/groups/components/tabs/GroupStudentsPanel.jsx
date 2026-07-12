@@ -23,7 +23,7 @@ const GroupStudentsPanel = () => {
           }
         >
           <Plus className="size-4" />
-          O'quvchi qo'shish
+          O'quvchilar qo'shish
         </Button>
       </div>
       <GroupStudentsTable group={group} />

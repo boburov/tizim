@@ -64,6 +64,20 @@ export const registerUserSchema = z.object({
             });
           }
         }
+        // Ro'yxatga olingan sana o'quvchi uchun MAJBURIY (a'zolik/moliya davri shunga bog'liq).
+        if (b.enrolledAt == null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["enrolledAt"],
+            message: "Ro'yxatga olingan sana majburiy",
+          });
+        } else if (b.enrolledAt.getTime() > Date.now()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["enrolledAt"],
+            message: "Ro'yxatga olingan sana kelajakda bo'lmasin",
+          });
+        }
       }
     }),
 });

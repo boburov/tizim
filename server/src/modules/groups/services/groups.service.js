@@ -751,6 +751,150 @@ const ensureFinanceForMembershipRange = async (groupId, membership) => {
   }
 };
 
+const DAY_LABELS_FULL_UZ = {
+  mon: "Dushanba",
+  tue: "Seshanba",
+  wed: "Chorshanba",
+  thu: "Payshanba",
+  fri: "Juma",
+  sat: "Shanba",
+  sun: "Yakshanba",
+};
+
+// Ikki vaqt oralig'i kesishadimi ("HH:mm" nol to'ldirilgani uchun string solishtiruv).
+// Yopiq-ochiq: 14:00-15:00 va 15:00-16:00 kesishmaydi.
+const timesOverlap = (aStart, aEnd, bStart, bEnd) =>
+  aStart < bEnd && bStart < aEnd;
+
+// A jadvalidagi biror slot B dagi slot bilan bir kun + kesishuvchi vaqtga tushsa,
+// o'sha (a,b) juftlarini qaytaradi.
+const findSlotConflicts = (slotsA, slotsB) => {
+  const out = [];
+  for (const a of slotsA) {
+    for (const b of slotsB) {
+      if (
+        a.day === b.day &&
+        timesOverlap(a.startTime, a.endTime, b.startTime, b.endTime)
+      ) {
+        out.push(b);
+      }
+    }
+  }
+  return out;
+};
+
+// Berilgan o'quvchilardan qaysilari MAQSAD guruh jadvali bilan bir kun/bir vaqtda
+// to'qnashuvchi (boshqa aktiv guruhdagi) darsga ega ekanini aniqlaydi. Faqat
+// to'qnashuvi bor o'quvchilar qaytadi: { studentId, studentName, conflicts:[{groupName,day,dayLabel,startTime,endTime}] }.
+export const checkStudentsScheduleConflicts = async (groupId, studentIds) => {
+  const ids = [...new Set((studentIds || []).map(String))];
+  if (!ids.length) return [];
+
+  const group = await Group.findById(groupId, { schedule: 1 }).lean();
+  if (!group) throw new ApiError(404, "Guruh topilmadi");
+  const targetSlots = scheduleActiveOn(group.schedule || []);
+  // Maqsad guruhning jadvali bo'sh - to'qnashuv bo'lishi mumkin emas.
+  if (!targetSlots.length) return [];
+
+  const objIds = ids.map(toObjectId);
+  // O'quvchilarning MAQSAD guruhdan boshqa aktiv (tugamagan) a'zoliklari.
+  const mems = await GroupMembership.find(
+    {
+      student: { $in: objIds },
+      group: { $ne: toObjectId(groupId) },
+      leftAt: null,
+      isDeleted: { $ne: true },
+    },
+    { student: 1, group: 1 },
+  ).lean();
+  if (!mems.length) return [];
+
+  // Tegishli guruhlar jadvallari (faqat aktiv guruhlar).
+  const otherGroupIds = [...new Set(mems.map((m) => String(m.group)))];
+  const otherGroups = await Group.find(
+    { _id: { $in: otherGroupIds }, isActive: true, isDeleted: { $ne: true } },
+    { name: 1, schedule: 1 },
+  ).lean();
+  const groupById = new Map(otherGroups.map((g) => [String(g._id), g]));
+
+  // O'quvchilar ismlarini birga chiqarish uchun.
+  const users = await User.find(
+    { _id: { $in: objIds } },
+    { firstName: 1, lastName: 1, username: 1 },
+  ).lean();
+  const nameById = new Map(
+    users.map((u) => [
+      String(u._id),
+      `${u.firstName} ${u.lastName || ""}`.trim() || `@${u.username}`,
+    ]),
+  );
+
+  const byStudent = new Map();
+  for (const m of mems) {
+    const g = groupById.get(String(m.group));
+    if (!g) continue;
+    const hits = findSlotConflicts(targetSlots, scheduleActiveOn(g.schedule || []));
+    if (!hits.length) continue;
+    const key = String(m.student);
+    const arr = byStudent.get(key) || [];
+    for (const h of hits) {
+      arr.push({
+        groupName: g.name,
+        day: h.day,
+        dayLabel: DAY_LABELS_FULL_UZ[h.day] || h.day,
+        startTime: h.startTime,
+        endTime: h.endTime,
+      });
+    }
+    byStudent.set(key, arr);
+  }
+
+  return ids
+    .filter((id) => byStudent.has(id))
+    .map((id) => ({
+      studentId: id,
+      studentName: nameById.get(id) || "",
+      conflicts: byStudent.get(id),
+    }));
+};
+
+// Bir nechta o'quvchini bitta guruhga qo'shadi. force=false bo'lsa avval dars
+// to'qnashuvini tekshiradi - to'qnashuv bo'lsa HECH KIM qo'shilmaydi va
+// { requiresConfirmation:true, conflicts } qaytadi (owner "baribir qo'shish"
+// bosganda force=true bilan qayta yuboriladi). Har bir o'quvchi alohida qo'shiladi;
+// bittasi xato bersa (mas. allaqachon guruhda) qolganlari qo'shilaveradi.
+export const addStudentsBulk = async (
+  groupId,
+  studentIds,
+  { joinedAt, leftAt, force = false } = {},
+) => {
+  await ensureGroup(groupId);
+  const ids = [...new Set((studentIds || []).map(String))];
+  if (!ids.length) throw new ApiError(400, "O'quvchi tanlanmagan");
+
+  if (!force) {
+    const conflicts = await checkStudentsScheduleConflicts(groupId, ids);
+    if (conflicts.length) {
+      return { requiresConfirmation: true, conflicts, added: [], failed: [] };
+    }
+  }
+
+  const added = [];
+  const failed = [];
+  for (const studentId of ids) {
+    try {
+      const membership = await addStudent(groupId, studentId, { joinedAt, leftAt });
+      added.push({ studentId, membershipId: membership._id });
+    } catch (err) {
+      failed.push({
+        studentId,
+        message: err?.message || "Qo'shib bo'lmadi",
+      });
+    }
+  }
+  return { requiresConfirmation: false, conflicts: [], added, failed };
+};
+
 export const addStudent = async (
   groupId,
   studentId,
