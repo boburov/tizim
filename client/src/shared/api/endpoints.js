@@ -189,6 +189,7 @@ export const ENDPOINTS = Object.freeze({
     trend: "/finance-report/trend",
     groupBreakdown: "/finance-report/group-breakdown",
     ledger: "/finance-report/ledger",
+    writeOffs: "/finance-report/write-offs",
   },
 
   // Teacher salary (O'qituvchi maoshlari)

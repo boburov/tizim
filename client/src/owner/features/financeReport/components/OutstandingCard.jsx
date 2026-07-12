@@ -40,7 +40,7 @@ const Row = ({ label, paidLabel, billed, outstanding, rate, barClass, to }) => {
   );
 };
 
-// Qarzdorlik (o'quvchilar) va to'lanmagan maoshlar (o'qituvchilar).
+// Qarzdorlik (o'quvchilar), to'lanmagan maoshlar (o'qituvchilar) va yomon qarz (loss).
 const OutstandingCard = ({ income, expense }) => (
   <div className="rounded-2xl border border-zinc-200/80 bg-white p-5">
     <h2 className="font-semibold text-zinc-900">Qoldiqlar</h2>
@@ -65,6 +65,16 @@ const OutstandingCard = ({ income, expense }) => (
         barClass="bg-rose-500"
         to="/owner/finance/teacher-salaries/qoldiqlar"
       />
+    </div>
+
+    {/* Undirilmagan to'lovlar (hisobdan chiqarilgan) - undirilmaydigan, alohida moliyaviy zarar. */}
+    <div className="mt-4 flex items-center justify-between border-t border-dashed border-zinc-200 pt-3">
+      <span className="text-sm font-medium text-amber-700">
+        Undirilmagan to'lovlar
+      </span>
+      <span className="text-sm font-semibold text-amber-700">
+        {formatMoney(income?.badDebt || 0)}
+      </span>
     </div>
   </div>
 );

@@ -7,10 +7,12 @@ import PaymentMethodCard from "../components/PaymentMethodCard";
 import OutstandingCard from "../components/OutstandingCard";
 import GroupBreakdownChart from "../components/GroupBreakdownChart";
 import LedgerTable from "../components/LedgerTable";
+import WriteOffsTable from "../components/WriteOffsTable";
 
 import useFinanceSummaryQuery from "../hooks/useFinanceSummaryQuery";
 import useFinanceGroupBreakdownQuery from "../hooks/useFinanceGroupBreakdownQuery";
 import useFinanceLedgerQuery from "../hooks/useFinanceLedgerQuery";
+import useFinanceWriteOffsQuery from "../hooks/useFinanceWriteOffsQuery";
 
 const SkeletonBlock = ({ className = "" }) => (
   <div className={`animate-pulse rounded-2xl bg-zinc-100 ${className}`} />
@@ -34,6 +36,8 @@ const FinanceReportPage = () => {
     ...params,
     limit: 12,
   });
+  const { data: writeOffs, isLoading: writeOffsLoading } =
+    useFinanceWriteOffsQuery(params);
 
   return (
     <div className="space-y-5">
@@ -85,6 +89,9 @@ const FinanceReportPage = () => {
           />
         )}
       </div>
+
+      {/* Undirilmagan to'lovlar (hisobdan chiqarilgan) - alohida bo'lim */}
+      <WriteOffsTable data={writeOffs} isLoading={writeOffsLoading} />
 
       {/* So'nggi tranzaksiyalar */}
       <LedgerTable items={ledger || []} isLoading={ledgerLoading} />

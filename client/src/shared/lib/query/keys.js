@@ -187,6 +187,7 @@ export const qk = Object.freeze({
     trend: (params) => ["financeReport", "trend", params],
     groupBreakdown: (params) => ["financeReport", "groupBreakdown", params],
     ledger: (params) => ["financeReport", "ledger", params],
+    writeOffs: (params) => ["financeReport", "writeOffs", params],
   },
 
   // Teacher salary (O'qituvchi maoshlari)

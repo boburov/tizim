@@ -176,10 +176,12 @@ export const autoApply = async (studentId, currentUser) => {
   const deposit = await getOrCreate(studentId);
   if ((deposit.balance || 0) <= 0) return { applied: 0 };
 
-  // Qoldiq (expected>paid) planlar, eng eski oy avval.
+  // Qoldiq (expected>paid) planlar, eng eski oy avval. Yomon qarz (write-off)
+  // yopilgan - depozitdan qoplanmaydi.
   const plans = await StudentPayment.find({
     student: deposit.student,
     isDeleted: { $ne: true },
+    writtenOff: { $ne: true },
     $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
   }).sort({ year: 1, month: 1, createdAt: 1 });
 
@@ -199,6 +201,7 @@ export const autoApplyForMonth = async (year, month) => {
     year,
     month,
     isDeleted: { $ne: true },
+    writtenOff: { $ne: true },
     $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
   });
   let applied = 0;

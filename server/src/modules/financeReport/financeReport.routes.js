@@ -7,11 +7,13 @@ import { PERMISSIONS } from "../../constants/permissions.js";
 import { periodSchema } from "./validators/period.validator.js";
 import { trendSchema } from "./validators/trend.validator.js";
 import { breakdownSchema } from "./validators/breakdown.validator.js";
+import { writeOffsSchema } from "./validators/writeOffs.validator.js";
 
 import summary from "./handlers/summary.handler.js";
 import trend from "./handlers/trend.handler.js";
 import groupBreakdown from "./handlers/groupBreakdown.handler.js";
 import ledger from "./handlers/ledger.handler.js";
+import writeOffs from "./handlers/writeOffs.handler.js";
 
 const router = Router();
 
@@ -42,6 +44,13 @@ router.get(
   requirePermission(PERMISSIONS.FINANCE_READ),
   validate(breakdownSchema),
   ledger,
+);
+router.get(
+  "/write-offs",
+  requireAuth,
+  requirePermission(PERMISSIONS.FINANCE_READ),
+  validate(writeOffsSchema),
+  writeOffs,
 );
 
 export default router;

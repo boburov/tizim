@@ -1158,15 +1158,26 @@ const recalcFinanceOnLeave = async (groupId, studentId) => {
   }
 };
 
-export const removeStudent = async (groupId, studentId, { reasonId } = {}) => {
+export const removeStudent = async (
+  groupId,
+  studentId,
+  { reasonId, writeOff = false } = {},
+  currentUser = null,
+) => {
   await ensureGroup(groupId);
 
-  // Qarzli o'quvchini guruhdan chiqarib bo'lmaydi - avval qarz to'lanishi kerak.
-  if (await financePaymentService.hasOutstandingDebtInGroup(studentId, groupId)) {
-    throw new ApiError(
-      400,
-      "O'quvchining bu guruhda qarzi bor. Avval qarzni to'lang, keyin guruhdan chiqaring.",
-    );
+  // Qarzli o'quvchini chiqarishda: writeOff=false bo'lsa 409 bilan qarz summasini
+  // qaytaramiz - frontend "Yomon qarz" tasdiq modalini ko'rsatadi. writeOff=true
+  // (admin tasdiqladi) bo'lsa qarz yomon qarz sifatida hisobdan chiqariladi.
+  const debt = await financePaymentService.getOutstandingBreakdownInGroup(
+    studentId,
+    groupId,
+  );
+  if (debt.total > 0 && !writeOff) {
+    throw new ApiError(409, "O'quvchida to'lanmagan qarz bor", {
+      code: "OUTSTANDING_DEBT",
+      details: { amount: debt.total, breakdown: debt.items },
+    });
   }
 
   const leftAt = toUtcMidnight(new Date());
@@ -1190,12 +1201,28 @@ export const removeStudent = async (groupId, studentId, { reasonId } = {}) => {
     throw new ApiError(404, "Faol a'zolik topilmadi");
   }
 
+  // Qarzni YOMON QARZ (write-off) sifatida yopamiz: recalcFinanceOnLeave'DAN OLDIN,
+  // aks holda leftAt proratsiyasi qarz summasini o'zgartirib yuborardi. Write-off
+  // qilingan to'lovlar keyingi recalc'da muzlaydi (qayta ochilmaydi).
+  let writeOffResult = null;
+  if (debt.total > 0 && writeOff) {
+    writeOffResult = await financePaymentService.writeOffDebtInGroup(
+      studentId,
+      groupId,
+      {
+        membershipId: membership._id,
+        currentUser,
+        reasonTitle: set.leftReasonTitle || "",
+      },
+    );
+  }
+
   // Ketgan o'quvchi endi to'liq oy uchun hisoblanmasin (C1 tuzatish)
   await recalcFinanceOnLeave(groupId, studentId);
 
   await safeRecomputeStudentCompletion(studentId);
 
-  return membership;
+  return { membership, writeOff: writeOffResult };
 };
 
 export const history = async (groupId, { page = 1, limit = 20 } = {}) => {

@@ -7,4 +7,6 @@ export const financeReportAPI = {
   groupBreakdown: (params) =>
     http.get(ENDPOINTS.financeReport.groupBreakdown, { params }),
   ledger: (params) => http.get(ENDPOINTS.financeReport.ledger, { params }),
+  writeOffs: (params) =>
+    http.get(ENDPOINTS.financeReport.writeOffs, { params }),
 };

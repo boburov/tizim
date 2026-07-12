@@ -6,6 +6,7 @@ import Discount from "../../../models/discount.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import Group from "../../../models/group.model.js";
 import User from "../../../models/user.model.js";
+import DebtWriteOff from "../../../models/debtWriteOff.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import {
@@ -227,6 +228,10 @@ export const recalc = async (paymentId, { session } = {}) => {
   const payment = await StudentPayment.findById(paymentId).session(session || null);
   if (!payment) return null;
 
+  // Yomon qarz (write-off) MUZLATILGAN: expected/status qayta hisoblanmaydi,
+  // aks holda kunlik accrual recalc yopilgan qarzni qayta ochib yuborardi.
+  if (payment.writtenOff) return payment;
+
   // Shu oydagi BARCHA a'zolik davrlari (rejoin holatida bir nechta) bo'yicha
   // hisoblaymiz - bitta membership ref'iga tayanib qolmaymiz, aks holda
   // ketib-qaytgan o'quvchining ikkinchi davri billing'dan tushib qolardi.
@@ -368,18 +373,94 @@ export const accrueMonth = async (year, month) => {
   return { total: payments.length, recalculated };
 };
 
-// O'quvchining shu guruhda qarzi (biror oyda expected>paid) bormi. Guruhdan
-// chiqarish/o'qish davrini o'chirishni bloklashda ishlatiladi - qarzli o'quvchi
-// guruhdan chiqarilmasin.
+// O'quvchining shu guruhda FAOL qarzi (biror oyda expected>paid, write-off
+// qilinmagan) bormi. Hisobdan chiqarilgan (writtenOff) qarz faol qarz emas.
 export const hasOutstandingDebtInGroup = async (student, group) =>
   Boolean(
     await StudentPayment.exists({
       student,
       group,
       isDeleted: { $ne: true },
+      writtenOff: { $ne: true },
       $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
     }),
   );
+
+// O'quvchining shu guruhdagi FAOL qarzini oy-ma-oy taqsimlab qaytaradi:
+// { total, items:[{ paymentId, year, month, amount }] }. Write-off qilinganlar
+// chiqarib tashlanadi. Chiqarish modalidagi summa va write-off shu funksiyaga tayanadi.
+export const getOutstandingBreakdownInGroup = async (student, group) => {
+  const payments = await StudentPayment.find(
+    {
+      student,
+      group,
+      isDeleted: { $ne: true },
+      writtenOff: { $ne: true },
+      $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
+    },
+    { year: 1, month: 1, expectedAmount: 1, paidAmount: 1 },
+  ).sort({ year: 1, month: 1 });
+
+  const items = payments.map((p) => ({
+    paymentId: p._id,
+    year: p.year,
+    month: p.month,
+    amount: Math.max(0, (p.expectedAmount || 0) - (p.paidAmount || 0)),
+  }));
+  const total = items.reduce((s, it) => s + it.amount, 0);
+  return { total, items };
+};
+
+// O'quvchining shu guruhdagi FAOL qarzini YOMON QARZ (write-off) sifatida yopadi:
+//  1) har bir qarzli oy to'lovini writtenOff=true + writeOffAmount(=qoldiq) qiladi,
+//  2) bitta DebtWriteOff audit yozuvini yaratadi (breakdown bilan).
+// Yopilgan qarz endi faol qarz emas va accrual recalc uni qayta ochmaydi.
+// Qarz bo'lmasa - hech nima qilmaydi (null qaytaradi).
+export const writeOffDebtInGroup = async (
+  student,
+  group,
+  { membershipId = null, currentUser = null, reasonTitle = "" } = {},
+) => {
+  const { total, items } = await getOutstandingBreakdownInGroup(student, group);
+  if (total <= 0) return null;
+
+  const now = new Date();
+  await Promise.all(
+    items.map((it) =>
+      StudentPayment.updateOne(
+        { _id: it.paymentId },
+        { $set: { writtenOff: true, writeOffAmount: it.amount, writeOffAt: now } },
+      ),
+    ),
+  );
+
+  const [studentDoc, groupDoc] = await Promise.all([
+    User.findById(student, { firstName: 1, lastName: 1 }).lean(),
+    Group.findById(group, { name: 1 }).lean(),
+  ]);
+  const studentName = studentDoc
+    ? `${studentDoc.firstName || ""} ${studentDoc.lastName || ""}`.trim()
+    : "";
+
+  const writeOff = await DebtWriteOff.create({
+    student,
+    group,
+    membership: membershipId,
+    amount: total,
+    breakdown: items.map((it) => ({
+      payment: it.paymentId,
+      year: it.year,
+      month: it.month,
+      amount: it.amount,
+    })),
+    reasonTitle: reasonTitle || "",
+    studentName,
+    groupName: groupDoc?.name || "",
+    createdBy: currentUser?._id || null,
+  });
+
+  return { amount: total, writeOff };
+};
 
 // Bitta a'zolik uchun (o'quvchi guruhga qo'shilganda) shu oy to'lovini yaratadi.
 // session berilsa, ochiq MongoDB tranzaksiyasi ichida o'qib-yozadi (avans spill
@@ -480,7 +561,13 @@ export const generateMonth = async (year, month) => {
 // Qarzdorlar: oylik plan bo'yicha qoldig'i (expected - paid) > 0 bo'lgan o'quvchilar.
 // month berilmasa - tanlangan yilning BARCHA oylari bo'yicha (har oy alohida qator).
 export const obligations = async ({ groupId, year, month }) => {
-  const filter = { year: Number(year), isDeleted: { $ne: true } };
+  // Write-off qilingan (yomon qarz) yozuvlar FAOL qarzdan chiqarib tashlanadi -
+  // ular endi undiriladigan qarz emas, alohida "Yomon qarzlar" bo'limida ko'rinadi.
+  const filter = {
+    year: Number(year),
+    isDeleted: { $ne: true },
+    writtenOff: { $ne: true },
+  };
   if (month) filter.month = Number(month);
   if (groupId) filter.group = toObjectId(groupId);
 

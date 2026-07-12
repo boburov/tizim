@@ -1,8 +1,10 @@
+import mongoose from "mongoose";
 import StudentPayment from "../../../models/studentPayment.model.js";
 import PaymentTransaction from "../../../models/paymentTransaction.model.js";
 import TeacherSalary from "../../../models/teacherSalary.model.js";
 import SalaryTransaction from "../../../models/salaryTransaction.model.js";
 import Group from "../../../models/group.model.js";
+import DebtWriteOff from "../../../models/debtWriteOff.model.js";
 
 // === Sana yordamchilari (UTC) ===
 const monthRange = (year, month) => {
@@ -54,19 +56,31 @@ const sumByMethod = async (start, end) => {
   return out;
 };
 
-// Hisoblangan (billed) summa va qoldiq - oylik snapshotlar bo'yicha.
+// Hisoblangan (billed) summa, qoldiq va YOMON QARZ - oylik snapshotlar bo'yicha.
 // Model: StudentPayment yoki TeacherSalary (ikkalasida ham expectedAmount/paidAmount bor).
+// Write-off qilingan (yomon qarz) yozuvlar billed/paid/outstanding'dan CHIQARILADI
+// va alohida badDebt sifatida jamlanadi (TeacherSalary'da writtenOff yo'q → 0).
 const billedAndOutstanding = async (Model, year, month) => {
+  const isWrittenOff = { $eq: [{ $ifNull: ["$writtenOff", false] }, true] };
   const [row] = await Model.aggregate([
     { $match: { year: Number(year), month: Number(month) } },
     {
       $group: {
         _id: null,
-        billed: { $sum: "$expectedAmount" },
-        paid: { $sum: "$paidAmount" },
+        billed: { $sum: { $cond: [isWrittenOff, 0, "$expectedAmount"] } },
+        paid: { $sum: { $cond: [isWrittenOff, 0, "$paidAmount"] } },
         outstanding: {
           $sum: {
-            $max: [{ $subtract: ["$expectedAmount", "$paidAmount"] }, 0],
+            $cond: [
+              isWrittenOff,
+              0,
+              { $max: [{ $subtract: ["$expectedAmount", "$paidAmount"] }, 0] },
+            ],
+          },
+        },
+        badDebt: {
+          $sum: {
+            $cond: [isWrittenOff, { $ifNull: ["$writeOffAmount", 0] }, 0],
           },
         },
       },
@@ -76,6 +90,7 @@ const billedAndOutstanding = async (Model, year, month) => {
     billed: row?.billed || 0,
     paid: row?.paid || 0,
     outstanding: row?.outstanding || 0,
+    badDebt: row?.badDebt || 0,
   };
 };
 
@@ -115,6 +130,9 @@ export const getSummary = async ({ year, month } = {}) => {
       collected: incomeCash.total,
       billed: studentBilled.billed,
       outstanding: studentBilled.outstanding,
+      // Yomon qarz (write-off) - undirilmaydigan, moliyaviy zarar. Undirilishi
+      // mumkin bo'lgan qoldiq (outstanding) dan alohida ko'rsatiladi.
+      badDebt: studentBilled.badDebt,
       rate: pct(studentBilled.paid, studentBilled.billed),
       delta: delta(incomeCash.total, incomeCashPrev.total),
       count: incomeCash.count,
@@ -140,9 +158,10 @@ export const getTrend = async ({ months = 12 } = {}) => {
   const result = [];
   for (const p of periods) {
     const { start, end } = monthRange(p.year, p.month);
-    const [income, expense] = await Promise.all([
+    const [income, expense, studentBilled] = await Promise.all([
       sumTransactions(PaymentTransaction, start, end),
       sumTransactions(SalaryTransaction, start, end),
+      billedAndOutstanding(StudentPayment, p.year, p.month),
     ]);
     result.push({
       year: p.year,
@@ -151,9 +170,63 @@ export const getTrend = async ({ months = 12 } = {}) => {
       income: income.total,
       expense: expense.total,
       net: income.total - expense.total,
+      outstanding: studentBilled.outstanding,
+      badDebt: studentBilled.badDebt,
     });
   }
   return result;
+};
+
+// === getWriteOffs: yomon qarzlar (hisobdan chiqarilgan) ro'yxati ===
+// Hisobot ASL QARZ OYIGA bog'lanadi: year/month berilsa shu oyga tegishli
+// breakdown ulushi ko'rsatiladi (bir chiqish bir nechta oyni qamrashi mumkin).
+export const getWriteOffs = async ({ year, month, groupId, limit = 100 } = {}) => {
+  const match = {};
+  if (groupId && mongoose.isValidObjectId(groupId)) {
+    match.group = new mongoose.Types.ObjectId(String(groupId));
+  }
+  if (year && month) {
+    match.breakdown = {
+      $elemMatch: { year: Number(year), month: Number(month) },
+    };
+  } else if (year) {
+    match.breakdown = { $elemMatch: { year: Number(year) } };
+  }
+
+  const rows = await DebtWriteOff.find(match)
+    .sort({ createdAt: -1 })
+    .limit(Number(limit))
+    .lean();
+
+  const matchAmount = (breakdown = []) => {
+    if (year && month) {
+      return breakdown
+        .filter((b) => b.year === Number(year) && b.month === Number(month))
+        .reduce((s, b) => s + (b.amount || 0), 0);
+    }
+    if (year) {
+      return breakdown
+        .filter((b) => b.year === Number(year))
+        .reduce((s, b) => s + (b.amount || 0), 0);
+    }
+    return breakdown.reduce((s, b) => s + (b.amount || 0), 0);
+  };
+
+  const items = rows.map((r) => ({
+    id: String(r._id),
+    studentName: r.studentName || "Noma'lum",
+    groupName: r.groupName || "-",
+    // Filtrga tegishli ko'rsatiladigan summa (asl oy bo'yicha)
+    amount: matchAmount(r.breakdown),
+    // Hodisadagi to'liq yo'qotish (barcha oylar)
+    totalAmount: r.amount || 0,
+    reasonTitle: r.reasonTitle || "",
+    breakdown: r.breakdown || [],
+    createdAt: r.createdAt,
+  }));
+
+  const total = items.reduce((s, it) => s + it.amount, 0);
+  return { items, total };
 };
 
 // === getGroupBreakdown: oy bo'yicha guruhlar kesimida kirim/chiqim/sof ===

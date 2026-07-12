@@ -21,9 +21,12 @@ export const groupsAPI = {
       leftAt,
       force,
     }),
-  removeStudent: (id, studentId, reasonId) =>
+  removeStudent: (id, studentId, { reasonId, writeOff } = {}) =>
     http.delete(ENDPOINTS.groups.studentById(id, studentId), {
-      data: reasonId ? { reasonId } : {},
+      data: {
+        ...(reasonId ? { reasonId } : {}),
+        ...(writeOff ? { writeOff: true } : {}),
+      },
     }),
 
   // O'quvchining o'qish davrlari (membership)

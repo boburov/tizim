@@ -39,6 +39,15 @@ const studentPaymentSchema = new mongoose.Schema(
       default: "unpaid",
       index: true,
     },
+    // Yomon qarz (write-off): o'quvchi qarzi bilan guruhdan chiqarilganda shu oy
+    // to'lovi hisobdan chiqariladi. writtenOff=true bo'lgach:
+    //  • qoldiq (expected-paid) endi FAOL qarz emas (obligations/autoApply/allocation
+    //    va accrual recalc uni butunlay chetlab o'tadi - qayta ochilmaydi),
+    //  • writeOffAmount - hisobdan chiqarilgan yo'qotish (asl oyga tegishli),
+    //    moliya hisobotida "Yomon qarz" sifatida alohida ko'rsatiladi.
+    writtenOff: { type: Boolean, default: false, index: true },
+    writeOffAmount: { type: Number, default: 0 },
+    writeOffAt: { type: Date, default: null },
     recalculatedAt: { type: Date, default: null },
   },
   { timestamps: true },

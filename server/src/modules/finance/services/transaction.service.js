@@ -28,6 +28,7 @@ const buildAllocationOrder = async (selected) => {
     group: selected.group,
     _id: { $ne: selected._id },
     isDeleted: { $ne: true },
+    writtenOff: { $ne: true },
     $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
   }).sort({ year: 1, month: 1, createdAt: 1 });
   return [selected, ...others];
@@ -80,6 +81,9 @@ export const create = async (
 
   for (const plan of order) {
     if (left <= 0) break;
+    // Yomon qarz (write-off) yopilgan - to'lov unga taqsimlanmaydi (ortgan pul
+    // boshqa oylarga yoki depozitga tushadi).
+    if (plan.writtenOff) continue;
     const remaining = Math.max(0, (plan.expectedAmount || 0) - (plan.paidAmount || 0));
     const take = Math.min(left, remaining);
     if (take <= 0) continue;

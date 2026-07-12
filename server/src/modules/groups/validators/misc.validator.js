@@ -10,10 +10,12 @@ export const permanentDeleteSchema = z.object({
 });
 export const studentParamsSchema = z.object({
   params: idStudentParams,
-  // Guruhdan chiqarishda ixtiyoriy dinamik sabab (ArchiveReason id).
+  // Guruhdan chiqarishda ixtiyoriy dinamik sabab (ArchiveReason id) va
+  // qarzni yomon qarz sifatida hisobdan chiqarishga admin tasdig'i (writeOff).
   body: z
     .object({
       reasonId: z.string().min(1).optional(),
+      writeOff: z.boolean().optional(),
     })
     .optional(),
 });
