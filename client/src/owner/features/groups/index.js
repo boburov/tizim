@@ -3,6 +3,7 @@ export { default as GroupDetailPage } from "./pages/GroupDetailPage";
 export { default as GroupInfoPanel } from "./components/tabs/GroupInfoPanel";
 export { default as GroupStudentsPanel } from "./components/tabs/GroupStudentsPanel";
 export { default as GroupAttendancePanel } from "./components/tabs/GroupAttendancePanel";
+export { default as GroupArchivePanel } from "./components/tabs/GroupArchivePanel";
 
 export { groupsAPI } from "./api/groups.api";
 

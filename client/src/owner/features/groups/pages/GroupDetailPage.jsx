@@ -173,6 +173,7 @@ const GroupDetailPage = () => {
           { to: `/owner/groups/${id}`, label: "Ma'lumot", exact: true },
           { to: `/owner/groups/${id}/o-quvchilar`, label: "O'quvchilar" },
           { to: `/owner/groups/${id}/davomat`, label: "Davomat" },
+          { to: `/owner/groups/${id}/arxiv`, label: "Arxiv" },
         ]}
       />
       <Outlet context={{ group }} />

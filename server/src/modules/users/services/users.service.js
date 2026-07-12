@@ -191,6 +191,13 @@ export const update = async (id, body) => {
   if (body.firstName !== undefined) user.firstName = body.firstName.trim();
   if (body.lastName !== undefined) user.lastName = body.lastName.trim();
   if (body.isActive !== undefined) {
+    // O'quvchini faolsizlantirib (arxivlab) bo'lmaydi - u doim faol obyekt.
+    if (body.isActive === false && user.role === ROLES.STUDENT) {
+      throw new ApiError(
+        400,
+        "O'quvchini arxivlab bo'lmaydi. \"Muzlatish\"dan foydalaning yoki guruhdan chiqaring.",
+      );
+    }
     // Faolsizlantirish ham arxivlash kabi - faol guruhi bor o'qituvchiga ruxsat yo'q.
     if (body.isActive === false) await assertTeacherHasNoActiveGroup(user, "arxivlang");
     user.isActive = !!body.isActive;
@@ -298,6 +305,15 @@ export const softRemove = async (id, { reasonId, archiveDate, by } = {}) => {
   const user = await getById(id);
   if (user.role === ROLES.OWNER) {
     throw new ApiError(403, "Owner foydalanuvchini o'chirib bo'lmaydi");
+  }
+  // O'quvchi arxivlanmaydi - u tizimda doim faol obyekt bo'lib qoladi.
+  // Vaqtincha to'xtatish uchun "Muzlatish" (StudentFreeze) ishlatiladi, chiqib
+  // ketish esa guruhdan chiqarish (GroupMembership.leftAt) orqali qayd etiladi.
+  if (user.role === ROLES.STUDENT) {
+    throw new ApiError(
+      400,
+      "O'quvchini arxivlab bo'lmaydi. Vaqtincha to'xtatish uchun \"Muzlatish\"dan foydalaning yoki guruhdan chiqaring.",
+    );
   }
 
   // Arxiv sanasi - berilsa o'sha kun (UTC midnight), aks holda mahalliy "bugun".

@@ -74,6 +74,7 @@ const UserDetailPage = () => {
       { to: `${BASE}/ozod`, label: "Davomatdan ozod" },
       { to: `${BASE}/depozit`, label: "Depozit" },
       { to: `${BASE}/tarix`, label: "Guruhlar tarixi" },
+      { to: `${BASE}/arxiv`, label: "Arxiv" },
     );
   }
 
@@ -119,14 +120,17 @@ const UserDetailPage = () => {
               </Button>
             )
           )}
-          <Button
-            variant="outline"
-            className="text-amber-600"
-            onClick={() => openModal(MODAL.USER_DELETE, { user: profile })}
-          >
-            <Archive className="size-4" />
-            Arxivlash
-          </Button>
+          {/* O'quvchi arxivlanmaydi - faqat o'qituvchi/boshqa rollar uchun */}
+          {!isStudent && (
+            <Button
+              variant="outline"
+              className="text-amber-600"
+              onClick={() => openModal(MODAL.USER_DELETE, { user: profile })}
+            >
+              <Archive className="size-4" />
+              Arxivlash
+            </Button>
+          )}
           <Button
             variant="outline"
             className="text-red-600"

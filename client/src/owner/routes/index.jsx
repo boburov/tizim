@@ -8,6 +8,7 @@ import {
   GroupInfoPanel,
   GroupStudentsPanel,
   GroupAttendancePanel,
+  GroupArchivePanel,
 } from "@/owner/features/groups";
 import {
   UsersListPage,
@@ -18,6 +19,7 @@ import {
   UserGradesPanel,
   UserExemptionsPanel,
   UserHistoryPanel,
+  UserArchivePanel,
 } from "@/owner/features/users";
 import { ROLES } from "@/shared/constants/roles";
 import {
@@ -105,6 +107,7 @@ const OwnerRoutes = () => (
       <Route index element={<GroupInfoPanel />} />
       <Route path="o-quvchilar" element={<GroupStudentsPanel />} />
       <Route path="davomat" element={<GroupAttendancePanel />} />
+      <Route path="arxiv" element={<GroupArchivePanel />} />
     </Route>
 
     {/* Foydalanuvchilar - tablar route darajasida (static 'students' ObjectId :id dan ustun) */}
@@ -120,6 +123,7 @@ const OwnerRoutes = () => (
       <Route path="ozod" element={<UserExemptionsPanel />} />
       <Route path="depozit" element={<UserDepositPanel />} />
       <Route path="tarix" element={<UserHistoryPanel />} />
+      <Route path="arxiv" element={<UserArchivePanel />} />
     </Route>
     <Route path="students/stats" element={<StudentStatsPage />} />
     <Route path="students/retention" element={<StudentRetentionPage />}>

@@ -304,19 +304,22 @@ const UsersTable = ({
                               <Snowflake className="size-4" />
                             </Button>
                           ))}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-amber-600 hover:bg-amber-50 hover:text-amber-700"
-                          onClick={() =>
-                            openModal(MODAL.USER_DELETE, { user: u })
-                          }
-                          aria-label="Foydalanuvchini arxivlash"
-                          title="Arxivlash"
-                        >
-                          <Archive className="size-4" />
-                        </Button>
+                        {/* O'quvchi arxivlanmaydi - faqat o'qituvchi/boshqa rollar */}
+                        {!isStudentRow && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                            onClick={() =>
+                              openModal(MODAL.USER_DELETE, { user: u })
+                            }
+                            aria-label="Foydalanuvchini arxivlash"
+                            title="Arxivlash"
+                          >
+                            <Archive className="size-4" />
+                          </Button>
+                        )}
                       </>
                     )}
                     <Button

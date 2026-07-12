@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import Button from "@/shared/components/ui/button/Button";
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import UserStatusFilter from "../components/UserStatusFilter";
+import { allowedStatusesForTab } from "../utils/userStatusFilter";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import UserCreateModal from "../components/UserCreateModal";
 import UserDeleteModal from "../components/UserDeleteModal";
@@ -33,6 +34,19 @@ const UsersListPage = () => {
       ? ROLES.STUDENT
       : ROLES.STUDENT;
 
+  // Joriy tab (holat filtri variantlari uchun).
+  const tab = pathname.endsWith("/teachers")
+    ? "teachers"
+    : pathname.endsWith("/students")
+      ? "students"
+      : "all";
+
+  // Status shu tabga mos kelmasa (masalan o'quvchida "Arxiv") - render vaqtida
+  // "Faol"ga tushiramiz. State'ni saqlaymiz: boshqa tabga qaytganda tiklanadi.
+  const effectiveStatus = allowedStatusesForTab(tab).includes(status)
+    ? status
+    : "active";
+
   const items = [
     { to: BASE, label: "Hammasi", exact: true },
     { to: `${BASE}/students`, label: "O'quvchilar" },
@@ -43,7 +57,7 @@ const UsersListPage = () => {
     <div className="space-y-4">
       <header className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Foydalanuvchilar</h1>
-        {status !== "archived" && (
+        {effectiveStatus !== "archived" && (
           <Button onClick={() => openModal(MODAL.USER_CREATE, { defaultRole: currentRole })}>
             <Plus className="size-4" />
             Yangi foydalanuvchi
@@ -53,9 +67,9 @@ const UsersListPage = () => {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <TabsLinks items={items} />
-        <UserStatusFilter value={status} onChange={setStatus} />
+        <UserStatusFilter value={effectiveStatus} onChange={setStatus} tab={tab} />
       </div>
-      <Outlet context={{ status }} />
+      <Outlet context={{ status: effectiveStatus }} />
 
       <ModalWrapper name={MODAL.USER_CREATE} title="Yangi foydalanuvchi">
         <UserCreateModal />

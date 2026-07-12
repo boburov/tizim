@@ -19,6 +19,7 @@ import feedbackRouter from "../modules/feedback/feedback.routes.js";
 import feedbackTypesRouter from "../modules/feedbackTypes/feedbackTypes.routes.js";
 import botAuthRouter from "../modules/botAuth/botAuth.routes.js";
 import activityLogsRouter from "../modules/activityLogs/activityLogs.routes.js";
+import activityHistoryRouter from "../modules/activityHistory/activityHistory.routes.js";
 import adminDashboardRouter from "../modules/adminDashboard/adminDashboard.routes.js";
 import searchRouter from "../modules/search/search.routes.js";
 import financeRouter from "../modules/finance/finance.routes.js";
@@ -63,6 +64,7 @@ router.use("/bot-auth", botAuthRouter);
 
 // Admin / boshqaruv paneli
 router.use("/activity-logs", activityLogsRouter);
+router.use("/activity-history", activityHistoryRouter);
 router.use("/admin-dashboard", adminDashboardRouter);
 
 // Finance subsystem (Moliya)

@@ -6,6 +6,7 @@ export { default as UserAttendancePanel } from "./components/tabs/UserAttendance
 export { default as UserGradesPanel } from "./components/tabs/UserGradesPanel";
 export { default as UserExemptionsPanel } from "./components/tabs/UserExemptionsPanel";
 export { default as UserHistoryPanel } from "./components/tabs/UserHistoryPanel";
+export { default as UserArchivePanel } from "./components/tabs/UserArchivePanel";
 export { default as UserPasswordModal } from "./components/UserPasswordModal";
 
 export { usersAPI } from "./api/users.api";
