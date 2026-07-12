@@ -19,6 +19,8 @@ const GroupStudentsPanel = () => {
               groupId: group._id,
               // Guruh boshlangan sana: startDate, bo'lmasa createdAt.
               groupStartedAt: group.startDate || group.createdAt,
+              // Guruhda hozir bor o'quvchilar - tanlov ro'yxatidan chiqarib tashlanadi.
+              existingStudentIds: (group.students || []).map((s) => s._id),
             })
           }
         >

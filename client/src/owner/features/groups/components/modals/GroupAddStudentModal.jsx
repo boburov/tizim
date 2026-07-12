@@ -22,6 +22,7 @@ import { ROLES } from "@/shared/constants/roles";
 const GroupAddStudentModal = ({
   groupId,
   groupStartedAt,
+  existingStudentIds = [],
   close,
   isLoading,
   setIsLoading,
@@ -42,11 +43,15 @@ const GroupAddStudentModal = ({
     limit: 200,
   });
 
+  // Guruhda allaqachon bor o'quvchilar tanlov ro'yxatida ko'rinmaydi.
+  const existingSet = new Set((existingStudentIds || []).map(String));
   const students = data?.data || [];
-  const options = students.map((s) => ({
-    value: s._id,
-    label: `${s.firstName} ${s.lastName} (@${s.username})`,
-  }));
+  const options = students
+    .filter((s) => !existingSet.has(String(s._id)))
+    .map((s) => ({
+      value: s._id,
+      label: `${s.firstName} ${s.lastName} (@${s.username})`,
+    }));
 
   const { mutate } = useGroupAddStudentsBulkMutation({
     onSuccess: (res) => {
