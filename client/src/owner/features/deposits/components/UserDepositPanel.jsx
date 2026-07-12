@@ -46,7 +46,7 @@ const UserDepositPanel = () => {
           onClick={() => openModal(MODAL.DEPOSIT_WITHDRAW, { mode: "withdraw", student })}
         >
           <Minus className="size-4" />
-          Yechib olish
+          Qaytarish
         </Button>
         <Button
           variant="outline"
@@ -66,7 +66,7 @@ const UserDepositPanel = () => {
       <ModalWrapper name={MODAL.DEPOSIT_ADD} title="To'lov qo'shish" className="max-w-md">
         <DepositFormModal />
       </ModalWrapper>
-      <ModalWrapper name={MODAL.DEPOSIT_WITHDRAW} title="To'lovdan yechib olish" className="max-w-md">
+      <ModalWrapper name={MODAL.DEPOSIT_WITHDRAW} title="Ortiqcha to'lovni qaytarish" className="max-w-md">
         <DepositFormModal />
       </ModalWrapper>
     </div>

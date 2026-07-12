@@ -5,7 +5,7 @@ const BASE = "/owner/finance/deposits";
 
 const DepositsPage = () => {
   const items = [
-    { to: BASE, label: "Tranzaksiyalar", exact: true },
+    { to: BASE, label: "O'tkazmalar", exact: true },
     { to: `${BASE}/hisobotlar`, label: "Hisobotlar" },
   ];
 

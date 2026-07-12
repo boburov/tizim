@@ -36,7 +36,7 @@ export const useDepositTopupMutation = makeMutation(
 
 export const useDepositWithdrawMutation = makeMutation(
   (body) => depositsAPI.withdraw(body).then((r) => r.data.data),
-  "To'lovdan yechib olindi",
+  "Ortiqcha to'lov qaytarildi",
 );
 
 export const useDepositApplyMutation = makeMutation(
