@@ -1,0 +1,27 @@
+name: Deploy to VPS
+
+# main ga har push bo'lganda avtomatik deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # GitHub UI'dan qo'lda ham ishga tushirish mumkin
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true # ketma-ket push bo'lsa faqat oxirgisi ishlaydi
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: VPS'ga SSH orqali deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            bash /root/tizim/deploy.sh
