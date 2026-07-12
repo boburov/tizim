@@ -17,7 +17,6 @@ import {
 import {
   getClassDaysInRange,
   toUtcMidnight,
-  localTodayMidnight,
 } from "../../../helpers/attendance.helper.js";
 import { holidayKeySetForRange } from "../../holidays/services/holidays.service.js";
 import {
@@ -99,10 +98,11 @@ const countElapsedLessons = (lessonDates, periods, asOf, freezeWindows = []) => 
 
 // Bir o'quvchi+guruh+oy uchun snapshot maydonlarini hisoblaydi (DB dan yuklab).
 // periods berilmasa, bitta {joinedAt, leftAt} davr ishlatiladi.
-// NARX dars soniga bog'liq (dars-asosli accrual): oydagi jami darsni maxraj,
-// bugungacha o'tib bo'lgan darsni surat qilib proratsiya qiladi. Guruh jadvali
-// bo'lmasa (yoki oyda dars yo'q bo'lsa) eski kalendar-kun proratsiyasiga qaytadi
-// - shunda jadvalsiz guruhlarda billing yo'qolib qolmaydi.
+// BILLING TO'LIQ-OY: qarz oy boshidanoq to'liq oylik summa (kunlik/dars asosida
+// o'smaydi). A'zolik davri (qo'shilish/chiqish) va muzlatishga proratsiya
+// qilinadi - narx = oylik × (a'zolikdagi darslar / oydagi jami darslar) − chegirma.
+// Guruh jadvali bo'lmasa (yoki oyda dars yo'q bo'lsa) eski kalendar-kun
+// proratsiyasiga qaytadi - shunda jadvalsiz guruhlarda billing yo'qolib qolmaydi.
 const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = null, periods = null }) => {
   const [feeDoc, discounts, groupDoc, freezeWindows] = await Promise.all([
     GroupFee.findOne({ group, year, month }),
@@ -143,18 +143,16 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
 
   const monthEnd = new Date(Date.UTC(year, month, 0));
 
-  // Accrual kesimi: joriy/kelasi oy uchun bugungi kun (qarz kunda o'sib boradi);
-  // o'tgan oylar uchun oy oxiri (barcha dars o'tib bo'lgan → to'liq oylik).
-  const today = localTodayMidnight();
-  const todayIdx = today.getUTCFullYear() * 12 + today.getUTCMonth();
-  const monthIdx = year * 12 + (month - 1);
-  const asOf = monthIdx >= todayIdx ? today : monthEnd;
-
+  // TO'LIQ-OY billing: qarz oy boshidanoq to'liq oylik summaga teng - kunlik/dars
+  // asosida o'smaydi. Shu oyda a'zolikka to'g'ri keladigan BARCHA darslar
+  // (asOf = oy oxiri, muzlatilganlaridan tashqari) sanaladi. Oy o'rtasida
+  // qo'shilgan o'quvchi faqat qolgan darslar uchun to'laydi; chiqib ketsa -
+  // keyingi recalc qarzni haqiqiy a'zolik davriga qarab kamaytiradi.
   const totalLessons = lessonDates.length;
   const elapsedLessons = countElapsedLessons(
     lessonDates,
     effPeriods,
-    asOf,
+    monthEnd,
     freezeWindows,
   );
 
@@ -165,24 +163,9 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
     discounts,
   });
 
-  // To'liq-oy obligatsiyasi: o'quvchining shu oydagi a'zolik davri BO'YICHA
-  // barcha darslar (asOf=oy oxiri). Oldindan (avans) to'lovni depozitga
-  // qaytarmaslik uchun ISHLATILADI: haqiqiy ortiqcha to'lov = paid - fullExpected,
-  // accrued expected'dan emas (aks holda avans har kuni depozitga ko'chib ketardi).
-  const fullElapsed = countElapsedLessons(
-    lessonDates,
-    effPeriods,
-    monthEnd,
-    freezeWindows,
-  );
-  const full = computeLessonSnapshot({
-    baseFee,
-    totalLessons,
-    elapsedLessons: fullElapsed,
-    discounts,
-  });
-
-  return { ...snap, fullExpectedAmount: full.expectedAmount };
+  // expectedAmount endi to'liq-oy obligatsiyasiga teng - shuning uchun
+  // fullExpectedAmount ham o'sha (ortiqcha to'lov shu chegaraga nisbatan o'lchanadi).
+  return { ...snap, fullExpectedAmount: snap.expectedAmount };
 };
 
 // paidAmount ifodasidan status'ni hisoblaydigan update-pipeline $set bosqichi.
