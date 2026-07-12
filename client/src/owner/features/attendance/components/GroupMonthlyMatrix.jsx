@@ -43,14 +43,11 @@ const Legend = () => (
       </LegendItem>
     ))}
     <LegendItem
-      swatch={<span className="block w-2.5 h-2.5 rounded-full bg-gray-200" />}
+      swatch={
+        <span className="block w-2.5 h-2.5 rounded-full border-2 border-gray-300" />
+      }
     >
       Belgilanmagan
-    </LegendItem>
-    <LegendItem
-      swatch={<span className="block w-2.5 h-2.5 rounded-sm bg-rose-100" />}
-    >
-      Bayram
     </LegendItem>
   </div>
 );
@@ -98,7 +95,20 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
     );
   }
 
-  const dates = data.dates || [];
+  // Faqat dars kunlari ustun bo'ladi (jadval versiyalanishi server tomonda hisobga
+  // olingan - qaysi sanada qaysi jadval amal qilgan bo'lsa, o'sha kunlar chiqadi)
+  const dates = (data.dates || []).filter((d) => d.isClassDay);
+
+  if (dates.length === 0) {
+    return (
+      <Card>
+        <Legend />
+        <p className="py-6 text-center text-muted-foreground mt-3">
+          Bu oyda dars kuni yo'q
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <Card className="space-y-3">
@@ -112,7 +122,7 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
         <table className="w-auto border-separate border-spacing-0 text-xs">
           <thead>
             <tr>
-              <th className="sticky left-0 z-20 w-44 min-w-[11rem] bg-white border-b border-gray-100 px-3 py-2 text-left font-medium text-gray-400 whitespace-nowrap">
+              <th className="sticky left-0 z-20 w-48 min-w-[12rem] bg-white border-b border-r border-gray-200 px-3 py-2.5 text-left font-semibold text-gray-500 whitespace-nowrap">
                 O'quvchi
               </th>
               {dates.map((d) => {
@@ -132,10 +142,10 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                           ? `${day}-kun, ${d.startTime}`
                           : undefined
                     }
-                    className={`w-8 border-b border-gray-100 px-0 py-1.5 text-center font-medium ${headerCls}`}
+                    className={`w-12 min-w-[3rem] border-b border-r border-gray-200 px-0 py-2.5 text-center font-semibold ${headerCls}`}
                   >
-                    <div className="leading-none">{day}</div>
-                    <div className="mt-0.5 text-[9px] font-normal uppercase tracking-wide text-gray-300">
+                    <div className="text-[13px] leading-none">{day}</div>
+                    <div className="mt-1 text-[10px] font-normal uppercase tracking-wide text-gray-400">
                       {d.slot ? d.startTime : DAY_SHORT[d.dayOfWeek]}
                     </div>
                   </th>
@@ -149,13 +159,13 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
               const name = `${row.student.firstName || ""} ${row.student.lastName || ""}`.trim();
               return (
                 <tr key={sid} className="group">
-                  <td className="sticky left-0 z-10 w-44 min-w-[11rem] bg-white border-b border-gray-100 px-3 py-1.5 truncate text-gray-700 group-hover:bg-gray-50">
+                  <td className="sticky left-0 z-10 w-48 min-w-[12rem] bg-white border-b border-r border-gray-200 px-3 py-2 truncate text-gray-700 group-hover:bg-gray-50">
                     {name || row.student.username || "-"}
                   </td>
                   {dates.map((d) => {
                     const colKey = d.colKey || d.dateKey;
                     const cell = row.cells?.[colKey];
-                    const cellCls = `w-8 h-7 border-b border-gray-100 ${
+                    const cellCls = `w-12 h-11 border-b border-r border-gray-200 ${
                       d.isHoliday ? "bg-rose-50/50" : ""
                     } group-hover:bg-gray-50`;
                     if (!d.isClassDay || cell === null || cell === undefined) {
@@ -164,8 +174,8 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                     const displayed = cell.status || cell.defaultStatus;
                     const label = d.slot ? `${d.dateKey} ${d.startTime}` : d.dateKey;
                     const dotCls = displayed
-                      ? `w-2.5 h-2.5 ${bgOf(displayed)}`
-                      : "w-1.5 h-1.5 bg-gray-200 group-hover/cell:bg-gray-300";
+                      ? `w-4 h-4 ${bgOf(displayed)}`
+                      : "w-3 h-3 border-2 border-gray-300 group-hover/cell:border-gray-400";
                     return (
                       <td key={colKey} className={cellCls}>
                         <Tooltip
@@ -178,7 +188,7 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                           <button
                             type="button"
                             onClick={() => handleCellClick(sid, d, cell)}
-                            className="group/cell flex h-7 w-full items-center justify-center rounded transition-colors hover:bg-gray-100"
+                            className="group/cell flex h-11 w-full items-center justify-center rounded transition-colors hover:bg-gray-100"
                           >
                             <span className={`block rounded-full ${dotCls}`} />
                           </button>
