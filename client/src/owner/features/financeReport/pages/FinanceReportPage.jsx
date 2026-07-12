@@ -2,17 +2,16 @@ import useObjectState from "@/shared/hooks/useObjectState";
 
 import PeriodPicker from "../components/PeriodPicker";
 import FinanceKpiCards from "../components/FinanceKpiCards";
+import IncomeBreakdownCards from "../components/IncomeBreakdownCards";
 import IncomeExpenseTrendChart from "../components/IncomeExpenseTrendChart";
 import PaymentMethodCard from "../components/PaymentMethodCard";
 import OutstandingCard from "../components/OutstandingCard";
 import GroupBreakdownChart from "../components/GroupBreakdownChart";
 import LedgerTable from "../components/LedgerTable";
-import WriteOffsTable from "../components/WriteOffsTable";
 
 import useFinanceSummaryQuery from "../hooks/useFinanceSummaryQuery";
 import useFinanceGroupBreakdownQuery from "../hooks/useFinanceGroupBreakdownQuery";
 import useFinanceLedgerQuery from "../hooks/useFinanceLedgerQuery";
-import useFinanceWriteOffsQuery from "../hooks/useFinanceWriteOffsQuery";
 
 const SkeletonBlock = ({ className = "" }) => (
   <div className={`animate-pulse rounded-2xl bg-zinc-100 ${className}`} />
@@ -36,8 +35,6 @@ const FinanceReportPage = () => {
     ...params,
     limit: 12,
   });
-  const { data: writeOffs, isLoading: writeOffsLoading } =
-    useFinanceWriteOffsQuery(params);
 
   return (
     <div className="space-y-5">
@@ -61,6 +58,17 @@ const FinanceReportPage = () => {
         </div>
       ) : (
         <FinanceKpiCards data={summary} />
+      )}
+
+      {/* To'lov tafsiloti: kelishi kerak / kelgan / qarz / undirilishi kerak (zarar) */}
+      {summaryLoading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonBlock key={i} className="h-32" />
+          ))}
+        </div>
+      ) : (
+        <IncomeBreakdownCards income={summary?.income} />
       )}
 
       {/* Asosiy qator: dinamika grafigi + to'lov usullari */}
@@ -89,13 +97,6 @@ const FinanceReportPage = () => {
           />
         )}
       </div>
-
-      {/* Undirilmagan to'lovlar (hisobdan chiqarilgan) - alohida bo'lim */}
-      <WriteOffsTable
-        data={writeOffs}
-        isLoading={writeOffsLoading}
-        href="/owner/finance/write-offs"
-      />
 
       {/* So'nggi tranzaksiyalar */}
       <LedgerTable items={ledger || []} isLoading={ledgerLoading} />

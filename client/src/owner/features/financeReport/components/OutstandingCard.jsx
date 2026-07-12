@@ -66,20 +66,6 @@ const OutstandingCard = ({ income, expense }) => (
         to="/owner/finance/teacher-salaries/qoldiqlar"
       />
     </div>
-
-    {/* Undirilmagan to'lovlar (hisobdan chiqarilgan) - undirilmaydigan, alohida moliyaviy zarar. */}
-    <Link
-      to="/owner/finance/write-offs"
-      className="group mt-4 flex items-center justify-between border-t border-dashed border-zinc-200 pt-3"
-    >
-      <span className="inline-flex items-center gap-0.5 text-sm font-medium text-amber-700 transition group-hover:text-amber-800">
-        Undirilmagan to'lovlar
-        <ArrowUpRight className="size-3 text-amber-400 transition group-hover:text-amber-600" />
-      </span>
-      <span className="text-sm font-semibold text-amber-700">
-        {formatMoney(income?.badDebt || 0)}
-      </span>
-    </Link>
   </div>
 );
 
