@@ -1118,6 +1118,19 @@ export const removeMembershipById = async (groupId, membershipId) => {
     }
   }
 
+  // Qarzli o'quvchining o'qish davrini o'chirib bo'lmaydi - avval qarz to'lansin.
+  if (
+    await financePaymentService.hasOutstandingDebtInGroup(
+      membership.student,
+      groupId,
+    )
+  ) {
+    throw new ApiError(
+      400,
+      "O'quvchining bu guruhda qarzi bor. Avval qarzni to'lang.",
+    );
+  }
+
   await membership.softDelete();
   try {
     await financePaymentService.recalcForStudentScope(membership.student, groupId, {});
@@ -1147,6 +1160,15 @@ const recalcFinanceOnLeave = async (groupId, studentId) => {
 
 export const removeStudent = async (groupId, studentId, { reasonId } = {}) => {
   await ensureGroup(groupId);
+
+  // Qarzli o'quvchini guruhdan chiqarib bo'lmaydi - avval qarz to'lanishi kerak.
+  if (await financePaymentService.hasOutstandingDebtInGroup(studentId, groupId)) {
+    throw new ApiError(
+      400,
+      "O'quvchining bu guruhda qarzi bor. Avval qarzni to'lang, keyin guruhdan chiqaring.",
+    );
+  }
+
   const leftAt = toUtcMidnight(new Date());
 
   // Dinamik chiqish sababi (ixtiyoriy) - snapshot title bilan birga yozamiz,

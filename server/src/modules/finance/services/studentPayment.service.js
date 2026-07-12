@@ -8,7 +8,17 @@ import Group from "../../../models/group.model.js";
 import User from "../../../models/user.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
-import { computePaymentSnapshot, deriveStatus } from "./proration.helper.js";
+import {
+  computePaymentSnapshot,
+  computeLessonSnapshot,
+  deriveStatus,
+} from "./proration.helper.js";
+import {
+  getClassDaysInRange,
+  toUtcMidnight,
+  localTodayMidnight,
+} from "../../../helpers/attendance.helper.js";
+import { holidayKeySetForRange } from "../../holidays/services/holidays.service.js";
 
 const safeStudentProjection = {
   firstName: 1,
@@ -42,10 +52,52 @@ const loadMembershipPeriods = async (student, group, year, month) => {
   return rows.map((r) => ({ joinedAt: r.joinedAt, leftAt: r.leftAt || null }));
 };
 
+// Guruh jadvali + dam olish kunlari bo'yicha oydagi BARCHA dars sessiyalarining
+// sanalarini qaytaradi (kunda bir nechta dars bo'lsa - har biri alohida dars).
+// Kurs tugash sanasi (endDate) oy ichida bo'lsa - undan keyin dars hisoblanmaydi.
+const loadMonthLessonDates = async (groupDoc, year, month) => {
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  let monthEnd = new Date(Date.UTC(year, month, 0));
+  if (groupDoc?.endDate) {
+    const end = toUtcMidnight(groupDoc.endDate);
+    if (end.getTime() < monthEnd.getTime()) monthEnd = end;
+  }
+  if (monthEnd.getTime() < monthStart.getTime()) return [];
+  const holidaySet = await holidayKeySetForRange(monthStart, monthEnd);
+  return getClassDaysInRange(groupDoc, monthStart, monthEnd, holidaySet).map(
+    (s) => toUtcMidnight(s.date),
+  );
+};
+
+// A'zolik davrlariga (leftAt EXCLUSIVE) to'g'ri keladigan va asOf sanasigacha
+// (shu kun inklyuziv) O'TIB BO'LGAN darslar sonini sanaydi. Davrlar a'zolik
+// bo'yicha kesishmaydi, shuning uchun bir dars faqat bir marta sanaladi.
+const countElapsedLessons = (lessonDates, periods, asOf) => {
+  const cutoff = asOf ? asOf.getTime() : Infinity;
+  let count = 0;
+  for (const d of lessonDates) {
+    const t = d.getTime();
+    if (t > cutoff) continue; // hali bo'lib o'tmagan dars - accrual qilinmaydi
+    for (const p of periods) {
+      const start = p.joinedAt ? toUtcMidnight(p.joinedAt).getTime() : -Infinity;
+      const endExcl = p.leftAt ? toUtcMidnight(p.leftAt).getTime() : Infinity;
+      if (t >= start && t < endExcl) {
+        count += 1;
+        break;
+      }
+    }
+  }
+  return count;
+};
+
 // Bir o'quvchi+guruh+oy uchun snapshot maydonlarini hisoblaydi (DB dan yuklab).
 // periods berilmasa, bitta {joinedAt, leftAt} davr ishlatiladi.
+// NARX dars soniga bog'liq (dars-asosli accrual): oydagi jami darsni maxraj,
+// bugungacha o'tib bo'lgan darsni surat qilib proratsiya qiladi. Guruh jadvali
+// bo'lmasa (yoki oyda dars yo'q bo'lsa) eski kalendar-kun proratsiyasiga qaytadi
+// - shunda jadvalsiz guruhlarda billing yo'qolib qolmaydi.
 const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = null, periods = null }) => {
-  const [feeDoc, discounts] = await Promise.all([
+  const [feeDoc, discounts, groupDoc] = await Promise.all([
     GroupFee.findOne({ group, year, month }),
     Discount.find({
       student,
@@ -54,17 +106,63 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
       isDeleted: { $ne: true },
       $or: [{ scope: "permanent" }, { scope: "monthly", year, month }],
     }),
+    Group.findById(group, { schedule: 1, startDate: 1, endDate: 1 }).lean(),
   ]);
 
-  return computePaymentSnapshot({
-    baseFee: feeDoc ? feeDoc.amount : 0,
-    year,
-    month,
-    joinedAt,
-    leftAt,
-    periods,
+  const baseFee = feeDoc ? feeDoc.amount : 0;
+  const effPeriods = periods === null ? [{ joinedAt, leftAt }] : periods;
+
+  const lessonDates = groupDoc
+    ? await loadMonthLessonDates(groupDoc, year, month)
+    : [];
+
+  // Jadval/dars yo'q → orqaga-moslik uchun kalendar-kun proratsiyasi.
+  // fullExpectedAmount = accrued bilan bir xil (kalendar model kunda o'smaydi).
+  if (lessonDates.length === 0) {
+    const snap = computePaymentSnapshot({
+      baseFee,
+      year,
+      month,
+      joinedAt,
+      leftAt,
+      periods,
+      discounts,
+    });
+    return { ...snap, fullExpectedAmount: snap.expectedAmount };
+  }
+
+  const monthEnd = new Date(Date.UTC(year, month, 0));
+
+  // Accrual kesimi: joriy/kelasi oy uchun bugungi kun (qarz kunda o'sib boradi);
+  // o'tgan oylar uchun oy oxiri (barcha dars o'tib bo'lgan → to'liq oylik).
+  const today = localTodayMidnight();
+  const todayIdx = today.getUTCFullYear() * 12 + today.getUTCMonth();
+  const monthIdx = year * 12 + (month - 1);
+  const asOf = monthIdx >= todayIdx ? today : monthEnd;
+
+  const totalLessons = lessonDates.length;
+  const elapsedLessons = countElapsedLessons(lessonDates, effPeriods, asOf);
+
+  const snap = computeLessonSnapshot({
+    baseFee,
+    totalLessons,
+    elapsedLessons,
     discounts,
   });
+
+  // To'liq-oy obligatsiyasi: o'quvchining shu oydagi a'zolik davri BO'YICHA
+  // barcha darslar (asOf=oy oxiri). Oldindan (avans) to'lovni depozitga
+  // qaytarmaslik uchun ISHLATILADI: haqiqiy ortiqcha to'lov = paid - fullExpected,
+  // accrued expected'dan emas (aks holda avans har kuni depozitga ko'chib ketardi).
+  const fullElapsed = countElapsedLessons(lessonDates, effPeriods, monthEnd);
+  const full = computeLessonSnapshot({
+    baseFee,
+    totalLessons,
+    elapsedLessons: fullElapsed,
+    discounts,
+  });
+
+  return { ...snap, fullExpectedAmount: full.expectedAmount };
 };
 
 // paidAmount ifodasidan status'ni hisoblaydigan update-pipeline $set bosqichi.
@@ -175,13 +273,19 @@ export const recalc = async (paymentId, { session } = {}) => {
     { new: true, session: session || undefined },
   );
 
-  // Plan kamayib paidAmount > expected bo'lsa, ortiqcha DEPOZIT-qoplama depozitga
-  // qaytariladi. Faqat sessiyasiz (recompute kaskadi) - yaratish (session) oqimida emas.
+  // Ortiqcha to'lovni depozitga qaytarish. MUHIM: taqqoslash accrued expected'ga
+  // emas, TO'LIQ-OY obligatsiyasiga (fullExpectedAmount) nisbatan - shunda dars-asosli
+  // accrual paytida avans (oldindan to'lov) har kuni depozitga ko'chib ketmaydi;
+  // faqat butun oy narxidan ORTIQ to'langan qism qaytadi. Faqat sessiyasiz
+  // (recompute kaskadi) - yaratish (session) oqimida emas.
   // Dinamik import: deposit.service → studentPayment.service siklini oldini oladi.
-  if (!session && updated && (updated.paidAmount || 0) > (updated.expectedAmount || 0)) {
+  const fullExpected = snap.fullExpectedAmount ?? snap.expectedAmount;
+  if (!session && updated && (updated.paidAmount || 0) > fullExpected) {
     try {
       const depositService = await import("../../deposits/services/deposit.service.js");
-      await depositService.reconcileDepositOverpay(updated._id);
+      await depositService.reconcileDepositOverpay(updated._id, {
+        capAmount: fullExpected,
+      });
     } catch (err) {
       logger.warn({ err }, "Depozit ortiqcha qoplama qayta hisoblanmadi");
     }
@@ -243,6 +347,39 @@ export const recalcForStudent = async (student) => {
   }
   return payments.length;
 };
+
+// Berilgan oydagi barcha to'lovlarni qayta hisoblaydi - dars-asosli accrual'ni
+// bir kunga oldinga suradi (o'tib bo'lgan yangi dars(lar) qarzga qo'shiladi).
+// Kunlik job chaqiradi. Bitta yozuvdagi xato butun jarayonni to'xtatmaydi.
+export const accrueMonth = async (year, month) => {
+  const payments = await StudentPayment.find(
+    { year, month, isDeleted: { $ne: true } },
+    { _id: 1 },
+  );
+  let recalculated = 0;
+  for (const p of payments) {
+    try {
+      await recalc(p._id);
+      recalculated += 1;
+    } catch (err) {
+      logger.warn({ err, payment: p._id }, "Kunlik accrual recalc xatosi");
+    }
+  }
+  return { total: payments.length, recalculated };
+};
+
+// O'quvchining shu guruhda qarzi (biror oyda expected>paid) bormi. Guruhdan
+// chiqarish/o'qish davrini o'chirishni bloklashda ishlatiladi - qarzli o'quvchi
+// guruhdan chiqarilmasin.
+export const hasOutstandingDebtInGroup = async (student, group) =>
+  Boolean(
+    await StudentPayment.exists({
+      student,
+      group,
+      isDeleted: { $ne: true },
+      $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
+    }),
+  );
 
 // Bitta a'zolik uchun (o'quvchi guruhga qo'shilganda) shu oy to'lovini yaratadi.
 // session berilsa, ochiq MongoDB tranzaksiyasi ichida o'qib-yozadi (avans spill

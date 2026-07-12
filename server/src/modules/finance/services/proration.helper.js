@@ -130,6 +130,35 @@ export const computePaymentSnapshot = ({
   };
 };
 
+// Dars-asosli accrual snapshot: narx kalendar kunga emas, OYDAGI DARS SONIGA
+// bo'linadi (1 dars narxi = oylik / oydagi jami dars). Qarz o'tib bo'lgan har bir
+// dars uchun yig'iladi - o'quvchi darsga kelsin kelmasin. elapsedLessons: a'zolik
+// davriga to'g'ri keladigan va bugungacha (asOf) O'TIB BO'LGAN darslar soni;
+// totalLessons: oydagi jami darslar. Yaxlitlash drift'siz: elapsed==total bo'lganda
+// (oy oxiri) aynan baseFee chiqadi, oraliqda esa proporsional.
+export const computeLessonSnapshot = ({
+  baseFee = 0,
+  totalLessons = 0,
+  elapsedLessons = 0,
+  discounts = [],
+}) => {
+  const fee = Number(baseFee) || 0;
+  const total = Math.max(0, Number(totalLessons) || 0);
+  const elapsed = clamp(Number(elapsedLessons) || 0, 0, total);
+
+  const proratedFee = total > 0 ? Math.round((fee * elapsed) / total) : 0;
+  const factor = total > 0 ? elapsed / total : 0;
+
+  const discountApplied = resolveDiscountAmount(discounts, proratedFee);
+  const expectedAmount = Math.max(0, proratedFee - discountApplied);
+  return {
+    baseFee: fee,
+    prorationFactor: factor,
+    discountApplied,
+    expectedAmount,
+  };
+};
+
 // paidAmount va expectedAmount dan status aniqlaydi.
 export const deriveStatus = (paidAmount, expectedAmount) => {
   if (paidAmount <= 0) return "unpaid";

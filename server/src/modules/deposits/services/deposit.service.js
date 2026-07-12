@@ -234,10 +234,14 @@ const refundOverpayChunk = async (deposit, planId, take, note) => {
 // Avval DEPOZIT-qoplama tranzaksiyalari (faqat kerakli ulush - qisman reverse,
 // fantom pul yaratmaymiz), yetmasa qolgan ortiqcha to'g'ridan-to'g'ri to'lov ham
 // depozitga qaytadi (memory qoidasi: "overpay depozitga qaytadi").
-export const reconcileDepositOverpay = async (paymentId) => {
+// capAmount berilsa - ortiqcha to'lov shu chegaraga nisbatan o'lchanadi (dars-asosli
+// accrual'da TO'LIQ-OY obligatsiyasi), aks holda plan.expectedAmount ga nisbatan.
+// Bu avansni (butun oy narxigacha to'langan) depozitga qaytarmaslik uchun kerak.
+export const reconcileDepositOverpay = async (paymentId, { capAmount } = {}) => {
   const plan = await StudentPayment.findById(paymentId);
   if (!plan) return;
-  let excess = (plan.paidAmount || 0) - (plan.expectedAmount || 0);
+  const cap = capAmount != null ? capAmount : plan.expectedAmount || 0;
+  let excess = (plan.paidAmount || 0) - cap;
   if (excess <= 0) return;
 
   const deposit = await getOrCreate(plan.student);

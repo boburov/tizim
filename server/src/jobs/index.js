@@ -26,6 +26,10 @@ import defineGenerateMonthlySalary, {
 import defineAutoEndGroups, {
   JOB_NAME as AUTO_END_GROUPS_JOB,
 } from "./autoEndGroups.job.js";
+import defineDailyAccrueFinance, {
+  JOB_NAME as DAILY_ACCRUE_JOB,
+  accrueToday,
+} from "./dailyAccrueFinance.job.js";
 import { catchUpMonthlyGeneration } from "./catchUpMonthly.js";
 import * as groupsService from "../modules/groups/services/groups.service.js";
 
@@ -47,6 +51,7 @@ export const startJobs = async () => {
   defineGenerateMonthlyFinance(agenda);
   defineGenerateMonthlySalary(agenda);
   defineAutoEndGroups(agenda);
+  defineDailyAccrueFinance(agenda);
 
   await agenda.start();
 
@@ -71,6 +76,9 @@ export const startJobs = async () => {
 
   // Tugash sanasi yetgan kurslarni avto-arxivlash - har kuni 00:10 da
   await every("10 0 * * *", AUTO_END_GROUPS_JOB);
+  // Kunlik dars-asosli qarz accrual - har kuni 00:20 da (kurs arxivlashdan keyin:
+  // tugagan guruh yangi dars accrual qilmasin).
+  await every("20 0 * * *", DAILY_ACCRUE_JOB);
 
   logger.info({ timezone: TZ }, "Agenda ishga tushirildi");
 
@@ -81,6 +89,12 @@ export const startJobs = async () => {
   // Boot catch-up: server o'chiq paytda tugash sanasi yetgan kurslarni arxivlaydi.
   groupsService.processDueGroupEnds().catch((err) => {
     logger.warn({ err }, "Boot: tugagan kurslar avto-arxivlanmadi");
+  });
+
+  // Boot catch-up: server o'chiq paytda o'tkazib yuborilgan kunlik dars-asosli
+  // accrual'ni bugungi kesimga suradi. Await qilinmaydi - startup bloklanmasin.
+  accrueToday().catch((err) => {
+    logger.warn({ err }, "Boot: kunlik accrual bajarilmadi");
   });
 };
 
