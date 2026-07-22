@@ -225,6 +225,25 @@ export const update = async (id, body) => {
       if (d && d.getTime() > Date.now()) {
         throw new ApiError(400, "Ro'yxatga olingan sana kelajakda bo'lmasin");
       }
+      // Ro'yxatga olingan sanani mavjud a'zolik boshlangan kundan KEYINGA surib
+      // bo'lmaydi - aks holda "guruhga ro'yxatdan oldin qo'shilgan" holat qoladi.
+      if (d) {
+        const earliest = await GroupMembership.findOne(
+          { student: user._id, isDeleted: { $ne: true } },
+          { joinedAt: 1 },
+        )
+          .sort({ joinedAt: 1 })
+          .lean();
+        if (
+          earliest?.joinedAt &&
+          toUtcMidnight(d).getTime() > toUtcMidnight(earliest.joinedAt).getTime()
+        ) {
+          throw new ApiError(
+            400,
+            "Ro'yxatga olingan sana o'quvchi guruhga qo'shilgan sanadan keyin bo'lmasin",
+          );
+        }
+      }
       user.enrolledAt = d;
     }
 

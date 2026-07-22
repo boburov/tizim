@@ -18,6 +18,7 @@ import { qk } from "@/shared/lib/query/keys";
 
 const StudentAddToGroupModal = ({
   studentId,
+  enrolledAt,
   excludeGroupIds = [],
   close,
   isLoading,
@@ -41,21 +42,28 @@ const StudentAddToGroupModal = ({
   const available = groups.filter((g) => !excluded.has(String(g._id)));
   const options = available.map((g) => ({ value: g._id, label: g.name }));
 
-  // Boshlash sanasi guruh boshlangan sanadan oldin bo'lmasin (min).
+  // Boshlash sanasi guruh boshlangan sanadan HAM, o'quvchi ro'yxatga olingan
+  // sanadan HAM oldin bo'lmasin (min = ikkalasining kechrog'i). Aks holda
+  // "10-iyulda ro'yxatga olingan, 1-iyuldan o'qiyapti" degan holat chiqadi.
   const selectedGroup = available.find(
     (g) => String(g._id) === String(groupId),
   );
-  const joinMin = selectedGroup?.startDate
+  const enrolledInput = enrolledAt ? toDateInput(enrolledAt) : undefined;
+  const groupStartInput = selectedGroup?.startDate
     ? toDateInput(selectedGroup.startDate)
     : undefined;
+  // ISO (YYYY-MM-DD) formatda string solishtiruvi sana solishtiruviga teng.
+  const joinMin =
+    [groupStartInput, enrolledInput].filter(Boolean).sort().pop() || undefined;
 
-  // Guruh tanlanganda boshlash sanasini guruh boshlangan sanaga moslaymiz.
+  // Guruh tanlanganda boshlash sanasini shu eng erta ruxsat etilgan sanaga
+  // moslaymiz (guruh o'quvchidan oldin boshlangan bo'lsa - ro'yxat sanasi).
   const onSelectGroup = (v) => {
     const g = available.find((x) => String(x._id) === String(v));
-    setFields({
-      groupId: v,
-      joinedAt: g?.startDate ? toDateInput(g.startDate) : todayInput(),
-    });
+    const gStart = g?.startDate ? toDateInput(g.startDate) : undefined;
+    const earliest =
+      [gStart, enrolledInput].filter(Boolean).sort().pop() || todayInput();
+    setFields({ groupId: v, joinedAt: earliest });
   };
 
   const { mutate } = useGroupAddStudentMutation({

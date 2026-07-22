@@ -18,6 +18,8 @@ const UserProfilePanel = () => {
   const openAddToGroup = () =>
     openModal(MODAL.STUDENT_ADD_TO_GROUP, {
       studentId: profile._id,
+      // Boshlash sanasi ro'yxatga olingan sanadan oldin bo'lmasligi uchun.
+      enrolledAt: profile.enrolledAt,
       excludeGroupIds: (profile.activeGroups || [])
         .map((m) => m.group?._id)
         .filter(Boolean),

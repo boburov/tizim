@@ -30,8 +30,15 @@ const GroupAddStudentModal = ({
   // Default boshlash sanasi - guruh boshlangan sana (owner o'zgartira oladi).
   // leftAt (tugatgan sana) ixtiyoriy: bo'sh bo'lsa o'quvchi "o'qimoqda".
   // conflicts - dars to'qnashuvi tasdiq oynasi uchun (bo'sh bo'lsa forma ko'rinadi).
-  const { studentIds, joinedAt, leftAt, conflicts, setField, resetState } =
-    useObjectState({
+  const {
+    studentIds,
+    joinedAt,
+    leftAt,
+    conflicts,
+    setField,
+    setFields,
+    resetState,
+  } = useObjectState({
       studentIds: [],
       joinedAt: groupStartedAt ? toDateInput(groupStartedAt) : todayInput(),
       leftAt: "",
@@ -52,6 +59,37 @@ const GroupAddStudentModal = ({
       value: s._id,
       label: `${s.firstName} ${s.lastName} (@${s.username})`,
     }));
+
+  // Boshlash sanasi guruh boshlangan sanadan HAM, tanlangan o'quvchilarning
+  // ro'yxatga olingan sanasidan HAM oldin bo'lmasin. Bir nechta o'quvchi
+  // tanlansa - eng KECH ro'yxatga olingani bo'yicha (hammasiga to'g'ri kelsin).
+  // ISO (YYYY-MM-DD) formatda string solishtiruvi sana solishtiruviga teng.
+  const selectedSet = new Set((studentIds || []).map(String));
+  const latestEnrolled = students
+    .filter((s) => selectedSet.has(String(s._id)) && s.enrolledAt)
+    .map((s) => toDateInput(s.enrolledAt))
+    .sort()
+    .pop();
+  const groupStartInput = groupStartedAt ? toDateInput(groupStartedAt) : undefined;
+  const joinMin =
+    [groupStartInput, latestEnrolled].filter(Boolean).sort().pop() || undefined;
+
+  // O'quvchi tanlanganda, boshlash sanasi endi ruxsat etilmagan (juda erta)
+  // bo'lib qolsa - avtomatik eng erta mumkin bo'lgan sanaga suramiz.
+  const onSelectStudents = (v) => {
+    const nextSet = new Set((v || []).map(String));
+    const nextLatest = students
+      .filter((s) => nextSet.has(String(s._id)) && s.enrolledAt)
+      .map((s) => toDateInput(s.enrolledAt))
+      .sort()
+      .pop();
+    const nextMin = [groupStartInput, nextLatest].filter(Boolean).sort().pop();
+    if (nextMin && joinedAt && joinedAt < nextMin) {
+      setFields({ studentIds: v, joinedAt: nextMin });
+      return;
+    }
+    setField("studentIds", v);
+  };
 
   const { mutate } = useGroupAddStudentsBulkMutation({
     onSuccess: (res) => {
@@ -146,7 +184,7 @@ const GroupAddStudentModal = ({
         placeholder="O'quvchilarni tanlang"
         emptyText="O'quvchilar topilmadi"
         value={studentIds}
-        onChange={(v) => setField("studentIds", v)}
+        onChange={onSelectStudents}
         options={options}
         isLoading={loadingStudents}
         required
@@ -158,7 +196,7 @@ const GroupAddStudentModal = ({
         name="joinedAt"
         label="Boshlash sanasi"
         value={joinedAt}
-        min={groupStartedAt ? toDateInput(groupStartedAt) : undefined}
+        min={joinMin}
         max={joinedAt > todayInput() ? joinedAt : todayInput()}
         onChange={(e) => setField("joinedAt", e.target.value)}
         disabled={isLoading}

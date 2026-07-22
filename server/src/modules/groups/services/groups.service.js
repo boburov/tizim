@@ -901,7 +901,7 @@ export const addStudent = async (
   { joinedAt, leftAt } = {},
 ) => {
   const group = await ensureGroup(groupId);
-  await ensureStudent(studentId);
+  const student = await ensureStudent(studentId);
 
   const existing = await GroupMembership.findOne({
     group: groupId,
@@ -918,18 +918,34 @@ export const addStudent = async (
   // MUHIM: davomat ham mahalliy "bugun" bilan ishlaydi - UTC ishlatilsa, yarim
   // tundan keyin (mahalliy 00:00–05:00) joinedAt ertangi/kechagi kunga tushib,
   // bugungi davomatda o'quvchi ko'rinmay qolardi.
-  const defaultJoin = group.startDate || group.createdAt;
-  const join = joinedAt ? toUtcMidnight(joinedAt) : toUtcMidnight(defaultJoin);
+  // MUHIM: guruh o'quvchi ro'yxatga olinishidan OLDIN boshlangan bo'lsa, default
+  // sana ro'yxatga olingan kun bo'ladi - aks holda "10-iyulda ro'yxatga olingan,
+  // lekin 1-iyuldan o'qiyapti" degan bo'lmagan davr paydo bo'lardi.
+  const groupStart = toUtcMidnight(group.startDate || group.createdAt);
+  const enrolledStart = student.enrolledAt
+    ? toUtcMidnight(student.enrolledAt)
+    : null;
+  const defaultJoin =
+    enrolledStart && enrolledStart.getTime() > groupStart.getTime()
+      ? enrolledStart
+      : groupStart;
+  const join = joinedAt ? toUtcMidnight(joinedAt) : defaultJoin;
   const left = leftAt ? toUtcMidnight(leftAt) : null;
   if (left && left.getTime() < join.getTime()) {
     throw new ApiError(400, "Tugatgan sana boshlash sanasidan oldin bo'lishi mumkin emas");
   }
   // O'quvchini guruh boshlangan sanadan OLDIN qo'shib bo'lmaydi.
-  const groupStart = toUtcMidnight(group.startDate || group.createdAt);
   if (join.getTime() < groupStart.getTime()) {
     throw new ApiError(
       400,
       "O'quvchini guruh boshlangan sanadan oldin qo'shib bo'lmaydi",
+    );
+  }
+  // O'quvchini o'zi ro'yxatga olingan sanadan OLDIN guruhga qo'shib bo'lmaydi.
+  if (enrolledStart && join.getTime() < enrolledStart.getTime()) {
+    throw new ApiError(
+      400,
+      "O'quvchini ro'yxatga olingan sanadan oldin guruhga qo'shib bo'lmaydi",
     );
   }
 
@@ -996,6 +1012,18 @@ const applyMembershipDates = async (membership, { joinedAt, leftAt } = {}) => {
       throw new ApiError(
         400,
         "A'zolik boshlanish sanasi guruh boshlangan sanadan oldin bo'lmasin",
+      );
+    }
+  }
+
+  // A'zolik o'quvchi ro'yxatga olingan sanadan oldin boshlana olmaydi.
+  const studentDoc = await User.findById(studentId, { enrolledAt: 1 }).lean();
+  if (studentDoc?.enrolledAt) {
+    const enrolledStart = toUtcMidnight(studentDoc.enrolledAt);
+    if (newJoin.getTime() < enrolledStart.getTime()) {
+      throw new ApiError(
+        400,
+        "A'zolik boshlanish sanasi ro'yxatga olingan sanadan oldin bo'lmasin",
       );
     }
   }
