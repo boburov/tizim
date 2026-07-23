@@ -1,0 +1,92 @@
+// Admin panel ma'lumotlar bazasi (PostgreSQL orqali Prisma).
+// Bu baza faqat provisioning metadata'sini saqlaydi. Har tenant esa
+// o'z alohida MongoDB bazasida ishlaydi (tenant server mongoose'da).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 2-darajali admin userlar. Super admin .env orqali (statik) kiradi,
+// bu jadval keyinchalik qo'shiladigan userlar uchun (role bilan).
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  VIEWER
+}
+
+// Tenant hayot sikli
+enum TenantStatus {
+  DRAFT        // yozuv yaratildi, hali provision qilinmagan
+  PROVISIONING // provision.sh ishlayapti
+  ACTIVE       // ishga tushdi
+  FAILED       // provisioning xatosi
+  SUSPENDED    // to'xtatilgan
+}
+
+// "Tizim" turi — dinamik. Hozircha "oquv markaz", keyin boshqalar qo'shiladi.
+// Har template qaysi client/server shablonidan nusxa olinishini belgilaydi.
+model SystemTemplate {
+  id           String   @id @default(cuid())
+  key          String   @unique // masalan "study-center"
+  name         String            // ko'rinadigan nom, masalan "O'quv markaz tizimi"
+  description  String?
+  // Provisioning skript template papkalari (VPS'dagi manba yo'llari)
+  templateDir  String   @default("/root/templates/study-center")
+  // Bu tizim faol tanlash uchun ochiqmi
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenants      Tenant[]
+}
+
+model Tenant {
+  id            String        @id @default(cuid())
+
+  // Foydalanuvchi kiritadigan brend ma'lumotlari
+  name          String                        // markaz nomi (VITE_APP_NAME)
+  domain        String        @unique         // masalan markaz.example.uz
+  brandColor    String        @default("#4f46e5") // VITE_APP_PRIMARY
+  logoUrl       String?                       // VITE_APP_LOGO
+  botToken      String?                       // TELEGRAM_BOT_TOKEN
+
+  // NOYOB DB nomi — hech qachon takrorlanmaydi (slug + qisqa cuid).
+  // Bu tenant MongoDB bazasining nomi bo'ladi.
+  dbName        String        @unique
+
+  // Ajratilgan PM2 process nomi va port
+  pm2Name       String        @unique
+  port          Int           @unique
+
+  // DNS uchun beriladigan IP (bitta VPS bo'lsa doim bir xil)
+  serverIp      String?
+
+  status        TenantStatus  @default(DRAFT)
+  provisionLog  String?       @db.Text        // provision.sh chiqishi (oxirgi)
+  failureReason String?
+
+  systemTemplate   SystemTemplate @relation(fields: [systemTemplateId], references: [id])
+  systemTemplateId String
+
+  createdBy     String?                       // qaysi admin yaratdi (email)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  fullName     String?
+  role         AdminRole @default(ADMIN)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
