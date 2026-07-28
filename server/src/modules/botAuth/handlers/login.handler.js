@@ -3,7 +3,7 @@ import * as service from "../services/botAuth.service.js";
 import { setRefreshCookie } from "../../../helpers/cookie.helper.js";
 
 const login = asyncHandler(async (req, res) => {
-  const { accessToken, refreshToken, user } = await service.loginAndLink({
+  const { accessToken, refreshToken, user, roleMeta } = await service.loginAndLink({
     login: req.body.login,
     password: req.body.password,
     initData: req.body.initData,
@@ -14,7 +14,7 @@ const login = asyncHandler(async (req, res) => {
   setRefreshCookie(res, refreshToken);
   res.json({
     success: true,
-    data: { accessToken, user },
+    data: { accessToken, user, roleMeta },
     message: "Tizimga kirildi va Telegram bog'landi",
   });
 });

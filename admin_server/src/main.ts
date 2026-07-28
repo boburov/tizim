@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import passport from 'passport';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
@@ -10,6 +11,9 @@ async function bootstrap() {
 
   app.use(helmet());
   app.use(cookieParser(process.env.COOKIE_SECRET));
+  // Google OAuth marshrutlari passport.authenticate() ni to'g'ridan-to'g'ri
+  // chaqiradi - shuning uchun initialize() shart (sessiyasiz).
+  app.use(passport.initialize());
   app.setGlobalPrefix('api');
 
   // Vergul bilan ajratilgan admin panel domenlari

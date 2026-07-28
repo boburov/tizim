@@ -15,6 +15,9 @@ const activityLogSchema = new mongoose.Schema(
       enum: ACTOR_ROLES,
       default: "system",
     },
+    // user null bo'lgan so'rovlarda (masalan login) kiritilgan login/telefon.
+    // Jadvalda "Mehmon" o'rniga kim urinayotganini ko'rsatish uchun.
+    actorLabel: { type: String, default: "" },
     method: { type: String, enum: HTTP_METHODS, required: true },
     path: { type: String, required: true },
     status: { type: Number, default: 0 },

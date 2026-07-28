@@ -5,6 +5,7 @@ import TeacherSalary from "../../../models/teacherSalary.model.js";
 import SalaryTransaction from "../../../models/salaryTransaction.model.js";
 import Group from "../../../models/group.model.js";
 import DebtWriteOff from "../../../models/debtWriteOff.model.js";
+import { branchMatchStage } from "../../../helpers/branchContext.helper.js";
 
 // === Sana yordamchilari (UTC) ===
 const monthRange = (year, month) => {
@@ -39,6 +40,8 @@ const delta = (cur, prev) =>
 // Tranzaksiyalar yig'indisi (kassa asosida - paidAt oraliqda)
 const sumTransactions = async (Model, start, end) => {
   const [row] = await Model.aggregate([
+    // FILIAL: aggregate pre-hook'dan O'TMAYDI - $match MAJBURIY.
+    ...branchMatchStage(),
     { $match: { paidAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
     { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
   ]);
@@ -48,6 +51,7 @@ const sumTransactions = async (Model, start, end) => {
 // Kirim tranzaksiyalarini to'lov usuli bo'yicha ajratish
 const sumByMethod = async (start, end) => {
   const rows = await PaymentTransaction.aggregate([
+    ...branchMatchStage(),
     { $match: { paidAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
     { $group: { _id: "$method", total: { $sum: "$amount" } } },
   ]);
@@ -63,6 +67,7 @@ const sumByMethod = async (start, end) => {
 const billedAndOutstanding = async (Model, year, month) => {
   const isWrittenOff = { $eq: [{ $ifNull: ["$writtenOff", false] }, true] };
   const [row] = await Model.aggregate([
+    ...branchMatchStage(),
     { $match: { year: Number(year), month: Number(month) } },
     {
       $group: {
@@ -237,6 +242,7 @@ export const getGroupBreakdown = async ({ year, month, limit = 8 } = {}) => {
 
   const [studentRows, teacherRows] = await Promise.all([
     StudentPayment.aggregate([
+      ...branchMatchStage(),
       { $match: { year: y, month: m } },
       {
         $group: {
@@ -247,6 +253,7 @@ export const getGroupBreakdown = async ({ year, month, limit = 8 } = {}) => {
       },
     ]),
     TeacherSalary.aggregate([
+      ...branchMatchStage(),
       { $match: { year: y, month: m } },
       { $group: { _id: "$group", expense: { $sum: "$paidAmount" } } },
     ]),

@@ -30,6 +30,11 @@ import defineDailyAccrueFinance, {
   JOB_NAME as DAILY_ACCRUE_JOB,
   accrueToday,
 } from "./dailyAccrueFinance.job.js";
+import defineUsageHeartbeat, {
+  JOB_NAME as USAGE_HEARTBEAT_JOB,
+  isHeartbeatConfigured,
+  sendHeartbeat,
+} from "./usageHeartbeat.job.js";
 import { catchUpMonthlyGeneration } from "./catchUpMonthly.js";
 import * as groupsService from "../modules/groups/services/groups.service.js";
 
@@ -52,6 +57,7 @@ export const startJobs = async () => {
   defineGenerateMonthlySalary(agenda);
   defineAutoEndGroups(agenda);
   defineDailyAccrueFinance(agenda);
+  defineUsageHeartbeat(agenda);
 
   await agenda.start();
 
@@ -79,6 +85,17 @@ export const startJobs = async () => {
   // Kunlik dars-asosli qarz accrual - har kuni 00:20 da (kurs arxivlashdan keyin:
   // tugagan guruh yangi dars accrual qilmasin).
   await every("20 0 * * *", DAILY_ACCRUE_JOB);
+
+  // Admin panelga usage heartbeat - har 15 daqiqada. Faqat admin panel
+  // orqali provision qilingan tenantlarda ishlaydi (ADMIN_API_URL bo'lsa);
+  // standalone/lokal o'rnatmalarda butunlay o'chiq qoladi.
+  if (isHeartbeatConfigured()) {
+    await every("*/15 * * * *", USAGE_HEARTBEAT_JOB);
+    // Startupda darrov bir marta yuboramiz - limitlar keshini to'ldirish uchun
+    // (15 daqiqa kutmasdan). Await qilinmaydi: startup bloklanmasin.
+    sendHeartbeat().catch(() => null);
+    logger.info("Usage heartbeat yoqildi (har 15 daqiqada)");
+  }
 
   logger.info({ timezone: TZ }, "Agenda ishga tushirildi");
 

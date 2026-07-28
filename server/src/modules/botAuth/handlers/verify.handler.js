@@ -3,7 +3,7 @@ import * as service from "../services/botAuth.service.js";
 import { setRefreshCookie } from "../../../helpers/cookie.helper.js";
 
 const verify = asyncHandler(async (req, res) => {
-  const { accessToken, refreshToken, user } = await service.verifyAndIssue({
+  const { accessToken, refreshToken, user, roleMeta } = await service.verifyAndIssue({
     initData: req.body.initData,
     userAgent: req.get("user-agent"),
     ip: req.ip,
@@ -12,7 +12,7 @@ const verify = asyncHandler(async (req, res) => {
   setRefreshCookie(res, refreshToken);
   res.json({
     success: true,
-    data: { accessToken, user },
+    data: { accessToken, user, roleMeta },
     message: "Telegram orqali muvaffaqiyatli kirildi",
   });
 });

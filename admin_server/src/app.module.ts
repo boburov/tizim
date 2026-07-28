@@ -5,6 +5,12 @@ import { AuthModule } from './auth/auth.module.js';
 import { TemplatesModule } from './templates/templates.module.js';
 import { TenantsModule } from './tenants/tenants.module.js';
 import { UsersModule } from './users/users.module.js';
+import { MaintenanceModule } from './maintenance/maintenance.module.js';
+import { EntitlementsModule } from './entitlements/entitlements.module.js';
+import { UsageModule } from './usage/usage.module.js';
+import { PlansModule } from './plans/plans.module.js';
+import { CustomersModule } from './customers/customers.module.js';
+import { BillingModule } from './billing/billing.module.js';
 
 @Module({
   imports: [
@@ -14,6 +20,12 @@ import { UsersModule } from './users/users.module.js';
     TemplatesModule,
     TenantsModule,
     UsersModule,
+    MaintenanceModule,
+    EntitlementsModule,
+    UsageModule,
+    PlansModule,
+    CustomersModule,
+    BillingModule,
   ],
 })
 export class AppModule {}

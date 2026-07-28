@@ -4,6 +4,9 @@ export const listSchema = z.object({
   query: z.object({
     userId: z.string().optional(),
     method: z.enum(["GET", "POST", "PATCH", "PUT", "DELETE"]).optional(),
+    action: z
+      .enum(["CREATE", "UPDATE", "DELETE", "LOGIN", "LOGOUT"])
+      .optional(),
     resourceType: z.string().optional(),
     fromDate: z.coerce.date().optional(),
     toDate: z.coerce.date().optional(),

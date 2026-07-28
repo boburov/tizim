@@ -5,13 +5,14 @@ import useObjectState from "@/shared/hooks/useObjectState";
 import { MODAL } from "@/shared/constants/modals";
 
 import ActivityLogsTable from "../components/ActivityLogsTable";
+import ActivityLogsTableSkeleton from "../components/ActivityLogsTableSkeleton";
 import LogFilters from "../components/LogFilters";
 import LogDetailModal from "../components/LogDetailModal";
 import useActivityLogsQuery from "../hooks/useActivityLogsQuery";
 
 const ActivityLogsPage = () => {
   const filters = useObjectState({
-    method: "",
+    action: "",
     resourceType: "",
     fromDate: "",
     toDate: "",
@@ -25,7 +26,7 @@ const ActivityLogsPage = () => {
   };
 
   const { data, isLoading } = useActivityLogsQuery({
-    method: filters.method || undefined,
+    action: filters.action || undefined,
     resourceType: filters.resourceType || undefined,
     fromDate: filters.fromDate || undefined,
     toDate: filters.toDate || undefined,
@@ -39,9 +40,12 @@ const ActivityLogsPage = () => {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center justify-between gap-3 flex-wrap">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Faoliyat loglari</h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Tizimda bajarilgan amallar tarixi
+          </p>
         </div>
         <div className="text-sm text-muted-foreground">
           Jami: <span className="font-semibold">{total}</span>
@@ -51,9 +55,7 @@ const ActivityLogsPage = () => {
       <LogFilters filters={filters} onChange={onFilterChange} />
 
       {isLoading ? (
-        <div className="p-8 text-center text-muted-foreground">
-          Yuklanmoqda...
-        </div>
+        <ActivityLogsTableSkeleton />
       ) : (
         <>
           <ActivityLogsTable items={items} />

@@ -9,6 +9,12 @@ import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
 import { normalizePhone } from "../../../utils/phone.js";
 import { hashPassword } from "../../../helpers/password.helper.js";
+import {
+  assertTargetInScope,
+  assertCanAssignBranch,
+} from "../../../helpers/branchAccess.helper.js";
+import { userBranchCondition } from "../../../helpers/branchContext.helper.js";
+import Branch from "../../../models/branch.model.js";
 import { buildUserProfile } from "../../../helpers/userProfile.helper.js";
 import { toUtcMidnight, localTodayMidnight } from "../../../helpers/attendance.helper.js";
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
@@ -19,6 +25,12 @@ import {
   hardDeleteStudentData,
   hardDeleteTeacherData,
 } from "../../../helpers/userRelations.helper.js";
+import {
+  assertRoleAssignable,
+  assertNotSelfRoleChange,
+  assertNotLastOwner,
+  assertCanGrantRole,
+} from "../../../helpers/roles.helper.js";
 import { logAction as logArchiveAction } from "../../archiveReasons/services/archiveReasons.service.js";
 import * as financePaymentService from "../../finance/services/studentPayment.service.js";
 import * as studentFreezeService from "../../studentFreeze/services/studentFreeze.service.js";
@@ -138,6 +150,16 @@ export const list = async ({
     ];
   }
 
+  // FILIAL KO'LAMI.
+  //
+  // DIQQAT: $and ishlatiladi, $or EMAS - yuqorida qidiruv allaqachon $or
+  // ni band qilgan. Ikkinchi $or birinchisini bosib ketardi va qidiruv
+  // filial filtrini butunlay yo'q qilardi (jimgina sizish).
+  const branchCond = userBranchCondition();
+  if (branchCond) {
+    filter.$and = [...(filter.$and || []), branchCond];
+  }
+
   const dir = order === "asc" ? 1 : -1;
   const skip = (page - 1) * limit;
 
@@ -146,7 +168,9 @@ export const list = async ({
     User.find(filter)
       .sort({ [sortField]: dir })
       .skip(skip)
-      .limit(limit),
+      .limit(limit)
+      // FILIAL nomi jadvalda ko'rsatiladi - ID yetarli emas.
+      .populate("homeBranchId", { name: 1, code: 1 }),
     User.countDocuments(filter),
   ]);
 
@@ -293,21 +317,42 @@ export const update = async (id, body) => {
 
 // Owner uchun: login va parolni qaytaradi. Parol OCHIQ MATNDA saqlanadi,
 // shu sababli to'g'ridan-to'g'ri o'qib ko'rsatiladi.
-export const getPassword = async (id) => {
-  const user = await User.findById(id).select("username role +passwordHash");
+export const getPassword = async (id, currentUser) => {
+  const user = await User.findById(id).select(
+    "username role homeBranchId branchAssignments +passwordHash",
+  );
   if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
   if (user.role === ROLES.OWNER) {
     throw new ApiError(403, "Owner parolini ko'rib bo'lmaydi");
   }
+
+  // FILIAL HIMOYASI (eng muhim tekshiruv).
+  // Parollar OCHIQ MATNDA saqlanadi. requireRole(OWNER) uchinchi bosqichda
+  // system.admin_access borlarni ham o'tkazadi - ya'ni filial direktori
+  // shu endpoint orqali BOSHQA filial xodimining parolini o'qiy olardi.
+  assertTargetInScope(
+    currentUser?.allowedBranchIds,
+    currentUser?.canSeeAllBranches,
+    user,
+  );
+
   return { username: user.username, password: user.passwordHash || "" };
 };
 
 // Owner uchun: foydalanuvchiga yangi parol o'rnatish (javobda bir martalik qaytadi)
-export const setPassword = async (id, newPassword) => {
+export const setPassword = async (id, newPassword, currentUser) => {
   const user = await getById(id);
   if (user.role === ROLES.OWNER) {
     throw new ApiError(403, "Owner parolini o'zgartirib bo'lmaydi");
   }
+
+  // FILIAL HIMOYASI: boshqa filial xodimining parolini almashtirib,
+  // uning hisobiga kirib olishni to'sadi.
+  assertTargetInScope(
+    currentUser?.allowedBranchIds,
+    currentUser?.canSeeAllBranches,
+    user,
+  );
   user.passwordHash = await hashPassword(newPassword);
   await user.save();
 
@@ -594,6 +639,183 @@ export const studentHistory = async (
   ]);
 
   return { items, total, page, limit };
+};
+
+// Foydalanuvchiga rol biriktirish (built-in yoki custom).
+// User.role'dan enum olib tashlangani uchun tekshiruv SHU YERDA:
+//  - rol haqiqatan mavjudmi va muzlatilmaganmi;
+//  - o'z rolini o'zgartirmayaptimi (o'zini qulflab qo'ymasin);
+//  - tizimdagi oxirgi owner rolidan ayrilmayaptimi.
+// ============================================================
+// XODIM (direktor/administrator) YARATISH
+// ============================================================
+//
+// NEGA auth.registerUser'dan ALOHIDA:
+// registerUser qat'iy `student|teacher` ga bog'langan - validatorda
+// z.enum, servisda qayta tekshiruv, va rolga xos majburiy maydonlar
+// (o'qituvchiga hiredAt, o'quvchiga enrolledAt). Direktorga ularning
+// birortasi ham kerak emas. registerUser'ni kengaytirish uni shartlar
+// uyumiga aylantirardi.
+//
+// Bu funksiya BITTA amalda: foydalanuvchi + login/parol + filial + rol.
+export const createStaff = async (body, currentUser) => {
+  const phone = body.phone ? normalizePhone(body.phone) : null;
+  if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
+
+  const username = String(body.username).toLowerCase().trim();
+
+  if (phone) {
+    const phoneTaken = await User.findOne({ phone });
+    if (phoneTaken) {
+      throw new ApiError(409, "Bu telefon raqam allaqachon ro'yxatdan o'tgan");
+    }
+  }
+  const usernameTaken = await User.findOne({ username });
+  if (usernameTaken) {
+    throw new ApiError(409, "Bunday login (username) allaqachon mavjud");
+  }
+
+  // --- ROL tekshiruvi ---
+  const targetRole = await assertRoleAssignable(body.role);
+  // IMTIYOZ OSHIRISHDAN HIMOYA: o'zida yo'q ruxsatli rolni bera olmaydi,
+  // va owner rolini faqat owner biriktira oladi.
+  await assertCanGrantRole(targetRole, currentUser);
+
+  // --- FILIAL tekshiruvi ---
+  const homeBranchId = body.homeBranchId || null;
+  if (!homeBranchId) throw new ApiError(400, "Filial tanlanishi shart");
+
+  // Direktor faqat O'ZI kira oladigan filialga xodim qo'sha oladi.
+  // Bu bo'lmasa u boshqa filialga odam qo'shib, keyin uning OCHIQ MATNDAGI
+  // parolini /:id/password orqali o'qib olardi.
+  assertCanAssignBranch(
+    currentUser?.allowedBranchIds,
+    currentUser?.canSeeAllBranches,
+    homeBranchId,
+  );
+
+  const branch = await Branch.findOne({ _id: homeBranchId, isDeleted: false }).lean();
+  if (!branch) throw new ApiError(400, "Filial topilmadi");
+
+  // Qo'shimcha filiallar (ixtiyoriy) - har biri ham tekshiriladi.
+  const branchAssignments = [];
+  for (const a of body.branchAssignments || []) {
+    assertCanAssignBranch(
+      currentUser?.allowedBranchIds,
+      currentUser?.canSeeAllBranches,
+      a.branchId,
+    );
+    if (a.role) {
+      const r = await assertRoleAssignable(a.role);
+      await assertCanGrantRole(r, currentUser);
+    }
+    branchAssignments.push({ branchId: a.branchId, role: a.role || null });
+  }
+
+  const passwordHash = await hashPassword(body.password);
+
+  const user = await User.create({
+    firstName: body.firstName.trim(),
+    lastName: body.lastName.trim(),
+    username,
+    phone: phone || undefined,
+    passwordHash,
+    role: body.role,
+    homeBranchId,
+    branchAssignments,
+    isActive: true,
+    birthDate: body.birthDate ? new Date(body.birthDate) : null,
+    hiredAt: body.hiredAt ? new Date(body.hiredAt) : new Date(),
+  });
+
+  return buildUserProfile(user);
+};
+
+/**
+ * Xodimning filial biriktiruvini o'zgartirish.
+ * Owner "bu odam qaysi filialda" ni tahrirlashi uchun.
+ */
+export const setBranches = async (id, body, currentUser) => {
+  const user = await User.findById(id);
+  if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
+
+  // Nishon joriy ko'lamda bo'lishi shart (boshqa filial xodimiga tegib bo'lmaydi).
+  assertTargetInScope(
+    currentUser?.allowedBranchIds,
+    currentUser?.canSeeAllBranches,
+    user,
+  );
+
+  if (body.homeBranchId !== undefined) {
+    if (!body.homeBranchId) throw new ApiError(400, "Asosiy filial bo'sh bo'lmasligi kerak");
+    assertCanAssignBranch(
+      currentUser?.allowedBranchIds,
+      currentUser?.canSeeAllBranches,
+      body.homeBranchId,
+    );
+    const branch = await Branch.findOne({
+      _id: body.homeBranchId,
+      isDeleted: false,
+    }).lean();
+    if (!branch) throw new ApiError(400, "Filial topilmadi");
+    user.homeBranchId = body.homeBranchId;
+  }
+
+  if (body.branchAssignments !== undefined) {
+    const next = [];
+    for (const a of body.branchAssignments || []) {
+      assertCanAssignBranch(
+        currentUser?.allowedBranchIds,
+        currentUser?.canSeeAllBranches,
+        a.branchId,
+      );
+      if (a.role) {
+        const r = await assertRoleAssignable(a.role);
+        await assertCanGrantRole(r, currentUser);
+      }
+      next.push({ branchId: a.branchId, role: a.role || null });
+    }
+    user.branchAssignments = next;
+  }
+
+  await user.save();
+  return buildUserProfile(user);
+};
+
+export const setRole = async (id, role, currentUser) => {
+  assertNotSelfRoleChange(currentUser, id);
+
+  const user = await User.findById(id);
+  if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
+
+  if (user.role === role) return buildUserProfile(user);
+
+  const targetRole = await assertRoleAssignable(role);
+  await assertNotLastOwner(id);
+
+  // IMTIYOZ OSHIRISHDAN HIMOYA (avval YO'Q edi - teshik).
+  // Bu tekshiruvsiz `roles.update` huquqi bor filial direktori boshqa
+  // odamga OWNER rolini bera olardi va shu orqali butun tizimni egallardi.
+  await assertCanGrantRole(targetRole, currentUser);
+
+  // FILIAL: boshqa filial xodimining rolini o'zgartirib bo'lmaydi.
+  assertTargetInScope(
+    currentUser?.allowedBranchIds,
+    currentUser?.canSeeAllBranches,
+    user,
+  );
+
+  user.role = role;
+  await user.save();
+
+  // Rol o'zgardi - eski sessiyalar yangi ruxsat bilan ishlashi uchun
+  // barcha refresh tokenlarni bekor qilamiz (qayta login talab qilinadi).
+  await RefreshToken.updateMany(
+    { user: user._id, revokedAt: null },
+    { $set: { revokedAt: new Date() } },
+  );
+
+  return buildUserProfile(user);
 };
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

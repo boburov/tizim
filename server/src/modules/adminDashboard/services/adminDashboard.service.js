@@ -6,6 +6,13 @@ import PaymentTransaction from "../../../models/paymentTransaction.model.js";
 import SalaryTransaction from "../../../models/salaryTransaction.model.js";
 import Lead from "../../../models/lead.model.js";
 import { ROLES } from "../../../constants/roles.js";
+import {
+  branchFilter,
+  branchMatchStage,
+  branchGroupFilter,
+  branchGroupMatchStage,
+  userBranchCondition,
+} from "../../../helpers/branchContext.helper.js";
 
 // === Sana yordamchilari (UTC) ===
 const monthRange = (year, month) => {
@@ -49,6 +56,8 @@ const previousMonths = (count) => {
 const computeAttendanceGauge = async () => {
   const { start, end } = todayRange();
   const result = await Attendance.aggregate([
+    // FILIAL: Attendance'da branchId yo'q - guruh orqali bog'lanadi.
+    ...(await branchGroupMatchStage()),
     { $match: { date: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
     { $group: { _id: "$status", count: { $sum: 1 } } },
   ]);
@@ -85,6 +94,7 @@ const computeWeekdayActivity = async () => {
   );
 
   const result = await Attendance.aggregate([
+    ...(await branchGroupMatchStage()),
     { $match: { date: { $gte: start }, isDeleted: { $ne: true } } },
     { $group: { _id: { $dayOfWeek: "$date" }, count: { $sum: 1 } } },
   ]);
@@ -99,6 +109,8 @@ const computeWeekdayActivity = async () => {
 // Oylik kirim (to'lov tranzaksiyalari yig'indisi)
 const computeRevenue = async (start, end) => {
   const [row] = await PaymentTransaction.aggregate([
+    // FILIAL: PaymentTransaction'da branchId bor (denormalizatsiya).
+    ...branchMatchStage(),
     { $match: { paidAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
     { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
   ]);
@@ -107,7 +119,10 @@ const computeRevenue = async (start, end) => {
 
 // So'nggi to'lovlar ro'yxati (reference: "Project" ro'yxati)
 const computeRecentPayments = async () => {
-  const rows = await PaymentTransaction.find({ isDeleted: { $ne: true } })
+  const rows = await PaymentTransaction.find({
+    ...branchFilter(),
+    isDeleted: { $ne: true },
+  })
     .sort({ paidAt: -1 })
     .limit(5)
     .populate("student", "firstName lastName")
@@ -128,6 +143,8 @@ const computeRecentPayments = async () => {
 // Eng faol o'qituvchilar - faol guruhlardagi o'quvchilar soni bo'yicha (reference: "Team Collaboration")
 const computeTopTeachers = async () => {
   const rows = await Group.aggregate([
+    // FILIAL: Group'da branchId bor.
+    ...branchMatchStage(),
     { $match: { isActive: true, isDeleted: { $ne: true } } },
     { $unwind: "$teachers" },
     {
@@ -186,6 +203,15 @@ export const getOverview = async ({ year, month } = {}) => {
   const { start, end } = monthRange(y, m);
   const prev = monthRange(m === 1 ? y - 1 : y, m === 1 ? 12 : m - 1);
 
+  // Foydalanuvchi filtri: userBranchCondition() $or beradi, shuning uchun
+  // uni $and ichiga qo'yamiz (boshqa $or bilan to'qnashmasin).
+  const userScoped = (base) => {
+    const cond = userBranchCondition();
+    return cond ? { ...base, $and: [cond] } : base;
+  };
+  // A'zoliklar guruh orqali filialga bog'lanadi (branchId maydoni yo'q).
+  const memberScope = await branchGroupFilter();
+
   const [
     studentsCount,
     teachersCount,
@@ -201,13 +227,17 @@ export const getOverview = async ({ year, month } = {}) => {
     recentPayments,
     topTeachers,
   ] = await Promise.all([
-    User.countDocuments({ role: ROLES.STUDENT, isActive: true, isDeleted: { $ne: true } }),
-    User.countDocuments({ role: ROLES.TEACHER, isActive: true, isDeleted: { $ne: true } }),
-    Group.countDocuments({ isActive: true, isDeleted: { $ne: true } }),
-    GroupMembership.countDocuments({ joinedAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
-    GroupMembership.countDocuments({ leftAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
-    Lead.countDocuments({ createdAt: { $gte: start, $lte: end } }),
-    Lead.countDocuments({ status: { $in: ["new", "info_given", "trial"] } }),
+    // FILIAL: bu hisoblagichlarda filtr YO'Q edi - dashboard tanlangan
+    // filialda turib BUTUN tashkilot sonlarini ko'rsatardi. Sizish sonlarda
+    // bo'lgani uchun ID-qidiruvchi test uni tutmagan.
+    User.countDocuments(userScoped({ role: ROLES.STUDENT, isActive: true, isDeleted: { $ne: true } })),
+    User.countDocuments(userScoped({ role: ROLES.TEACHER, isActive: true, isDeleted: { $ne: true } })),
+    Group.countDocuments({ ...branchFilter(), isActive: true, isDeleted: { $ne: true } }),
+    // GroupMembership'da branchId yo'q - guruh orqali.
+    GroupMembership.countDocuments({ ...memberScope, joinedAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
+    GroupMembership.countDocuments({ ...memberScope, leftAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
+    Lead.countDocuments({ ...branchFilter(), createdAt: { $gte: start, $lte: end } }),
+    Lead.countDocuments({ ...branchFilter(), status: { $in: ["new", "info_given", "trial"] } }),
     computeRevenue(start, end),
     computeRevenue(prev.start, prev.end),
     computeAttendanceGauge(),
@@ -247,12 +277,15 @@ export const getOverview = async ({ year, month } = {}) => {
 // === getStudentFlow (o'quvchilar oqimi - oylik) ===
 export const getStudentFlow = async ({ months = 6 } = {}) => {
   const periods = previousMonths(months);
+  // FILIAL: a'zoliklar guruh orqali (GroupMembership'da branchId yo'q).
+  // Bir marta hisoblab, sikl ichida qayta ishlatamiz.
+  const flowScope = await branchGroupFilter();
   const result = [];
   for (const p of periods) {
     const { start, end } = monthRange(p.year, p.month);
     const [joined, left] = await Promise.all([
-      GroupMembership.countDocuments({ joinedAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
-      GroupMembership.countDocuments({ leftAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
+      GroupMembership.countDocuments({ ...flowScope, joinedAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
+      GroupMembership.countDocuments({ ...flowScope, leftAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
     ]);
     result.push({ year: p.year, month: p.month, joined, left, netGrowth: joined - left });
   }
@@ -264,6 +297,8 @@ export const getStudentFlow = async ({ months = 6 } = {}) => {
 // Kirim = PaymentTransaction (o'quvchi to'lovlari), Chiqim = SalaryTransaction (maoshlar).
 const sumByDay = async (Model, start, end) => {
   const rows = await Model.aggregate([
+    // FILIAL: PaymentTransaction/SalaryTransaction'da branchId bor.
+    ...branchMatchStage(),
     { $match: { paidAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
     {
       $group: {
@@ -279,6 +314,7 @@ const sumByDay = async (Model, start, end) => {
 
 const sumByMonth = async (Model, start, end) => {
   const rows = await Model.aggregate([
+    ...branchMatchStage(),
     { $match: { paidAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
     { $group: { _id: { $month: { date: "$paidAt", timezone: "UTC" } }, total: { $sum: "$amount" } } },
   ]);

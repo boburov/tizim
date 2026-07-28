@@ -8,11 +8,35 @@ export const ENDPOINTS = Object.freeze({
     changePassword: "/auth/change-password",
     registerUser: "/auth/register-user",
   },
+  branches: {
+    base: "/branches",
+    byId: (id) => `/branches/${id}`,
+    stats: (id) => `/branches/${id}/stats`,
+  },
+  expenseApprovals: {
+    base: "/expense-approvals",
+    byId: (id) => `/expense-approvals/${id}`,
+    pendingCount: "/expense-approvals/pending-count",
+    approve: (id) => `/expense-approvals/${id}/approve`,
+    reject: (id) => `/expense-approvals/${id}/reject`,
+    cancel: (id) => `/expense-approvals/${id}/cancel`,
+    retry: (id) => `/expense-approvals/${id}/retry`,
+  },
   users: {
     base: "/users",
     byId: (id) => `/users/${id}`,
     password: (id) => `/users/${id}/password`,
     groupHistory: (id) => `/users/${id}/group-history`,
+    role: (id) => `/users/${id}/role`,
+    staff: "/users/staff",
+    branches: (id) => `/users/${id}/branches`,
+  },
+  roles: {
+    base: "/roles",
+    // Tizimda MAVJUD ruxsatlardan qurilgan module x action jadvali.
+    matrix: "/roles/matrix",
+    byValue: (value) => `/roles/${value}`,
+    freeze: (value) => `/roles/${value}/freeze`,
   },
   studentFreezes: {
     byStudent: (sid) => `/student-freezes/${sid}`,

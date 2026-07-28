@@ -2,7 +2,7 @@ import asyncHandler from "../../../middleware/asyncHandler.js";
 import * as groupsService from "../services/groups.service.js";
 
 const create = asyncHandler(async (req, res) => {
-  const data = await groupsService.create(req.body);
+  const data = await groupsService.create(req.body, req.user);
   res.status(201).json({
     success: true,
     data,

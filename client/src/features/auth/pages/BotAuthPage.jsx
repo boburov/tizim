@@ -12,7 +12,7 @@ import InputField from "@/shared/components/ui/input/InputField";
 import Button from "@/shared/components/ui/button/Button";
 
 // Constants
-import { ROLE_HOME } from "@/shared/constants/roles";
+import { resolveHomePath } from "@/shared/constants/roles";
 
 const Container = ({ children }) => (
   <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-b from-slate-50 to-blue-50">
@@ -28,7 +28,7 @@ const Spinner = () => (
 
 const BotAuthPage = () => {
   const navigate = useNavigate();
-  const { user, role } = useAuth();
+  const { user, role, roleMeta } = useAuth();
   const triedRef = useRef(false);
   const initDataRef = useRef("");
 
@@ -40,11 +40,20 @@ const BotAuthPage = () => {
     password: "",
   });
 
-  const goHome = (r) => navigate(ROLE_HOME[r] || "/", { replace: true });
+  // roleMeta serverdan keladi (custom rolda landing sahifa shu yerda).
+  const goHome = (r, meta) =>
+    navigate(
+      resolveHomePath({
+        defaultPath: meta?.defaultPath,
+        role: r,
+        roleType: meta?.roleType,
+      }),
+      { replace: true },
+    );
 
   const { mutate: loginAndLink, isPending: isLoggingIn } =
     useBotAuthLoginMutation({
-      onSuccess: (data) => goHome(data.user?.role),
+      onSuccess: (data) => goHome(data.user?.role, data.roleMeta),
       onError: (err) => {
         ui.setField(
           "errorMsg",
@@ -65,7 +74,7 @@ const BotAuthPage = () => {
     // Telegram Mini App ichida EMAS (oddiy brauzer): login bo'lsa panelga, aks holda xabar.
     if (!tg || !initData) {
       if (user) {
-        goHome(role);
+        goHome(role, roleMeta);
         return;
       }
       // Diagnostika: initData nega bo'sh ekanini aniqlash uchun. tg bor-yo'qligi,

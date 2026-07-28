@@ -5,6 +5,13 @@ import softDeletePlugin from "./plugins/softDelete.plugin.js";
 // bo'linishi mumkin (qisman naqd/karta). teacher/group/year/month - hisobot uchun.
 const salaryTransactionSchema = new mongoose.Schema(
   {
+    // FILIAL (denormalizatsiya): guruhdan meros - chiqim hisobotlari uchun.
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+      index: true,
+    },
     salary: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "TeacherSalary",
@@ -31,12 +38,32 @@ const salaryTransactionSchema = new mongoose.Schema(
     paidAt: { type: Date, required: true, index: true },
     note: { type: String, trim: true, default: "" },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    // TASDIQ orqali yaratilgan bo'lsa - qaysi so'rovdan.
+    // Pastdagi partial unique indeks bilan birga AYNAN BIR MARTA bajarilishini
+    // kafolatlaydi: ikki owner bir vaqtda tasdiqlasa yoki jarayon o'rtada
+    // o'lib qayta urinsa ham ikkinchi yozuv 11000 xatosiga uriladi.
+    expenseApprovalId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ExpenseApproval",
+      default: null,
+    },
   },
   { timestamps: true },
 );
 
 // Kunlik chiqim grafigi uchun
 salaryTransactionSchema.index({ year: 1, month: 1, paidAt: 1 });
+
+// AYNAN BIR MARTA: bitta tasdiq so'rovidan faqat BITTA tranzaksiya.
+// Partial - null qiymatlar to'qnashmaydi (odatdagi to'lovlarda u null).
+// Bu paymentTransaction.idempotencyKey'dagi namunaning aynan o'zi.
+salaryTransactionSchema.index(
+  { expenseApprovalId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { expenseApprovalId: { $type: "objectId" } },
+  },
+);
 
 salaryTransactionSchema.plugin(softDeletePlugin);
 

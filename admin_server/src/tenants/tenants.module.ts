@@ -7,5 +7,6 @@ import { ProvisioningModule } from '../provisioning/provisioning.module.js';
   imports: [ProvisioningModule],
   controllers: [TenantsController],
   providers: [TenantsService],
+  exports: [TenantsService],
 })
 export class TenantsModule {}

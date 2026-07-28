@@ -1,5 +1,5 @@
 import { Outlet, useParams } from "react-router-dom";
-import { Pencil, Trash2, Archive, Snowflake, Sun } from "lucide-react";
+import { Pencil, Trash2, Archive, Snowflake, Sun, Building2 } from "lucide-react";
 
 import Button from "@/shared/components/ui/button/Button";
 import Badge from "@/shared/components/ui/badge/Badge";
@@ -14,18 +14,22 @@ import UserPasswordModal from "../components/UserPasswordModal";
 import UserFreezeModal from "../components/UserFreezeModal";
 import UserUnfreezeModal from "../components/UserUnfreezeModal";
 import UserFreezeHistory from "../components/UserFreezeHistory";
+import UserBranchModal from "../components/UserBranchModal";
 import {
   ExemptionCreateModal,
   ExemptionDeleteModal,
 } from "@/owner/features/attendanceExemptions";
 
 import useModal from "@/shared/hooks/useModal";
+import usePermissions from "@/shared/hooks/usePermissions";
+import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import useGoBack from "@/shared/hooks/useGoBack";
 import useUserDetailQuery from "../hooks/useUserDetailQuery";
 import useUserGroupHistoryQuery from "../hooks/useUserGroupHistoryQuery";
 
 import { MODAL } from "@/shared/constants/modals";
 import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import { getRoleLabel, hasValidRole } from "@/shared/helpers/role.helpers";
 import BackLink from "@/shared/components/ui/link/BackLink";
 
@@ -35,6 +39,8 @@ const UserDetailPage = () => {
   const { id } = useParams();
   const goBack = useGoBack("/owner/users");
   const { openModal } = useModal();
+  const { has } = usePermissions();
+  const { hasMultipleBranches } = useActiveBranch();
   const { data: profile, isLoading, isError } = useUserDetailQuery(id);
   const isStudent = profile?.role === ROLES.STUDENT;
 
@@ -99,6 +105,17 @@ const UserDetailPage = () => {
             <Pencil className="size-4" />
             Tahrirlash
           </Button>
+          {/* Filial biriktiruvi - faqat ko'p filialli markazlarda va
+              rol boshqarish huquqi borlar uchun */}
+          {hasMultipleBranches && has(PERMISSIONS.ROLES_UPDATE) && (
+            <Button
+              variant="outline"
+              onClick={() => openModal(MODAL.USER_BRANCH, { user: profile })}
+            >
+              <Building2 className="size-4" />
+              Filial
+            </Button>
+          )}
           {isStudent && profile.isActive && (
             profile.isFrozen ? (
               <Button
@@ -148,6 +165,9 @@ const UserDetailPage = () => {
       <Outlet context={{ profile, historyData, historyLoading, noActiveGroup }} />
 
       {/* Profil modallari */}
+      <ModalWrapper name={MODAL.USER_BRANCH} title="Filial biriktiruvi" className="max-w-xl">
+        <UserBranchModal />
+      </ModalWrapper>
       <ModalWrapper name={MODAL.USER_EDIT} title="Profilni tahrirlash" className="max-w-xl">
         <UserEditModal />
       </ModalWrapper>

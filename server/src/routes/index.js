@@ -1,6 +1,8 @@
 import { Router } from "express";
 import authRouter from "../modules/auth/auth.routes.js";
+import branchesRouter from "../modules/branches/branches.routes.js";
 import usersRouter from "../modules/users/users.routes.js";
+import rolesRouter from "../modules/roles/roles.routes.js";
 import studentFreezeRouter from "../modules/studentFreeze/studentFreeze.routes.js";
 import archiveReasonsRouter from "../modules/archiveReasons/archiveReasons.routes.js";
 import leadsRouter from "../modules/leads/leads.routes.js";
@@ -26,6 +28,7 @@ import financeRouter from "../modules/finance/finance.routes.js";
 import depositsRouter from "../modules/deposits/deposits.routes.js";
 import teacherSalaryRouter from "../modules/teacherSalary/teacherSalary.routes.js";
 import financeReportRouter from "../modules/financeReport/financeReport.routes.js";
+import expenseApprovalsRouter from "../modules/expenseApprovals/expenseApprovals.routes.js";
 
 const router = Router();
 
@@ -34,8 +37,10 @@ router.get("/health", (_req, res) =>
 );
 
 router.use("/auth", authRouter);
+router.use("/branches", branchesRouter);
 router.use("/search", searchRouter);
 router.use("/users", usersRouter);
+router.use("/roles", rolesRouter);
 router.use("/student-freezes", studentFreezeRouter);
 router.use("/archive-reasons", archiveReasonsRouter);
 router.use("/leads", leadsRouter);
@@ -72,5 +77,6 @@ router.use("/finance", financeRouter);
 router.use("/deposits", depositsRouter);
 router.use("/teacher-salary", teacherSalaryRouter);
 router.use("/finance-report", financeReportRouter);
+router.use("/expense-approvals", expenseApprovalsRouter);
 
 export default router;

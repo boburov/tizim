@@ -6,6 +6,7 @@ import logger from "../../../config/logger.js";
 import { verifyInitData } from "../../../bot/utils/initData.js";
 import { comparePassword } from "../../../helpers/password.helper.js";
 import { normalizePhone, isPhoneLike } from "../../../utils/phone.js";
+import { resolveRole } from "../../../helpers/permission.helper.js";
 import {
   issueTokens,
   sanitizeUser,
@@ -111,6 +112,12 @@ export const verifyAndIssue = async ({ initData, userAgent, ip }) => {
     throw new ApiError(401, "Hisob faol emas");
   }
 
+  // MUZLATISH: muzlatilgan rol egasi bot orqali ham kira olmaydi.
+  const role = await resolveRole(botUser.user.role);
+  if (role.isFrozen) {
+    throw new ApiError(403, "Sizning rolingiz muzlatilgan. Administratorga murojaat qiling");
+  }
+
   const { accessToken, refreshToken } = await issueTokens(botUser.user, {
     userAgent,
     ip,
@@ -119,6 +126,12 @@ export const verifyAndIssue = async ({ initData, userAgent, ip }) => {
     accessToken,
     refreshToken,
     user: sanitizeUser(botUser.user),
+    roleMeta: {
+      value: role.value,
+      label: role.label,
+      roleType: role.roleType,
+      defaultPath: role.defaultPath,
+    },
   };
 };
 
@@ -139,6 +152,17 @@ export const loginAndLink = async ({ login, password, initData, userAgent, ip })
 
   const ok = await comparePassword(password, user.passwordHash);
   if (!ok) throw new ApiError(401, "Login yoki parol noto'g'ri");
+
+  // MUZLATISH: parol to'g'ri bo'lsa ham muzlatilgan rol kirita olmaydi.
+  const role = await resolveRole(user.role);
+  if (role.isFrozen) {
+    throw new ApiError(
+      403,
+      role.frozenReason
+        ? `Rolingiz muzlatilgan: ${role.frozenReason}`
+        : "Sizning rolingiz muzlatilgan. Administratorga murojaat qiling",
+    );
+  }
 
   // Telegram bog'lash: qat'iy HMAC ni sinaymiz; o'tmasa ham PAROL tasdiqlangani uchun
   // initData dagi telegram id ni baribir bog'laymiz (qaysi botdan ochilsa ham ishlaydi).
@@ -173,5 +197,15 @@ export const loginAndLink = async ({ login, password, initData, userAgent, ip })
     userAgent,
     ip,
   });
-  return { accessToken, refreshToken, user: sanitizeUser(user) };
+  return {
+    accessToken,
+    refreshToken,
+    user: sanitizeUser(user),
+    roleMeta: {
+      value: role.value,
+      label: role.label,
+      roleType: role.roleType,
+      defaultPath: role.defaultPath,
+    },
+  };
 };

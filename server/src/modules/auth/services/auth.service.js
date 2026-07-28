@@ -6,11 +6,15 @@ import {
   hashPassword,
   comparePassword,
 } from "../../../helpers/password.helper.js";
-import { collectPermissions } from "../../../helpers/permission.helper.js";
+import { resolveRole, hasPermission } from "../../../helpers/permission.helper.js";
+import { resolveAllowedBranchIds } from "../../../helpers/branchAccess.helper.js";
+import { getActiveBranchId } from "../../../helpers/branchContext.helper.js";
 import { buildUserProfile } from "../../../helpers/userProfile.helper.js";
 import { sha256 } from "../../../utils/hashToken.js";
 import { normalizePhone, isPhoneLike } from "../../../utils/phone.js";
 import { ROLES } from "../../../constants/roles.js";
+import { PERMISSIONS } from "../../../constants/permissions.js";
+import Branch from "../../../models/branch.model.js";
 
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -54,12 +58,36 @@ export const login = async ({ login, password, userAgent, ip }) => {
   const ok = await comparePassword(password, user.passwordHash);
   if (!ok) throw new ApiError(401, "Login yoki parol noto'g'ri");
 
+  // MUZLATISH: roli muzlatilgan foydalanuvchi tizimga KIRA OLMAYDI.
+  // Parol to'g'ri bo'lsa ham shu yerda to'xtatiladi.
+  const role = await resolveRole(user.role);
+  if (role.isFrozen) {
+    throw new ApiError(
+      403,
+      role.frozenReason
+        ? `Rolingiz muzlatilgan: ${role.frozenReason}`
+        : "Sizning rolingiz muzlatilgan. Administratorga murojaat qiling",
+    );
+  }
+
   const { accessToken, refreshToken } = await issueTokens(user, {
     userAgent,
     ip,
   });
 
-  return { accessToken, refreshToken, user: sanitizeUser(user) };
+  return {
+    accessToken,
+    refreshToken,
+    user: sanitizeUser(user),
+    // Client login'dan keyin darhol to'g'ri sahifaga o'tishi uchun
+    // (custom rolda landing sahifa ROLE_HOME map'ida yo'q).
+    roleMeta: {
+      value: role.value,
+      label: role.label,
+      roleType: role.roleType,
+      defaultPath: role.defaultPath,
+    },
+  };
 };
 
 export const rotateRefresh = async ({ rawRefresh, userAgent, ip }) => {
@@ -87,6 +115,13 @@ export const rotateRefresh = async ({ rawRefresh, userAgent, ip }) => {
     throw new ApiError(401, "Foydalanuvchi topilmadi");
   }
 
+  // MUZLATISH: sessiyani uzaytirishga ham yo'l qo'yilmaydi - eski refresh
+  // yuqorida allaqachon revoke qilingan, ya'ni sessiya butunlay tugaydi.
+  const role = await resolveRole(user.role);
+  if (role.isFrozen) {
+    throw new ApiError(401, "Sizning rolingiz muzlatilgan. Administratorga murojaat qiling");
+  }
+
   const { accessToken, refreshToken } = await issueTokens(user, {
     userAgent,
     ip,
@@ -104,15 +139,59 @@ export const logout = async ({ rawRefresh }) => {
   );
 };
 
-export const me = async (user) => {
-  const [permissions, profile] = await Promise.all([
-    collectPermissions(user.role),
+/**
+ * @param {object} user
+ * @param {object} [ctx] - requireAuth hisoblagan filial konteksti.
+ *   { effectiveRole, branchId } - filialga xos rol bo'lsa o'sha qaytadi,
+ *   aks holda asosiy rol. Client shu ruxsatlar bo'yicha UI quradi, shuning
+ *   uchun u serverdagi HAQIQIY ruxsatlar bilan bir xil bo'lishi SHART -
+ *   aks holda tugma ko'rinadi-yu bosilganda 403 chiqardi.
+ */
+export const me = async (user, ctx = {}) => {
+  const [baseRole, profile] = await Promise.all([
+    resolveRole(user.role),
     buildUserProfile(user),
   ]);
+
+  // Filialga xos rol (requireAuth bergan) ustunlikka ega.
+  const role = ctx.effectiveRole || baseRole;
+
+  // FILIAL: client filial tanlagichni shu ro'yxatdan quradi.
+  // canSeeAllBranches=true bo'lsa "Barcha filiallar" varianti ko'rinadi.
+  //
+  // DIQQAT: ro'yxat ASOSIY rol ruxsatlari bilan hisoblanadi - foydalanuvchi
+  // qaysi filialda turganidan qat'i nazar, o'zi kira oladigan BARCHA
+  // filiallarni tanlagichda ko'rishi kerak.
+  const allowedIds = await resolveAllowedBranchIds(user, baseRole.permissions);
+  const branches = allowedIds.length
+    ? await Branch.find({ _id: { $in: allowedIds }, isDeleted: false, isActive: true })
+        .select("_id name code isMain")
+        .sort({ isMain: -1, name: 1 })
+        .lean()
+    : [];
+
   return {
     user: sanitizeUser(user),
-    role: user.role,
-    permissions,
+    // Joriy filialdagi AMALDAGI rol (asosiy roldan farq qilishi mumkin).
+    role: role.value || user.role,
+    baseRole: user.role,
+    permissions: role.permissions,
+    branches,
+    canSeeAllBranches: hasPermission(
+      baseRole.permissions,
+      PERMISSIONS.BRANCHES_VIEW_ALL,
+    ),
+    homeBranchId: user.homeBranchId ? String(user.homeBranchId) : null,
+    // Client rolni hardcode qilmasligi uchun: landing sahifa va scope tipi
+    // shu yerdan keladi (ROLE_HOME map o'rniga).
+    roleMeta: {
+      value: role.value,
+      label: role.label,
+      roleType: role.roleType,
+      defaultPath: role.defaultPath,
+      isSystem: role.exists ? role.isSystem : true,
+      permissionsVersion: role.permissionsVersion,
+    },
     profile,
   };
 };
@@ -183,6 +262,21 @@ export const registerUser = async (body) => {
     throw new ApiError(400, "Noto'g'ri rol");
   }
 
+  // FILIAL MAJBURIY.
+  //
+  // Foydalanuvchi HECH QACHON filialsiz yaratilmasligi kerak: filialsiz
+  // odam userBranchCondition() qoidasi bo'yicha faqat view_all egalariga
+  // ko'rinadi, ya'ni "umumiy"da osilib qoladi va o'z filialida yo'q
+  // bo'lardi. "Barcha filiallar" rejimida yaratishga urinilsa - xato,
+  // chunki qaysi filialga yozishni bilib bo'lmaydi.
+  const homeBranchId = body.homeBranchId || getActiveBranchId() || null;
+  if (!homeBranchId) {
+    throw new ApiError(
+      400,
+      "Filial tanlanmagan. Foydalanuvchi qo'shish uchun avval aniq filialni tanlang",
+    );
+  }
+
   const passwordHash = await hashPassword(body.password);
 
   const doc = {
@@ -194,6 +288,7 @@ export const registerUser = async (body) => {
     role: body.role,
     isActive: true,
     birthDate: body.birthDate ? new Date(body.birthDate) : null,
+    homeBranchId,
   };
 
   if (body.role === ROLES.STUDENT) {

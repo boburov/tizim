@@ -63,7 +63,7 @@ export class TenantsService {
     throw new ConflictException("Bo'sh port qolmadi");
   }
 
-  async create(dto: CreateTenantDto, createdBy?: string) {
+  async create(dto: CreateTenantDto, createdBy?: string, customerId?: string) {
     // Domen bandligini tekshirish
     const domainTaken = await this.prisma.tenant.findUnique({
       where: { domain: dto.domain },
@@ -84,6 +84,8 @@ export class TenantsService {
     const port = await this.pickFreePort();
     // pm2 nomi ham noyob bo'lishi kerak — dbName'dan olamiz (u allaqachon noyob)
     const pm2Name = `${dbName}-api`;
+    // Tenant server usage yuborishda shu kalit bilan o'zini tanitadi
+    const heartbeatSecret = randomBytes(32).toString('hex');
 
     const tenant = await this.prisma.tenant.create({
       data: {
@@ -95,7 +97,9 @@ export class TenantsService {
         dbName,
         pm2Name,
         port,
+        heartbeatSecret,
         systemTemplateId: dto.systemTemplateId,
+        customerId: customerId ?? null,
         status: 'DRAFT',
         createdBy,
         serverIp: process.env.SERVER_PUBLIC_IP || null,
@@ -115,6 +119,8 @@ export class TenantsService {
         logoUrl: tenant.logoUrl,
         botToken: tenant.botToken,
         templateDir: template.templateDir,
+        heartbeatSecret: tenant.heartbeatSecret,
+        adminApiUrl: process.env.ADMIN_API_PUBLIC_URL || null,
       })
       .catch((err) =>
         this.logger.error(`Provisioning boshlashda xato: ${err.message}`),
@@ -167,6 +173,14 @@ export class TenantsService {
     if (t.status === 'PROVISIONING') {
       throw new ConflictException('Provisioning allaqachon ketmoqda');
     }
+    if (t.status === 'DEPROVISIONING') {
+      throw new ConflictException("O'chirish jarayoni ketmoqda");
+    }
+    if (t.status === 'DELETED') {
+      throw new ConflictException(
+        "O'chirilgan tenantni qayta tiklab bo'lmaydi — yangisini yarating",
+      );
+    }
     await this.provisioning.provision({
       tenantId: t.id,
       dbName: t.dbName,
@@ -178,7 +192,70 @@ export class TenantsService {
       logoUrl: t.logoUrl,
       botToken: t.botToken,
       templateDir: t.systemTemplate.templateDir,
+      heartbeatSecret: t.heartbeatSecret,
+      adminApiUrl: process.env.ADMIN_API_PUBLIC_URL || null,
     });
     return { ok: true, status: 'PROVISIONING' };
+  }
+
+  /**
+   * Tenantni VPS'dan o'chiradi (deprovision). Yozuv Postgres'da DELETED
+   * holatida qoladi — port/dbName qayta ishlatilmasligi va tarix saqlanishi uchun.
+   * Domenni bo'shatamiz, aks holda o'sha domen bilan yangi tenant yaratib bo'lmaydi.
+   */
+  async remove(id: string, confirmDomain: string) {
+    const t = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!t) throw new NotFoundException('Tenant topilmadi');
+
+    // Noto'g'ri tenantni o'chirib yubormaslik uchun domen tasdiqlanadi
+    if (confirmDomain !== t.domain) {
+      throw new BadRequestException(
+        `Tasdiqlash uchun domenni aynan yozing: ${t.domain}`,
+      );
+    }
+    if (t.status === 'DEPROVISIONING') {
+      throw new ConflictException("O'chirish allaqachon ketmoqda");
+    }
+    if (t.status === 'DELETED') {
+      throw new ConflictException('Bu tenant allaqachon o\'chirilgan');
+    }
+    if (t.status === 'PROVISIONING') {
+      throw new ConflictException(
+        "Provisioning ketmoqda — tugashini kuting, keyin o'chiring",
+      );
+    }
+
+    // Domen va noyob maydonlarni bo'shatamiz (arxiv yozuvi qoladi).
+    // Suffiks qo'shamiz, chunki bu ustunlar @unique.
+    const freed = `deleted_${Date.now()}_${t.domain}`.slice(0, 200);
+    await this.prisma.tenant.update({
+      where: { id },
+      data: { domain: freed, heartbeatSecret: null },
+    });
+
+    await this.provisioning.deprovision({
+      tenantId: t.id,
+      dbName: t.dbName,
+      domain: t.domain, // skriptga ASL domen ketadi
+      pm2Name: t.pm2Name,
+    });
+
+    return { ok: true, status: 'DEPROVISIONING' };
+  }
+
+  /**
+   * DELETED tenant yozuvini Postgres'dan butunlay o'chiradi (arxivni tozalash).
+   * VPS resurslariga tegmaydi — ular allaqachon o'chirilgan bo'lishi kerak.
+   */
+  async purge(id: string) {
+    const t = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!t) throw new NotFoundException('Tenant topilmadi');
+    if (t.status !== 'DELETED') {
+      throw new ConflictException(
+        "Faqat o'chirilgan (DELETED) tenant yozuvini tozalash mumkin",
+      );
+    }
+    await this.prisma.tenant.delete({ where: { id } });
+    return { ok: true };
   }
 }

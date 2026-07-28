@@ -66,4 +66,22 @@ export const PERMISSIONS = Object.freeze({
   // Teacher salary (O'qituvchi maoshlari)
   SALARY_READ: "salary.read",
   SALARY_PAY: "salary.pay",
+
+  // Chiqim tasdig'i (limitdan oshgan to'lovlar)
+  FINANCE_APPROVE: "finance.approve",
+
+  // Filiallar
+  BRANCHES_READ: "branches.read",
+  BRANCHES_CREATE: "branches.create",
+  BRANCHES_UPDATE: "branches.update",
+  BRANCHES_DELETE: "branches.delete",
+  // Barcha filiallarni birdan ko'rish (konsolidatsiya hisobotlar)
+  BRANCHES_VIEW_ALL: "branches.view_all",
+
+  // Rollar va tizim
+  ROLES_READ: "roles.read",
+  ROLES_CREATE: "roles.create",
+  ROLES_UPDATE: "roles.update",
+  ROLES_DELETE: "roles.delete",
+  SYSTEM_ADMIN_ACCESS: "system.admin_access",
 });

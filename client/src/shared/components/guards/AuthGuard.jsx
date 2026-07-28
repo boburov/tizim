@@ -3,11 +3,16 @@ import { Navigate, Outlet } from "react-router-dom";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
+import useActiveBranch from "@/shared/hooks/useActiveBranch";
+
+// Components
+import BranchPicker from "@/shared/components/branch/BranchPicker";
 
 const AuthGuard = () => {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
   const { isLoading, isError } = useAuth();
+  const { needsBranchChoice } = useActiveBranch();
 
   if (!token) return <Navigate to="/login" replace />;
 
@@ -25,6 +30,10 @@ const AuthGuard = () => {
     }
     return <Navigate to="/login" replace />;
   }
+
+  // FILIAL TANLASH: bir nechta filiali borlar avval qaysi biri bilan
+  // ishlashini tanlaydi. Bitta filiali borlar bu ekranni ko'rmaydi.
+  if (needsBranchChoice) return <BranchPicker />;
 
   return <Outlet />;
 };

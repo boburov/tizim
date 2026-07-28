@@ -5,6 +5,13 @@ import mongoose from "mongoose";
 // O'chirilmaydi (softDelete yo'q) - o'quvchi to'lovi modeli kabi.
 const teacherSalarySchema = new mongoose.Schema(
   {
+    // FILIAL (denormalizatsiya): guruhdan meros - chiqim hisobotlari uchun.
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+      index: true,
+    },
     teacher: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

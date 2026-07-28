@@ -64,6 +64,67 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
+  /**
+   * Cookie'lardagi access tokenlarni tekshirib, joriy sessiyani aniqlaydi.
+   *
+   * Admin tokeni ustun turadi: super admin o'z brauzerida mijoz kabinetini
+   * ham ochgan bo'lishi mumkin, bunday holda admin sifatida ko'rsatiladi.
+   * Hech biri yaroqli bo'lmasa null.
+   */
+  async resolveSession(tokens: {
+    adminToken?: string;
+    customerToken?: string;
+  }) {
+    const accessSecret = process.env.JWT_ACCESS_SECRET || 'dev-access-secret';
+
+    if (tokens.adminToken) {
+      try {
+        const p = await this.jwt.verifyAsync(tokens.adminToken, {
+          secret: accessSecret,
+        });
+        // Mijoz tokeni `aud: "customer"` bilan keladi — u admin sifatida
+        // qabul qilinmasligi SHART (ikkala token bir xil secret bilan
+        // imzolanadi, farqi faqat shu maydonda).
+        if (p.aud !== 'customer') {
+          return {
+            kind: 'admin' as const,
+            user: { sub: p.sub, email: p.email, role: p.role } as AuthUser,
+          };
+        }
+      } catch {
+        // yaroqsiz — pastda mijozni sinaymiz
+      }
+    }
+
+    if (tokens.customerToken) {
+      try {
+        const p = await this.jwt.verifyAsync(tokens.customerToken, {
+          secret: accessSecret,
+        });
+        if (p.aud !== 'customer') return null;
+
+        const customer = await this.prisma.customer.findUnique({
+          where: { id: p.sub },
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            avatarUrl: true,
+            isActive: true,
+          },
+        });
+        if (!customer || !customer.isActive) return null;
+
+        const { isActive, ...rest } = customer;
+        return { kind: 'customer' as const, customer: rest };
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
   async refresh(refreshToken: string) {
     try {
       const payload = await this.jwt.verifyAsync(refreshToken, {

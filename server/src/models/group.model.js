@@ -28,6 +28,15 @@ const scheduleItemSchema = new mongoose.Schema(
 
 const groupSchema = new mongoose.Schema(
   {
+    // FILIAL: guruh - filial ko'lamining ILDIZI. Davomat, baho, to'lov,
+    // maosh kabi modellar guruh orqali filialga bog'lanadi, shuning uchun
+    // bir guruh IKKI filialga tegishli bo'la olmaydi.
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+      index: true,
+    },
     name: { type: String, trim: true, required: true },
     schedule: { type: [scheduleItemSchema], default: [] },
     teachers: [

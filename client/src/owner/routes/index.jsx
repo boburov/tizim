@@ -1,6 +1,9 @@
 // Router
 import { Routes, Route, Navigate } from "react-router-dom";
 
+// Guards
+import PermissionGuard from "@/shared/components/guards/PermissionGuard";
+
 // Pages
 import {
   GroupsListPage,
@@ -54,6 +57,9 @@ import {
 } from "@/owner/features/notifications";
 import { NotificationTemplatesListPage } from "@/owner/features/notificationTemplates";
 import { HolidaysListPage } from "@/owner/features/holidays";
+import { RolesPage, RoleFormPage } from "@/owner/features/roles";
+import { BranchesPage } from "@/owner/features/branches";
+import { ExpenseApprovalsPage } from "@/owner/features/expenseApprovals";
 import {
   FeedbackListPage,
   FeedbackDetailPage,
@@ -177,6 +183,54 @@ const OwnerRoutes = () => (
     <Route path="feedback" element={<FeedbackListPage />} />
     <Route path="feedback/:id" element={<FeedbackDetailPage />} />
     <Route path="feedback-types" element={<FeedbackTypesListPage />} />
+
+    {/* Chiqim tasdiqlari - limitdan oshgan to'lovlar */}
+    <Route
+      path="expense-approvals"
+      element={
+        <PermissionGuard required="finance.read" fallback="/owner">
+          <ExpenseApprovalsPage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* Filiallar - faqat branches.read ruxsati borlar uchun */}
+    <Route
+      path="branches"
+      element={
+        <PermissionGuard required="branches.read" fallback="/owner">
+          <BranchesPage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* Rollar va ruxsatlar - faqat roles.read ruxsati borlar uchun.
+        Tahrirlash alohida sahifada: ruxsatlar modalga sig'masdi.
+        DIQQAT: "new" static segment ":value" dan OLDIN turishi shart. */}
+    <Route
+      path="roles"
+      element={
+        <PermissionGuard required="roles.read" fallback="/owner">
+          <RolesPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="roles/new"
+      element={
+        <PermissionGuard required="roles.create" fallback="/owner/roles">
+          <RoleFormPage mode="create" />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="roles/:value"
+      element={
+        <PermissionGuard required="roles.read" fallback="/owner">
+          <RoleFormPage mode="edit" />
+        </PermissionGuard>
+      }
+    />
 
     <Route path="settings/attendance" element={<AttendanceSettingsPage />} />
 

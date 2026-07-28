@@ -13,6 +13,11 @@ import {
   localTodayMidnight,
   scheduleActiveOn,
 } from "../../../helpers/attendance.helper.js";
+import {
+  branchFilter,
+  branchGroupFilter,
+  resolveBranchForWrite,
+} from "../../../helpers/branchContext.helper.js";
 import { restoreGroup as cascadeRestoreGroup } from "../../../helpers/cascadeDelete.helper.js";
 import { hardDeleteGroupData } from "../../../helpers/userRelations.helper.js";
 import { runFinanceTxn } from "../../finance/services/financeTxn.helper.js";
@@ -48,8 +53,9 @@ const toObjectId = (id) => {
 // Yozuv amallari uchun: guruh mavjud + aktiv bo'lishi shart. Arxivlangan bo'lsa
 // aniq xabar beradi (avval read-only edi - chalg'ituvchi 404). Read yo'llari
 // (getById/list/restore) Group.findById ni TO'G'RIDAN-TO'G'RI ishlatadi.
+// FILIAL KO'LAMI shu YAGONA nuqtada - fayl bo'ylab o'nlab joyda ishlatiladi.
 const ensureGroup = async (groupId) => {
-  const group = await Group.findById(groupId);
+  const group = await Group.findOne({ _id: groupId, ...branchFilter() });
   if (!group || group.isDeleted) throw new ApiError(404, "Guruh topilmadi");
   // Tugagan kurs (isActive=false yoki endDate o'tgan - kunlik job-gacha oyna).
   const ended =
@@ -98,7 +104,13 @@ export const list = async ({
   page = 1,
   limit = 20,
 }) => {
-  const match = { isActive: archived ? false : true, isDeleted: { $ne: true } };
+  // FILIAL ko'lami: aggregate pre-hook'lari ishlamaydi, shuning uchun
+  // filtr ochiq qo'shiladi (branchFilter() kontekstdan oladi).
+  const match = {
+    ...branchFilter(),
+    isActive: archived ? false : true,
+    isDeleted: { $ne: true },
+  };
   if (teacherId) match.teachers = toObjectId(teacherId);
   if (search && search.trim()) {
     match.name = { $regex: escapeRegex(search.trim()), $options: "i" };
@@ -212,7 +224,9 @@ const attachTelegram = async (userObjs) => {
 };
 
 export const getById = async (id) => {
-  const group = await Group.findById(id)
+  // FILIAL: boshqa filial guruhining to'liq tafsiloti (o'quvchilar, telefon,
+  // Telegram ID) ochilib ketmasin. 404 - mavjudligini ham oshkor qilmaymiz.
+  const group = await Group.findOne({ _id: id, ...branchFilter() })
     .populate("teachers", safeUserProjection);
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
@@ -306,7 +320,7 @@ const mergeScheduleVersion = (existing, incoming, effectiveFromInput) => {
   }));
 };
 
-export const create = async (body) => {
+export const create = async (body, currentUser) => {
   await ensureTeachers(body.teachers);
   // O'qituvchi ishga olingan sanasi guruh boshlanish sanasidan KEYIN bo'lsa -
   // biriktirib bo'lmaydi (guruh boshlanganda o'qituvchi hali ishga qabul qilinmagan).
@@ -335,6 +349,9 @@ export const create = async (body) => {
     );
   }
   const group = await Group.create({
+    // FILIAL: guruh filial ko'lamining ildizi - davomat/to'lov/maosh
+    // shu guruh orqali filialga bog'lanadi.
+    branchId: resolveBranchForWrite(currentUser),
     name: body.name.trim(),
     schedule: normalizeSchedule(body.schedule, { dropEffective: true }),
     // teachers[] - davrlardan HOSILA kesh; assignTeacher syncGroupTeachersCache qiladi.
@@ -395,7 +412,8 @@ export const create = async (body) => {
 export const update = async (id, body) => {
   // Arxivlangan guruhni ham yuklaymiz - endDate'ni tahrirlab REACTIVATE qilish
   // (kelajakka uzaytirish) shu yo'l orqali bo'ladi.
-  const group = await Group.findById(id);
+  // FILIAL: boshqa filial guruhini tahrirlab bo'lmaydi.
+  const group = await Group.findOne({ _id: id, ...branchFilter() });
   if (!group || group.isDeleted) throw new ApiError(404, "Guruh topilmadi");
 
   if (body.teachers !== undefined) await ensureTeachers(body.teachers);
@@ -636,7 +654,10 @@ export const processDueGroupEnds = async () => {
 // (aks holda garov izsiz yo'qolardi). Boshqa guruhlar/o'qituvchilar moliyasi o'zaro
 // bog'liq emas, shu sababli qo'shimcha recalc kerak emas.
 export const permanentRemove = async (id, currentUser, { confirmName } = {}) => {
-  const group = await Group.findById(id);
+  // FILIAL: bu QAYTARIB BO'LMAYDIGAN amal - guruh va uning butun ma'lumoti
+  // (davomat, baho, to'lov tarixi) o'chadi. Boshqa filial guruhiga
+  // yetib borishi mumkin bo'lgan eng xavfli yo'l shu edi.
+  const group = await Group.findOne({ _id: id, ...branchFilter() });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
   // O'chirish faqat: (a) guruhda AKTIV o'quvchi bo'lmasa (0 ta) YOKI (b) kurs
@@ -1095,14 +1116,18 @@ export const updateMembership = async (
 };
 
 // O'quvchining guruhdagi BARCHA o'qish davrlari (yopiq + ochiq), eng yangisi yuqorida.
-export const listMemberships = async (groupId, studentId) =>
-  GroupMembership.find({
+export const listMemberships = async (groupId, studentId) => {
+  // FILIAL: guruh ko'lamda bo'lmasa bo'sh natija.
+  const scope = await branchGroupFilter();
+  return GroupMembership.find({
     group: groupId,
     student: studentId,
     isDeleted: { $ne: true },
+    ...scope,
   })
     .sort({ joinedAt: -1 })
     .lean();
+};
 
 // O'qish davrini ID bo'yicha tahrirlash (tarixiy davr ham) - "O'qish davrlari" UI.
 export const updateMembershipById = async (
@@ -1301,6 +1326,9 @@ export const findActiveForStudent = async (studentId) => {
     student: studentId,
     leftAt: null,
     isDeleted: { $ne: true },
+    // FILIAL: o'quvchi boshqa filialda ham guruhda bo'lsa, uning guruhi
+    // shu filial ko'rinishiga chiqib ketmasin.
+    ...(await branchGroupFilter()),
   })
     .populate({
       path: "group",
@@ -1321,6 +1349,7 @@ export const findAllActiveForStudent = async (studentId) => {
     student: studentId,
     leftAt: null,
     isDeleted: { $ne: true },
+    ...(await branchGroupFilter()),
   })
     .populate({
       path: "group",

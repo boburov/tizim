@@ -39,6 +39,9 @@ import {
   DropdownMenuSeparator,
 } from "@/shared/components/shadcn/dropdown-menu";
 
+// Components
+import BranchSwitcher from "./BranchSwitcher";
+
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
 import useLogout from "@/features/auth/hooks/useLogout";
@@ -58,6 +61,10 @@ const ROLE_SIDEBAR = {
   [ROLES.OWNER]: ownerSidebar,
   [ROLES.TEACHER]: teacherSidebar,
   [ROLES.STUDENT]: studentSidebar,
+  // XODIM (direktor, buxgalter, administrator...) - owner panelida ishlaydi,
+  // lekin menyusi RUXSATLARI bo'yicha kesiladi (pastdagi filter).
+  // Bu qator bo'lmasa custom rolli foydalanuvchi bo'sh menyu ko'rardi.
+  staff: ownerSidebar,
 };
 
 const AppSidebar = ({ ...props }) => {
@@ -98,6 +105,9 @@ const Header = () => {
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
+
+      {/* Filial tanlagich - bir filialli markazlarda ko'rinmaydi */}
+      <BranchSwitcher />
     </SidebarHeader>
   );
 };
@@ -105,10 +115,17 @@ const Header = () => {
 const Main = () => {
   const isMobile = useIsMobile();
   const { toggleSidebar } = useSidebar();
-  const { role } = useAuth();
+  const { role, roleType } = useAuth();
   const { has } = usePermissions();
 
-  const navItems = ROLE_SIDEBAR[role] || [];
+  // MENYUNI roleType ANIQLAYDI, rol NOMI emas.
+  //
+  // Rollar dinamik: "director", "buxgalter" kabi custom rollar bor va
+  // ular ROLE_SIDEBAR xaritasida YO'Q. Faqat `role` bo'yicha qaralsa
+  // menyu bo'm-bo'sh chiqardi - foydalanuvchi hamma ruxsatga ega bo'lsa ham
+  // hech narsa ko'rmasdi. roleType ("owner"/"teacher"/"student") esa
+  // har doim mavjud va custom rol qaysi panel bilan ishlashini bildiradi.
+  const navItems = ROLE_SIDEBAR[role] || ROLE_SIDEBAR[roleType] || [];
 
   // Filter sub-items by permission
   const filtered = navItems
@@ -122,7 +139,9 @@ const Main = () => {
 
   return (
     <SidebarContent>
-      {role === ROLES.OWNER && (
+      {/* Global qidiruv - owner panelida ishlaydigan hamma uchun
+          (custom "director" roli ham roleType="owner"/"staff" bo'lishi mumkin) */}
+      {(role === ROLES.OWNER || roleType === ROLES.OWNER) && (
         <SidebarGroup className="pb-0">
           <OwnerGlobalSearch />
         </SidebarGroup>

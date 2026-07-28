@@ -59,6 +59,11 @@ const ownerSidebar = [
         permission: "finance.read",
       },
       {
+        title: "Chiqim tasdiqlari",
+        url: "/owner/expense-approvals",
+        permission: "finance.read",
+      },
+      {
         title: "O'qituvchi maoshlari",
         url: "/owner/finance/teacher-salaries",
         permission: "salary.read",
@@ -212,6 +217,16 @@ const ownerSidebar = [
       {
         title: "Ega profili",
         url: "/owner/profile",
+      },
+      {
+        title: "Filiallar",
+        url: "/owner/branches",
+        permission: "branches.read",
+      },
+      {
+        title: "Rollar va ruxsatlar",
+        url: "/owner/roles",
+        permission: "roles.read",
       },
       {
         title: "Faoliyat loglari",

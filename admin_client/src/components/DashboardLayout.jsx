@@ -1,5 +1,13 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutGrid, Plus, LogOut, ShieldCheck } from 'lucide-react';
+import {
+  LayoutGrid,
+  Plus,
+  LogOut,
+  ShieldCheck,
+  Settings,
+  CreditCard,
+  BarChart3,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
 
@@ -37,6 +45,17 @@ export default function DashboardLayout() {
           <NavLink to="/tenants/new" className={linkClass}>
             <Plus size={18} /> Yangi loyiha
           </NavLink>
+          <NavLink to="/usage" className={linkClass}>
+            <BarChart3 size={18} /> Foydalanish
+          </NavLink>
+          <NavLink to="/plans" className={linkClass}>
+            <CreditCard size={18} /> Tariflar
+          </NavLink>
+          {user?.role === 'SUPER_ADMIN' && (
+            <NavLink to="/settings" className={linkClass}>
+              <Settings size={18} /> Sozlamalar
+            </NavLink>
+          )}
         </nav>
 
         <div className="mt-4 border-t border-slate-200 pt-4">

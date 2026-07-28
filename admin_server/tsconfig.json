@@ -8,6 +8,8 @@
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "target": "ES2022",
+    "outDir": "./dist",
+    "rootDir": "./src",
     "sourceMap": true,
     "incremental": true,
     "skipLibCheck": true,

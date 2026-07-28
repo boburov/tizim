@@ -12,6 +12,13 @@ const statusHistorySchema = new mongoose.Schema(
 
 const leadSchema = new mongoose.Schema(
   {
+    // FILIAL: lid qaysi filialga kelgan.
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+      index: true,
+    },
     firstName: { type: String, trim: true, required: true },
     lastName: { type: String, trim: true, default: "" },
     age: { type: Number, default: null },

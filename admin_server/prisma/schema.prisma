@@ -8,7 +8,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url     = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 // 2-darajali admin userlar. Super admin .env orqali (statik) kiradi,
@@ -21,63 +21,82 @@ enum AdminRole {
 
 // Tenant hayot sikli
 enum TenantStatus {
-  DRAFT        // yozuv yaratildi, hali provision qilinmagan
+  DRAFT // yozuv yaratildi, hali provision qilinmagan
   PROVISIONING // provision.sh ishlayapti
-  ACTIVE       // ishga tushdi
-  FAILED       // provisioning xatosi
-  SUSPENDED    // to'xtatilgan
+  ACTIVE // ishga tushdi
+  FAILED // provisioning xatosi
+  SUSPENDED // to'xtatilgan (limit oshgan yoki to'lov yo'q)
+  DEPROVISIONING // deprovision.sh ishlayapti
+  DELETED // VPS resurslari o'chirilgan, yozuv arxiv sifatida qoldi
 }
 
 // "Tizim" turi — dinamik. Hozircha "oquv markaz", keyin boshqalar qo'shiladi.
 // Har template qaysi client/server shablonidan nusxa olinishini belgilaydi.
 model SystemTemplate {
-  id           String   @id @default(cuid())
-  key          String   @unique // masalan "study-center"
-  name         String            // ko'rinadigan nom, masalan "O'quv markaz tizimi"
-  description  String?
+  id          String   @id @default(cuid())
+  key         String   @unique // masalan "study-center"
+  name        String // ko'rinadigan nom, masalan "O'quv markaz tizimi"
+  description String?
   // Provisioning skript template papkalari (VPS'dagi manba yo'llari)
-  templateDir  String   @default("/root/templates/study-center")
+  templateDir String   @default("/root/templates/study-center")
   // Bu tizim faol tanlash uchun ochiqmi
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  tenants      Tenant[]
+  tenants Tenant[]
 }
 
 model Tenant {
-  id            String        @id @default(cuid())
+  id String @id @default(cuid())
 
   // Foydalanuvchi kiritadigan brend ma'lumotlari
-  name          String                        // markaz nomi (VITE_APP_NAME)
-  domain        String        @unique         // masalan markaz.example.uz
-  brandColor    String        @default("#4f46e5") // VITE_APP_PRIMARY
-  logoUrl       String?                       // VITE_APP_LOGO
-  botToken      String?                       // TELEGRAM_BOT_TOKEN
+  name       String // markaz nomi (VITE_APP_NAME)
+  domain     String  @unique // masalan markaz.example.uz
+  brandColor String  @default("#4f46e5") // VITE_APP_PRIMARY
+  logoUrl    String? // VITE_APP_LOGO
+  botToken   String? // TELEGRAM_BOT_TOKEN
 
   // NOYOB DB nomi — hech qachon takrorlanmaydi (slug + qisqa cuid).
   // Bu tenant MongoDB bazasining nomi bo'ladi.
-  dbName        String        @unique
+  dbName String @unique
 
   // Ajratilgan PM2 process nomi va port
-  pm2Name       String        @unique
-  port          Int           @unique
+  pm2Name String @unique
+  port    Int    @unique
 
   // DNS uchun beriladigan IP (bitta VPS bo'lsa doim bir xil)
-  serverIp      String?
+  serverIp String?
 
-  status        TenantStatus  @default(DRAFT)
-  provisionLog  String?       @db.Text        // provision.sh chiqishi (oxirgi)
+  status        TenantStatus @default(DRAFT)
+  provisionLog  String?      @db.Text // provision.sh chiqishi (oxirgi)
   failureReason String?
+
+  // Deprovision (o'chirish) kuzatuvi
+  deprovisionLog String?   @db.Text
+  deletedAt      DateTime?
+
+  // Tenant server bilan aloqa (heartbeat) — noyob sirli kalit
+  heartbeatSecret String?   @unique
+  lastHeartbeatAt DateTime?
 
   systemTemplate   SystemTemplate @relation(fields: [systemTemplateId], references: [id])
   systemTemplateId String
 
-  createdBy     String?                       // qaysi admin yaratdi (email)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  // Self-service: bu tenant qaysi mijozga tegishli (super admin yaratsa null)
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  customerId String?
+
+  subscription   Subscription?
+  usageSnapshots UsageSnapshot[]
+  addons         TenantAddon[]
+
+  createdBy String? // qaysi admin yaratdi (email)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
+  @@index([customerId])
 }
 
 model AdminUser {
@@ -89,4 +108,235 @@ model AdminUser {
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+// ============================================================================
+// SELF-SERVICE: mijozlar (AdminUser'dan ALOHIDA — bular to'lov qiladigan
+// tashqi foydalanuvchilar, AdminUser esa bizning xodimlarimiz).
+// ============================================================================
+
+model Customer {
+  id String @id @default(cuid())
+
+  email String @unique
+  // Google orqali kirgan mijozda parol YO'Q — shuning uchun optional.
+  // Parol bilan kirishga urinishda null bo'lsa rad etiladi.
+  passwordHash String?
+  fullName     String?
+  phone        String?
+  companyName  String?
+
+  // --- Google OAuth ---
+  // googleId bo'lsa — bu hisob Google bilan bog'langan.
+  googleId  String? @unique
+  avatarUrl String?
+
+  emailVerified Boolean   @default(false)
+  verifyToken   String?   @unique // email tasdiqlash tokeni
+  resetToken    String?   @unique // parol tiklash tokeni
+  resetTokenExp DateTime?
+
+  isActive Boolean @default(true)
+
+  tenants       Tenant[]
+  subscriptions Subscription[]
+  transactions  Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// TARIFLAR VA IMKONIYATLAR (entitlements)
+// ============================================================================
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+  LIFETIME
+}
+
+// Feature ikki xil bo'ladi:
+//   LIMIT   — raqamli chek (masalan max_users = 1000)
+//   BOOLEAN — yoqilgan/o'chirilgan (masalan telegram_bot)
+enum FeatureType {
+  LIMIT
+  BOOLEAN
+}
+
+// Dinamik imkoniyatlar ro'yxati. Yangi xizmat qo'shilsa (Telegram bot, SMS)
+// shu yerga yangi yozuv qo'shiladi — kod o'zgartirilmaydi.
+model Feature {
+  id          String      @id @default(cuid())
+  key         String      @unique // "max_users", "telegram_bot", "max_storage_mb"
+  name        String
+  description String?
+  type        FeatureType @default(LIMIT)
+  unit        String? // "ta", "MB" — UI da ko'rsatish uchun
+  // Bu feature usage orqali kuzatiladimi (heartbeat metrikasi bilan bog'liqmi)
+  metricKey   String? // masalan "user_count" — UsageSnapshot bilan bog'lash
+  isActive    Boolean     @default(true)
+
+  planFeatures PlanFeature[]
+  addons       Addon[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Plan {
+  id          String       @id @default(cuid())
+  key         String       @unique // "free", "basic", "pro"
+  name        String
+  description String?
+  price       Decimal      @default(0) @db.Decimal(12, 2)
+  currency    String       @default("UZS")
+  interval    BillingCycle @default(MONTHLY)
+  trialDays   Int          @default(0)
+  sortOrder   Int          @default(0)
+  isActive    Boolean      @default(true)
+  isPublic    Boolean      @default(true) // client panelda ko'rinadimi
+
+  features      PlanFeature[]
+  subscriptions Subscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Tarif ichidagi konkret limit/imkoniyat qiymati.
+// value: LIMIT uchun son (1000), BOOLEAN uchun 0/1. -1 = cheksiz.
+model PlanFeature {
+  id        String  @id @default(cuid())
+  plan      Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId    String
+  feature   Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  featureId String
+  value     Int
+
+  @@unique([planId, featureId])
+  @@index([featureId])
+}
+
+// Alohida sotib olinadigan qo'shimcha xizmat (add-on).
+model Addon {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  price       Decimal  @default(0) @db.Decimal(12, 2)
+  currency    String   @default("UZS")
+  // Qaysi feature'ni yoqadi/oshiradi
+  feature     Feature? @relation(fields: [featureId], references: [id])
+  featureId   String?
+  value       Int      @default(1) // feature qiymatiga qo'shiladi
+  isActive    Boolean  @default(true)
+
+  tenantAddons TenantAddon[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TenantAddon {
+  id        String    @id @default(cuid())
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  addon     Addon     @relation(fields: [addonId], references: [id], onDelete: Cascade)
+  addonId   String
+  isActive  Boolean   @default(true)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([tenantId, addonId])
+}
+
+// ============================================================================
+// OBUNA VA TO'LOV
+// ============================================================================
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE // muddat o'tdi, hali to'lanmadi (grace period)
+  CANCELED
+  EXPIRED
+}
+
+model Subscription {
+  id         String    @id @default(cuid())
+  // Bitta tenantda bitta faol obuna
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId   String    @unique
+  plan       Plan      @relation(fields: [planId], references: [id])
+  planId     String
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  customerId String?
+
+  status           SubscriptionStatus @default(TRIALING)
+  startedAt        DateTime           @default(now())
+  currentPeriodEnd DateTime?
+  canceledAt       DateTime?
+
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([planId])
+}
+
+enum PaymentProvider {
+  PAYME
+  CLICK
+  MANUAL // qo'lda (naqd/bank o'tkazma) — admin tasdiqlaydi
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELED
+  FAILED
+}
+
+model Transaction {
+  id             String        @id @default(cuid())
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  subscriptionId String?
+  customer       Customer?     @relation(fields: [customerId], references: [id])
+  customerId     String?
+
+  amount   Decimal         @db.Decimal(12, 2)
+  currency String          @default("UZS")
+  provider PaymentProvider
+  status   PaymentStatus   @default(PENDING)
+
+  // Provayder tomonidagi tranzaksiya id (Payme/Click) — idempotentlik uchun
+  providerTxnId String?
+  rawPayload    String?   @db.Text
+  paidAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerTxnId])
+  @@index([status])
+  @@index([customerId])
+}
+
+// ============================================================================
+// USAGE (heartbeat orqali tenant serverdan keladi)
+// ============================================================================
+
+// Har heartbeat bitta snapshot yozadi — tarix uchun (grafik chizish mumkin).
+model UsageSnapshot {
+  id         String   @id @default(cuid())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId   String
+  metricKey  String // "user_count", "student_count", "storage_mb"
+  value      Int
+  recordedAt DateTime @default(now())
+
+  @@index([tenantId, metricKey, recordedAt])
 }

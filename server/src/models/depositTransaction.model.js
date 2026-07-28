@@ -7,6 +7,19 @@ import softDeletePlugin from "./plugins/softDelete.plugin.js";
 // Bu yozuvlar tizim daromad/xarajatiga KIRMAYDI.
 const depositTransactionSchema = new mongoose.Schema(
   {
+    // FILIAL: o'quvchining filiali (homeBranchId) bo'yicha.
+    //
+    // DIQQAT: bu maydon ATAYLAB `required: false`. Depozit yozuvlari
+    // o'quvchiga bog'langan, guruhga emas - va o'quvchi hali hech qaysi
+    // filialga biriktirilmagan bo'lishi mumkin. required qilinsa, xuddi
+    // SalaryTransaction'dagi kabi to'lov butunlay ishlamay qolardi.
+    // null = eski yozuv yoki filialsiz o'quvchi (hisobotda "boshqa").
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      default: null,
+      index: true,
+    },
     student: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -33,11 +46,26 @@ const depositTransactionSchema = new mongoose.Schema(
     note: { type: String, trim: true, default: "" },
     paidAt: { type: Date, required: true, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    // TASDIQ orqali yaratilgan bo'lsa - qaysi so'rovdan (aynan bir marta kafolati).
+    expenseApprovalId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ExpenseApproval",
+      default: null,
+    },
   },
   { timestamps: true },
 );
 
 depositTransactionSchema.index({ student: 1, paidAt: -1 });
+
+// AYNAN BIR MARTA: bitta tasdiq so'rovidan faqat BITTA tranzaksiya.
+depositTransactionSchema.index(
+  { expenseApprovalId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { expenseApprovalId: { $type: "objectId" } },
+  },
+);
 
 depositTransactionSchema.plugin(softDeletePlugin);
 

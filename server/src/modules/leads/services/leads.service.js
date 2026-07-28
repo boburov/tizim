@@ -2,6 +2,10 @@ import Lead from "../../../models/lead.model.js";
 import LeadOption from "../../../models/leadOption.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { normalizePhone } from "../../../utils/phone.js";
+import {
+  branchFilter,
+  resolveBranchForWrite,
+} from "../../../helpers/branchContext.helper.js";
 import { LEAD_PIPELINE } from "../../../constants/leadStatus.js";
 import * as authService from "../../auth/services/auth.service.js";
 
@@ -22,7 +26,8 @@ export const list = async ({
   page = 1,
   limit = 20,
 }) => {
-  const filter = {};
+  // FILIAL ko'lami
+  const filter = { ...branchFilter() };
   if (status) filter.status = status;
   if (source) filter.source = source;
   if (direction) filter.direction = direction;
@@ -71,6 +76,8 @@ export const create = async (body, currentUser) => {
   const status = body.status || "new";
 
   const lead = await Lead.create({
+    // FILIAL: lid qaysi filialga kelgan.
+    branchId: resolveBranchForWrite(currentUser),
     firstName: String(body.firstName).trim(),
     lastName: body.lastName ? String(body.lastName).trim() : "",
     age: body.age ?? null,
@@ -164,13 +171,24 @@ export const remove = async (id) => {
 
 // Lidni o'quvchiga aylantirish: o'quvchi yaratiladi + lid bog'lanadi
 export const convert = async (id, body, currentUser) => {
-  const lead = await Lead.findById(id);
+  // FILIAL: boshqa filial lidini aylantirib bo'lmaydi.
+  const lead = await Lead.findOne({ _id: id, ...branchFilter() });
   if (!lead) throw new ApiError(404, "Lid topilmadi");
   if (lead.studentId) {
     throw new ApiError(409, "Bu lid allaqachon o'quvchiga aylantirilgan");
   }
 
-  const student = await authService.registerUser({ ...body, role: "student" });
+  // FILIAL: yaratilayotgan o'quvchi LID FILIALIGA biriktiriladi.
+  //
+  // Bu bo'lmasa o'quvchi filialsiz qolardi - va userBranchCondition()
+  // qoidasi bo'yicha filialsiz foydalanuvchi FAQAT view_all egalariga
+  // ko'rinadi, ya'ni lidni aylantirgan direktor o'zi yaratgan o'quvchini
+  // ro'yxatda ko'rmay qolardi.
+  const student = await authService.registerUser({
+    ...body,
+    role: "student",
+    homeBranchId: lead.branchId,
+  });
 
   lead.studentId = student._id;
   if (lead.status !== "enrolled") {
@@ -187,7 +205,8 @@ export const convert = async (id, body, currentUser) => {
 
 // Statistika: voronka, manba/yo'nalish samaradorligi, drop-off
 export const stats = async ({ from, to } = {}) => {
-  const match = {};
+  // FILIAL: voronka/manba statistikasi butun tashkilotni ko'rsatardi.
+  const match = { ...branchFilter() };
   if (from || to) {
     match.createdAt = {};
     if (from) match.createdAt.$gte = new Date(from);

@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { ROLES } from "../../../constants/roles.js";
 
 export const listSchema = z.object({
   query: z.object({
-    role: z.enum([ROLES.OWNER, ROLES.TEACHER, ROLES.STUDENT]).optional(),
+    // Rollar dinamik - enum bilan cheklamaymiz, custom rol bo'yicha ham
+    // filtrlash mumkin bo'lsin.
+    role: z.string().min(1).optional(),
     search: z.string().optional(),
     archived: z.enum(["0", "1", "true", "false"]).optional(),
     // Holat filtri: active (faol) | archived (arxiv) | frozen (muzlatilgan) |

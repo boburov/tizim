@@ -15,7 +15,10 @@ import { authAPI } from "../api/auth.api";
 import { qk } from "@/shared/lib/query/keys";
 
 // Constants
-import { ROLE_HOME } from "@/shared/constants/roles";
+import { resolveHomePath } from "@/shared/constants/roles";
+
+// Lib
+import { clearActiveBranchId } from "@/shared/lib/branch/activeBranch";
 
 const useLoginMutation = () => {
   const qc = useQueryClient();
@@ -24,11 +27,30 @@ const useLoginMutation = () => {
   return useMutation({
     mutationFn: (body) => authAPI.login(body).then((r) => r.data.data),
     onSuccess: (data) => {
+      // FILIAL: oldingi foydalanuvchidan qolgan tanlovni TOZALAYMIZ.
+      // Aks holda owner'dan keyin direktor kirsa, owner tanlagan filial
+      // header'da ketardi - yoki eskirgan ID butun tizimni bloklardi.
+      // Yangi tanlov useActiveBranch tomonidan /auth/me javobiga qarab
+      // avtomatik qo'yiladi.
+      clearActiveBranchId();
       localStorage.setItem("authToken", data.accessToken);
-      qc.setQueryData(qk.auth.me(), { user: data.user, role: data.user.role });
+      qc.setQueryData(qk.auth.me(), {
+        user: data.user,
+        role: data.user.role,
+        roleMeta: data.roleMeta,
+      });
       qc.invalidateQueries({ queryKey: qk.auth.me() });
       toast.success("Tizimga xush kelibsiz");
-      navigate(ROLE_HOME[data.user.role] || "/", { replace: true });
+      // Custom rolda landing sahifa ROLE_HOME map'ida yo'q - u serverdan
+      // (roleMeta.defaultPath) keladi.
+      navigate(
+        resolveHomePath({
+          defaultPath: data.roleMeta?.defaultPath,
+          role: data.user.role,
+          roleType: data.roleMeta?.roleType,
+        }),
+        { replace: true },
+      );
     },
     onError: (err) => {
       apiErrorToast(err, "Login yoki parol noto'g'ri");

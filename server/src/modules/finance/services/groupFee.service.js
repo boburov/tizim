@@ -5,6 +5,7 @@ import ApiError from "../../../utils/ApiError.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
 import logger from "../../../config/logger.js";
 import { localTodayMidnight } from "../../../helpers/attendance.helper.js";
+import { branchFilter } from "../../../helpers/branchContext.helper.js";
 import * as studentPaymentService from "./studentPayment.service.js";
 import * as teacherSalaryService from "../../teacherSalary/services/teacherSalary.service.js";
 
@@ -88,7 +89,9 @@ export const ensureGroupFeeBackfill = async (group, year, month) => {
 
 // Tanlangan oy uchun barcha faol guruhlar + o'sha oy to'lovi (jadval uchun).
 export const list = async ({ year, month, search }) => {
-  const match = { isActive: true, isDeleted: { $ne: true } };
+  // FILIAL: guruhlar filtrlansa, ularning narxlari ham avtomatik cheklanadi
+  // (fees quyida aynan shu guruh ID'lari bo'yicha olinadi).
+  const match = { ...branchFilter(), isActive: true, isDeleted: { $ne: true } };
   if (search && search.trim()) {
     match.name = { $regex: search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
   }
@@ -116,7 +119,8 @@ export const list = async ({ year, month, search }) => {
 
 // Bitta guruhning barcha oylik to'lovlari (sub-sahifa). Joriy oyni ta'minlaydi.
 export const byGroup = async (groupId) => {
-  const group = await Group.findById(groupId, { name: 1 });
+  // FILIAL: boshqa filial guruhining narx tarixi ochilmasin.
+  const group = await Group.findOne({ _id: groupId, ...branchFilter() }, { name: 1 });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
   const today = localTodayMidnight();
@@ -129,7 +133,10 @@ export const byGroup = async (groupId) => {
 // Guruh+oy to'lovini o'rnatadi (upsert). Narx faqat shu (yil, oy) ga ta'sir qiladi -
 // qo'shimcha sana yo'q. O'chirish yo'q. To'lovlarni qayta hisoblaydi.
 export const upsert = async ({ groupId, year, month, amount }, currentUser) => {
-  const group = await Group.findById(groupId);
+  // FILIAL: bu YOZUV amali - boshqa filial guruhining narxini o'zgartirish
+  // butun o'quvchi to'lovlari va o'qituvchi maoshini qayta hisoblardi.
+  const group = await Group.findOne({ _id: groupId, ...branchFilter() });
+  if (!group) throw new ApiError(404, "Guruh topilmadi");
   assertGroupActive(group);
 
   const fee = await GroupFee.findOneAndUpdate(

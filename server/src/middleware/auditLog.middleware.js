@@ -8,9 +8,30 @@ import {
 
 const TRACKED_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
+// Audit log faqat *ataylab qilingan* amallarni yozishi kerak.
+// Token yangilash - fon jarayoni, u jadvalni to'ldirib, haqiqiy hodisalarni
+// ko'rinmas qilib qo'yadi. Shuning uchun yozish bosqichidayoq tashlab ketamiz.
+const IGNORED_PATHS = new Set(["/api/auth/refresh", "/auth/refresh"]);
+
+const isIgnored = (req) => {
+  const path = String(req.originalUrl || req.path || "").split("?")[0];
+  return IGNORED_PATHS.has(path);
+};
+
+// user null bo'lganda (login - hali autentifikatsiya bo'lmagan so'rov)
+// hech bo'lmasa kim urinayotganini saqlaymiz.
+const extractActorLabel = (req) => {
+  if (req.user) return "";
+  const body = req.body || {};
+  return String(body.login || body.username || body.phone || "").slice(0, 120);
+};
+
 const auditLog = (req, res, next) => {
   if (!TRACKED_METHODS.has(req.method)) return next();
+  if (isIgnored(req)) return next();
   const startedAt = Date.now();
+  // req.body handler'lar tomonidan o'zgartirilishi mumkin - hozir o'qib olamiz
+  const actorLabel = extractActorLabel(req);
 
   res.on("finish", () => {
     setImmediate(async () => {
@@ -22,6 +43,7 @@ const auditLog = (req, res, next) => {
         await ActivityLog.create({
           user: req.user?._id || null,
           userRole: req.user?.role || "system",
+          actorLabel,
           method: req.method,
           path: req.originalUrl || req.path,
           status: res.statusCode || 0,

@@ -2,30 +2,19 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, ExternalLink, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
-
-const STATUS_STYLE = {
-  DRAFT: 'bg-slate-100 text-slate-600',
-  PROVISIONING: 'bg-amber-100 text-amber-700',
-  ACTIVE: 'bg-emerald-100 text-emerald-700',
-  FAILED: 'bg-red-100 text-red-700',
-  SUSPENDED: 'bg-slate-200 text-slate-500',
-};
-
-const STATUS_LABEL = {
-  DRAFT: 'Qoralama',
-  PROVISIONING: 'Yaratilmoqda…',
-  ACTIVE: 'Faol',
-  FAILED: 'Xato',
-  SUSPENDED: "To'xtatilgan",
-};
+import {
+  BUSY_STATUSES,
+  STATUS_LABEL,
+  STATUS_STYLE,
+} from '../lib/tenantStatus';
 
 export default function TenantsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['tenants'],
     queryFn: () => api.get('/tenants').then((r) => r.data),
     refetchInterval: (q) =>
-      // Provisioning ketayotgan bo'lsa har 4 soniyada yangilaymiz
-      q.state.data?.some((t) => t.status === 'PROVISIONING') ? 4000 : false,
+      // Provisioning/o'chirish ketayotgan bo'lsa har 4 soniyada yangilaymiz
+      q.state.data?.some((t) => BUSY_STATUSES.includes(t.status)) ? 4000 : false,
   });
 
   return (

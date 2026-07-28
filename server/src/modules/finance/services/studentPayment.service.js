@@ -8,6 +8,12 @@ import Group from "../../../models/group.model.js";
 import User from "../../../models/user.model.js";
 import DebtWriteOff from "../../../models/debtWriteOff.model.js";
 import ApiError from "../../../utils/ApiError.js";
+import {
+  branchFilter,
+  branchGroupFilter,
+  userBranchCondition,
+  resolveBranchFromGroup,
+} from "../../../helpers/branchContext.helper.js";
 import logger from "../../../config/logger.js";
 import {
   computePaymentSnapshot,
@@ -495,10 +501,16 @@ export const ensurePaymentForMembership = async (membership, year, month, { sess
     leftAt: membership.leftAt || null,
   });
 
+  // FILIAL: guruhdan meros. Bu funksiya Agenda job'laridan ham chaqiriladi
+  // (u yerda foydalanuvchi konteksti YO'Q), shuning uchun filial guruhdan
+  // olinadi - kontekstga bog'liq bo'lmagan yagona to'g'ri manba.
+  const branchId = await resolveBranchFromGroup(membership.group);
+
   try {
     const docs = await StudentPayment.create(
       [
         {
+          branchId,
           student: membership.student,
           group: membership.group,
           membership: membership._id,
@@ -592,7 +604,8 @@ export const list = async ({
   page = 1,
   limit = 50,
 }) => {
-  const filter = { isDeleted: { $ne: true } };
+  // FILIAL: StudentPayment'da branchId bor (guruhdan meros).
+  const filter = { ...branchFilter(), isDeleted: { $ne: true } };
   if (groupId) filter.group = toObjectId(groupId);
   if (year) filter.year = Number(year);
   if (month) filter.month = Number(month);
@@ -646,10 +659,22 @@ export const getById = async (id) => {
 // tranzaksiyalar (to'lovlar tarixi sahifasi uchun). Eng yangi oy yuqorida.
 export const historyByStudent = async (studentId) => {
   const sid = toObjectId(studentId);
-  const student = await User.findById(sid, safeStudentProjection).lean();
+  // FILIAL: boshqa filial o'quvchisining ismi ham ochilmasin (404 - mavjudligini
+  // ham oshkor qilmaymiz). $and ishlatiladi: userBranchCondition o'zi $or beradi.
+  const branchCond = userBranchCondition();
+  const student = await User.findOne(
+    branchCond ? { _id: sid, $and: [branchCond] } : { _id: sid },
+    safeStudentProjection,
+  ).lean();
   if (!student) throw new ApiError(404, "O'quvchi topilmadi");
 
-  const payments = await StudentPayment.find({ student: sid, isDeleted: { $ne: true } })
+  // FILIAL: o'quvchi boshqa filialda ham to'lagan bo'lsa, u yerdagi
+  // to'lovlari shu filial ko'rinishiga chiqmasin.
+  const payments = await StudentPayment.find({
+    student: sid,
+    ...branchFilter(),
+    isDeleted: { $ne: true },
+  })
     .populate("group", { name: 1 })
     .sort({ year: -1, month: -1 })
     .lean();

@@ -105,6 +105,12 @@ CLIENT_URL=${CLIENT_URL}
 TELEGRAM_BOT_TOKEN=${TENANT_BOT_TOKEN:-}
 TELEGRAM_BOT_ENABLED=${BOT_ENABLED}
 TELEGRAM_BOT_WEBAPP_URL=${CLIENT_URL}/bot-auth
+
+# --- Admin panel bilan aloqa (usage heartbeat + tarif limitlari) ---
+ADMIN_API_URL=${TENANT_ADMIN_API_URL:-}
+TENANT_ID=${TENANT_ID:-}
+HEARTBEAT_SECRET=${TENANT_HEARTBEAT_SECRET:-}
+ENFORCE_LIMITS=true
 EOF
 
 # --- 4) client/.env yozish (brend) ---

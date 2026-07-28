@@ -5,16 +5,21 @@ import { Navigate, Outlet } from "react-router-dom";
 import useAuth from "@/shared/hooks/useAuth";
 
 // Constants
-import { ROLE_HOME } from "@/shared/constants/roles";
+import { resolveHomePath } from "@/shared/constants/roles";
 
 const GuestGuard = () => {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-  const { role, isLoading, isError } = useAuth();
+  const { role, roleType, homePath, isLoading, isError } = useAuth();
 
   if (token && isLoading) return null;
   if (token && !isError && role) {
-    return <Navigate to={ROLE_HOME[role] || "/"} replace />;
+    return (
+      <Navigate
+        to={resolveHomePath({ defaultPath: homePath, role, roleType })}
+        replace
+      />
+    );
   }
 
   return <Outlet />;

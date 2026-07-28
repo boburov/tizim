@@ -1,32 +1,29 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
+  AlertTriangle,
   ArrowLeft,
+  BarChart3,
   Copy,
+  CreditCard,
   Globe,
   Loader2,
   RefreshCw,
   Server,
   Database,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { api } from '../api/client';
-
-const STATUS_STYLE = {
-  DRAFT: 'bg-slate-100 text-slate-600',
-  PROVISIONING: 'bg-amber-100 text-amber-700',
-  ACTIVE: 'bg-emerald-100 text-emerald-700',
-  FAILED: 'bg-red-100 text-red-700',
-  SUSPENDED: 'bg-slate-200 text-slate-500',
-};
-
-const STATUS_LABEL = {
-  DRAFT: 'Qoralama',
-  PROVISIONING: 'Yaratilmoqda…',
-  ACTIVE: 'Faol',
-  FAILED: 'Xato',
-  SUSPENDED: "To'xtatilgan",
-};
+import { useAuth } from '../context/AuthContext';
+import {
+  BUSY_STATUSES,
+  STATUS_LABEL,
+  STATUS_STYLE,
+} from '../lib/tenantStatus';
+import UsageLimits from '../components/UsageLimits';
 
 function copy(text) {
   navigator.clipboard.writeText(text);
@@ -54,12 +51,66 @@ function Row({ icon: Icon, label, value, mono, copyable }) {
 export default function TenantDetailPage() {
   const { id } = useParams();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  const [delOpen, setDelOpen] = useState(false);
+  const [confirmDomain, setConfirmDomain] = useState('');
+  const [planKey, setPlanKey] = useState('');
 
   const { data: t, isLoading } = useQuery({
     queryKey: ['tenant', id],
     queryFn: () => api.get(`/tenants/${id}`).then((r) => r.data),
     refetchInterval: (q) =>
-      q.state.data?.status === 'PROVISIONING' ? 3000 : false,
+      BUSY_STATUSES.includes(q.state.data?.status) ? 3000 : false,
+  });
+
+  // Limitlar va foydalanish
+  const { data: usage } = useQuery({
+    queryKey: ['tenant-usage', id],
+    queryFn: () => api.get(`/usage/tenant/${id}`).then((r) => r.data),
+    enabled: !!t && t.status !== 'DELETED',
+  });
+
+  const { data: plans } = useQuery({
+    queryKey: ['plans'],
+    queryFn: () => api.get('/plans').then((r) => r.data),
+  });
+
+  const assignPlan = useMutation({
+    mutationFn: (key) =>
+      api.post(`/tenants/${id}/subscription`, { planKey: key }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tenant-usage', id] });
+      qc.invalidateQueries({ queryKey: ['tenant', id] });
+      toast.success('Tarif biriktirildi');
+      setPlanKey('');
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Xatolik'),
+  });
+
+  const remove = useMutation({
+    mutationFn: () =>
+      api.delete(`/tenants/${id}`, { data: { confirmDomain } }),
+    onSuccess: () => {
+      toast.success("O'chirish boshlandi — VPS resurslari tozalanmoqda");
+      setDelOpen(false);
+      setConfirmDomain('');
+      qc.invalidateQueries({ queryKey: ['tenant', id] });
+      qc.invalidateQueries({ queryKey: ['tenants'] });
+    },
+    onError: (e) => toast.error(e.response?.data?.message || "O'chirib bo'lmadi"),
+  });
+
+  const purge = useMutation({
+    mutationFn: () => api.delete(`/tenants/${id}/purge`),
+    onSuccess: () => {
+      toast.success('Arxiv yozuvi tozalandi');
+      qc.invalidateQueries({ queryKey: ['tenants'] });
+      navigate('/');
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Xatolik'),
   });
 
   const retry = useMutation({
@@ -126,6 +177,55 @@ export default function TenantDetailPage() {
         <Row label="Yaratgan" value={t.createdBy} />
       </div>
 
+      {/* Tarif va limitlar */}
+      {t.status !== 'DELETED' && (
+        <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
+            <CreditCard size={17} /> Tarif va limitlar
+          </h2>
+
+          <div className="mb-4 flex items-center gap-2">
+            <select
+              value={planKey}
+              onChange={(e) => setPlanKey(e.target.value)}
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+            >
+              <option value="">
+                {usage?.subscription
+                  ? `Hozirgi: ${usage.subscription.planName}`
+                  : 'Tarif tanlanmagan'}
+              </option>
+              {plans?.map((p) => (
+                <option key={p.id} value={p.key}>
+                  {p.name} — {Number(p.price).toLocaleString('uz-UZ')} UZS
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => assignPlan.mutate(planKey)}
+              disabled={!planKey || assignPlan.isPending}
+              className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            >
+              {assignPlan.isPending && (
+                <Loader2 size={15} className="animate-spin" />
+              )}
+              Biriktirish
+            </button>
+          </div>
+
+          <UsageLimits limits={usage?.limits} />
+
+          {usage?.limits?.length > 0 && (
+            <Link
+              to="/usage"
+              className="mt-3 inline-flex items-center gap-1 text-sm text-brand hover:underline"
+            >
+              <BarChart3 size={14} /> Barcha loyihalar foydalanishi
+            </Link>
+          )}
+        </div>
+      )}
+
       {t.status === 'FAILED' && (
         <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-5">
           <div className="mb-2 font-medium text-red-700">Provisioning xatosi</div>
@@ -146,13 +246,149 @@ export default function TenantDetailPage() {
       )}
 
       {t.provisionLog && (
-        <div className="rounded-xl border border-slate-200 bg-slate-900 p-4">
+        <div className="mb-5 rounded-xl border border-slate-200 bg-slate-900 p-4">
           <div className="mb-2 text-xs font-medium text-slate-400">
             Provisioning log
           </div>
           <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs text-slate-200">
             {t.provisionLog}
           </pre>
+        </div>
+      )}
+
+      {t.deprovisionLog && (
+        <div className="mb-5 rounded-xl border border-orange-200 bg-slate-900 p-4">
+          <div className="mb-2 text-xs font-medium text-orange-400">
+            O'chirish (deprovision) log
+          </div>
+          <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs text-slate-200">
+            {t.deprovisionLog}
+          </pre>
+        </div>
+      )}
+
+      {/* --- Xavfli hudud --- */}
+      {isSuperAdmin && (
+        <div className="rounded-xl border border-red-200 bg-white p-5">
+          <h2 className="mb-1 flex items-center gap-2 font-medium text-red-700">
+            <AlertTriangle size={17} /> Xavfli hudud
+          </h2>
+
+          {t.status === 'DELETED' ? (
+            <>
+              <p className="mb-3 text-sm text-slate-600">
+                Bu loyiha o'chirilgan
+                {t.deletedAt &&
+                  ` (${new Date(t.deletedAt).toLocaleString('uz-UZ')})`}
+                . Arxiv yozuvi bazada saqlanmoqda — uni butunlay tozalash mumkin.
+              </p>
+              <button
+                onClick={() => {
+                  if (confirm('Arxiv yozuvi bazadan butunlay tozalansinmi?'))
+                    purge.mutate();
+                }}
+                disabled={purge.isPending}
+                className="flex items-center gap-2 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+              >
+                {purge.isPending ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <Trash2 size={15} />
+                )}
+                Arxiv yozuvini tozalash
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="mb-3 text-sm text-slate-600">
+                Loyihani o'chirish VPS'dagi MongoDB bazasi, PM2 process, nginx
+                config va fayllarni butunlay yo'q qiladi. Bu amalni{' '}
+                <span className="font-medium text-red-600">
+                  qaytarib bo'lmaydi
+                </span>
+                .
+              </p>
+              <button
+                onClick={() => setDelOpen(true)}
+                disabled={BUSY_STATUSES.includes(t.status)}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 size={15} /> Loyihani o'chirish
+              </button>
+              {BUSY_STATUSES.includes(t.status) && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Jarayon ketmoqda — tugashini kuting
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* O'chirishni tasdiqlash modali */}
+      {delOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                  <AlertTriangle size={20} />
+                </div>
+                <h3 className="font-semibold">Loyihani o'chirish</h3>
+              </div>
+              <button
+                onClick={() => setDelOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="mb-2 text-sm text-slate-600">
+              Quyidagilar butunlay o'chiriladi:
+            </p>
+            <ul className="mb-4 space-y-1 text-sm text-slate-600">
+              <li>• MongoDB bazasi (<span className="font-mono text-xs">{t.dbName}</span>)</li>
+              <li>• PM2 process (<span className="font-mono text-xs">{t.pm2Name}</span>)</li>
+              <li>• Nginx config va SSL sertifikat</li>
+              <li>• Ilova fayllari va client build</li>
+            </ul>
+
+            <p className="mb-2 text-sm text-slate-600">
+              Tasdiqlash uchun domenni aynan yozing:
+            </p>
+            <div className="mb-1 rounded bg-slate-100 px-2 py-1 text-center font-mono text-sm">
+              {t.domain}
+            </div>
+            <input
+              autoFocus
+              value={confirmDomain}
+              onChange={(e) => setConfirmDomain(e.target.value)}
+              placeholder={t.domain}
+              className="mb-5 mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-red-500"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDelOpen(false)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+              >
+                Bekor qilish
+              </button>
+              <button
+                onClick={() => remove.mutate()}
+                disabled={confirmDomain !== t.domain || remove.isPending}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {remove.isPending ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Trash2 size={16} />
+                )}
+                Ha, o'chirilsin
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

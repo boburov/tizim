@@ -8,6 +8,10 @@ import ApiError from "../../../utils/ApiError.js";
 import { buildMeta } from "../../../utils/pagination.js";
 import { ROLES } from "../../../constants/roles.js";
 import {
+  branchFilter,
+  branchGroupFilter,
+} from "../../../helpers/branchContext.helper.js";
+import {
   dateKeyOf,
   dayOfWeekOf,
   toUtcMidnight,
@@ -37,8 +41,17 @@ const STUDENT_PROJECTION = {
   phone: 1,
 };
 
+// FILIAL KO'LAMI shu YAGONA nuqtada.
+//
+// Bu funksiya butun fayl bo'ylab ishlatiladi (listForGroupOnDate, bulkRecord,
+// getGroupMonthly, getGroupSummary...). Filtrni shu yerga qo'yish o'nlab
+// chaqiruvni birdan yopadi - har birida alohida eslab qolishdan ko'ra
+// ancha ishonchli.
+//
+// Boshqa filial guruhi so'ralsa 404 qaytaramiz (403 emas): mavjudligini
+// ham oshkor qilmaymiz.
 const ensureGroup = async (groupId) => {
-  const g = await Group.findById(groupId);
+  const g = await Group.findOne({ _id: groupId, ...branchFilter() });
   if (!g) throw new ApiError(404, "Guruh topilmadi");
   return g;
 };
@@ -1159,7 +1172,14 @@ export const getDashboardStats = async ({ fromDate, toDate, page = 1, limit = 20
   const from = parseLocalDay(fromDate);
   const to = parseLocalDay(toDate);
 
-  const groups = await Group.find({ isActive: true, isDeleted: { $ne: true } });
+  // FILIAL: dashboard butun tizim guruhlarini olardi - boshqa filial
+  // davomati ham hisobga tushardi. Guruh filialga bog'langani uchun
+  // branchFilter() shu yerda yetarli.
+  const groups = await Group.find({
+    ...branchFilter(),
+    isActive: true,
+    isDeleted: { $ne: true },
+  });
   const groupIds = groups.map((g) => g._id);
 
   // Oraliqda active bo'lgan guruh membershiplari (groupBreakdown + o'quvchilar ro'yxati uchun)
@@ -1379,7 +1399,14 @@ export const consecutiveAbsences = async (studentId, groupId = null) => {
     isDeleted: { $ne: true },
     dateKey: { $lte: localTodayKey() },
   };
-  if (groupId) filter.group = groupId;
+  if (groupId) {
+    filter.group = groupId;
+  } else {
+    // FILIAL: guruh berilmasa barcha guruhlar bo'yicha yuriladi - filial
+    // ko'lamiga cheklaymiz. Attendance'da branchId YO'Q, shuning uchun
+    // guruh orqali (branchGroupFilter).
+    Object.assign(filter, await branchGroupFilter());
+  }
   const recent = await Attendance.find(filter)
     .sort({ dateKey: -1 })
     .limit(50)

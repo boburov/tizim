@@ -12,6 +12,11 @@ import {
   permanentDeleteSchema,
 } from "./validators/update.validator.js";
 import { setPasswordSchema } from "./validators/password.validator.js";
+import { setRoleSchema } from "./validators/role.validator.js";
+import {
+  createStaffSchema,
+  setBranchesSchema,
+} from "./validators/createStaff.validator.js";
 import { archiveActionSchema } from "./validators/archive.validator.js";
 import list from "./handlers/list.handler.js";
 import getById from "./handlers/getById.handler.js";
@@ -22,8 +27,33 @@ import permanentRemove from "./handlers/permanentRemove.handler.js";
 import groupHistory from "./handlers/groupHistory.handler.js";
 import getPassword from "./handlers/getPassword.handler.js";
 import setPassword from "./handlers/setPassword.handler.js";
+import setRole from "./handlers/setRole.handler.js";
+import createStaff from "./handlers/createStaff.handler.js";
+import setBranches from "./handlers/setBranches.handler.js";
 
 const router = Router();
+
+// XODIM (direktor/administrator) yaratish - login/parol + filial + rol.
+// Ikkita ruxsat talab qilinadi: odam yaratish VA rol biriktirish, chunki
+// bu amal ikkalasini birdan bajaradi.
+router.post(
+  "/staff",
+  requireAuth,
+  requirePermission(PERMISSIONS.TEACHERS_CREATE),
+  requirePermission(PERMISSIONS.ROLES_UPDATE),
+  validate(createStaffSchema),
+  createStaff,
+);
+
+// Xodimning filial biriktiruvini o'zgartirish. "/:id" dan OLDIN.
+router.patch(
+  "/:id/branches",
+  requireAuth,
+  requirePermission(PERMISSIONS.USERS_READ),
+  requirePermission(PERMISSIONS.ROLES_UPDATE),
+  validate(setBranchesSchema),
+  setBranches,
+);
 
 router.get(
   "/",
@@ -59,6 +89,14 @@ router.patch(
   requireRole(ROLES.OWNER),
   validate(setPasswordSchema),
   setPassword,
+);
+// Foydalanuvchiga rol biriktirish (custom rol ham). "/:id" dan OLDIN.
+router.patch(
+  "/:id/role",
+  requireAuth,
+  requirePermission(PERMISSIONS.ROLES_UPDATE),
+  validate(setRoleSchema),
+  setRole,
 );
 router.patch(
   "/:id",

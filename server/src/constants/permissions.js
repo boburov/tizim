@@ -60,6 +60,30 @@ export const PERMISSIONS = Object.freeze({
   // Teacher salary (O'qituvchi maoshlari)
   SALARY_READ: "salary.read",
   SALARY_PAY: "salary.pay",
+
+  // Chiqim tasdig'i (limitdan oshgan to'lovlar).
+  // FINANCE_APPROVE - tasdiqlash/rad etish huquqi. Bu ruxsat egasi limitdan
+  // ham OZOD bo'ladi (u baribir o'zi tasdiqlay olardi).
+  FINANCE_APPROVE: "finance.approve",
+
+  // Filiallar (Bo'lak: multi-branch)
+  BRANCHES_READ: "branches.read",
+  BRANCHES_CREATE: "branches.create",
+  BRANCHES_UPDATE: "branches.update",
+  BRANCHES_DELETE: "branches.delete",
+  // BARCHA filiallarni birdan ko'rish (konsolidatsiya hisobotlar).
+  // Bu ruxsatsiz foydalanuvchi faqat biriktirilgan filialini ko'radi.
+  BRANCHES_VIEW_ALL: "branches.view_all",
+
+  // Tizim: owner-only route'lar shu kalit orqali himoyalanadi.
+  // requireRole(ROLES.OWNER) o'rniga requirePermission(SYSTEM_ADMIN_ACCESS).
+  SYSTEM_ADMIN_ACCESS: "system.admin_access",
+
+  // Rol va ruxsatlarni boshqarish (custom role UI)
+  ROLES_READ: "roles.read",
+  ROLES_CREATE: "roles.create",
+  ROLES_UPDATE: "roles.update",
+  ROLES_DELETE: "roles.delete",
 });
 
 // Human-readable labels (used by the seed)
@@ -150,4 +174,109 @@ export const PERMISSION_LABELS = {
 
   [PERMISSIONS.SALARY_READ]: { label: "Maoshlarni ko'rish", group: "finance" },
   [PERMISSIONS.SALARY_PAY]: { label: "Maosh to'lash", group: "finance" },
+  [PERMISSIONS.FINANCE_APPROVE]: {
+    label: "Chiqimni tasdiqlash",
+    group: "finance",
+  },
+
+  [PERMISSIONS.BRANCHES_READ]: { label: "Filiallarni ko'rish", group: "branches" },
+  [PERMISSIONS.BRANCHES_CREATE]: { label: "Filial yaratish", group: "branches" },
+  [PERMISSIONS.BRANCHES_UPDATE]: { label: "Filialni tahrirlash", group: "branches" },
+  [PERMISSIONS.BRANCHES_DELETE]: { label: "Filialni o'chirish", group: "branches" },
+  [PERMISSIONS.BRANCHES_VIEW_ALL]: {
+    label: "Barcha filiallarni ko'rish",
+    group: "branches",
+  },
+
+  [PERMISSIONS.SYSTEM_ADMIN_ACCESS]: {
+    label: "Tizim sozlamalariga kirish",
+    group: "admin",
+  },
+  [PERMISSIONS.ROLES_READ]: { label: "Rollarni ko'rish", group: "admin" },
+  [PERMISSIONS.ROLES_CREATE]: { label: "Rol yaratish", group: "admin" },
+  [PERMISSIONS.ROLES_UPDATE]: { label: "Rolni tahrirlash", group: "admin" },
+  [PERMISSIONS.ROLES_DELETE]: { label: "Rolni o'chirish", group: "admin" },
+};
+
+// --- Matritsa metadata ---
+// UI jadvali: qator = module, ustun = action. Ikkalasi ham permission
+// key'idan ("<module>.<action>") chiqadi, bu yerda faqat KO'RINISHI
+// (nomi va tartibi) belgilanadi. Yangi permission qo'shilsa jadvalga
+// avtomatik tushadi - fallback nomi key'ning o'zidan olinadi.
+
+// Ustunlar tartibi. Rasmda: Create / Read / Update / Delete, keyin
+// modulga xos nostandart action'lar (manage, record, pay...).
+export const ACTION_ORDER = [
+  "create",
+  "read",
+  "update",
+  "delete",
+  "manage",
+  "record",
+  "pay",
+  "send",
+  "respond",
+  "manage_students",
+  "view_all",
+  "approve",
+  "admin_access",
+];
+
+export const ACTION_LABELS = {
+  create: "Yaratish",
+  read: "Ko'rish",
+  update: "Tahrirlash",
+  delete: "O'chirish",
+  manage: "Boshqarish",
+  record: "Belgilash",
+  pay: "To'lov",
+  send: "Yuborish",
+  respond: "Javob berish",
+  manage_students: "O'quvchilarni biriktirish",
+  view_all: "Barchasini ko'rish",
+  approve: "Tasdiqlash",
+  admin_access: "To'liq kirish",
+};
+
+// Qatorlar: ko'rinadigan nom + tartib.
+export const MODULE_META = {
+  admin_dashboard: { label: "Boshqaruv paneli", order: 10 },
+  branches: { label: "Filiallar", order: 15 },
+  users: { label: "Foydalanuvchilar", order: 20 },
+  roles: { label: "Rollar va ruxsatlar", order: 30 },
+  students: { label: "O'quvchilar", order: 40 },
+  teachers: { label: "O'qituvchilar", order: 50 },
+  groups: { label: "Guruhlar", order: 60 },
+  classes: { label: "Sinflar", order: 70 },
+  leads: { label: "Lidlar", order: 80 },
+  attendance: { label: "Davomat", order: 90 },
+  grades: { label: "Baholash", order: 100 },
+  rating: { label: "Reyting", order: 110 },
+  finance: { label: "Moliya", order: 120 },
+  salary: { label: "Maoshlar", order: 130 },
+  notifications: { label: "Bildirishnomalar", order: 140 },
+  notification_templates: { label: "Bildirishnoma shablonlari", order: 150 },
+  holidays: { label: "Bayramlar", order: 160 },
+  feedback: { label: "Feedback", order: 170 },
+  feedback_types: { label: "Feedback turlari", order: 180 },
+  archive_reasons: { label: "Arxiv sabablari", order: 190 },
+  activity_logs: { label: "Faoliyat loglari", order: 200 },
+  system: { label: "Tizim", order: 210 },
+};
+
+// "users.read" -> { module: "users", action: "read" }
+export const splitPermissionKey = (key) => {
+  const idx = String(key).indexOf(".");
+  if (idx === -1) return { module: String(key), action: "read" };
+  return { module: key.slice(0, idx), action: key.slice(idx + 1) };
+};
+
+export const getModuleMeta = (module) =>
+  MODULE_META[module] || { label: module, order: 999 };
+
+export const getActionLabel = (action) => ACTION_LABELS[action] || action;
+
+export const getActionOrder = (action) => {
+  const idx = ACTION_ORDER.indexOf(action);
+  return idx === -1 ? ACTION_ORDER.length : idx;
 };

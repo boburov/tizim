@@ -25,6 +25,15 @@ export const MODAL = Object.freeze({
   USER_FREEZE: "user:freeze",
   USER_UNFREEZE: "user:unfreeze",
 
+  // Xodim (direktor/administrator) qo'shish
+  STAFF_CREATE: "staff:create",
+  USER_BRANCH: "user:branch",
+
+  // Filiallar
+  BRANCH_CREATE: "branch:create",
+  BRANCH_EDIT: "branch:edit",
+  BRANCH_DELETE: "branch:delete",
+
   // Archive reasons
   ARCHIVE_REASON_CREATE: "archiveReason:create",
   ARCHIVE_REASON_EDIT: "archiveReason:edit",
@@ -70,6 +79,11 @@ export const MODAL = Object.freeze({
   HOLIDAY_CREATE: "holiday:create",
   HOLIDAY_EDIT: "holiday:edit",
   HOLIDAY_DELETE: "holiday:delete",
+
+  // Roles & access (custom rollar)
+  ROLE_CREATE: "role:create",
+  ROLE_DELETE: "role:delete",
+  ROLE_FREEZE: "role:freeze",
   TEACHER_BIRTHDAY_CONGRATULATE: "teacherBirthday:congratulate",
   FEEDBACK_SUBMIT: "feedback:submit",
   FEEDBACK_REPLY: "feedback:reply",

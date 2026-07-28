@@ -8,6 +8,7 @@ import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.h
 import * as studentPaymentService from "./studentPayment.service.js";
 import * as depositService from "../../deposits/services/deposit.service.js";
 import { runFinanceTxn } from "./financeTxn.helper.js";
+import { branchFilter } from "../../../helpers/branchContext.helper.js";
 
 // Bir martada qabul qilinadigan maksimal summa (kassa xatosini cheklash uchun).
 const MAX_PAYMENT_AMOUNT = 50_000_000;
@@ -44,7 +45,11 @@ export const create = async (
   { paymentId, amount, method, paidAt, note, idempotencyKey },
   currentUser,
 ) => {
-  const payment = await StudentPayment.findById(paymentId);
+  // FILIAL: boshqa filial o'quvchisiga to'lov yozib bo'lmaydi.
+  const payment = await StudentPayment.findOne({
+    _id: paymentId,
+    ...branchFilter(),
+  });
   if (!payment) throw new ApiError(404, "To'lov topilmadi");
 
   // Arxivlangan guruhga to'lov qabul qilinmaydi (avval arxivdan chiqarish kerak).
@@ -98,6 +103,8 @@ export const create = async (
 
     try {
       const trx = await PaymentTransaction.create({
+        // FILIAL: oylik plandan meros (plan guruhdan olgan).
+        branchId: plan.branchId,
         payment: plan._id,
         student: plan.student,
         group: plan.group,
@@ -152,8 +159,11 @@ export const create = async (
 // chiqqani holda yozuv "to'langan" ko'rinib, audit izsiz pul yo'qolardi (#1A, #1B).
 export const remove = async (id, currentUser) => {
   return runFinanceTxn(async (session) => {
+    // FILIAL: boshqa filial to'lovini bekor qilib bo'lmaydi. Bu amal
+    // depozitga pul qaytaradi, ya'ni haqiqiy moliyaviy ta'sirga ega.
     const trx = await PaymentTransaction.findOne({
       _id: id,
+      ...branchFilter(),
       isDeleted: { $ne: true },
     }).session(session || null);
     if (!trx) throw new ApiError(404, "Tranzaksiya topilmadi");

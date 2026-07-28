@@ -6,6 +6,18 @@ export const qk = Object.freeze({
   search: {
     global: (term) => ["search", "global", term],
   },
+  branches: {
+    all: () => ["branches"],
+    list: (params) => ["branches", "list", params],
+    one: (id) => ["branches", "detail", id],
+    stats: (id) => ["branches", "stats", id],
+  },
+  expenseApprovals: {
+    all: () => ["expenseApprovals"],
+    list: (params) => ["expenseApprovals", "list", params],
+    one: (id) => ["expenseApprovals", "detail", id],
+    pendingCount: () => ["expenseApprovals", "pendingCount"],
+  },
   users: {
     all: () => ["users"],
     // Faqat ro'yxat querylari prefiksi (detail/password/history'ni qamramaydi).
@@ -14,6 +26,13 @@ export const qk = Object.freeze({
     one: (id) => ["users", "detail", id],
     password: (id) => ["users", "password", id],
     groupHistory: (id, params) => ["users", id, "group-history", params],
+  },
+  roles: {
+    all: () => ["roles"],
+    list: () => ["roles", "list"],
+    one: (value) => ["roles", "detail", value],
+    // Ruxsatlar matritsasi (module x action) - kamdan-kam o'zgaradi.
+    matrix: () => ["roles", "matrix"],
   },
   studentFreezes: {
     all: () => ["studentFreezes"],

@@ -1,74 +1,169 @@
-import MethodBadge from "./MethodBadge";
+import { useState } from "react";
+import { ChevronDown, Clock, MapPin, Monitor } from "lucide-react";
+import ActionBadge from "./ActionBadge";
+import LogUserCell from "./LogUserCell";
+import LogChangesList from "./LogChangesList";
 import useActivityLogDetailQuery from "../hooks/useActivityLogDetailQuery";
 import { formatDateTimeUz } from "@/shared/utils/formatDate";
+import { cn } from "@/shared/utils/cn";
 
-const fullName = (u) =>
-  u
-    ? `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username || "-"
-    : "Tizim";
-
-const Row = ({ label, value, mono = false }) => (
-  <div className="grid grid-cols-3 gap-2 text-sm py-1.5 border-b border-zinc-100">
-    <div className="text-zinc-500">{label}</div>
-    <div className={`col-span-2 ${mono ? "font-mono text-xs" : ""}`}>
-      {value}
+const Meta = ({ icon: Icon, label, value }) => (
+  <div className="flex items-start gap-2">
+    <Icon className="mt-0.5 size-4 shrink-0 text-slate-400" strokeWidth={2} />
+    <div className="min-w-0">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="truncate text-sm text-slate-800">{value || "—"}</div>
     </div>
   </div>
 );
 
+const TechRow = ({ label, value, className = "" }) => (
+  <div className="grid grid-cols-3 gap-3 py-1.5 text-sm">
+    <span className="text-slate-500">{label}</span>
+    <span className={cn("col-span-2 break-all font-mono text-xs", className)}>
+      {value || "—"}
+    </span>
+  </div>
+);
+
+const statusClass = (status) => {
+  if (!status) return "text-slate-600";
+  if (status >= 500) return "text-rose-600 font-semibold";
+  if (status >= 400) return "text-amber-600 font-semibold";
+  if (status >= 200 && status < 300) return "text-emerald-600";
+  return "text-slate-600";
+};
+
+// "Mozilla/5.0 (Macintosh; Intel Mac OS X ...) ... Safari/605" -> "Safari · macOS"
+const readableDevice = (ua = "") => {
+  if (!ua) return "";
+  const os = /Macintosh|Mac OS/.test(ua)
+    ? "macOS"
+    : /Windows/.test(ua)
+      ? "Windows"
+      : /Android/.test(ua)
+        ? "Android"
+        : /iPhone|iPad|iOS/.test(ua)
+          ? "iOS"
+          : /Linux/.test(ua)
+            ? "Linux"
+            : "";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /Chrome\//.test(ua)
+      ? "Chrome"
+      : /Firefox\//.test(ua)
+        ? "Firefox"
+        : /Safari\//.test(ua)
+          ? "Safari"
+          : "";
+  return [browser, os].filter(Boolean).join(" · ") || "Noma'lum qurilma";
+};
+
 const LogDetailModal = ({ logId }) => {
   const { data: log, isLoading } = useActivityLogDetailQuery(logId);
+  const [showTech, setShowTech] = useState(false);
 
   if (isLoading) {
     return (
-      <div className="p-6 text-center text-muted-foreground text-sm">
+      <div className="p-6 text-center text-sm text-muted-foreground">
         Yuklanmoqda...
       </div>
     );
   }
   if (!log) {
     return (
-      <div className="p-6 text-center text-muted-foreground text-sm">
+      <div className="p-6 text-center text-sm text-muted-foreground">
         Log topilmadi
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-0">
-        <Row
-          label="Vaqt"
-          value={formatDateTimeUz(log.createdAt, { withSeconds: true })}
-        />
-        <Row
-          label="Metod"
-          value={<MethodBadge method={log.method} />}
-        />
-        <Row label="Yo'l" value={log.path} mono />
-        <Row label="Foydalanuvchi" value={fullName(log.user)} />
-        <Row label="Roli" value={log.userRole || "-"} />
-        <Row label="Holat" value={log.status || "-"} mono />
-        <Row label="Davomiyligi" value={`${log.durationMs} ms`} mono />
-        <Row label="IP" value={log.ip || "-"} mono />
-        <Row label="Resurs turi" value={log.resourceType || "-"} />
-        <Row label="Resurs ID" value={log.resourceId || "-"} mono />
+    <div className="space-y-5">
+      {/* 1. KIM va NIMA QILDI - eng muhim ma'lumot tepada */}
+      <div
+        className={cn(
+          "rounded-lg border p-4",
+          log.failed
+            ? "border-rose-200 bg-rose-50/50"
+            : "border-slate-200 bg-slate-50/60",
+        )}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <LogUserCell
+            user={log.user}
+            userRole={log.userRole}
+            actorLabel={log.actorLabel}
+          />
+          <ActionBadge action={log.action} failed={log.failed} />
+        </div>
+
+        <p className="mt-3 text-[15px] font-medium text-slate-900">
+          {log.description}
+        </p>
+
+        {log.failed && (
+          <p className="mt-1 text-sm text-rose-600">
+            Amal bajarilmadi — so'rov xatolik bilan yakunlandi
+          </p>
+        )}
       </div>
 
-      {log.userAgent && (
-        <div>
-          <div className="text-sm text-zinc-500 mb-1">User-Agent</div>
-          <div className="font-mono text-xs bg-zinc-50 border rounded p-2 break-all">
-            {log.userAgent}
-          </div>
-        </div>
-      )}
+      {/* 2. QACHON, QAYERDAN, QAYSI QURILMADAN */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Meta
+          icon={Clock}
+          label="Vaqti"
+          value={formatDateTimeUz(log.createdAt, { withSeconds: true })}
+        />
+        <Meta icon={MapPin} label="IP manzil" value={log.ip} />
+        <Meta
+          icon={Monitor}
+          label="Qurilma"
+          value={readableDevice(log.userAgent)}
+        />
+      </div>
 
+      {/* 3. NIMA O'ZGARDI - JSON emas, o'qiladigan jadval */}
       <div>
-        <div className="text-sm text-zinc-500 mb-1">So'rov tanasi (body)</div>
-        <pre className="font-mono text-xs bg-zinc-50 border rounded p-2 max-h-[300px] overflow-auto">
-          {log.body ? JSON.stringify(log.body, null, 2) : "-"}
-        </pre>
+        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+          O'zgartirilgan ma'lumotlar
+        </div>
+        <LogChangesList body={log.body} />
+      </div>
+
+      {/* 4. Texnik ma'lumotlar - yopiq, faqat kerak bo'lganda ochiladi */}
+      <div className="rounded-lg border border-slate-200">
+        <button
+          type="button"
+          onClick={() => setShowTech((v) => !v)}
+          className="flex w-full items-center justify-between px-3 py-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+        >
+          <span>Texnik ma'lumotlar</span>
+          <ChevronDown
+            className={cn(
+              "size-4 text-slate-400 transition-transform",
+              showTech && "rotate-180",
+            )}
+          />
+        </button>
+
+        {showTech && (
+          <div className="border-t border-slate-100 px-3 py-2">
+            <TechRow label="Metod" value={log.method} />
+            <TechRow label="Yo'l" value={log.path} />
+            <TechRow
+              label="Holat kodi"
+              value={log.status || "—"}
+              className={statusClass(log.status)}
+            />
+            <TechRow label="Davomiyligi" value={`${log.durationMs} ms`} />
+            <TechRow label="Resurs turi" value={log.resourceType} />
+            <TechRow label="Resurs ID" value={log.resourceId} />
+            <TechRow label="User-Agent" value={log.userAgent} />
+          </div>
+        )}
       </div>
     </div>
   );

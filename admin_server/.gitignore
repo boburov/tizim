@@ -3,3 +3,11 @@ dist
 .env
 *.local
 *.log
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Emitted output must live in dist/, never next to sources
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts

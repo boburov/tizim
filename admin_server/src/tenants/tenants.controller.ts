@@ -1,13 +1,16 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { TenantsService } from './tenants.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
+import { DeleteTenantDto } from './dto/delete-tenant.dto.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -42,5 +45,21 @@ export class TenantsController {
   @Post(':id/retry')
   retry(@Param('id') id: string) {
     return this.tenants.retry(id);
+  }
+
+  // O'chirish — qaytarib bo'lmaydi, faqat SUPER_ADMIN
+  @Roles('SUPER_ADMIN')
+  @Delete(':id')
+  @HttpCode(200)
+  remove(@Param('id') id: string, @Body() dto: DeleteTenantDto) {
+    return this.tenants.remove(id, dto.confirmDomain);
+  }
+
+  // Arxiv yozuvini bazadan butunlay tozalash
+  @Roles('SUPER_ADMIN')
+  @Delete(':id/purge')
+  @HttpCode(200)
+  purge(@Param('id') id: string) {
+    return this.tenants.purge(id);
   }
 }

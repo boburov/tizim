@@ -6,6 +6,11 @@ import Group from "../../../models/group.model.js";
 import User from "../../../models/user.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
+import {
+  branchFilter,
+  userBranchCondition,
+  resolveBranchFromGroup,
+} from "../../../helpers/branchContext.helper.js";
 import { computePeriodsSnapshot, deriveStatus } from "./salaryCompute.helper.js";
 import * as teacherGroupPeriodService from "../../groups/services/teacherGroupPeriod.service.js";
 
@@ -188,7 +193,18 @@ export const ensureSalaryForTeacherGroup = async (teacher, group, year, month) =
   const exists = await TeacherSalary.findOne({ teacher, group, year, month });
   if (exists) return exists;
 
-  const draft = new TeacherSalary({ teacher, group, year, month, source: "auto" });
+  // FILIAL: guruhdan meros. Bu fon vazifasidan (Agenda) ham chaqiriladi -
+  // u yerda foydalanuvchi konteksti yo'q.
+  const branchId = await resolveBranchFromGroup(group);
+
+  const draft = new TeacherSalary({
+    branchId,
+    teacher,
+    group,
+    year,
+    month,
+    source: "auto",
+  });
   const { snap, groupRevenue, rate } = await buildSnapshot(draft);
   Object.assign(draft, rate, snap);
   draft.groupRevenue = groupRevenue;
@@ -253,7 +269,8 @@ export const list = async ({
   page = 1,
   limit = 200,
 }) => {
-  const filter = { isDeleted: { $ne: true } };
+  // FILIAL: TeacherSalary'da branchId bor (guruhdan meros).
+  const filter = { ...branchFilter(), isDeleted: { $ne: true } };
   if (groupId) filter.group = toObjectId(groupId);
   if (teacherId) filter.teacher = toObjectId(teacherId);
   if (year) filter.year = Number(year);
@@ -306,10 +323,21 @@ export const getById = async (id) => {
 // to'lovlar (maosh to'lovlari tarixi sahifasi uchun). Eng yangi oy yuqorida.
 export const historyByTeacher = async (teacherId) => {
   const tid = toObjectId(teacherId);
-  const teacher = await User.findById(tid, safeTeacherProjection).lean();
+  // FILIAL: boshqa filial o'qituvchisining ismi ochilmasin.
+  const branchCond = userBranchCondition();
+  const teacher = await User.findOne(
+    branchCond ? { _id: tid, $and: [branchCond] } : { _id: tid },
+    safeTeacherProjection,
+  ).lean();
   if (!teacher) throw new ApiError(404, "O'qituvchi topilmadi");
 
-  const salaries = await TeacherSalary.find({ teacher: tid, isDeleted: { $ne: true } })
+  // FILIAL: o'qituvchi boshqa filialda ham ishlasa, u yerdagi maoshi
+  // shu filial ko'rinishiga chiqmasin.
+  const salaries = await TeacherSalary.find({
+    teacher: tid,
+    ...branchFilter(),
+    isDeleted: { $ne: true },
+  })
     .populate("group", { name: 1 })
     .sort({ year: -1, month: -1 })
     .lean();
@@ -359,7 +387,7 @@ export const myFinance = async (teacherId) => historyByTeacher(teacherId);
 // Majburiyatlar: qoldig'i (expected - paid) > 0 bo'lgan maoshlar.
 // month berilmasa - tanlangan yilning BARCHA oylari bo'yicha (har oy alohida qator).
 export const obligations = async ({ groupId, year, month }) => {
-  const filter = { year: Number(year), isDeleted: { $ne: true } };
+  const filter = { ...branchFilter(), year: Number(year), isDeleted: { $ne: true } };
   if (month) filter.month = Number(month);
   if (groupId) filter.group = toObjectId(groupId);
 

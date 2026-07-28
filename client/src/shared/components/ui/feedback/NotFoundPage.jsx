@@ -11,12 +11,14 @@ import Button from "@/shared/components/ui/button/Button";
 import useAuth from "@/shared/hooks/useAuth";
 
 // Constants
-import { ROLE_HOME } from "@/shared/constants/roles";
+import { resolveHomePath } from "@/shared/constants/roles";
 
 const NotFoundPage = () => {
   const navigate = useNavigate();
-  const { role } = useAuth();
-  const home = ROLE_HOME[role] || "/";
+  const { role, roleType, homePath } = useAuth();
+  const home = role
+    ? resolveHomePath({ defaultPath: homePath, role, roleType })
+    : "/";
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-4">

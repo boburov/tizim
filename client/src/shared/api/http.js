@@ -1,5 +1,9 @@
 // Axios
 import axios from "axios";
+import {
+  getActiveBranchId,
+  clearActiveBranchId,
+} from "@/shared/lib/branch/activeBranch";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -12,6 +16,11 @@ const http = axios.create({
 http.interceptors.request.use((config) => {
   const token = localStorage.getItem("authToken");
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // FILIAL ko'lami: server shu header orqali qaysi filial ma'lumoti
+  // so'ralayotganini biladi. "all" = konsolidatsiya (faqat view_all bilan).
+  // Yuborilmasa server avtomatik aniqlaydi (foydalanuvchining filiali).
+  const branchId = getActiveBranchId();
+  if (branchId) config.headers["x-branch-id"] = branchId;
   return config;
 });
 
@@ -73,6 +82,8 @@ http.interceptors.response.use(
     } catch (e) {
       flushWaiters(null);
       localStorage.removeItem("authToken");
+      // Sessiya tugadi - filial tanlovi keyingi foydalanuvchiga qolmasin.
+      clearActiveBranchId();
       // Telegram Mini App ichida /login'ga uloqtirmaymiz: u yerda initData
       // yuborilmaydi va avtomatik login oqimi buziladi. /bot-auth o'zi qayta
       // verify qilib, kerak bo'lsa login formasini ko'rsatadi.

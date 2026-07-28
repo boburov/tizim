@@ -5,6 +5,13 @@ import softDeletePlugin from "./plugins/softDelete.plugin.js";
 // mumkin (qisman naqd/karta). student/group/year/month - hisobot uchun denormalizatsiya.
 const paymentTransactionSchema = new mongoose.Schema(
   {
+    // FILIAL (denormalizatsiya): guruhdan meros - kirim hisobotlari uchun.
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+      index: true,
+    },
     payment: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "StudentPayment",

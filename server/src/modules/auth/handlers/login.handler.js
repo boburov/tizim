@@ -3,7 +3,7 @@ import * as authService from "../services/auth.service.js";
 import { setRefreshCookie } from "../../../helpers/cookie.helper.js";
 
 const login = asyncHandler(async (req, res) => {
-  const { accessToken, refreshToken, user } = await authService.login({
+  const { accessToken, refreshToken, user, roleMeta } = await authService.login({
     login: req.body.login,
     password: req.body.password,
     userAgent: req.get("user-agent"),
@@ -13,7 +13,9 @@ const login = asyncHandler(async (req, res) => {
   setRefreshCookie(res, refreshToken);
   res.json({
     success: true,
-    data: { accessToken, user },
+    // roleMeta - custom rolda landing sahifani aniqlash uchun (client
+    // ROLE_HOME map'ida custom rol yo'q).
+    data: { accessToken, user, roleMeta },
     message: "Tizimga xush kelibsiz",
   });
 });

@@ -8,6 +8,12 @@ import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
+import { resolveBranchFromUser } from "../../../helpers/branchContext.helper.js";
+import { EXPENSE_KINDS } from "../../../models/expenseApproval.model.js";
+import {
+  checkExpenseLimit,
+  createRequest,
+} from "../../expenseApprovals/services/expenseApproval.service.js";
 import * as studentPaymentService from "../../finance/services/studentPayment.service.js";
 
 const safeStudentProjection = { firstName: 1, lastName: 1, username: 1, phone: 1 };
@@ -68,7 +74,8 @@ const applyBalanceDelta = async (depositId, delta, { session } = {}) => {
 // --- DEPOZIT QO'SHISH / YECHISH ---
 
 export const topup = async (studentId, { amount, method, paidAt, note }, currentUser) => {
-  await ensureStudent(studentId);
+  // FILIAL: o'quvchining filiali (ensureStudent allaqachon hujjatni oladi).
+  const student = await ensureStudent(studentId);
   const amt = Number(amount);
   if (!amt || amt <= 0) throw new ApiError(400, "Summa noto'g'ri");
   const day = paidAt ? parseLocalDay(paidAt) : localTodayMidnight();
@@ -80,6 +87,7 @@ export const topup = async (studentId, { amount, method, paidAt, note }, current
   const deposit = await getOrCreate(studentId);
   const updated = await applyBalanceDelta(deposit._id, amt);
   await DepositTransaction.create({
+    branchId: student.homeBranchId || null,
     student: deposit.student,
     deposit: deposit._id,
     type: "topup",
@@ -96,8 +104,10 @@ export const topup = async (studentId, { amount, method, paidAt, note }, current
   return getOrCreate(studentId);
 };
 
-export const withdraw = async (studentId, { amount, method, paidAt, note }, currentUser) => {
-  await ensureStudent(studentId);
+// Yechish uchun umumiy tekshiruvlar. To'g'ridan-to'g'ri yo'lda ham,
+// tasdiqlangan so'rovni bajarishda ham AYNAN SHU qoidalar qo'llanadi.
+const validateWithdraw = async (studentId, { amount, paidAt }) => {
+  const student = await ensureStudent(studentId);
   const amt = Number(amount);
   if (!amt || amt <= 0) throw new ApiError(400, "Summa noto'g'ri");
   const day = paidAt ? parseLocalDay(paidAt) : localTodayMidnight();
@@ -105,24 +115,117 @@ export const withdraw = async (studentId, { amount, method, paidAt, note }, curr
   if (day.getTime() > localTodayMidnight().getTime()) {
     throw new ApiError(400, "Sana kelajakda bo'lishi mumkin emas");
   }
+  return { student, amt, day };
+};
 
+// Balansni kamaytirib, ledger yozuvini yozadi.
+const writeWithdraw = async ({
+  studentId,
+  student,
+  amt,
+  day,
+  method,
+  note,
+  createdBy,
+  expenseApprovalId = null,
+}) => {
   const deposit = await getOrCreate(studentId);
   const updated = await applyBalanceDelta(deposit._id, -amt);
   if (!updated) {
     throw new ApiError(400, `To'lovda yetarli mablag' yo'q (balans: ${deposit.balance} so'm)`);
   }
-  await DepositTransaction.create({
-    student: deposit.student,
-    deposit: deposit._id,
-    type: "withdraw",
-    amount: amt,
-    method: method || "cash",
-    balanceAfter: updated.balance,
-    note: note || "",
-    paidAt: day,
-    createdBy: currentUser?._id || null,
-  });
+  try {
+    await DepositTransaction.create({
+      branchId: student.homeBranchId || null,
+      student: deposit.student,
+      deposit: deposit._id,
+      type: "withdraw",
+      amount: amt,
+      method: method || "cash",
+      balanceAfter: updated.balance,
+      note: note || "",
+      paidAt: day,
+      createdBy: createdBy || null,
+      expenseApprovalId,
+    });
+  } catch (err) {
+    // Yozuv yaratilmasa balans kamaytirilgancha qolmasin (rollback).
+    await applyBalanceDelta(deposit._id, amt);
+    throw err;
+  }
   return getOrCreate(studentId);
+};
+
+export const withdraw = async (studentId, { amount, method, paidAt, note }, currentUser) => {
+  const { student, amt, day } = await validateWithdraw(studentId, { amount, paidAt });
+
+  // CHIQIM LIMITI: limitdan oshsa pul HOZIR chiqmaydi - tasdiq so'raladi.
+  const { needsApproval, threshold } = await checkExpenseLimit({
+    branchId: student.homeBranchId,
+    amount: amt,
+    permissions: currentUser?.permissions,
+  });
+
+  if (needsApproval) {
+    const approval = await createRequest({
+      branchId: student.homeBranchId,
+      kind: EXPENSE_KINDS.DEPOSIT_WITHDRAW,
+      amount: amt,
+      threshold,
+      payload: {
+        studentId: String(studentId),
+        method: method || "cash",
+        paidAt: day,
+        note: note || "",
+      },
+      subjectName: `${student.firstName} ${student.lastName || ""}`.trim(),
+      contextName: "Depozitdan yechish",
+      currentUser,
+    });
+    return { pendingApproval: true, approval };
+  }
+
+  return writeWithdraw({
+    studentId,
+    student,
+    amt,
+    day,
+    method,
+    note,
+    createdBy: currentUser?._id,
+  });
+};
+
+/**
+ * TASDIQLANGAN yechishni bajaradi (expenseApproval.service'dan chaqiriladi).
+ * Avval mavjud tranzaksiya tekshiriladi - aynan bir marta kafolati.
+ */
+export const executeApprovedWithdraw = async (approval) => {
+  const existing = await DepositTransaction.findOne({
+    expenseApprovalId: approval._id,
+  });
+  if (existing) return existing;
+
+  const { studentId, method, paidAt, note } = approval.payload || {};
+
+  // QAYTA VALIDATSIYA: so'rovdan keyin balans kamaygan bo'lishi mumkin.
+  const { student, amt, day } = await validateWithdraw(studentId, {
+    amount: approval.amount,
+    paidAt,
+  });
+
+  await writeWithdraw({
+    studentId,
+    student,
+    amt,
+    day,
+    method,
+    note,
+    createdBy: approval.requestedBy,
+    expenseApprovalId: approval._id,
+  });
+
+  return DepositTransaction.findOne({ expenseApprovalId: approval._id });
 };
 
 // --- QOPLAMA (depozit → oylik plan) ---
@@ -150,6 +253,8 @@ const applyToPayment = async (deposit, payment, amount, currentUser) => {
 
   try {
     await PaymentTransaction.create({
+      // FILIAL: oylik plandan meros.
+      branchId: payment.branchId,
       payment: payment._id,
       student: payment.student,
       group: payment.group,
@@ -222,6 +327,8 @@ const refundOverpayChunk = async (deposit, planId, take, note) => {
   const balUpd = await applyBalanceDelta(deposit._id, take);
   if (!balUpd) throw new ApiError(500, "To'lovga qaytarib bo'lmadi");
   await DepositTransaction.create({
+    // FILIAL: bu yerda o'quvchi hujjati yuklanmagan - qidirib olamiz.
+    branchId: await resolveBranchFromUser(deposit.student),
     student: deposit.student,
     deposit: deposit._id,
     type: "refund",
@@ -306,6 +413,7 @@ export const refundToDeposit = async (
   await DepositTransaction.create(
     [
       {
+        branchId: await resolveBranchFromUser(deposit.student),
         student: deposit.student,
         deposit: deposit._id,
         type: "refund",

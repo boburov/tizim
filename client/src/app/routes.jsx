@@ -14,7 +14,7 @@ import DashboardLayout from "@/shared/layouts/DashboardLayout";
 import useAuth from "@/shared/hooks/useAuth";
 
 // Constants
-import { ROLES, ROLE_HOME } from "@/shared/constants/roles";
+import { ROLES, resolveHomePath } from "@/shared/constants/roles";
 
 // Features
 import { LoginPage, BotAuthPage } from "@/features/auth";
@@ -25,8 +25,10 @@ import { TeacherRoutes } from "@/teacher";
 import { StudentRoutes } from "@/student";
 
 const RoleHomeRedirect = () => {
-  const { role } = useAuth();
-  return <Navigate to={ROLE_HOME[role] || "/login"} replace />;
+  const { role, roleType, homePath, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!role) return <Navigate to="/login" replace />;
+  return <Navigate to={resolveHomePath({ defaultPath: homePath, role, roleType })} replace />;
 };
 
 const Routes = () => (

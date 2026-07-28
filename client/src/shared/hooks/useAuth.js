@@ -26,12 +26,26 @@ const useAuth = () => {
   });
 
   const role = data?.role || data?.user?.role || null;
+  // Serverdan keladigan rol metadata (custom rollar uchun). Rol nomi
+  // hardcode qilinmasin: landing sahifa va scope tipi shu yerdan olinadi.
+  const roleMeta = data?.roleMeta || null;
+  const roleType = roleMeta?.roleType || role;
 
   return {
     user: data?.user || null,
     role,
+    roleMeta,
+    // "Xatti-harakat tipi": custom "Katta o'qituvchi" roli ham teacher.
+    roleType,
+    roleLabel: roleMeta?.label || null,
+    // Login'dan keyin tushadigan sahifa (ROLE_HOME o'rniga).
+    homePath: roleMeta?.defaultPath || null,
     permissions: data?.permissions || [],
-    isOwner: role === ROLES.OWNER,
+    // FILIAL: foydalanuvchi kira oladigan filiallar (tanlagich shundan quriladi).
+    branches: data?.branches || [],
+    canSeeAllBranches: !!data?.canSeeAllBranches,
+    homeBranchId: data?.homeBranchId || null,
+    isOwner: roleType === ROLES.OWNER,
     isAuthenticated: !!data?.user,
     isLoading: !!token && isLoading,
     isError,

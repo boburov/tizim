@@ -18,6 +18,7 @@ import Button from "@/shared/components/ui/button/Button";
 
 // Hooks
 import useModal from "@/shared/hooks/useModal";
+import useActiveBranch from "@/shared/hooks/useActiveBranch";
 
 // Constants
 import { MODAL } from "@/shared/constants/modals";
@@ -75,6 +76,11 @@ const UsersTable = ({
   const isStudentTab = role === ROLES.STUDENT;
   const canSort = typeof onSort === "function";
 
+  // FILIAL ustuni faqat ko'p filialli markazlarda kerak - bitta filial
+  // bo'lsa har qatorda bir xil qiymat turardi (ortiqcha shovqin).
+  const { hasMultipleBranches } = useActiveBranch();
+  const showBranch = hasMultipleBranches;
+
   // "Hammasi" holatida har xil holatli qatorlar aralash bo'lishi mumkin - shu sabab
   // arxivlangan qatorlarga holat belgisi qo'yamiz.
   const showStatusBadge = status === "all";
@@ -117,6 +123,8 @@ const UsersTable = ({
             )}
             <th className="px-4 py-2 font-medium">Telefon</th>
             <th className="px-4 py-2 font-medium">Rol</th>
+            {/* Filial ustuni: bir filialli markazlarda ortiqcha - yashiriladi */}
+            {showBranch && <th className="px-4 py-2 font-medium">Filial</th>}
             {isStudentTab && <th className="px-4 py-2 font-medium">Guruh</th>}
             <th className="px-4 py-2 font-medium">{joinedColLabel}</th>
             <th className="px-4 py-2 font-medium text-right">Amallar</th>
@@ -169,6 +177,17 @@ const UsersTable = ({
                     )}
                   </div>
                 </td>
+                {showBranch && (
+                  <td className="px-4 py-2">
+                    {u.homeBranchId?.name ? (
+                      <span className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">
+                        {u.homeBranchId.name}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                )}
                 {isStudentTab && (
                   <td className="px-4 py-2">
                     {u.activeGroups?.length ? (

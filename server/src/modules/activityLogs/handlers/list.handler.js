@@ -7,6 +7,7 @@ const list = asyncHandler(async (req, res) => {
   const { items, total } = await service.list({
     userId: req.query.userId,
     method: req.query.method,
+    action: req.query.action,
     resourceType: req.query.resourceType,
     fromDate: req.query.fromDate,
     toDate: req.query.toDate,

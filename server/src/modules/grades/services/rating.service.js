@@ -5,6 +5,7 @@ import Group from "../../../models/group.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { averagesForStudents } from "./grades.service.js";
 import { getStudentSummary as getAttendanceStudentSummary } from "../../attendance/services/attendance.service.js";
+import { branchGroupFilter } from "../../../helpers/branchContext.helper.js";
 
 const STUDENT_PROJECTION = {
   firstName: 1,
@@ -65,7 +66,14 @@ export const getLeaderboard = async ({
   const settings = await getSettings();
 
   // O'quvchilar to'plamini aniqlaymiz (aktiv a'zoliklar bo'yicha)
-  const membershipFilter = { leftAt: null, isDeleted: { $ne: true } };
+  // FILIAL: reyting boshqa filial o'quvchilarini ARALASHTIRMASLIGI kerak -
+  // aks holda direktor begona o'quvchilar ismini va ballarini ko'rardi,
+  // va o'z filiali o'quvchisining o'rni ham noto'g'ri chiqardi.
+  const membershipFilter = {
+    leftAt: null,
+    isDeleted: { $ne: true },
+    ...(await branchGroupFilter()),
+  };
   let groupId = null;
   if (scope && scope !== "all") {
     groupId = new mongoose.Types.ObjectId(String(scope));

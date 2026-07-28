@@ -43,6 +43,15 @@ const env = Object.freeze({
     String(process.env.TELEGRAM_BOT_ENABLED || "false").toLowerCase() === "true",
   TELEGRAM_BOT_WEBAPP_URL:
     process.env.TELEGRAM_BOT_WEBAPP_URL || `${primaryUrl}/bot-auth`,
+
+  // --- Admin panel bilan aloqa (usage heartbeat) ---
+  // Bo'sh bo'lsa heartbeat butunlay o'chiq bo'ladi (lokal dev, standalone rejim).
+  ADMIN_API_URL: process.env.ADMIN_API_URL || "",
+  TENANT_ID: process.env.TENANT_ID || "",
+  HEARTBEAT_SECRET: process.env.HEARTBEAT_SECRET || "",
+  // Limit oshganda yaratishni bloklash (hard limit). false = faqat ogohlantirish.
+  ENFORCE_LIMITS:
+    String(process.env.ENFORCE_LIMITS || "true").toLowerCase() === "true",
 });
 
 export const isProd = env.NODE_ENV === "production";

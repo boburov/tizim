@@ -5,6 +5,15 @@ import mongoose from "mongoose";
 // o'zgarganda recalc() orqali yangilanadi. O'chirilmaydi (softDelete yo'q).
 const studentPaymentSchema = new mongoose.Schema(
   {
+    // FILIAL (denormalizatsiya): guruhdan meros oladi. Moliya hisobotlari
+    // aggregate bilan ishlaydi va $lookup'siz filtrlash uchun shu maydon
+    // shart - aks holda har hisobotda Group'ga join qilishga to'g'ri kelardi.
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+      index: true,
+    },
     student: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
