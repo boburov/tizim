@@ -158,6 +158,90 @@ export const upsert = async ({ groupId, year, month, amount }, currentUser) => {
   return fee;
 };
 
+// --- GURUH NARXI TASDIG'I (owner tasdig'i talab qilinganda) ---
+//
+// NEGA CHEGIRMA BILAN BIR QATORDA: guruh oylik narxini 1 000 000 dan
+// 400 000 ga tushirish - barcha o'quvchiga 60% chegirma berish bilan
+// IQTISODIY JIHATDAN BIR XIL. Faqat chegirmani tasdiqqa qo'yish "old
+// eshikni qulflab, yon eshikni ochiq qoldirish" bo'lardi.
+//
+// TASDIQLANMAGUNCHA GroupFee o'zgarmaydi: uning `amount` maydoni
+// buildSnapshot() dagi baseFee - ya'ni yozilishi bilanoq barcha
+// o'quvchining expected summasi qayta hisoblanardi.
+
+/**
+ * Guruh narxini TASDIQQA yuboradi (yozmaydi).
+ *
+ * Yengil tekshiruv: guruh mavjud va joriy filial ko'lamida ekanligi.
+ * To'liq qoidalar (guruh aktivligi, qayta hisoblash) tasdiqlash paytida
+ * qayta ishlaydi.
+ */
+export const requestGroupFee = async ({ groupId, year, month, amount, requestNote }, currentUser) => {
+  const approvalService = await import(
+    "../../expenseApprovals/services/expenseApproval.service.js"
+  );
+  const { APPROVAL_KINDS } = await import("../../../models/approval.model.js");
+
+  // Filial ko'lami so'rov paytida ham tekshiriladi - direktor boshqa filial
+  // guruhiga so'rov yubora olmasin.
+  const group = await Group.findOne({ _id: groupId, ...branchFilter() });
+  if (!group) throw new ApiError(404, "Guruh topilmadi");
+  assertGroupActive(group);
+
+  // Owner "qanchadan qanchaga" ekanini ko'rishi uchun eski narx snapshot'i.
+  const existing = await GroupFee.findOne({ group: groupId, year, month }).lean();
+
+  return approvalService.createRequest({
+    branchId: group.branchId,
+    kind: APPROVAL_KINDS.GROUP_FEE_SET,
+    payload: {
+      groupId: String(groupId),
+      year,
+      month,
+      amount,
+      previousAmount: existing ? existing.amount : null,
+    },
+    // Bitta guruh-oy uchun bitta kutilayotgan so'rov.
+    subjectKey: `group_fee:${String(groupId)}:${year}:${month}`,
+    subjectName: group.name || "",
+    contextName: `${month}/${year}`,
+    requestNote,
+    currentUser,
+  });
+};
+
+/**
+ * Tasdiqlangan guruh narxi so'rovini BAJARADI.
+ *
+ * upsert() ning O'ZINI chaqiradi - guruh aktivligi tekshiruvi va ikki
+ * bosqichli qayta hisoblash (o'quvchi to'lovlari -> o'qituvchi foiz maoshi)
+ * shu yerda qayta ishlaydi.
+ *
+ * FILIAL KONTEKSTI MAJBURAN o'rnatiladi: upsert() ichida branchFilter() bor,
+ * u esa TASDIQLOVCHINING joriy ko'rinishiga bog'liq. Owner "Toshkent" filialini
+ * tanlab turib Buxoro guruhining so'rovini tasdiqlasa, guruh topilmay so'rov
+ * bekorga FAILED bo'lardi. So'rovning O'Z filiali - yagona to'g'ri kontekst.
+ */
+export const executeApprovedGroupFee = async (approval) => {
+  const { runWithBranchContext } = await import("../../../helpers/branchContext.helper.js");
+  const p = approval?.payload || {};
+  const branchId = String(approval.branchId);
+
+  return runWithBranchContext(
+    {
+      branchId,
+      allowedBranchIds: [branchId],
+      canSeeAllBranches: false,
+      userId: String(approval.requestedBy || ""),
+    },
+    () =>
+      upsert(
+        { groupId: p.groupId, year: p.year, month: p.month, amount: p.amount },
+        { _id: approval?.requestedBy || null },
+      ),
+  );
+};
+
 // Berilgan oy uchun barcha faol guruhlarga to'lov yozuvini ta'minlaydi (carry-forward).
 export const generateMonth = async (year, month) => {
   const groups = await Group.find(

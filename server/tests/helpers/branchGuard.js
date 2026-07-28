@@ -26,7 +26,7 @@ const SCOPED = {
   TeacherSalary: ["branchId"],
   SalaryTransaction: ["branchId"],
   DepositTransaction: ["branchId"],
-  ExpenseApproval: ["branchId"],
+  Approval: ["branchId"],
   // branchId YO'Q - guruh orqali bog'lanadi
   Attendance: ["group", "branchId"],
   Grade: ["group", "branchId"],

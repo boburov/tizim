@@ -77,6 +77,10 @@ router.use("/finance", financeRouter);
 router.use("/deposits", depositsRouter);
 router.use("/teacher-salary", teacherSalaryRouter);
 router.use("/finance-report", financeReportRouter);
+// Tasdiqlar. "/expense-approvals" - eski (frontend shu manzilni biladi),
+// "/approvals" - yangi umumiy nom: ro'yxatda endi chiqim ham, sozlama
+// o'zgarishi ham bor. Ikkalasi bir xil routerga boradi.
 router.use("/expense-approvals", expenseApprovalsRouter);
+router.use("/approvals", expenseApprovalsRouter);
 
 export default router;

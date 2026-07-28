@@ -1,6 +1,9 @@
 // Router
 import { useNavigate } from "react-router-dom";
 
+// Toast
+import { toast } from "sonner";
+
 // Icons
 import { Plus } from "lucide-react";
 
@@ -10,33 +13,54 @@ import ErrorState from "@/shared/components/ui/feedback/ErrorState";
 import RolesList from "../components/RolesList";
 
 // Hooks
-import useObjectState from "@/shared/hooks/useObjectState";
 import { useRolesQuery, useRolesMatrixQuery } from "../hooks/useRolesQuery";
+import { useRoleFreezeMutation } from "../hooks/useRoleMutations";
 
-// Utils
-import { cn } from "@/shared/utils/cn.js";
-
-const TABS = [
-  { key: "system", label: "Tizim rollari" },
-  { key: "custom", label: "Custom rollar" },
-];
-
-// Rollar ro'yxati. Tahrirlash alohida sahifada (/roles/:value) - ilgari
-// u yon panelda edi va ruxsatlar jadvaliga joy qolmasdi.
+// Rollar ro'yxati - tizim va custom rollar bitta ro'yxatda (serverda
+// tizim rollari birinchi bo'lib saralanadi). Tahrirlash alohida sahifada
+// (/roles/:value) - ilgari u yon panelda edi va ruxsatlar jadvaliga joy
+// qolmasdi.
 const RolesPage = () => {
   const navigate = useNavigate();
-
-  const ui = useObjectState({ tab: "system" });
-  const { tab, setField } = ui;
 
   const { data: roles = [], isLoading, isError, refetch } = useRolesQuery();
   // Ruxsat sonini ko'rsatish uchun matritsa oldindan yuklanadi - shunda
   // tahrirlash sahifasi ochilganda kutish bo'lmaydi.
   useRolesMatrixQuery();
 
-  const visibleRoles = roles.filter((r) =>
-    tab === "system" ? r.isSystem : !r.isSystem,
-  );
+  // Ro'yxatdagi bir bosishli muzlatish. Tasdiqlash oynasi yo'q, o'rniga
+  // toast'da "Qaytarish" - noto'g'ri bosilsa darhol ortga qaytariladi.
+  const {
+    mutate: setFrozen,
+    isPending,
+    variables,
+  } = useRoleFreezeMutation({
+    silent: true,
+    onSuccess: (data, vars) => {
+      const message = vars.isFrozen
+        ? `"${data.label}" muzlatildi - egalari tizimga kira olmaydi`
+        : `"${data.label}" muzdan chiqarildi`;
+
+      // Qaytarishning o'zi ham toast chiqaradi, lekin unda tugma yo'q -
+      // aks holda cheksiz aylanaverar edi.
+      toast.success(
+        message,
+        vars.isUndo
+          ? undefined
+          : {
+              action: {
+                label: "Qaytarish",
+                onClick: () =>
+                  setFrozen({
+                    value: vars.value,
+                    isFrozen: !vars.isFrozen,
+                    isUndo: true,
+                  }),
+              },
+            },
+      );
+    },
+  });
 
   if (isError) return <ErrorState onRetry={refetch} />;
 
@@ -55,33 +79,18 @@ const RolesPage = () => {
         </Button>
       </header>
 
-      {/* Tizim / Custom rollar */}
-      <div className="inline-flex rounded-lg bg-muted p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setField("tab", t.key)}
-            className={cn(
-              "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-              tab === t.key
-                ? "bg-background shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       {isLoading ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
           Yuklanmoqda...
         </p>
       ) : (
         <RolesList
-          roles={visibleRoles}
+          roles={roles}
           onSelect={(v) => navigate(`/owner/roles/${v}`)}
+          onToggleFreeze={(role) =>
+            setFrozen({ value: role.value, isFrozen: !role.isFrozen })
+          }
+          pendingValue={isPending ? variables?.value : null}
         />
       )}
     </div>

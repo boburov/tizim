@@ -44,7 +44,7 @@ const salaryTransactionSchema = new mongoose.Schema(
     // o'lib qayta urinsa ham ikkinchi yozuv 11000 xatosiga uriladi.
     expenseApprovalId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "ExpenseApproval",
+      ref: "Approval",
       default: null,
     },
   },

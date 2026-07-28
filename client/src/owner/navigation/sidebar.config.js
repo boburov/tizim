@@ -59,9 +59,11 @@ const ownerSidebar = [
         permission: "finance.read",
       },
       {
-        title: "Chiqim tasdiqlari",
+        // Ro'yxatda endi chiqim ham, sozlama o'zgarishi (maosh stavkasi,
+        // chegirma, ishga olish) ham bor - shuning uchun umumiy nom.
+        title: "Tasdiqlar",
         url: "/owner/expense-approvals",
-        permission: "finance.read",
+        permissionAnyOf: ["finance.read", "approvals.decide_config"],
       },
       {
         title: "O'qituvchi maoshlari",

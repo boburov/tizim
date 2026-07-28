@@ -124,9 +124,27 @@ const seed = async () => {
   // KIRA OLMAYDI" degani - muzlatilgan holda yaratilsa, tayinlangan direktor
   // darhol qulflangan bo'lardi.
   //
-  // Ruxsatlari ataylab O'QISH ustunlikli: pul chiqarish (finance.pay,
-  // salary.pay) bor, lekin tasdiqlash (finance.approve) YO'Q - shuning
-  // uchun limitdan oshgan chiqim owner tasdig'ini kutadi.
+  // ASOSIY PRINSIP: direktor amalni BOSHLAY oladi, lekin TASDIQLAY olmaydi.
+  //
+  // Shuning uchun bu ro'yxatda tasdiqlash kalitlari ATAYLAB YO'Q:
+  //   finance.approve          - limitdan oshgan chiqimni tasdiqlash
+  //   approvals.decide_config  - maosh stavkasi / chegirma / ishga olishni
+  //                              tasdiqlash
+  // Ular yo'qligi sababli direktorning quyidagi amallari owner tasdig'iga
+  // tushadi (202 qaytariladi, hech narsa o'zgarmaydi):
+  //   groups.update    -> maosh stavkasi belgilash  (salary_terms)
+  //   finance.manage   -> chegirma belgilash        (discount_set)
+  //   teachers.create  -> ishga olish               (staff_hire)
+  //   + roles.update   - ishga olish route'i talab qiladi (rol biriktirish).
+  //     Xavfsiz: roles.service.js dagi assertCanGrantPermissions direktorga
+  //     O'ZIDA YO'Q ruxsatni bera olmasligini kafolatlaydi, ya'ni u o'ziga
+  //     approvals.decide_config qo'sha olmaydi. Owner esa ["*"] bypass
+  //     bilan himoyalangan (permission.helper.js).
+  //
+  // BU RO'YXATGA finance.approve YOKI approvals.decide_config QO'SHMANG -
+  // aks holda direktor o'z so'rovini o'zi tasdiqlay oladigan bo'lib qoladi
+  // va butun tasdiq zanjiri ma'nosini yo'qotadi. (tests/directorRole.test.js
+  // shu invariantni qulflaydi.)
   const directorPermKeys = [
     PERMISSIONS.ADMIN_DASHBOARD_READ,
     PERMISSIONS.USERS_READ,
@@ -135,6 +153,10 @@ const seed = async () => {
     PERMISSIONS.STUDENTS_CREATE,
     PERMISSIONS.STUDENTS_UPDATE,
     PERMISSIONS.TEACHERS_READ,
+    // Ishga olish so'rovini yubora olishi uchun (owner tasdiqlaydi).
+    // Route ikkalasini birga talab qiladi: users.routes.js "/staff".
+    PERMISSIONS.TEACHERS_CREATE,
+    PERMISSIONS.ROLES_UPDATE,
     PERMISSIONS.GROUPS_READ,
     PERMISSIONS.GROUPS_CREATE,
     PERMISSIONS.GROUPS_UPDATE,
@@ -148,6 +170,10 @@ const seed = async () => {
     PERMISSIONS.LEADS_MANAGE,
     PERMISSIONS.FINANCE_READ,
     PERMISSIONS.FINANCE_PAY,
+    // Chegirma so'rovini yubora olishi uchun (owner tasdiqlaydi).
+    // DIQQAT: bu kalit guruh narxini (PUT /finance/group-fees) ham ochadi -
+    // u hozircha tasdiqsiz o'zgaradi.
+    PERMISSIONS.FINANCE_MANAGE,
     PERMISSIONS.SALARY_READ,
     PERMISSIONS.SALARY_PAY,
     PERMISSIONS.NOTIFICATIONS_READ,

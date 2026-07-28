@@ -49,7 +49,7 @@ const depositTransactionSchema = new mongoose.Schema(
     // TASDIQ orqali yaratilgan bo'lsa - qaysi so'rovdan (aynan bir marta kafolati).
     expenseApprovalId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "ExpenseApproval",
+      ref: "Approval",
       default: null,
     },
   },

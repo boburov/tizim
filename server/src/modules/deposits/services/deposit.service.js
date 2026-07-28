@@ -9,7 +9,7 @@ import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
 import { resolveBranchFromUser } from "../../../helpers/branchContext.helper.js";
-import { EXPENSE_KINDS } from "../../../models/expenseApproval.model.js";
+import { EXPENSE_KINDS } from "../../../models/approval.model.js";
 import {
   checkExpenseLimit,
   createRequest,

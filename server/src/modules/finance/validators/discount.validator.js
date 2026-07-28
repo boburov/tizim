@@ -21,6 +21,8 @@ export const createSchema = z.object({
     year: z.coerce.number().int().min(2000).max(3000).optional(),
     month: z.coerce.number().int().min(1).max(12).optional(),
     reason: z.string().trim().max(300).optional(),
+    // Tasdiq talab qilinganda so'rovchi qoldiradigan izoh (owner ko'radi).
+    requestNote: z.string().trim().max(500).optional(),
   }),
 });
 
@@ -33,6 +35,8 @@ export const updateSchema = z.object({
     year: z.coerce.number().int().min(2000).max(3000).optional(),
     month: z.coerce.number().int().min(1).max(12).optional(),
     reason: z.string().trim().max(300).optional(),
+    // Tasdiq talab qilinganda so'rovchi qoldiradigan izoh (owner ko'radi).
+    requestNote: z.string().trim().max(500).optional(),
     isActive: z.boolean().optional(),
   }),
 });

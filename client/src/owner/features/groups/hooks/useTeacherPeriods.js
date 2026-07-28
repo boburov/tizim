@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { qk } from "@/shared/lib/query/keys";
 import { apiErrorToast } from "@/shared/utils/apiError";
+import { unwrapApproval, approvalToast } from "@/shared/utils/approvalResponse";
 import { groupsAPI } from "../api/groups.api";
 
 export const useTeacherPeriodsQuery = (groupId, options = {}) =>
@@ -13,23 +14,30 @@ export const useTeacherPeriodsQuery = (groupId, options = {}) =>
   });
 
 // O'qituvchi davri o'zgarishi → guruh (teachers keshi) + maosh query'lari.
+// Tasdiqqa yuborilgan bo'lsa esa hech narsa o'zgarmagan - faqat tasdiqlar
+// ro'yxati va kutilayotganlar soni yangilanadi.
 const useInvalidate = (groupId) => {
   const qc = useQueryClient();
-  return () => {
+  return (pendingApproval = false) => {
+    if (pendingApproval) {
+      qc.invalidateQueries({ queryKey: qk.expenseApprovals.all() });
+      return;
+    }
     qc.invalidateQueries({ queryKey: qk.groups.teacherPeriods(groupId) });
     qc.invalidateQueries({ queryKey: qk.groups.one(groupId) });
     qc.invalidateQueries({ queryKey: qk.teacherSalary.all() });
   };
 };
 
+
 export const useTeacherPeriodCreateMutation = (groupId, options = {}) => {
   const invalidate = useInvalidate(groupId);
   return useMutation({
-    mutationFn: (body) => groupsAPI.createTeacherPeriod(groupId, body).then((r) => r.data.data),
-    onSuccess: (...a) => {
-      invalidate();
-      toast.success("Dars berish davri qo'shildi");
-      options.onSuccess?.(...a);
+    mutationFn: (body) => groupsAPI.createTeacherPeriod(groupId, body).then(unwrapApproval),
+    onSuccess: (res, ...rest) => {
+      invalidate(res.pendingApproval);
+      approvalToast(toast, res, "Dars berish davri qo'shildi");
+      options.onSuccess?.(res, ...rest);
     },
     onError: (err) => {
       apiErrorToast(err);
@@ -42,11 +50,11 @@ export const useTeacherPeriodUpdateMutation = (groupId, options = {}) => {
   const invalidate = useInvalidate(groupId);
   return useMutation({
     mutationFn: ({ id, body }) =>
-      groupsAPI.updateTeacherPeriod(groupId, id, body).then((r) => r.data.data),
-    onSuccess: (...a) => {
-      invalidate();
-      toast.success("Dars berish davri yangilandi");
-      options.onSuccess?.(...a);
+      groupsAPI.updateTeacherPeriod(groupId, id, body).then(unwrapApproval),
+    onSuccess: (res, ...rest) => {
+      invalidate(res.pendingApproval);
+      approvalToast(toast, res, "Dars berish davri yangilandi");
+      options.onSuccess?.(res, ...rest);
     },
     onError: (err) => {
       apiErrorToast(err);

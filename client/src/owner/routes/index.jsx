@@ -184,11 +184,16 @@ const OwnerRoutes = () => (
     <Route path="feedback/:id" element={<FeedbackDetailPage />} />
     <Route path="feedback-types" element={<FeedbackTypesListPage />} />
 
-    {/* Chiqim tasdiqlari - limitdan oshgan to'lovlar */}
+    {/* Tasdiqlar - limitdan oshgan chiqimlar VA sozlama o'zgarishlari
+        (maosh stavkasi, chegirma, ishga olish). Ikki xil ruxsat egasi
+        ham kiradi; ro'yxatni server kategoriya bo'yicha kesadi. */}
     <Route
       path="expense-approvals"
       element={
-        <PermissionGuard required="finance.read" fallback="/owner">
+        <PermissionGuard
+          anyOf={["finance.read", "approvals.decide_config"]}
+          fallback="/owner"
+        >
           <ExpenseApprovalsPage />
         </PermissionGuard>
       }

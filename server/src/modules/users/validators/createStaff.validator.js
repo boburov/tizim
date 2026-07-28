@@ -27,6 +27,8 @@ export const createStaffSchema = z.object({
     branchAssignments: z.array(branchAssignmentSchema).optional(),
     birthDate: z.coerce.date().optional().nullable(),
     hiredAt: z.coerce.date().optional().nullable(),
+    // Tasdiq talab qilinganda so'rovchi qoldiradigan izoh (owner ko'radi).
+    requestNote: z.string().trim().max(500).optional(),
   }),
 });
 

@@ -29,12 +29,7 @@ const BranchesPage = () => {
   return (
     <div className="space-y-4">
       <header className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Filiallar</h1>
-          <p className="text-sm opacity-60">
-            Har bir filialning moliyasi, davomati va xodimlari alohida yuritiladi
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold">Filiallar</h1>
 
         {canCreate && (
           <Button onClick={() => openModal(MODAL.BRANCH_CREATE)}>

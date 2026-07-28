@@ -146,6 +146,140 @@ export const update = async (id, body) => {
   return doc;
 };
 
+// --- CHEGIRMA TASDIG'I (owner tasdig'i talab qilinganda) ---
+//
+// Chegirma TAKRORLANUVCHI: scope="permanent" bo'lsa har oy qayta qo'llanadi,
+// ya'ni oyiga 500 000 so'mlik chegirma 2 yilda 12 mln bo'ladi - lekin bironta
+// ham "amaliyot" chiqim limitidan oshmaydi. Shuning uchun tekshiruv summaga
+// emas, IKKILIK huquqqa bog'lanadi (approvals.decide_config).
+//
+// TASDIQLANMAGUNCHA Discount hujjati YARATILMAYDI. Bu ataylab: hujjat mavjud
+// bo'lishining o'zi buildSnapshot() dagi `Discount.find({isActive:true})` ga
+// tushib, o'quvchi to'lovini darhol kamaytirardi.
+
+// Subyekt qulfi: bir "slot" uchun bitta kutilayotgan so'rov.
+// Yaratish va tahrirlash boshqa subyekt fazolari - yangi chegirma so'rovi
+// mavjudini tahrirlash so'roviga to'sqinlik qilmaydi (ikkalasi ham mumkin
+// bo'lishi kerak).
+const discountSubjectKey = (payload) =>
+  payload.op === "update"
+    ? `discount:${String(payload.discountId)}`
+    : `discount:new:${String(payload.student)}:${String(payload.group)}:${payload.scope}:${payload.year || 0}:${payload.month || 0}`;
+
+/**
+ * Chegirmani TASDIQQA yuboradi (hujjat yaratmaydi).
+ *
+ * Yengil tekshiruv: o'quvchi/guruh bor-yo'qligi. To'liq qoidalar (dublikat,
+ * foiz chegarasi, guruh aktivligi) ATAYLAB tasdiqlash paytida qayta
+ * tekshiriladi - so'rov va tasdiq orasida holat o'zgarishi mumkin.
+ */
+export const requestDiscount = async ({ op, discountId, body }, currentUser) => {
+  const { resolveBranchFromGroup } = await import(
+    "../../../helpers/branchContext.helper.js"
+  );
+  const approvalService = await import(
+    "../../expenseApprovals/services/expenseApproval.service.js"
+  );
+  const { APPROVAL_KINDS } = await import("../../../models/approval.model.js");
+
+  let student;
+  let group;
+  let base = {};
+  if (op === "update") {
+    const existing = await Discount.findOne({ _id: discountId, isDeleted: { $ne: true } }).lean();
+    if (!existing) throw new ApiError(404, "Chegirma topilmadi");
+    student = existing.student;
+    group = existing.group;
+    // Tahrirda faqat berilgan maydonlar o'zgaradi - qolgani eskisicha.
+    base = {
+      type: existing.type,
+      value: existing.value,
+      scope: existing.scope,
+      year: existing.year,
+      month: existing.month,
+    };
+  } else {
+    student = body.student;
+    group = body.group;
+  }
+
+  await ensureStudentAndGroup(student, group);
+
+  const [studentDoc, groupDoc] = await Promise.all([
+    User.findById(student, studentProjection).lean(),
+    Group.findById(group, { name: 1 }).lean(),
+  ]);
+
+  const payload = {
+    op,
+    discountId: discountId ? String(discountId) : undefined,
+    student: String(student),
+    group: String(group),
+    type: body.type ?? base.type,
+    value: body.value ?? base.value,
+    scope: body.scope ?? base.scope,
+    year: body.year ?? base.year,
+    month: body.month ?? base.month,
+    reason: body.reason,
+    isActive: body.isActive,
+  };
+
+  return approvalService.createRequest({
+    branchId: await resolveBranchFromGroup(group),
+    kind: APPROVAL_KINDS.DISCOUNT_SET,
+    payload,
+    subjectKey: discountSubjectKey(payload),
+    subjectName:
+      [studentDoc?.firstName, studentDoc?.lastName].filter(Boolean).join(" ") || "",
+    contextName: groupDoc?.name || "",
+    requestNote: body.requestNote,
+    currentUser,
+  });
+};
+
+/**
+ * Tasdiqlangan chegirma so'rovini BAJARADI.
+ *
+ * create/update ning O'ZINI chaqiradi - dublikat tekshiruvi, foiz chegarasi
+ * va qayta hisoblash (studentPayment + o'qituvchi foiz maoshi) shu yerda
+ * QAYTA ishlaydi. Yiqilsa approve() so'rovni FAILED qiladi.
+ */
+export const executeApprovedDiscount = async (approval) => {
+  const p = approval?.payload || {};
+  const actor = { _id: approval?.requestedBy || null };
+
+  if (p.op === "create") {
+    return create(
+      {
+        student: p.student,
+        group: p.group,
+        type: p.type,
+        value: p.value,
+        scope: p.scope,
+        year: p.year,
+        month: p.month,
+        reason: p.reason,
+      },
+      actor,
+    );
+  }
+
+  if (p.op === "update") {
+    if (!p.discountId) throw new ApiError(400, "So'rovda chegirma identifikatori yo'q");
+    return update(p.discountId, {
+      type: p.type,
+      value: p.value,
+      scope: p.scope,
+      year: p.year,
+      month: p.month,
+      reason: p.reason,
+      isActive: p.isActive,
+    });
+  }
+
+  throw new ApiError(400, `Noma'lum chegirma amali: ${p.op}`);
+};
+
 export const remove = async (id, currentUser) => {
   const doc = await Discount.findOne({ _id: id, isDeleted: { $ne: true } });
   if (!doc) throw new ApiError(404, "Chegirma topilmadi");

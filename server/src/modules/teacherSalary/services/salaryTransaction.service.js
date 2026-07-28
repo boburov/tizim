@@ -3,7 +3,7 @@ import TeacherSalary from "../../../models/teacherSalary.model.js";
 import Group from "../../../models/group.model.js";
 import User from "../../../models/user.model.js";
 import ApiError from "../../../utils/ApiError.js";
-import { EXPENSE_KINDS } from "../../../models/expenseApproval.model.js";
+import { EXPENSE_KINDS } from "../../../models/approval.model.js";
 import {
   branchFilter,
   isBranchAllowed,

@@ -18,5 +18,7 @@ export const upsertSchema = z.object({
     year: z.coerce.number().int().min(2000).max(3000),
     month: z.coerce.number().int().min(1).max(12),
     amount: z.coerce.number().int().min(0, "Manfiy bo'lmasligi kerak"),
+    // Tasdiq talab qilinganda so'rovchi qoldiradigan izoh (owner ko'radi).
+    requestNote: z.string().trim().max(500).optional(),
   }),
 });

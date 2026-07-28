@@ -1,8 +1,10 @@
-import mongoose from "mongoose";
-import ExpenseApproval, {
+import Approval, {
   APPROVAL_STATUSES,
+  APPROVAL_CATEGORIES,
+  APPROVAL_KINDS,
   EXPENSE_KINDS,
-} from "../../../models/expenseApproval.model.js";
+  resolveCategory,
+} from "../../../models/approval.model.js";
 import Branch from "../../../models/branch.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
@@ -10,8 +12,22 @@ import { PERMISSIONS } from "../../../constants/permissions.js";
 import { hasPermission } from "../../../helpers/permission.helper.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
 
+// Kategoriya -> uni tasdiqlash uchun kerak bo'lgan ruxsat.
+// AJRATILGAN bo'lishi PRINSIPIAL: chiqim tasdiqlash huquqi berilgan direktor
+// avtomatik ravishda maosh stavkasi belgilash huquqini olmasligi kerak.
+const DECIDE_PERMISSION = {
+  [APPROVAL_CATEGORIES.FINANCIAL]: PERMISSIONS.FINANCE_APPROVE,
+  [APPROVAL_CATEGORIES.CONFIGURATION]: PERMISSIONS.APPROVALS_DECIDE_CONFIG,
+};
+
+// Kategoriya -> uni RO'YXATDA ko'rish uchun kerak bo'lgan ruxsat.
+const READ_PERMISSION = {
+  [APPROVAL_CATEGORIES.FINANCIAL]: PERMISSIONS.FINANCE_READ,
+  [APPROVAL_CATEGORIES.CONFIGURATION]: PERMISSIONS.APPROVALS_DECIDE_CONFIG,
+};
+
 // ============================================================
-// 1) LIMIT TEKSHIRUVI - chiqim servislaridan chaqiriladi
+// 1) LIMIT / TASDIQ TEKSHIRUVI - amal servislaridan chaqiriladi
 // ============================================================
 
 /**
@@ -47,46 +63,129 @@ export const checkExpenseLimit = async ({ branchId, amount, permissions }) => {
 };
 
 /**
- * Tasdiq so'rovini yaratadi (chiqim limitdan oshganda).
- * Pul HALI chiqmaydi - hech qanday balans o'zgarmaydi.
+ * KONFIGURATSIYA o'zgarishi tasdiq talab qiladimi.
+ *
+ * Chiqimdan farqi: SUMMA YO'Q. Maosh stavkasi va chegirma TAKRORLANUVCHI -
+ * ularni bir martalik `expenseApprovalThreshold` bilan solishtirish ma'nosiz
+ * (oyiga 500k so'm chegirma 2 yilda 12 mln bo'ladi, lekin bironta ham
+ * "amaliyot" limitdan oshmaydi). Shuning uchun tekshiruv IKKILIK:
+ * approvals.decide_config bor -> darhol; yo'q -> tasdiqqa yuboriladi.
+ *
+ * Qaytaradi: { needsApproval: boolean }
+ */
+export const checkConfigApproval = ({ permissions }) => ({
+  needsApproval: !hasPermission(permissions, PERMISSIONS.APPROVALS_DECIDE_CONFIG),
+});
+
+/**
+ * Tasdiq so'rovini yaratadi. Hech qanday holat o'zgarmaydi - so'rov faqat
+ * "buyruq jurnali", haqiqiy ish tasdiqlanganda EXECUTORS ichida bajariladi.
+ *
+ * subjectKey berilgan bo'lsa, o'sha subyekt uchun ikkinchi kutilayotgan
+ * so'rov YARATILMAYDI (partial unique indeks -> 409).
  */
 export const createRequest = async ({
   branchId,
   kind,
-  amount,
+  amount = null,
   payload,
   threshold,
+  subjectKey,
   subjectName,
   contextName,
   requestNote,
   currentUser,
 }) => {
-  return ExpenseApproval.create({
-    branchId,
-    kind,
-    amount,
-    payload: payload || {},
-    thresholdAtRequest: threshold ?? null,
-    subjectName: subjectName || "",
-    contextName: contextName || "",
-    requestedBy: currentUser?._id || null,
-    requestNote: requestNote || "",
-    status: APPROVAL_STATUSES.PENDING,
-  });
+  try {
+    return await Approval.create({
+      branchId,
+      kind,
+      category: resolveCategory(kind),
+      amount,
+      payload: payload || {},
+      thresholdAtRequest: threshold ?? null,
+      subjectKey: subjectKey || undefined,
+      subjectName: subjectName || "",
+      contextName: contextName || "",
+      requestedBy: currentUser?._id || null,
+      requestNote: requestNote || "",
+      status: APPROVAL_STATUSES.PENDING,
+    });
+  } catch (err) {
+    // Partial unique indeks (subjectKey + pending) - subyekt qulfi.
+    if (err?.code === 11000) {
+      throw new ApiError(
+        409,
+        "Bu obyekt uchun tasdiq kutilayotgan so'rov allaqachon mavjud. Avval o'shani ko'rib chiqing.",
+      );
+    }
+    throw err;
+  }
 };
 
 // ============================================================
 // 2) O'QISH
 // ============================================================
 
-export const list = async ({ status, kind, page = 1, limit = 20 }) => {
-  const filter = { ...branchFilter() };
+// PAYLOAD ICHIDAGI MAXFIY MAYDONLAR - o'qish javoblarida olib tashlanadi.
+//
+// NEGA: ishga olish so'rovi payload'ida yangi xodimning paroli turadi
+// (loyihada parollar ochiq matnda saqlanadi - qarang password.helper.js).
+// User modelida u `select: false` va alohida endpoint bilan himoyalangan,
+// lekin Approval.payload oddiy Mixed maydon - tasdiqlar ro'yxatini ko'ra
+// oladigan HAR KIM uni o'qib olardi. Bu mavjud himoyadan ORQAGA qadam
+// bo'lardi, shuning uchun o'qishda kesib tashlanadi.
+//
+// Bajaruvchi (EXECUTORS) baza hujjatini to'g'ridan-to'g'ri oladi, shuning
+// uchun bu kesish ishlashga ta'sir qilmaydi.
+const SENSITIVE_PAYLOAD_FIELDS = ["password"];
+
+const stripSensitive = (doc) => {
+  if (!doc) return doc;
+  const plain = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
+  if (plain.payload && typeof plain.payload === "object") {
+    plain.payload = { ...plain.payload };
+    for (const field of SENSITIVE_PAYLOAD_FIELDS) delete plain.payload[field];
+  }
+  return plain;
+};
+
+/**
+ * Foydalanuvchi ko'ra oladigan kategoriyalar sharti.
+ *
+ * O'Z so'rovini har kim ko'radi (kategoriyadan qat'i nazar) - aks holda
+ * direktor o'zi yuborgan so'rovning holatini kuza ololmasdi.
+ */
+const categoryCondition = (permissions, userId) => {
+  const cats = Object.entries(READ_PERMISSION)
+    .filter(([, key]) => hasPermission(permissions, key))
+    .map(([category]) => category);
+
+  if (cats.length === Object.keys(READ_PERMISSION).length) return {};
+  if (cats.length === 0) return { requestedBy: userId };
+  return { $or: [{ category: { $in: cats } }, { requestedBy: userId }] };
+};
+
+export const list = async ({
+  status,
+  kind,
+  category,
+  page = 1,
+  limit = 20,
+  permissions,
+  currentUser,
+}) => {
+  const filter = {
+    ...branchFilter(),
+    ...categoryCondition(permissions, currentUser?._id),
+  };
   if (status) filter.status = status;
   if (kind) filter.kind = kind;
+  if (category) filter.category = category;
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    ExpenseApproval.find(filter)
+    Approval.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -94,24 +193,33 @@ export const list = async ({ status, kind, page = 1, limit = 20 }) => {
       .populate("decidedBy", { firstName: 1, lastName: 1, username: 1 })
       .populate("branchId", { name: 1, code: 1 })
       .lean(),
-    ExpenseApproval.countDocuments(filter),
+    Approval.countDocuments(filter),
   ]);
-  return { items, total, page, limit };
+  return { items: items.map(stripSensitive), total, page, limit };
 };
 
-export const getById = async (id) => {
-  const doc = await ExpenseApproval.findById(id)
+export const getById = async (id, { permissions, currentUser } = {}) => {
+  const doc = await Approval.findById(id)
     .populate("requestedBy", { firstName: 1, lastName: 1, username: 1 })
     .populate("decidedBy", { firstName: 1, lastName: 1, username: 1 })
     .populate("branchId", { name: 1, code: 1 });
   if (!doc) throw new ApiError(404, "So'rov topilmadi");
-  return doc;
+
+  // Kategoriya ko'lami: moliya so'rovini faqat moliyani ko'ra oladigan,
+  // sozlama so'rovini faqat sozlamani tasdiqlay oladigan (yoki so'rovchining
+  // o'zi) ko'radi.
+  const canRead = hasPermission(permissions, READ_PERMISSION[doc.category]);
+  const isOwnRequest = String(doc.requestedBy?._id || doc.requestedBy) === String(currentUser?._id);
+  if (!canRead && !isOwnRequest) throw new ApiError(403, "Ruxsat etilmagan");
+
+  return stripSensitive(doc);
 };
 
 /** Kutilayotgan so'rovlar soni - sidebar belgisi uchun. */
-export const pendingCount = async () =>
-  ExpenseApproval.countDocuments({
+export const pendingCount = async ({ permissions, currentUser } = {}) =>
+  Approval.countDocuments({
     ...branchFilter(),
+    ...categoryCondition(permissions, currentUser?._id),
     status: APPROVAL_STATUSES.PENDING,
   });
 
@@ -119,10 +227,28 @@ export const pendingCount = async () =>
 // 3) QAROR: rad etish / bekor qilish
 // ============================================================
 
-export const reject = async (id, { note } = {}, currentUser) => {
+/**
+ * Shu KATEGORIYA uchun qaror qabul qilish huquqi bormi.
+ *
+ * Route qatlamidagi requireAnyPermission faqat "eshikni" ochadi (ikki
+ * kategoriyadan biri). Haqiqiy tekshiruv shu yerda - aks holda faqat
+ * finance.approve bor direktor sozlama so'rovini tasdiqlay olardi.
+ */
+const assertCanDecide = (approval, permissions) => {
+  const needed = DECIDE_PERMISSION[approval.category];
+  if (!needed || !hasPermission(permissions, needed)) {
+    throw new ApiError(403, "Bu turdagi so'rovni tasdiqlash huquqingiz yo'q");
+  }
+};
+
+export const reject = async (id, { note } = {}, currentUser, permissions) => {
+  const existing = await Approval.findById(id).lean();
+  if (!existing) throw new ApiError(404, "So'rov topilmadi");
+  assertCanDecide(existing, permissions);
+
   // Compare-and-set: faqat PENDING'dan REJECTED'ga o'tadi. Ikki owner bir
   // vaqtda bosgan bo'lsa, ikkinchisi null oladi.
-  const doc = await ExpenseApproval.findOneAndUpdate(
+  const doc = await Approval.findOneAndUpdate(
     { _id: id, status: APPROVAL_STATUSES.PENDING },
     {
       $set: {
@@ -140,12 +266,12 @@ export const reject = async (id, { note } = {}, currentUser) => {
 
 /** So'rovchi o'z so'rovini bekor qiladi. */
 export const cancel = async (id, currentUser) => {
-  const existing = await ExpenseApproval.findById(id).lean();
+  const existing = await Approval.findById(id).lean();
   if (!existing) throw new ApiError(404, "So'rov topilmadi");
   if (String(existing.requestedBy) !== String(currentUser?._id)) {
     throw new ApiError(403, "Faqat o'z so'rovingizni bekor qila olasiz");
   }
-  const doc = await ExpenseApproval.findOneAndUpdate(
+  const doc = await Approval.findOneAndUpdate(
     { _id: id, status: APPROVAL_STATUSES.PENDING },
     {
       $set: {
@@ -165,16 +291,32 @@ export const cancel = async (id, currentUser) => {
 // ============================================================
 
 // Bajaruvchilar ro'yxati. Sikldan qochish uchun dinamik import ishlatiladi:
-// chiqim servislari bu servisni import qiladi (limit tekshiruvi uchun),
+// amal servislari bu servisni import qiladi (tasdiq tekshiruvi uchun),
 // bu servis esa ularni chaqiradi (bajarish uchun).
 const EXECUTORS = {
-  [EXPENSE_KINDS.SALARY_PAYMENT]: async (approval) => {
+  [APPROVAL_KINDS.SALARY_PAYMENT]: async (approval) => {
     const svc = await import("../../teacherSalary/services/salaryTransaction.service.js");
     return svc.executeApproved(approval);
   },
-  [EXPENSE_KINDS.DEPOSIT_WITHDRAW]: async (approval) => {
+  [APPROVAL_KINDS.DEPOSIT_WITHDRAW]: async (approval) => {
     const svc = await import("../../deposits/services/deposit.service.js");
     return svc.executeApprovedWithdraw(approval);
+  },
+  [APPROVAL_KINDS.SALARY_TERMS]: async (approval) => {
+    const svc = await import("../../groups/services/teacherGroupPeriod.service.js");
+    return svc.executeApprovedSalaryTerms(approval);
+  },
+  [APPROVAL_KINDS.DISCOUNT_SET]: async (approval) => {
+    const svc = await import("../../finance/services/discount.service.js");
+    return svc.executeApprovedDiscount(approval);
+  },
+  [APPROVAL_KINDS.GROUP_FEE_SET]: async (approval) => {
+    const svc = await import("../../finance/services/groupFee.service.js");
+    return svc.executeApprovedGroupFee(approval);
+  },
+  [APPROVAL_KINDS.STAFF_HIRE]: async (approval) => {
+    const svc = await import("../../users/services/users.service.js");
+    return svc.executeApprovedHire(approval);
   },
 };
 
@@ -192,17 +334,18 @@ const EXECUTORS = {
  *
  * O'Z SO'ROVINI O'ZI TASDIQLASH TAQIQLANADI.
  */
-export const approve = async (id, { note } = {}, currentUser) => {
-  const existing = await ExpenseApproval.findById(id).lean();
+export const approve = async (id, { note } = {}, currentUser, permissions) => {
+  const existing = await Approval.findById(id).lean();
   if (!existing) throw new ApiError(404, "So'rov topilmadi");
+  assertCanDecide(existing, permissions);
 
-  // O'ZINI-O'ZI TASDIQLASH TAQIQI: limitning butun ma'nosi shu.
+  // O'ZINI-O'ZI TASDIQLASH TAQIQI: tasdiqning butun ma'nosi shu.
   if (String(existing.requestedBy) === String(currentUser?._id)) {
     throw new ApiError(403, "O'z so'rovingizni o'zingiz tasdiqlay olmaysiz");
   }
 
   // 1-qatlam: atomik holat o'zgarishi.
-  const approval = await ExpenseApproval.findOneAndUpdate(
+  const approval = await Approval.findOneAndUpdate(
     { _id: id, status: APPROVAL_STATUSES.PENDING },
     {
       $set: {
@@ -218,35 +361,36 @@ export const approve = async (id, { note } = {}, currentUser) => {
 
   const executor = EXECUTORS[approval.kind];
   if (!executor) {
-    await markFailed(approval._id, `Noma'lum chiqim turi: ${approval.kind}`);
-    throw new ApiError(500, "Bu chiqim turini bajarib bo'lmadi");
+    await markFailed(approval._id, `Noma'lum so'rov turi: ${approval.kind}`);
+    throw new ApiError(500, "Bu so'rov turini bajarib bo'lmadi");
   }
 
   try {
     // 2 va 3-qatlam bajaruvchi ichida (mavjud tranzaksiya tekshiruvi +
     // unique indeks). Bajaruvchi biznes qoidalarini QAYTA tekshiradi.
-    const trx = await executor(approval);
+    const result = await executor(approval);
 
-    await ExpenseApproval.updateOne(
+    await Approval.updateOne(
       { _id: approval._id },
       {
         $set: {
           status: APPROVAL_STATUSES.EXECUTED,
           executedAt: new Date(),
-          resultTransactionId: trx?._id || null,
+          resultTransactionId: result?._id || null,
           failureReason: "",
         },
       },
     );
-    return ExpenseApproval.findById(approval._id);
+    return Approval.findById(approval._id);
   } catch (err) {
-    // Re-validatsiya yiqildi (balans yetmadi, guruh arxivlandi, qoldiq
-    // o'zgardi) yoki texnik xato. Holatni FAILED qilamiz - owner ko'radi.
+    // Re-validatsiya yiqildi (balans yetmadi, guruh arxivlandi, o'qituvchi
+    // ishdan bo'shadi, davrlar kesishib qoldi) yoki texnik xato.
+    // Holatni FAILED qilamiz - owner ko'radi.
     const reason = err?.message || "Noma'lum xato";
     await markFailed(approval._id, reason);
     logger.warn(
       { approvalId: String(approval._id), kind: approval.kind, reason },
-      "Tasdiqlangan chiqimni bajarib bo'lmadi",
+      "Tasdiqlangan so'rovni bajarib bo'lmadi",
     );
     throw new ApiError(
       err?.statusCode || 400,
@@ -256,7 +400,7 @@ export const approve = async (id, { note } = {}, currentUser) => {
 };
 
 const markFailed = (id, reason) =>
-  ExpenseApproval.updateOne(
+  Approval.updateOne(
     { _id: id },
     { $set: { status: APPROVAL_STATUSES.FAILED, failureReason: String(reason).slice(0, 500) } },
   );
@@ -265,21 +409,38 @@ const markFailed = (id, reason) =>
  * FAILED so'rovni qayta urinish (masalan balans to'ldirilgandan keyin).
  * PENDING'ga qaytaradi, owner qaytadan tasdiqlaydi.
  */
-export const retry = async (id) => {
-  const doc = await ExpenseApproval.findOneAndUpdate(
-    { _id: id, status: APPROVAL_STATUSES.FAILED },
-    {
-      $set: {
-        status: APPROVAL_STATUSES.PENDING,
-        decidedBy: null,
-        decidedAt: null,
-        failureReason: "",
+export const retry = async (id, permissions) => {
+  const existing = await Approval.findById(id).lean();
+  if (!existing) throw new ApiError(404, "So'rov topilmadi");
+  assertCanDecide(existing, permissions);
+
+  let doc;
+  try {
+    doc = await Approval.findOneAndUpdate(
+      { _id: id, status: APPROVAL_STATUSES.FAILED },
+      {
+        $set: {
+          status: APPROVAL_STATUSES.PENDING,
+          decidedBy: null,
+          decidedAt: null,
+          failureReason: "",
+        },
       },
-    },
-    { new: true },
-  );
+      { new: true },
+    );
+  } catch (err) {
+    // Xato holatda turgan paytda o'sha subyektga YANGI so'rov yaratilgan
+    // bo'lsa, PENDING'ga qaytarish subyekt qulfini buzadi (E11000).
+    if (err?.code === 11000) {
+      throw new ApiError(
+        409,
+        "Bu obyekt uchun boshqa kutilayotgan so'rov bor. Avval o'shani ko'rib chiqing.",
+      );
+    }
+    throw err;
+  }
   if (!doc) throw new ApiError(409, "Faqat xato holatidagi so'rovni qayta urinish mumkin");
   return doc;
 };
 
-export { APPROVAL_STATUSES, EXPENSE_KINDS };
+export { APPROVAL_STATUSES, APPROVAL_CATEGORIES, APPROVAL_KINDS, EXPENSE_KINDS };

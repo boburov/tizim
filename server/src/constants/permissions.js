@@ -66,6 +66,13 @@ export const PERMISSIONS = Object.freeze({
   // ham OZOD bo'ladi (u baribir o'zi tasdiqlay olardi).
   FINANCE_APPROVE: "finance.approve",
 
+  // KONFIGURATSIYA tasdig'i (maosh stavkasi, chegirma - takrorlanuvchi ta'sir).
+  // FINANCE_APPROVE dan ATAYLAB AJRATILGAN: kichik chiqimlarni tasdiqlash
+  // huquqi berilgan direktor avtomatik ravishda o'ziga maosh stavkasi
+  // belgilash huquqini OLMASLIGI kerak. Bu ruxsat egasi tasdiqdan ozod
+  // bo'ladi (u baribir o'zi tasdiqlay olardi).
+  APPROVALS_DECIDE_CONFIG: "approvals.decide_config",
+
   // Filiallar (Bo'lak: multi-branch)
   BRANCHES_READ: "branches.read",
   BRANCHES_CREATE: "branches.create",
@@ -178,6 +185,10 @@ export const PERMISSION_LABELS = {
     label: "Chiqimni tasdiqlash",
     group: "finance",
   },
+  [PERMISSIONS.APPROVALS_DECIDE_CONFIG]: {
+    label: "Sozlama o'zgarishini tasdiqlash",
+    group: "approvals",
+  },
 
   [PERMISSIONS.BRANCHES_READ]: { label: "Filiallarni ko'rish", group: "branches" },
   [PERMISSIONS.BRANCHES_CREATE]: { label: "Filial yaratish", group: "branches" },
@@ -219,6 +230,7 @@ export const ACTION_ORDER = [
   "manage_students",
   "view_all",
   "approve",
+  "decide_config",
   "admin_access",
 ];
 
@@ -235,6 +247,7 @@ export const ACTION_LABELS = {
   manage_students: "O'quvchilarni biriktirish",
   view_all: "Barchasini ko'rish",
   approve: "Tasdiqlash",
+  decide_config: "Sozlamani tasdiqlash",
   admin_access: "To'liq kirish",
 };
 
@@ -254,6 +267,7 @@ export const MODULE_META = {
   rating: { label: "Reyting", order: 110 },
   finance: { label: "Moliya", order: 120 },
   salary: { label: "Maoshlar", order: 130 },
+  approvals: { label: "Tasdiqlar", order: 135 },
   notifications: { label: "Bildirishnomalar", order: 140 },
   notification_templates: { label: "Bildirishnoma shablonlari", order: 150 },
   holidays: { label: "Bayramlar", order: 160 },

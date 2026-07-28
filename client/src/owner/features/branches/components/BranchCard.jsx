@@ -103,17 +103,15 @@ const BranchCard = ({ branch }) => {
         <Stat label="O'quvchi" value={stats?.studentCount} />
       </div>
 
-      <div className="flex items-center gap-2 text-xs pt-2 border-t">
-        <ShieldCheck size={14} strokeWidth={1.5} className="opacity-60" />
-        <span className="opacity-60">Chiqim limiti:</span>
-        {branch.expenseApprovalThreshold ? (
+      {branch.expenseApprovalThreshold > 0 && (
+        <div className="flex items-center gap-2 text-xs pt-2 border-t">
+          <ShieldCheck size={14} strokeWidth={1.5} className="opacity-60" />
+          <span className="opacity-60">Limit</span>
           <span className="font-medium">
             {formatMoney(branch.expenseApprovalThreshold)}
           </span>
-        ) : (
-          <span className="opacity-60">yo'q</span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

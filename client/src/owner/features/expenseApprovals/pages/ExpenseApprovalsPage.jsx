@@ -1,13 +1,15 @@
-// React
-import { useState } from "react";
-
 // Components
 import ApprovalCard from "../components/ApprovalCard";
 
 // Hooks
+import useObjectState from "@/shared/hooks/useObjectState";
+import usePermissions from "@/shared/hooks/usePermissions";
 import useExpenseApprovalsQuery from "../hooks/useExpenseApprovalsQuery";
 
-const TABS = [
+// Constants
+import { PERMISSIONS } from "@/shared/constants/permissions";
+
+const STATUS_TABS = [
   { value: "pending", label: "Kutilmoqda" },
   { value: "executed", label: "Bajarilgan" },
   { value: "rejected", label: "Rad etilgan" },
@@ -15,36 +17,73 @@ const TABS = [
   { value: "", label: "Barchasi" },
 ];
 
+// Kategoriya filtri. Server baribir ruxsatga qarab kesadi - bu tab faqat
+// ko'rish qulayligi uchun (ikkala kategoriyaga huquqi bor owner uchun).
+const CATEGORY_TABS = [
+  { value: "", label: "Barchasi" },
+  { value: "financial", label: "Chiqimlar" },
+  { value: "configuration", label: "Sozlamalar" },
+];
+
+const TabRow = ({ tabs, value, onChange }) => (
+  <div className="flex gap-2 flex-wrap">
+    {tabs.map((t) => (
+      <button
+        key={t.value || "all"}
+        type="button"
+        onClick={() => onChange(t.value)}
+        className={`px-3 py-1.5 text-sm rounded-md transition ${
+          value === t.value ? "bg-primary text-white" : "hover:bg-muted"
+        }`}
+      >
+        {t.label}
+      </button>
+    ))}
+  </div>
+);
+
 const ExpenseApprovalsPage = () => {
-  const [status, setStatus] = useState("pending");
-  const { data, isLoading } = useExpenseApprovalsQuery(
-    status ? { status } : undefined,
-  );
+  const { has } = usePermissions();
+  const { status, category, setField } = useObjectState({
+    status: "pending",
+    category: "",
+  });
+
+  // Ikkala kategoriyaga ham huquqi bo'lmasa kategoriya tab'i ortiqcha -
+  // ro'yxatda baribir bitta tur ko'rinadi.
+  const showCategoryTabs =
+    has(PERMISSIONS.FINANCE_READ) && has(PERMISSIONS.APPROVALS_DECIDE_CONFIG);
+
+  const { data, isLoading } = useExpenseApprovalsQuery({
+    ...(status ? { status } : {}),
+    ...(category ? { category } : {}),
+  });
 
   const items = data?.data || [];
 
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-2xl font-semibold">Chiqim tasdiqlari</h1>
+        <h1 className="text-2xl font-semibold">Tasdiqlar</h1>
         <p className="text-sm opacity-60">
-          Filial limitidan oshgan to'lovlar shu yerda tasdiqlanadi
+          Limitdan oshgan to'lovlar va maosh stavkasi kabi sozlama
+          o'zgarishlari shu yerda tasdiqlanadi
         </p>
       </header>
 
-      <div className="flex gap-2 flex-wrap border-b pb-2">
-        {TABS.map((t) => (
-          <button
-            key={t.value || "all"}
-            type="button"
-            onClick={() => setStatus(t.value)}
-            className={`px-3 py-1.5 text-sm rounded-md transition ${
-              status === t.value ? "bg-primary text-white" : "hover:bg-muted"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="space-y-2 border-b pb-2">
+        <TabRow
+          tabs={STATUS_TABS}
+          value={status}
+          onChange={(v) => setField("status", v)}
+        />
+        {showCategoryTabs && (
+          <TabRow
+            tabs={CATEGORY_TABS}
+            value={category}
+            onChange={(v) => setField("category", v)}
+          />
+        )}
       </div>
 
       {isLoading && <p className="text-sm opacity-60">Yuklanmoqda...</p>}

@@ -7,6 +7,9 @@ const salaryRate = {
   salaryType: z.enum(["fixed", "percent", "mixed"]).optional(),
   fixedAmount: z.coerce.number().min(0).optional(),
   percentRate: z.coerce.number().min(0).max(100).optional(),
+  // Tasdiq talab qilinganda so'rovchi qoldiradigan izoh (owner ko'radi).
+  // Tasdiq kerak bo'lmasa e'tiborga olinmaydi.
+  requestNote: z.string().max(500).optional(),
 };
 
 export const listSchema = z.object({

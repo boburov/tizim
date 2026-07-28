@@ -70,6 +70,11 @@ export const PERMISSIONS = Object.freeze({
   // Chiqim tasdig'i (limitdan oshgan to'lovlar)
   FINANCE_APPROVE: "finance.approve",
 
+  // Sozlama tasdig'i (maosh stavkasi, chegirma, ishga olish).
+  // finance.approve dan AJRATILGAN: chiqim tasdiqlash huquqi
+  // maosh stavkasi belgilash huquqini bermaydi.
+  APPROVALS_DECIDE_CONFIG: "approvals.decide_config",
+
   // Filiallar
   BRANCHES_READ: "branches.read",
   BRANCHES_CREATE: "branches.create",

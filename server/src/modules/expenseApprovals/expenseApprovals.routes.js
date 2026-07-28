@@ -1,6 +1,7 @@
 import { Router } from "express";
 import requireAuth from "../../middleware/auth.js";
 import requirePermission from "../../middleware/requirePermission.js";
+import requireAnyPermission from "../../middleware/requireAnyPermission.js";
 import validate from "../../middleware/validate.js";
 import { PERMISSIONS } from "../../constants/permissions.js";
 
@@ -17,45 +18,61 @@ import retry from "./handlers/retry.handler.js";
 
 const router = Router();
 
-// O'QISH: moliyani ko'rish huquqi yetarli. Ro'yxat filial bo'yicha
-// avtomatik kesiladi (branchFilter), ya'ni direktor faqat o'z filialining
-// so'rovlarini ko'radi.
-router.get("/", requireAuth, requirePermission(PERMISSIONS.FINANCE_READ), validate(listSchema), list);
-router.get("/pending-count", requireAuth, requirePermission(PERMISSIONS.FINANCE_READ), pendingCount);
-router.get("/:id", requireAuth, requirePermission(PERMISSIONS.FINANCE_READ), validate(idSchema), getById);
+// Route qatlamidagi ruxsat faqat "eshik" - u ikki kategoriyadan (moliya /
+// sozlama) BIRIGA huquqi borlarni kiritadi. Haqiqiy kategoriya tekshiruvi
+// SERVIS ichida (categoryCondition / assertCanDecide), chunki bitta endpoint
+// ikkala kategoriyaga xizmat qiladi va ularning huquqi har xil.
+const CAN_READ = [PERMISSIONS.FINANCE_READ, PERMISSIONS.APPROVALS_DECIDE_CONFIG];
+const CAN_DECIDE = [PERMISSIONS.FINANCE_APPROVE, PERMISSIONS.APPROVALS_DECIDE_CONFIG];
 
-// QAROR: faqat finance.approve ruxsati bilan.
-// Servis ichida qo'shimcha himoya: o'z so'rovini o'zi tasdiqlay olmaydi.
+// O'QISH: ro'yxat filial bo'yicha avtomatik kesiladi (branchFilter), ya'ni
+// direktor faqat o'z filialining so'rovlarini ko'radi. Kategoriya bo'yicha
+// esa servis kesadi - moliya huquqi bor odam sozlama so'rovlarini ko'rmaydi
+// (va aksincha), lekin O'Z so'rovini har kim ko'radi.
+router.get("/", requireAuth, requireAnyPermission(...CAN_READ), validate(listSchema), list);
+router.get("/pending-count", requireAuth, requireAnyPermission(...CAN_READ), pendingCount);
+router.get("/:id", requireAuth, requireAnyPermission(...CAN_READ), validate(idSchema), getById);
+
+// QAROR: kategoriyaga mos ruxsat SERVISDA tekshiriladi (finance.approve yoki
+// approvals.decide_config). Servis ichida qo'shimcha himoya: o'z so'rovini
+// o'zi tasdiqlay olmaydi.
 router.post(
   "/:id/approve",
   requireAuth,
-  requirePermission(PERMISSIONS.FINANCE_APPROVE),
+  requireAnyPermission(...CAN_DECIDE),
   validate(decisionSchema),
   approve,
 );
 router.post(
   "/:id/reject",
   requireAuth,
-  requirePermission(PERMISSIONS.FINANCE_APPROVE),
+  requireAnyPermission(...CAN_DECIDE),
   validate(decisionSchema),
   reject,
 );
 router.post(
   "/:id/retry",
   requireAuth,
-  requirePermission(PERMISSIONS.FINANCE_APPROVE),
+  requireAnyPermission(...CAN_DECIDE),
   validate(idSchema),
   retry,
 );
 
 // BEKOR QILISH: so'rovchining o'zi (servis ichida tekshiriladi).
-// Shuning uchun finance.pay yetarli - tasdiqlash huquqi shart emas.
+// Shuning uchun tasdiqlash huquqi shart emas - so'rov YARATA oladigan
+// har qanday rol (chiqim uchun finance.pay, maosh sharti uchun groups.update)
+// o'z so'rovini bekor qila olishi kerak.
 router.post(
   "/:id/cancel",
   requireAuth,
-  requirePermission(PERMISSIONS.FINANCE_PAY),
+  requireAnyPermission(PERMISSIONS.FINANCE_PAY, PERMISSIONS.GROUPS_UPDATE),
   validate(idSchema),
   cancel,
 );
 
 export default router;
+
+// Eslatma: HTTP yo'li ("/expense-approvals") ATAYLAB o'zgartirilmadi -
+// frontend shu manzilga murojaat qiladi. routes/index.js qo'shimcha
+// "/approvals" taxallusini ham ulaydi (yangi, umumiy nom).
+export { router };

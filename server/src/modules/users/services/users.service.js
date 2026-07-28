@@ -16,7 +16,12 @@ import {
 import { userBranchCondition } from "../../../helpers/branchContext.helper.js";
 import Branch from "../../../models/branch.model.js";
 import { buildUserProfile } from "../../../helpers/userProfile.helper.js";
-import { toUtcMidnight, localTodayMidnight } from "../../../helpers/attendance.helper.js";
+import {
+  toUtcMidnight,
+  localTodayMidnight,
+  parseLocalDay,
+  isFutureLocalDay,
+} from "../../../helpers/attendance.helper.js";
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { safeRecomputeStudentCompletion } from "../../../helpers/studentCompletion.helper.js";
 import {
@@ -245,8 +250,12 @@ export const update = async (id, body) => {
   let recomputeCompletion = false;
   if (user.role === ROLES.STUDENT) {
     if (body.enrolledAt !== undefined) {
-      const d = body.enrolledAt ? new Date(body.enrolledAt) : null;
-      if (d && d.getTime() > Date.now()) {
+      // Kalendar kuni (UTC-midnight) - "bugun" mahalliy (Asia/Tashkent) kun bo'yicha.
+      const d = body.enrolledAt ? parseLocalDay(body.enrolledAt) : null;
+      if (body.enrolledAt && d == null) {
+        throw new ApiError(400, "Ro'yxatga olingan sana noto'g'ri");
+      }
+      if (d && isFutureLocalDay(d)) {
         throw new ApiError(400, "Ro'yxatga olingan sana kelajakda bo'lmasin");
       }
       // Ro'yxatga olingan sanani mavjud a'zolik boshlangan kundan KEYINGA surib
@@ -273,9 +282,12 @@ export const update = async (id, body) => {
 
     // Yakunlash sanasi: bo'sh → avtoga qaytarish, sana → qo'lda override.
     if (body.completedAt !== undefined) {
-      const d = body.completedAt ? toUtcMidnight(body.completedAt) : null;
+      const d = body.completedAt ? parseLocalDay(body.completedAt) : null;
+      if (body.completedAt && d == null) {
+        throw new ApiError(400, "Yakunlash sanasi noto'g'ri");
+      }
       if (d) {
-        if (d.getTime() > Date.now()) {
+        if (isFutureLocalDay(d)) {
           throw new ApiError(400, "Yakunlash sanasi kelajakda bo'lmasin");
         }
         if (user.enrolledAt && d.getTime() < toUtcMidnight(user.enrolledAt).getTime()) {
@@ -298,8 +310,11 @@ export const update = async (id, body) => {
       if (!body.hiredAt) {
         throw new ApiError(400, "Ishga olingan sana majburiy");
       }
-      const d = new Date(body.hiredAt);
-      if (d.getTime() > Date.now()) {
+      const d = parseLocalDay(body.hiredAt);
+      if (d == null) {
+        throw new ApiError(400, "Ishga olingan sana noto'g'ri");
+      }
+      if (isFutureLocalDay(d)) {
         throw new ApiError(400, "Ishga olingan sana kelajakda bo'lmasin");
       }
       user.hiredAt = d;
@@ -725,7 +740,8 @@ export const createStaff = async (body, currentUser) => {
     branchAssignments,
     isActive: true,
     birthDate: body.birthDate ? new Date(body.birthDate) : null,
-    hiredAt: body.hiredAt ? new Date(body.hiredAt) : new Date(),
+    // Kalendar kuni (UTC-midnight) - "bugun" mahalliy (Asia/Tashkent) kun bo'yicha.
+    hiredAt: body.hiredAt ? parseLocalDay(body.hiredAt) : localTodayMidnight(),
   });
 
   return buildUserProfile(user);
@@ -819,3 +835,88 @@ export const setRole = async (id, role, currentUser) => {
 };
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// --- ISHGA OLISH TASDIG'I (owner tasdig'i talab qilinganda) ---
+//
+// TASDIQLANMAGUNCHA User hujjati YARATILMAYDI. Bu ataylab:
+//   - username/phone unique indeks so'rov paytidayoq band bo'lib qolardi
+//     (owner ko'rmasidan turib "bunday login mavjud" xatosi chiqardi);
+//   - "kutilmoqda" holatidagi odam ro'yxatlarga, davomatga va Telegram
+//     botiga tushib ketardi - ya'ni ishga olinmagan odam tizimda ishlardi.
+// So'rov ma'lumoti faqat Approval.payload ichida yashaydi.
+
+/**
+ * Ishga olishni TASDIQQA yuboradi (User yaratmaydi).
+ *
+ * Yengil tekshiruv: login/telefon bandligi (so'rovchiga darhol javob berish
+ * uchun). Rol/filial huquqlari ATAYLAB bajarish paytida QAYTA tekshiriladi.
+ */
+export const requestHire = async (body, currentUser) => {
+  const approvalService = await import(
+    "../../expenseApprovals/services/expenseApproval.service.js"
+  );
+  const { APPROVAL_KINDS } = await import("../../../models/approval.model.js");
+
+  const username = String(body.username).toLowerCase().trim();
+  const phone = body.phone ? normalizePhone(body.phone) : null;
+  if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
+
+  if (await User.findOne({ username })) {
+    throw new ApiError(409, "Bunday login (username) allaqachon mavjud");
+  }
+  if (phone && (await User.findOne({ phone }))) {
+    throw new ApiError(409, "Bu telefon raqam allaqachon ro'yxatdan o'tgan");
+  }
+  if (!body.homeBranchId) throw new ApiError(400, "Filial tanlanishi shart");
+
+  const branch = await Branch.findOne({ _id: body.homeBranchId, isDeleted: false }).lean();
+  if (!branch) throw new ApiError(400, "Filial topilmadi");
+
+  return approvalService.createRequest({
+    branchId: body.homeBranchId,
+    kind: APPROVAL_KINDS.STAFF_HIRE,
+    // DIQQAT: payload ichida parol bor. U o'qish javoblarida (list/getById)
+    // OLIB TASHLANADI - qarang expenseApproval.service.js: stripSensitive().
+    payload: { ...body, username, phone: phone || undefined },
+    // Bitta login uchun bitta kutilayotgan so'rov.
+    subjectKey: `staff_hire:${username}`,
+    subjectName: `${body.firstName || ""} ${body.lastName || ""}`.trim(),
+    contextName: branch.name || "",
+    requestNote: body.requestNote,
+    currentUser,
+  });
+};
+
+/**
+ * Tasdiqlangan ishga olish so'rovini BAJARADI.
+ *
+ * IMTIYOZ OSHIRISHDAN HIMOYA: createStaff SO'ROVCHINING huquqlari bilan
+ * chaqiriladi, tasdiqlovchining emas. Aks holda direktor "owner rolidagi
+ * foydalanuvchi yarat" deb so'rov yuborib, e'tiborsiz owner tasdiqlasa -
+ * to'liq imtiyoz oshirish sodir bo'lardi. Huquqlar bajarish paytida QAYTA
+ * hisoblanadi (so'rovdan keyin rol o'zgargan bo'lishi mumkin).
+ */
+export const executeApprovedHire = async (approval) => {
+  const { collectPermissions, hasPermission } = await import(
+    "../../../helpers/permission.helper.js"
+  );
+  const { resolveAllowedBranchIds } = await import(
+    "../../../helpers/branchAccess.helper.js"
+  );
+  const { PERMISSIONS } = await import("../../../constants/permissions.js");
+
+  const requester = await User.findById(approval?.requestedBy).lean();
+  if (!requester) throw new ApiError(400, "So'rovchi topilmadi - so'rov bajarilmadi");
+
+  const permissions = await collectPermissions(requester.role);
+  const allowedBranchIds = await resolveAllowedBranchIds(requester, permissions);
+
+  return createStaff(approval.payload || {}, {
+    _id: requester._id,
+    permissions,
+    allowedBranchIds,
+    // requireAuth bilan bir xil hisoblanadi - aks holda ko'lam tekshiruvi
+    // bajarish paytida so'rov paytidagidan farq qilardi.
+    canSeeAllBranches: hasPermission(permissions, PERMISSIONS.BRANCHES_VIEW_ALL),
+  });
+};

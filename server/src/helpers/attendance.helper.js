@@ -73,6 +73,19 @@ export const parseLocalDayKey = (input) => {
   return d ? dateKeyOf(d) : null;
 };
 
+// Kiruvchi sana mahalliy (Asia/Tashkent) kalendar bo'yicha KELAJAKDAMI.
+// MUHIM: kalendar kunini `Date.now()` (vaqt nuqtasi) bilan solishtirib bo'lmaydi -
+// "2026-07-28" UTC yarim tuni sifatida parse bo'ladi va mahalliy 00:00-05:00
+// oralig'ida u `Date.now()` dan KATTA chiqib, bugungi sana "kelajak" deb rad
+// etiladi. Shuning uchun ikkala tomon ham kalendar kuniga keltiriladi.
+// Yaroqsiz sana uchun `false` - uni chaqiruvchi alohida tekshiradi.
+// `now` parametri testlar uchun: soatni mocklamasdan istalgan lahzani berish mumkin.
+export const isFutureLocalDay = (input, now = new Date()) => {
+  const day = parseLocalDay(input);
+  if (day == null) return false;
+  return day.getTime() > localTodayMidnight(now).getTime();
+};
+
 // Diapazonda har bir kunni iteratsiya qiladi (UTC)
 const iterateDays = function* (fromDate, toDate) {
   const start = toUtcMidnight(fromDate);

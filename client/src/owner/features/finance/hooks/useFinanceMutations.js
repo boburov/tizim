@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { qk } from "@/shared/lib/query/keys";
 import { apiErrorToast } from "@/shared/utils/apiError";
+import { unwrapApproval, approvalToast } from "@/shared/utils/approvalResponse";
 import { financeAPI } from "../api/finance.api";
 
 // Moliya o'zgarishlari ko'p query'ga ta'sir qiladi (to'lovlar, hisobot, guruh fee) →
@@ -17,14 +18,19 @@ const useInvalidate = () => {
   };
 };
 
+// Guruh narxi ham chegirma kabi tasdiqdan o'tadi (ikkalasi tushumni
+// kamaytiradi) - tasdiq talab qilinsa server 202 qaytaradi va narx
+// O'ZGARMAYDI, shuning uchun moliya query'larini yangilash noto'g'ri bo'lardi.
 export const useGroupFeeUpsertMutation = (options = {}) => {
   const invalidate = useInvalidate();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => financeAPI.upsertGroupFee(body).then((r) => r.data.data),
-    onSuccess: (data, vars, ctx) => {
-      invalidate();
-      toast.success("Guruh to'lovi saqlandi");
-      options.onSuccess?.(data, vars, ctx);
+    mutationFn: (body) => financeAPI.upsertGroupFee(body).then(unwrapApproval),
+    onSuccess: (res, vars, ctx) => {
+      if (res.pendingApproval) qc.invalidateQueries({ queryKey: qk.expenseApprovals.all() });
+      else invalidate();
+      approvalToast(toast, res, "Guruh to'lovi saqlandi");
+      options.onSuccess?.(res, vars, ctx);
     },
     onError: (err) => {
       apiErrorToast(err);
@@ -65,14 +71,19 @@ export const useRemoveTransactionMutation = (options = {}) => {
   });
 };
 
+// Tasdiq talab qilinsa server 202 qaytaradi va chegirma YOZILMAYDI -
+// shunda moliya query'larini yangilash noto'g'ri bo'lardi (hech nima
+// o'zgarmagan), buning o'rniga tasdiqlar ro'yxati yangilanadi.
 export const useDiscountCreateMutation = (options = {}) => {
   const invalidate = useInvalidate();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => financeAPI.createDiscount(body).then((r) => r.data.data),
-    onSuccess: (data, vars, ctx) => {
-      invalidate();
-      toast.success("Chegirma qo'shildi");
-      options.onSuccess?.(data, vars, ctx);
+    mutationFn: (body) => financeAPI.createDiscount(body).then(unwrapApproval),
+    onSuccess: (res, vars, ctx) => {
+      if (res.pendingApproval) qc.invalidateQueries({ queryKey: qk.expenseApprovals.all() });
+      else invalidate();
+      approvalToast(toast, res, "Chegirma qo'shildi");
+      options.onSuccess?.(res, vars, ctx);
     },
     onError: (err) => {
       apiErrorToast(err);
@@ -83,13 +94,14 @@ export const useDiscountCreateMutation = (options = {}) => {
 
 export const useDiscountUpdateMutation = (options = {}) => {
   const invalidate = useInvalidate();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, body }) =>
-      financeAPI.updateDiscount(id, body).then((r) => r.data.data),
-    onSuccess: (data, vars, ctx) => {
-      invalidate();
-      toast.success("Chegirma yangilandi");
-      options.onSuccess?.(data, vars, ctx);
+    mutationFn: ({ id, body }) => financeAPI.updateDiscount(id, body).then(unwrapApproval),
+    onSuccess: (res, vars, ctx) => {
+      if (res.pendingApproval) qc.invalidateQueries({ queryKey: qk.expenseApprovals.all() });
+      else invalidate();
+      approvalToast(toast, res, "Chegirma yangilandi");
+      options.onSuccess?.(res, vars, ctx);
     },
     onError: (err) => {
       apiErrorToast(err);

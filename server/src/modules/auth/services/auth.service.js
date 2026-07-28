@@ -15,6 +15,7 @@ import { normalizePhone, isPhoneLike } from "../../../utils/phone.js";
 import { ROLES } from "../../../constants/roles.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 import Branch from "../../../models/branch.model.js";
+import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
 
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -294,11 +295,13 @@ export const registerUser = async (body) => {
   if (body.role === ROLES.STUDENT) {
     // Jins faqat o'quvchi uchun saqlanadi (o'qituvchida yo'q).
     doc.gender = body.gender || null;
-    doc.enrolledAt = body.enrolledAt ? new Date(body.enrolledAt) : new Date();
+    // Kalendar kuni sifatida saqlanadi (UTC-midnight) - "bugun" ham mahalliy
+    // (Asia/Tashkent) kun bo'yicha, aks holda 00:00-05:00 oralig'ida kechagi kun tushardi.
+    doc.enrolledAt = body.enrolledAt ? parseLocalDay(body.enrolledAt) : localTodayMidnight();
   }
 
   if (body.role === ROLES.TEACHER) {
-    doc.hiredAt = body.hiredAt ? new Date(body.hiredAt) : new Date();
+    doc.hiredAt = body.hiredAt ? parseLocalDay(body.hiredAt) : localTodayMidnight();
   }
 
   const user = await User.create(doc);

@@ -42,6 +42,8 @@ export const useRoleUpdateMutation = (options = {}) => {
 };
 
 // Muzlatish: rol egasi panelga kira olmay qoladi (mavjud sessiyalari ham uziladi).
+// options.silent - toast'ni chaqiruvchi o'zi ko'rsatadi (masalan rollar
+// ro'yxatida "Qaytarish" tugmasi bilan birga).
 export const useRoleFreezeMutation = (options = {}) => {
   const qc = useQueryClient();
   return useMutation({
@@ -49,7 +51,9 @@ export const useRoleFreezeMutation = (options = {}) => {
       rolesAPI.setFrozen(value, { isFrozen, reason }).then((r) => r.data.data),
     onSuccess: (data, vars, ctx) => {
       invalidateAll(qc);
-      toast.success(vars.isFrozen ? "Rol muzlatildi" : "Rol muzdan chiqarildi");
+      if (!options.silent) {
+        toast.success(vars.isFrozen ? "Rol muzlatildi" : "Rol muzdan chiqarildi");
+      }
       options.onSuccess?.(data, vars, ctx);
     },
     onError: handleErr,

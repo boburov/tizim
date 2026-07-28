@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ROLES } from "../../../constants/roles.js";
+import { isFutureLocalDay } from "../../../helpers/attendance.helper.js";
 
 // gender faqat o'quvchi uchun - o'qituvchida jins so'ralmaydi.
 const STUDENT_FIELDS = ["enrolledAt", "gender"];
@@ -46,7 +47,7 @@ export const registerUserSchema = z.object({
             path: ["hiredAt"],
             message: "Ishga olingan sana majburiy",
           });
-        } else if (b.hiredAt.getTime() > Date.now()) {
+        } else if (isFutureLocalDay(b.hiredAt)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["hiredAt"],
@@ -71,7 +72,7 @@ export const registerUserSchema = z.object({
             path: ["enrolledAt"],
             message: "Ro'yxatga olingan sana majburiy",
           });
-        } else if (b.enrolledAt.getTime() > Date.now()) {
+        } else if (isFutureLocalDay(b.enrolledAt)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["enrolledAt"],

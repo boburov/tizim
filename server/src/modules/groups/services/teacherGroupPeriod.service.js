@@ -4,6 +4,7 @@ import TeacherSalary from "../../../models/teacherSalary.model.js";
 import SalaryTransaction from "../../../models/salaryTransaction.model.js";
 import Group from "../../../models/group.model.js";
 import User from "../../../models/user.model.js";
+import { APPROVAL_KINDS } from "../../../models/approval.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -14,6 +15,7 @@ import {
 } from "../../../helpers/attendance.helper.js";
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
+import { resolveBranchFromGroup } from "../../../helpers/branchContext.helper.js";
 
 const DAY_LABEL_UZ = {
   mon: "Dushanba",
@@ -451,6 +453,126 @@ export const remove = async (id) => {
   await syncGroupTeachersCache(doc.group);
   await recomputeForRange(doc.teacher, doc.group, doc.startDate, doc.endDate);
   return { _id: doc._id };
+};
+
+// --- MAOSH STAVKASI TASDIG'I (owner tasdig'i talab qilinganda) ---
+//
+// Maosh stavkasi TAKRORLANUVCHI xarajat: bir marta belgilangan foiz har oy
+// qayta-qayta hisoblanadi. Shuning uchun u chiqim limitiga emas, IKKILIK
+// huquqqa bog'lanadi (approvals.decide_config) - qarang checkConfigApproval.
+//
+// TASDIQLANMAGUNCHA TeacherGroupPeriod YARATILMAYDI. Bu ataylab: davr hujjati
+// mavjud bo'lishining o'zi maosh hisobiga (periodsForMonth -> recalc) darhol
+// kirib ketardi, ya'ni tasdiqlanmagan stavka to'lanadigan summaga aylanardi.
+// So'rov ma'lumoti faqat Approval.payload ichida yashaydi.
+
+// Subyekt qulfi kaliti: bitta o'qituvchining bitta guruhdagi stavkasi uchun
+// bir vaqtda faqat BITTA kutilayotgan so'rov bo'lsin. "create" va "update"
+// bir xil kalitni beradi - aks holda bir direktor yangi davr, ikkinchisi
+// mavjud davrni o'zgartirishni so'rab, ikkalasi ham tasdiqlanardi.
+const salaryTermsSubjectKey = (group, teacher) =>
+  `salary_terms:${String(group)}:${String(teacher)}`;
+
+/**
+ * Maosh stavkasi o'zgarishini TASDIQQA yuboradi (hujjat yaratmaydi).
+ *
+ * Bu yerda faqat YENGIL tekshiruv bor (guruh/o'qituvchi bor-yo'qligi) - to'liq
+ * invariantlar (davrlar kesishuvi, jadval to'qnashuvi, guruh chegaralari)
+ * ATAYLAB tasdiqlash paytida qayta tekshiriladi, chunki so'rov va tasdiq
+ * orasida holat o'zgarishi mumkin.
+ */
+export const requestSalaryTerms = async ({ op, group, periodId, body }, currentUser) => {
+  const approvalService = await import(
+    "../../expenseApprovals/services/expenseApproval.service.js"
+  );
+
+  let teacher;
+  let groupId = group;
+  if (op === "update") {
+    const period = await TeacherGroupPeriod.findById(periodId).lean();
+    if (!period || period.isDeleted) throw new ApiError(404, "Dars berish davri topilmadi");
+    teacher = period.teacher;
+    groupId = period.group;
+  } else {
+    teacher = body.teacher;
+  }
+
+  const grp = await Group.findById(groupId);
+  assertGroupActive(grp);
+  const teacherDoc = await assertTeacher(teacher);
+
+  const branchId = await resolveBranchFromGroup(groupId);
+
+  return approvalService.createRequest({
+    branchId,
+    kind: APPROVAL_KINDS.SALARY_TERMS,
+    payload: {
+      op,
+      group: String(groupId),
+      teacher: String(teacher),
+      periodId: periodId ? String(periodId) : undefined,
+      startDate: body.startDate,
+      endDate: body.endDate,
+      salaryType: body.salaryType,
+      fixedAmount: body.fixedAmount,
+      percentRate: body.percentRate,
+    },
+    subjectKey: salaryTermsSubjectKey(groupId, teacher),
+    subjectName: [teacherDoc.firstName, teacherDoc.lastName].filter(Boolean).join(" "),
+    contextName: grp?.name || "",
+    requestNote: body.requestNote,
+    currentUser,
+  });
+};
+
+/**
+ * Tasdiqlangan maosh stavkasi so'rovini BAJARADI.
+ *
+ * create/update ning O'ZINI chaqiradi - ya'ni barcha invariantlar (davr
+ * kesishuvi, guruh oynasi, ishga olingan sana, jadval to'qnashuvi) shu yerda
+ * QAYTA ishlaydi. Ular yiqilsa approve() so'rovni FAILED qiladi va owner
+ * sababni ko'radi.
+ *
+ * CRON POYGASI shu yerda yopiladi: create/update ichidagi recomputeForRange
+ * o'sha oy uchun maosh planini ENSURE qilib qayta hisoblaydi. Ya'ni oylik job
+ * 1-sanada eski stavka bilan qator yaratgan bo'lsa ham, 20-sanadagi tasdiq
+ * o'sha MAVJUD qatorni yangilaydi - kelajak oyga surilmaydi.
+ */
+export const executeApprovedSalaryTerms = async (approval) => {
+  const p = approval?.payload || {};
+  // Amalni so'ragan odam nomidan bajariladi (createdBy/updatedBy tarixda
+  // tasdiqlovchi emas, so'rovchi bo'lib qolsin).
+  const actor = { _id: approval?.requestedBy || null };
+
+  const rate = {
+    salaryType: p.salaryType,
+    fixedAmount: p.fixedAmount,
+    percentRate: p.percentRate,
+  };
+
+  if (p.op === "create") {
+    return create(
+      {
+        teacher: p.teacher,
+        group: p.group,
+        startDate: p.startDate,
+        endDate: p.endDate ?? null,
+        ...rate,
+      },
+      actor,
+    );
+  }
+
+  if (p.op === "update") {
+    if (!p.periodId) throw new ApiError(400, "So'rovda davr identifikatori yo'q");
+    return update(
+      p.periodId,
+      { startDate: p.startDate, endDate: p.endDate, ...rate },
+      actor,
+    );
+  }
+
+  throw new ApiError(400, `Noma'lum maosh sharti amali: ${p.op}`);
 };
 
 // --- ERGONOMIK ASSIGN / UNASSIGN ---

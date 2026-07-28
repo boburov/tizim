@@ -116,7 +116,7 @@ const Main = () => {
   const isMobile = useIsMobile();
   const { toggleSidebar } = useSidebar();
   const { role, roleType } = useAuth();
-  const { has } = usePermissions();
+  const { has, hasAny } = usePermissions();
 
   // MENYUNI roleType ANIQLAYDI, rol NOMI emas.
   //
@@ -131,9 +131,12 @@ const Main = () => {
   const filtered = navItems
     .map((item) => ({
       ...item,
-      items: (item.items || []).filter(
-        (sub) => !sub.permission || has(sub.permission),
-      ),
+      // `permission` - bitta kalit; `permissionAnyOf` - kamida bittasi
+      // yetarli (bitta sahifa ikki xil ruxsat egasiga ochiq bo'lganda).
+      items: (item.items || []).filter((sub) => {
+        if (sub.permissionAnyOf?.length) return hasAny(sub.permissionAnyOf);
+        return !sub.permission || has(sub.permission);
+      }),
     }))
     .filter((item) => item.items.length > 0);
 
