@@ -40,9 +40,8 @@ const LeadsStatsPage = () => {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Lidlar statistikasi</h1>
-        </div>
+        {/* Sarlavha LeadsPage qobig'ida (tab nomi = "Statistika") */}
+        <div />
         <div className="flex flex-wrap items-end gap-2">
           {preset === "month" && (
             <>

@@ -163,6 +163,95 @@ export class TenantsService {
     return this.withDnsInfo(t);
   }
 
+  /**
+   * Sayt preview'i uchun URL va uning tirikligi.
+   * Tekshiruv admin serverdan turib qilinadi — brauzer CORS'ga tushmasligi uchun.
+   */
+  async preview(id: string) {
+    const t = await this.prisma.tenant.findUnique({
+      where: { id },
+      select: { id: true, domain: true, status: true, name: true },
+    });
+    if (!t) throw new NotFoundException('Tenant topilmadi');
+
+    if (t.status === 'DELETED') {
+      return {
+        url: null,
+        domain: null,
+        status: t.status,
+        reachable: false,
+        checkedAt: new Date().toISOString(),
+        message: "Loyiha o'chirilgan — sayt mavjud emas",
+      };
+    }
+
+    // probe qaysi sxema (https/http) javob berganini o'zi aniqlab, url ni qaytaradi
+    const probe = await this.probeSite(t.domain);
+
+    return {
+      domain: t.domain,
+      status: t.status,
+      checkedAt: new Date().toISOString(),
+      ...probe,
+      message:
+        probe.reachable
+          ? null
+          : t.status === 'PROVISIONING'
+            ? "Loyiha hali yaratilmoqda — sayt tayyor bo'lgach ko'rinadi"
+            : t.status === 'FAILED'
+              ? 'Provisioning xato bilan tugagan — sayt ishga tushmagan'
+              : "Sayt javob bermadi. DNS hali tarqalmagan yoki nginx/PM2 to'xtagan bo'lishi mumkin",
+    };
+  }
+
+  /** Avval HTTPS, u ishlamasa HTTP — qaysi biri javob bersa o'shani qaytaradi. */
+  private async probeSite(domain: string) {
+    const started = Date.now();
+    for (const scheme of ['https', 'http'] as const) {
+      const url = `${scheme}://${domain}`;
+      try {
+        const res = await fetch(url, {
+          method: 'GET',
+          redirect: 'follow',
+          signal: AbortSignal.timeout(6000),
+        });
+        return {
+          url,
+          reachable: res.ok,
+          httpStatus: res.status,
+          scheme,
+          elapsedMs: Date.now() - started,
+          error: res.ok ? null : `HTTP ${res.status}`,
+        };
+      } catch (err: any) {
+        // HTTPS ishlamasa (sertifikat yo'q) — HTTP bilan qayta urinamiz
+        if (scheme === 'http') {
+          return {
+            url: `https://${domain}`,
+            reachable: false,
+            httpStatus: null,
+            scheme: null,
+            elapsedMs: Date.now() - started,
+            // fetch xatolarida asl sabab cause ichida bo'ladi (ENOTFOUND, ECONNREFUSED...)
+            error:
+              err?.name === 'TimeoutError'
+                ? 'Timeout (6s)'
+                : err?.cause?.message || err?.message,
+          };
+        }
+      }
+    }
+    // Bu yerga yetib kelmaydi, TS uchun
+    return {
+      url: `https://${domain}`,
+      reachable: false,
+      httpStatus: null,
+      scheme: null,
+      elapsedMs: Date.now() - started,
+      error: 'Nomalum xato',
+    };
+  }
+
   /** Muvaffaqiyatsiz provisioning'ni qayta urinish. */
   async retry(id: string) {
     const t = await this.prisma.tenant.findUnique({

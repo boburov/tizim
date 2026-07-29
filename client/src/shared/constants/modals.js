@@ -33,6 +33,7 @@ export const MODAL = Object.freeze({
   BRANCH_CREATE: "branch:create",
   BRANCH_EDIT: "branch:edit",
   BRANCH_DELETE: "branch:delete",
+  BRANCH_FREEZE: "branch:freeze",
 
   // Archive reasons
   ARCHIVE_REASON_CREATE: "archiveReason:create",

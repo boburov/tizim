@@ -46,10 +46,11 @@ import BranchSwitcher from "./BranchSwitcher";
 import useAuth from "@/shared/hooks/useAuth";
 import useLogout from "@/features/auth/hooks/useLogout";
 import usePermissions from "@/shared/hooks/usePermissions";
+import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import { useIsMobile } from "@/shared/hooks/useMobile";
 
 // Constants
-import { ROLES } from "@/shared/constants/roles";
+import { ROLES, ROLE_TYPES } from "@/shared/constants/roles";
 import { APP_NAME, APP_LOGO } from "@/shared/constants/app";
 
 // Rol-spec sidebar konfiguratsiyalari
@@ -122,8 +123,12 @@ const Header = () => {
 
 const Main = () => {
   const isMobile = useIsMobile();
-  const { toggleSidebar } = useSidebar();
-  const { role, roleType } = useAuth();
+  const { toggleSidebar, state } = useSidebar();
+  // Yig'ilgan sidebar faqat ikonka kengligida - qidiruv va tasdiqlar
+  // tugmasi yonma-yon sig'maydi, shuning uchun ustma-ust joylashadi.
+  const isCollapsed = state === "collapsed" && !isMobile;
+  const { role, roleType, multiBranch } = useAuth();
+  const { isAllBranches } = useActiveBranch();
   const { has, hasAny } = usePermissions();
 
   // MENYUNI roleType ANIQLAYDI, rol NOMI emas.
@@ -135,9 +140,23 @@ const Main = () => {
   // har doim mavjud va custom rol qaysi panel bilan ishlashini bildiradi.
   const navItems = ROLE_SIDEBAR[role] || ROLE_SIDEBAR[roleType] || [];
 
+  // OWNER PANELIDA ishlayaptimi. Menyu ROLE_SIDEBAR'da `staff: ownerSidebar`
+  // bilan berilgani uchun xodim (direktor, buxgalter) ham shu panelda
+  // ishlaydi - yaratish tugmasi, qidiruv va MODALLAR unga ham kerak.
+  const isOwnerPanel =
+    role === ROLES.OWNER ||
+    roleType === ROLES.OWNER ||
+    roleType === ROLE_TYPES.STAFF;
+
   // `permission` - bitta kalit; `permissionAnyOf` - kamida bittasi
   // yetarli (bitta sahifa ikki xil ruxsat egasiga ochiq bo'lganda).
+  // `multiBranchOnly`  - yakka markaz rejimida yozuv umuman ko'rsatilmaydi.
+  // `allBranchesOnly`  - faqat "Barcha filiallar" tanlanganda ko'rinadi
+  //                      (filiallararo hisobotlar bitta filial ichida
+  //                      ma'nosiz).
   const allowed = (entry) => {
+    if (entry.multiBranchOnly && !multiBranch) return false;
+    if (entry.allBranchesOnly && !isAllBranches) return false;
     if (entry.permissionAnyOf?.length) return hasAny(entry.permissionAnyOf);
     return !entry.permission || has(entry.permission);
   };
@@ -150,6 +169,7 @@ const Main = () => {
   // Yakka link ataylab qo'shildi: "Tasdiqlar" kabi bitta sahifali bo'lim
   // uchun ochiladigan guruh ortiqcha bosish qadamini qo'shardi.
   const filtered = navItems
+    .filter(allowed)
     .map((item) => ({
       ...item,
       items: (item.items || []).filter(allowed),
@@ -160,20 +180,33 @@ const Main = () => {
 
   return (
     <SidebarContent>
-      {/* Yaratish tugmasi + global qidiruv - owner panelida ishlaydigan hamma
-          uchun (custom "director" roli ham roleType="owner"/"staff" bo'lishi
-          mumkin). Modallar shu yerda mount qilinadi: sidebar har doim
-          DashboardLayout ichida turadi, ya'ni istalgan sahifadan ochiladi. */}
-      {(role === ROLES.OWNER || roleType === ROLES.OWNER) && (
+      {/* Yaratish tugmasi + global qidiruv + YARATISH MODALLARI.
+          Sidebar har doim DashboardLayout ichida turadi, ya'ni modallar
+          istalgan sahifadan ochiladi.
+
+          DIQQAT: shart `isOwnerPanel` - roleType "staff" HAM kiradi.
+          Ilgari faqat owner tekshirilardi va filial direktori (roleType
+          "staff") uchun modallar UMUMAN mount qilinmasdi: sahifadagi
+          "Yangi o'quvchi" tugmasi bosilardi, Redux holati ochilardi,
+          lekin ekranda hech narsa chiqmasdi. Menyu esa ROLE_SIDEBAR'da
+          `staff: ownerSidebar` orqali ko'rinib turardi - shuning uchun
+          nosozlik jimgina bo'lardi. */}
+      {isOwnerPanel && (
         <>
           <SidebarGroup className="gap-2 pb-0">
             <OwnerCreateMenu />
-            <div className="flex items-center gap-1">
+            <div
+              className={
+                isCollapsed
+                  ? "flex flex-col items-center gap-2"
+                  : "flex items-center gap-1.5"
+              }
+            >
               <div className="min-w-0 flex-1">
                 <OwnerGlobalSearch />
               </div>
               {/* Kutilayotgan tasdiqlar paneli - yonboshdan chiqadi */}
-              <OwnerApprovalsBell className="shrink-0" />
+              <OwnerApprovalsBell />
             </div>
           </SidebarGroup>
           <OwnerCreateModals />

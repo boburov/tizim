@@ -28,6 +28,15 @@ export const registerUserSchema = z.object({
 
       // Teacher-only
       hiredAt: z.coerce.date().nullable().optional(),
+
+      // FILIAL. Odatda aktiv filialdan (x-branch-id) olinadi, lekin
+      // "Barcha filiallar" rejimida aktiv filial YO'Q - o'shanda client
+      // qaysi filialga yozishni ochiq yuboradi. Bu maydon bo'lmasa
+      // konsolidatsiya ko'rinishidan odam qo'shib bo'lmasdi.
+      homeBranchId: z.preprocess(
+        (v) => (v === "" || v == null ? undefined : v),
+        z.string().length(24, "Filial noto'g'ri").optional(),
+      ),
     })
     .superRefine((b, ctx) => {
       if (b.role === ROLES.TEACHER) {

@@ -45,7 +45,7 @@ const CREATE_TYPE_OPTIONS = ROLE_TYPE_OPTIONS.filter(
   (o) => o.value !== ROLE_TYPES.OWNER,
 );
 
-const ROLES_PATH = "/owner/roles";
+const ROLES_PATH = "/owner/settings/rollar";
 
 // Rol yaratish/tahrirlash - alohida sahifa.
 // Ilgari bu tor modal ichida edi: ruxsatlar jadvali sig'masdi, gorizontal

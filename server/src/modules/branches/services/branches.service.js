@@ -223,28 +223,55 @@ export const softRemove = async (id, currentUser) => {
 };
 
 /** Filial statistikasi - kartochkada ko'rsatish uchun. */
-export const stats = async (id) => {
+export const stats = async (id, { allowedBranchIds = [], canSeeAllBranches = false } = {}) => {
   const doc = await getById(id);
   const branchId = doc._id;
 
-  const [groupCount, activeGroupCount, staffCount, studentCount] = await Promise.all([
-    Group.countDocuments({ branchId, isDeleted: { $ne: true } }),
-    Group.countDocuments({ branchId, isActive: true, isDeleted: { $ne: true } }),
-    User.countDocuments({
-      $or: [{ homeBranchId: branchId }, { "branchAssignments.branchId": branchId }],
-      role: { $nin: ["student"] },
-      isActive: true,
-      isDeleted: { $ne: true },
-    }),
-    User.countDocuments({
-      $or: [{ homeBranchId: branchId }, { "branchAssignments.branchId": branchId }],
-      role: "student",
-      isActive: true,
-      isDeleted: { $ne: true },
-    }),
-  ]);
+  // KO'LAM TEKSHIRUVI. Bu endpoint filial rahbariyatining ism va loginini
+  // ham qaytaradi, ya'ni "o'z filialingdan boshqasini o'qima" qoidasi shart.
+  if (!canSeeAllBranches) {
+    const allowed = allowedBranchIds.some((b) => String(b) === String(branchId));
+    if (!allowed) throw new ApiError(403, "Bu filialga ruxsatingiz yo'q");
+  }
 
-  return { groupCount, activeGroupCount, staffCount, studentCount };
+  const [groupCount, activeGroupCount, staffCount, studentCount, managers] =
+    await Promise.all([
+      Group.countDocuments({ branchId, isDeleted: { $ne: true } }),
+      Group.countDocuments({ branchId, isActive: true, isDeleted: { $ne: true } }),
+      User.countDocuments({
+        $or: [{ homeBranchId: branchId }, { "branchAssignments.branchId": branchId }],
+        role: { $nin: ["student"] },
+        isActive: true,
+        isDeleted: { $ne: true },
+      }),
+      User.countDocuments({
+        $or: [{ homeBranchId: branchId }, { "branchAssignments.branchId": branchId }],
+        role: "student",
+        isActive: true,
+        isDeleted: { $ne: true },
+      }),
+      // FILIAL RAHBARIYATI - kartada login/parolni ko'rsatish uchun.
+      //
+      // O'quvchi/o'qituvchi chiqarib tashlanadi: kerak bo'lgani "bu filialni
+      // kim boshqaradi" degan savolga javob, ya'ni custom rolli xodimlar
+      // (direktor, administrator, buxgalter). Ega ham kerak emas - u
+      // filialga bog'liq emas.
+      //
+      // PAROL BU YERDA QAYTARILMAYDI: uni alohida /users/:id/password
+      // beradi, ya'ni ro'yxat so'ralganda parollar yopiq qoladi.
+      User.find({
+        $or: [{ homeBranchId: branchId }, { "branchAssignments.branchId": branchId }],
+        role: { $nin: ["student", "teacher", "owner"] },
+        isActive: true,
+        isDeleted: { $ne: true },
+      })
+        .select("firstName lastName username role")
+        .sort({ createdAt: 1 })
+        .limit(5)
+        .lean(),
+    ]);
+
+  return { groupCount, activeGroupCount, staffCount, studentCount, managers };
 };
 
 /**

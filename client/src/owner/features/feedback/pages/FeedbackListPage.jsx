@@ -42,20 +42,12 @@ const FeedbackListPage = () => {
 
   return (
     <div className="space-y-5">
-      {/* Sarlavha + tezkor o'tish */}
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Feedback'lar</h1>
-        </div>
+      {/* Sarlavha FeedbackPage qobig'ida. "Hisobot" endi tab, shuning uchun
+          bu yerdan olib tashlandi; "Turlar" sozlamalarga ko'chdi. */}
+      <header className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link to="/owner/feedback/dashboard">
-              <BarChart3 className="size-4" />
-              Hisobot
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/owner/feedback-types">
+            <Link to="/owner/settings/feedback-turlari">
               <Tags className="size-4" />
               Turlar
             </Link>

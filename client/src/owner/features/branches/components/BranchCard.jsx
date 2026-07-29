@@ -1,7 +1,19 @@
 // Icons
-import { Building2, MapPin, Phone, Pencil, Trash2, Star, ShieldCheck } from "lucide-react";
+import {
+  Building2,
+  MapPin,
+  Phone,
+  Pencil,
+  Trash2,
+  Star,
+  ShieldCheck,
+  Snowflake,
+  Play,
+  KeyRound,
+} from "lucide-react";
 
 // Utils
+import { cn } from "@/shared/utils/cn";
 import { formatMoney } from "@/shared/utils/formatMoney";
 
 // Hooks
@@ -28,8 +40,16 @@ const BranchCard = ({ branch }) => {
   const canUpdate = has(PERMISSIONS.BRANCHES_UPDATE);
   const canDelete = has(PERMISSIONS.BRANCHES_DELETE);
 
+  const isFrozen = branch.isActive === false;
+  const managers = stats?.managers || [];
+
   return (
-    <div className="rounded-lg border p-4 space-y-3">
+    <div
+      className={cn(
+        "rounded-lg border p-4 space-y-3",
+        isFrozen && "border-dashed opacity-60",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center justify-center size-10 shrink-0 rounded-md bg-primary/10 text-primary">
@@ -46,6 +66,12 @@ const BranchCard = ({ branch }) => {
                 Asosiy
               </span>
             )}
+            {isFrozen && (
+              <span className="flex items-center gap-1 shrink-0 text-xs text-sky-600">
+                <Snowflake size={12} strokeWidth={2} />
+                Muzlatilgan
+              </span>
+            )}
           </div>
         </div>
 
@@ -58,6 +84,22 @@ const BranchCard = ({ branch }) => {
               onClick={() => openModal(MODAL.BRANCH_EDIT, { branch })}
             >
               <Pencil size={16} strokeWidth={1.5} />
+            </button>
+          )}
+          {/* Muzlatish - asosiy filialda yo'q: serverda ham taqiqlangan
+              (barcha eski ma'lumot shunga biriktirilgan). */}
+          {canUpdate && !branch.isMain && (
+            <button
+              type="button"
+              title={isFrozen ? "Faollashtirish" : "Muzlatish"}
+              className="p-2 rounded-md hover:bg-muted"
+              onClick={() => openModal(MODAL.BRANCH_FREEZE, { branch })}
+            >
+              {isFrozen ? (
+                <Play size={16} strokeWidth={1.5} />
+              ) : (
+                <Snowflake size={16} strokeWidth={1.5} />
+              )}
             </button>
           )}
           {/* Asosiy filialni o'chirib bo'lmaydi - tugma ham ko'rsatilmaydi */}
@@ -88,6 +130,36 @@ const BranchCard = ({ branch }) => {
               <span>{branch.phone}</span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* FILIAL RAHBARIYATI - "bu filialni kim boshqaradi va u qanday
+          kiradi" degan savolga shu yerda javob beriladi. Parol ro'yxat
+          bilan kelmaydi: kalit tugmasi alohida so'rov yuboradi. */}
+      {managers.length > 0 && (
+        <div className="space-y-1.5 pt-2 border-t">
+          {managers.map((m) => (
+            <div key={m._id} className="flex items-center gap-2 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="truncate">
+                  {m.firstName} {m.lastName}
+                </p>
+                <p className="truncate text-xs opacity-60">
+                  {m.role} · {m.username}
+                </p>
+              </div>
+              {canUpdate && (
+                <button
+                  type="button"
+                  title="Login va parol"
+                  className="p-1.5 rounded-md hover:bg-muted shrink-0"
+                  onClick={() => openModal(MODAL.USER_PASSWORD, { user: m })}
+                >
+                  <KeyRound size={15} strokeWidth={1.5} />
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

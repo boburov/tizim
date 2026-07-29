@@ -76,9 +76,7 @@ const DiscountsPage = () => {
         onDelete={(d) => openModal(MODAL.DISCOUNT_DELETE, { discount: d })}
       />
 
-      <ModalWrapper name={MODAL.DISCOUNT_CREATE} title="Yangi chegirma">
-        <DiscountCreateModal />
-      </ModalWrapper>
+      {/* DISCOUNT_CREATE global mount qilingan (owner/components/CreateModals) */}
       <ModalWrapper name={MODAL.DISCOUNT_EDIT} title="Chegirmani tahrirlash">
         <DiscountEditModal />
       </ModalWrapper>

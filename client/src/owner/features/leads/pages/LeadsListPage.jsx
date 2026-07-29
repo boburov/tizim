@@ -58,9 +58,8 @@ const LeadsListPage = () => {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Lidlar</h1>
-        </div>
+        {/* Sarlavha LeadsPage qobig'ida */}
+        <div />
         <Button onClick={() => openModal(MODAL.LEAD_CREATE)}>
           <Plus className="size-4" />
           Yangi lid
@@ -111,9 +110,7 @@ const LeadsListPage = () => {
         </>
       )}
 
-      <ModalWrapper name={MODAL.LEAD_CREATE} title="Yangi lid" className="max-w-xl">
-        <LeadCreateModal />
-      </ModalWrapper>
+      {/* LEAD_CREATE global mount qilingan (owner/components/CreateModals) */}
       <ModalWrapper name={MODAL.LEAD_EDIT} title="Lidni tahrirlash" className="max-w-xl">
         <LeadEditModal />
       </ModalWrapper>

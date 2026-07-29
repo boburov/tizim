@@ -6,6 +6,7 @@ import ApprovalKindCell from "./ApprovalKindCell";
 
 // Hooks
 import useApprovalPermissions from "../hooks/useApprovalPermissions";
+import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import {
   useApproveMutation,
   useRejectMutation,
@@ -24,6 +25,7 @@ import { approvalHeadline, fullName } from "../utils/approvalSummary";
  * paneli va kirish modali bilan AYNAN bir xil qoida.
  */
 const ApprovalToastCard = ({ approval, onClose, onOpenDetail }) => {
+  const { hasMultipleBranches } = useActiveBranch();
   const { resolve } = useApprovalPermissions();
   const { canDecide, reason } = resolve(approval);
 
@@ -61,7 +63,9 @@ const ApprovalToastCard = ({ approval, onClose, onOpenDetail }) => {
         <p className="text-sm font-semibold">{approvalHeadline(approval)}</p>
         <p className="text-xs text-zinc-500">
           {fullName(approval.requestedBy)}
-          {approval.branchId?.name ? ` · ${approval.branchId.name}` : ""}
+          {hasMultipleBranches && approval.branchId?.name
+            ? ` · ${approval.branchId.name}`
+            : ""}
         </p>
       </div>
 

@@ -52,6 +52,18 @@ const env = Object.freeze({
   // Limit oshganda yaratishni bloklash (hard limit). false = faqat ogohlantirish.
   ENFORCE_LIMITS:
     String(process.env.ENFORCE_LIMITS || "true").toLowerCase() === "true",
+
+  // KO'P FILIALLI REJIM.
+  //
+  // false = yakka o'quv markazi: filial tushunchasi UI'da umuman ko'rinmaydi
+  // (tanlagich, "Filiallar" bo'limi, jadval ustuni, forma maydoni) va yangi
+  // filial ochib bo'lmaydi.
+  //
+  // Standart TRUE - ataylab. Bu o'zgaruvchi eski o'rnatmalarda yo'q, va
+  // standart false bo'lsa bir nechta filiali bor markaz upgrade'dan keyin
+  // filial UI'sini jimgina yo'qotardi. Yakka markaz buni ochiq e'lon qiladi.
+  MULTI_BRANCH:
+    String(process.env.MULTI_BRANCH || "true").toLowerCase() === "true",
 });
 
 export const isProd = env.NODE_ENV === "production";

@@ -44,7 +44,7 @@ const DashboardTopbar = () => {
 
       {/* Profil havolasi */}
       <Link
-        to="/owner/profile"
+        to="/owner/settings"
         className="group flex items-center gap-2 rounded-full border border-zinc-200 bg-white py-1 pl-1 pr-2 transition hover:border-primary/30 hover:shadow-sm"
       >
         <span className="flex size-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">

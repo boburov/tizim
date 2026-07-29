@@ -73,7 +73,7 @@ const RolesPage = () => {
             Har bir rol tizimning qaysi qismlariga kira olishini belgilaydi
           </p>
         </div>
-        <Button onClick={() => navigate("/owner/roles/new")}>
+        <Button onClick={() => navigate("/owner/settings/rollar/new")}>
           <Plus className="mr-1.5 size-4" />
           Yangi rol
         </Button>
@@ -86,7 +86,7 @@ const RolesPage = () => {
       ) : (
         <RolesList
           roles={roles}
-          onSelect={(v) => navigate(`/owner/roles/${v}`)}
+          onSelect={(v) => navigate(`/owner/settings/rollar/${v}`)}
           onToggleFreeze={(role) =>
             setFrozen({ value: role.value, isFrozen: !role.isFrozen })
           }

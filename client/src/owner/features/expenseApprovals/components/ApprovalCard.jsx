@@ -6,6 +6,7 @@ import Button from "@/shared/components/ui/button/Button";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
+import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import usePermissions from "@/shared/hooks/usePermissions";
 import {
   useApproveMutation,
@@ -95,6 +96,7 @@ const fullName = (u) =>
   u ? `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username : "—";
 
 const ApprovalCard = ({ approval }) => {
+  const { hasMultipleBranches } = useActiveBranch();
   const { user } = useAuth();
   const { has } = usePermissions();
   const { mutate: approve, isPending: approving } = useApproveMutation();
@@ -145,7 +147,7 @@ const ApprovalCard = ({ approval }) => {
           )}
         </div>
 
-        {approval.branchId?.name && (
+        {hasMultipleBranches && approval.branchId?.name && (
           <span className="text-xs opacity-60 shrink-0">{approval.branchId.name}</span>
         )}
       </div>

@@ -38,10 +38,37 @@ const BranchSwitcher = () => {
     isAllBranches,
     canSeeAllBranches,
     hasMultipleBranches,
+    multiBranch,
     changeBranch,
   } = useActiveBranch();
 
-  if (!hasMultipleBranches) return null;
+  // Yakka markaz rejimi - filial tushunchasi umuman yo'q.
+  if (!multiBranch) return null;
+
+  // BITTA FILIAL: tanlash ma'nosiz, lekin filial administratori QAYSI
+  // filialda ishlayotganini bilishi kerak - bosilmaydigan yorliq beramiz.
+  // Ilgari bu holatda hech narsa ko'rsatilmasdi va direktor kontekstni
+  // umuman ko'rmasdi.
+  if (!hasMultipleBranches) {
+    const only = activeBranch || branches[0];
+    if (!only) return null;
+
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <div className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sidebar-foreground">
+            <div className="flex items-center justify-center size-8 shrink-0 bg-primary/10 text-primary rounded-[2px]">
+              <Building2 size={18} strokeWidth={1.5} />
+            </div>
+            <div className="grid flex-1 min-w-0 text-left text-sm leading-tight">
+              <span className="truncate text-xs opacity-70">Filial</span>
+              <span className="truncate font-medium">{only.name}</span>
+            </div>
+          </div>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    );
+  }
 
   const label = isAllBranches
     ? "Barcha filiallar"

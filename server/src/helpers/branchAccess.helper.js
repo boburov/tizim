@@ -2,8 +2,48 @@ import Branch from "../models/branch.model.js";
 import ApiError from "../utils/ApiError.js";
 import { PERMISSIONS } from "../constants/permissions.js";
 import { hasPermission } from "./permission.helper.js";
+import env from "../config/env.js";
 
 // Filialga kirish huquqini hisoblash. requireAuth'dan keyin ishlaydi.
+
+// ASOSIY FILIAL KESHI.
+//
+// Yakka markaz rejimida bu har SO'ROVDA kerak bo'ladi - keshsiz har
+// so'rovga bitta ortiqcha DB o'qishi qo'shilardi. Kesh xavfsiz: yakka
+// rejimda yangi filial ochib bo'lmaydi (POST /branches 403) va `isMain`
+// ni o'zgartiradigan endpoint yo'q.
+let mainBranchIdCache;
+
+export const clearMainBranchCache = () => {
+  mainBranchIdCache = undefined;
+};
+
+/**
+ * Markazning ASOSIY filiali (isMain). Yakka markaz rejimida hamma narsa
+ * shunga qisqartiriladi.
+ *
+ * Zaxira tartibi (Branch.create `isMain: count === 0` qo'yadi, ya'ni odatda
+ * har doim bittasi bor - lekin qo'lda tahrirlangan bazaga ham chidamli):
+ *   1. isMain: true bo'lgan eng eski filial
+ *   2. umuman eng eski filial
+ *   3. null - hali filial yaratilmagan (yangi o'rnatma)
+ */
+export const resolveMainBranchId = async () => {
+  if (mainBranchIdCache !== undefined) return mainBranchIdCache;
+
+  const main =
+    (await Branch.findOne({ isMain: true, isDeleted: false })
+      .select("_id")
+      .sort({ createdAt: 1 })
+      .lean()) ||
+    (await Branch.findOne({ isDeleted: false })
+      .select("_id")
+      .sort({ createdAt: 1 })
+      .lean());
+
+  mainBranchIdCache = main ? String(main._id) : null;
+  return mainBranchIdCache;
+};
 
 /**
  * Foydalanuvchi kira oladigan filiallar ro'yxati (ObjectId string massiv).
@@ -46,6 +86,39 @@ export const resolveRoleForBranch = (user, branchId) => {
 export const resolveBranchScope = async ({ user, permissions, requestedBranchId }) => {
   const canSeeAll = hasPermission(permissions, PERMISSIONS.BRANCHES_VIEW_ALL);
   const allowedBranchIds = await resolveAllowedBranchIds(user, permissions);
+
+  // YAKKA MARKAZ REJIMI (MULTI_BRANCH=false).
+  //
+  // Hamma narsa ASOSIY filialga qisqartiriladi: markaz bitta joydan iborat
+  // ko'rinadi. Client yuborgan filial sarlavhasi e'tiborsiz qoldiriladi -
+  // UI'da tanlagich yo'q, demak header faqat eskirgan localStorage'dan yoki
+  // qo'lda yuborilgan so'rovdan kelishi mumkin.
+  //
+  // MUZLATISH shu yerda sodir bo'ladi: qolgan filiallar ko'lamdan chiqadi,
+  // ya'ni ularning ma'lumoti na o'qiladi, na yoziladi. Bu FAQAT o'qish
+  // vaqtidagi ko'lam - bazaga hech narsa yozilmaydi, shuning uchun bayroqni
+  // qaytarish hamma narsani joyiga qaytaradi.
+  if (!env.MULTI_BRANCH) {
+    const mainId = await resolveMainBranchId();
+
+    // Hali birorta filial yo'q (yangi o'rnatma) - tabiiy ko'lamda qolamiz,
+    // aks holda foydalanuvchi bo'sh ekranga qamalib qolardi.
+    if (!mainId) {
+      return { branchId: null, allowedBranchIds, canSeeAllBranches: canSeeAll };
+    }
+
+    // IMTIYOZ OSHIRISHDAN HIMOYA: asosiy filialni foydalanuvchining O'Z
+    // ro'yxati bilan kesishtiramiz. Faqat B filialiga biriktirilgan direktor
+    // aks holda asosiy filial ma'lumotini ko'rib qolardi - u hech qachon
+    // ruxsat etilmagan. Uning filiali muzlatilgan, demak ko'lami bo'sh.
+    const scoped = allowedBranchIds.includes(mainId) ? [mainId] : [];
+
+    return {
+      branchId: scoped.length ? mainId : null,
+      allowedBranchIds: scoped,
+      canSeeAllBranches: false,
+    };
+  }
 
   // "all" so'ralgan: faqat view_all huquqi borlar uchun.
   // Huquq bo'lmasa XATO TASHLAMAYMIZ - o'z ko'lamiga tushiramiz (pastga o'tadi).

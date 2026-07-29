@@ -45,6 +45,13 @@ const useAuth = () => {
     branches: data?.branches || [],
     canSeeAllBranches: !!data?.canSeeAllBranches,
     homeBranchId: data?.homeBranchId || null,
+    // KO'P FILIALLI REJIM (server env, MULTI_BRANCH). false bo'lsa filial
+    // tushunchasi UI'da umuman ko'rinmaydi. Server yubormasa - true
+    // (eski backend bilan ishlayotgan client o'zgarishsiz qoladi).
+    multiBranch: data?.multiBranch !== false,
+    // Markazdagi jami filial. Yakka rejim yoqilgan-u, bu 1 dan katta bo'lsa -
+    // hisobotlar faqat asosiy filialni qamraydi (ogohlantirish chizig'i).
+    branchCount: data?.branchCount ?? 0,
     isOwner: roleType === ROLES.OWNER,
     isAuthenticated: !!data?.user,
     isLoading: !!token && isLoading,

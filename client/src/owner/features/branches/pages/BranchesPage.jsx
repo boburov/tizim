@@ -8,8 +8,11 @@ import BranchCard from "../components/BranchCard";
 import BranchCreateModal from "../components/modals/BranchCreateModal";
 import BranchEditModal from "../components/modals/BranchEditModal";
 import BranchDeleteModal from "../components/modals/BranchDeleteModal";
+import BranchFreezeModal from "../components/modals/BranchFreezeModal";
+import UserPasswordModal from "@/owner/features/users/components/UserPasswordModal";
 
 // Hooks
+import useAuth from "@/shared/hooks/useAuth";
 import useModal from "@/shared/hooks/useModal";
 import usePermissions from "@/shared/hooks/usePermissions";
 import useBranchesQuery from "../hooks/useBranchesQuery";
@@ -18,18 +21,26 @@ import useBranchesQuery from "../hooks/useBranchesQuery";
 import { MODAL } from "@/shared/constants/modals";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 
+// Ikki rejimda ishlaydi:
+//   • ko'p filialli - "Filiallar" ro'yxati, yangi filial ochish mumkin
+//   • yakka markaz  - Sozlamalar ichida "Markaz" sifatida ochiladi, ro'yxatda
+//     bitta karta bo'ladi va yangi filial ochish tugmasi yo'q (serverda ham
+//     POST /branches 403 qaytaradi)
 const BranchesPage = () => {
   const { openModal } = useModal();
   const { has } = usePermissions();
+  const { multiBranch } = useAuth();
   const { data, isLoading } = useBranchesQuery({ includeInactive: true });
 
   const branches = data?.data || [];
-  const canCreate = has(PERMISSIONS.BRANCHES_CREATE);
+  const canCreate = multiBranch && has(PERMISSIONS.BRANCHES_CREATE);
 
   return (
     <div className="space-y-4">
       <header className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Filiallar</h1>
+        <h1 className="text-2xl font-semibold">
+          {multiBranch ? "Filiallar" : "Markaz ma'lumotlari"}
+        </h1>
 
         {canCreate && (
           <Button onClick={() => openModal(MODAL.BRANCH_CREATE)}>
@@ -60,6 +71,13 @@ const BranchesPage = () => {
       </ModalWrapper>
       <ModalWrapper name={MODAL.BRANCH_EDIT} title="Filialni tahrirlash">
         <BranchEditModal />
+      </ModalWrapper>
+      <ModalWrapper name={MODAL.BRANCH_FREEZE} title="Filial holati">
+        <BranchFreezeModal />
+      </ModalWrapper>
+      {/* Filial rahbarining login/paroli - kartadagi kalit tugmasidan */}
+      <ModalWrapper name={MODAL.USER_PASSWORD} title="Foydalanuvchi paroli">
+        <UserPasswordModal />
       </ModalWrapper>
       <ModalWrapper name={MODAL.BRANCH_DELETE} title="Filialni o'chirish">
         <BranchDeleteModal />

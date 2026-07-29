@@ -3,8 +3,10 @@ import Button from "@/shared/components/ui/button/Button";
 import BranchFormFields from "../BranchFormFields";
 import { useBranchUpdateMutation } from "../../hooks/useBranchMutations";
 
-const BranchEditModal = ({ close, isLoading, setIsLoading, data }) => {
-  const branch = data?.branch || {};
+const BranchEditModal = ({ branch = {}, close, isLoading, setIsLoading }) => {
+  // DIQQAT: ModalWrapper `data` ni YOYIB beradi (...(data || {})),
+  // ya'ni openModal(NAME, { branch }) -> shu yerda `branch` propi.
+  // `data.branch` deb o'qish undefined qaytarardi.
   const obj = useObjectState({
     name: branch.name || "",
     address: branch.address || "",

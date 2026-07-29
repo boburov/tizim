@@ -24,6 +24,7 @@ import {
   STATUS_STYLE,
 } from '../lib/tenantStatus';
 import UsageLimits from '../components/UsageLimits';
+import SitePreview from '../components/SitePreview';
 
 function copy(text) {
   navigator.clipboard.writeText(text);
@@ -152,6 +153,9 @@ export default function TenantDetailPage() {
           {STATUS_LABEL[t.status] || t.status}
         </span>
       </div>
+
+      {/* Sayt preview — tirik bo'lsa iframe, bo'lmasa brend mock */}
+      <SitePreview tenant={t} />
 
       {/* DNS / IP bo'limi — Cloudflare uchun */}
       <div className="mb-5 rounded-xl border border-brand/20 bg-brand/5 p-5">

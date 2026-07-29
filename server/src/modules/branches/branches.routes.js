@@ -3,6 +3,21 @@ import requireAuth from "../../middleware/auth.js";
 import requirePermission from "../../middleware/requirePermission.js";
 import validate from "../../middleware/validate.js";
 import { PERMISSIONS } from "../../constants/permissions.js";
+import ApiError from "../../utils/ApiError.js";
+import env from "../../config/env.js";
+
+// YAKKA MARKAZ REJIMI: yangi filial ochishni to'sadi.
+//
+// UI'da tugma yashiringani YETARLI EMAS - so'rovni qo'lda yuborib
+// "arvoh" filial yaratish va unga ma'lumot yozish mumkin edi.
+const requireMultiBranch = (_req, _res, next) => {
+  if (!env.MULTI_BRANCH) {
+    return next(
+      new ApiError(403, "Yakka markaz rejimida yangi filial ochib bo'lmaydi"),
+    );
+  }
+  next();
+};
 
 import { listSchema } from "./validators/list.validator.js";
 import { idSchema } from "./validators/id.validator.js";
@@ -25,7 +40,16 @@ router.get("/", requireAuth, validate(listSchema), list);
 // "/:id" dan OLDIN: aks holda "compare" filial ID deb o'qilardi.
 router.get("/compare", requireAuth, requirePermission(PERMISSIONS.BRANCHES_READ), compare);
 router.get("/:id", requireAuth, validate(idSchema), getById);
-router.get("/:id/stats", requireAuth, validate(idSchema), stats);
+// Statistika filial rahbariyatining ism/loginini ham qaytaradi, shuning
+// uchun ruxsat SHART - ilgari har qanday auth'langan foydalanuvchi (hatto
+// o'quvchi) istalgan filial ko'rsatkichini o'qiy olardi.
+router.get(
+  "/:id/stats",
+  requireAuth,
+  requirePermission(PERMISSIONS.BRANCHES_READ),
+  validate(idSchema),
+  stats,
+);
 
 // YOZISH: faqat SYSTEM_ADMIN_ACCESS bilan.
 //
@@ -36,6 +60,7 @@ router.get("/:id/stats", requireAuth, validate(idSchema), stats);
 router.post(
   "/",
   requireAuth,
+  requireMultiBranch,
   requirePermission(PERMISSIONS.SYSTEM_ADMIN_ACCESS),
   requirePermission(PERMISSIONS.BRANCHES_CREATE),
   validate(createSchema),

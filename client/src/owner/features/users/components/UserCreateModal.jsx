@@ -1,4 +1,5 @@
 import useObjectState from "@/shared/hooks/useObjectState";
+import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import useUserCreateMutation from "../hooks/useUserCreateMutation";
 
 import InputField from "@/shared/components/ui/input/InputField";
@@ -25,6 +26,7 @@ const initialState = (defaultRole) => ({
   phone: "",
   password: "",
   role: defaultRole || ROLES.STUDENT,
+  homeBranchId: "",
 
   gender: "",
 
@@ -39,6 +41,16 @@ const initialState = (defaultRole) => ({
 const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
   const obj = useObjectState(initialState(defaultRole));
   const isStudent = obj.role === ROLES.STUDENT;
+
+  // FILIAL. Odatda server aktiv filialdan (x-branch-id) oladi. Lekin
+  // "Barcha filiallar" rejimida aktiv filial YO'Q va server 400 qaytaradi
+  // ("Filial tanlanmagan") - o'shanda qaysi filialga yozishni SO'RAYMIZ.
+  const { branches, isAllBranches, multiBranch } = useActiveBranch();
+  const needsBranch = multiBranch && isAllBranches;
+  const branchOptions = branches.map((b) => ({
+    value: String(b._id),
+    label: b.name,
+  }));
 
   const { mutate } = useUserCreateMutation({
     onSuccess: () => {
@@ -60,7 +72,9 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
     obj.role &&
     // O'qituvchi uchun ishga olingan sana, o'quvchi uchun ro'yxatga olingan sana majburiy.
     (obj.role !== ROLES.TEACHER || obj.hiredAt) &&
-    (obj.role !== ROLES.STUDENT || obj.enrolledAt);
+    (obj.role !== ROLES.STUDENT || obj.enrolledAt) &&
+    // "Barcha filiallar" rejimida qaysi filialga yozishni bilish shart.
+    (!needsBranch || obj.homeBranchId);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -76,6 +90,7 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
       role: obj.role,
     };
     // Telefon ixtiyoriy: faqat kiritilgan bo'lsa yuboriladi.
+    if (needsBranch && obj.homeBranchId) body.homeBranchId = obj.homeBranchId;
     if (obj.phone.trim()) body.phone = obj.phone.trim();
     if (obj.gender) body.gender = obj.gender;
 
@@ -146,6 +161,19 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
         required
         disabled={isLoading}
       />
+
+      {needsBranch && (
+        <SelectField
+          label="Filial"
+          placeholder="Filialni tanlang"
+          value={obj.homeBranchId}
+          onChange={(v) => obj.setField("homeBranchId", v?.target?.value ?? v)}
+          options={branchOptions}
+          required
+          error={!obj.homeBranchId}
+          disabled={isLoading}
+        />
+      )}
 
       {isStudent ? (
         <div className="grid grid-cols-2 gap-3">

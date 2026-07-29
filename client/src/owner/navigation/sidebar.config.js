@@ -1,51 +1,62 @@
 import {
-  CalendarCheck,
-  Bell,
   BadgeCheck,
   Building2,
-  MessageSquare,
+  GraduationCap,
   LayoutDashboard,
-  MonitorCog,
-  Star,
-  Target,
+  MessagesSquare,
+  Settings,
   Wallet,
 } from "lucide-react";
 
+// MENYU TUZILISHI
+//
+// Uchta o'lchov aralashib ketgan edi: subyekt (o'quvchi/guruh/filial),
+// ish (davomat/baholash/lid) va sozlama. 30 ta havoladan 11 tasi sozlama
+// bo'lib, olti xil guruhga sochilgandi - "Sozlamalar" nomi uchta guruhda
+// takrorlanardi.
+//
+// Yechim: sozlamalar butunlay ajratildi (/owner/settings), qolgani esa
+// kundalik ish bo'yicha guruhlandi. 10 bo'lim / 30 havola -> 7 / 15.
+//
+// Yozuv turlari:
+//   • GURUH      - `items` massivi bor, ochiladigan collapsible
+//   • YAKKA LINK - `url` bor, `items` yo'q, to'g'ridan-to'g'ri havola
 const ownerSidebar = [
   {
-    title: "Asosiy",
+    title: "Bosh sahifa",
     icon: LayoutDashboard,
+    url: "/owner/dashboard",
+    permission: "admin_dashboard.read",
+  },
+
+  // Ataylab YAKKA link: bitta sahifa uchun ochiladigan guruh ortiqcha
+  // bosish qadamini qo'shardi. Badge kutilayotgan so'rovlar sonini ko'rsatadi.
+  {
+    title: "Tasdiqlar",
+    icon: BadgeCheck,
+    url: "/owner/expense-approvals",
+    badge: "approvals",
+    permissionAnyOf: ["finance.read", "approvals.decide_config"],
+  },
+
+  {
+    title: "O'quv jarayoni",
+    icon: GraduationCap,
     isActive: true,
     items: [
-      {
-        title: "Bosh sahifa",
-        url: "/owner/dashboard",
-        permission: "admin_dashboard.read",
-      },
-      // SUBYEKT BO'YICHA GURUHLASH: o'quvchiga tegishli hamma narsa (to'lov,
-      // qarzdorlik, chegirma, statistika) o'quvchilar sahifasining tabi;
-      // o'qituvchiniki (maosh, qoldiq, davomat) - o'qituvchilar sahifasida.
-      // Shuning uchun bu yerda har bir subyekt bitta link.
-      {
-        title: "O'quvchilar",
-        url: "/owner/students",
-        permission: "users.read",
-      },
+      // Har bir subyekt bitta havola: unga tegishli hamma narsa
+      // (to'lov, maosh, statistika) sahifa ichidagi tab.
+      { title: "O'quvchilar", url: "/owner/students", permission: "users.read" },
       {
         title: "O'qituvchilar",
         url: "/owner/teachers",
         permission: "users.read",
       },
-      {
-        title: "Guruhlar",
-        url: "/owner/groups",
-        permission: "groups.read",
-      },
-      {
-        title: "Arxiv sabablari",
-        url: "/owner/archive-reasons",
-        permission: "archive_reasons.manage",
-      },
+      { title: "Guruhlar", url: "/owner/groups", permission: "groups.read" },
+      // Davomat: umumiy/guruh hisoboti + belgilash - bitta sahifa, uch tab.
+      { title: "Davomat", url: "/owner/attendance", permission: "attendance.read" },
+      // Baholash: baho qo'yish + reyting.
+      { title: "Baholash", url: "/owner/grades", permission: "grades.record" },
     ],
   },
 
@@ -59,9 +70,6 @@ const ownerSidebar = [
         url: "/owner/finance/accounting",
         permission: "finance.read",
       },
-      // Maosh -> O'qituvchilar, to'lov/qarzdorlik/chegirma -> O'quvchilar,
-      // guruh to'lovi -> Guruhlar sahifasiga ko'chdi. Bu yerda faqat
-      // subyektga bog'lanmagan umumiy moliya qoladi.
       {
         title: "To'lovlar",
         url: "/owner/finance/deposits",
@@ -70,184 +78,56 @@ const ownerSidebar = [
     ],
   },
 
-  // TASDIQLAR - ataylab YAKKA link (`items` yo'q, `url` bor).
-  // Moliya guruhidan chiqarildi: so'rovlar chiqim ham, sozlama ham, ishga
-  // olish ham bo'lgani uchun u faqat moliya bo'limi emas. Bitta sahifa
-  // bo'lgani uchun ochiladigan guruh ortiqcha bosish qadamini qo'shardi.
-  {
-    title: "Tasdiqlar",
-    icon: BadgeCheck,
-    url: "/owner/expense-approvals",
-    badge: "approvals",
-    permissionAnyOf: ["finance.read", "approvals.decide_config"],
-  },
-
+  // Yakka o'quv markazida (MULTI_BRANCH=false) bu bo'lim UMUMAN ko'rinmaydi -
+  // filial ro'yxati, taqqoslash va filiallar kesimidagi statistika bir filial
+  // uchun ma'nosiz. Yagona filialning ma'lumoti Sozlamalar > Markaz'da.
   {
     title: "Filiallar",
     icon: Building2,
-    isActive: false,
+    multiBranchOnly: true,
     items: [
-      {
-        title: "Ro'yxat",
-        url: "/owner/branches",
-        permission: "branches.read",
-      },
+      { title: "Ro'yxat", url: "/owner/branches", permission: "branches.read" },
       {
         title: "Taqqoslash",
         url: "/owner/branches/compare",
         permission: "branches.read",
+        // Filiallararo ko'rinish: bitta filial tanlangan holatda ma'nosiz
+        // (filialni o'zi bilan taqqoslash), shuning uchun faqat
+        // "Barcha filiallar" rejimida chiqadi.
+        allBranchesOnly: true,
       },
       {
         title: "Statistika",
         url: "/owner/branches/stats",
         permission: "branches.read",
-      },
-      {
-        // Chiqim tasdiq limiti (expenseApprovalThreshold) - ilgari faqat
-        // filialni tahrirlash modalida edi, ya'ni "qaysi filialda limit
-        // qancha" degan savolga javob berish uchun har birini ochish kerak edi.
-        title: "Limitlar",
-        url: "/owner/branches/limits",
-        permission: "branches.update",
+        // Filiallararo ko'rinish: bitta filial tanlangan holatda ma'nosiz
+        // (filialni o'zi bilan taqqoslash), shuning uchun faqat
+        // "Barcha filiallar" rejimida chiqadi.
+        allBranchesOnly: true,
       },
     ],
   },
 
   {
-    title: "Lidlar",
-    icon: Target,
-    isActive: false,
+    title: "Aloqa",
+    icon: MessagesSquare,
     items: [
+      { title: "Lidlar", url: "/owner/leads", permission: "leads.read" },
       {
-        title: "Ro'yxatlar",
-        url: "/owner/leads",
-        permission: "leads.read",
-      },
-      {
-        title: "Statistika",
-        url: "/owner/leads/stats",
-        permission: "leads.read",
-      },
-      {
-        title: "Sozlamalar",
-        url: "/owner/leads/settings",
-        permission: "leads.manage",
-      },
-    ],
-  },
-
-  {
-    title: "Davomat",
-    icon: CalendarCheck,
-    isActive: false,
-    items: [
-      {
-        title: "Belgilash",
-        url: "/owner/attendance/mark",
-        permission: "attendance.record",
-      },
-      // O'qituvchilar davomati -> O'qituvchilar sahifasining tabi.
-      {
-        title: "Hisobotlar",
-        url: "/owner/attendance",
-        permission: "attendance.read",
-      },
-      {
-        title: "Sozlamalar",
-        url: "/owner/settings/attendance",
-        permission: "attendance.manage",
-      },
-    ],
-  },
-  {
-    title: "Baholash",
-    icon: Star,
-    isActive: false,
-    items: [
-      {
-        title: "Baholash",
-        url: "/owner/grades",
-        permission: "grades.record",
-      },
-      {
-        title: "Reyting",
-        url: "/owner/rating",
-        permission: "rating.read",
-      },
-      {
-        title: "Sozlamalar",
-        url: "/owner/settings/rating",
-        permission: "rating.manage",
-      },
-    ],
-  },
-
-  {
-    title: "Bildirishnomalar",
-    icon: Bell,
-    isActive: false,
-    items: [
-      {
-        title: "Xabarlar",
+        title: "Bildirishnomalar",
         url: "/owner/notifications",
         permission: "notifications.read",
       },
-      {
-        title: "Shablonlar",
-        url: "/owner/notification-templates",
-        permission: "notification_templates.manage",
-      },
-      {
-        title: "Bayramlar",
-        url: "/owner/holidays",
-        permission: "holidays.manage",
-      },
+      { title: "Feedback", url: "/owner/feedback", permission: "feedback.read" },
     ],
   },
 
+  // Ilgari 6 guruhga sochilgan 11 ta konfiguratsiya sahifasi shu yerda,
+  // chap ustunli yagona qobiqda.
   {
-    title: "Feedback",
-    icon: MessageSquare,
-    isActive: false,
-    items: [
-      {
-        title: "Asosiy",
-        url: "/owner/feedback",
-        permission: "feedback.read",
-      },
-      {
-        title: "Hisobotlar",
-        url: "/owner/feedback/dashboard",
-        permission: "feedback.read",
-      },
-      {
-        title: "Turlari",
-        url: "/owner/feedback-types",
-        permission: "feedback_types.manage",
-      },
-    ],
-  },
-
-  {
-    title: "Tizim",
-    icon: MonitorCog,
-    items: [
-      {
-        title: "Ega profili",
-        url: "/owner/profile",
-      },
-      // "Filiallar" bu yerdan o'zining top-level bo'limiga ko'chdi.
-      {
-        title: "Rollar va ruxsatlar",
-        url: "/owner/roles",
-        permission: "roles.read",
-      },
-      {
-        title: "Faoliyat loglari",
-        url: "/owner/activity-logs",
-        permission: "activity_logs.read",
-      },
-    ],
+    title: "Sozlamalar",
+    icon: Settings,
+    url: "/owner/settings",
   },
 ];
 

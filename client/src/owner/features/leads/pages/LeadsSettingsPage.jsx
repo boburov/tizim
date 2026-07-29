@@ -7,13 +7,13 @@ import LeadOptionCreateModal from "../components/LeadOptionCreateModal";
 import LeadOptionEditModal from "../components/LeadOptionEditModal";
 import LeadOptionDeleteModal from "../components/LeadOptionDeleteModal";
 
-const BASE = "/owner/leads/settings";
+const BASE = "/owner/settings/lidlar";
 
 const LeadsSettingsPage = () => {
   const items = [
     { to: BASE, label: "Manba", exact: true },
-    { to: `${BASE}/direction`, label: "Yo'nalish" },
-    { to: `${BASE}/rejection`, label: "Rad etish sabablari" },
+    { to: `${BASE}/yonalish`, label: "Yo'nalish" },
+    { to: `${BASE}/rad-etish`, label: "Rad etish sabablari" },
   ];
 
   return (

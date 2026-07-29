@@ -44,12 +44,10 @@ const FeedbackDashboardPage = () => {
 
   return (
     <div className="space-y-5">
+      {/* Sarlavha va orqaga qaytish FeedbackPage qobig'ida - bu endi tab,
+          alohida sahifa emas. */}
       <header className="space-y-2">
-        <BackLink to="/owner/feedback" />
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold">Feedback hisoboti</h1>
-          </div>
+        <div className="flex flex-wrap items-end justify-end gap-3">
           <TimeRangeFilter
             preset={range.preset}
             custom={{ from: range.from, to: range.to }}

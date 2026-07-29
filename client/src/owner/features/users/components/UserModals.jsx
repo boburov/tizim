@@ -19,9 +19,6 @@ import { MODAL } from "@/shared/constants/modals";
 // USER_CREATE bu yerda YO'Q: u global mount qilingan (owner/components/CreateModals).
 const UserModals = () => (
   <>
-    <ModalWrapper name={MODAL.STAFF_CREATE} title="Xodim qo'shish">
-      <StaffCreateModal />
-    </ModalWrapper>
     <ModalWrapper name={MODAL.USER_DELETE} title="Foydalanuvchini arxivlash">
       <UserDeleteModal />
     </ModalWrapper>

@@ -1,3 +1,4 @@
+export { default as LeadsPage } from "./pages/LeadsPage";
 export { default as LeadsListPage } from "./pages/LeadsListPage";
 export { default as LeadsStatsPage } from "./pages/LeadsStatsPage";
 export { default as LeadsSettingsPage } from "./pages/LeadsSettingsPage";

@@ -1,5 +1,6 @@
 // Hooks
 import useObjectState from "@/shared/hooks/useObjectState";
+import { useEffect } from "react";
 import useAuth from "@/shared/hooks/useAuth";
 import { useStaffCreateMutation } from "../hooks/useStaffMutations";
 import { useRolesQuery } from "@/owner/features/roles";
@@ -32,12 +33,26 @@ const initialState = (homeBranchId) => ({
  *  - hiredAt/enrolledAt kabi rolga xos maydonlar YO'Q
  */
 const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
-  const { homeBranchId } = useAuth();
+  const { homeBranchId, multiBranch } = useAuth();
   const obj = useObjectState(initialState(homeBranchId));
 
   const { data: roles = [] } = useRolesQuery();
   const { data: branchesData } = useBranchesQuery();
   const branches = branchesData?.data || [];
+
+  // YAKKA MARKAZ: filial tanlagich ko'rsatilmaydi, lekin server homeBranchId
+  // ni MAJBURIY talab qiladi ("Filial tanlanishi shart"). Yagona filialni
+  // o'zimiz qo'yamiz - egada homeBranchId bo'lmasligi mumkin.
+  //
+  // Bog'liqliklar ATAYLAB primitiv: `branches` har renderda yangi massiv
+  // bo'lgani uchun effekt cheksiz qayta ishga tushardi.
+  const onlyBranchId = branches[0]?._id;
+  const { homeBranchId: pickedBranchId, setField } = obj;
+
+  useEffect(() => {
+    if (multiBranch || pickedBranchId || !onlyBranchId) return;
+    setField("homeBranchId", String(onlyBranchId));
+  }, [multiBranch, pickedBranchId, onlyBranchId, setField]);
 
   const { mutate } = useStaffCreateMutation({
     onSuccess: () => {
@@ -149,16 +164,20 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
       <div className="pt-2 border-t">
         <p className="text-sm font-medium mb-2">Filial va ruxsatlar</p>
         <div className="grid grid-cols-2 gap-3">
-          <SelectField
-            name="homeBranchId"
-            label="Filial"
-            placeholder="Filialni tanlang"
-            options={branchOptions}
-            value={obj.homeBranchId}
-            onChange={(v) => obj.setField("homeBranchId", v?.target?.value ?? v)}
-            required
-            disabled={isLoading}
-          />
+          {multiBranch && (
+            <SelectField
+              name="homeBranchId"
+              label="Filial"
+              placeholder="Filialni tanlang"
+              options={branchOptions}
+              value={obj.homeBranchId}
+              onChange={(v) =>
+                obj.setField("homeBranchId", v?.target?.value ?? v)
+              }
+              required
+              disabled={isLoading}
+            />
+          )}
           <SelectField
             name="role"
             label="Rol"

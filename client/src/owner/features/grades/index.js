@@ -1,3 +1,4 @@
+export { default as GradesPage } from "./pages/GradesPage";
 export { default as GradesGivePage } from "./pages/GradesGivePage";
 
 export { gradesAPI } from "./api/grades.api";

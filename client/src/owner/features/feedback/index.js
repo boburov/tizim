@@ -1,3 +1,4 @@
+export { default as FeedbackPage } from "./pages/FeedbackPage";
 export { default as FeedbackListPage } from "./pages/FeedbackListPage";
 export { default as FeedbackDetailPage } from "./pages/FeedbackDetailPage";
 export { default as FeedbackDashboardPage } from "./pages/FeedbackDashboardPage";

@@ -4,7 +4,7 @@ import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import InputField from "@/shared/components/ui/input/InputField";
 import useObjectState from "@/shared/hooks/useObjectState";
 
-const BASE = "/owner/rating";
+const BASE = "/owner/grades/reyting";
 
 // Layout: ko'lam (Markaz / Guruh) route darajasida. Sana filtri header'da -
 // Outlet context orqali leaderboard panellarga uzatiladi.
@@ -21,8 +21,7 @@ const RatingPage = () => {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Reyting</h1>
-
+      {/* Sarlavha GradesPage qobig'ida (tab nomi = "Reyting") */}
       <Card className="space-y-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <TabsLinks items={items} />

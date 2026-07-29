@@ -1,5 +1,5 @@
+export { default as AttendancePage } from "./pages/AttendancePage";
 export { default as AttendanceMarkPage } from "./pages/AttendanceMarkPage";
-export { default as AttendanceDashboardPage } from "./pages/AttendanceDashboardPage";
 export { default as AttendanceOverallPanel } from "./components/AttendanceOverallPanel";
 export { default as AttendancePerGroupPanel } from "./components/AttendancePerGroupPanel";
 export { default as AttendanceSettingsPage } from "./pages/AttendanceSettingsPage";

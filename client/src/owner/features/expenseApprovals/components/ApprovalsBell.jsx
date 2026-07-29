@@ -20,6 +20,7 @@ import ApprovalDetailSheet from "./ApprovalDetailSheet";
 // Hooks
 import usePermissions from "@/shared/hooks/usePermissions";
 import useExpenseApprovalsQuery from "../hooks/useExpenseApprovalsQuery";
+import usePendingApprovalsCount from "../hooks/usePendingApprovalsCount";
 
 // Constants
 import { PERMISSIONS } from "@/shared/constants/permissions";
@@ -42,8 +43,12 @@ const ApprovalsBell = ({ className = "" }) => {
     PERMISSIONS.APPROVALS_DECIDE_CONFIG,
   ]);
 
-  // So'rov FAQAT panel ochiq turganda yuboriladi - yopiq turganda
-  // sidebar belgisi (ApprovalsBadge) allaqachon sanoqni yangilab turadi.
+  // Sanoq DOIM yangilanib turadi (15s polling) - badge shu bilan ishlaydi.
+  // Sidebar linkidagi belgi ham AYNAN shu query'dan oziqlanadi, ya'ni
+  // ikkalasi hech qachon bir-biridan farq qilmaydi.
+  const { data: count = 0 } = usePendingApprovalsCount({ enabled: canSee });
+
+  // To'liq ro'yxat esa faqat panel ochilganda so'raladi.
   const { data, isLoading } = useExpenseApprovalsQuery(PANEL_PARAMS, {
     enabled: canSee && open,
   });
@@ -56,13 +61,22 @@ const ApprovalsBell = ({ className = "" }) => {
   return (
     <>
       <Sheet open={open} onOpenChange={setOpen}>
+        {/* Tugma ko'rinishi bildirishnoma qo'ng'irog'i bilan bir xil:
+            oq fon + chegara + doira. Yalang'och ikonka bosiladigan
+            joyga o'xshamasdi. */}
         <button
           type="button"
           title="Tasdiqlar"
           onClick={() => setOpen(true)}
-          className={`inline-flex items-center justify-center rounded-md p-2 transition hover:bg-muted ${className}`}
+          aria-label={`Tasdiqlar (${count} ta kutilmoqda)`}
+          className={`relative inline-flex size-9 shrink-0 items-center justify-center rounded-xl border bg-white transition hover:bg-muted ${className}`}
         >
           <BadgeCheck strokeWidth={1.5} className="size-5" />
+          {count > 0 && (
+            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium leading-none text-white">
+              {count > 99 ? "99+" : count}
+            </span>
+          )}
         </button>
 
         <SheetContent

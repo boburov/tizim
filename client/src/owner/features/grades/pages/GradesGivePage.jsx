@@ -37,8 +37,7 @@ const GradesGivePage = () => {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Baholash</h1>
-
+      {/* Sarlavha GradesPage qobig'ida (tab nomi = "Baholash") */}
       <Card className="flex flex-col gap-4 sm:flex-row sm:items-start">
         <div className="flex-1 min-w-0">
           <GroupPicker value={groupId} onChange={setGroupId} autoSelectFirst />

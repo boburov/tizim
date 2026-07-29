@@ -34,6 +34,12 @@ export class TenantsController {
     return this.tenants.findOne(id);
   }
 
+  // Sayt preview: URL + sayt javob berayotganini tekshirish
+  @Get(':id/preview')
+  preview(@Param('id') id: string) {
+    return this.tenants.preview(id);
+  }
+
   // Yaratish va provisioning — SUPER_ADMIN va ADMIN
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post()

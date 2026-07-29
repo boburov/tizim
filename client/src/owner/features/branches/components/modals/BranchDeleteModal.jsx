@@ -1,8 +1,10 @@
 import Button from "@/shared/components/ui/button/Button";
 import { useBranchRemoveMutation } from "../../hooks/useBranchMutations";
 
-const BranchDeleteModal = ({ close, isLoading, setIsLoading, data }) => {
-  const branch = data?.branch || {};
+const BranchDeleteModal = ({ branch = {}, close, isLoading, setIsLoading }) => {
+  // DIQQAT: ModalWrapper `data` ni YOYIB beradi (...(data || {})),
+  // ya'ni openModal(NAME, { branch }) -> shu yerda `branch` propi.
+  // `data.branch` deb o'qish undefined qaytarardi.
 
   const { mutate } = useBranchRemoveMutation({
     onSuccess: () => {

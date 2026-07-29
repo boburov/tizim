@@ -14,6 +14,7 @@ import ApprovalKindCell from "./ApprovalKindCell";
 
 // Hooks
 import useApprovalPermissions from "../hooks/useApprovalPermissions";
+import useActiveBranch from "@/shared/hooks/useActiveBranch";
 
 // Utils
 import { approvalHeadline, fullName } from "../utils/approvalSummary";
@@ -50,6 +51,7 @@ const ApprovalDetailSheet = ({
   busy = false,
 }) => {
   const { resolve } = useApprovalPermissions();
+  const { hasMultipleBranches } = useActiveBranch();
   const { canDecide, canCancel, canRetry, reason } = resolve(approval);
 
   if (!approval) return null;
@@ -72,7 +74,9 @@ const ApprovalDetailSheet = ({
 
           <div className="divide-y">
             <Row label="Kategoriya">{CATEGORY_LABELS[approval.category]}</Row>
-            <Row label="Filial">{approval.branchId?.name}</Row>
+            {hasMultipleBranches && (
+              <Row label="Filial">{approval.branchId?.name}</Row>
+            )}
             <Row label="So'rovchi">
               {fullName(approval.requestedBy)}
               <span className="block text-xs text-zinc-500">

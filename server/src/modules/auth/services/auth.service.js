@@ -7,12 +7,16 @@ import {
   comparePassword,
 } from "../../../helpers/password.helper.js";
 import { resolveRole, hasPermission } from "../../../helpers/permission.helper.js";
-import { resolveAllowedBranchIds } from "../../../helpers/branchAccess.helper.js";
+import {
+  resolveAllowedBranchIds,
+  assertCanAssignBranch,
+} from "../../../helpers/branchAccess.helper.js";
 import { getActiveBranchId } from "../../../helpers/branchContext.helper.js";
 import { buildUserProfile } from "../../../helpers/userProfile.helper.js";
 import { sha256 } from "../../../utils/hashToken.js";
 import { normalizePhone, isPhoneLike } from "../../../utils/phone.js";
 import { ROLES } from "../../../constants/roles.js";
+import env from "../../../config/env.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 import Branch from "../../../models/branch.model.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
@@ -164,12 +168,15 @@ export const me = async (user, ctx = {}) => {
   // qaysi filialda turganidan qat'i nazar, o'zi kira oladigan BARCHA
   // filiallarni tanlagichda ko'rishi kerak.
   const allowedIds = await resolveAllowedBranchIds(user, baseRole.permissions);
-  const branches = allowedIds.length
-    ? await Branch.find({ _id: { $in: allowedIds }, isDeleted: false, isActive: true })
-        .select("_id name code isMain")
-        .sort({ isMain: -1, name: 1 })
-        .lean()
-    : [];
+  const [branches, branchCount] = await Promise.all([
+    allowedIds.length
+      ? Branch.find({ _id: { $in: allowedIds }, isDeleted: false, isActive: true })
+          .select("_id name code isMain")
+          .sort({ isMain: -1, name: 1 })
+          .lean()
+      : [],
+    Branch.countDocuments({ isDeleted: false, isActive: true }),
+  ]);
 
   return {
     user: sanitizeUser(user),
@@ -182,6 +189,15 @@ export const me = async (user, ctx = {}) => {
       baseRole.permissions,
       PERMISSIONS.BRANCHES_VIEW_ALL,
     ),
+    // Ko'p filialli rejim (server env). Client shu bayroqqa qarab filial
+    // UI'sini butunlay yashiradi - bitta build ikkala rejimda ishlaydi,
+    // shuning uchun bu VITE_ o'zgaruvchisi EMAS.
+    multiBranch: env.MULTI_BRANCH,
+    // Markazdagi JAMI filial (foydalanuvchi ko'lamidan qat'i nazar).
+    // Yakka rejim yoqilgan-u, bazada bir nechta filial bo'lsa - client
+    // ogohlantirish chizig'ini ko'rsatadi: hisobotlar faqat asosiy filialni
+    // qamraydi, ega noto'g'ri raqamga ishonib qolmasligi kerak.
+    branchCount,
     homeBranchId: user.homeBranchId ? String(user.homeBranchId) : null,
     // Client rolni hardcode qilmasligi uchun: landing sahifa va scope tipi
     // shu yerdan keladi (ROLE_HOME map o'rniga).
@@ -239,7 +255,7 @@ export const changePassword = async (currentUser, { currentPassword, newPassword
   );
 };
 
-export const registerUser = async (body) => {
+export const registerUser = async (body, scope = {}) => {
   const phone = body.phone ? normalizePhone(body.phone) : null;
   if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
 
@@ -277,6 +293,16 @@ export const registerUser = async (body) => {
       "Filial tanlanmagan. Foydalanuvchi qo'shish uchun avval aniq filialni tanlang",
     );
   }
+
+  // IMTIYOZ OSHIRISHDAN HIMOYA: filial ochiq berilgan bo'lsa (client
+  // "Barcha filiallar" rejimida tanlagan), u chaqiruvchining O'Z ko'lamida
+  // ekani tekshiriladi. Aks holda bir filial direktori boshqa filialga
+  // odam qo'shib, keyin uning parolini o'qib olardi.
+  assertCanAssignBranch(
+    scope.allowedBranchIds,
+    scope.canSeeAllBranches,
+    homeBranchId,
+  );
 
   const passwordHash = await hashPassword(body.password);
 

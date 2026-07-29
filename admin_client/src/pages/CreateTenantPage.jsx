@@ -1,9 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Loader2, Rocket } from 'lucide-react';
+import { AlertTriangle, Check, GraduationCap, Layers, Loader2, Rocket } from 'lucide-react';
 import { api } from '../api/client';
+import { cn } from '../lib/utils';
+import BrandPreview from '../components/BrandPreview';
+
+// Sahifa ochilganda shu tizim avtomatik tanlanadi (topilmasa — ro'yxatdagi birinchisi).
+const DEFAULT_TEMPLATE_KEY = 'study-center';
+
+// Template key → ikonka. Yangi tizim qo'shilsa shu yerga qo'shiladi.
+const TEMPLATE_ICON = {
+  'study-center': GraduationCap,
+};
 
 export default function CreateTenantPage() {
   const navigate = useNavigate();
@@ -23,6 +33,17 @@ export default function CreateTenantPage() {
     queryKey: ['templates', 'active'],
     queryFn: () => api.get('/templates/active').then((r) => r.data),
   });
+
+  // Ro'yxat kelgach o'quv markaz tizimini avtomatik tanlab qo'yamiz.
+  useEffect(() => {
+    if (!templates?.length) return;
+    setForm((f) => {
+      if (f.systemTemplateId) return f;
+      const preferred =
+        templates.find((t) => t.key === DEFAULT_TEMPLATE_KEY) || templates[0];
+      return { ...f, systemTemplateId: preferred.id };
+    });
+  }, [templates]);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -57,7 +78,7 @@ export default function CreateTenantPage() {
   const label = 'mb-1 block text-sm font-medium text-slate-700';
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-5xl">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Yangi loyiha</h1>
         <p className="text-sm text-slate-500">
@@ -66,36 +87,91 @@ export default function CreateTenantPage() {
         </p>
       </div>
 
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
       <form
         onSubmit={submit}
         className="space-y-5 rounded-xl border border-slate-200 bg-white p-6"
       >
-        {/* Tizim tanlash (dinamik) */}
-        <div>
-          <label className={label}>Tizim turi *</label>
+        {/* Tizim tanlash (dinamik) — kartochka ko'rinishidagi radio guruh */}
+        <fieldset>
+          <legend className={label}>Tizim turi *</legend>
+
           {templatesLoading ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 size={16} className="animate-spin" /> Tizimlar yuklanmoqda…
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[0, 1].map((i) => (
+                <div
+                  key={i}
+                  className="h-[86px] animate-pulse rounded-xl border border-slate-200 bg-slate-50"
+                />
+              ))}
+            </div>
+          ) : !templates?.length ? (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <span>
+                Faol tizim shabloni topilmadi. Avval "Sozlamalar"da tizim qo'shing.
+              </span>
             </div>
           ) : (
-            <select
-              value={form.systemTemplateId}
-              onChange={set('systemTemplateId')}
-              className={field}
-              required
-            >
-              <option value="">— Tanlang —</option>
-              {templates?.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            // Bitta tizim bo'lsa — to'liq kenglik, ko'p bo'lsa 2 ustun
+            <div className={cn('grid gap-3', templates.length > 1 && 'sm:grid-cols-2')}>
+              {templates.map((t) => {
+                const Icon = TEMPLATE_ICON[t.key] || Layers;
+                const active = form.systemTemplateId === t.id;
+                return (
+                  <label
+                    key={t.id}
+                    className={cn(
+                      'relative flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition',
+                      'focus-within:ring-2 focus-within:ring-brand/30',
+                      active
+                        ? 'border-brand bg-brand/5 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="systemTemplateId"
+                      value={t.id}
+                      checked={active}
+                      onChange={set('systemTemplateId')}
+                      className="sr-only"
+                    />
+                    <span
+                      className={cn(
+                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition',
+                        active ? 'bg-brand text-white' : 'bg-slate-100 text-slate-500',
+                      )}
+                    >
+                      <Icon size={18} />
+                    </span>
+                    <span className="min-w-0 pr-5">
+                      <span className="block text-sm font-medium text-slate-800">
+                        {t.name}
+                      </span>
+                      {t.description && (
+                        <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">
+                          {t.description}
+                        </span>
+                      )}
+                    </span>
+                    {active && (
+                      <Check
+                        size={16}
+                        strokeWidth={3}
+                        className="absolute right-3 top-3 text-brand"
+                      />
+                    )}
+                  </label>
+                );
+              })}
+            </div>
           )}
-          <p className="mt-1 text-xs text-slate-400">
+
+          <p className="mt-2 text-xs text-slate-400">
             Hozircha o'quv markaz tizimi. Keyinchalik boshqa tizimlar qo'shiladi.
           </p>
-        </div>
+        </fieldset>
 
         <div>
           <label className={label}>Loyiha nomi *</label>
@@ -166,7 +242,7 @@ export default function CreateTenantPage() {
           </button>
           <button
             type="submit"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || !form.systemTemplateId}
             className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
           >
             {mutation.isPending ? (
@@ -178,6 +254,16 @@ export default function CreateTenantPage() {
           </button>
         </div>
       </form>
+
+        {/* Jonli preview — kiritilayotgan brend darrov ko'rinadi */}
+        <BrandPreview
+          name={form.name}
+          domain={form.domain}
+          logoUrl={form.logoUrl.trim()}
+          brandColor={form.brandColor}
+          className="lg:sticky lg:top-6"
+        />
+      </div>
     </div>
   );
 }

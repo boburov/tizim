@@ -23,8 +23,22 @@ import {
  * eski filial ma'lumoti qolib ketardi (kesh query key'da branchId yo'q).
  */
 const useActiveBranch = () => {
-  const { branches, canSeeAllBranches, homeBranchId, isLoading } = useAuth();
+  const { branches, canSeeAllBranches, homeBranchId, isLoading, multiBranch } =
+    useAuth();
   const queryClient = useQueryClient();
+
+  // TANLOV VARIANTLARI SONI.
+  //
+  // Yakka markaz rejimida (MULTI_BRANCH=false) tanlov umuman yo'q.
+  //
+  // DIQQAT: "Barcha filiallar" varianti faqat filial ROSTDAN HAM bir nechta
+  // bo'lgandagina qo'shiladi. Ilgari `canSeeAllBranches` yolg'iz o'zi ham
+  // yetardi, lekin egada bu ruxsat DOIM bor - natijada bir filialli markazda
+  // ham "Filialni tanlang" ekrani chiqib, ikkita bir xil variant taklif
+  // qilinardi ("Barcha filiallar" va yagona filial).
+  const optionCount = !multiBranch
+    ? 1
+    : branches.length + (canSeeAllBranches && branches.length > 1 ? 1 : 0);
 
   // UMUMIY holat (useState EMAS).
   //
@@ -51,7 +65,6 @@ const useActiveBranch = () => {
     // TANLASH EKRANI: bir nechta variant bo'lsa foydalanuvchi O'ZI tanlaydi
     // (BranchPicker ko'rsatiladi). Avtomatik tanlash uni chalg'itardi -
     // qaysi filialda ishlayotganini bilmay qolardi.
-    const optionCount = branches.length + (canSeeAllBranches ? 1 : 0);
     if (optionCount > 1) {
       // Yaroqsiz eski qiymat bo'lsa tozalaymiz, lekin YANGISINI qo'ymaymiz.
       if (branchId) setActiveBranchId(null);
@@ -59,9 +72,23 @@ const useActiveBranch = () => {
     }
 
     // Yagona variant - tanlashning ma'nosi yo'q, darhol qo'yamiz.
-    const only = canSeeAllBranches ? ALL_BRANCHES : branches[0]?._id || homeBranchId;
+    // Bitta filial bo'lsa "barcha filiallar" emas, o'sha filialning o'zini
+    // qo'yamiz - ular ayni bir narsa, lekin aniq ID tushunarliroq.
+    const only =
+      branches.length === 1
+        ? branches[0]._id
+        : canSeeAllBranches
+          ? ALL_BRANCHES
+          : branches[0]?._id || homeBranchId;
     if (only) setActiveBranchId(only);
-  }, [branchId, branches, canSeeAllBranches, homeBranchId, isLoading]);
+  }, [
+    branchId,
+    branches,
+    canSeeAllBranches,
+    homeBranchId,
+    isLoading,
+    optionCount,
+  ]);
 
   const changeBranch = useCallback(
     (next) => {
@@ -84,7 +111,6 @@ const useActiveBranch = () => {
       : null;
 
   // Tanlash ekrani kerakmi: variant ko'p, lekin hali tanlanmagan.
-  const optionCount = branches.length + (canSeeAllBranches ? 1 : 0);
   const needsBranchChoice = !isLoading && optionCount > 1 && !branchId;
 
   return {
@@ -94,8 +120,14 @@ const useActiveBranch = () => {
     canSeeAllBranches,
     needsBranchChoice,
     isAllBranches: branchId === ALL_BRANCHES,
-    // Tanlagichni ko'rsatish kerakmi: bitta filial bo'lsa keraksiz.
-    hasMultipleBranches: branches.length > 1 || canSeeAllBranches,
+    // Ko'p filialli rejim yoqilganmi (server env). Filial bo'limi, "Filial
+    // qo'shish" kabi BOSHQARUV elementlari shunga qarab ko'rsatiladi.
+    multiBranch,
+    // Filialga oid MA'LUMOT elementlarini (tanlagich, jadval ustuni, forma
+    // maydoni) ko'rsatish kerakmi. Bitta filialda ular doim bir xil qiymat -
+    // faqat shovqin. `canSeeAllBranches` bu yerda YETARLI EMAS: egada u
+    // doim true, shuning uchun filial soni bo'yicha qaraymiz.
+    hasMultipleBranches: multiBranch && branches.length > 1,
     changeBranch,
   };
 };

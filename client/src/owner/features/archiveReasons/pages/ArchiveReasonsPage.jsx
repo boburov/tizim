@@ -7,12 +7,12 @@ import ArchiveReasonCreateModal from "../components/ArchiveReasonCreateModal";
 import ArchiveReasonEditModal from "../components/ArchiveReasonEditModal";
 import ArchiveReasonDeleteModal from "../components/ArchiveReasonDeleteModal";
 
-const BASE = "/owner/archive-reasons";
+const BASE = "/owner/settings/arxiv-sabablari";
 
 const ArchiveReasonsPage = () => {
   const items = [
     { to: BASE, label: "Sabablar", exact: true },
-    { to: `${BASE}/report`, label: "Hisobot" },
+    { to: `${BASE}/hisobot`, label: "Hisobot" },
   ];
 
   return (

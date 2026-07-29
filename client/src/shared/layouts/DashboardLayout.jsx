@@ -8,6 +8,7 @@ import {
 } from "@/shared/components/shadcn/sidebar";
 import AppHeader from "@/shared/components/layout/AppHeader";
 import AppSidebar from "@/shared/components/layout/AppSidebar";
+import BranchModeBanner from "@/shared/components/layout/BranchModeBanner";
 
 const DashboardLayout = () => (
   <SidebarProvider className="relative z-10">
@@ -15,6 +16,7 @@ const DashboardLayout = () => (
     <SidebarInset className="min-w-0">
       <AppHeader />
       <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:py-2">
+        <BranchModeBanner />
         <Outlet />
       </div>
     </SidebarInset>
