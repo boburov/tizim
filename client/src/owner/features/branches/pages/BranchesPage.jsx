@@ -51,7 +51,11 @@ const BranchesPage = () => {
         ))}
       </div>
 
-      <ModalWrapper name={MODAL.BRANCH_CREATE} title="Yangi filial">
+      <ModalWrapper
+        name={MODAL.BRANCH_CREATE}
+        title="Yangi filial"
+        className="max-w-2xl"
+      >
         <BranchCreateModal />
       </ModalWrapper>
       <ModalWrapper name={MODAL.BRANCH_EDIT} title="Filialni tahrirlash">

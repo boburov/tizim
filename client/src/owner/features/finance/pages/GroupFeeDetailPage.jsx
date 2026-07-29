@@ -49,7 +49,7 @@ const GroupFeeDetailPage = () => {
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <BackLink to="/owner/finance/group-fees" />
+          <BackLink to="/owner/groups/tolov" />
           <div>
             <h1 className="text-2xl font-semibold">{group?.name || "Guruh to'lovi"}</h1>
           </div>

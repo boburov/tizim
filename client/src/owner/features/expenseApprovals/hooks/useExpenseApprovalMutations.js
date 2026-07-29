@@ -46,6 +46,55 @@ export const useRejectMutation = (options = {}) => {
   });
 };
 
+export const useRetryApprovalMutation = (options = {}) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => expenseApprovalsAPI.retry(id).then((r) => r.data.data),
+    onSuccess: (data, vars, ctx) => {
+      invalidateAll(qc);
+      toast.success("So'rov qayta tasdiqlashga qo'yildi");
+      options.onSuccess?.(data, vars, ctx);
+    },
+    onError: (err) => {
+      apiErrorToast(err);
+      options.onError?.(err);
+    },
+  });
+};
+
+/**
+ * OMMAVIY qaror. Server QISMAN muvaffaqiyatni normal holat deb qaytaradi
+ * (`{ succeeded, failed }`), shuning uchun `onSuccess` ichida ham xato
+ * bo'lishi mumkin - toast shunga qarab tanlanadi.
+ */
+export const useBulkDecideMutation = (options = {}) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, ids, note }) =>
+      (action === "reject"
+        ? expenseApprovalsAPI.bulkReject({ ids, note })
+        : expenseApprovalsAPI.bulkApprove({ ids, note })
+      ).then((r) => r.data.data),
+    onSuccess: (data, vars, ctx) => {
+      invalidateAll(qc);
+      if (data.failed?.length) {
+        // Birinchi sababni ko'rsatamiz - qolganini batafsil oynada ko'radi.
+        toast.warning(
+          `${data.succeeded.length} ta bajarildi, ${data.failed.length} ta o'tmadi`,
+          { description: data.failed[0]?.reason },
+        );
+      } else {
+        toast.success(`${data.succeeded.length} ta so'rov bajarildi`);
+      }
+      options.onSuccess?.(data, vars, ctx);
+    },
+    onError: (err) => {
+      apiErrorToast(err);
+      options.onError?.(err);
+    },
+  });
+};
+
 export const useCancelApprovalMutation = (options = {}) => {
   const qc = useQueryClient();
   return useMutation({

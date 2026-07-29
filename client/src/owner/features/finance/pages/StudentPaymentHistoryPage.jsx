@@ -31,7 +31,7 @@ const StudentPaymentHistoryPage = () => {
   return (
     <div className="space-y-4">
       <header className="flex items-center gap-3">
-        <BackLink to="/owner/finance/student-payments" />
+        <BackLink to="/owner/students/tolovlar" />
         <div>
           <h1 className="text-2xl font-semibold">{fullName}</h1>
         </div>

@@ -1,6 +1,8 @@
 import {
   CalendarCheck,
   Bell,
+  BadgeCheck,
+  Building2,
   MessageSquare,
   LayoutDashboard,
   MonitorCog,
@@ -20,25 +22,24 @@ const ownerSidebar = [
         url: "/owner/dashboard",
         permission: "admin_dashboard.read",
       },
+      // SUBYEKT BO'YICHA GURUHLASH: o'quvchiga tegishli hamma narsa (to'lov,
+      // qarzdorlik, chegirma, statistika) o'quvchilar sahifasining tabi;
+      // o'qituvchiniki (maosh, qoldiq, davomat) - o'qituvchilar sahifasida.
+      // Shuning uchun bu yerda har bir subyekt bitta link.
       {
-        title: "Foydalanuvchilar",
-        url: "/owner/users",
+        title: "O'quvchilar",
+        url: "/owner/students",
+        permission: "users.read",
+      },
+      {
+        title: "O'qituvchilar",
+        url: "/owner/teachers",
         permission: "users.read",
       },
       {
         title: "Guruhlar",
         url: "/owner/groups",
         permission: "groups.read",
-      },
-      {
-        title: "O'quvchilar statistikasi",
-        url: "/owner/students/stats",
-        permission: "admin_dashboard.read",
-      },
-      {
-        title: "Chiqib ketish tahlili",
-        url: "/owner/students/retention",
-        permission: "admin_dashboard.read",
       },
       {
         title: "Arxiv sabablari",
@@ -58,37 +59,56 @@ const ownerSidebar = [
         url: "/owner/finance/accounting",
         permission: "finance.read",
       },
-      {
-        // Ro'yxatda endi chiqim ham, sozlama o'zgarishi (maosh stavkasi,
-        // chegirma, ishga olish) ham bor - shuning uchun umumiy nom.
-        title: "Tasdiqlar",
-        url: "/owner/expense-approvals",
-        permissionAnyOf: ["finance.read", "approvals.decide_config"],
-      },
-      {
-        title: "O'qituvchi maoshlari",
-        url: "/owner/finance/teacher-salaries",
-        permission: "salary.read",
-      },
-      {
-        title: "O'quvchi to'lovlari",
-        url: "/owner/finance/student-payments",
-        permission: "finance.read",
-      },
+      // Maosh -> O'qituvchilar, to'lov/qarzdorlik/chegirma -> O'quvchilar,
+      // guruh to'lovi -> Guruhlar sahifasiga ko'chdi. Bu yerda faqat
+      // subyektga bog'lanmagan umumiy moliya qoladi.
       {
         title: "To'lovlar",
         url: "/owner/finance/deposits",
         permission: "finance.read",
       },
+    ],
+  },
+
+  // TASDIQLAR - ataylab YAKKA link (`items` yo'q, `url` bor).
+  // Moliya guruhidan chiqarildi: so'rovlar chiqim ham, sozlama ham, ishga
+  // olish ham bo'lgani uchun u faqat moliya bo'limi emas. Bitta sahifa
+  // bo'lgani uchun ochiladigan guruh ortiqcha bosish qadamini qo'shardi.
+  {
+    title: "Tasdiqlar",
+    icon: BadgeCheck,
+    url: "/owner/expense-approvals",
+    badge: "approvals",
+    permissionAnyOf: ["finance.read", "approvals.decide_config"],
+  },
+
+  {
+    title: "Filiallar",
+    icon: Building2,
+    isActive: false,
+    items: [
       {
-        title: "Guruh to'lovi",
-        url: "/owner/finance/group-fees",
-        permission: "finance.read",
+        title: "Ro'yxat",
+        url: "/owner/branches",
+        permission: "branches.read",
       },
       {
-        title: "Chegirmalar",
-        url: "/owner/finance/discounts",
-        permission: "finance.read",
+        title: "Taqqoslash",
+        url: "/owner/branches/compare",
+        permission: "branches.read",
+      },
+      {
+        title: "Statistika",
+        url: "/owner/branches/stats",
+        permission: "branches.read",
+      },
+      {
+        // Chiqim tasdiq limiti (expenseApprovalThreshold) - ilgari faqat
+        // filialni tahrirlash modalida edi, ya'ni "qaysi filialda limit
+        // qancha" degan savolga javob berish uchun har birini ochish kerak edi.
+        title: "Limitlar",
+        url: "/owner/branches/limits",
+        permission: "branches.update",
       },
     ],
   },
@@ -126,11 +146,7 @@ const ownerSidebar = [
         url: "/owner/attendance/mark",
         permission: "attendance.record",
       },
-      {
-        title: "O'qituvchilar",
-        url: "/owner/attendance/teachers",
-        permission: "attendance.record",
-      },
+      // O'qituvchilar davomati -> O'qituvchilar sahifasining tabi.
       {
         title: "Hisobotlar",
         url: "/owner/attendance",
@@ -220,11 +236,7 @@ const ownerSidebar = [
         title: "Ega profili",
         url: "/owner/profile",
       },
-      {
-        title: "Filiallar",
-        url: "/owner/branches",
-        permission: "branches.read",
-      },
+      // "Filiallar" bu yerdan o'zining top-level bo'limiga ko'chdi.
       {
         title: "Rollar va ruxsatlar",
         url: "/owner/roles",

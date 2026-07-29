@@ -95,10 +95,8 @@ const TeacherAttendancePage = () => {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold">O'qituvchilar davomati</h1>
-        </div>
+      {/* Sarlavha TeachersPage qobig'ida (tab nomi = "Davomat") */}
+      <header className="flex items-end justify-end gap-3 flex-wrap">
         <div className="flex items-end gap-3">
           <div className="w-[170px]">
             <InputField

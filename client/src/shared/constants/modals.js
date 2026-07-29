@@ -116,4 +116,8 @@ export const MODAL = Object.freeze({
   SALARY_ADD_PAYOUT: "salary:addPayout",
   SALARY_PERIOD_CREATE: "salary:periodCreate",
   SALARY_PERIOD_EDIT: "salary:periodEdit",
+
+  // Tasdiqlar
+  APPROVAL_BULK_DECIDE: "approval:bulkDecide",
+  APPROVAL_MISSED: "approval:missed",
 });

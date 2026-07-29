@@ -54,7 +54,7 @@ const OutstandingCard = ({ income, expense }) => (
         outstanding={income?.outstanding}
         rate={income?.rate}
         barClass="bg-primary"
-        to="/owner/finance/student-payments/debtors"
+        to="/owner/students/qarzdorlar"
       />
       <Row
         label="To'lanmagan maosh"
@@ -63,7 +63,7 @@ const OutstandingCard = ({ income, expense }) => (
         outstanding={expense?.outstanding}
         rate={expense?.rate}
         barClass="bg-rose-500"
-        to="/owner/finance/teacher-salaries/qoldiqlar"
+        to="/owner/teachers/qoldiqlar"
       />
     </div>
   </div>

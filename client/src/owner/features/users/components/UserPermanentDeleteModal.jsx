@@ -49,7 +49,10 @@ const UserPermanentDeleteModal = ({ user, close, isLoading, setIsLoading }) => {
     onSuccess: () => {
       setIsLoading(false);
       close?.();
-      navigate("/owner/users", { replace: true });
+      // Ro'yxat rol bo'yicha bo'lingan - o'chirilgan odamning ro'yxatiga qaytamiz.
+      navigate(user?.role === ROLES.STUDENT ? "/owner/students" : "/owner/teachers", {
+        replace: true,
+      });
     },
     onError: () => setIsLoading(false),
   });

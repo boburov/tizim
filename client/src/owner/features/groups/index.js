@@ -1,3 +1,4 @@
+export { default as GroupsPage } from "./pages/GroupsPage";
 export { default as GroupsListPage } from "./pages/GroupsListPage";
 export { default as GroupDetailPage } from "./pages/GroupDetailPage";
 export { default as GroupInfoPanel } from "./components/tabs/GroupInfoPanel";

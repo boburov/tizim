@@ -103,7 +103,7 @@ const DashboardStatCards = ({ data }) => {
         value={data.studentsCount}
         delta={null}
         hint="Faol o'quvchilar"
-        to="/owner/users"
+        to="/owner/students"
       />
       <StatTile
         icon={Layers}
@@ -118,7 +118,7 @@ const DashboardStatCards = ({ data }) => {
         value={data.newStudentsThisMonth}
         delta={data.netGrowth}
         hint="Yangi qo'shilganlar"
-        to="/owner/users"
+        to="/owner/students"
       />
       <StatTile
         icon={Wallet}
@@ -127,7 +127,7 @@ const DashboardStatCards = ({ data }) => {
         isMoney
         delta={data.revenueDelta}
         hint="O'tgan oyga nisbatan"
-        to="/owner/finance/student-payments"
+        to="/owner/students/tolovlar"
       />
     </div>
   );

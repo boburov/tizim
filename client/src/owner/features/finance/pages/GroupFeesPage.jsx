@@ -62,10 +62,8 @@ const GroupFeesPage = () => {
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Guruh to'lovi</h1>
-        </div>
+      {/* Sarlavha GroupsPage qobig'ida (tab nomi = "To'lov") */}
+      <header className="flex flex-wrap items-center justify-end gap-3">
         <MonthPicker
           year={filters.year}
           month={filters.month}

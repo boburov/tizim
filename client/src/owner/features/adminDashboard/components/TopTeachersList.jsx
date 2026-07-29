@@ -18,7 +18,7 @@ const TopTeachersList = ({ items = [] }) => (
     <div className="flex items-center justify-between">
       <h2 className="font-semibold text-zinc-900">Faol o'qituvchilar</h2>
       <Link
-        to="/owner/users"
+        to="/owner/teachers"
         className="flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-600 transition hover:border-primary/40 hover:text-primary"
       >
         Barchasi <ArrowUpRight className="size-3" />

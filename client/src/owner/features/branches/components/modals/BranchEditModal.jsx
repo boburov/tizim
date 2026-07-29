@@ -7,7 +7,6 @@ const BranchEditModal = ({ close, isLoading, setIsLoading, data }) => {
   const branch = data?.branch || {};
   const obj = useObjectState({
     name: branch.name || "",
-    code: branch.code || "",
     address: branch.address || "",
     phone: branch.phone || "",
     expenseApprovalThreshold: branch.expenseApprovalThreshold ?? "",
@@ -29,7 +28,6 @@ const BranchEditModal = ({ close, isLoading, setIsLoading, data }) => {
       id: branch._id,
       body: {
         name: obj.name.trim(),
-        code: obj.code.trim() || null,
         address: obj.address.trim() || null,
         phone: obj.phone.trim() || null,
         // Bo'sh => null (limit yo'q)

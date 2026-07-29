@@ -7,10 +7,13 @@ import { PERMISSIONS } from "../../constants/permissions.js";
 
 import { listSchema } from "./validators/list.validator.js";
 import { decisionSchema, idSchema } from "./validators/decision.validator.js";
+import { bulkSchema } from "./validators/bulk.validator.js";
 
 import list from "./handlers/list.handler.js";
 import getById from "./handlers/getById.handler.js";
 import pendingCount from "./handlers/pendingCount.handler.js";
+import stats from "./handlers/stats.handler.js";
+import bulkDecide from "./handlers/bulkDecide.handler.js";
 import approve from "./handlers/approve.handler.js";
 import reject from "./handlers/reject.handler.js";
 import cancel from "./handlers/cancel.handler.js";
@@ -31,7 +34,27 @@ const CAN_DECIDE = [PERMISSIONS.FINANCE_APPROVE, PERMISSIONS.APPROVALS_DECIDE_CO
 // (va aksincha), lekin O'Z so'rovini har kim ko'radi.
 router.get("/", requireAuth, requireAnyPermission(...CAN_READ), validate(listSchema), list);
 router.get("/pending-count", requireAuth, requireAnyPermission(...CAN_READ), pendingCount);
+// KPI kartalari. "/:id" dan OLDIN turishi shart - aks holda "stats" ID deb
+// o'qilib, 404 qaytarardi.
+router.get("/stats", requireAuth, requireAnyPermission(...CAN_READ), stats);
 router.get("/:id", requireAuth, requireAnyPermission(...CAN_READ), validate(idSchema), getById);
+
+// OMMAVIY QAROR: route qatlami faqat "eshik", har bir ID uchun huquq va
+// o'zini-o'zi tasdiqlash taqiqi servis ichida qayta tekshiriladi.
+router.post(
+  "/bulk-approve",
+  requireAuth,
+  requireAnyPermission(...CAN_DECIDE),
+  validate(bulkSchema),
+  bulkDecide("approve"),
+);
+router.post(
+  "/bulk-reject",
+  requireAuth,
+  requireAnyPermission(...CAN_DECIDE),
+  validate(bulkSchema),
+  bulkDecide("reject"),
+);
 
 // QAROR: kategoriyaga mos ruxsat SERVISDA tekshiriladi (finance.approve yoki
 // approvals.decide_config). Servis ichida qo'shimcha himoya: o'z so'rovini

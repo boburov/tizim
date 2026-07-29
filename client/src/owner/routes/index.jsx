@@ -6,6 +6,7 @@ import PermissionGuard from "@/shared/components/guards/PermissionGuard";
 
 // Pages
 import {
+  GroupsPage,
   GroupsListPage,
   GroupDetailPage,
   GroupInfoPanel,
@@ -14,7 +15,8 @@ import {
   GroupArchivePanel,
 } from "@/owner/features/groups";
 import {
-  UsersListPage,
+  StudentsPage,
+  TeachersPage,
   UsersTab,
   UserDetailPage,
   UserProfilePanel,
@@ -58,7 +60,12 @@ import {
 import { NotificationTemplatesListPage } from "@/owner/features/notificationTemplates";
 import { HolidaysListPage } from "@/owner/features/holidays";
 import { RolesPage, RoleFormPage } from "@/owner/features/roles";
-import { BranchesPage } from "@/owner/features/branches";
+import {
+  BranchesPage,
+  BranchComparePage,
+  BranchStatsPage,
+  BranchLimitsPage,
+} from "@/owner/features/branches";
 import { ExpenseApprovalsPage } from "@/owner/features/expenseApprovals";
 import {
   FeedbackListPage,
@@ -69,7 +76,6 @@ import {
 import { AdminDashboardPage } from "@/owner/features/adminDashboard";
 import { ActivityLogsPage } from "@/owner/features/activityLogs";
 import {
-  StudentPaymentsPage,
   StudentPaymentsPanel,
   StudentObligationsPanel,
   StudentPaymentHistoryPage,
@@ -84,7 +90,6 @@ import {
   UserDepositPanel,
 } from "@/owner/features/deposits";
 import {
-  TeacherSalariesPage,
   TeacherSalariesPanel,
   TeacherObligationsPage,
   TeacherSalaryHistoryPage,
@@ -108,7 +113,19 @@ const OwnerRoutes = () => (
     <Route path="dashboard" element={<AdminDashboardPage />} />
     <Route path="activity-logs" element={<ActivityLogsPage />} />
 
-    <Route path="groups" element={<GroupsListPage />} />
+    {/* Guruhlar: ro'yxat + guruh to'lovi bitta qobiqda.
+        'tolov' static segment 'groups/:id' dan ustun turadi (v6 ranking). */}
+    <Route path="groups" element={<GroupsPage />}>
+      <Route index element={<GroupsListPage />} />
+      <Route
+        path="tolov"
+        element={
+          <PermissionGuard required="finance.read" fallback="/owner/groups">
+            <GroupFeesPage />
+          </PermissionGuard>
+        }
+      />
+    </Route>
     <Route path="groups/:id" element={<GroupDetailPage />}>
       <Route index element={<GroupInfoPanel />} />
       <Route path="o-quvchilar" element={<GroupStudentsPanel />} />
@@ -116,12 +133,73 @@ const OwnerRoutes = () => (
       <Route path="arxiv" element={<GroupArchivePanel />} />
     </Route>
 
-    {/* Foydalanuvchilar - tablar route darajasida (static 'students' ObjectId :id dan ustun) */}
-    <Route path="users" element={<UsersListPage />}>
-      <Route index element={<UsersTab role={null} />} />
-      <Route path="students" element={<UsersTab role={ROLES.STUDENT} />} />
-      <Route path="teachers" element={<UsersTab role={ROLES.TEACHER} />} />
+    {/* O'QUVCHILAR - o'quvchiga tegishli hamma narsa bitta qobiqda.
+        Har bir tab o'z ruxsati bilan qo'riqlanadi: menyuda yashirish yetarli
+        emas, URL'ni qo'lda yozib kirishning ham oldi olinadi. */}
+    <Route path="students" element={<StudentsPage />}>
+      <Route index element={<UsersTab role={ROLES.STUDENT} />} />
+
+      <Route
+        element={
+          <PermissionGuard required="finance.read" fallback="/owner/students" />
+        }
+      >
+        <Route path="tolovlar" element={<StudentPaymentsPanel />} />
+        <Route path="qarzdorlar" element={<StudentObligationsPanel />} />
+        <Route path="chegirmalar" element={<DiscountsPage />} />
+      </Route>
+
+      <Route
+        element={
+          <PermissionGuard
+            required="admin_dashboard.read"
+            fallback="/owner/students"
+          />
+        }
+      >
+        <Route path="statistika" element={<StudentStatsPage />} />
+        <Route path="chiqib-ketish" element={<StudentRetentionPage />}>
+          <Route index element={<RetentionContent preset="all" />} />
+          <Route path="12-oy" element={<RetentionContent preset="12m" />} />
+          <Route path="3-oy" element={<RetentionContent preset="3m" />} />
+        </Route>
+      </Route>
     </Route>
+
+    {/* O'QITUVCHILAR - ro'yxat + maosh + davomat bitta qobiqda. */}
+    <Route path="teachers" element={<TeachersPage />}>
+      <Route index element={<UsersTab role={ROLES.TEACHER} />} />
+
+      <Route
+        element={
+          <PermissionGuard required="salary.read" fallback="/owner/teachers" />
+        }
+      >
+        <Route path="maoshlar" element={<TeacherSalariesPanel />} />
+        <Route path="qoldiqlar" element={<TeacherObligationsPage />} />
+      </Route>
+
+      <Route
+        path="maosh-belgilash"
+        element={
+          <PermissionGuard required="groups.update" fallback="/owner/teachers">
+            <SalaryConfigsPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="davomat"
+        element={
+          <PermissionGuard
+            required="attendance.record"
+            fallback="/owner/teachers"
+          >
+            <TeacherAttendancePage />
+          </PermissionGuard>
+        }
+      />
+    </Route>
+
     <Route path="users/:id" element={<UserDetailPage />}>
       <Route index element={<UserProfilePanel />} />
       <Route path="davomat" element={<UserAttendancePanel />} />
@@ -131,12 +209,7 @@ const OwnerRoutes = () => (
       <Route path="tarix" element={<UserHistoryPanel />} />
       <Route path="arxiv" element={<UserArchivePanel />} />
     </Route>
-    <Route path="students/stats" element={<StudentStatsPage />} />
-    <Route path="students/retention" element={<StudentRetentionPage />}>
-      <Route index element={<RetentionContent preset="all" />} />
-      <Route path="12-oy" element={<RetentionContent preset="12m" />} />
-      <Route path="3-oy" element={<RetentionContent preset="3m" />} />
-    </Route>
+
     <Route path="archive-reasons" element={<ArchiveReasonsPage />}>
       <Route index element={<ReasonsTab />} />
       <Route path="report" element={<ArchiveReasonReportTab />} />
@@ -163,7 +236,6 @@ const OwnerRoutes = () => (
       <Route path="guruh-boyicha" element={<AttendancePerGroupPanel />} />
     </Route>
     <Route path="attendance/mark" element={<AttendanceMarkPage />} />
-    <Route path="attendance/teachers" element={<TeacherAttendancePage />} />
 
     {/* Baholash */}
     <Route path="grades" element={<GradesGivePage />} />
@@ -199,12 +271,41 @@ const OwnerRoutes = () => (
       }
     />
 
-    {/* Filiallar - faqat branches.read ruxsati borlar uchun */}
+    {/* Filiallar - faqat branches.read ruxsati borlar uchun.
+        DIQQAT: static segmentlar ("compare", "stats", "limits") oddiy
+        "branches" dan keyin, lekin hech qanday ":id" route'idan OLDIN
+        turishi shart - aks holda ular filial ID deb o'qilardi. */}
     <Route
       path="branches"
       element={
         <PermissionGuard required="branches.read" fallback="/owner">
           <BranchesPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="branches/compare"
+      element={
+        <PermissionGuard required="branches.read" fallback="/owner">
+          <BranchComparePage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="branches/stats"
+      element={
+        <PermissionGuard required="branches.read" fallback="/owner">
+          <BranchStatsPage />
+        </PermissionGuard>
+      }
+    />
+    {/* Limit o'zgartirish - yozish huquqi. Serverda bu amal
+        system.admin_access + branches.update talab qiladi. */}
+    <Route
+      path="branches/limits"
+      element={
+        <PermissionGuard required="branches.update" fallback="/owner/branches">
+          <BranchLimitsPage />
         </PermissionGuard>
       }
     />
@@ -248,19 +349,12 @@ const OwnerRoutes = () => (
     {/* Undirilmagan to'lovlar (hisobdan chiqarilgan qarzlar) - oy/yil/guruh filtri */}
     <Route path="finance/write-offs" element={<WriteOffsPage />} />
 
-    {/* O'quvchi to'lovlari - tablar route darajasida */}
-    <Route path="finance/student-payments" element={<StudentPaymentsPage />}>
-      <Route index element={<StudentPaymentsPanel />} />
-      <Route path="debtors" element={<StudentObligationsPanel />} />
-    </Route>
+    {/* Detal sahifalar o'z URL'ida qoldi - ro'yxatlardagi havolalar ishlaydi. */}
     <Route
       path="finance/student-payments/student/:studentId"
       element={<StudentPaymentHistoryPage />}
     />
-
-    <Route path="finance/group-fees" element={<GroupFeesPage />} />
     <Route path="finance/group-fees/:groupId" element={<GroupFeeDetailPage />} />
-    <Route path="finance/discounts" element={<DiscountsPage />} />
 
     {/* Depozitlar - 2 tab (tranzaksiyalar + hisobotlar) */}
     <Route path="finance/deposits" element={<DepositsPage />}>
@@ -268,12 +362,6 @@ const OwnerRoutes = () => (
       <Route path="hisobotlar" element={<DepositsReportPanel />} />
     </Route>
 
-    {/* O'qituvchi maoshlari - tablar route darajasida */}
-    <Route path="finance/teacher-salaries" element={<TeacherSalariesPage />}>
-      <Route index element={<TeacherSalariesPanel />} />
-      <Route path="qoldiqlar" element={<TeacherObligationsPage />} />
-      <Route path="maosh-belgilash" element={<SalaryConfigsPage />} />
-    </Route>
     <Route
       path="finance/teacher-salaries/teacher/:teacherId"
       element={<TeacherSalaryHistoryPage />}
@@ -284,14 +372,65 @@ const OwnerRoutes = () => (
       element={<SalaryGroupDetailPage />}
     />
 
-    {/* Eski havolalar (redirect) */}
+    {/* ESKI HAVOLALAR.
+        Ro'yxat sahifalari o'quvchi/o'qituvchi/guruh qobiqlariga ko'chdi -
+        eski URL, xatcho'p va tashqi havolalar ishlashda davom etadi. */}
+    <Route path="users" element={<Navigate to="/owner/students" replace />} />
     <Route
-      path="finance/salary-configs"
-      element={<Navigate to="/owner/finance/teacher-salaries/maosh-belgilash" replace />}
+      path="users/students"
+      element={<Navigate to="/owner/students" replace />}
+    />
+    <Route
+      path="users/teachers"
+      element={<Navigate to="/owner/teachers" replace />}
+    />
+    <Route
+      path="students/stats"
+      element={<Navigate to="/owner/students/statistika" replace />}
+    />
+    <Route
+      path="students/retention/*"
+      element={<Navigate to="/owner/students/chiqib-ketish" replace />}
+    />
+    <Route
+      path="finance/student-payments"
+      element={<Navigate to="/owner/students/tolovlar" replace />}
+    />
+    <Route
+      path="finance/student-payments/debtors"
+      element={<Navigate to="/owner/students/qarzdorlar" replace />}
+    />
+    <Route
+      path="finance/discounts"
+      element={<Navigate to="/owner/students/chegirmalar" replace />}
     />
     <Route
       path="finance/obligations"
-      element={<Navigate to="/owner/finance/student-payments/debtors" replace />}
+      element={<Navigate to="/owner/students/qarzdorlar" replace />}
+    />
+    <Route
+      path="finance/teacher-salaries"
+      element={<Navigate to="/owner/teachers/maoshlar" replace />}
+    />
+    <Route
+      path="finance/teacher-salaries/qoldiqlar"
+      element={<Navigate to="/owner/teachers/qoldiqlar" replace />}
+    />
+    <Route
+      path="finance/teacher-salaries/maosh-belgilash"
+      element={<Navigate to="/owner/teachers/maosh-belgilash" replace />}
+    />
+    <Route
+      path="finance/salary-configs"
+      element={<Navigate to="/owner/teachers/maosh-belgilash" replace />}
+    />
+    <Route
+      path="finance/group-fees"
+      element={<Navigate to="/owner/groups/tolov" replace />}
+    />
+    <Route
+      path="attendance/teachers"
+      element={<Navigate to="/owner/teachers/davomat" replace />}
     />
 
     <Route path="profile" element={<ProfilePage />} />

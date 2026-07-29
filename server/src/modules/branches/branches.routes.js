@@ -12,6 +12,7 @@ import { updateSchema } from "./validators/update.validator.js";
 import list from "./handlers/list.handler.js";
 import getById from "./handlers/getById.handler.js";
 import stats from "./handlers/stats.handler.js";
+import compare from "./handlers/compare.handler.js";
 import create from "./handlers/create.handler.js";
 import update from "./handlers/update.handler.js";
 import remove from "./handlers/remove.handler.js";
@@ -21,6 +22,8 @@ const router = Router();
 // O'QISH: filial tanlagichi uchun har qanday auth'langan foydalanuvchi
 // o'z filiallarini ko'radi (ro'yxat allowedBranchIds bo'yicha kesiladi).
 router.get("/", requireAuth, validate(listSchema), list);
+// "/:id" dan OLDIN: aks holda "compare" filial ID deb o'qilardi.
+router.get("/compare", requireAuth, requirePermission(PERMISSIONS.BRANCHES_READ), compare);
 router.get("/:id", requireAuth, validate(idSchema), getById);
 router.get("/:id/stats", requireAuth, validate(idSchema), stats);
 

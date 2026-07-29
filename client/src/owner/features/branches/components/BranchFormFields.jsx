@@ -1,7 +1,13 @@
 import InputField from "@/shared/components/ui/input/InputField";
 
-const BranchFormFields = ({ obj, disabled = false, showThreshold = false }) => (
-  <div className="space-y-3">
+// twoCols - keng modallar uchun (2 ustunli grid), aks holda bitta ustun
+const BranchFormFields = ({
+  obj,
+  disabled = false,
+  showThreshold = false,
+  twoCols = false,
+}) => (
+  <div className={twoCols ? "grid gap-3 sm:grid-cols-2" : "space-y-3"}>
     <InputField
       name="name"
       label="Filial nomi"
@@ -9,22 +15,6 @@ const BranchFormFields = ({ obj, disabled = false, showThreshold = false }) => (
       value={obj.name}
       onChange={(e) => obj.setField("name", e.target.value)}
       required
-      disabled={disabled}
-    />
-    <InputField
-      name="code"
-      label="Qisqa kod (ixtiyoriy)"
-      placeholder="Masalan: CHL"
-      value={obj.code}
-      onChange={(e) => obj.setField("code", e.target.value)}
-      disabled={disabled}
-    />
-    <InputField
-      name="address"
-      label="Manzil (ixtiyoriy)"
-      placeholder="Toshkent, Chilonzor 5-kvartal"
-      value={obj.address}
-      onChange={(e) => obj.setField("address", e.target.value)}
       disabled={disabled}
     />
     {/* type="tel" -> InputTel (react-imask, "+{998} (00) 000-00-00") */}
@@ -36,9 +26,18 @@ const BranchFormFields = ({ obj, disabled = false, showThreshold = false }) => (
       onChange={(e) => obj.setField("phone", e.target.value)}
       disabled={disabled}
     />
+    <InputField
+      name="address"
+      label="Manzil"
+      placeholder="Toshkent, Chilonzor 5-kvartal"
+      value={obj.address}
+      onChange={(e) => obj.setField("address", e.target.value)}
+      className={twoCols ? "sm:col-span-2" : ""}
+      disabled={disabled}
+    />
 
     {showThreshold && (
-      <div>
+      <div className={twoCols ? "sm:col-span-2" : ""}>
         <InputField
           name="expenseApprovalThreshold"
           label="Chiqim limiti (bitta to'lov uchun)"
@@ -49,8 +48,7 @@ const BranchFormFields = ({ obj, disabled = false, showThreshold = false }) => (
           disabled={disabled}
         />
         <p className="text-xs opacity-60 mt-1">
-          Shu summadan katta to'lov sizning tasdig'ingizni kutadi. Bo'sh
-          qoldirilsa - limit yo'q.
+          Shu summadan katta to'lov tasdiqlashni kutadi
         </p>
       </div>
     )}

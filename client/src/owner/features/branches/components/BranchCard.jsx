@@ -35,21 +35,16 @@ const BranchCard = ({ branch }) => {
           <div className="flex items-center justify-center size-10 shrink-0 rounded-md bg-primary/10 text-primary">
             <Building2 size={20} strokeWidth={1.5} />
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium truncate">{branch.name}</h3>
-              {branch.isMain && (
-                <span
-                  title="Asosiy filial"
-                  className="flex items-center gap-1 text-xs text-amber-600"
-                >
-                  <Star size={12} strokeWidth={2} />
-                  Asosiy
-                </span>
-              )}
-            </div>
-            {branch.code && (
-              <span className="text-xs opacity-60">{branch.code}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="font-medium truncate">{branch.name}</h3>
+            {branch.isMain && (
+              <span
+                title="Asosiy filial"
+                className="flex items-center gap-1 shrink-0 text-xs text-amber-600"
+              >
+                <Star size={12} strokeWidth={2} />
+                Asosiy
+              </span>
             )}
           </div>
         </div>

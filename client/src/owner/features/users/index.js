@@ -1,4 +1,5 @@
-export { default as UsersListPage } from "./pages/UsersListPage";
+export { default as StudentsPage } from "./pages/StudentsPage";
+export { default as TeachersPage } from "./pages/TeachersPage";
 export { default as UsersTab } from "./components/UsersTab";
 export { default as UserDetailPage } from "./pages/UserDetailPage";
 export { default as UserProfilePanel } from "./components/tabs/UserProfilePanel";

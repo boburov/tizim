@@ -53,7 +53,15 @@ import { ROLES } from "@/shared/constants/roles";
 import { APP_NAME, APP_LOGO } from "@/shared/constants/app";
 
 // Rol-spec sidebar konfiguratsiyalari
-import { ownerSidebar, OwnerGlobalSearch } from "@/owner";
+import {
+  ownerSidebar,
+  OwnerGlobalSearch,
+  OwnerCreateMenu,
+  OwnerCreateModals,
+  OwnerApprovalsBadge,
+  OwnerApprovalNotifier,
+  OwnerApprovalsBell,
+} from "@/owner";
 import { teacherSidebar } from "@/teacher";
 import { studentSidebar } from "@/student";
 
@@ -127,32 +135,79 @@ const Main = () => {
   // har doim mavjud va custom rol qaysi panel bilan ishlashini bildiradi.
   const navItems = ROLE_SIDEBAR[role] || ROLE_SIDEBAR[roleType] || [];
 
-  // Filter sub-items by permission
+  // `permission` - bitta kalit; `permissionAnyOf` - kamida bittasi
+  // yetarli (bitta sahifa ikki xil ruxsat egasiga ochiq bo'lganda).
+  const allowed = (entry) => {
+    if (entry.permissionAnyOf?.length) return hasAny(entry.permissionAnyOf);
+    return !entry.permission || has(entry.permission);
+  };
+
+  // Filter sub-items by permission.
+  //
+  // Ikki xil yozuv bor:
+  //   - GURUH: `items` massivi bor -> ochiladigan collapsible.
+  //   - YAKKA LINK: `url` bor, `items` yo'q -> to'g'ridan-to'g'ri havola.
+  // Yakka link ataylab qo'shildi: "Tasdiqlar" kabi bitta sahifali bo'lim
+  // uchun ochiladigan guruh ortiqcha bosish qadamini qo'shardi.
   const filtered = navItems
     .map((item) => ({
       ...item,
-      // `permission` - bitta kalit; `permissionAnyOf` - kamida bittasi
-      // yetarli (bitta sahifa ikki xil ruxsat egasiga ochiq bo'lganda).
-      items: (item.items || []).filter((sub) => {
-        if (sub.permissionAnyOf?.length) return hasAny(sub.permissionAnyOf);
-        return !sub.permission || has(sub.permission);
-      }),
+      items: (item.items || []).filter(allowed),
     }))
-    .filter((item) => item.items.length > 0);
+    .filter((item) =>
+      item.items.length ? true : Boolean(item.url) && allowed(item),
+    );
 
   return (
     <SidebarContent>
-      {/* Global qidiruv - owner panelida ishlaydigan hamma uchun
-          (custom "director" roli ham roleType="owner"/"staff" bo'lishi mumkin) */}
+      {/* Yaratish tugmasi + global qidiruv - owner panelida ishlaydigan hamma
+          uchun (custom "director" roli ham roleType="owner"/"staff" bo'lishi
+          mumkin). Modallar shu yerda mount qilinadi: sidebar har doim
+          DashboardLayout ichida turadi, ya'ni istalgan sahifadan ochiladi. */}
       {(role === ROLES.OWNER || roleType === ROLES.OWNER) && (
-        <SidebarGroup className="pb-0">
-          <OwnerGlobalSearch />
-        </SidebarGroup>
+        <>
+          <SidebarGroup className="gap-2 pb-0">
+            <OwnerCreateMenu />
+            <div className="flex items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <OwnerGlobalSearch />
+              </div>
+              {/* Kutilayotgan tasdiqlar paneli - yonboshdan chiqadi */}
+              <OwnerApprovalsBell className="shrink-0" />
+            </div>
+          </SidebarGroup>
+          <OwnerCreateModals />
+          {/* Bildirishnoma qatlamining YAGONA mount nuqtasi: sidebar har
+              doim DashboardLayout ichida turadi, ya'ni toast va kirish
+              oynasi istalgan sahifada ishlaydi. */}
+          <OwnerApprovalNotifier />
+        </>
       )}
       <SidebarGroup>
         <SidebarGroupLabel>Platforma</SidebarGroupLabel>
         <SidebarMenu>
-          {filtered.map((item) => (
+          {filtered.map((item) =>
+            item.items.length === 0 ? (
+              /* Yakka link - collapsible'siz, to'g'ridan-to'g'ri sahifaga */
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  asChild
+                  tooltip={item.title}
+                  className="h-auto py-2.5"
+                >
+                  <Link
+                    to={item.url}
+                    onClick={isMobile ? toggleSidebar : undefined}
+                  >
+                    {item.icon && <item.icon strokeWidth={1.5} />}
+                    <span>{item.title}</span>
+                    {item.badge === "approvals" && (
+                      <OwnerApprovalsBadge className="ml-auto" />
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : (
             <Collapsible
               asChild
               key={item.title}
@@ -193,7 +248,8 @@ const Main = () => {
                 </CollapsibleContent>
               </SidebarMenuItem>
             </Collapsible>
-          ))}
+            ),
+          )}
         </SidebarMenu>
       </SidebarGroup>
     </SidebarContent>

@@ -25,7 +25,7 @@ const TeacherSalaryHistoryPage = () => {
   return (
     <div className="space-y-4">
       <header className="flex items-center gap-3">
-        <BackLink to="/owner/finance/teacher-salaries" />
+        <BackLink to="/owner/teachers/maoshlar" />
         <div>
           <h1 className="text-2xl font-semibold">{fullName}</h1>
         </div>

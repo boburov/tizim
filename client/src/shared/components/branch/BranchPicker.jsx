@@ -71,10 +71,7 @@ const BranchPicker = () => {
               <div className="flex items-center justify-center size-10 shrink-0 rounded-md bg-muted">
                 <Building2 size={20} strokeWidth={1.5} />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{b.name}</p>
-                {b.code && <p className="text-xs opacity-60">{b.code}</p>}
-              </div>
+              <p className="flex-1 min-w-0 font-medium truncate">{b.name}</p>
               <ChevronRight size={18} strokeWidth={1.5} className="opacity-40" />
             </button>
           ))}

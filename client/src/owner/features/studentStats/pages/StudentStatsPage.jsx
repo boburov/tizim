@@ -25,10 +25,7 @@ const StudentStatsPage = () => {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-semibold">O'quvchilar statistikasi</h1>
-      </header>
-
+      {/* Sarlavha StudentsPage qobig'ida (tab nomi = "Statistika") */}
       {isError ? (
         <ErrorState onRetry={refetch} />
       ) : isLoading ? (

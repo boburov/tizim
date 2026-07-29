@@ -4,7 +4,7 @@ import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import ChurnedStudentsModal from "../components/ChurnedStudentsModal";
 import { MODAL } from "@/shared/constants/modals";
 
-const BASE = "/owner/students/retention";
+const BASE = "/owner/students/chiqib-ketish";
 
 // Layout: davr presetlari (Butun davr / 12 oy / 3 oy) route darajasida.
 const StudentRetentionPage = () => {
@@ -16,10 +16,8 @@ const StudentRetentionPage = () => {
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="text-2xl font-semibold">Chiqib ketish tahlili</h1>
-      </header>
-
+      {/* Sarlavha StudentsPage qobig'ida (tab nomi = "Chiqib ketish").
+          Bu yerdagi tablar - davr presetlari, ya'ni ichki tab qatori. */}
       <TabsLinks items={items} />
       <Outlet />
 

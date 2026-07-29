@@ -44,8 +44,8 @@ const DiscountsPage = () => {
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Chegirmalar</h1>
+      {/* Sarlavha StudentsPage qobig'ida (tab nomi = "Chegirmalar") */}
+      <header className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap items-end gap-2">
           <MonthPicker
             year={filters.year}

@@ -11,12 +11,14 @@ export const qk = Object.freeze({
     list: (params) => ["branches", "list", params],
     one: (id) => ["branches", "detail", id],
     stats: (id) => ["branches", "stats", id],
+    compare: () => ["branches", "compare"],
   },
   expenseApprovals: {
     all: () => ["expenseApprovals"],
     list: (params) => ["expenseApprovals", "list", params],
     one: (id) => ["expenseApprovals", "detail", id],
     pendingCount: () => ["expenseApprovals", "pendingCount"],
+    stats: () => ["expenseApprovals", "stats"],
   },
   users: {
     all: () => ["users"],

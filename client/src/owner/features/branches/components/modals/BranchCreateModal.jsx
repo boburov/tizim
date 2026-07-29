@@ -18,7 +18,6 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
   const obj = useObjectState({
     // Filial
     name: "",
-    code: "",
     address: "",
     phone: "",
     // Direktor
@@ -63,7 +62,6 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
     setIsLoading(true);
     mutate({
       name: obj.name.trim(),
-      code: obj.code.trim() || null,
       address: obj.address.trim() || null,
       phone: obj.phone.trim() || null,
       director: {
@@ -79,18 +77,12 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <BranchFormFields obj={obj} disabled={isLoading} />
+      <BranchFormFields obj={obj} disabled={isLoading} twoCols />
 
       <div className="pt-3 border-t space-y-3">
-        <div>
-          <p className="text-sm font-medium">Filial direktori</p>
-          <p className="text-xs opacity-60">
-            Shu login/parol bilan direktor tizimga kiradi va faqat shu
-            filialni boshqaradi
-          </p>
-        </div>
+        <p className="text-sm font-medium">Filial direktori</p>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <InputField
             name="dirFirstName"
             label="Ism"
@@ -107,18 +99,24 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
             required
             disabled={isLoading}
           />
-        </div>
-
-        <InputField
-          type="tel"
-          name="dirPhone"
-          label="Direktor telefoni"
-          value={obj.dirPhone}
-          onChange={(e) => obj.setField("dirPhone", e.target.value)}
-          disabled={isLoading}
-        />
-
-        <div className="grid grid-cols-2 gap-3">
+          <InputField
+            type="tel"
+            name="dirPhone"
+            label="Telefon"
+            value={obj.dirPhone}
+            onChange={(e) => obj.setField("dirPhone", e.target.value)}
+            disabled={isLoading}
+          />
+          {roleOptions.length > 0 && (
+            <SelectField
+              name="dirRole"
+              label="Rol"
+              options={roleOptions}
+              value={obj.dirRole}
+              onChange={(v) => obj.setField("dirRole", v?.target?.value ?? v)}
+              disabled={isLoading}
+            />
+          )}
           <InputField
             name="dirUsername"
             label="Login"
@@ -141,18 +139,6 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
             disabled={isLoading}
           />
         </div>
-
-        {roleOptions.length > 0 && (
-          <SelectField
-            name="dirRole"
-            label="Rol"
-            options={roleOptions}
-            value={obj.dirRole}
-            onChange={(v) => obj.setField("dirRole", v?.target?.value ?? v)}
-            disabled={isLoading}
-            description="Ruxsatlarni 'Rollar va ruxsatlar' bo'limida sozlaysiz"
-          />
-        )}
       </div>
 
       <div className="flex gap-2 pt-1">
@@ -166,7 +152,7 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
           Bekor qilish
         </Button>
         <Button type="submit" disabled={isLoading || !isValid} className="flex-1">
-          {isLoading ? "Yaratilmoqda..." : "Filial va direktor yaratish"}
+          {isLoading ? "Yaratilmoqda..." : "Yaratish"}
         </Button>
       </div>
     </form>

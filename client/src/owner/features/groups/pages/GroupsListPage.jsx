@@ -11,7 +11,6 @@ import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import Pagination from "@/shared/components/ui/pagination/Pagination";
 import ArchiveToggle from "@/shared/components/ui/archive/ArchiveToggle";
 import GroupCard from "../components/GroupCard";
-import GroupCreateModal from "../components/modals/GroupCreateModal";
 import GroupEditModal from "../components/modals/GroupEditModal";
 import GroupFinishModal from "../components/modals/GroupFinishModal";
 import GroupPermanentDeleteModal from "../components/modals/GroupPermanentDeleteModal";
@@ -45,9 +44,8 @@ const GroupsListPage = () => {
 
   return (
     <div className="space-y-4">
-      {/* Title */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Guruhlar</h1>
+      {/* Sarlavha GroupsPage qobig'ida - bu yerda faqat arxiv tugmasi */}
+      <div className="flex items-center justify-end gap-3">
         <ArchiveToggle
           value={archived}
           onChange={(v) => {
@@ -108,13 +106,8 @@ const GroupsListPage = () => {
         />
       )}
 
-      <ModalWrapper
-        name={MODAL.GROUP_CREATE}
-        title="Yangi guruh"
-        className="max-w-4xl"
-      >
-        <GroupCreateModal />
-      </ModalWrapper>
+      {/* GROUP_CREATE modali global mount qilingan (owner/components/CreateModals).
+          Bu yerda takrorlansa bitta openModal ikkita dialog ochardi. */}
       <ModalWrapper
         name={MODAL.GROUP_EDIT}
         title="Guruhni tahrirlash"

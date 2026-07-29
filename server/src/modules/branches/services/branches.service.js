@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Branch from "../../../models/branch.model.js";
 import User from "../../../models/user.model.js";
 import Group from "../../../models/group.model.js";
+import Approval from "../../../models/approval.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { hashPassword } from "../../../helpers/password.helper.js";
@@ -244,4 +245,110 @@ export const stats = async (id) => {
   ]);
 
   return { groupCount, activeGroupCount, staffCount, studentCount };
+};
+
+/**
+ * TAQQOSLASH - barcha ko'rinadigan filiallar bitta jadvalda.
+ *
+ * NEGA ALOHIDA ENDPOINT: global BranchPicker butun ilovani BITTA filialga
+ * qisadi, ya'ni "qaysi filial qanday ishlayapti" degan savolga javob
+ * berolmaydi. Bu yagona ko'rinish uni filialdan tashqarida beradi.
+ *
+ * N+1 dan qochish: har filial uchun alohida `stats(id)` chaqirilsa 4xN
+ * so'rov bo'lardi. Bu yerda har bir o'lcham uchun BITTA aggregation
+ * ishlaydi va natija filial bo'yicha guruhlanadi.
+ */
+export const compare = async ({ allowedBranchIds = [], canSeeAllBranches = false }) => {
+  const filter = { isDeleted: false, isActive: true };
+  if (!canSeeAllBranches) {
+    filter._id = { $in: allowedBranchIds.map((id) => new mongoose.Types.ObjectId(id)) };
+  }
+
+  const branches = await Branch.find(filter)
+    .sort({ isMain: -1, name: 1 })
+    .select({ name: 1, code: 1, isMain: 1, expenseApprovalThreshold: 1 })
+    .lean();
+
+  if (!branches.length) return [];
+
+  const ids = branches.map((b) => b._id);
+
+  // Xodim/o'quvchi filialga IKKI yo'l bilan bog'lanadi: `homeBranchId` yoki
+  // `branchAssignments`. Ikkalasini bitta massivga yig'ib, `$unwind` bilan
+  // sanaymiz - aks holda ikki filialga biriktirilgan xodim faqat bittasida
+  // hisoblanardi.
+  const userCounts = await User.aggregate([
+    {
+      $match: {
+        isActive: true,
+        isDeleted: { $ne: true },
+        $or: [
+          { homeBranchId: { $in: ids } },
+          { "branchAssignments.branchId": { $in: ids } },
+        ],
+      },
+    },
+    {
+      $project: {
+        role: 1,
+        branches: {
+          $setUnion: [
+            { $cond: [{ $ifNull: ["$homeBranchId", false] }, ["$homeBranchId"], []] },
+            { $ifNull: ["$branchAssignments.branchId", []] },
+          ],
+        },
+      },
+    },
+    { $unwind: "$branches" },
+    { $match: { branches: { $in: ids } } },
+    {
+      $group: {
+        _id: "$branches",
+        studentCount: { $sum: { $cond: [{ $eq: ["$role", "student"] }, 1, 0] } },
+        staffCount: { $sum: { $cond: [{ $ne: ["$role", "student"] }, 1, 0] } },
+      },
+    },
+  ]);
+
+  const groupCounts = await Group.aggregate([
+    { $match: { branchId: { $in: ids }, isDeleted: { $ne: true } } },
+    {
+      $group: {
+        _id: "$branchId",
+        groupCount: { $sum: 1 },
+        activeGroupCount: { $sum: { $cond: [{ $eq: ["$isActive", true] }, 1, 0] } },
+      },
+    },
+  ]);
+
+  const pendingCounts = await Approval.aggregate([
+    { $match: { branchId: { $in: ids }, status: "pending" } },
+    { $group: { _id: "$branchId", pendingApprovals: { $sum: 1 } } },
+  ]);
+
+  const byId = (rows) =>
+    rows.reduce((acc, row) => {
+      acc[String(row._id)] = row;
+      return acc;
+    }, {});
+
+  const users = byId(userCounts);
+  const groups = byId(groupCounts);
+  const pending = byId(pendingCounts);
+
+  return branches.map((b) => {
+    const key = String(b._id);
+    return {
+      _id: b._id,
+      name: b.name,
+      code: b.code,
+      isMain: b.isMain,
+      expenseApprovalThreshold: b.expenseApprovalThreshold ?? null,
+      studentCount: users[key]?.studentCount || 0,
+      staffCount: users[key]?.staffCount || 0,
+      groupCount: groups[key]?.groupCount || 0,
+      activeGroupCount: groups[key]?.activeGroupCount || 0,
+      pendingApprovals: pending[key]?.pendingApprovals || 0,
+    };
+  });
 };

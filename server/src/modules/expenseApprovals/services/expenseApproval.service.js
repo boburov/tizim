@@ -11,6 +11,7 @@ import logger from "../../../config/logger.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 import { hasPermission } from "../../../helpers/permission.helper.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import { SORT_OPTIONS } from "../validators/list.validator.js";
 
 // Kategoriya -> uni tasdiqlash uchun kerak bo'lgan ruxsat.
 // AJRATILGAN bo'lishi PRINSIPIAL: chiqim tasdiqlash huquqi berilgan direktor
@@ -166,12 +167,23 @@ const categoryCondition = (permissions, userId) => {
   return { $or: [{ category: { $in: cats } }, { requestedBy: userId }] };
 };
 
-export const list = async ({
+// Regexp uchun foydalanuvchi matnini zararsizlantirish.
+// Bu bo'lmasa "(" kabi belgi butun so'rovni yiqitadi, ".*" esa
+// indekssiz to'liq skanerlashga aylanadi.
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Ro'yxat filtrini quradi. `count` va `list` bitta manbadan qurilishi uchun
+ * alohida chiqarildi - aks holda ikkalasi vaqt o'tib bir-biridan uzoqlashardi.
+ */
+const buildListFilter = ({
   status,
   kind,
   category,
-  page = 1,
-  limit = 20,
+  search,
+  dateFrom,
+  dateTo,
+  requestedBy,
   permissions,
   currentUser,
 }) => {
@@ -182,11 +194,71 @@ export const list = async ({
   if (status) filter.status = status;
   if (kind) filter.kind = kind;
   if (category) filter.category = category;
+  if (requestedBy) filter.requestedBy = requestedBy;
+
+  if (dateFrom || dateTo) {
+    filter.createdAt = {};
+    if (dateFrom) filter.createdAt.$gte = dateFrom;
+    // `dateTo` KUN OXIRIGACHA: foydalanuvchi "31-dekabrgacha" deganda
+    // o'sha kunning o'zi ham kirishini kutadi, 00:00 ni emas.
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      filter.createdAt.$lte = end;
+    }
+  }
+
+  if (search) {
+    const rx = new RegExp(escapeRegex(search), "i");
+    const searchOr = [
+      { subjectName: rx },
+      { contextName: rx },
+      { requestNote: rx },
+    ];
+    // DIQQAT: categoryCondition ham $or ishlatishi mumkin. Ikkinchi $or uni
+    // jimgina yozib yuborardi va foydalanuvchi ko'rmasligi kerak bo'lgan
+    // kategoriyani ham qidiruv orqali ochib berardi. Shuning uchun $and.
+    if (filter.$or) {
+      filter.$and = [{ $or: filter.$or }, { $or: searchOr }];
+      delete filter.$or;
+    } else {
+      filter.$or = searchOr;
+    }
+  }
+
+  return filter;
+};
+
+export const list = async ({
+  status,
+  kind,
+  category,
+  search,
+  sort = "-createdAt",
+  dateFrom,
+  dateTo,
+  requestedBy,
+  page = 1,
+  limit = 20,
+  permissions,
+  currentUser,
+}) => {
+  const filter = buildListFilter({
+    status,
+    kind,
+    category,
+    search,
+    dateFrom,
+    dateTo,
+    requestedBy,
+    permissions,
+    currentUser,
+  });
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
     Approval.find(filter)
-      .sort({ createdAt: -1 })
+      .sort(SORT_OPTIONS[sort] || SORT_OPTIONS["-createdAt"])
       .skip(skip)
       .limit(limit)
       .populate("requestedBy", { firstName: 1, lastName: 1, username: 1 })
@@ -196,6 +268,53 @@ export const list = async ({
     Approval.countDocuments(filter),
   ]);
   return { items: items.map(stripSensitive), total, page, limit };
+};
+
+/**
+ * KPI kartalari uchun yig'ma. Bitta aggregation - har bir karta uchun
+ * alohida so'rov yuborilsa 3 marta bir xil filtr bo'yicha skanerlanardi.
+ *
+ * `pendingAmount` FAQAT `financial` so'rovlarni qo'shadi: konfiguratsiya
+ * so'rovlarida `amount` null va ular "kutilayotgan chiqim" summasiga
+ * qo'shilsa hisobot yolg'on ko'rsatardi (model izohidagi leakage darsi).
+ */
+export const stats = async ({ permissions, currentUser }) => {
+  const base = buildListFilter({ permissions, currentUser });
+
+  const [row] = await Approval.aggregate([
+    { $match: base },
+    {
+      $group: {
+        _id: null,
+        pending: {
+          $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] },
+        },
+        pendingAmount: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ["$status", "pending"] },
+                  { $eq: ["$category", "financial"] },
+                ],
+              },
+              { $ifNull: ["$amount", 0] },
+              0,
+            ],
+          },
+        },
+        failed: {
+          $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] },
+        },
+      },
+    },
+  ]);
+
+  return {
+    pending: row?.pending || 0,
+    pendingAmount: row?.pendingAmount || 0,
+    failed: row?.failed || 0,
+  };
 };
 
 export const getById = async (id, { permissions, currentUser } = {}) => {
@@ -397,6 +516,45 @@ export const approve = async (id, { note } = {}, currentUser, permissions) => {
       `Tasdiqlandi, lekin bajarib bo'lmadi: ${reason}`,
     );
   }
+};
+
+/**
+ * OMMAVIY QAROR - bir nechta so'rovni ketma-ket tasdiqlaydi/rad etadi.
+ *
+ * KETMA-KET, ATAYLAB PARALLEL EMAS: bajaruvchilar bir xil resursga tegishi
+ * mumkin (bitta o'quvchining depoziti, bitta o'qituvchining maosh qoldig'i).
+ * Parallel ishga tushirilsa ikki to'lov bir balansni bir vaqtda o'qib,
+ * ikkalasi ham "yetarli" deb qaror qilardi.
+ *
+ * HAR BIR ID ALOHIDA TEKSHIRILADI va alohida yiqiladi: bittasi o'tmasa
+ * qolganlari baribir bajariladi. Frontend'dagi checkbox holatiga ISHONILMAYDI -
+ * huquq va o'zini-o'zi tasdiqlash taqiqi shu yerda qayta tekshiriladi
+ * (approve/reject ichida).
+ */
+export const bulkDecide = async (
+  ids,
+  { action, note } = {},
+  currentUser,
+  permissions,
+) => {
+  const decide = action === "reject" ? reject : approve;
+
+  const succeeded = [];
+  const failed = [];
+
+  for (const id of ids) {
+    try {
+      await decide(id, { note }, currentUser, permissions);
+      succeeded.push(String(id));
+    } catch (err) {
+      failed.push({
+        id: String(id),
+        reason: err?.message || "Noma'lum xato",
+      });
+    }
+  }
+
+  return { succeeded, failed, total: ids.length };
 };
 
 const markFailed = (id, reason) =>

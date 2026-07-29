@@ -37,12 +37,18 @@ import BackLink from "@/shared/components/ui/link/BackLink";
 // Profil. profile/history Outlet context orqali panellarga uzatiladi.
 const UserDetailPage = () => {
   const { id } = useParams();
-  const goBack = useGoBack("/owner/users");
+  // Fallback (tarix bo'sh bo'lsa) - profil hali yuklanmagan bo'lishi mumkin,
+  // shuning uchun o'quvchilar ro'yxati.
+  const goBack = useGoBack("/owner/students");
   const { openModal } = useModal();
   const { has } = usePermissions();
   const { hasMultipleBranches } = useActiveBranch();
   const { data: profile, isLoading, isError } = useUserDetailQuery(id);
   const isStudent = profile?.role === ROLES.STUDENT;
+
+  // Ro'yxat endi rol bo'yicha ikkiga bo'lingan - qaysi biridan kelgan bo'lsa
+  // o'shanga qaytaramiz.
+  const listUrl = isStudent ? "/owner/students" : "/owner/teachers";
 
   const { data: historyData, isLoading: historyLoading } = useUserGroupHistoryQuery(
     isStudent ? id : null,
@@ -88,7 +94,7 @@ const UserDetailPage = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <BackLink to="/owner/users" />
+          <BackLink to={listUrl} />
           <h1 className="text-2xl font-semibold truncate">
             {profile.firstName} {profile.lastName}
           </h1>

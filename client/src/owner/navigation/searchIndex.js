@@ -44,11 +44,21 @@ export const SEARCH_INDEX = [
     permission: "admin_dashboard.read",
   },
   {
-    title: "Foydalanuvchilar",
-    description: "O'qituvchilar va o'quvchilar ro'yxati, parol, profil",
+    title: "O'quvchilar",
+    description: "O'quvchilar ro'yxati, to'lovlar, qarzdorlar, chegirmalar",
     keywords:
-      "users, foydalanuvchi, o'qituvchi, teacher, talaba, student, o'quvchi, hisob, account",
-    url: "/owner/users",
+      "users, foydalanuvchi, talaba, student, o'quvchi, hisob, account, to'lov, payment",
+    url: "/owner/students",
+    icon: Users,
+    category: "Asosiy",
+    permission: "users.read",
+  },
+  {
+    title: "O'qituvchilar",
+    description: "O'qituvchilar ro'yxati, maoshlar, qoldiqlar, davomat",
+    keywords:
+      "users, foydalanuvchi, o'qituvchi, teacher, hisob, account, maosh, salary",
+    url: "/owner/teachers",
     icon: Users,
     category: "Asosiy",
     permission: "users.read",
@@ -67,7 +77,7 @@ export const SEARCH_INDEX = [
     description: "O'quvchilar bo'yicha umumiy tahlil va ko'rsatkichlar",
     keywords:
       "statistika, stats, o'quvchi, student, tahlil, analytics, hisobot, dashboard",
-    url: "/owner/students/stats",
+    url: "/owner/students/statistika",
     icon: BarChart3,
     category: "Asosiy",
     permission: "admin_dashboard.read",
@@ -77,7 +87,7 @@ export const SEARCH_INDEX = [
     description: "O'quvchilar chiqib ketishi (retention) tahlili",
     keywords:
       "retention, chiqib ketish, ketgan, tahlil, churn, ushlab qolish, o'quvchi",
-    url: "/owner/students/retention",
+    url: "/owner/students/chiqib-ketish",
     icon: TrendingDown,
     category: "Asosiy",
     permission: "admin_dashboard.read",
@@ -99,7 +109,7 @@ export const SEARCH_INDEX = [
     description: "O'qituvchilar maoshi, qoldiqlar, maosh belgilash",
     keywords:
       "maosh, salary, o'qituvchi, teacher, qoldiq, oylik, to'lov, payment",
-    url: "/owner/finance/teacher-salaries",
+    url: "/owner/teachers/maoshlar",
     icon: Banknote,
     category: "Moliya",
     permission: "salary.read",
@@ -109,7 +119,7 @@ export const SEARCH_INDEX = [
     description: "O'quvchilarning to'lovlari va qarzdorlar",
     keywords:
       "to'lov, payment, o'quvchi, student, qarz, debtor, qarzdor, moliya, finance",
-    url: "/owner/finance/student-payments",
+    url: "/owner/students/tolovlar",
     icon: Wallet,
     category: "Moliya",
     permission: "finance.read",
@@ -119,7 +129,7 @@ export const SEARCH_INDEX = [
     description: "Guruhlar narxi va to'lov shartlari",
     keywords:
       "guruh to'lovi, group fee, narx, price, oylik, tarif, moliya, finance",
-    url: "/owner/finance/group-fees",
+    url: "/owner/groups/tolov",
     icon: Receipt,
     category: "Moliya",
     permission: "finance.read",
@@ -129,7 +139,7 @@ export const SEARCH_INDEX = [
     description: "O'quvchilarga beriladigan chegirmalar",
     keywords:
       "chegirma, discount, skidka, imtiyoz, narx, moliya, finance",
-    url: "/owner/finance/discounts",
+    url: "/owner/students/chegirmalar",
     icon: BadgePercent,
     category: "Moliya",
     permission: "finance.read",
@@ -183,7 +193,7 @@ export const SEARCH_INDEX = [
     description: "O'qituvchilarning kunlik davomatini qayd etish",
     keywords:
       "davomat, attendance, o'qituvchi, teacher, kelmadi, keldi, belgilash",
-    url: "/owner/attendance/teachers",
+    url: "/owner/teachers/davomat",
     icon: UserCheck,
     category: "Davomat",
     permission: "attendance.record",

@@ -10,7 +10,7 @@ const SalaryGroupDetailPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <BackLink to="/owner/finance/teacher-salaries/maosh-belgilash" />
+        <BackLink to="/owner/teachers/maosh-belgilash" />
         <h2 className="text-lg font-semibold">{group?.name || "Guruh"}</h2>
       </div>
 
