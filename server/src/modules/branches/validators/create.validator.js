@@ -1,8 +1,12 @@
 import { z } from "zod";
 
-// FILIAL + DIREKTOR birga yaratiladi.
-// Direktor MAJBURIY: direktorsiz filial - "qorong'i ma'lumot", unga
-// owner'dan boshqa hech kim kira olmaydi.
+// FILIAL + DIREKTOR birga yaratilishi MUMKIN, lekin majburiy emas.
+//
+// Ilgari direktor majburiy edi ("direktorsiz filial - qorong'i ma'lumot").
+// Amalda bu halqa hosil qilardi: yaratilgan har bir filialda darhol 1 ta
+// foydalanuvchi paydo bo'lardi, softRemove esa foydalanuvchisi bor filialni
+// o'chirishni taqiqlaydi - ya'ni yaratilgan filialni HECH QACHON o'chirib
+// bo'lmasdi. Endi avval filialni ochib, direktorni keyin biriktirish mumkin.
 const directorSchema = z.object({
   firstName: z.string().min(1, "Direktor ismi kerak").max(60),
   lastName: z.string().min(1, "Direktor familiyasi kerak").max(60),
@@ -26,6 +30,15 @@ export const createSchema = z.object({
     expenseApprovalThreshold: z
       .union([z.coerce.number().min(0).max(1_000_000_000), z.null()])
       .optional(),
-    director: directorSchema,
+    // Ixtiyoriy. Bo'sh obyekt ({} yoki hamma maydoni bo'sh) ham "yo'q"
+    // deb qabul qilinadi - client forma maydonlarini bo'sh string bilan
+    // yuboradi va ular yarim to'ldirilgan direktor yaratmasligi kerak.
+    director: z.preprocess((v) => {
+      if (!v || typeof v !== "object") return undefined;
+      const filled = ["firstName", "lastName", "username", "password"].some(
+        (k) => String(v[k] ?? "").trim() !== "",
+      );
+      return filled ? v : undefined;
+    }, directorSchema.optional()),
   }),
 });

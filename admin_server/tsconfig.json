@@ -12,6 +12,14 @@
     "rootDir": "./src",
     "sourceMap": true,
     "incremental": true,
+    // Kesh dist/ ICHIDA turishi SHART. nest-cli.json da deleteOutDir:true -
+    // ya'ni har build dist/ ni o'chiradi. Agar kesh tashqarida tursa (ilgari
+    // ildizdagi tsconfig.tsbuildinfo edi), tsc "hammasi tayyor" deb o'ylab
+    // HECH NARSA chiqarmaydi: build 0 kod bilan, xatosiz tugaydi, lekin
+    // dist/ umuman yaratilmaydi. Natijada `npm start` -> dist/main.js yo'q,
+    // `nest start --watch` esa jarayon bo'lib turadi-yu, portni tinglamaydi.
+    // Keshni dist/ ichiga qo'ysak, u chiqindilar bilan birga o'chadi.
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "skipLibCheck": true,
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,

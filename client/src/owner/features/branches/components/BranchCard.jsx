@@ -34,11 +34,14 @@ const Stat = ({ label, value }) => (
 
 const BranchCard = ({ branch }) => {
   const { openModal } = useModal();
-  const { has } = usePermissions();
+  const { hasAll } = usePermissions();
   const { data: stats } = useBranchStatsQuery(branch._id);
 
-  const canUpdate = has(PERMISSIONS.BRANCHES_UPDATE);
-  const canDelete = has(PERMISSIONS.BRANCHES_DELETE);
+  // Server yozish amallarida SYSTEM_ADMIN_ACCESS ni HAM talab qiladi
+  // (branches.routes.js: requirePermission ikki marta). Faqat branches.*
+  // ni tekshirsak tugma ko'rinardi-yu, bosilganda doim 403 qaytardi.
+  const canUpdate = hasAll([PERMISSIONS.SYSTEM_ADMIN_ACCESS, PERMISSIONS.BRANCHES_UPDATE]);
+  const canDelete = hasAll([PERMISSIONS.SYSTEM_ADMIN_ACCESS, PERMISSIONS.BRANCHES_DELETE]);
 
   const isFrozen = branch.isActive === false;
   const managers = stats?.managers || [];

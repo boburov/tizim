@@ -5,6 +5,7 @@ import Group from "../../../models/group.model.js";
 import Approval from "../../../models/approval.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
+import { ROLES } from "../../../constants/roles.js";
 import { hashPassword } from "../../../helpers/password.helper.js";
 import { normalizePhone } from "../../../utils/phone.js";
 import {
@@ -87,6 +88,11 @@ export const create = async (body) => {
  */
 export const createWithDirector = async (body, currentUser) => {
   const { director, ...branchBody } = body;
+
+  // DIREKTORSIZ: faqat filial ochiladi. Direktorni keyin "Xodim qo'shish"
+  // orqali biriktirish mumkin. Bu holatda filialda 0 ta foydalanuvchi
+  // bo'ladi, ya'ni kerak bo'lsa uni o'chirib ham yuborsa bo'ladi.
+  if (!director) return create(branchBody);
 
   // ── 1-QADAM: OLDINDAN validatsiya (hech narsa yaratilmasdan) ──
   // Login/telefon bandligini shu yerda tekshiramiz - keyinroq bilsak,
@@ -202,19 +208,84 @@ export const softRemove = async (id, currentUser) => {
     throw new ApiError(400, "Asosiy filialni o'chirib bo'lmaydi");
   }
 
-  const [groupCount, userCount] = await Promise.all([
+  // TO'SIQ FAQAT HAQIQIY MA'LUMOT UCHUN: guruhlar, o'quvchilar va
+  // o'qituvchilar. Ular boshqa filialga ko'chirilishi kerak, aks holda
+  // yetim qolardi.
+  //
+  // XODIM (direktor/administrator) ATAYLAB HISOBGA OLINMAYDI. Ilgari u ham
+  // to'sardi va natijada halqa hosil bo'lardi: filial yaratilganda tizim
+  // O'ZI direktor yaratardi, keyin o'sha direktor filialni o'chirishga
+  // to'sqinlik qilardi - ya'ni yaratilgan filialni hech qachon o'chirib
+  // bo'lmasdi. Endi xodim filial bilan birga arxivlanadi.
+  const [groupCount, members, staff] = await Promise.all([
     Group.countDocuments({ branchId: doc._id, isDeleted: { $ne: true } }),
-    User.countDocuments({
+    // SANAB emas, RO'YXAT bilan olamiz - to'siq xabari kimni ko'chirish
+    // kerakligini AYTISHI kerak. Ilgari faqat son berilardi va arxivlangan
+    // o'qituvchi kartada ko'rinmagani uchun ("Xodim 0") ega nimani
+    // ko'chirishni bilmay qolardi - o'chirib bo'lmaydigan filial.
+    User.find({
       $or: [{ homeBranchId: doc._id }, { "branchAssignments.branchId": doc._id }],
+      role: { $in: [ROLES.STUDENT, ROLES.TEACHER] },
       isDeleted: { $ne: true },
-    }),
+    })
+      .select("firstName lastName role isActive")
+      .limit(10)
+      .lean(),
+    User.find({
+      $or: [{ homeBranchId: doc._id }, { "branchAssignments.branchId": doc._id }],
+      role: { $nin: [ROLES.STUDENT, ROLES.TEACHER, ROLES.OWNER] },
+      isDeleted: { $ne: true },
+    })
+      .select("_id homeBranchId branchAssignments")
+      .lean(),
   ]);
 
-  if (groupCount > 0 || userCount > 0) {
+  if (groupCount > 0 || members.length > 0) {
+    const who = members
+      .map(
+        (u) =>
+          `${u.firstName} ${u.lastName}` +
+          (u.isActive === false ? " (arxivda)" : ""),
+      )
+      .join(", ");
+
+    const parts = [];
+    if (groupCount > 0) parts.push(`${groupCount} ta guruh`);
+    if (members.length > 0) parts.push(`${members.length} ta o'quvchi/o'qituvchi`);
+
     throw new ApiError(
       400,
-      `Filialda ${groupCount} ta guruh va ${userCount} ta foydalanuvchi bor. ` +
-        "Avval ularni boshqa filialga ko'chiring",
+      `Filialda ${parts.join(" va ")} bor. Avval ularni boshqa filialga ko'chiring.` +
+        // "(arxivda)" belgisi muhim: arxivlangan odam ro'yxatlarda
+        // ko'rinmaydi, lekin baribir to'sadi - ega uni qidirib topa olishi
+        // uchun ismini ochiq aytamiz.
+        (who ? ` Kimlar: ${who}` : ""),
+    );
+  }
+
+  // BOSHQA FILIALDA HAM ISHLAYDIGAN xodimni arxivlamaymiz - undan shu
+  // filial biriktiruvini olib tashlash yetarli.
+  const solelyHere = [];
+  const alsoElsewhere = [];
+  for (const u of staff) {
+    const others = (u.branchAssignments || []).filter(
+      (a) => a?.branchId && String(a.branchId) !== String(doc._id),
+    );
+    const homeElsewhere =
+      u.homeBranchId && String(u.homeBranchId) !== String(doc._id);
+    (others.length || homeElsewhere ? alsoElsewhere : solelyHere).push(u._id);
+  }
+
+  if (solelyHere.length) {
+    await User.updateMany(
+      { _id: { $in: solelyHere } },
+      { $set: { isActive: false, archivedAt: new Date() } },
+    );
+  }
+  if (alsoElsewhere.length) {
+    await User.updateMany(
+      { _id: { $in: alsoElsewhere } },
+      { $pull: { branchAssignments: { branchId: doc._id } } },
     );
   }
 

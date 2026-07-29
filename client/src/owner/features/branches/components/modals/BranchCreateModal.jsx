@@ -8,11 +8,16 @@ import { useRolesQuery } from "@/owner/features/roles";
 import { ROLES } from "@/shared/constants/roles";
 
 /**
- * FILIAL yaratish - direktori bilan BIRGA.
+ * FILIAL yaratish. Majburiy maydon FAQAT bittta - filial nomi.
  *
- * Direktor MAJBURIY: direktorsiz filial "qorong'i" bo'lib qoladi - u yerda
- * guruh va to'lov paydo bo'ladi, lekin owner'dan boshqa hech kim ko'ra
- * olmaydi. Login/parol shu yerda beriladi, keyin direktor o'zi kiradi.
+ * Direktor IXTIYORIY: uni shu yerda birga yaratish qulay, lekin majburiy
+ * qilinsa halqa hosil bo'lardi - har bir yangi filialda darhol 1 ta
+ * foydalanuvchi paydo bo'lardi va server foydalanuvchisi bor filialni
+ * o'chirishga yo'l qo'ymasdi. Direktorni keyin "Xodim qo'shish" orqali
+ * biriktirish mumkin.
+ *
+ * Direktor blokini QISMAN to'ldirib bo'lmaydi: yo hammasi (ism, familiya,
+ * login, parol), yo hech biri.
  */
 const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
   const obj = useObjectState({
@@ -49,12 +54,23 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
   const usernameShort =
     obj.dirUsername.trim().length > 0 && obj.dirUsername.trim().length < 3;
 
-  const isValid =
-    obj.name.trim() &&
+  // Direktor bloki umuman tegilmaganmi?
+  const dirUntouched =
+    !obj.dirFirstName.trim() &&
+    !obj.dirLastName.trim() &&
+    !obj.dirUsername.trim() &&
+    !obj.dirPassword;
+
+  const dirComplete =
     obj.dirFirstName.trim() &&
     obj.dirLastName.trim() &&
     obj.dirUsername.trim().length >= 3 &&
     obj.dirPassword.length >= 6;
+
+  // Nom yetarli. Direktor bloki esa yo bo'sh, yo to'liq bo'lishi kerak -
+  // yarim to'ldirilgani jimgina tashlab yuborilsa foydalanuvchi "direktor
+  // ham yaratildi" deb o'ylab qolardi.
+  const isValid = Boolean(obj.name.trim()) && (dirUntouched || dirComplete);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -64,14 +80,20 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
       name: obj.name.trim(),
       address: obj.address.trim() || null,
       phone: obj.phone.trim() || null,
-      director: {
-        firstName: obj.dirFirstName.trim(),
-        lastName: obj.dirLastName.trim(),
-        username: obj.dirUsername.trim().toLowerCase(),
-        password: obj.dirPassword,
-        phone: obj.dirPhone || undefined,
-        role: obj.dirRole || "director",
-      },
+      // Bloki bo'sh bo'lsa director UMUMAN yuborilmaydi - bo'sh obyekt
+      // serverda validatsiyadan o'tmasdi.
+      ...(dirUntouched
+        ? {}
+        : {
+            director: {
+              firstName: obj.dirFirstName.trim(),
+              lastName: obj.dirLastName.trim(),
+              username: obj.dirUsername.trim().toLowerCase(),
+              password: obj.dirPassword,
+              phone: obj.dirPhone || undefined,
+              role: obj.dirRole || "director",
+            },
+          }),
     });
   };
 
@@ -80,7 +102,13 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
       <BranchFormFields obj={obj} disabled={isLoading} twoCols />
 
       <div className="pt-3 border-t space-y-3">
-        <p className="text-sm font-medium">Filial direktori</p>
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">Filial direktori</p>
+          <p className="text-xs opacity-60">
+            Ixtiyoriy — keyinroq ham qo&apos;shish mumkin. Boshlasangiz, ism,
+            familiya, login va parolni to&apos;ldirish kerak.
+          </p>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <InputField
@@ -88,7 +116,6 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
             label="Ism"
             value={obj.dirFirstName}
             onChange={(e) => obj.setField("dirFirstName", e.target.value)}
-            required
             disabled={isLoading}
           />
           <InputField
@@ -96,7 +123,6 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
             label="Familiya"
             value={obj.dirLastName}
             onChange={(e) => obj.setField("dirLastName", e.target.value)}
-            required
             disabled={isLoading}
           />
           <InputField
@@ -125,7 +151,6 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
             onChange={(e) => obj.setField("dirUsername", e.target.value)}
             error={usernameShort}
             description={usernameShort ? "Kamida 3 ta belgi" : ""}
-            required
             disabled={isLoading}
           />
           <InputField
@@ -135,7 +160,6 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
             value={obj.dirPassword}
             onChange={(e) => obj.setField("dirPassword", e.target.value)}
             description="Kamida 6 ta belgi"
-            required
             disabled={isLoading}
           />
         </div>

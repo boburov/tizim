@@ -28,12 +28,15 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
 //     POST /branches 403 qaytaradi)
 const BranchesPage = () => {
   const { openModal } = useModal();
-  const { has } = usePermissions();
+  const { hasAll } = usePermissions();
   const { multiBranch } = useAuth();
   const { data, isLoading } = useBranchesQuery({ includeInactive: true });
 
   const branches = data?.data || [];
-  const canCreate = multiBranch && has(PERMISSIONS.BRANCHES_CREATE);
+  // SYSTEM_ADMIN_ACCESS - serverdagi POST /branches shuni ham talab qiladi.
+  const canCreate =
+    multiBranch &&
+    hasAll([PERMISSIONS.SYSTEM_ADMIN_ACCESS, PERMISSIONS.BRANCHES_CREATE]);
 
   return (
     <div className="space-y-4">
