@@ -3,37 +3,36 @@ import User from "../../../models/user.model.js";
 import Group from "../../../models/group.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import StudentPayment from "../../../models/studentPayment.model.js";
-import Insight from "../../../models/insight.model.js";
-import { AI_ENGINE_VERSION } from "../../../models/aiConfig.model.js";
+import { DEFAULT_THRESHOLDS } from "../../../models/aiConfig.model.js";
 import { ROLES } from "../../../constants/roles.js";
 import { branchMatchStage } from "../../../helpers/branchContext.helper.js";
 import { collectStudentSignals } from "../signals/student.signal.js";
 import { scoreChurn, churnActions } from "../scoring/churn.scoring.js";
 import { scorePaymentRisk, paymentActions } from "../scoring/payment.scoring.js";
-import { narrateChurn, narratePaymentRisk } from "./narration.service.js";
+import { narrateChurn, narratePaymentRisk, narrate } from "./narration.service.js";
+import {
+  buildFactors,
+  weightedScore,
+  sampleConfidence,
+  severityFor,
+  norm,
+  readMap,
+} from "../scoring/common.scoring.js";
+import {
+  buildInsight,
+  closeStale,
+  mkStats,
+  upsertInsight,
+  fmtMoney,
+} from "./insightWriter.service.js";
 import { resolveConfig } from "./aiConfig.service.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Insight shu muddatdan keyin eskiradi. 14 kun: bir hisob-kitob davri
-// ichida ikki marta qayta ko'rib chiqiladi, lekin owner e'tibor bermasa
-// abadiy osilib qolmaydi.
-const INSIGHT_TTL_DAYS = 14;
 
-/**
- * Prioritet = pul × ehtimol × shoshilinchlik.
- *
- * Action Center TARTIBI shu formuladan chiqadi va bu mahsulotning eng
- * muhim qarori: owner ro'yxatning YUQORISIDAN boshlab ishlaydi, shuning
- * uchun tartib noto'g'ri bo'lsa qolgan hamma narsa bekor.
- *
- * Pul birinchi ko'paytuvchi: 90% xavfli, lekin 200 000 so'mlik o'quvchidan
- * ko'ra 60% xavfli 900 000 so'mlik o'quvchi muhimroq.
- */
-const computePriority = ({ amount, score, severity, confidence }) => {
-  const urgency = severity === "high" ? 1.5 : severity === "medium" ? 1 : 0.6;
-  // Ishonch ham ko'paytuvchi: shubhali insight ro'yxat tepasiga chiqmasligi kerak.
-  return Math.round(amount * score * urgency * Math.max(0.3, confidence));
-};
+// Prioritet formulasi, upsert va eskirganni yopish mantiqi
+// insightWriter.service.js ga ko'chirildi - u yerda BARCHA domenlar uchun
+// bitta yo'l bor. Ilgari bu yerda turgan nusxa har yangi detektorda
+// takrorlanardi va ertami-kechmi bittasida noto'g'ri qilinardi.
 
 /** Filialdagi faol o'quvchilar + guruhlari + joriy oy to'lovi. */
 const loadStudents = async (branchId) => {
@@ -203,11 +202,13 @@ export const recomputeStudentInsights = async (branchId, now = new Date()) => {
   const config = await resolveConfig(branchId);
   const students = await loadStudents(branchId);
 
-  const mkStats = () => ({ created: 0, updated: 0, closed: 0, skippedLowConfidence: 0 });
+  const thresholds = readMap(config.thresholds, DEFAULT_THRESHOLDS);
   const stats = {
     scanned: students.length,
     churn: mkStats(),
     payment: mkStats(),
+    improving: mkStats(),
+    attendancePattern: mkStats(),
   };
   if (!students.length) return stats;
 
@@ -217,11 +218,12 @@ export const recomputeStudentInsights = async (branchId, now = new Date()) => {
     loadMonthlyValue(ids, now),
   ]);
 
-  const expiresAt = new Date(now.getTime() + INSIGHT_TTL_DAYS * DAY_MS);
-  const riskyChurn = new Set();
-  const riskyPayment = new Set();
-
-  const fmt = (n) => new Intl.NumberFormat("uz-UZ").format(Math.round(n));
+  const stillOpen = {
+    student_churn_risk: new Set(),
+    payment_risk: new Set(),
+    student_improving: new Set(),
+    attendance_anomaly: new Set(),
+  };
 
   for (const student of students) {
     const sid = String(student._id);
@@ -230,16 +232,7 @@ export const recomputeStudentInsights = async (branchId, now = new Date()) => {
 
     const amount = valueMap.get(sid) || 0;
     const subjectLabel = `${student.firstName} ${student.lastName}`.trim();
-    const base = {
-      branchId,
-      subjectType: "student",
-      subjectId: student._id,
-      subjectLabel,
-      narrationModel: null,
-      engineVersion: AI_ENGINE_VERSION,
-      generatedAt: now,
-      expiresAt,
-    };
+    const base = { branchId, subjectId: student._id, subjectLabel, now };
 
     // --- 1. KETISH XAVFI ---
     const churn = scoreChurn(signals, config);
@@ -252,36 +245,29 @@ export const recomputeStudentInsights = async (branchId, now = new Date()) => {
       stats.churn.skippedLowConfidence += 1;
     } else if (churn.severity !== "low") {
       // Past xavf insight yaratmaydi - shovqin bo'lardi.
-      riskyChurn.add(sid);
+      stillOpen.student_churn_risk.add(sid);
       const expectedImpact = {
         amount,
         currency: "UZS",
-        label: amount ? `Oyiga ${fmt(amount)} so'm xavf ostida` : "",
+        label: amount ? `Oyiga ${fmtMoney(amount)} so'm xavf ostida` : "",
       };
-      const res = await upsertInsight({
-        ...base,
-        kind: "student_churn_risk",
-        severity: churn.severity,
-        score: churn.score,
-        confidence: churn.confidence,
-        factors: churn.factors,
-        sourceRefs: buildSourceRefs(sid, signals, ["attendance", "grade", "payment"]),
-        recommendedActions: churnActions(churn.factors, {
-          debtAmount: signals.debt.debtAmount,
-        }),
-        expectedImpact,
-        priority: computePriority({
-          amount,
-          score: churn.score,
+      const res = await upsertInsight(
+        buildInsight({
+          ...base,
+          kind: "student_churn_risk",
+          title: `${subjectLabel} — ketish xavfi ${Math.round(churn.score * 100)}%`,
           severity: churn.severity,
+          score: churn.score,
           confidence: churn.confidence,
-        }),
-        narration: narrateChurn({
-          subjectLabel,
-          ...churn,
+          factors: churn.factors,
+          sourceRefs: buildSourceRefs(sid, signals, ["attendance", "grade", "payment"]),
+          recommendedActions: churnActions(churn.factors, {
+            debtAmount: signals.debt.debtAmount,
+          }),
           expectedImpact,
+          narration: narrateChurn({ subjectLabel, ...churn, expectedImpact }),
         }),
-      });
+      );
       stats.churn[res] += 1;
     }
 
@@ -293,47 +279,90 @@ export const recomputeStudentInsights = async (branchId, now = new Date()) => {
     if (payment.confidence < config.confidenceFloor) {
       stats.payment.skippedLowConfidence += 1;
     } else if (payment.severity !== "low") {
-      riskyPayment.add(sid);
+      stillOpen.payment_risk.add(sid);
       // Bu yerda xavf ostidagi pul = KUTILAYOTGAN QARZ (mavjud qarz +
       // joriy oy to'lovi), ketish yo'qotishi emas.
       const atRisk = (signals.debt.debtAmount || 0) + amount;
       const expectedImpact = {
         amount: atRisk,
         currency: "UZS",
-        label: atRisk ? `Kutilayotgan qarz: ${fmt(atRisk)} so'm` : "",
+        label: atRisk ? `Kutilayotgan qarz: ${fmtMoney(atRisk)} so'm` : "",
       };
-      const res = await upsertInsight({
-        ...base,
-        kind: "payment_risk",
-        severity: payment.severity,
-        score: payment.score,
-        confidence: payment.confidence,
-        factors: payment.factors,
-        sourceRefs: buildSourceRefs(sid, signals, ["payment"]),
-        recommendedActions: paymentActions(payment.factors, {
-          debtAmount: signals.debt.debtAmount,
-          debtDays: signals.debt.debtDays,
-        }),
-        expectedImpact,
-        priority: computePriority({
-          amount: atRisk,
-          score: payment.score,
+      const res = await upsertInsight(
+        buildInsight({
+          ...base,
+          kind: "payment_risk",
+          title: `${subjectLabel} — kechikib to'lash ehtimoli ${Math.round(payment.score * 100)}%`,
           severity: payment.severity,
-          confidence: payment.confidence,
-        }),
-        narration: narratePaymentRisk({
-          subjectLabel,
           score: payment.score,
+          confidence: payment.confidence,
           factors: payment.factors,
+          sourceRefs: buildSourceRefs(sid, signals, ["payment"]),
+          recommendedActions: paymentActions(payment.factors, {
+            debtAmount: signals.debt.debtAmount,
+            debtDays: signals.debt.debtDays,
+          }),
           expectedImpact,
+          narration: narratePaymentRisk({
+            subjectLabel,
+            score: payment.score,
+            factors: payment.factors,
+            expectedImpact,
+          }),
         }),
-      });
+      );
       stats.payment[res] += 1;
+    }
+
+    // --- 3. TEZ O'SAYOTGAN O'QUVCHI (imkoniyat) ---
+    const improving = detectImproving({ subjectLabel, signals, thresholds });
+    if (improving) {
+      if (improving.confidence < config.confidenceFloor) {
+        stats.improving.skippedLowConfidence += 1;
+      } else {
+        stillOpen.student_improving.add(sid);
+        const res = await upsertInsight(buildInsight({ ...base, ...improving }));
+        stats.improving[res] += 1;
+      }
+    }
+
+    // --- 4. DAVOMAT NAQSHI (kuzatuv) ---
+    const pattern = detectAttendancePattern({ sid, subjectLabel, signals, thresholds });
+    if (pattern) {
+      if (pattern.confidence < config.confidenceFloor) {
+        stats.attendancePattern.skippedLowConfidence += 1;
+      } else {
+        stillOpen.attendance_anomaly.add(sid);
+        const res = await upsertInsight(buildInsight({ ...base, ...pattern }));
+        stats.attendancePattern[res] += 1;
+      }
     }
   }
 
-  stats.churn.closed = await closeStale(branchId, "student_churn_risk", riskyChurn, now);
-  stats.payment.closed = await closeStale(branchId, "payment_risk", riskyPayment, now);
+  stats.churn.closed = await closeStale(
+    branchId,
+    ["student_churn_risk"],
+    stillOpen.student_churn_risk,
+    now,
+  );
+  stats.payment.closed = await closeStale(
+    branchId,
+    ["payment_risk"],
+    stillOpen.payment_risk,
+    now,
+  );
+  stats.improving.closed = await closeStale(
+    branchId,
+    ["student_improving"],
+    stillOpen.student_improving,
+    now,
+  );
+  stats.attendancePattern.closed = await closeStale(
+    branchId,
+    ["attendance_anomaly"],
+    stillOpen.attendance_anomaly,
+    now,
+  );
 
   return stats;
 };

@@ -1,4 +1,9 @@
 import mongoose from "mongoose";
+import {
+  INSIGHT_KINDS as KINDS,
+  INSIGHT_DOMAINS as DOMAINS,
+  INSIGHT_STANCES as STANCES,
+} from "../modules/ai/insightKinds.js";
 
 export const INSIGHT_SUBJECT_TYPES = [
   "student",
@@ -9,15 +14,12 @@ export const INSIGHT_SUBJECT_TYPES = [
   "branch",
 ];
 
-export const INSIGHT_KINDS = [
-  "student_churn_risk",
-  "payment_risk",
-  "attendance_anomaly",
-  "teacher_load",
-  "lead_priority",
-  "cashflow_warning",
-  "course_opportunity",
-];
+// Turlar ro'yxati modules/ai/insightKinds.js dan keladi - u yerda har bir
+// tur uchun domen/stance/yangilanish darajasi ham belgilangan. Ro'yxatni
+// ikki joyda saqlash ularni jimgina ayrilishga olib borardi.
+export const INSIGHT_KINDS = KINDS;
+export const INSIGHT_DOMAINS = DOMAINS;
+export const INSIGHT_STANCES = STANCES;
 
 export const INSIGHT_SEVERITIES = ["high", "medium", "low"];
 export const INSIGHT_STATUSES = ["open", "acked", "done", "dismissed", "expired"];
@@ -102,7 +104,23 @@ const insightSchema = new mongoose.Schema(
     subjectLabel: { type: String, default: "" },
 
     kind: { type: String, enum: INSIGHT_KINDS, required: true },
+
+    // DOMEN va STANCE - kind'dan keltirib chiqariladi (insightKinds.js),
+    // lekin HUJJATDA saqlanadi: "Moliya modulining AI paneli" so'rovi
+    // 20 ta kind'ni sanab o'tmasligi kerak, bitta indekslangan tenglik
+    // yetarli. Yozishda buildInsight() to'ldiradi.
+    domain: { type: String, enum: INSIGHT_DOMAINS, required: true, index: true },
+    // risk | watch | opportunity - imkoniyat xavf bilan bir ro'yxatda
+    // turmasligi kerak, aks holda owner uni "yana bir muammo" deb o'qiydi.
+    stance: { type: String, enum: INSIGHT_STANCES, default: "risk", index: true },
+
     severity: { type: String, enum: INSIGHT_SEVERITIES, required: true, index: true },
+
+    // Owner ko'radigan sarlavha: "IELTS kursida davomat 12% pasaydi".
+    // subjectLabel ("IELTS") o'zi yetarli emas - filial darajasidagi
+    // insight'larda subyekt nomi filial nomi bo'lib qoladi va karta
+    // "nima bo'lgani" ni aytmaydi.
+    title: { type: String, default: "" },
 
     // Asosiy ball [0,1] - mas. ketish ehtimoli.
     score: { type: Number, required: true, min: 0, max: 1 },
@@ -185,6 +203,8 @@ insightSchema.index(
 
 // Action Center hot path: filial + ochiq + prioritet bo'yicha saralash.
 insightSchema.index({ branchId: 1, status: 1, priority: -1 });
+// Modul paneli hot path: "Moliya modulining ochiq insight'lari".
+insightSchema.index({ branchId: 1, domain: 1, status: 1, priority: -1 });
 // Modul ichidagi badge: "shu o'quvchining ochiq insight'lari".
 insightSchema.index({ subjectId: 1, status: 1 });
 // Yopiq halqa joblari uchun.

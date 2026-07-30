@@ -210,6 +210,7 @@ export const gradeSignal = async (studentIds, windows) => {
       recentAvg: null,
       priorAvg: null,
       delta: 0,
+      improvement: 0,
       count: 0,
       ids: [],
     };
@@ -226,7 +227,102 @@ export const gradeSignal = async (studentIds, windows) => {
   for (const v of out.values()) {
     if (v.priorAvg != null && v.recentAvg != null) {
       v.delta = Math.max(0, v.priorAvg - v.recentAvg);
+      // O'SISH - pasayishning teskarisi, ALOHIDA maydon.
+      // Nega bitta ishorali (signed) son emas: churn scoring faqat
+      // pasayishni "yomon" deb o'qiydi, "eng tez o'sayotgan o'quvchilar"
+      // esa faqat o'sishni. Bitta maydonni ikki joyda teskari talqin
+      // qilish - klassik ishora xatosi manbai.
+      v.improvement = Math.max(0, v.recentAvg - v.priorAvg);
     }
+  }
+  return out;
+};
+
+/**
+ * HAFTA KUNI naqshi - "aynan dushanbalarni qoldiradi" signali.
+ *
+ * NEGA umumiy davomat foizi YETARLI EMAS: 80% davomatli o'quvchi
+ * "yaxshi" ko'rinadi, lekin qoldirgan 20% i bitta kunga to'plangan bo'lsa
+ * bu TIZIMLI muammo (ish/transport/boshqa to'garak), tasodifiy kasallik
+ * emas. Tizimli muammoni hal qilish mumkin - jadvalni o'zgartirib.
+ * Tasodifiylikni esa yo'q.
+ *
+ * Shu signal "ertaga kim kelmasligi mumkin" ro'yxatini ham beradi:
+ * o'quvchining eng yomon kuni ertangi kunga to'g'ri kelsa.
+ *
+ * @returns {Promise<Map<string, {worstDay, worstRate, overallRate, gap, absences, sampleIds}>>}
+ */
+export const weekdayPatternSignal = async (studentIds, windows) => {
+  const branchStage = await branchGroupMatchStage();
+  // 90 kun: har hafta kuni uchun kamida 8-12 kuzatuv beradi. Qisqaroq
+  // oyna naqshni tasodifdan ajratolmaydi.
+  const since = new Date(windows.end.getTime() - 90 * DAY_MS);
+
+  const rows = await Attendance.aggregate([
+    ...branchStage,
+    {
+      $match: {
+        isDeleted: false,
+        student: { $in: studentIds.map(toId) },
+        date: { $gte: since, $lt: windows.end },
+        status: { $in: ["present", "absent"] },
+      },
+    },
+    {
+      $group: {
+        // $dayOfWeek: 1=yakshanba ... 7=shanba (Mongo konvensiyasi).
+        // TZ ataylab berilgan: UTC da hisoblanса Toshkent kechqurun
+        // darslari oldingi kunga tushib, naqsh siljib ketardi.
+        _id: {
+          student: "$student",
+          dow: { $dayOfWeek: { date: "$date", timezone: "Asia/Tashkent" } },
+        },
+        total: { $sum: 1 },
+        absent: { $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] } },
+        absentIds: {
+          $push: { $cond: [{ $eq: ["$status", "absent"] }, "$_id", "$$REMOVE"] },
+        },
+      },
+    },
+  ]);
+
+  const byStudent = new Map();
+  for (const r of rows) {
+    const sid = String(r._id.student);
+    if (!byStudent.has(sid)) byStudent.set(sid, { days: [], total: 0, absent: 0 });
+    const entry = byStudent.get(sid);
+    entry.days.push({
+      dow: r._id.dow,
+      total: r.total,
+      absent: r.absent,
+      rate: r.total > 0 ? r.absent / r.total : 0,
+      ids: (r.absentIds || []).slice(0, 10),
+    });
+    entry.total += r.total;
+    entry.absent += r.absent;
+  }
+
+  const out = new Map();
+  for (const [sid, entry] of byStudent) {
+    const overallRate = entry.total > 0 ? entry.absent / entry.total : 0;
+    // Kamida 4 kuzatuv: 1 tadan 1 ta qoldirish "100% qoldiradi" degan
+    // yolg'on naqsh yasardi.
+    const eligible = entry.days.filter((d) => d.total >= 4);
+    let worst = null;
+    for (const d of eligible) {
+      if (!worst || d.rate > worst.rate) worst = d;
+    }
+    out.set(sid, {
+      worstDay: worst?.dow ?? null,
+      worstRate: worst?.rate ?? 0,
+      worstTotal: worst?.total ?? 0,
+      worstAbsences: worst?.absent ?? 0,
+      overallRate,
+      // Naqsh KUCHI: shu kun boshqa kunlardan qanchalik yomonroq.
+      // Aynan shu son "tizimli" va "tasodifiy" ni ajratadi.
+      gap: worst ? Math.max(0, worst.rate - overallRate) : 0,
+      sampleIds: worst?.ids || [],
+    });
   }
   return out;
 };
@@ -440,7 +536,7 @@ export const collectStudentSignals = async (students, now = new Date()) => {
   if (!ids.length) return new Map();
 
   // Parallel: signallar bir-biriga bog'liq emas.
-  const [attendance, streak, grades, debt, groupChurn, freeze, discipline] =
+  const [attendance, streak, grades, debt, groupChurn, freeze, discipline, weekday] =
     await Promise.all([
       attendanceSignal(ids, windows),
       absenceStreakSignal(ids, windows),
@@ -449,6 +545,7 @@ export const collectStudentSignals = async (students, now = new Date()) => {
       groupChurnSignal(windows),
       freezeSignal(ids),
       paymentDisciplineSignal(ids, now),
+      weekdayPatternSignal(ids, windows),
     ]);
 
   const out = new Map();
@@ -483,8 +580,18 @@ export const collectStudentSignals = async (students, now = new Date()) => {
         recentAvg: null,
         priorAvg: null,
         delta: 0,
+        improvement: 0,
         count: 0,
         ids: [],
+      },
+      weekday: weekday.get(sid) || {
+        worstDay: null,
+        worstRate: 0,
+        worstTotal: 0,
+        worstAbsences: 0,
+        overallRate: 0,
+        gap: 0,
+        sampleIds: [],
       },
       debt: debt.get(sid) || { debtAmount: 0, periods: 0, debtDays: 0, ids: [] },
       groupChurn: worstGroup,
