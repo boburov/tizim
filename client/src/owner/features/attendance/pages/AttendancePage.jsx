@@ -4,6 +4,7 @@ import { Outlet, useLocation } from "react-router-dom";
 // Components
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import PeriodPicker from "../components/PeriodPicker";
+import { AiDomainInsights } from "@/owner/features/ai";
 
 // Hooks
 import useObjectState from "@/shared/hooks/useObjectState";
@@ -58,6 +59,14 @@ const AttendancePage = () => {
       </header>
 
       <TabsLinks items={items} />
+
+      {/* G'ayrioddiy davomat naqshlari - hisobot tablarida. "Belgilash"
+          tabida ko'rsatilmaydi: u yerda o'qituvchi tez ish qiladi va
+          tahlil paneli faqat xalaqit berardi. */}
+      {isReport && (
+        <AiDomainInsights domain="attendance" title="Davomat bo'yicha AI tahlili" />
+      )}
+
       <Outlet context={{ year, month }} />
     </div>
   );

@@ -69,7 +69,12 @@ import {
   BranchLimitsPage,
 } from "@/owner/features/branches";
 import { ExpenseApprovalsPage } from "@/owner/features/expenseApprovals";
-import { ActionCenterPage } from "@/owner/features/ai";
+import {
+  ActionCenterPage,
+  AiReportDetailPage,
+  AiReportsPage,
+  OperationsCenterPage,
+} from "@/owner/features/ai";
 import {
   FeedbackPage,
   FeedbackListPage,
@@ -281,14 +286,46 @@ const OwnerRoutes = () => (
       }
     />
 
-    {/* AI vazifalar markazi - kunlik prioritetli ro'yxat. Alohida chatbot
-        sahifasi ATAYLAB yo'q: AI modullar ichiga o'rnatiladi, bu sahifa
-        esa faqat "bugun nima qilish kerak" savoliga javob beradi. */}
+    {/* AI OPERATSIYALAR MARKAZI. Alohida chatbot sahifasi ATAYLAB yo'q:
+        AI modullar ichiga o'rnatiladi, bu sahifa esa kunning hikoyasini
+        aytadi — kecha nima bo'ldi, bugun nima bo'layapti, keyin nima
+        bo'lishi mumkin va hozir nima qilish kerak.
+
+        DIQQAT: "reports/:id" dan OLDIN "reports" turishi shart emas
+        (React Router aniqlik bo'yicha tanlaydi), lekin static "tasks" va
+        "reports" segmentlari indeks route bilan to'qnashmasligi uchun
+        alohida yozilgan. */}
     <Route
       path="ai"
       element={
         <PermissionGuard required="ai.read" fallback="/owner">
+          <OperationsCenterPage />
+        </PermissionGuard>
+      }
+    />
+    {/* To'liq vazifalar ro'yxati - operatsiyalar markazi faqat eng
+        muhimlarini ko'rsatadi. */}
+    <Route
+      path="ai/tasks"
+      element={
+        <PermissionGuard required="ai.read" fallback="/owner">
           <ActionCenterPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="ai/reports"
+      element={
+        <PermissionGuard required="ai.read" fallback="/owner">
+          <AiReportsPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="ai/reports/:id"
+      element={
+        <PermissionGuard required="ai.read" fallback="/owner">
+          <AiReportDetailPage />
         </PermissionGuard>
       }
     />

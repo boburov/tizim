@@ -12,6 +12,7 @@ import Button from "@/shared/components/ui/button/Button";
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import UserStatusFilter from "../components/UserStatusFilter";
 import UserModals from "../components/UserModals";
+import { AiDomainInsights } from "@/owner/features/ai";
 
 // Utils
 import { allowedStatusesForTab } from "../utils/userStatusFilter";
@@ -91,6 +92,14 @@ const StudentsPage = () => {
           />
         )}
       </div>
+
+      {/* AI tahlili - FAQAT ro'yxat tabida. To'lovlar/statistika tablarida
+          o'quvchi insight'lari kontekstdan chiqib ketardi (u yerda owner
+          boshqa savolga javob qidiradi). Ochiq insight bo'lmasa panel
+          o'zini o'zi yashiradi. */}
+      {isList && (
+        <AiDomainInsights domain="students" title="O'quvchilar bo'yicha AI tahlili" />
+      )}
 
       <Outlet context={{ status: effectiveStatus }} />
 

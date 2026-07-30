@@ -1,8 +1,19 @@
 import http from "@/shared/api/http";
 
 export const aiAPI = {
+  // Operatsiyalar markazi: to'rtta savolga bitta javob
+  // (kecha / bugun / keyin / hozir).
+  briefing: (params) => http.get("/ai/briefing", { params }),
+
+  // Hisobotlar: kunlik / haftalik / oylik.
+  reports: (params) => http.get("/ai/reports", { params }),
+  report: (id) => http.get(`/ai/reports/${id}`),
+  latestReport: (period) => http.get("/ai/reports/latest", { params: { period } }),
+
   insights: (params) => http.get("/ai/insights", { params }),
   actionCenter: (params) => http.get("/ai/action-center", { params }),
+  // Modul paneli: "Moliya → AI Insights".
+  byDomain: (domain, params) => http.get(`/ai/insights/domain/${domain}`, { params }),
   // POST, chunki 500 tagacha ID query string'ga sig'maydi.
   bySubjects: (subjectIds) => http.post("/ai/insights/by-subjects", { subjectIds }),
 

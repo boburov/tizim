@@ -1,10 +1,13 @@
 import { z } from "zod";
 import {
+  INSIGHT_DOMAINS,
   INSIGHT_KINDS,
   INSIGHT_SEVERITIES,
+  INSIGHT_STANCES,
   INSIGHT_STATUSES,
   INSIGHT_SUBJECT_TYPES,
 } from "../../../models/insight.model.js";
+import { AI_REPORT_PERIODS } from "../../../models/aiReport.model.js";
 
 const objectId = z
   .string()
@@ -18,6 +21,8 @@ export const listSchema = z.object({
     kind: z.enum(INSIGHT_KINDS).optional(),
     subjectType: z.enum(INSIGHT_SUBJECT_TYPES).optional(),
     severity: z.enum(INSIGHT_SEVERITIES).optional(),
+    domain: z.enum(INSIGHT_DOMAINS).optional(),
+    stance: z.enum(INSIGHT_STANCES).optional(),
     subjectId: objectId.optional(),
   }),
 });
@@ -26,6 +31,40 @@ export const actionCenterSchema = z.object({
   query: z.object({
     limit: z.coerce.number().int().min(1).max(50).optional(),
   }),
+});
+
+// Modul paneli: /ai/insights/domain/finance. Domen YO'L parametrida,
+// query'da emas - u resursni aniqlaydi, uni filtrlamaydi.
+export const byDomainSchema = z.object({
+  params: z.object({ domain: z.enum(INSIGHT_DOMAINS) }),
+  query: z.object({
+    limit: z.coerce.number().int().min(1).max(20).optional(),
+  }),
+});
+
+// Brifing "hozir nima qilay" bo'limida nechta harakat ko'rsatilishi.
+export const briefingSchema = z.object({
+  query: z.object({
+    actionLimit: z.coerce.number().int().min(1).max(20).optional(),
+  }),
+});
+
+export const listReportsSchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    period: z.enum(AI_REPORT_PERIODS).optional(),
+  }),
+});
+
+export const latestReportSchema = z.object({
+  query: z.object({
+    period: z.enum(AI_REPORT_PERIODS).optional(),
+  }),
+});
+
+export const reportIdSchema = z.object({
+  params: z.object({ id: objectId }),
 });
 
 // Ro'yxat sahifasi uchun: N ta o'quvchining badge'ini BITTA so'rovda olish.

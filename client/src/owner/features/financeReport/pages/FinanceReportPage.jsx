@@ -8,6 +8,7 @@ import PaymentMethodCard from "../components/PaymentMethodCard";
 import OutstandingCard from "../components/OutstandingCard";
 import GroupBreakdownChart from "../components/GroupBreakdownChart";
 import LedgerTable from "../components/LedgerTable";
+import { AiDomainInsights } from "@/owner/features/ai";
 
 import useFinanceSummaryQuery from "../hooks/useFinanceSummaryQuery";
 import useFinanceGroupBreakdownQuery from "../hooks/useFinanceGroupBreakdownQuery";
@@ -48,6 +49,13 @@ const FinanceReportPage = () => {
           onChange={({ year, month }) => period.setFields({ year, month })}
         />
       </header>
+
+      {/* AI tahlili KPI kartalardan OLDIN: daromad bashorati, xarajat
+          anomaliyasi va pul oqimi ogohlantirishi raqamlarni QANDAY
+          o'qishni aytadi. Ularni sahifa oxiriga qo'yish "grafikdan keyin
+          AI izohi" qoidasini rasman bajarardi, lekin owner pastgacha
+          aylantirmasa hech qachon ko'rmasdi. */}
+      <AiDomainInsights domain="finance" title="Moliya bo'yicha AI tahlili" />
 
       {/* KPI kartalar */}
       {summaryLoading ? (

@@ -20,6 +20,11 @@ export const list = async (query = {}) => {
   if (query.kind) filter.kind = query.kind;
   if (query.subjectType) filter.subjectType = query.subjectType;
   if (query.severity) filter.severity = query.severity;
+  // Domen bo'yicha filtr - modul panellari ("Moliya → AI Insights") shu
+  // orqali o'qiydi. Hujjatdagi indekslangan maydon, 20 ta kind'ni sanab
+  // o'tish shart emas.
+  if (query.domain) filter.domain = query.domain;
+  if (query.stance) filter.stance = query.stance;
   if (query.subjectId) {
     filter.subjectId = new mongoose.Types.ObjectId(String(query.subjectId));
   }
@@ -54,26 +59,47 @@ export const actionCenter = async (query = {}) => {
     // Imkoniyatlar - muammo emas, o'sish taklifi. Ular xavf bilan bir
     // ro'yxatda turmasligi kerak, aks holda owner ularni "yana bir
     // muammo" deb o'qiydi.
-    if (it.kind === "course_opportunity") opportunities.push(it);
+    //
+    // AJRATUVCHI - `stance`, `kind` EMAS. Kind bo'yicha tekshirish har
+    // safar yangi imkoniyat turi qo'shilganda jimgina buzilardi: turi
+    // ro'yxatda yo'q imkoniyat "o'rta ustuvorlikdagi muammo" bo'lib
+    // ko'rinardi. stance taksonomiyada bir marta belgilanadi va
+    // buildInsight() uni hujjatga yozadi.
+    if (it.stance === "opportunity") opportunities.push(it);
     else if (it.severity === "high") high.push(it);
     else medium.push(it);
   }
 
   const totals = await Insight.aggregate([
     { $match: filter },
-    { $group: { _id: "$severity", count: { $sum: 1 }, impact: { $sum: "$expectedImpact.amount" } } },
+    {
+      $group: {
+        _id: { severity: "$severity", stance: "$stance" },
+        count: { $sum: 1 },
+        impact: { $sum: "$expectedImpact.amount" },
+      },
+    },
   ]);
+
+  // Imkoniyatlar xavf sanog'iga QO'SHILMAYDI: "12 ta muammo bor" deb
+  // ko'rsatish, holbuki 4 tasi o'sish taklifi, owner'ni behuda
+  // vahimaga soladi va sonning o'ziga ishonchni yo'qotadi.
+  const summary = { high: 0, medium: 0, low: 0, opportunities: 0, impactAtRisk: 0, upside: 0 };
+  for (const t of totals) {
+    if (t._id.stance === "opportunity") {
+      summary.opportunities += t.count;
+      summary.upside += t.impact || 0;
+    } else {
+      summary[t._id.severity] = (summary[t._id.severity] || 0) + t.count;
+      summary.impactAtRisk += t.impact || 0;
+    }
+  }
 
   return {
     high: high.slice(0, limit),
     medium: medium.slice(0, limit),
     opportunities: opportunities.slice(0, limit),
-    summary: {
-      high: totals.find((t) => t._id === "high")?.count || 0,
-      medium: totals.find((t) => t._id === "medium")?.count || 0,
-      low: totals.find((t) => t._id === "low")?.count || 0,
-      impactAtRisk: totals.reduce((a, t) => a + (t.impact || 0), 0),
-    },
+    summary,
   };
 };
 
@@ -101,6 +127,57 @@ export const bySubjects = async (subjectIds = []) => {
     out[key].push(r);
   }
   return out;
+};
+
+/**
+ * MODUL PANELI - "Moliya → AI Insights" bo'limining yagona manbai.
+ *
+ * NEGA ALOHIDA (list() ga domain filtri qo'shish yetarli emas): panel
+ * xavf va imkoniyatni ALOHIDA ro'yxatda ko'rsatishi kerak, va ikkalasini
+ * bitta sahifalangan ro'yxatdan olish mumkin emas - prioritet bo'yicha
+ * saralanganda imkoniyatlar ikkinchi sahifaga tushib ketardi va modulda
+ * hech qachon ko'rinmasdi.
+ *
+ * Panel KICHIK bo'lishi kerak: modul sahifasi insight ro'yxati emas,
+ * uning ustidagi qisqa maslahat. To'liq ro'yxat Action Center'da.
+ */
+export const byDomain = async (domain, query = {}) => {
+  const limit = Math.min(20, Math.max(1, Number(query.limit) || 4));
+  const filter = { ...branchFilter(), domain, status: { $in: OPEN_STATUSES } };
+
+  const [risks, opportunities, totals] = await Promise.all([
+    Insight.find({ ...filter, stance: { $in: ["risk", "watch"] } })
+      .sort({ priority: -1, generatedAt: -1 })
+      .limit(limit)
+      .lean(),
+    Insight.find({ ...filter, stance: "opportunity" })
+      .sort({ priority: -1, generatedAt: -1 })
+      .limit(limit)
+      .lean(),
+    Insight.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: { severity: "$severity", stance: "$stance" },
+          count: { $sum: 1 },
+          impact: { $sum: "$expectedImpact.amount" },
+        },
+      },
+    ]),
+  ]);
+
+  const summary = { high: 0, medium: 0, low: 0, opportunities: 0, impactAtRisk: 0, upside: 0 };
+  for (const t of totals) {
+    if (t._id.stance === "opportunity") {
+      summary.opportunities += t.count;
+      summary.upside += t.impact || 0;
+    } else {
+      summary[t._id.severity] = (summary[t._id.severity] || 0) + t.count;
+      summary.impactAtRisk += t.impact || 0;
+    }
+  }
+
+  return { domain, risks, opportunities, summary };
 };
 
 const findScoped = async (id) => {

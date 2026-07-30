@@ -1859,3 +1859,181 @@ cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/a5429cf6-a678-43e7-
 <sub>session `a5429cf6` · branch `main` · 1 ta qadam</sub>
 
 ---
+
+## 2026-07-30 16:06 — @PROMT.MD
+
+**So'rov**
+
+> @PROMT.MD
+
+**O'zgargan fayllar (31)**
+
+- `server/src/modules/ai/services/insight.service.js` — tahrirlandi
+- `server/src/modules/ai/validators/insight.validator.js` — tahrirlandi
+- `server/src/modules/ai/handlers/briefing.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/handlers/byDomain.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/handlers/listReports.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/handlers/getReport.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/handlers/latestReport.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/ai.routes.js` — tahrirlandi
+- `client/src/owner/features/ai/api/ai.api.js` — tahrirlandi
+- `client/src/shared/lib/query/keys.js` — tahrirlandi
+- `client/src/owner/features/ai/hooks/useBriefingQuery.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/hooks/useDomainInsightsQuery.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/hooks/useReportsQuery.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/utils/metric.utils.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/AiMetricTile.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/BriefingSection.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/pages/OperationsCenterPage.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/ai/pages/AiReportsPage.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/ai/pages/AiReportDetailPage.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/components/ai/AiDomainPanel.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/AiDomainInsights.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/index.js` — yaratildi/qayta yozildi
+- `client/src/owner/routes/index.jsx` — tahrirlandi
+- `client/src/owner/features/users/pages/StudentsPage.jsx` — tahrirlandi
+- `client/src/owner/features/users/pages/TeachersPage.jsx` — tahrirlandi
+- `client/src/owner/features/groups/pages/GroupsPage.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/leads/pages/LeadsPage.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/attendance/pages/AttendancePage.jsx` — tahrirlandi
+- `client/src/owner/features/financeReport/pages/FinanceReportPage.jsx` — tahrirlandi
+- `client/src/owner/navigation/sidebar.config.js` — tahrirlandi
+- `client/src/owner/navigation/searchIndex.js` — tahrirlandi
+
+**Buyruqlar (50)**
+
+```sh
+find /Users/shukrullo/Desktop/lc-total/server/src/modules/ai -type f | head -100
+git status --short && echo "---JOBS---" && ls -la server/src/jobs/
+ls /Users/shukrullo/Desktop/lc-total/server/src/models/ | grep -i ai
+ls && echo "---CLIENT AI---" && find . -path ./node_modules -prune -o -type d -name "*ai*" -print -o -type d -name "*Ai*" -print 2>/dev/null | head -30
+find client/src/owner/features/ai client/src/shared/components/ai -type f | sort
+git log --oneline -3 -- server/src/modules/ai && echo "---MODEL---" && wc -l server/src/models/aiReport.model.js server/src/models/insight.model.js server/src/m…
+wc -l client/src/owner/features/ai/pages/ActionCenterPage.jsx client/src/shared/components/ai/*.jsx client/src/owner/features/ai/hooks/*.js server/src/jobs/aiRe…
+grep -n "ai" server/src/routes/index.js && echo "---PERMS---" && grep -n "AI_" server/src/constants/permissions.js
+grep -rn "ActionCenter\|features/ai" client/src/owner/routes/index.jsx client/src/owner/navigation/sidebar.config.js client/src/owner/features/ai/index.js && ec…
+sed -n '185,205p' client/src/shared/lib/query/keys.js && echo "===HOOKS===" && cat client/src/owner/features/ai/hooks/useActionCenterQuery.js client/src/owner/f…
+cd server && grep -n "^export" src/modules/ai/signals/pulse.signal.js && echo "---FINANCE---" && grep -n "^export" src/modules/ai/signals/finance.signal.js && e…
+cd server && npm run lint 2>&1 | tail -25
+cd server && sed -n '261,300p' src/modules/ai/signals/course.signal.js
+npm run lint 2>&1 | tail -25
+sed -n '261,300p' /Users/shukrullo/Desktop/lc-total/server/src/modules/ai/signals/course.signal.js
+for f in src/modules/ai/handlers/briefing.handler.js src/modules/ai/handlers/byDomain.handler.js src/modules/ai/handlers/listReports.handler.js src/modules/ai/h…
+node --input-type=module -e " import('./src/modules/ai/ai.routes.js') .then(() => console.log('ROUTES IMPORT OK')) .catch(e => { console.error('FAIL:', e.messag…
+ls client/src/shared/components/ui/ && echo "---UTILS---" && ls client/src/shared/utils/ && echo "---DATE---" && grep -n "^export" client/src/shared/utils/date.…
+sed -n '280,300p' client/src/owner/routes/index.jsx && echo "===SIDEBAR AI===" && grep -n -B4 -A8 "action-center\|ActionCenter\|Bot" client/src/owner/navigation…
+cd /Users/shukrullo/Desktop/lc-total && ls client/src/shared/components/ui/ && echo "---UTILS---" && ls client/src/shared/utils/
+sed -n '283,300p' client/src/owner/routes/index.jsx && echo "===SIDEBAR AI===" && grep -n -B6 -A6 "action-center" client/src/owner/navigation/sidebar.config.js
+grep -n -B3 -A10 '"/owner/ai"\|path: "ai"\|Bot' client/src/owner/navigation/sidebar.config.js | head -40
+grep -n "^export" client/src/shared/utils/formatMoney.js client/src/shared/utils/formatDate.js && echo "===PAGINATION===" && ls client/src/shared/components/ui/…
+sed -n '1,40p' client/src/shared/components/ui/pagination/Pagination.jsx
+grep -n -A15 "buildMeta" server/src/utils/pagination.js | head -25 && echo "===HOOK===" && ls client/src/shared/hooks/ | grep -i object
+# … yana 25 ta
+```
+
+**Natija**
+
+I'll start by understanding the current state of the AI module before planning.
+
+A lot of this is already in flight. Let me read the core pieces.
+
+Substantial infra exists already. Let me read the new untracked pieces and the job wiring.
+
+Backend services are deep, but I notice `ai.routes.js` has no briefing/report endpoints. Let me check the models and frontend.
+
+Now I see the gap clearly. Let me verify the frontend and validators before planning.
+
+Backend engine is complete; the HTTP layer and frontend are the gap. Let me confirm the wiring points.
+
+I have the full picture. The backend engine is essentially complete — but ~1,500 lines of it are **unreachable dead code**: `briefing.service.js`, `report.service.js`, and `lifecycle.service.js` have no HTTP routes. The frontend still only has the passive `ActionCenterPage` that PROMT.MD explicitly rejects.
+
+One scope decision is genuinely yours before I build:
+
+Full scope it is. Let me read the remaining contracts I need to build against.
+
+Found a real bug while reading: [insight.service.js:57](server/src/modules/ai/services/insight.service.js#L57) splits opportunities on `kind === "course_opportunity"` — a kind that doesn't exist in the taxonomy. Opportunities never render today. The `stance` field is the correct discriminator.
+
+Let me check the remaining support files, then build.
+
+Everything I need. Let me track the build and start with the backend.
+
+Starting with the backend read layer — fixing the stance bug and adding domain support.
+
+Now the actionCenter bug — opportunities are currently unreachable:
+
+Now the domain panel read — this powers every module's "AI Insights" section:
+
+Now the validators:
+
+Now the five handlers — one file per endpoint, per the codebase convention:
+
+Now the routes. Ordering matters here — 
+
+…(qisqartirildi)
+
+<sub>session `de0b93b7` · branch `main` · 135 ta qadam</sub>
+
+---
+
+## 2026-07-30 16:53 — sahifa overexplain bo'lib ketgan 50% muhum bo''lmagan sozlarni yoqotis
+
+**So'rov**
+
+> sahifa overexplain bo'lib ketgan 50% muhum bo''lmagan sozlarni yoqotish kerak /llm-council
+
+**O'zgargan fayllar (2)**
+
+- `client/src/owner/features/ai/components/AiMetricTile.jsx` — tahrirlandi
+- `client/src/owner/features/ai/pages/OperationsCenterPage.jsx` — tahrirlandi
+
+**Buyruqlar (6)**
+
+```sh
+ls -la .env 2>/dev/null; ls -la ~/.claude/skills/llm-council/; grep -l "OPENAI_API_KEY" .env */.env 2>/dev/null
+grep -n "formatMoney" -A6 /Users/shukrullo/Desktop/lc-total/client/src/shared/utils/formatMoney.js | head -12
+ls ~/.claude/skills/llm-council/scripts/; echo "---ENV SEARCH---"; ls -la /Users/shukrullo/Desktop/lc-total/.env 2>/dev/null || echo "no .env in project root"; …
+python3 ~/.claude/skills/llm-council/scripts/query_llms.py "test" 2>&1 | head -20
+cd /Users/shukrullo/Desktop/lc-total/client && npm run build 2>&1 | tail -6
+cd /Users/shukrullo/Desktop/lc-total/client && npx eslint src/owner/features/ai/ src/shared/components/ai/ 2>&1 | tail -15
+```
+
+**Natija**
+
+Ko'rdim — sahifada "0 so'm **so'm**" takrorlanishi ham bor (formatMoney o'zi birlikni qo'shadi). Avval council'ni chaqiraman.
+
+Confirmed: `formatMoney` already appends "so'm" — my tile adds it again. Now let me set up the council:
+
+Council unavailable — no API keys and neither CLI is installed:
+
+```
+chatgpt: "Error: codex CLI not available and OPENAI_API_KEY not found"
+gemini:  "Error: gemini CLI not available and GEMINI_API_KEY not found"
+```
+
+To enable it later, add `OPENAI_API_KEY` and `GEMINI_API_KEY` to a `.env` in the project root. Proceeding with my own analysis — the redundancy in your screenshot is measurable, not a matter of taste.
+
+**The biggest offender is the top paragraph.** [briefing.service.js:375](server/src/modules/ai/services/briefing.service.js#L375) builds `headline` by concatenating `now + yesterday + today` narration. So that grey box repeats, word for word, the three narration boxes below it. In your screenshot: "Kecha to'lov qabul qilinmagan. Kecha davomat belgilanmagan. Bugun jadvalda dars yo'q." appears twice on one screen.
+
+**Second: the hint lines are design notes that leaked into the UI.** "O'lchangan fakt — oldingi kun bilan taqqoslangan", "Hozirgi holat — o'tmish emas", "Bashorat — har doim hisobi bilan" explain *my* reasoning to the owner, who only wants the number.
+
+Let me fix those plus the two rendering bugs visible in the shot.
+
+Now removing the duplicated headline and the methodology hints:
+
+Now let me verify — build plus a lint check scoped to my files:
+
+Build passes; lint is clean on the AI files.
+
+## Council unavailable
+
+Neither model could be reached — no `OPENAI_API_KEY`/`GEMINI_API_KEY` and neither CLI installed. Add them to a `.env` in the project root to enable it. Below is my own analysis.
+
+## Nima olib tashlandi
+
+**1. Yuqo
+
+…(qisqartirildi)
+
+<sub>session `de0b93b7` · branch `main` · 10 ta qadam</sub>
+
+---

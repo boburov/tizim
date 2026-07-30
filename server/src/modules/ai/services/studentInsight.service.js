@@ -99,64 +99,6 @@ const loadMonthlyValue = async (studentIds, now) => {
   return new Map(rows.map((r) => [String(r._id), r.amount || 0]));
 };
 
-/**
- * Insight'ni yaratadi yoki mavjudini yangilaydi.
- *
- * status va acknowledgedBy TEGILMAYDI: owner "ko'rdim" deb belgilagan
- * insight tungi qayta hisoblashdan keyin yana "open" ga qaytmasligi kerak -
- * aks holda Action Center har kuni ertalab bir xil vazifani qayta
- * ko'rsatadi va owner ro'yxatga ishonishni to'xtatadi.
- */
-const upsertInsight = async (doc) => {
-  const existing = await Insight.findOne({
-    subjectType: doc.subjectType,
-    subjectId: doc.subjectId,
-    kind: doc.kind,
-    status: { $in: ["open", "acked"] },
-  });
-
-  if (existing) {
-    Object.assign(existing, doc);
-    await existing.save();
-    return "updated";
-  }
-  await Insight.create(doc);
-  return "created";
-};
-
-/**
- * Endi xavfli bo'lmagan subyektlarning ochiq insight'larini yopadi.
- *
- * outcome="prevented": bashorat qilingan hodisa SODIR BO'LMADI. Yopiq
- * halqaning boshlanishi - "sizga aytgan 12 tadan 9 tasi qoldi" degan
- * hisobot aynan shu maydondan chiqadi va ishonchni qaytaradigan yagona
- * narsa shu.
- */
-const closeStale = async (branchId, kind, stillRisky, now) => {
-  const closable = await Insight.find({
-    branchId,
-    kind,
-    status: { $in: ["open", "acked"] },
-    subjectId: {
-      $nin: [...stillRisky].map((id) => new mongoose.Types.ObjectId(id)),
-    },
-  }).select("_id");
-
-  if (!closable.length) return 0;
-  await Insight.updateMany(
-    { _id: { $in: closable.map((d) => d._id) } },
-    {
-      $set: {
-        status: "done",
-        resolvedAt: now,
-        outcome: "prevented",
-        outcomeCheckedAt: now,
-      },
-    },
-  );
-  return closable.length;
-};
-
 /** Faktorlar ortidagi haqiqiy hujjatlar - "Ishingni ko'rsat" havolalari. */
 const buildSourceRefs = (sid, signals, kinds) => {
   const refs = [];
@@ -185,6 +127,210 @@ const buildSourceRefs = (sid, signals, kinds) => {
     });
   }
   return refs;
+};
+
+// Mongo $dayOfWeek: 1=yakshanba ... 7=shanba.
+const DOW_LABELS = [
+  null,
+  "yakshanba",
+  "dushanba",
+  "seshanba",
+  "chorshanba",
+  "payshanba",
+  "juma",
+  "shanba",
+];
+
+/**
+ * DETEKTOR: tez o'sayotgan o'quvchi (imkoniyat).
+ *
+ * NEGA KERAK: tizim faqat yomon xabar bergan sahifa bo'lib qolsa, owner
+ * uni ochishni to'xtatadi. "Kim yaxshi ishlayapti" ham qaror uchun kerak -
+ * bu o'quvchilar guvohnoma/rag'bat uchun nomzod va ular haqida ota-onaga
+ * xabar berish eng arzon ushlab qolish (retention) vositasi.
+ *
+ * XOM BAHO EMAS, O'SISH: 5 ball bilan kelgan o'quvchi "yaxshi", lekin u
+ * markazning hissasi emas. 3.1 dan 4.4 ga ko'tarilgan o'quvchi - hissa.
+ */
+const detectImproving = ({ subjectLabel, signals, thresholds }) => {
+  const { grades, attendance } = signals;
+  if (!grades.improvement || grades.improvement < 0.4) return null;
+  // Baho namunasi kichik bo'lsa o'sish tasodifiy bo'lishi mumkin.
+  if ((grades.count || 0) < 6) return null;
+  // Davomati past bo'lsa "o'sish" ishonchsiz: kam dars, kam baho.
+  if (attendance.recentRate == null || attendance.recentRate < 0.7) return null;
+
+  const factors = buildFactors([
+    {
+      key: "gradeImprovement",
+      label: "Baho o'sishi",
+      value: Number(grades.improvement.toFixed(2)),
+      unit: "ball",
+      // 1.5 ball o'sish (1-5 shkalada) = to'liq signal.
+      normalized: norm(grades.improvement, 1.5),
+      weight: 0.6,
+      direction: "good",
+    },
+    {
+      key: "attendanceRate",
+      label: "Davomat darajasi",
+      value: Math.round(attendance.recentRate * 100),
+      unit: "%",
+      normalized: norm(attendance.recentRate, 1),
+      weight: 0.4,
+      direction: "good",
+    },
+  ]);
+
+  const score = weightedScore(factors);
+  const confidence = sampleConfidence({
+    observed: grades.count,
+    minSample: 6,
+    fullSample: 30,
+  });
+
+  return {
+    kind: "student_improving",
+    title: `${subjectLabel} — bahosi ${grades.improvement.toFixed(1)} ballga ko'tarildi`,
+    severity: severityFor(score, thresholds) === "high" ? "medium" : "low",
+    score,
+    confidence,
+    factors,
+    // Imkoniyat, lekin PUL ta'siri yo'q: bu o'quvchini "ushlab qolish
+    // daromadi" deb hisoblash xavf summalarini shishirardi.
+    expectedImpact: {
+      amount: 0,
+      currency: "UZS",
+      label: `${grades.priorAvg?.toFixed(1)} → ${grades.recentAvg?.toFixed(1)} ball`,
+    },
+    sourceRefs: grades.ids?.length
+      ? [
+          {
+            model: "Grade",
+            ids: grades.ids,
+            total: grades.count,
+            href: "/owner/grades",
+          },
+        ]
+      : [],
+    recommendedActions: [
+      {
+        key: "praise_student",
+        label: "Ota-onaga muvaffaqiyat haqida xabar bering — eng arzon ushlab qolish yo'li",
+        dueInDays: 7,
+      },
+    ],
+    narration: narrate({
+      headline:
+        `${subjectLabel} ning o'rtacha bahosi ${grades.priorAvg?.toFixed(1)} dan ` +
+        `${grades.recentAvg?.toFixed(1)} ga ko'tarildi (davomat ${Math.round(attendance.recentRate * 100)}%).`,
+      factors,
+      confidence,
+      stance: "opportunity",
+    }),
+  };
+};
+
+/**
+ * DETEKTOR: g'ayrioddiy davomat naqshi (kuzatuv).
+ *
+ * "Aynan dushanbalarni qoldiradi" - umumiy davomat foizidan BOSHQA signal.
+ * 80% davomatli o'quvchi yaxshi ko'rinadi, lekin qoldirgan 20% i bitta
+ * kunga to'plangan bo'lsa bu TIZIMLI muammo (ish, transport, boshqa
+ * to'garak) - va tizimli muammoni JADVALNI o'zgartirib hal qilish mumkin.
+ * Tasodifiy kasallikni esa yo'q.
+ *
+ * Shu insight "ertaga kim kelmasligi mumkin" ro'yxatining ham asosi:
+ * briefing servisi o'quvchining eng yomon kunini ertangi kun bilan
+ * taqqoslaydi.
+ */
+const detectAttendancePattern = ({ sid, subjectLabel, signals, thresholds }) => {
+  const { weekday, attendance } = signals;
+  if (!weekday.worstDay) return null;
+  // Naqsh KUCHI: shu kun boshqa kunlardan qanchalik yomonroq. 15 punktdan
+  // kam farq - tasodif.
+  if (weekday.gap < 0.15) return null;
+  // Kamida 2 marta qoldirgan bo'lishi kerak.
+  if (weekday.worstAbsences < 2) return null;
+  // Shu kun uchun kamida 4 kuzatuv (signal qatlamida ham filtrlangan).
+  if (weekday.worstTotal < 4) return null;
+
+  const dayName = DOW_LABELS[weekday.worstDay] || "shu kun";
+
+  const factors = buildFactors([
+    {
+      key: "weekdayGap",
+      label: "Naqsh kuchi",
+      value: dayName,
+      // 40 punkt farq = to'liq signal.
+      normalized: norm(weekday.gap, 0.4),
+      weight: 0.5,
+    },
+    {
+      key: "weekdayAbsences",
+      label: `${dayName} kunidagi qoldirishlar`,
+      value: weekday.worstAbsences,
+      unit: "marta",
+      normalized: norm(weekday.worstAbsences, 5),
+      weight: 0.3,
+    },
+    {
+      key: "weekdayRate",
+      label: `${dayName} qoldirish darajasi`,
+      value: Math.round(weekday.worstRate * 100),
+      unit: "%",
+      normalized: norm(weekday.worstRate, 0.6),
+      weight: 0.2,
+    },
+  ]);
+
+  const score = weightedScore(factors);
+  const confidence = sampleConfidence({
+    observed: weekday.worstTotal,
+    minSample: 4,
+    fullSample: 12,
+  });
+
+  return {
+    kind: "attendance_anomaly",
+    title: `${subjectLabel} — aynan ${dayName} kunlari kelmaydi`,
+    severity: severityFor(score, thresholds) === "high" ? "medium" : "low",
+    score,
+    confidence,
+    factors,
+    expectedImpact: {
+      amount: 0,
+      currency: "UZS",
+      label: `${dayName}: ${weekday.worstAbsences}/${weekday.worstTotal} dars qoldirilgan`,
+    },
+    sourceRefs: weekday.sampleIds?.length
+      ? [
+          {
+            model: "Attendance",
+            ids: weekday.sampleIds,
+            total: weekday.worstAbsences,
+            href: `/owner/users/${sid}/davomat`,
+          },
+        ]
+      : [],
+    recommendedActions: [
+      {
+        key: "ask_schedule_conflict",
+        label: `${dayName} kunidagi to'siqni aniqlang — jadvalni moslash mumkinmi?`,
+        dueInDays: 7,
+      },
+    ],
+    narration: narrate({
+      headline:
+        `${subjectLabel} ${dayName} kunlari ${weekday.worstTotal} darsdan ` +
+        `${weekday.worstAbsences} tasini qoldirgan (${Math.round(weekday.worstRate * 100)}%), ` +
+        `umumiy qoldirish darajasi esa ${Math.round(weekday.overallRate * 100)}%. ` +
+        "Bu tasodifiy emas, tizimli to'siqqa o'xshaydi.",
+      factors,
+      confidence,
+      stance: "watch",
+    }),
+  };
 };
 
 /**

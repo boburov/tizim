@@ -22,6 +22,9 @@ import {
   Receipt,
   BadgePercent,
   Banknote,
+  Bot,
+  FileText,
+  AlertTriangle,
 } from "lucide-react";
 
 // Bayyina admin panelining barcha qidiriladigan sahifalari.
@@ -42,6 +45,34 @@ export const SEARCH_INDEX = [
     icon: LayoutDashboard,
     category: "Asosiy",
     permission: "admin_dashboard.read",
+  },
+  {
+    title: "AI markaz",
+    description: "Kunlik brifing: kecha, bugun, keyin va hozir nima qilish kerak",
+    keywords:
+      "ai, sun'iy intellekt, brifing, briefing, tahlil, tavsiya, insight, maslahat, operatsiya",
+    url: "/owner/ai",
+    icon: Bot,
+    category: "Asosiy",
+    permission: "ai.read",
+  },
+  {
+    title: "AI vazifalar",
+    description: "Biznes ta'siri bo'yicha tartiblangan to'liq vazifalar ro'yxati",
+    keywords: "ai, vazifa, task, xavf, risk, imkoniyat, opportunity, action center",
+    url: "/owner/ai/tasks",
+    icon: AlertTriangle,
+    category: "Asosiy",
+    permission: "ai.read",
+  },
+  {
+    title: "AI hisobotlar",
+    description: "Kunlik, haftalik va oylik avtomatik hisobotlar",
+    keywords: "ai, hisobot, report, kunlik, haftalik, oylik, daily, weekly, monthly",
+    url: "/owner/ai/reports",
+    icon: FileText,
+    category: "Asosiy",
+    permission: "ai.read",
   },
   {
     title: "O'quvchilar",

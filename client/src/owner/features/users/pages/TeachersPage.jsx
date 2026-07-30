@@ -12,6 +12,7 @@ import Button from "@/shared/components/ui/button/Button";
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import UserStatusFilter from "../components/UserStatusFilter";
 import UserModals from "../components/UserModals";
+import { AiDomainInsights } from "@/owner/features/ai";
 
 // Utils
 import { allowedStatusesForTab } from "../utils/userStatusFilter";
@@ -97,6 +98,12 @@ const TeachersPage = () => {
           />
         )}
       </div>
+
+      {/* AI tahlili - faqat ro'yxat tabida (maosh/davomat tablarida
+          kontekstdan chiqib ketardi). */}
+      {isList && (
+        <AiDomainInsights domain="teachers" title="O'qituvchilar bo'yicha AI tahlili" />
+      )}
 
       <Outlet context={{ status: effectiveStatus }} />
 

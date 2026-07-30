@@ -195,8 +195,24 @@ export const qk = Object.freeze({
     insights: () => ["ai", "insights"],
     list: (params) => ["ai", "insights", "list", params],
     actionCenter: (params) => ["ai", "insights", "actionCenter", params],
+    // Modul paneli: "Moliya → AI Insights". `insights` prefiksi ostida -
+    // insight mutatsiyasidan keyin panellar ham yangilanadi.
+    byDomain: (domain, params) => ["ai", "insights", "domain", domain, params],
     // Ro'yxat sahifasidagi badge'lar: N ta subyekt uchun BITTA so'rov.
     bySubjects: (ids) => ["ai", "insights", "bySubjects", ids],
+
+    // Brifing insight'larga tayanadi (u "hozir nima qilay" bo'limini
+    // ulardan quradi), shuning uchun u ham `insights` prefiksi ostida:
+    // vazifa bajarilgach dashboard o'zi yangilanadi.
+    briefing: (params) => ["ai", "insights", "briefing", params],
+
+    // Hisobotlar ALOHIDA prefiks: ular o'tmish snapshot'lari va insight
+    // mutatsiyasi ularni o'zgartirmaydi - keraksiz refetch qilmasin.
+    reports: () => ["ai", "reports"],
+    reportList: (params) => ["ai", "reports", "list", params],
+    report: (id) => ["ai", "reports", "detail", id],
+    latestReport: (period) => ["ai", "reports", "latest", period ?? "daily"],
+
     config: (branchId) => ["ai", "config", branchId ?? null],
   },
 

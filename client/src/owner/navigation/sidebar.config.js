@@ -40,9 +40,15 @@ const ownerSidebar = [
     permissionAnyOf: ["finance.read", "approvals.decide_config"],
   },
 
-  // AI vazifalar markazi: YAKKA link, "Bosh sahifa"dan keyin darhol.
+  // AI operatsiyalar markazi: YAKKA link, "Bosh sahifa"dan keyin darhol.
   // Sabab - bu ertalabki birinchi ekran bo'lishi kerak ("bugun nima
   // qilaman?"), guruh ichiga yashirilsa kundalik odatga aylanmaydi.
+  //
+  // Vazifalar (/ai/tasks) va hisobotlar (/ai/reports) ATAYLAB bu yerda
+  // YO'Q: `items` qo'shilishi bilan AppSidebar bu yozuvni ochiladigan
+  // guruhga aylantiradi va yakka link bo'lmay qoladi - yuqoridagi
+  // sababning aynan o'zi buziladi. Ularga havola brifing sahifasining
+  // sarlavhasida turadi.
   {
     title: "AI markaz",
     icon: Bot,

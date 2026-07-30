@@ -38,6 +38,20 @@ import defineUsageHeartbeat, {
 import defineAiNightlyRecompute, {
   JOB_NAME as AI_RECOMPUTE_JOB,
 } from "./aiNightlyRecompute.job.js";
+import defineAiIntradayRefresh, {
+  JOB_NAME as AI_INTRADAY_JOB,
+} from "./aiIntradayRefresh.job.js";
+import defineAiLifecycle, {
+  JOB_NAME as AI_LIFECYCLE_JOB,
+} from "./aiLifecycle.job.js";
+import defineAiReports, {
+  DAILY_JOB as AI_DAILY_REPORT_JOB,
+  WEEKLY_JOB as AI_WEEKLY_REPORT_JOB,
+  MONTHLY_JOB as AI_MONTHLY_REPORT_JOB,
+} from "./aiReports.job.js";
+import defineAiMorningDigest, {
+  JOB_NAME as AI_DIGEST_JOB,
+} from "./aiMorningDigest.job.js";
 import { catchUpMonthlyGeneration } from "./catchUpMonthly.js";
 import * as groupsService from "../modules/groups/services/groups.service.js";
 
@@ -61,6 +75,10 @@ export const startJobs = async () => {
   defineAutoEndGroups(agenda);
   defineDailyAccrueFinance(agenda);
   defineAiNightlyRecompute(agenda);
+  defineAiIntradayRefresh(agenda);
+  defineAiLifecycle(agenda);
+  defineAiReports(agenda);
+  defineAiMorningDigest(agenda);
   defineUsageHeartbeat(agenda);
 
   await agenda.start();
@@ -90,10 +108,44 @@ export const startJobs = async () => {
   // tugagan guruh yangi dars accrual qilmasin).
   await every("20 0 * * *", DAILY_ACCRUE_JOB);
 
-  // AI qayta hisoblash - har kuni 01:00 da. Kunlik accrual (00:20) va kurs
-  // arxivlashdan (00:10) KEYIN: aks holda qarz kunlari va faol guruhlar
+  // --- AI OPERATSIYALAR MARKAZI: kunlik zanjir ---
+  //
+  // TARTIB ATAYLAB shunday va uni o'zgartirish natijalarni buzadi:
+  //
+  //   00:10  kurs arxivlash        (mavjud)
+  //   00:20  kunlik qarz accrual   (mavjud)
+  //   00:40  AI hayot sikli        → eskirgan insight'lar YOPILADI
+  //   01:00  AI to'liq hisoblash   → yangi insight'lar YARATILADI
+  //   07:00  AI kunlik hisobot     → tugagan kun (kecha) qamraladi
+  //   08:00  AI ertalabki digest   → hisobot + insight'lar owner'ga ketadi
+  //   09:00+ har 3 soatda tez yangilanish (qarz, lidlar, o'qituvchi davomati)
+  //
+  // Hayot sikli hisoblashdan OLDIN: eskirgan insight avval yopilishi kerak,
+  // aks holda yangi yaratilgani darhol "muddati o'tgan" deb yopilib qolardi.
+  await every("40 0 * * *", AI_LIFECYCLE_JOB);
+
+  // AI to'liq qayta hisoblash - har kuni 01:00 da. Kunlik accrual (00:20) va
+  // kurs arxivlashdan (00:10) KEYIN: aks holda qarz kunlari va faol guruhlar
   // ro'yxati eski bo'lib, ballar bir kun orqada qolardi.
   await every("0 1 * * *", AI_RECOMPUTE_JOB);
+
+  // Kunlik hisobot - 07:00. Kecha TUGAGAN kunni qamraydi, shuning uchun
+  // tungi hisoblashdan keyin bo'lishi yetarli.
+  await every("0 7 * * *", AI_DAILY_REPORT_JOB);
+  // Haftalik hisobot - dushanba 07:10 (o'tgan to'liq haftani qamraydi).
+  await every("10 7 * * 1", AI_WEEKLY_REPORT_JOB);
+  // Oylik ijroiya hisoboti - oyning 1-sanasi 07:20 (o'tgan oyni qamraydi).
+  // Oylik moliya generatsiyasidan (00:05) keyin: o'tgan oy yopilgan bo'lishi kerak.
+  await every("20 7 1 * *", AI_MONTHLY_REPORT_JOB);
+
+  // Ertalabki digest - 08:00, kunlik hisobotdan KEYIN.
+  // Bu proaktivlik halqasini yopadi: owner ilovani ochmasa ham ko'radi.
+  await every("0 8 * * *", AI_DIGEST_JOB);
+
+  // Kunduzgi tez yangilanish - ish vaqtida har 3 soatda (09:00-21:00).
+  // Faqat kun ichida o'zgaradigan detektorlar ishlaydi; og'ir trend
+  // hisoblashlari tungi jobda qoladi. Tunda ishlamaydi - o'zgarish yo'q.
+  await every("0 9,12,15,18,21 * * *", AI_INTRADAY_JOB);
 
   // Admin panelga usage heartbeat - har 15 daqiqada. Faqat admin panel
   // orqali provision qilingan tenantlarda ishlaydi (ADMIN_API_URL bo'lsa);
