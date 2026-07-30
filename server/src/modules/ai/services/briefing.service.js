@@ -49,41 +49,43 @@ const buildYesterday = async (now) => {
     periodPulse(dayBefore),
   ]);
 
+  // IZOH FAQAT KARTA AYTA OLMAYDIGAN NARSANI AYTADI.
+  //
+  // Ilgari har bir ko'rsatkich uchun bitta jumla yozilardi ("0 so'm
+  // yig'ildi (0 to'lov)") - bu yonidagi kartaning AYNAN o'zi edi. Owner
+  // bir xil raqamni ikki marta o'qishga majbur bo'lardi va matnni
+  // butunlay o'qimay qo'yardi.
+  //
+  // Yangi qoida: sezilarli o'zgarish, sof yo'qotish yoki kartada
+  // umuman yo'q hodisa (o'qituvchi kelmagani) bo'lsagina jumla yoziladi.
+  // Aytadigan gap bo'lmasa - narration null, va bo'lim izohsiz chiqadi.
   const lines = [];
-  if (pulse.revenue.collected > 0) {
-    const d = delta(pulse.revenue.collected, prior.revenue.collected);
+
+  const revDelta = delta(pulse.revenue.collected, prior.revenue.collected);
+  if (revDelta != null && Math.abs(revDelta) >= 20) {
     lines.push(
-      `${fmtMoney(pulse.revenue.collected)} so'm yig'ildi (${pulse.revenue.transactions} to'lov)` +
-        (d != null ? `, oldingi kunga nisbatan ${d > 0 ? "+" : ""}${d}%` : "") +
-        ".",
+      revDelta < 0
+        ? `To'lov oqimi oldingi kunga nisbatan ${Math.abs(revDelta)}% pasaydi.`
+        : `To'lov oqimi ${revDelta}% oshdi.`,
     );
-  } else {
-    lines.push("Kecha to'lov qabul qilinmagan.");
   }
 
-  if (pulse.attendance.marked > 0) {
-    const d = delta(pulse.attendance.rate, prior.attendance.rate);
-    lines.push(
-      `Davomat ${pct(pulse.attendance.rate)}% (${pulse.attendance.marked} yozuv)` +
-        (d != null ? `, ${d > 0 ? "+" : ""}${d}% o'zgarish` : "") +
-        ".",
-    );
-  } else {
-    lines.push("Kecha davomat belgilanmagan.");
+  const attDelta = delta(pulse.attendance.rate, prior.attendance.rate);
+  if (attDelta != null && attDelta <= -10) {
+    lines.push(`Davomat ${Math.abs(attDelta)}% tushdi — sababini tekshiring.`);
   }
 
-  if (pulse.students.joined || pulse.students.left) {
+  if (pulse.students.left > pulse.students.joined) {
     lines.push(
-      `O'quvchi oqimi: +${pulse.students.joined} qo'shildi, −${pulse.students.left} ketdi.`,
+      `${pulse.students.left} o'quvchi ketdi, ${pulse.students.joined} tasi qo'shildi.`,
     );
   }
-  if (pulse.leads.created) {
-    lines.push(`${pulse.leads.created} yangi lid keldi.`);
-  }
+
+  // Kartada yo'q: o'qituvchi yo'qligi bo'limda umuman ko'rsatkich emas.
   if (pulse.teachers.missedLessons || pulse.teachers.hrAbsences) {
     lines.push(
-      `Diqqat: ${pulse.teachers.affectedTeachers} o'qituvchi kelmadi ` +
-        `(${pulse.teachers.missedLessons} dars o'tkazilmadi).`,
+      `${pulse.teachers.affectedTeachers} o'qituvchi kelmadi, ` +
+        `${pulse.teachers.missedLessons} dars o'tkazilmadi.`,
     );
   }
 
@@ -124,7 +126,9 @@ const buildYesterday = async (now) => {
         hint: `${pulse.leads.enrolled} yozildi`,
       },
     ],
-    narration: lines.join(" "),
+    // null = aytadigan gap yo'q. Frontend bunda izoh qutisini
+    // umuman chizmaydi (bo'sh quti ham matn kabi joy egallaydi).
+    narration: lines.length ? lines.join(" ") : null,
   };
 };
 
@@ -132,35 +136,16 @@ const buildYesterday = async (now) => {
 const buildToday = async (now) => {
   const snap = await todaySnapshot(now);
 
+  // To'rtta karta bugungi holatni to'liq qamraydi (darslar, belgilanmagan
+  // guruhlar, kelmasligi mumkin bo'lganlar, bog'lanish kerak bo'lgan
+  // lidlar). Shuning uchun izoh ularni TAKRORLAMAYDI - faqat muddati
+  // o'tgan ish va kutilayotgan pul haqida gapiradi: bularning ikkalasi
+  // ham kartadagi sondan kelib chiqmaydi.
   const lines = [];
-  if (snap.lessons.sessions > 0) {
-    lines.push(
-      `Bugun ${snap.lessons.groups} guruhda ${snap.lessons.sessions} dars bor.`,
-    );
-    if (snap.lessons.unmarkedGroups.length) {
-      lines.push(
-        `${snap.lessons.unmarkedGroups.length} guruhda davomat hali belgilanmagan.`,
-      );
-    } else if (snap.lessons.markedGroups > 0) {
-      lines.push("Barcha guruhlarda davomat belgilangan.");
-    }
-  } else {
-    lines.push("Bugun jadvalda dars yo'q.");
-  }
 
-  if (snap.likelyAbsent.length) {
-    lines.push(
-      `${snap.likelyAbsent.length} o'quvchi bugun kelmasligi mumkin — ` +
-        `ular aynan ${snap.weekday} kunlarini qoldirish naqshiga ega.`,
-    );
-  }
-  if (snap.followUps.length) {
-    const overdue = snap.followUps.filter((f) => f.overdue).length;
-    lines.push(
-      `${snap.followUps.length} lid bilan bog'lanish vaqti keldi` +
-        (overdue ? ` (${overdue} tasining muddati o'tgan)` : "") +
-        ".",
-    );
+  const overdue = snap.followUps.filter((f) => f.overdue).length;
+  if (overdue) {
+    lines.push(`${overdue} lid bilan bog'lanish muddati o'tgan.`);
   }
   if (snap.paymentsDue.amount > 0) {
     lines.push(
@@ -198,10 +183,10 @@ const buildToday = async (now) => {
         label: "Bog'lanish kerak",
         value: snap.followUps.length,
         unit: "lid",
-        hint: `${snap.followUps.filter((f) => f.overdue).length} muddati o'tgan`,
+        hint: `${overdue} muddati o'tgan`,
       },
     ],
-    narration: lines.join(" "),
+    narration: lines.length ? lines.join(" ") : null,
   };
 };
 
@@ -218,25 +203,29 @@ const buildNext = async (branchId, now) => {
     overdueSignal(now),
   ]);
 
-  const dropPct = Math.round(Math.abs(forecast.deltaRatio) * 100);
-  const direction = forecast.deltaRatio < 0 ? "pasayish" : "o'sish";
+  // To'rtta karta bashorat, xavfdagi summa, qarz va yig'ish darajasini
+  // ALLAQACHON ko'rsatadi. Ilgari izoh aynan shu to'rt sonni qayta
+  // o'qib berardi ("Keyingi oy uchun bashorat: X so'm ... 0% o'sish").
+  // Endi u faqat SONDAN KELIB CHIQMAYDIGAN xulosani aytadi: pasayish
+  // sababi va yalpi/sof farqi.
+  const lines = [];
 
-  const lines = [
-    `Keyingi oy uchun bashorat: ${fmtMoney(forecast.forecastGross)} so'm ` +
-      `(joriy oy ${fmtMoney(forecast.currentExpected)} so'm) — ${dropPct}% ${direction}.`,
-    `Hisob: ${forecast.activeStudents} faol o'quvchi, ulardan ${forecast.riskyStudents} tasi ` +
-      `ketish xavfida (${fmtMoney(forecast.atRisk)} so'm).`,
-  ];
-  if (forecast.collectionSample > 0) {
-    lines.push(
-      `Tarixiy yig'ish darajasi ${pct(forecast.collectionRate)}% — ` +
-        `shuni hisobga olsak, real kutilma ${fmtMoney(forecast.forecastNet)} so'm.`,
-    );
-  }
-  if (overdue.amount > 0) {
-    lines.push(
-      `Bundan tashqari ${fmtMoney(overdue.amount)} so'm muddati o'tgan qarz yig'ilishi kerak.`,
-    );
+  // Faol o'quvchi bo'lmasa bashorat ham, izoh ham ma'nosiz.
+  if (forecast.activeStudents > 0) {
+    if (forecast.deltaRatio <= -0.05) {
+      lines.push(
+        `Pasayishning asosiy sababi — ketish xavfidagi ${forecast.riskyStudents} o'quvchi.`,
+      );
+    }
+    if (forecast.collectionSample > 0 && forecast.collectionRate < 0.95) {
+      lines.push(
+        `Tarixda to'lovlarning ${pct(forecast.collectionRate)}% i yig'ilgan — ` +
+          `shu tezlikda real kutilma ${fmtMoney(forecast.forecastNet)} so'm.`,
+      );
+    }
+    if (overdue.amount > 0) {
+      lines.push(`${fmtMoney(overdue.amount)} so'm eski qarzni undirish kerak.`);
+    }
   }
 
   return {
@@ -273,7 +262,7 @@ const buildNext = async (branchId, now) => {
         hint: `oxirgi ${forecast.collectionSample} oy`,
       },
     ],
-    narration: lines.join(" "),
+    narration: lines.length ? lines.join(" ") : null,
   };
 };
 
@@ -298,24 +287,25 @@ const buildNow = async (limit = 6) => {
     openCounts(),
   ]);
 
+  // Vazifa/imkoniyat SONLARI bo'lim sarlavhasidagi hint'da, vazifalarning
+  // O'ZI esa darhol pastdagi kartalarda turadi. Ilgari izoh ikkalasini
+  // ham qayta aytardi ("N ta yuqori ustuvorlikli vazifa e'tibor
+  // kutmoqda", "Eng muhimi: X"), bo'sh holatda esa ActionLists ning
+  // bo'sh holat kartasini takrorlardi.
+  //
+  // Qoladigan yagona gap - PUL: umumiy xavf summasi na hint'da, na
+  // kartalarda ko'rinadi, chunki u barcha insight'lar bo'yicha yig'indi.
   const lines = [];
-  if (counts.high > 0) {
-    lines.push(`${counts.high} ta yuqori ustuvorlikli vazifa e'tibor kutmoqda.`);
-  }
   if (counts.impactAtRisk > 0) {
-    lines.push(`Jami ${fmtMoney(counts.impactAtRisk)} so'm xavf ostida.`);
-  }
-  if (risks[0]) {
-    lines.push(`Eng muhimi: ${risks[0].title || risks[0].subjectLabel}.`);
-  }
-  if (counts.opportunities > 0) {
-    lines.push(`Shu bilan birga ${counts.opportunities} ta o'sish imkoniyati aniqlandi.`);
-  }
-  if (!lines.length) {
-    lines.push("Hozir shoshilinch vazifa yo'q — barcha ko'rsatkichlar normal doirada.");
+    lines.push(`Ushbu vazifalar bo'yicha jami ${fmtMoney(counts.impactAtRisk)} so'm xavf ostida.`);
   }
 
-  return { risks, opportunities, counts, narration: lines.join(" ") };
+  return {
+    risks,
+    opportunities,
+    counts,
+    narration: lines.length ? lines.join(" ") : null,
+  };
 };
 
 /**

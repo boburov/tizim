@@ -2037,3 +2037,69 @@ Neither model could be reached — no `OPENAI_API_KEY`/`GEMINI_API_KEY` and neit
 <sub>session `de0b93b7` · branch `main` · 10 ta qadam</sub>
 
 ---
+
+## 2026-07-30 20:10 — hali ham juda kop matin mavjud
+
+**So'rov**
+
+> hali ham juda kop matin mavjud
+
+**O'zgargan fayllar (3)**
+
+- `server/src/modules/ai/services/briefing.service.js` — tahrirlandi
+- `client/src/owner/features/ai/components/BriefingSection.jsx` — tahrirlandi
+- `client/src/owner/features/ai/pages/OperationsCenterPage.jsx` — tahrirlandi
+
+**Buyruqlar (2)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && node --check src/modules/ai/services/briefing.service.js && node --input-type=module -e " import('./src/modules/a…
+cd /Users/shukrullo/Desktop/lc-total/client && npm run build 2>&1 | tail -4 && npx eslint src/owner/features/ai/ src/shared/components/ai/ && echo "AI LINT CLEA…
+```
+
+**Natija**
+
+Haq, hali ham takror bor. Asosiy muammo: **izoh kartalarni qayta o'qib beryapti.** "Keyingi oy uchun bashorat: 0 so'm (joriy oy 0 so'm) — 0% o'sish" — uchalasi ham yonidagi kartalarda turibdi.
+
+Izoh faqat karta **ayta olmaydigan** narsani aytishi kerak. Backend'dan tuzataman.
+
+Now `buildToday` — all four of its sentences duplicate its own cards:
+
+Now `buildNext` — its two sentences restate all four cards:
+
+Now `buildNow` — its lines duplicate the section hint and the cards directly below:
+
+Now the frontend: drop the empty narration box entirely instead of showing fallback text.
+
+Tayyor. Ikkalasi ham o'tdi.
+
+## Qoida o'zgardi
+
+Ilgari izoh har bir ko'rsatkich uchun bitta jumla yozardi — ya'ni yonidagi kartani so'z bilan qayta o'qib berardi. Endi **izoh faqat karta ayta olmaydigan narsani aytadi**, aytadigan gap bo'lmasa `null` qaytadi va quti umuman chizilmaydi.
+
+## Skrinshotingizdagi holatda nima yo'qoladi
+
+To'rtala izoh qutisi ham ketadi — bo'sh bazada ularning hech biri yangi ma'lumot bermaydi:
+
+| Bo'lim | Ilgari | Endi |
+|---|---|---|
+| 01 | "Kecha to'lov qabul qilinmagan. Kecha davomat belgilanmagan." | *quti yo'q* |
+| 02 | "Bugun jadvalda dars yo'q." | *quti yo'q* |
+| 03 | "Keyingi oy uchun bashorat: 0 so'm (joriy oy 0 so'm) — 0% o'sish. Hisob: 0 faol o'quvchi..." | *quti yo'q* |
+| 04 | vazifa sanog'i takrori | *quti yo'q* |
+
+Sahifa faqat sarlavha + 4 ta savol + kartalardan iborat bo'ladi.
+
+## Ma'lumot bo'lganda izoh nima deydi
+
+Endi u faqat **sondan kelib chiqmaydigan** xulosani aytadi:
+
+- **01** — to'lov ≥20% siljisa, davomat ≥10% tushsa, ketganlar qo'shilganlardan ko'p bo'lsa, yoki o'qituvchi kelmasa *(bu oxirgisi kartada umuman yo'q)*
+- **02** — muddati o'tgan lid va kutilayotgan pul *(kartalar buni ko'rsatmaydi)*
+- **03** — pasayish **sababi** va yalpi/sof farq
+
+…(qisqartirildi)
+
+<sub>session `de0b93b7` · branch `main` · 11 ta qadam</sub>
+
+---

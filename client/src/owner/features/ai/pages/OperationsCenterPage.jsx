@@ -184,7 +184,11 @@ const OperationsCenterPage = () => {
             question="Keyin nima bo'lishi mumkin?"
             icon={TrendingUp}
             metrics={data.next?.metrics}
-            narration={data.next?.narration || "Bashorat uchun filial tanlang."}
+            // Fallback FAQAT bashorat umuman yo'q bo'lganda ("barcha
+            // filiallar" rejimi). Bashorat bor, lekin aytadigan gap yo'q
+            // bo'lsa - izoh chizilmaydi, `||` esa bu ikki holatni
+            // ajratmay, bekordan-bekor matn ko'rsatardi.
+            narration={data.next ? data.next.narration : "Bashorat uchun filial tanlang."}
           />
 
           <BriefingSection

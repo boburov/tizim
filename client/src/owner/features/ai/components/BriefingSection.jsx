@@ -48,13 +48,19 @@ const BriefingSection = ({
       </div>
     )}
 
-    {/* AI IZOHI - raqamlarning MA'NOSI. Chap chegara chizig'i uni
-        ko'rsatkichlardan vizual ajratadi: bu o'lchov emas, talqin. */}
-    <div className="rounded-xl border border-l-2 border-l-primary bg-card p-4">
-      <p className="text-sm leading-relaxed text-foreground">
-        {narration || "Bu bo'lim uchun yetarli ma'lumot yig'ilmagan."}
-      </p>
-    </div>
+    {/* AI IZOHI - raqamlarning MA'NOSI, ularning takrori EMAS.
+        Chap chegara chizig'i uni ko'rsatkichlardan vizual ajratadi:
+        bu o'lchov emas, talqin.
+
+        Izoh bo'lmasa quti UMUMAN chizilmaydi. Ilgari bu yerda
+        "Bu bo'lim uchun yetarli ma'lumot yig'ilmagan" turardi - bo'sh
+        quti ham, uning ichidagi uzr ham ekranda xuddi shunday joy
+        egallardi va sahifani "ko'p gapiradigan" qilardi. */}
+    {narration && (
+      <div className="rounded-xl border border-l-2 border-l-primary bg-card p-4">
+        <p className="text-sm leading-relaxed text-foreground">{narration}</p>
+      </div>
+    )}
 
     {children}
   </section>
