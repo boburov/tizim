@@ -44,7 +44,7 @@ const GroupPermanentDeleteModal = ({ group, close, isLoading, setIsLoading }) =>
   if (obj.step === 1) {
     return (
       <div className="space-y-4">
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div className="rounded-md border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-800 dark:text-red-300">
           <p className="font-semibold">
             ⚠ {name} guruhi butunlay o'chiriladi. Bu amalni qaytarib bo'lmaydi.
           </p>

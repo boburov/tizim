@@ -16,12 +16,12 @@ const PaymentMethodCard = ({ methods }) => {
   const cardPct = total > 0 ? 100 - cashPct : 0;
 
   return (
-    <div className="rounded-2xl border border-zinc-200/80 bg-white p-5">
-      <h2 className="font-semibold text-zinc-900">To'lov usullari</h2>
-      <p className="mt-0.5 text-xs text-zinc-500">Bu oygi kirim taqsimoti</p>
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <h2 className="font-semibold text-foreground">To'lov usullari</h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">Bu oygi kirim taqsimoti</p>
 
       {total === 0 ? (
-        <p className="mt-8 text-sm text-zinc-400">Ma'lumot yo'q</p>
+        <p className="mt-8 text-sm text-muted-foreground">Ma'lumot yo'q</p>
       ) : (
         <div className="mt-4 flex items-center gap-5">
           {/* Donut */}
@@ -58,10 +58,10 @@ const PaymentMethodCard = ({ methods }) => {
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-lg font-semibold tabular-nums text-zinc-900">
+              <span className="text-lg font-semibold tabular-nums text-foreground">
                 {cashPct}%
               </span>
-              <span className="text-[10px] text-zinc-500">naqd</span>
+              <span className="text-[10px] text-muted-foreground">naqd</span>
             </div>
           </div>
 
@@ -69,23 +69,23 @@ const PaymentMethodCard = ({ methods }) => {
           <div className="min-w-0 flex-1 space-y-3">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-xs text-zinc-600">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="size-2.5 rounded-full bg-primary" /> Naqd
                 </span>
-                <span className="text-xs font-medium text-zinc-500">{cashPct}%</span>
+                <span className="text-xs font-medium text-muted-foreground">{cashPct}%</span>
               </div>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">
+              <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
                 {formatMoney(cash)}
               </p>
             </div>
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-xs text-zinc-600">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="size-2.5 rounded-full bg-primary/45" /> Karta
                 </span>
-                <span className="text-xs font-medium text-zinc-500">{cardPct}%</span>
+                <span className="text-xs font-medium text-muted-foreground">{cardPct}%</span>
               </div>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">
+              <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
                 {formatMoney(card)}
               </p>
             </div>

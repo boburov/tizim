@@ -37,7 +37,7 @@ const GroupAttendanceStatsTab = ({ groupId }) => {
     <div className="space-y-4 pt-3">
       {/* Sarlavha va Yil > Oy tanlagichlar yonma-yon */}
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="text-lg font-semibold text-gray-800">
+        <h2 className="text-lg font-semibold text-foreground">
           {period.year} yil, {UZ_MONTHS[period.month - 1]} oyi davomati
         </h2>
 

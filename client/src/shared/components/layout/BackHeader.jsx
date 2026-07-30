@@ -13,7 +13,7 @@ const BackHeader = ({ className = "", fallback = "/", title = "Sarlavha" }) => {
   return (
     <header
       className={cn(
-        "flex items-center sticky inset-x-0 top-0 bg-white h-16 shadow-sm",
+        "flex items-center sticky inset-x-0 top-0 bg-card h-16 shadow-sm",
         className,
       )}
     >

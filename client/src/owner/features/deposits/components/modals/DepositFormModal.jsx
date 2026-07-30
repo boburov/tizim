@@ -198,12 +198,12 @@ const DepositFormModal = ({ mode = "add", student, close, setIsLoading }) => {
                 {remainingForSelected > 0 ? (
                   <>
                     To'lashi kerak:{" "}
-                    <span className="font-medium text-red-600">
+                    <span className="font-medium text-red-600 dark:text-red-300">
                       {formatMoney(remainingForSelected)}
                     </span>
                   </>
                 ) : (
-                  <span className="text-green-600">Bu guruh uchun qarz yo'q</span>
+                  <span className="text-green-600 dark:text-green-300">Bu guruh uchun qarz yo'q</span>
                 )}
               </p>
             </div>

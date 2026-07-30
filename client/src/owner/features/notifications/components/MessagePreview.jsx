@@ -24,9 +24,9 @@ const MessagePreview = ({
 
   if (variant === "inapp") {
     return (
-      <div className="rounded-lg border bg-white p-3">
+      <div className="rounded-lg border bg-card p-3">
         <div className="flex items-start gap-2">
-          <Smartphone className="mt-0.5 size-4 shrink-0 text-violet-500" />
+          <Smartphone className="mt-0.5 size-4 shrink-0 text-violet-500 dark:text-violet-400" />
           <div className="min-w-0">
             {filledTitle && (
               <p className="truncate text-sm font-semibold">{filledTitle}</p>
@@ -48,27 +48,27 @@ const MessagePreview = ({
   // Telegram chat ko'rinishi
   return (
     <div className="rounded-lg bg-[#e7ebf0] p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
         <Send className="size-3" />
         Telegram bot
       </div>
-      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white px-3 py-2 shadow-sm">
+      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-card px-3 py-2 shadow-sm">
         {filledTitle && (
-          <p className="mb-0.5 text-sm font-semibold text-slate-900">
+          <p className="mb-0.5 text-sm font-semibold text-foreground">
             {emoji} {filledTitle}
           </p>
         )}
         <p
           className={cn(
-            "whitespace-pre-wrap break-words text-sm text-slate-800",
-            empty && "italic text-slate-400",
+            "whitespace-pre-wrap break-words text-sm text-foreground",
+            empty && "italic text-muted-foreground",
           )}
         >
           {empty
             ? "Xabar matni shu yerda ko'rinadi..."
             : (!filledTitle ? `${emoji} ` : "") + filledBody}
         </p>
-        <p className="mt-1 text-right text-[10px] text-slate-400">
+        <p className="mt-1 text-right text-[10px] text-muted-foreground">
           {new Date().toLocaleTimeString("uz", {
             hour: "2-digit",
             minute: "2-digit",

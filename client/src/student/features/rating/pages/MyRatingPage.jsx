@@ -71,7 +71,7 @@ const MyRatingPage = () => {
             "rounded-md border px-3 py-1.5 text-sm font-medium transition " +
             (tab === "overall"
               ? "border-primary bg-primary/10 text-primary"
-              : "border-gray-200 bg-white text-muted-foreground hover:bg-gray-50")
+              : "border-border bg-card text-muted-foreground hover:bg-muted")
           }
         >
           Umumiy reyting
@@ -84,7 +84,7 @@ const MyRatingPage = () => {
             "rounded-md border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 " +
             (tab === "group"
               ? "border-primary bg-primary/10 text-primary"
-              : "border-gray-200 bg-white text-muted-foreground hover:bg-gray-50")
+              : "border-border bg-card text-muted-foreground hover:bg-muted")
           }
         >
           Mening guruhim

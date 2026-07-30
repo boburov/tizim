@@ -62,11 +62,11 @@ const isSame = (a, b) =>
 
 // Range sudralayotganda qator yorqin bo'yaladi (fon rangi)
 const STATUS_ROW_PREVIEW = {
-  present: "bg-green-100",
-  absent: "bg-red-100",
-  excused: "bg-amber-100",
-  exempt: "bg-gray-200",
-  "": "bg-gray-100",
+  present: "bg-green-100 dark:bg-green-500/15",
+  absent: "bg-red-100 dark:bg-red-500/15",
+  excused: "bg-amber-100 dark:bg-amber-500/15",
+  exempt: "bg-accent",
+  "": "bg-muted",
 };
 
 // ...va chap chetida rangli chiziq
@@ -74,8 +74,8 @@ const STATUS_ACCENT = {
   present: "border-l-4 border-green-500",
   absent: "border-l-4 border-red-500",
   excused: "border-l-4 border-amber-500",
-  exempt: "border-l-4 border-gray-500",
-  "": "border-l-4 border-gray-400",
+  exempt: "border-l-4 border-input",
+  "": "border-l-4 border-input",
 };
 
 const AttendanceGrid = ({ data, onSubmit, isSubmitting = false }) => {
@@ -253,7 +253,7 @@ const AttendanceGrid = ({ data, onSubmit, isSubmitting = false }) => {
   // Dars kuni bo'lmasa ham belgilash mumkin - pastda ogohlantirish ko'rsatiladi
   if ((data.rows || []).length === 0) {
     return (
-      <div className="border rounded-md p-8 text-center text-muted-foreground bg-white">
+      <div className="border rounded-md p-8 text-center text-muted-foreground bg-card">
         Bu sanaga active o'quvchilar yo'q.
       </div>
     );
@@ -316,13 +316,13 @@ const AttendanceGrid = ({ data, onSubmit, isSubmitting = false }) => {
   return (
     <div className="space-y-3">
       {data.isHoliday ? (
-        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
+        <div className="rounded-md border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-300">
           Bu kun bayram/dam olish kuni - davomat belgilanmaydi va davomat foiziga
           ta'sir qilmaydi.
         </div>
       ) : (
         !data.isClassDay && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+          <div className="rounded-md border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-300">
             Bu kun guruh jadvalida dars kuni emas
             {classDaysLabel ? ` (dars kunlari: ${classDaysLabel})` : ""}. Davomat
             faqat dars kunlari belgilanadi.
@@ -330,7 +330,7 @@ const AttendanceGrid = ({ data, onSubmit, isSubmitting = false }) => {
         )
       )}
       {/* Sticky action panel */}
-      <div className="sticky top-0 z-20 -mx-1 px-1 py-2 bg-white/80 backdrop-blur-sm border-b border-gray-200">
+      <div className="sticky top-0 z-20 -mx-1 px-1 py-2 bg-card/80 backdrop-blur-sm border-b border-border">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex basis-full sm:basis-auto sm:flex-1 flex-wrap items-center gap-2 min-w-0">
             <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -341,7 +341,7 @@ const AttendanceGrid = ({ data, onSubmit, isSubmitting = false }) => {
 
           <div className="flex flex-wrap items-center justify-end gap-2">
             {dirtyCount > 0 && (
-              <Badge variant="outline" className="text-amber-600">
+              <Badge variant="outline" className="text-amber-600 dark:text-amber-300">
                 {dirtyCount} ta o'zgartirish
               </Badge>
             )}
@@ -365,10 +365,10 @@ const AttendanceGrid = ({ data, onSubmit, isSubmitting = false }) => {
           <AttendanceLegend />
           {!locked && (
             <span className="text-xs text-muted-foreground">
-              Klaviatura: <kbd className="rounded border bg-white px-1">P</kbd> hammasi keldi
-              · <kbd className="rounded border bg-white px-1">↑↓</kbd> o'tish
-              · <kbd className="rounded border bg-white px-1">1–4</kbd> status
-              · <kbd className="rounded border bg-white px-1">⌘↵</kbd> saqlash
+              Klaviatura: <kbd className="rounded border bg-card px-1">P</kbd> hammasi keldi
+              · <kbd className="rounded border bg-card px-1">↑↓</kbd> o'tish
+              · <kbd className="rounded border bg-card px-1">1–4</kbd> status
+              · <kbd className="rounded border bg-card px-1">⌘↵</kbd> saqlash
             </span>
           )}
         </div>
@@ -384,7 +384,7 @@ const AttendanceGrid = ({ data, onSubmit, isSubmitting = false }) => {
       <div
         ref={containerRef}
         className={cn(
-          "border rounded-md overflow-hidden bg-white divide-y text-sm",
+          "border rounded-md overflow-hidden bg-card divide-y text-sm",
           drag && "select-none touch-none",
         )}
       >
@@ -407,8 +407,8 @@ const AttendanceGrid = ({ data, onSubmit, isSubmitting = false }) => {
                 "flex flex-col gap-2 p-3 transition-colors sm:flex-row sm:items-center sm:gap-4",
                 inDrag
                   ? cn(STATUS_ROW_PREVIEW[drag.status], STATUS_ACCENT[drag.status])
-                  : "hover:bg-gray-50",
-                isFocused && !inDrag && "bg-sky-50 ring-1 ring-inset ring-sky-300",
+                  : "hover:bg-muted",
+                isFocused && !inDrag && "bg-sky-50 dark:bg-sky-500/10 ring-1 ring-inset ring-sky-300",
               )}
             >
               <div className="flex items-center gap-3 sm:w-60 sm:shrink-0">
@@ -422,7 +422,7 @@ const AttendanceGrid = ({ data, onSubmit, isSubmitting = false }) => {
                       <span
                         title={editHistoryTitle(r.attendance)}
                         aria-label="Tahrirlangan"
-                        className="ml-1 cursor-help text-amber-500"
+                        className="ml-1 cursor-help text-amber-500 dark:text-amber-400"
                       >
                         ✎
                       </span>

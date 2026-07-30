@@ -17,18 +17,18 @@ const IncomeExpenseTrendChart = () => {
   const net = totalIncome - totalExpense;
 
   return (
-    <div className="rounded-2xl border border-zinc-200/80 bg-white p-5">
+    <div className="rounded-2xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-zinc-900">Kirim / chiqim dinamikasi</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">So'nggi 12 oy</p>
+          <h2 className="font-semibold text-foreground">Kirim / chiqim dinamikasi</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">So'nggi 12 oy</p>
         </div>
         <div className="text-right">
-          <p className="text-[11px] text-zinc-500">12 oylik sof</p>
+          <p className="text-[11px] text-muted-foreground">12 oylik sof</p>
           <p
             className={cn(
               "text-lg font-semibold tabular-nums",
-              net >= 0 ? "text-emerald-600" : "text-rose-600",
+              net >= 0 ? "text-emerald-600 dark:text-emerald-300" : "text-rose-600 dark:text-rose-300",
             )}
           >
             {net > 0 ? "+" : ""}
@@ -40,14 +40,14 @@ const IncomeExpenseTrendChart = () => {
       {/* Xulosa */}
       <div className="mt-4 flex flex-wrap gap-5">
         <div>
-          <p className="text-[11px] text-zinc-500">Jami kirim</p>
+          <p className="text-[11px] text-muted-foreground">Jami kirim</p>
           <p className="text-sm font-semibold text-primary">
             {formatMoney(totalIncome)}
           </p>
         </div>
         <div>
-          <p className="text-[11px] text-zinc-500">Jami chiqim</p>
-          <p className="text-sm font-semibold text-rose-600">
+          <p className="text-[11px] text-muted-foreground">Jami chiqim</p>
+          <p className="text-sm font-semibold text-rose-600 dark:text-rose-300">
             {formatMoney(totalExpense)}
           </p>
         </div>
@@ -55,9 +55,9 @@ const IncomeExpenseTrendChart = () => {
 
       {/* Bar chart */}
       {isLoading ? (
-        <div className="mt-6 h-56 animate-pulse rounded-xl bg-zinc-100" />
+        <div className="mt-6 h-56 animate-pulse rounded-xl bg-muted" />
       ) : buckets.length === 0 ? (
-        <p className="mt-6 text-sm text-zinc-400">Ma'lumot yo'q</p>
+        <p className="mt-6 text-sm text-muted-foreground">Ma'lumot yo'q</p>
       ) : (
         <div className="mt-6 flex h-56 items-end gap-1.5 sm:gap-2.5">
           {buckets.map((b, i) => {
@@ -70,7 +70,7 @@ const IncomeExpenseTrendChart = () => {
                 className="group relative flex h-full flex-1 flex-col items-center justify-end"
               >
                 {has && (
-                  <div className="pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-zinc-900 px-2.5 py-1.5 text-[10px] text-white opacity-0 shadow-lg transition group-hover:opacity-100">
+                  <div className="pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-foreground px-2.5 py-1.5 text-[10px] text-background opacity-0 shadow-lg transition group-hover:opacity-100">
                     <span className="font-medium text-emerald-300">
                       ↑ {shortMoney(b.income)}
                     </span>
@@ -90,7 +90,7 @@ const IncomeExpenseTrendChart = () => {
                     style={{ height: `${Math.max(expPct, b.expense > 0 ? 3 : 0)}%` }}
                   />
                 </div>
-                <span className="mt-1.5 truncate text-[10px] text-zinc-500">
+                <span className="mt-1.5 truncate text-[10px] text-muted-foreground">
                   {b.label}
                 </span>
               </div>
@@ -100,7 +100,7 @@ const IncomeExpenseTrendChart = () => {
       )}
 
       {/* Legend */}
-      <div className="mt-4 flex gap-4 text-xs text-zinc-500">
+      <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className="size-2.5 rounded-full bg-primary" /> Kirim
         </span>

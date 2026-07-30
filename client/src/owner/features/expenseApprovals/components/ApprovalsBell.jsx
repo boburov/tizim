@@ -69,7 +69,7 @@ const ApprovalsBell = ({ className = "" }) => {
           title="Tasdiqlar"
           onClick={() => setOpen(true)}
           aria-label={`Tasdiqlar (${count} ta kutilmoqda)`}
-          className={`relative inline-flex size-9 shrink-0 items-center justify-center rounded-xl border bg-white transition hover:bg-muted ${className}`}
+          className={`relative inline-flex size-9 shrink-0 items-center justify-center rounded-xl border bg-card transition hover:bg-muted ${className}`}
         >
           <BadgeCheck strokeWidth={1.5} className="size-5" />
           {count > 0 && (
@@ -89,10 +89,10 @@ const ApprovalsBell = ({ className = "" }) => {
 
           <div className="flex-1 space-y-2 overflow-y-auto p-4">
             {isLoading && (
-              <p className="text-sm text-zinc-500">Yuklanmoqda...</p>
+              <p className="text-sm text-muted-foreground">Yuklanmoqda...</p>
             )}
             {!isLoading && items.length === 0 && (
-              <p className="text-sm text-zinc-500">Kutilayotgan so'rov yo'q</p>
+              <p className="text-sm text-muted-foreground">Kutilayotgan so'rov yo'q</p>
             )}
             {items.map((a) => (
               <ApprovalQuickRow

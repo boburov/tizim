@@ -32,14 +32,14 @@ const FeedbackCard = ({ feedback: f }) => (
       {f.group?.name ? ` • ${f.group.name}` : ""}
     </p>
     {f.adminReply && (
-      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-        <p className="font-medium text-xs text-blue-900 mb-1">Admin javobi:</p>
+      <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded text-sm">
+        <p className="font-medium text-xs text-blue-900 dark:text-blue-300 mb-1">Admin javobi:</p>
         <p className="whitespace-pre-wrap">{f.adminReply}</p>
       </div>
     )}
     {f.rejectionReason && (
-      <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-sm">
-        <p className="font-medium text-xs text-red-900 mb-1">Rad etish sababi:</p>
+      <div className="mt-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded text-sm">
+        <p className="font-medium text-xs text-red-900 dark:text-red-300 mb-1">Rad etish sababi:</p>
         <p className="whitespace-pre-wrap">{f.rejectionReason}</p>
       </div>
     )}

@@ -32,7 +32,7 @@ const BranchComparePage = () => {
     {
       key: "name",
       header: "Filial",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => (
         <div className="flex min-w-0 items-center gap-2">
           {row.isMain && (
@@ -41,7 +41,7 @@ const BranchComparePage = () => {
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{row.name}</p>
             {row.code && (
-              <p className="truncate text-xs text-zinc-500">{row.code}</p>
+              <p className="truncate text-xs text-muted-foreground">{row.code}</p>
             )}
           </div>
         </div>
@@ -50,53 +50,53 @@ const BranchComparePage = () => {
     {
       key: "studentCount",
       header: "O'quvchilar",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => <Num value={row.studentCount} />,
     },
     {
       key: "groupCount",
       header: "Guruhlar",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => (
         <span className="tabular-nums">
           {row.activeGroupCount}
-          <span className="text-zinc-400"> / {row.groupCount}</span>
+          <span className="text-muted-foreground"> / {row.groupCount}</span>
         </span>
       ),
     },
     {
       key: "staffCount",
       header: "Xodimlar",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => <Num value={row.staffCount} />,
     },
     {
       key: "threshold",
       header: "Tasdiq limiti",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) =>
         row.expenseApprovalThreshold > 0 ? (
           <span className="whitespace-nowrap text-sm tabular-nums">
             {formatMoney(row.expenseApprovalThreshold)}
           </span>
         ) : (
-          <span className="text-sm text-zinc-400">Yo'q</span>
+          <span className="text-sm text-muted-foreground">Yo'q</span>
         ),
     },
     {
       key: "pendingApprovals",
       header: "Kutilayotgan",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) =>
         row.pendingApprovals > 0 ? (
           <Link
             to="/owner/expense-approvals"
-            className="inline-flex min-w-6 items-center justify-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+            className="inline-flex min-w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
           >
             {row.pendingApprovals}
           </Link>
         ) : (
-          <span className="text-sm text-zinc-400">—</span>
+          <span className="text-sm text-muted-foreground">—</span>
         ),
     },
   ];
@@ -104,12 +104,12 @@ const BranchComparePage = () => {
   const renderCard = (row) => (
     <div className="space-y-1">
       <p className="text-sm font-medium">{row.name}</p>
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-muted-foreground">
         {row.studentCount} o'quvchi · {row.activeGroupCount} guruh ·{" "}
         {row.staffCount} xodim
       </p>
       {row.pendingApprovals > 0 && (
-        <p className="text-xs text-amber-600">
+        <p className="text-xs text-amber-600 dark:text-amber-300">
           {row.pendingApprovals} ta tasdiq kutmoqda
         </p>
       )}

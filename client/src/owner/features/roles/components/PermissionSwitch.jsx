@@ -38,17 +38,19 @@ const PermissionSwitch = ({
       <span
         className={cn(
           "relative flex h-[22px] w-[38px] shrink-0 items-center rounded-full transition-colors",
+          // Tokenlar ikkala temada ham to'g'ri ishlaydi, shuning uchun
+          // alohida `dark:` qoidalari kerak emas.
           isOn
-            ? "bg-neutral-900 dark:bg-neutral-100"
+            ? "bg-foreground"
             : isPartial
-              ? "bg-neutral-400 dark:bg-neutral-500"
-              : "bg-neutral-200 dark:bg-neutral-800",
-          !disabled && !isOn && "hover:bg-neutral-300 dark:hover:bg-neutral-700",
+              ? "bg-muted-foreground/50"
+              : "bg-accent",
+          !disabled && !isOn && "hover:bg-muted-foreground/30",
         )}
       >
         <span
           className={cn(
-            "pointer-events-none block size-[18px] rounded-full bg-white shadow-sm transition-transform dark:bg-neutral-900",
+            "pointer-events-none block size-[18px] rounded-full bg-card shadow-sm transition-transform",
             isOn
               ? "translate-x-[18px]"
               : isPartial

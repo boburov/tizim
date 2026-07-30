@@ -29,17 +29,17 @@ export const CATEGORY_LABEL = {
 };
 
 export const CATEGORY_BADGE_CLASS = {
-  payment_reminder: "bg-amber-100 text-amber-800",
-  debt_warning: "bg-red-100 text-red-700",
-  class_cancel: "bg-orange-100 text-orange-800",
-  announcement: "bg-blue-100 text-blue-800",
-  admin_personal: "bg-violet-100 text-violet-700",
-  teacher_message: "bg-cyan-100 text-cyan-700",
-  feedback_status: "bg-slate-100 text-slate-700",
-  holiday: "bg-pink-100 text-pink-700",
-  attendance: "bg-teal-100 text-teal-700",
-  template_based: "bg-indigo-100 text-indigo-700",
-  other: "bg-gray-100 text-gray-700",
+  payment_reminder: "bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300",
+  debt_warning: "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300",
+  class_cancel: "bg-orange-100 dark:bg-orange-500/15 text-orange-800 dark:text-orange-300",
+  announcement: "bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-300",
+  admin_personal: "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300",
+  teacher_message: "bg-cyan-100 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300",
+  feedback_status: "bg-muted text-foreground",
+  holiday: "bg-pink-100 dark:bg-pink-500/15 text-pink-700 dark:text-pink-300",
+  attendance: "bg-teal-100 dark:bg-teal-500/15 text-teal-700 dark:text-teal-300",
+  template_based: "bg-indigo-100 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
+  other: "bg-muted text-foreground",
 };
 
 export const CATEGORY_EMOJI = {

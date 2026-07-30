@@ -42,7 +42,7 @@ const ApprovalQuickRow = ({ approval, onOpenDetail }) => {
       <div className="mt-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold">{approvalHeadline(approval)}</p>
-          <p className="truncate text-xs text-zinc-500">
+          <p className="truncate text-xs text-muted-foreground">
             {fullName(approval.requestedBy)} ·{" "}
             {formatDateTimeUz(approval.createdAt)}
           </p>
@@ -64,14 +64,14 @@ const ApprovalQuickRow = ({ approval, onOpenDetail }) => {
               disabled={busy}
               aria-label="Rad etish"
               onClick={() => reject({ id: approval._id })}
-              className="inline-flex size-9 items-center justify-center rounded-md border border-red-200 text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+              className="inline-flex size-9 items-center justify-center rounded-md border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-50"
             >
               <X size={16} strokeWidth={2.5} />
             </button>
           </div>
         ) : (
           reason && (
-            <p className="max-w-[45%] shrink-0 text-right text-xs text-amber-600">
+            <p className="max-w-[45%] shrink-0 text-right text-xs text-amber-600 dark:text-amber-300">
               {reason}
             </p>
           )

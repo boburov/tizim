@@ -56,12 +56,12 @@ const SelectSearch = ({
           type="button"
           variant="outline"
           disabled={props.disabled || isLoading}
-          className="justify-between font-normal px-3 hover:bg-white"
+          className="justify-between font-normal px-3 hover:bg-card"
         >
           <span
             className={cn(
               "line-clamp-1",
-              selectedOption?.label ? "text-black" : "text-gray-500",
+              selectedOption?.label ? "text-foreground" : "text-muted-foreground",
             )}
           >
             {selectedOption?.label || props.placeholder}

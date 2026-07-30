@@ -69,7 +69,7 @@ const InboxItem = ({ recipient, onMarkRead }) => {
         "relative flex gap-3 rounded-2xl border p-3.5 transition-colors",
         isUnread
           ? "cursor-pointer border-primary/20 bg-primary/5 hover:bg-primary/10"
-          : "border-border/60 bg-white",
+          : "border-border/60 bg-card",
       )}
     >
       {/* O'qilmagan indikatori */}
@@ -143,7 +143,7 @@ const FilterTab = ({ active, onClick, children }) => (
     className={cn(
       "flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition",
       active
-        ? "bg-white text-foreground shadow-sm"
+        ? "bg-card text-foreground shadow-sm"
         : "text-muted-foreground hover:text-foreground",
     )}
   >
@@ -222,7 +222,7 @@ const InboxList = () => {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-white py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
           <div className="flex size-14 items-center justify-center rounded-full bg-muted/60">
             <Inbox className="size-7 text-muted-foreground" />
           </div>

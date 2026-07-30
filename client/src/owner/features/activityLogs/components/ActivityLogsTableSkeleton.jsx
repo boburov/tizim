@@ -3,12 +3,12 @@ import { Skeleton } from "@/shared/components/shadcn/skeleton";
 const ROWS = Array.from({ length: 8 });
 
 const ActivityLogsTableSkeleton = () => (
-  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-    <div className="h-[45px] border-b border-slate-200 bg-slate-50/80" />
+  <div className="overflow-hidden rounded-lg border border-border bg-card">
+    <div className="h-[45px] border-b border-border bg-muted/80" />
     {ROWS.map((_, i) => (
       <div
         key={i}
-        className="flex h-[68px] items-center gap-4 border-b border-slate-100 px-6 last:border-b-0"
+        className="flex h-[68px] items-center gap-4 border-b border-border px-6 last:border-b-0"
       >
         <Skeleton className="size-9 shrink-0 rounded-full" />
         <div className="w-[150px] space-y-1.5">

@@ -23,7 +23,7 @@ const TeacherAttendancePage = () => {
       {isLoading ? (
         <div className="p-8 text-center text-muted-foreground">Yuklanmoqda...</div>
       ) : groups.length === 0 ? (
-        <div className="border rounded-lg p-12 text-center bg-white">
+        <div className="border rounded-lg p-12 text-center bg-card">
           <p className="text-muted-foreground">
             Sizga biriktirilgan guruhlar yo'q
           </p>
@@ -39,7 +39,7 @@ const TeacherAttendancePage = () => {
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="min-w-0 break-words font-semibold">{g.name}</h3>
                   {isToday && (
-                    <Badge className="shrink-0 bg-blue-100 text-blue-700">
+                    <Badge className="shrink-0 bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300">
                       Bugun
                     </Badge>
                   )}

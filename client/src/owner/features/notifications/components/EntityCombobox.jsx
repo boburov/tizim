@@ -70,7 +70,7 @@ const EntityCombobox = ({
           <button
             type="button"
             className={cn(
-              "flex h-10 w-full items-center justify-between gap-2 rounded-[2px] border border-input bg-white px-3 text-sm outline-2 outline-primary disabled:cursor-not-allowed disabled:opacity-50",
+              "flex h-10 w-full items-center justify-between gap-2 rounded-[2px] border border-input bg-card px-3 text-sm outline-2 outline-primary disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
             <span className="truncate text-muted-foreground">

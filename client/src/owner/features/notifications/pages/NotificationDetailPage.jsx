@@ -66,13 +66,13 @@ const MessageBody = ({ text }) => {
   flushList();
 
   return (
-    <div className="space-y-2 text-[15px] leading-relaxed text-slate-800">
+    <div className="space-y-2 text-[15px] leading-relaxed text-foreground">
       {blocks.map((b, i) =>
         b.type === "list" ? (
           <ol key={i} className="space-y-1.5">
             {b.items.map((item, j) => (
               <li key={j} className="flex gap-2.5">
-                <span className="min-w-[1.75rem] shrink-0 text-right font-semibold tabular-nums text-slate-400">
+                <span className="min-w-[1.75rem] shrink-0 text-right font-semibold tabular-nums text-muted-foreground">
                   {j + 1}.
                 </span>
                 <span className="break-words">{item}</span>
@@ -104,14 +104,14 @@ const MessageBubble = ({ title, body, sentAt, variant }) => {
 
   if (variant === "inapp") {
     return (
-      <div className="rounded-xl border bg-white p-3.5 shadow-sm">
+      <div className="rounded-xl border bg-card p-3.5 shadow-sm">
         <div className="flex items-start gap-2.5">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-500">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-violet-50 dark:bg-violet-500/10 text-violet-500 dark:text-violet-400">
             <Smartphone className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
             {filledTitle && (
-              <p className="text-base font-semibold text-slate-900">
+              <p className="text-base font-semibold text-foreground">
                 {filledTitle}
               </p>
             )}
@@ -130,19 +130,19 @@ const MessageBubble = ({ title, body, sentAt, variant }) => {
   // Telegram chat ko'rinishi
   return (
     <div className="rounded-xl bg-[#e7ebf0] p-3.5">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
         <Send className="size-3" />
         Telegram bot
       </div>
-      <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm">
+      <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-card px-4 py-3 shadow-sm">
         {filledTitle && (
-          <p className="mb-1.5 text-base font-semibold text-slate-900">
+          <p className="mb-1.5 text-base font-semibold text-foreground">
             {filledTitle}
           </p>
         )}
         <MessageBody text={filledBody} />
         {time && (
-          <p className="mt-1.5 text-right text-[10px] text-slate-400">{time}</p>
+          <p className="mt-1.5 text-right text-[10px] text-muted-foreground">{time}</p>
         )}
       </div>
     </div>
@@ -334,7 +334,7 @@ const NotificationDetailPage = ({ backTo = "/owner/notifications" }) => {
         />
         <StatTile
           icon={Send}
-          iconClass="text-sky-600"
+          iconClass="text-sky-600 dark:text-sky-300"
           label="Bot orqali yetkazildi"
           value={deliveredViaBot}
           ratioPct={pct(deliveredViaBot, recipientsCount)}
@@ -342,7 +342,7 @@ const NotificationDetailPage = ({ backTo = "/owner/notifications" }) => {
         />
         <StatTile
           icon={Eye}
-          iconClass="text-emerald-600"
+          iconClass="text-emerald-600 dark:text-emerald-300"
           label="O'qilgan"
           value={readCount}
           ratioPct={pct(readCount, recipientsCount)}
@@ -352,7 +352,7 @@ const NotificationDetailPage = ({ backTo = "/owner/notifications" }) => {
 
       {/* Bot ulanmaganlar ogohlantirishi */}
       {showBotWarning && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>
             <strong>{unlinkedCount}</strong> ta foydalanuvchi Telegram botga

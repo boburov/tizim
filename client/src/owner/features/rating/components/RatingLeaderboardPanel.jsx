@@ -44,7 +44,7 @@ const RatingLeaderboardPanel = ({ scope = "all" }) => {
       )}
 
       {needsGroup ? (
-        <div className="rounded-lg border border-dashed bg-white p-10 text-center text-sm text-muted-foreground">
+        <div className="rounded-lg border border-dashed bg-card p-10 text-center text-sm text-muted-foreground">
           Reytingni ko'rish uchun guruh tanlang
         </div>
       ) : isLoading ? (

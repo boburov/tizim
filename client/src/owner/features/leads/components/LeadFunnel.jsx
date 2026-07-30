@@ -15,7 +15,7 @@ const LeadFunnel = ({ funnel = [], rates }) => {
                 {f.count} · {f.rate}%
               </span>
             </div>
-            <div className="h-2.5 overflow-hidden rounded bg-zinc-100">
+            <div className="h-2.5 overflow-hidden rounded bg-muted">
               <div
                 className="h-full rounded bg-primary"
                 style={{ width: `${(f.count / max) * 100}%` }}

@@ -9,6 +9,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import ThemeToggle from './ThemeToggle';
 import { cn } from '../lib/utils';
 
 export default function DashboardLayout() {
@@ -24,15 +25,15 @@ export default function DashboardLayout() {
     cn(
       'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition',
       isActive
-        ? 'bg-brand text-white'
-        : 'text-slate-600 hover:bg-slate-100',
+        ? 'bg-brand text-primary-foreground'
+        : 'text-muted-foreground hover:bg-muted',
     );
 
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-60 flex-col border-r border-slate-200 bg-white p-4">
+      <aside className="flex w-60 flex-col border-r border-border bg-card p-4">
         <div className="mb-6 flex items-center gap-2 px-1">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-primary-foreground">
             <ShieldCheck size={20} />
           </div>
           <span className="font-semibold">Admin Panel</span>
@@ -58,21 +59,26 @@ export default function DashboardLayout() {
           )}
         </nav>
 
-        <div className="mt-4 border-t border-slate-200 pt-4">
-          <div className="mb-2 px-1 text-xs text-slate-500">
-            <div className="font-medium text-slate-700">{user?.email}</div>
-            <div>{user?.role}</div>
+        <div className="mt-4 border-t border-border pt-4">
+          <div className="mb-3 flex items-center justify-between gap-2 px-1">
+            <div className="min-w-0 text-xs text-muted-foreground">
+              <div className="truncate font-medium text-foreground">
+                {user?.email}
+              </div>
+              <div>{user?.role}</div>
+            </div>
+            <ThemeToggle />
           </div>
           <button
             onClick={doLogout}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"
           >
             <LogOut size={18} /> Chiqish
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto bg-slate-50 p-6">
+      <main className="flex-1 overflow-auto bg-background p-6">
         <Outlet />
       </main>
     </div>

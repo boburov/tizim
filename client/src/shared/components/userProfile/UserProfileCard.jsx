@@ -61,7 +61,7 @@ const UserProfileCard = ({ profile }) => {
               {getRoleLabel(profile.role)}
             </Badge>
             {profile.isActive ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-600">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 dark:bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-600 dark:text-green-300">
                 <span className="size-1.5 rounded-full bg-green-500" />
                 Faol
               </span>

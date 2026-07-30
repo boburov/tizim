@@ -124,8 +124,8 @@ const FeedbackDetailPage = () => {
       )}
 
       {f.rejectionReason && (
-        <Card className="space-y-2 border-red-200 bg-red-50/40">
-          <h3 className="font-semibold text-red-700">Rad etish sababi</h3>
+        <Card className="space-y-2 border-red-200 dark:border-red-500/30 bg-red-50/40">
+          <h3 className="font-semibold text-red-700 dark:text-red-300">Rad etish sababi</h3>
           <p className="text-sm whitespace-pre-wrap">{f.rejectionReason}</p>
         </Card>
       )}

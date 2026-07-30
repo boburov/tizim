@@ -12,7 +12,7 @@ const ErrorState = ({
 }) => (
   <div
     className={cn(
-      "border rounded-md bg-white",
+      "border rounded-md bg-card",
       compact ? "p-4" : "p-8",
       "flex flex-col items-center justify-center text-center gap-2",
       className,
@@ -20,7 +20,7 @@ const ErrorState = ({
     role="alert"
   >
     <AlertCircle
-      className={cn(compact ? "size-6" : "size-10", "text-red-500")}
+      className={cn(compact ? "size-6" : "size-10", "text-red-500 dark:text-red-400")}
       strokeWidth={1.5}
     />
     <p className="font-medium text-sm">{title}</p>

@@ -25,7 +25,7 @@ const ArchiveReasonsTable = ({ items = [], isLoading = false }) => {
         type="button"
         variant="ghost"
         size="sm"
-        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+        className="text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300"
         onClick={() => openModal(MODAL.ARCHIVE_REASON_DELETE, { reason: r })}
       >
         <Trash2 className="size-4" />

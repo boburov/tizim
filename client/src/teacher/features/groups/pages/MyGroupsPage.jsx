@@ -25,7 +25,7 @@ const MyGroupsPage = () => {
       )}
 
       {!isLoading && groups.length === 0 && (
-        <div className="border rounded-lg p-12 text-center bg-white">
+        <div className="border rounded-lg p-12 text-center bg-card">
           <p className="text-muted-foreground">Sizga biriktirilgan guruhlar yo'q</p>
         </div>
       )}

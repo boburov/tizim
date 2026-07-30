@@ -42,10 +42,10 @@ const WriteOffsPage = () => {
         <div className="flex items-center gap-3">
           <BackLink to="/owner/finance/accounting" />
           <div>
-            <h1 className="text-2xl font-semibold text-zinc-900">
+            <h1 className="text-2xl font-semibold text-foreground">
               Undirilmagan to'lovlar
             </h1>
-            <p className="mt-0.5 text-sm text-zinc-500">
+            <p className="mt-0.5 text-sm text-muted-foreground">
               Qarzi bilan chiqib ketgan o'quvchilar - hisobdan chiqarilgan (zarar)
             </p>
           </div>
@@ -70,14 +70,14 @@ const WriteOffsPage = () => {
 
       {/* Umumiy zarar kartasi */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+        <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-amber-800">Jami zarar</p>
-            <span className="flex size-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Jami zarar</p>
+            <span className="flex size-8 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300">
               <AlertTriangle className="size-4" />
             </span>
           </div>
-          <p className="mt-4 text-2xl font-semibold tabular-nums text-amber-800">
+          <p className="mt-4 text-2xl font-semibold tabular-nums text-amber-800 dark:text-amber-300">
             {formatMoney(data?.total || 0)}
           </p>
           <p className="mt-1 text-xs text-amber-700/80">Tanlangan davr bo'yicha</p>

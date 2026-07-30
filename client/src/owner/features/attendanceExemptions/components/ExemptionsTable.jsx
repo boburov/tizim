@@ -27,7 +27,7 @@ const ExemptionsTable = ({ studentId }) => {
   }
 
   return (
-    <div className="border rounded-sm overflow-x-auto bg-white">
+    <div className="border rounded-sm overflow-x-auto bg-card">
       <table className="w-full text-sm">
         <thead className=" text-left">
           <tr>
@@ -60,7 +60,7 @@ const ExemptionsTable = ({ studentId }) => {
               </td>
               <td className="px-4 py-2">
                 {ex.isActive ? (
-                  <Badge className="bg-green-100 text-green-700">Faol</Badge>
+                  <Badge className="bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300">Faol</Badge>
                 ) : (
                   <Badge variant="outline">Nofaol</Badge>
                 )}
@@ -71,7 +71,7 @@ const ExemptionsTable = ({ studentId }) => {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                    className="text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300"
                     onClick={() =>
                       openModal(MODAL.ATTENDANCE_EXEMPTION_DELETE, {
                         exemption: ex,

@@ -11,7 +11,7 @@ export default function GoogleButton({ href, label = 'Google bilan davom etish' 
   return (
     <a
       href={href}
-      className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+      className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-border bg-card py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
     >
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
         <path

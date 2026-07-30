@@ -1,6 +1,7 @@
 // Components
 import { useSidebar } from "../shadcn/sidebar";
 import NotificationBell from "../notification/NotificationBell";
+import ThemeToggle from "@/shared/components/theme/ThemeToggle";
 
 // Icons
 import { TextAlignJustify } from "lucide-react";
@@ -11,7 +12,7 @@ import { APP_NAME, APP_LOGO } from "@/shared/constants/app";
 const AppHeader = () => {
   const { toggleSidebar } = useSidebar();
   return (
-    <header className="flex items-center justify-between h-12 container sticky top-0 z-30 bg-white shadow-sm md:hidden">
+    <header className="flex items-center justify-between h-12 container sticky top-0 z-30 bg-card shadow-sm md:hidden">
       {/* Hamburger menu */}
       <button onClick={toggleSidebar} className="size-7">
         <TextAlignJustify strokeWidth={1.5} className="size-5" />
@@ -29,8 +30,11 @@ const AppHeader = () => {
         <span className="font-medium">{APP_NAME}</span>
       </div>
 
-      {/* Bell */}
-      <NotificationBell />
+      {/* Tema + Bell */}
+      <div className="flex items-center gap-1">
+        <ThemeToggle variant="switch" className="size-8" />
+        <NotificationBell />
+      </div>
     </header>
   );
 };

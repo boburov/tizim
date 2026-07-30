@@ -42,7 +42,7 @@ const BulkDecideModal = ({ approvals = [], action = "approve", close }) => {
       </p>
 
       {isApprove && total > 0 && (
-        <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="rounded-md bg-amber-50 dark:bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
           Hisobdan <span className="font-semibold">{formatMoney(total)}</span>{" "}
           chiqadi. Bu amalni orqaga qaytarib bo'lmaydi.
         </div>

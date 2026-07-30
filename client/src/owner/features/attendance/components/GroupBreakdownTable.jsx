@@ -7,7 +7,7 @@ const ROW_SKELETON_COUNT = 6;
 
 // Davomat darajasiga qarab progress bar uchun yumshoq rang
 const barTone = (rate) => {
-  if (rate === null || rate === undefined) return "bg-slate-300";
+  if (rate === null || rate === undefined) return "bg-muted-foreground/30";
   if (rate >= 75) return "bg-emerald-500";
   if (rate >= 50) return "bg-amber-500";
   return "bg-rose-500";
@@ -20,8 +20,8 @@ const GroupBreakdownTable = ({
   page = 1,
   onPageChange,
 }) => (
-  <div className="border rounded-md overflow-hidden bg-white">
-    <div className="px-4 py-3 border-b bg-gray-50">
+  <div className="border rounded-md overflow-hidden bg-card">
+    <div className="px-4 py-3 border-b bg-muted">
       <h3 className="font-semibold text-base">Guruhlar bo'yicha statistika</h3>
     </div>
 
@@ -46,7 +46,7 @@ const GroupBreakdownTable = ({
     ) : (
       <div className="max-h-[600px] overflow-auto">
         <table className="w-full min-w-[420px] text-sm">
-          <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground bg-gray-50 sticky top-0 z-10 shadow-sm">
+          <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground bg-muted sticky top-0 z-10 shadow-sm">
             <tr>
               <th className="px-4 py-3 font-semibold">Guruh</th>
               <th className="px-4 py-3 font-semibold">Jami darslar</th>
@@ -55,7 +55,7 @@ const GroupBreakdownTable = ({
           </thead>
           <tbody>
             {items.map((g) => (
-              <tr key={g.groupId} className="border-t hover:bg-gray-50 transition-colors">
+              <tr key={g.groupId} className="border-t hover:bg-muted transition-colors">
                 <td className="px-4 py-3">
                   <Link
                     to={`/owner/groups/${g.groupId}`}
@@ -67,13 +67,13 @@ const GroupBreakdownTable = ({
                 <td className="px-4 py-3 text-muted-foreground">{g.totalClasses}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-1.5 w-24 max-w-[40%] overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-1.5 w-24 max-w-[40%] overflow-hidden rounded-full bg-muted">
                       <div
                         className={`h-full rounded-full ${barTone(g.groupRate)}`}
                         style={{ width: `${g.groupRate ?? 0}%` }}
                       />
                     </div>
-                    <span className="font-medium tabular-nums text-gray-900">
+                    <span className="font-medium tabular-nums text-foreground">
                       {g.groupRate !== null ? `${g.groupRate}%` : "-"}
                     </span>
                   </div>
@@ -86,7 +86,7 @@ const GroupBreakdownTable = ({
     )}
 
     {!isLoading && meta && meta.pages > 1 && (
-      <div className="px-4 py-3 border-t bg-white">
+      <div className="px-4 py-3 border-t bg-card">
         <Pagination
           currentPage={page}
           onPageChange={onPageChange}

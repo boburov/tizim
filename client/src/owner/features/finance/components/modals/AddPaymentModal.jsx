@@ -110,12 +110,12 @@ const AddPaymentModal = ({ payment, close, setIsLoading }) => {
 
         <div className="flex items-center justify-between gap-2 py-1.5">
           <p className="text-sm text-muted-foreground">To'langan</p>
-          <p className="text-sm text-green-600">{formatMoney(paid)}</p>
+          <p className="text-sm text-green-600 dark:text-green-300">{formatMoney(paid)}</p>
         </div>
 
         <div className="flex items-center justify-between gap-2 py-1.5">
           <p className="text-sm text-muted-foreground">To'lanmagan</p>
-          <p className="text-sm text-red-600">{formatMoney(remaining)}</p>
+          <p className="text-sm text-red-600 dark:text-red-300">{formatMoney(remaining)}</p>
         </div>
       </div>
 
@@ -135,7 +135,7 @@ const AddPaymentModal = ({ payment, close, setIsLoading }) => {
         {prorationCut > 0 && (
           <div className="flex items-center justify-between gap-2 py-1.5">
             <p className="text-sm text-muted-foreground">Proratsiya</p>
-            <p className="text-sm text-yellow-600">
+            <p className="text-sm text-yellow-600 dark:text-yellow-300">
               −{formatMoney(prorationCut)} / -{Math.round((1 - factor) * 100)}%
             </p>
           </div>
@@ -144,7 +144,7 @@ const AddPaymentModal = ({ payment, close, setIsLoading }) => {
         {discount > 0 && (
           <div className="flex items-center justify-between gap-2 py-1.5">
             <p className="text-sm text-muted-foreground">Chegirma</p>
-            <p className="text-sm text-yellow-600">−{formatMoney(discount)}</p>
+            <p className="text-sm text-yellow-600 dark:text-yellow-300">−{formatMoney(discount)}</p>
           </div>
         )}
       </div>
@@ -253,7 +253,7 @@ const AddPaymentModal = ({ payment, close, setIsLoading }) => {
                 ) : (
                   <button
                     type="button"
-                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-rose-500 active:bg-rose-50"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-rose-500 dark:text-rose-400 active:bg-rose-50 dark:active:bg-rose-500/10"
                     onClick={() => setConfirmId(t._id)}
                     aria-label="O'chirish"
                   >

@@ -66,7 +66,7 @@ const LeadsListPage = () => {
         </Button>
       </header>
 
-      <div className="grid grid-cols-1 gap-2 rounded-lg border bg-white p-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 rounded-lg border bg-card p-3 sm:grid-cols-2 lg:grid-cols-4">
         <InputField
           name="search"
           type="search"

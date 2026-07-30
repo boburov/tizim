@@ -40,7 +40,7 @@ const StatTile = ({
 }) => {
   if (isLoading) {
     return (
-      <div className="rounded-lg border bg-white p-4">
+      <div className="rounded-lg border bg-card p-4">
         <Skeleton className="mb-3 h-3 w-16" />
         <Skeleton className="h-7 w-10" />
       </div>
@@ -53,7 +53,7 @@ const StatTile = ({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex flex-col gap-1 rounded-lg border bg-white p-4 text-left transition-all",
+        "flex flex-col gap-1 rounded-lg border bg-card p-4 text-left transition-all",
         "hover:border-foreground/20 hover:bg-muted/30",
         active && activeRing[tone],
       )}

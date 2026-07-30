@@ -37,7 +37,7 @@ const InputSearch = ({
 
   return (
     <div ref={containerRef} className={cn("flex items-center relative")}>
-      <Search size={20} className="absolute left-3 text-gray-500" />
+      <Search size={20} className="absolute left-3 text-muted-foreground" />
 
       <Input
         name={name}
@@ -56,7 +56,7 @@ const InputSearch = ({
           title="Tozalash"
           aria-label="Tozalash"
           onClick={handleClearValue}
-          className="flex items-center justify-center absolute inset-y-1 right-1 size-8 rounded-sm text-gray-500 hover:bg-gray-100 transition-colors outline-primary"
+          className="flex items-center justify-center absolute inset-y-1 right-1 size-8 rounded-sm text-muted-foreground hover:bg-muted transition-colors outline-primary"
         >
           <X size={20} />
         </button>

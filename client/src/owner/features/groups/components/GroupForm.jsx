@@ -262,7 +262,7 @@ const GroupForm = ({
           disabled={isLoading}
         />
         {scheduleChanged && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
+          <div className="rounded-md border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-3 space-y-2">
             <InputField
               type="date"
               name="scheduleEffectiveFrom"
@@ -271,7 +271,7 @@ const GroupForm = ({
               onChange={(e) => setField("scheduleEffectiveFrom", e.target.value)}
               disabled={isLoading}
             />
-            <p className="text-[11px] text-amber-700">
+            <p className="text-[11px] text-amber-700 dark:text-amber-300">
               Eski jadval shu sanagacha bo'lgan davomat hisobida saqlanib qoladi
               - tarixiy dars soni o'zgarmaydi.
             </p>

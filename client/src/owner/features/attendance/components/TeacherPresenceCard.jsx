@@ -25,8 +25,8 @@ const TeacherPresenceCard = ({ groupId, date }) => {
         <span
           className={
             present
-              ? "text-sm font-medium text-emerald-600"
-              : "text-sm font-medium text-rose-500"
+              ? "text-sm font-medium text-emerald-600 dark:text-emerald-300"
+              : "text-sm font-medium text-rose-500 dark:text-rose-400"
           }
         >
           {present ? "Keldi" : "Kelmadi"}

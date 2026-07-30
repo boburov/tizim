@@ -3,10 +3,10 @@ import Card from "@/shared/components/ui/card/Card";
 
 // Davomat darajasiga qarab yumshoq rang
 const rateTone = (rate) => {
-  if (rate === null || rate === undefined) return "bg-slate-100 text-slate-500";
-  if (rate < 25) return "bg-rose-50 text-rose-600";
-  if (rate < 45) return "bg-orange-50 text-orange-600";
-  return "bg-amber-50 text-amber-700";
+  if (rate === null || rate === undefined) return "bg-muted text-muted-foreground";
+  if (rate < 25) return "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300";
+  if (rate < 45) return "bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-300";
+  return "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300";
 };
 
 const LowAttendanceList = ({ items = [], threshold }) => (

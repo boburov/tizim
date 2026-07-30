@@ -18,7 +18,7 @@ const SessionTabs = ({ sessions = [], activeSlot, onSelect }) => {
               "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
               active
                 ? "border-primary bg-primary/10 text-primary"
-                : "border-gray-200 bg-white text-muted-foreground hover:bg-gray-50",
+                : "border-border bg-card text-muted-foreground hover:bg-muted",
             )}
           >
             {s.startTime}–{s.endTime}

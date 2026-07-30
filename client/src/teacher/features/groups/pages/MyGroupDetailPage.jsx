@@ -35,7 +35,7 @@ const MyGroupDetailPage = () => {
         <button
           type="button"
           onClick={goBack}
-          className="text-blue-600 hover:underline cursor-pointer"
+          className="text-blue-600 dark:text-blue-300 hover:underline cursor-pointer"
         >
           Guruhlar ro'yxatiga qaytish
         </button>
@@ -100,7 +100,7 @@ const TelegramStatus = ({ telegram }) => {
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
-        className="inline-flex min-w-0 items-center gap-1 font-medium text-sky-600 hover:text-sky-700 hover:underline"
+        className="inline-flex min-w-0 items-center gap-1 font-medium text-sky-600 dark:text-sky-300 hover:text-sky-700 dark:hover:text-sky-300 hover:underline"
       >
         <Send className="size-3.5 shrink-0" />
         <span className="truncate">@{telegram.username}</span>
@@ -109,7 +109,7 @@ const TelegramStatus = ({ telegram }) => {
   }
   return (
     <span
-      className="inline-flex items-center gap-1 font-medium text-emerald-600"
+      className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-300"
       title={`Telegram ID: ${telegram.telegramId}`}
     >
       <Send className="size-3.5 shrink-0" />
@@ -128,7 +128,7 @@ const StudentsList = ({ students, onSelect }) => (
         <li
           key={s._id}
           onClick={() => onSelect?.(s)}
-          className="cursor-pointer rounded-xl border border-border/60 p-3 transition-colors hover:bg-gray-50"
+          className="cursor-pointer rounded-xl border border-border/60 p-3 transition-colors hover:bg-muted"
         >
           <div className="flex items-start gap-2">
             <span className="mt-0.5 text-xs text-muted-foreground">{i + 1}.</span>
@@ -164,7 +164,7 @@ const StudentsList = ({ students, onSelect }) => (
             <tr
               key={s._id}
               onClick={() => onSelect?.(s)}
-              className="cursor-pointer border-t transition-colors hover:bg-gray-50"
+              className="cursor-pointer border-t transition-colors hover:bg-muted"
             >
               <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
               <td className="px-3 py-2 font-medium">

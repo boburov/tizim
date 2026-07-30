@@ -2,6 +2,137 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+/*
+ * ─────────────────────────────────────────────────────────────────────────
+ *  Rang tizimi (design tokens)
+ *  ---------------------------------------------------------------------
+ *  Ranglar HSL kanallari ("H S% L%") sifatida saqlanadi, shuning uchun
+ *  Tailwind `hsl(var(--token) / <alpha>)` orqali shaffoflik qo'sha oladi.
+ *  Light/dark qiymatlar WCAG AA (4.5:1) bo'yicha tekshirilgan.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 243 62% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 18%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 19% 42%;
+    --accent: 214 44% 94%;
+    --accent-foreground: 222 47% 18%;
+
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 62% 29%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 90% 34%;
+    --warning-foreground: 0 0% 100%;
+    --info: 212 78% 40%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 214 32% 88%;
+    --input: 214 32% 85%;
+    --ring: 243 62% 52%;
+    --radius: 0.5rem;
+
+    --shadow-color: 222 47% 11%;
+    --shadow-strength: 0.08;
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    --background: 222 30% 8%;
+    --foreground: 210 30% 94%;
+    --card: 222 28% 11%;
+    --card-foreground: 210 30% 94%;
+    --popover: 222 28% 11%;
+    --popover-foreground: 210 30% 94%;
+
+    /* Brend indigo qorong'ida yorqinroq bo'lishi kerak */
+    --primary: 243 76% 74%;
+    --primary-foreground: 243 45% 12%;
+
+    --secondary: 222 20% 18%;
+    --secondary-foreground: 210 28% 92%;
+    --muted: 222 20% 17%;
+    --muted-foreground: 215 18% 68%;
+    --accent: 222 20% 22%;
+    --accent-foreground: 210 28% 92%;
+
+    --destructive: 0 72% 67%;
+    --destructive-foreground: 0 30% 8%;
+    --success: 142 50% 55%;
+    --success-foreground: 142 40% 8%;
+    --warning: 36 78% 58%;
+    --warning-foreground: 36 50% 8%;
+    --info: 212 68% 62%;
+    --info-foreground: 212 50% 8%;
+
+    --border: 222 18% 24%;
+    --input: 222 18% 28%;
+    --ring: 243 76% 74%;
+
+    --shadow-color: 0 0% 0%;
+    --shadow-strength: 0.5;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply bg-background;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  /*
+   * Tema almashganda sahifa foni yumshoq o'tsin.
+   *
+   * DIQQAT: ataylab FAQAT html/body. `body *` ga berilsa, aniqligi
+   * (specificity) Tailwind'ning `transition-*` utilitalaridan yuqori
+   * bo'lib, boshqa animatsiyalarni buzadi.
+   */
+  html,
+  body {
+    transition:
+      background-color 180ms ease,
+      color 180ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html,
+    body {
+      transition: none;
+    }
+  }
+}
+
+/* Autofill foni dark rejimda oq bo'lib qotib qolmasligi uchun */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: hsl(var(--foreground));
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--card)) inset;
+  caret-color: hsl(var(--foreground));
+  transition: background-color 5000s ease-in-out 0s;
 }

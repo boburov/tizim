@@ -66,7 +66,7 @@ const SalaryPeriodsManager = ({ groupId }) => {
       ) : (
         <div className="space-y-4">
           {byTeacher.map(({ teacher, items }) => (
-            <div key={String(teacher?._id || teacher)} className="rounded-lg border bg-white">
+            <div key={String(teacher?._id || teacher)} className="rounded-lg border bg-card">
               <div className="border-b px-3 py-2 text-sm font-semibold">{fullName(teacher)}</div>
               <ul className="divide-y">
                 {items.map((p) => (

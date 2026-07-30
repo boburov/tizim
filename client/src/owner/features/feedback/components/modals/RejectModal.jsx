@@ -22,7 +22,7 @@ const RejectModal = ({ feedbackId, close, isLoading, setIsLoading }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <p className="text-xs text-amber-700">
+      <p className="text-xs text-amber-700 dark:text-amber-300">
         
       </p>
 

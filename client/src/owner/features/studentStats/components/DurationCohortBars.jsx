@@ -25,7 +25,7 @@ const DurationCohortBars = ({ cohorts = [], mode = "ongoing", onModeChange }) =>
   return (
     <Card>
       <div className="flex flex-col gap-3">
-        <h2 className="font-semibold text-gray-900">
+        <h2 className="font-semibold text-foreground">
           Ro'yxatda turgan muddat bo'yicha taqsimot
         </h2>
         <TabsButtons items={MODE_ITEMS} value={mode} onChange={onModeChange} />
@@ -46,10 +46,10 @@ const DurationCohortBars = ({ cohorts = [], mode = "ongoing", onModeChange }) =>
                   </span>
                   <span className="text-muted-foreground">
                     {c.count} ta
-                    <span className="ml-1.5 text-xs text-zinc-400">{pct}%</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">{pct}%</span>
                   </span>
                 </div>
-                <div className="relative h-2.5 flex-1 overflow-hidden rounded bg-zinc-100">
+                <div className="relative h-2.5 flex-1 overflow-hidden rounded bg-muted">
                   <div
                     className={`absolute inset-y-0 left-0 rounded ${TONES[c.key] || "bg-primary"}`}
                     style={{ width: `${pct}%` }}

@@ -46,7 +46,7 @@ const BranchPicker = () => {
             <button
               type="button"
               onClick={() => changeBranch(ALL_BRANCHES)}
-              className="w-full flex items-center gap-3 rounded-lg border bg-white p-4 text-left transition hover:border-primary hover:shadow-sm"
+              className="w-full flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition hover:border-primary hover:shadow-sm"
             >
               <div className="flex items-center justify-center size-10 shrink-0 rounded-md bg-primary/10 text-primary">
                 <Layers size={20} strokeWidth={1.5} />
@@ -66,7 +66,7 @@ const BranchPicker = () => {
               key={b._id}
               type="button"
               onClick={() => changeBranch(b._id)}
-              className="w-full flex items-center gap-3 rounded-lg border bg-white p-4 text-left transition hover:border-primary hover:shadow-sm"
+              className="w-full flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition hover:border-primary hover:shadow-sm"
             >
               <div className="flex items-center justify-center size-10 shrink-0 rounded-md bg-muted">
                 <Building2 size={20} strokeWidth={1.5} />

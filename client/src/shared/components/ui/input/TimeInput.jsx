@@ -19,7 +19,7 @@ import { cn } from "@/shared/utils/cn.js";
  * @param {boolean}  disabled
  */
 const inputClasses =
-  "h-9 w-full rounded-md border border-input bg-white px-2 text-center text-sm tabular-nums outline-2 outline-primary outline-offset-0 focus:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50 [&::-webkit-calendar-picker-indicator]:cursor-pointer";
+  "h-9 w-full rounded-md border border-input bg-card px-2 text-center text-sm tabular-nums outline-2 outline-primary outline-offset-0 focus:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50 [&::-webkit-calendar-picker-indicator]:cursor-pointer";
 
 const TimeInput = React.forwardRef(function TimeInput(
   { value, onChange, disabled = false, className },

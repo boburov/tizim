@@ -44,8 +44,8 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
   const rows = data.rows || [];
   if (rows.length === 0) {
     return (
-      <div className="rounded-md border border-dashed bg-white p-10 text-center">
-        <Users className="mx-auto size-8 text-gray-300" />
+      <div className="rounded-md border border-dashed bg-card p-10 text-center">
+        <Users className="mx-auto size-8 text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">
           Bu sanaga aktiv o'quvchilar yo'q.
         </p>
@@ -102,7 +102,7 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
   return (
     <div className="space-y-3 pb-20">
       {locked && (
-        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-300">
           <CalendarOff className="size-4 shrink-0" />
           Bu kun guruh jadvalida dars kuni emas. Baho faqat dars kunlari
           qo'yiladi.
@@ -110,18 +110,18 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
       )}
 
       {/* Progress + action panel (yuqorida sticky) */}
-      <div className="sticky top-0 z-20 space-y-2.5 border-b border-gray-200 bg-background/85 py-3 backdrop-blur-sm">
+      <div className="sticky top-0 z-20 space-y-2.5 border-b border-border bg-background/85 py-3 backdrop-blur-sm">
         {/* Progress */}
         <div>
           <div className="flex items-center justify-between text-sm">
-            <span className="font-medium text-gray-700">
+            <span className="font-medium text-foreground">
               {total} tadan {gradedCount} ta baholandi
             </span>
             <span className="text-xs text-muted-foreground tabular-nums">
               {progressPct}%
             </span>
           </div>
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
               className={cn(
                 "h-full rounded-full transition-all",
@@ -135,7 +135,7 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
         {/* Hammaga tez-baholash + saqlash */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-500">Hammaga:</span>
+            <span className="text-xs font-medium text-muted-foreground">Hammaga:</span>
             <div className="flex items-center gap-1">
               {QUICK_SCALE.map((n) => (
                 <button
@@ -145,9 +145,9 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
                   onClick={() => setAll(n)}
                   title={gradeLabels[n] ? `${n} - ${gradeLabels[n]}` : `Ball ${n}`}
                   className={cn(
-                    "size-7 rounded border border-gray-200 bg-white text-xs font-semibold text-gray-500 transition",
+                    "size-7 rounded border border-border bg-card text-xs font-semibold text-muted-foreground transition",
                     "hover:border-primary/40 hover:bg-primary/5 hover:text-primary",
-                    "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white",
+                    "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-card",
                   )}
                 >
                   {n}
@@ -157,7 +157,7 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
           </div>
           <div className="flex items-center gap-2">
             {dirtyCount > 0 && (
-              <Badge variant="outline" className="text-amber-600">
+              <Badge variant="outline" className="text-amber-600 dark:text-amber-300">
                 {dirtyCount} ta o'zgartirish
               </Badge>
             )}
@@ -167,8 +167,8 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
       </div>
 
       {/* Rows */}
-      <div className="overflow-hidden rounded-md border bg-white">
-        <div className="divide-y divide-gray-100 text-sm">
+      <div className="overflow-hidden rounded-md border bg-card">
+        <div className="divide-y divide-border text-sm">
           {rows.map((r, i) => {
             const sid = String(r.student._id);
             const orig = r.grade ? r.grade.value : null;
@@ -188,7 +188,7 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
                       <Check
                         className={cn(
                           "size-4",
-                          isDirty ? "text-amber-500" : "text-green-500",
+                          isDirty ? "text-amber-500 dark:text-amber-400" : "text-green-500 dark:text-green-400",
                         )}
                       />
                     ) : (
@@ -196,10 +196,10 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
                     )}
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-gray-900">
+                    <p className="truncate font-medium text-foreground">
                       {r.student.firstName} {r.student.lastName}
                       {isDirty && (
-                        <span className="ml-2 text-xs font-normal text-amber-600">
+                        <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-300">
                           • saqlanmagan
                         </span>
                       )}
@@ -225,9 +225,9 @@ const GradeGrid = ({ data, onSubmit, isSubmitting }) => {
 
       {/* Pastki sticky saqlash (mobil/uzun ro'yxat uchun) */}
       {dirtyCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/90 p-3 backdrop-blur-sm sm:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/90 p-3 backdrop-blur-sm sm:hidden">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-amber-600">
+            <span className="text-sm text-amber-600 dark:text-amber-300">
               {dirtyCount} ta o'zgartirish
             </span>
             {SaveButton}

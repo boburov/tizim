@@ -7,7 +7,7 @@ const OPTIONS = [
 
 // Faol / Arxiv segmentli toggle - ro'yxatlarda arxivlangan yozuvlarni ko'rsatish uchun
 const ArchiveToggle = ({ value = false, onChange, className }) => (
-  <div className={cn("inline-flex rounded-md border bg-white p-0.5", className)}>
+  <div className={cn("inline-flex rounded-md border bg-card p-0.5", className)}>
     {OPTIONS.map((o) => (
       <button
         key={String(o.value)}

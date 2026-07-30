@@ -36,13 +36,13 @@ const WeightSlider = ({ grade, attendance, onChange, disabled = false }) => {
     <div className="space-y-5">
       {/* Yig'indi badge */}
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700">Yig'indi</span>
+        <span className="text-sm font-medium text-foreground">Yig'indi</span>
         <span
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
             isBalanced
-              ? "bg-green-100 text-green-700"
-              : "bg-red-100 text-red-700",
+              ? "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300"
+              : "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300",
           )}
         >
           {isBalanced ? (
@@ -56,7 +56,7 @@ const WeightSlider = ({ grade, attendance, onChange, disabled = false }) => {
 
       {/* Ikki rangli proportion bar */}
       <div>
-        <div className="flex h-3 w-full overflow-hidden rounded-full bg-gray-100">
+        <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
           <div
             className="h-full bg-primary transition-all duration-200"
             style={{ width: `${g}%` }}
@@ -67,11 +67,11 @@ const WeightSlider = ({ grade, attendance, onChange, disabled = false }) => {
           />
         </div>
         <div className="mt-2 flex items-center justify-between text-xs">
-          <span className="flex items-center gap-1.5 text-gray-600">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
             <span className="size-2.5 rounded-full bg-primary" />
             Baho {g}%
           </span>
-          <span className="flex items-center gap-1.5 text-gray-600">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
             Davomat {a}%
             <span className="size-2.5 rounded-full bg-amber-400" />
           </span>
@@ -104,7 +104,7 @@ const WeightRow = ({ label, accent, value, onChange, disabled }) => {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
           <span
             className={cn(
               "size-2.5 rounded-full",
@@ -122,12 +122,12 @@ const WeightRow = ({ label, accent, value, onChange, disabled }) => {
             disabled={disabled}
             onChange={(e) => onChange(Number(e.target.value))}
             className={cn(
-              "h-8 w-16 rounded-md border border-gray-200 px-2 text-right text-sm tabular-nums",
+              "h-8 w-16 rounded-md border border-border px-2 text-right text-sm tabular-nums",
               "focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary",
               "disabled:cursor-not-allowed disabled:opacity-60",
             )}
           />
-          <span className="text-sm text-gray-400">%</span>
+          <span className="text-sm text-muted-foreground">%</span>
         </div>
       </div>
       <input
@@ -139,7 +139,7 @@ const WeightRow = ({ label, accent, value, onChange, disabled }) => {
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         className={cn(
-          "h-2 w-full cursor-pointer appearance-none rounded-full bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60",
+          "h-2 w-full cursor-pointer appearance-none rounded-full bg-muted disabled:cursor-not-allowed disabled:opacity-60",
           // WebKit thumb
           "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:transition",
           // Firefox thumb

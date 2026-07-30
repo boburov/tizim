@@ -66,7 +66,7 @@ const UserDetailPage = () => {
         <button
           type="button"
           onClick={goBack}
-          className="text-blue-600 hover:underline cursor-pointer"
+          className="text-blue-600 dark:text-blue-300 hover:underline cursor-pointer"
         >
           Foydalanuvchilar ro'yxatiga qaytish
         </button>
@@ -102,7 +102,7 @@ const UserDetailPage = () => {
             {getRoleLabel(profile.role)}
           </Badge>
           {isStudent && profile.isFrozen && (
-            <Badge className="bg-sky-100 text-sky-700">Muzlatilgan</Badge>
+            <Badge className="bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300">Muzlatilgan</Badge>
           )}
         </div>
 
@@ -126,7 +126,7 @@ const UserDetailPage = () => {
             profile.isFrozen ? (
               <Button
                 variant="outline"
-                className="text-sky-600"
+                className="text-sky-600 dark:text-sky-300"
                 onClick={() => openModal(MODAL.USER_UNFREEZE, { user: profile })}
               >
                 <Sun className="size-4" />
@@ -135,7 +135,7 @@ const UserDetailPage = () => {
             ) : (
               <Button
                 variant="outline"
-                className="text-sky-600"
+                className="text-sky-600 dark:text-sky-300"
                 onClick={() => openModal(MODAL.USER_FREEZE, { user: profile })}
               >
                 <Snowflake className="size-4" />
@@ -147,7 +147,7 @@ const UserDetailPage = () => {
           {!isStudent && (
             <Button
               variant="outline"
-              className="text-amber-600"
+              className="text-amber-600 dark:text-amber-300"
               onClick={() => openModal(MODAL.USER_DELETE, { user: profile })}
             >
               <Archive className="size-4" />
@@ -156,7 +156,7 @@ const UserDetailPage = () => {
           )}
           <Button
             variant="outline"
-            className="text-red-600"
+            className="text-red-600 dark:text-red-300"
             onClick={() => openModal(MODAL.USER_PERMANENT_DELETE, { user: profile })}
           >
             <Trash2 className="size-4" />

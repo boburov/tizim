@@ -48,7 +48,7 @@ const ListItem = ({
   subContent,
 }) => {
   const baseStyles =
-    "flex flex-col gap-2 p-3.5 bg-white rounded-none border border-transparent transition-all xs:gap-3 xs:p-4";
+    "flex flex-col gap-2 p-3.5 bg-card rounded-none border border-transparent transition-all xs:gap-3 xs:p-4";
   const interactiveStyles = "active:scale-[0.98]";
   const disabledStyles = "opacity-50 cursor-not-allowed";
 
@@ -74,9 +74,9 @@ const ListItem = ({
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 truncate">{title}</h3>
+          <h3 className="font-semibold text-foreground truncate">{title}</h3>
           {description && (
-            <p className="text-sm text-gray-500 line-clamp-2">{description}</p>
+            <p className="text-sm text-muted-foreground line-clamp-2">{description}</p>
           )}
         </div>
 

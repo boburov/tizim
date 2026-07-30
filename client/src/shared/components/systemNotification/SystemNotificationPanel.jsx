@@ -35,7 +35,7 @@ const SystemNotificationPanel = ({ onClose }) => {
               onClick={() => setStatus(f.key)}
               className={`px-3 py-1 text-xs rounded transition ${
                 status === f.key
-                  ? "bg-white shadow-sm font-medium"
+                  ? "bg-card shadow-sm font-medium"
                   : "text-muted-foreground"
               }`}
             >

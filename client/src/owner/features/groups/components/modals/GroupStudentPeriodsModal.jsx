@@ -80,7 +80,7 @@ const GroupStudentPeriodsModal = ({ group, student, close }) => {
       ) : periods.length === 0 ? (
         <EmptyState title="O'qish davrlari yo'q" description="Davr qo'shing." />
       ) : (
-        <ul className="divide-y rounded-lg border bg-white">
+        <ul className="divide-y rounded-lg border bg-card">
           {periods.map((p) => (
             <li key={p._id} className="flex items-center justify-between gap-3 px-3 py-2.5">
               <span className="text-sm">
@@ -106,7 +106,7 @@ const GroupStudentPeriodsModal = ({ group, student, close }) => {
       )}
 
       {form.visible && (
-        <form onSubmit={submit} className="space-y-3 rounded-lg border bg-gray-50 p-3">
+        <form onSubmit={submit} className="space-y-3 rounded-lg border bg-muted p-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <InputField
               name="joinedAt"

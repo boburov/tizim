@@ -37,7 +37,7 @@ const PaginationButton = ({ className, isActive, size = "icon", onClick, disable
       size === "icon" ? "h-9 w-9" : "h-9 px-4",
       isActive
         ? "bg-blue-600 text-white font-medium"
-        : "border bg-white text-gray-700 hover:bg-gray-50",
+        : "border bg-card text-foreground hover:bg-muted",
       className,
     )}
   >
@@ -72,7 +72,7 @@ PaginationNext.displayName = "PaginationNext";
 const PaginationEllipsis = ({ className }) => (
   <span
     aria-hidden
-    className={cn("flex h-9 w-9 items-center justify-center text-gray-400", className)}
+    className={cn("flex h-9 w-9 items-center justify-center text-muted-foreground", className)}
   >
     <MoreHorizontal className="h-4 w-4" />
   </span>

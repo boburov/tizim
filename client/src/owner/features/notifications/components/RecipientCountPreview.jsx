@@ -33,7 +33,7 @@ const RecipientCountPreview = ({ audience }) => {
 
   if (isError) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+      <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2.5 text-sm text-red-700 dark:text-red-300">
         <AlertCircle className="size-4" />
         Hisobni olishda xatolik.
       </div>
@@ -47,8 +47,8 @@ const RecipientCountPreview = ({ audience }) => {
       className={cn(
         "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm",
         empty
-          ? "border-amber-200 bg-amber-50 text-amber-800"
-          : "border-emerald-200 bg-emerald-50 text-emerald-800",
+          ? "border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300"
+          : "border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
       )}
     >
       {isFetching ? (

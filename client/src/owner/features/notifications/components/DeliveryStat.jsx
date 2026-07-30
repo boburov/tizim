@@ -50,14 +50,14 @@ const DeliveryStat = ({
         icon={Send}
         value={bot}
         label="Bot orqali yetkazildi"
-        tone="text-sky-600"
+        tone="text-sky-600 dark:text-sky-300"
       />
       <span className="text-border">·</span>
       <Metric
         icon={Eye}
         value={read}
         label="O'qilgan"
-        tone="text-emerald-600"
+        tone="text-emerald-600 dark:text-emerald-300"
       />
     </div>
   </TooltipProvider>

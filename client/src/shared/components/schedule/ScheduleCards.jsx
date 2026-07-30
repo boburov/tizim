@@ -16,7 +16,7 @@ const ScheduleCards = ({ schedule = [], className = "", emptyText = "Dars jadval
       {groups.map((g) => (
         <div
           key={g.time}
-          className="min-w-[120px] flex-1 rounded-xl border border-border/70 bg-white p-3 shadow-sm sm:flex-none"
+          className="min-w-[120px] flex-1 rounded-xl border border-border/70 bg-card p-3 shadow-sm sm:flex-none"
         >
           <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
             <Clock className="size-3.5 text-primary" />

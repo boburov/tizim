@@ -30,7 +30,7 @@ const TeacherChurnTable = ({ teachers = [] }) => (
                   {t.teacherName}
                 </td>
                 <td className="px-2 py-2.5 text-right">
-                  <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-600">
+                  <span className="inline-flex items-center rounded-full bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 text-xs font-semibold text-rose-600 dark:text-rose-300">
                     {t.churnedCount}
                   </span>
                 </td>
@@ -43,13 +43,13 @@ const TeacherChurnTable = ({ teachers = [] }) => (
                       t.topReasons.map((r) => (
                         <span
                           key={r.title}
-                          className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
+                          className="inline-flex rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
                         >
                           {r.title} · {r.count}
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-zinc-400">-</span>
+                      <span className="text-xs text-muted-foreground">-</span>
                     )}
                   </div>
                 </td>

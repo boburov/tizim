@@ -11,17 +11,17 @@ const STATUS_OPTIONS = [
   {
     value: "present",
     label: "Keldi",
-    active: "bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-300",
+    active: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-1 ring-inset ring-emerald-300",
   },
   {
     value: "absent",
     label: "Kelmadi",
-    active: "bg-rose-100 text-rose-700 ring-1 ring-inset ring-rose-300",
+    active: "bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-1 ring-inset ring-rose-300",
   },
   {
     value: "excused",
     label: "Sababli",
-    active: "bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-300",
+    active: "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-1 ring-inset ring-amber-300",
   },
 ];
 
@@ -39,7 +39,7 @@ const StatusToggle = ({ value, onChange, onClear, disabled }) => (
             i > 0 && "border-l",
             value === o.value
               ? o.active
-              : "bg-white text-muted-foreground hover:bg-accent",
+              : "bg-card text-muted-foreground hover:bg-accent",
           )}
         >
           {o.label}
@@ -119,8 +119,8 @@ const TeacherAttendancePage = () => {
 
       {(absentCount > 0 || excusedCount > 0) && (
         <p className="text-sm text-muted-foreground">
-          Kelmadi: <b className="text-rose-600">{absentCount}</b> · Sababli:{" "}
-          <b className="text-amber-600">{excusedCount}</b>
+          Kelmadi: <b className="text-rose-600 dark:text-rose-300">{absentCount}</b> · Sababli:{" "}
+          <b className="text-amber-600 dark:text-amber-300">{excusedCount}</b>
         </p>
       )}
 

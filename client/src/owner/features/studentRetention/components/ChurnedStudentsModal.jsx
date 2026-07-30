@@ -39,7 +39,7 @@ const ChurnedStudentsModal = ({ params = {}, close }) => {
       ) : (
         <div className="max-h-[60vh] overflow-y-auto rounded-md border">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-gray-50 text-left text-xs text-muted-foreground">
+            <thead className="sticky top-0 bg-muted text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 font-medium">O'quvchi</th>
                 <th className="px-3 py-2 font-medium">Guruh</th>
@@ -67,7 +67,7 @@ const ChurnedStudentsModal = ({ params = {}, close }) => {
                     {formatMonths(s.durationMonths)}
                   </td>
                   <td className="px-3 py-2">
-                    <span className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
+                    <span className="inline-flex rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                       {s.reasonTitle}
                     </span>
                   </td>

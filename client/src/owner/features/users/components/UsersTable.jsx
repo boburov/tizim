@@ -93,7 +93,7 @@ const UsersTable = ({
 
   if (users.length === 0) {
     return (
-      <div className="border rounded-lg p-10 text-center bg-white">
+      <div className="border rounded-lg p-10 text-center bg-card">
         <p className="text-muted-foreground">
           {status === "archived"
             ? "Arxivda foydalanuvchi yo'q"
@@ -104,7 +104,7 @@ const UsersTable = ({
   }
 
   return (
-    <div className="border rounded-sm overflow-x-auto bg-white">
+    <div className="border rounded-sm overflow-x-auto bg-card">
       <table className="w-full text-sm">
         <thead className=" text-left">
           <tr>
@@ -142,7 +142,7 @@ const UsersTable = ({
               <tr
                 key={u._id}
                 onClick={() => navigate(`/owner/users/${u._id}`)}
-                className="border-t cursor-pointer transition-colors hover:bg-gray-50"
+                className="border-t cursor-pointer transition-colors hover:bg-muted"
               >
                 <td className="px-4 py-2 text-muted-foreground">
                   {startIndex + i + 1}
@@ -168,10 +168,10 @@ const UsersTable = ({
                       {getRoleLabel(u.role)}
                     </Badge>
                     {showStatusBadge && rowArchived && (
-                      <Badge className="bg-gray-200 text-gray-700">Arxiv</Badge>
+                      <Badge className="bg-accent text-foreground">Arxiv</Badge>
                     )}
                     {!rowArchived && u.isFrozen && (
-                      <Badge className="bg-sky-100 text-sky-700">
+                      <Badge className="bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300">
                         Muzlatilgan
                       </Badge>
                     )}
@@ -180,7 +180,7 @@ const UsersTable = ({
                 {showBranch && (
                   <td className="px-4 py-2">
                     {u.homeBranchId?.name ? (
-                      <span className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">
+                      <span className="inline-flex rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">
                         {u.homeBranchId.name}
                       </span>
                     ) : (
@@ -199,14 +199,14 @@ const UsersTable = ({
                             {shown.map((g) => (
                               <span
                                 key={g._id}
-                                className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700"
+                                className="inline-flex rounded bg-muted px-1.5 py-0.5 text-xs text-foreground"
                               >
                                 {g.name}
                               </span>
                             ))}
                             {rest.length > 0 && (
                               <span
-                                className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500"
+                                className="inline-flex rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
                                 title={rest.map((g) => g.name).join(", ")}
                               >
                                 +{rest.length}
@@ -223,13 +223,13 @@ const UsersTable = ({
                 <td className="px-4 py-2 text-muted-foreground">
                   {rowArchived ? (
                     <div className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 items-center">
-                      <span className="text-xs uppercase tracking-wide text-zinc-400">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
                         Boshlagan
                       </span>
                       <span>{start ? formatDateUzLong(start) : "-"}</span>
                       {isStudentRow && (
                         <>
-                          <span className="text-xs uppercase tracking-wide text-zinc-400">
+                          <span className="text-xs uppercase tracking-wide text-muted-foreground">
                             Yakunlangan
                           </span>
                           <span>
@@ -239,7 +239,7 @@ const UsersTable = ({
                           </span>
                         </>
                       )}
-                      <span className="text-xs uppercase tracking-wide text-zinc-400">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
                         Arxivlangan
                       </span>
                       <span>
@@ -250,7 +250,7 @@ const UsersTable = ({
                     start ? (
                       <div className="leading-tight">
                         <div>{formatDateUzLong(start)}</div>
-                        <div className="text-xs text-zinc-400">
+                        <div className="text-xs text-muted-foreground">
                           {formatEnrolledDuration(u.enrolledAt, u.completedAt)}
                         </div>
                       </div>
@@ -273,7 +273,7 @@ const UsersTable = ({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="text-green-600 hover:bg-green-50 hover:text-green-700"
+                        className="text-green-600 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-500/10 hover:text-green-700 dark:hover:text-green-300"
                         onClick={() =>
                           openModal(MODAL.USER_RESTORE, { user: u })
                         }
@@ -302,7 +302,7 @@ const UsersTable = ({
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="text-sky-600 hover:bg-sky-50 hover:text-sky-700"
+                              className="text-sky-600 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-300"
                               onClick={() =>
                                 openModal(MODAL.USER_UNFREEZE, { user: u })
                               }
@@ -316,7 +316,7 @@ const UsersTable = ({
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="text-sky-600 hover:bg-sky-50 hover:text-sky-700"
+                              className="text-sky-600 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-300"
                               onClick={() =>
                                 openModal(MODAL.USER_FREEZE, { user: u })
                               }
@@ -332,7 +332,7 @@ const UsersTable = ({
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                            className="text-amber-600 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300"
                             onClick={() =>
                               openModal(MODAL.USER_DELETE, { user: u })
                             }
@@ -348,7 +348,7 @@ const UsersTable = ({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                      className="text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300"
                       onClick={() =>
                         openModal(MODAL.USER_PERMANENT_DELETE, { user: u })
                       }

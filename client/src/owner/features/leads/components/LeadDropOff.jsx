@@ -19,7 +19,7 @@ const LeadDropOff = ({ rows = [] }) => {
                 <span className="font-medium">{LEAD_STATUS_LABEL[r.stage]}</span>
                 <span className="text-muted-foreground">{r.count}</span>
               </div>
-              <div className="h-2.5 overflow-hidden rounded bg-zinc-100">
+              <div className="h-2.5 overflow-hidden rounded bg-muted">
                 <div
                   className="h-full rounded bg-rose-500"
                   style={{ width: `${(r.count / max) * 100}%` }}

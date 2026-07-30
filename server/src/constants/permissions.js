@@ -82,6 +82,20 @@ export const PERMISSIONS = Object.freeze({
   // Bu ruxsatsiz foydalanuvchi faqat biriktirilgan filialini ko'radi.
   BRANCHES_VIEW_ALL: "branches.view_all",
 
+  // Kurslar (yo'nalish katalogi)
+  COURSES_READ: "courses.read",
+  COURSES_MANAGE: "courses.manage",
+
+  // AI maslahatchi.
+  // AI_READ - insight/ball ko'rish. AI_ASSISTANT dan ATAYLAB ajratilgan:
+  // assistent LLM chaqiradi (pul sarflaydi) va bir nechta modul ma'lumotini
+  // birlashtira oladi, shuning uchun uni tor doiradagi xodimga bermaslik kerak.
+  // AI_CONFIG - risk vaznlarini o'zgartirish: bu BARCHA ballarni siljitadi,
+  // shuning uchun alohida va eng tor huquq.
+  AI_READ: "ai.read",
+  AI_ASSISTANT: "ai.assistant",
+  AI_CONFIG: "ai.config",
+
   // Tizim: owner-only route'lar shu kalit orqali himoyalanadi.
   // requireRole(ROLES.OWNER) o'rniga requirePermission(SYSTEM_ADMIN_ACCESS).
   SYSTEM_ADMIN_ACCESS: "system.admin_access",
@@ -199,6 +213,13 @@ export const PERMISSION_LABELS = {
     group: "branches",
   },
 
+  [PERMISSIONS.COURSES_READ]: { label: "Kurslarni ko'rish", group: "courses" },
+  [PERMISSIONS.COURSES_MANAGE]: { label: "Kurslarni boshqarish", group: "courses" },
+
+  [PERMISSIONS.AI_READ]: { label: "AI tahlilini ko'rish", group: "ai" },
+  [PERMISSIONS.AI_ASSISTANT]: { label: "AI assistentdan foydalanish", group: "ai" },
+  [PERMISSIONS.AI_CONFIG]: { label: "AI sozlamalarini boshqarish", group: "ai" },
+
   [PERMISSIONS.SYSTEM_ADMIN_ACCESS]: {
     label: "Tizim sozlamalariga kirish",
     group: "admin",
@@ -231,6 +252,8 @@ export const ACTION_ORDER = [
   "view_all",
   "approve",
   "decide_config",
+  "assistant",
+  "config",
   "admin_access",
 ];
 
@@ -248,6 +271,8 @@ export const ACTION_LABELS = {
   view_all: "Barchasini ko'rish",
   approve: "Tasdiqlash",
   decide_config: "Sozlamani tasdiqlash",
+  assistant: "Assistentdan foydalanish",
+  config: "Sozlamalarni boshqarish",
   admin_access: "To'liq kirish",
 };
 
@@ -260,6 +285,7 @@ export const MODULE_META = {
   students: { label: "O'quvchilar", order: 40 },
   teachers: { label: "O'qituvchilar", order: 50 },
   groups: { label: "Guruhlar", order: 60 },
+  courses: { label: "Kurslar", order: 65 },
   classes: { label: "Sinflar", order: 70 },
   leads: { label: "Lidlar", order: 80 },
   attendance: { label: "Davomat", order: 90 },
@@ -275,6 +301,7 @@ export const MODULE_META = {
   feedback_types: { label: "Feedback turlari", order: 180 },
   archive_reasons: { label: "Arxiv sabablari", order: 190 },
   activity_logs: { label: "Faoliyat loglari", order: 200 },
+  ai: { label: "AI maslahatchi", order: 205 },
   system: { label: "Tizim", order: 210 },
 };
 

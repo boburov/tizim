@@ -18,7 +18,7 @@ const SalaryMonthCard = ({ salary }) => {
   const txs = salary.transactions || [];
 
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="font-semibold">
@@ -39,13 +39,13 @@ const SalaryMonthCard = ({ salary }) => {
         </div>
         <div>
           <p className="text-[11px] text-muted-foreground">Olingan</p>
-          <p className="font-semibold tabular-nums text-emerald-600">
+          <p className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">
             {formatMoney(paid)}
           </p>
         </div>
         <div>
           <p className="text-[11px] text-muted-foreground">Qoldiq</p>
-          <p className="font-semibold tabular-nums text-rose-600">
+          <p className="font-semibold tabular-nums text-rose-600 dark:text-rose-300">
             {formatMoney(remaining)}
           </p>
         </div>
@@ -58,7 +58,7 @@ const SalaryMonthCard = ({ salary }) => {
               key={t._id}
               className="flex items-baseline justify-between gap-2 text-sm"
             >
-              <span className="font-medium tabular-nums text-emerald-600">
+              <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-300">
                 {formatMoney(t.amount)}
               </span>
               <span className="text-xs text-muted-foreground">

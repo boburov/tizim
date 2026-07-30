@@ -32,7 +32,7 @@ const IconButton = ({ label, tone = "default", onClick, icon: Icon }) => (
           aria-label={label}
           className={
             tone === "danger"
-              ? "size-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+              ? "size-8 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300"
               : "size-8 text-muted-foreground hover:text-foreground"
           }
         >

@@ -38,7 +38,7 @@ const ScheduleField = ({ value, onChange, disabled = false }) => {
                 "flex items-center gap-2 rounded-lg border p-3 text-sm font-medium transition disabled:opacity-50",
                 active
                   ? "border-primary bg-primary/5 ring-1 ring-primary"
-                  : "border-border bg-white hover:border-primary/40",
+                  : "border-border bg-card hover:border-primary/40",
               )}
             >
               <Icon
@@ -64,7 +64,7 @@ const ScheduleField = ({ value, onChange, disabled = false }) => {
             value={scheduleAt}
             disabled={disabled}
             onChange={(e) => onChange({ scheduleAt: e.target.value })}
-            className="h-10 w-full rounded-[2px] border border-input bg-white px-3 text-sm outline-2 outline-primary disabled:opacity-50"
+            className="h-10 w-full rounded-[2px] border border-input bg-card px-3 text-sm outline-2 outline-primary disabled:opacity-50"
           />
           <p className="text-xs text-muted-foreground">
             Xabar belgilangan vaqtda avtomatik yuboriladi.

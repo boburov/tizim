@@ -48,8 +48,8 @@ const ScoreButtons = ({
               active
                 ? cn(token.solid, "scale-105 shadow-sm ring-2", token.ring)
                 : cn(
-                    "border-gray-200 bg-white text-gray-400",
-                    "hover:-translate-y-0.5 hover:border-gray-300 hover:text-gray-600 hover:shadow-sm",
+                    "border-border bg-card text-muted-foreground",
+                    "hover:-translate-y-0.5 hover:border-border hover:text-muted-foreground hover:shadow-sm",
                     "active:translate-y-0 active:scale-95",
                   ),
               disabled && "cursor-not-allowed opacity-50 hover:transform-none",

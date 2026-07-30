@@ -76,12 +76,12 @@ const TeacherSalaryHistoryPage = () => {
 const SummaryCard = ({ label, value, tone }) => {
   const toneClass =
     tone === "emerald"
-      ? "text-emerald-600"
+      ? "text-emerald-600 dark:text-emerald-300"
       : tone === "rose"
-        ? "text-rose-600"
-        : "text-gray-900";
+        ? "text-rose-600 dark:text-rose-300"
+        : "text-foreground";
   return (
-    <div className="rounded-lg border bg-white p-3">
+    <div className="rounded-lg border bg-card p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`mt-1 font-semibold ${toneClass}`}>{value}</p>
     </div>
@@ -96,7 +96,7 @@ const SalaryMonthCard = ({ salary }) => {
   const txs = salary.transactions || [];
 
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-semibold">
@@ -114,11 +114,11 @@ const SalaryMonthCard = ({ salary }) => {
         </div>
         <div>
           <p className="text-xs text-muted-foreground">To'langan</p>
-          <p className="font-medium text-emerald-600">{formatMoney(paid)}</p>
+          <p className="font-medium text-emerald-600 dark:text-emerald-300">{formatMoney(paid)}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Qoldiq</p>
-          <p className="font-medium text-rose-600">{formatMoney(remaining)}</p>
+          <p className="font-medium text-rose-600 dark:text-rose-300">{formatMoney(remaining)}</p>
         </div>
       </div>
 

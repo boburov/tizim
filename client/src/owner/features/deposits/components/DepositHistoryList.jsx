@@ -20,7 +20,7 @@ const DepositHistoryList = ({ rows = [], isLoading }) => {
   }
 
   return (
-    <ul className="divide-y rounded-lg border bg-white">
+    <ul className="divide-y rounded-lg border bg-card">
       {rows.map((r) => {
         const meta = kindMeta(r.kind);
         return (

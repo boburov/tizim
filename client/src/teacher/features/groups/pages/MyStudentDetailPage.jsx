@@ -22,7 +22,7 @@ const TelegramStatus = ({ telegram }) => {
         href={`https://t.me/${telegram.username}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex min-w-0 items-center gap-1 font-medium text-sky-600 hover:text-sky-700 hover:underline"
+        className="inline-flex min-w-0 items-center gap-1 font-medium text-sky-600 dark:text-sky-300 hover:text-sky-700 dark:hover:text-sky-300 hover:underline"
       >
         <Send className="size-3.5 shrink-0" />
         <span className="truncate">@{telegram.username}</span>
@@ -30,7 +30,7 @@ const TelegramStatus = ({ telegram }) => {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 font-medium text-emerald-600">
+    <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-300">
       <Send className="size-3.5 shrink-0" />
       Bog'langan
     </span>
@@ -56,7 +56,7 @@ const MyStudentDetailPage = () => {
         <button
           type="button"
           onClick={goBack}
-          className="text-blue-600 hover:underline cursor-pointer"
+          className="text-blue-600 dark:text-blue-300 hover:underline cursor-pointer"
         >
           Guruhga qaytish
         </button>

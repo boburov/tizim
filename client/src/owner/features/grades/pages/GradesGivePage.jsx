@@ -57,8 +57,8 @@ const GradesGivePage = () => {
       </Card>
 
       {!groupId ? (
-        <div className="rounded-lg border border-dashed bg-white p-10 text-center">
-          <ClipboardList className="mx-auto size-8 text-gray-300" />
+        <div className="rounded-lg border border-dashed bg-card p-10 text-center">
+          <ClipboardList className="mx-auto size-8 text-muted-foreground" />
           <p className="mt-2 text-sm text-muted-foreground">
             Boshlash uchun guruh tanlang
           </p>
@@ -82,7 +82,7 @@ const GradesGivePage = () => {
 const GradeGridSkeleton = () => (
   <div className="space-y-3">
     <Skeleton className="h-12 w-full rounded-md" />
-    <div className="space-y-2 rounded-md border bg-white p-3">
+    <div className="space-y-2 rounded-md border bg-card p-3">
       {[0, 1, 2, 3, 4].map((i) => (
         <div key={i} className="flex items-center justify-between gap-3 py-1">
           <div className="flex items-center gap-3">

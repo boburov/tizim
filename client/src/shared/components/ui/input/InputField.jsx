@@ -36,11 +36,11 @@ const InputField = ({
       {label && (
         <FieldLabel
           htmlFor={id || name}
-          className={cn("max-w-max", error && "text-red-600")}
+          className={cn("max-w-max", error && "text-red-600 dark:text-red-300")}
         >
           {label}
           {props.required && (
-            <span className={error ? "text-red-600" : "text-primary"}>*</span>
+            <span className={error ? "text-red-600 dark:text-red-300" : "text-primary"}>*</span>
           )}
         </FieldLabel>
       )}

@@ -15,7 +15,7 @@ const TimeRangeFilter = ({
   onCustomChange,
 }) => (
   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
-    <div className="inline-flex flex-wrap items-center gap-1 rounded-lg border bg-white p-1">
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-lg border bg-card p-1">
       {PRESETS.map((p) => (
         <button
           key={p.value}

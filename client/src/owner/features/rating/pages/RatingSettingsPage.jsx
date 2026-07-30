@@ -139,11 +139,11 @@ const RatingSettingsPage = () => {
   return (
     <div className="space-y-4 pb-24">
       {/* Sarlavha + saqlash paneli (sticky) */}
-      <div className="sticky top-0 z-30 -mx-4 flex flex-col gap-3 border-b border-gray-100 bg-background/80 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="sticky top-0 z-30 -mx-4 flex flex-col gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Baholash sozlamalari</h1>
           {isDirty && (
-            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-amber-600">
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-300">
               <span className="size-1.5 animate-pulse rounded-full bg-amber-500" />
               Saqlanmagan o'zgarishlar bor
             </p>
@@ -193,7 +193,7 @@ const RatingSettingsPage = () => {
               return (
                 <div
                   key={n}
-                  className="flex items-center gap-3 rounded-md border border-gray-100 bg-gray-50/50 p-2.5"
+                  className="flex items-center gap-3 rounded-md border border-border bg-muted/80 p-2.5"
                 >
                   <span
                     className={cn(
@@ -214,14 +214,14 @@ const RatingSettingsPage = () => {
                       })
                     }
                     placeholder={`Ball ${n} nomi`}
-                    className="h-9 flex-1 rounded-md border border-gray-200 bg-white px-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="h-9 flex-1 rounded-md border border-border bg-card px-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               );
             })}
         </div>
 
-        <div className="mt-4 rounded-md border border-dashed border-gray-200 p-3">
+        <div className="mt-4 rounded-md border border-dashed border-border p-3">
           <p className="mb-2 text-xs text-muted-foreground">
             Ko'rinishi (baholash sahifasidagi tugmalar):
           </p>
@@ -235,7 +235,7 @@ const RatingSettingsPage = () => {
         title="Reyting"
         description="Reyting qaysi davr bo'yicha hisoblanishi va nechta o'quvchi ko'rsatilishini belgilang."
       >
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-border">
           <SettingRow
             label="Hisoblash davri"
             hint="Reyting ballari shu oraliq bo'yicha jamlanadi."
@@ -282,7 +282,7 @@ const RatingSettingsPage = () => {
         title="Avtomatlashtirish"
         description="Eslatma va bildirishnomalarni avtomatlashtiring. Bildirishnomalar moduli orqali yuboriladi."
       >
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-border">
           <SettingRow
             label="Baholanmaganlar uchun eslatma"
             hint="Dars kuni oxirida baholanmagan o'quvchilar bo'lsa, o'qituvchiga eslatma yuboriladi."
@@ -323,7 +323,7 @@ const SettingsSkeleton = () => (
   <div className="space-y-4">
     <Skeleton className="h-9 w-56" />
     {[0, 1, 2, 3].map((i) => (
-      <div key={i} className="rounded-md border bg-white p-5">
+      <div key={i} className="rounded-md border bg-card p-5">
         <div className="flex items-center gap-3">
           <Skeleton className="size-9 rounded-md" />
           <div className="flex-1 space-y-2">

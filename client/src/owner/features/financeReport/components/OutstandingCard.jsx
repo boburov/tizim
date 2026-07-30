@@ -12,28 +12,28 @@ const Row = ({ label, paidLabel, billed, outstanding, rate, barClass, to }) => {
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-zinc-700">{label}</span>
+        <span className="text-sm font-medium text-foreground">{label}</span>
         {rate != null && (
-          <span className="text-xs font-medium text-zinc-500">{rate}%</span>
+          <span className="text-xs font-medium text-muted-foreground">{rate}%</span>
         )}
       </div>
-      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
         <div
           className={cn("h-full rounded-full transition-all duration-500", barClass)}
           style={{ width: `${fill}%` }}
         />
       </div>
       <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-        <span className="text-zinc-500">
+        <span className="text-muted-foreground">
           {paidLabel}:{" "}
-          <span className="font-medium text-zinc-700">{formatMoney(collected)}</span>
+          <span className="font-medium text-foreground">{formatMoney(collected)}</span>
         </span>
         <Link
           to={to}
-          className="group inline-flex items-center gap-0.5 font-medium text-zinc-700 transition hover:text-primary"
+          className="group inline-flex items-center gap-0.5 font-medium text-foreground transition hover:text-primary"
         >
           Qoldiq: {formatMoney(outstanding || 0)}
-          <ArrowUpRight className="size-3 text-zinc-400 transition group-hover:text-primary" />
+          <ArrowUpRight className="size-3 text-muted-foreground transition group-hover:text-primary" />
         </Link>
       </div>
     </div>
@@ -42,9 +42,9 @@ const Row = ({ label, paidLabel, billed, outstanding, rate, barClass, to }) => {
 
 // Qarzdorlik (o'quvchilar), to'lanmagan maoshlar (o'qituvchilar) va yomon qarz (loss).
 const OutstandingCard = ({ income, expense }) => (
-  <div className="rounded-2xl border border-zinc-200/80 bg-white p-5">
-    <h2 className="font-semibold text-zinc-900">Qoldiqlar</h2>
-    <p className="mt-0.5 text-xs text-zinc-500">Bu oy bo'yicha</p>
+  <div className="rounded-2xl border border-border bg-card p-5">
+    <h2 className="font-semibold text-foreground">Qoldiqlar</h2>
+    <p className="mt-0.5 text-xs text-muted-foreground">Bu oy bo'yicha</p>
 
     <div className="mt-4 space-y-5">
       <Row

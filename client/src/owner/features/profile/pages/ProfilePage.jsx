@@ -19,7 +19,7 @@ const InfoRow = ({ label, value }) => (
     <span className="text-sm text-muted-foreground sm:w-44 shrink-0">
       {label}
     </span>
-    <span className="text-sm font-medium text-gray-900">{value || "-"}</span>
+    <span className="text-sm font-medium text-foreground">{value || "-"}</span>
   </div>
 );
 
@@ -62,7 +62,7 @@ const ProfilePage = () => {
             <UserRound className="size-7" />
           </div>
           <div>
-            <p className="font-semibold text-lg text-gray-900">{fullName}</p>
+            <p className="font-semibold text-lg text-foreground">{fullName}</p>
             <p className="text-sm text-muted-foreground">
               {getRoleLabel(role)}
             </p>

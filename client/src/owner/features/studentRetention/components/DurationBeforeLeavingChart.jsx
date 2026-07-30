@@ -25,10 +25,10 @@ const DurationBeforeLeavingChart = ({ buckets = [] }) => {
                   </span>
                   <span className="text-muted-foreground">
                     {b.count} ta
-                    <span className="ml-1.5 text-xs text-zinc-400">{pct}%</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">{pct}%</span>
                   </span>
                 </div>
-                <div className="relative h-2.5 overflow-hidden rounded bg-zinc-100">
+                <div className="relative h-2.5 overflow-hidden rounded bg-muted">
                   <div
                     className="absolute inset-y-0 left-0 rounded bg-amber-500"
                     style={{ width: `${barPct}%` }}

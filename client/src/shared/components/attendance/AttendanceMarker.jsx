@@ -19,12 +19,12 @@ const SABAB_OPTIONS = [
 ];
 
 const HOLAT_TRIGGER_CLASS = {
-  present: "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
-  absent: "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100",
+  present: "border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/15",
+  absent: "border-rose-300 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/15",
 };
 const SABAB_TRIGGER_CLASS = {
-  excused: "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100",
-  absent: "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100",
+  excused: "border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/15",
+  absent: "border-rose-300 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/15",
 };
 
 const TRIGGER_BASE =
@@ -68,7 +68,7 @@ const AttendanceMarker = ({ value = {}, onChange, disabled = false }) => {
             "w-[130px]",
             holatValue
               ? cn(HOLAT_TRIGGER_CLASS[holatValue], "font-semibold")
-              : "border-gray-200 bg-white text-muted-foreground hover:bg-gray-50",
+              : "border-border bg-card text-muted-foreground hover:bg-muted",
           )}
         >
           {holatValue ? (
@@ -104,7 +104,7 @@ const AttendanceMarker = ({ value = {}, onChange, disabled = false }) => {
             "w-[150px]",
             sababValue
               ? cn(SABAB_TRIGGER_CLASS[sababValue], "font-semibold")
-              : "border-gray-200 bg-white text-muted-foreground hover:bg-gray-50",
+              : "border-border bg-card text-muted-foreground hover:bg-muted",
           )}
         >
           {sababValue ? (
@@ -136,7 +136,7 @@ const AttendanceMarker = ({ value = {}, onChange, disabled = false }) => {
         maxLength={300}
         onChange={setReason}
         placeholder="Izoh (ixtiyoriy)"
-        className="min-w-[140px] flex-1 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:bg-gray-50 disabled:opacity-60"
+        className="min-w-[140px] flex-1 rounded-md border border-border bg-card px-2.5 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-input focus:outline-none focus:ring-1 focus:ring-border disabled:bg-muted disabled:opacity-60"
       />
     </div>
   );

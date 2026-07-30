@@ -30,7 +30,7 @@ const DaysOfWeekToggle = ({
                 "px-3 py-1.5 rounded-md border text-sm transition",
                 selected
                   ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-white hover:bg-gray-50 text-gray-700",
+                  : "bg-card hover:bg-muted text-foreground",
               )}
             >
               {d.label}

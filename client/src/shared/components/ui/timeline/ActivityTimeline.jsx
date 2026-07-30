@@ -26,12 +26,12 @@ import EmptyState from "@/shared/components/ui/feedback/EmptyState";
 
 // Hodisa turi -> ikon + rang (tone). Tailwind klasslari to'liq literal (purge uchun).
 const TONE = {
-  emerald: "bg-emerald-100 text-emerald-600",
-  rose: "bg-rose-100 text-rose-600",
-  sky: "bg-sky-100 text-sky-600",
-  amber: "bg-amber-100 text-amber-600",
-  indigo: "bg-indigo-100 text-indigo-600",
-  zinc: "bg-zinc-100 text-zinc-600",
+  emerald: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
+  rose: "bg-rose-100 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300",
+  sky: "bg-sky-100 dark:bg-sky-500/15 text-sky-600 dark:text-sky-300",
+  amber: "bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300",
+  indigo: "bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-300",
+  zinc: "bg-muted text-muted-foreground",
 };
 
 const TYPE_CONFIG = {
@@ -112,7 +112,7 @@ const ActivityTimeline = ({ items = [], context = "student" }) => {
                   </span>
                 )}
                 {chip && (
-                  <span className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
+                  <span className="inline-flex rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                     {chip}
                   </span>
                 )}

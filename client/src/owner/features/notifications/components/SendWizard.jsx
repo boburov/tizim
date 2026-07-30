@@ -222,7 +222,7 @@ const SendWizard = ({ close, isLoading, setIsLoading }) => {
         {STEPS[step].key === "confirm" && (
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-3">
-              <div className="rounded-lg border bg-white p-3">
+              <div className="rounded-lg border bg-card p-3">
                 <SummaryRow label="Kanallar">
                   {form.channels.map((c) => CHANNEL_LABEL[c]).join(", ")}
                 </SummaryRow>
@@ -234,12 +234,12 @@ const SendWizard = ({ close, isLoading, setIsLoading }) => {
                 </SummaryRow>
                 <SummaryRow label="Yuborish">
                   {scheduled ? (
-                    <span className="inline-flex items-center gap-1 text-amber-700">
+                    <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
                       <CalendarClock className="size-3.5" />
                       {formatDateTimeUz(form.scheduleAt)}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-emerald-700">
+                    <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
                       <Send className="size-3.5" />
                       Hozir
                     </span>

@@ -25,12 +25,12 @@ const StudentGradesTab = ({ studentId }) => {
             className={cn(
               "text-2xl font-semibold",
               average == null
-                ? "text-gray-400"
+                ? "text-muted-foreground"
                 : average >= 4
-                  ? "text-green-600"
+                  ? "text-green-600 dark:text-green-300"
                   : average >= 3
-                    ? "text-amber-600"
-                    : "text-rose-600",
+                    ? "text-amber-600 dark:text-amber-300"
+                    : "text-rose-600 dark:text-rose-300",
             )}
           >
             {average == null ? "-" : `${average} / 5`}
@@ -38,7 +38,7 @@ const StudentGradesTab = ({ studentId }) => {
         </Card>
         <Card>
           <p className="text-xs text-muted-foreground">Jami baholar</p>
-          <p className="text-2xl font-semibold text-gray-700">
+          <p className="text-2xl font-semibold text-foreground">
             {data?.count || 0}
           </p>
         </Card>
@@ -52,7 +52,7 @@ const StudentGradesTab = ({ studentId }) => {
             Hali baho qo'yilmagan
           </p>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border">
             {recent.map((g) => (
               <li
                 key={g._id}

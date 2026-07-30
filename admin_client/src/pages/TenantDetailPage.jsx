@@ -33,14 +33,14 @@ function copy(text) {
 
 function Row({ icon: Icon, label, value, mono, copyable }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-100 py-3 last:border-0">
-      <span className="flex items-center gap-2 text-sm text-slate-500">
+    <div className="flex items-center justify-between border-b border-border py-3 last:border-0">
+      <span className="flex items-center gap-2 text-sm text-muted-foreground">
         {Icon && <Icon size={15} />} {label}
       </span>
       <span className="flex items-center gap-2">
         <span className={mono ? 'font-mono text-sm' : 'text-sm'}>{value || '—'}</span>
         {copyable && value && (
-          <button onClick={() => copy(value)} className="text-slate-400 hover:text-brand">
+          <button onClick={() => copy(value)} className="text-muted-foreground hover:text-brand">
             <Copy size={14} />
           </button>
         )}
@@ -125,7 +125,7 @@ export default function TenantDetailPage() {
 
   if (isLoading || !t)
     return (
-      <div className="flex items-center gap-2 text-slate-500">
+      <div className="flex items-center gap-2 text-muted-foreground">
         <Loader2 className="animate-spin" size={18} /> Yuklanmoqda…
       </div>
     );
@@ -134,7 +134,7 @@ export default function TenantDetailPage() {
     <div className="mx-auto max-w-3xl">
       <Link
         to="/"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft size={15} /> Loyihalar
       </Link>
@@ -144,7 +144,7 @@ export default function TenantDetailPage() {
           <div className="h-11 w-11 rounded-xl" style={{ background: t.brandColor }} />
           <div>
             <h1 className="text-2xl font-semibold">{t.name}</h1>
-            <div className="text-sm text-slate-500">{t.domain}</div>
+            <div className="text-sm text-muted-foreground">{t.domain}</div>
           </div>
         </div>
         <span
@@ -159,11 +159,11 @@ export default function TenantDetailPage() {
 
       {/* DNS / IP bo'limi — Cloudflare uchun */}
       <div className="mb-5 rounded-xl border border-brand/20 bg-brand/5 p-5">
-        <h2 className="mb-2 flex items-center gap-2 font-medium text-slate-800">
+        <h2 className="mb-2 flex items-center gap-2 font-medium text-foreground">
           <Globe size={17} /> DNS sozlash (Cloudflare)
         </h2>
-        <p className="mb-3 text-sm text-slate-600">{t.dns?.note}</p>
-        <div className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
+        <p className="mb-3 text-sm text-muted-foreground">{t.dns?.note}</p>
+        <div className="rounded-lg bg-card p-3 ring-1 ring-border">
           <Row label="Record turi" value={t.dns?.recordType} mono />
           <Row label="Name" value={t.dns?.name} mono copyable />
           <Row label="IP manzil" value={t.dns?.ip} mono copyable />
@@ -171,8 +171,8 @@ export default function TenantDetailPage() {
       </div>
 
       {/* Texnik ma'lumotlar */}
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-2 font-medium text-slate-800">Texnik ma'lumotlar</h2>
+      <div className="mb-5 rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-2 font-medium text-foreground">Texnik ma'lumotlar</h2>
         <Row icon={Database} label="Baza nomi (noyob)" value={t.dbName} mono copyable />
         <Row icon={Server} label="PM2 process" value={t.pm2Name} mono copyable />
         <Row icon={Server} label="Port" value={t.port} mono />
@@ -183,8 +183,8 @@ export default function TenantDetailPage() {
 
       {/* Tarif va limitlar */}
       {t.status !== 'DELETED' && (
-        <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
+        <div className="mb-5 rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-3 flex items-center gap-2 font-medium text-foreground">
             <CreditCard size={17} /> Tarif va limitlar
           </h2>
 
@@ -192,7 +192,7 @@ export default function TenantDetailPage() {
             <select
               value={planKey}
               onChange={(e) => setPlanKey(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+              className="flex-1 rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
             >
               <option value="">
                 {usage?.subscription
@@ -208,7 +208,7 @@ export default function TenantDetailPage() {
             <button
               onClick={() => assignPlan.mutate(planKey)}
               disabled={!planKey || assignPlan.isPending}
-              className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-brand-dark disabled:opacity-50"
             >
               {assignPlan.isPending && (
                 <Loader2 size={15} className="animate-spin" />
@@ -231,9 +231,9 @@ export default function TenantDetailPage() {
       )}
 
       {t.status === 'FAILED' && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-5">
-          <div className="mb-2 font-medium text-red-700">Provisioning xatosi</div>
-          <p className="mb-3 text-sm text-red-600">{t.failureReason}</p>
+        <div className="mb-5 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 p-5">
+          <div className="mb-2 font-medium text-red-700 dark:text-red-300">Provisioning xatosi</div>
+          <p className="mb-3 text-sm text-red-600 dark:text-red-300">{t.failureReason}</p>
           <button
             onClick={() => retry.mutate()}
             disabled={retry.isPending}
@@ -249,8 +249,13 @@ export default function TenantDetailPage() {
         </div>
       )}
 
+      {/*
+        Log panellari ATAYLAB har ikki temada ham to'q (terminal ko'rinishi).
+        Shu sababli ichidagi matnlar token emas, aniq ochroq ranglar bilan
+        yozilgan - `text-muted-foreground` bu to'q fonda o'qilmaydi.
+      */}
       {t.provisionLog && (
-        <div className="mb-5 rounded-xl border border-slate-200 bg-slate-900 p-4">
+        <div className="mb-5 rounded-xl border border-border bg-slate-900 p-4">
           <div className="mb-2 text-xs font-medium text-slate-400">
             Provisioning log
           </div>
@@ -261,7 +266,7 @@ export default function TenantDetailPage() {
       )}
 
       {t.deprovisionLog && (
-        <div className="mb-5 rounded-xl border border-orange-200 bg-slate-900 p-4">
+        <div className="mb-5 rounded-xl border border-orange-200 dark:border-orange-500/30 bg-slate-900 p-4">
           <div className="mb-2 text-xs font-medium text-orange-400">
             O'chirish (deprovision) log
           </div>
@@ -273,14 +278,14 @@ export default function TenantDetailPage() {
 
       {/* --- Xavfli hudud --- */}
       {isSuperAdmin && (
-        <div className="rounded-xl border border-red-200 bg-white p-5">
-          <h2 className="mb-1 flex items-center gap-2 font-medium text-red-700">
+        <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-card p-5">
+          <h2 className="mb-1 flex items-center gap-2 font-medium text-red-700 dark:text-red-300">
             <AlertTriangle size={17} /> Xavfli hudud
           </h2>
 
           {t.status === 'DELETED' ? (
             <>
-              <p className="mb-3 text-sm text-slate-600">
+              <p className="mb-3 text-sm text-muted-foreground">
                 Bu loyiha o'chirilgan
                 {t.deletedAt &&
                   ` (${new Date(t.deletedAt).toLocaleString('uz-UZ')})`}
@@ -292,7 +297,7 @@ export default function TenantDetailPage() {
                     purge.mutate();
                 }}
                 disabled={purge.isPending}
-                className="flex items-center gap-2 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg border border-red-300 dark:border-red-500/30 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-50"
               >
                 {purge.isPending ? (
                   <Loader2 size={15} className="animate-spin" />
@@ -304,10 +309,10 @@ export default function TenantDetailPage() {
             </>
           ) : (
             <>
-              <p className="mb-3 text-sm text-slate-600">
+              <p className="mb-3 text-sm text-muted-foreground">
                 Loyihani o'chirish VPS'dagi MongoDB bazasi, PM2 process, nginx
                 config va fayllarni butunlay yo'q qiladi. Bu amalni{' '}
-                <span className="font-medium text-red-600">
+                <span className="font-medium text-red-600 dark:text-red-300">
                   qaytarib bo'lmaydi
                 </span>
                 .
@@ -320,7 +325,7 @@ export default function TenantDetailPage() {
                 <Trash2 size={15} /> Loyihani o'chirish
               </button>
               {BUSY_STATUSES.includes(t.status) && (
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Jarayon ketmoqda — tugashini kuting
                 </p>
               )}
@@ -331,37 +336,37 @@ export default function TenantDetailPage() {
 
       {/* O'chirishni tasdiqlash modali */}
       {delOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl">
             <div className="mb-4 flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-300">
                   <AlertTriangle size={20} />
                 </div>
                 <h3 className="font-semibold">Loyihani o'chirish</h3>
               </div>
               <button
                 onClick={() => setDelOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-muted-foreground hover:text-muted-foreground"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <p className="mb-2 text-sm text-slate-600">
+            <p className="mb-2 text-sm text-muted-foreground">
               Quyidagilar butunlay o'chiriladi:
             </p>
-            <ul className="mb-4 space-y-1 text-sm text-slate-600">
+            <ul className="mb-4 space-y-1 text-sm text-muted-foreground">
               <li>• MongoDB bazasi (<span className="font-mono text-xs">{t.dbName}</span>)</li>
               <li>• PM2 process (<span className="font-mono text-xs">{t.pm2Name}</span>)</li>
               <li>• Nginx config va SSL sertifikat</li>
               <li>• Ilova fayllari va client build</li>
             </ul>
 
-            <p className="mb-2 text-sm text-slate-600">
+            <p className="mb-2 text-sm text-muted-foreground">
               Tasdiqlash uchun domenni aynan yozing:
             </p>
-            <div className="mb-1 rounded bg-slate-100 px-2 py-1 text-center font-mono text-sm">
+            <div className="mb-1 rounded bg-muted px-2 py-1 text-center font-mono text-sm">
               {t.domain}
             </div>
             <input
@@ -369,13 +374,13 @@ export default function TenantDetailPage() {
               value={confirmDomain}
               onChange={(e) => setConfirmDomain(e.target.value)}
               placeholder={t.domain}
-              className="mb-5 mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-red-500"
+              className="mb-5 mt-2 w-full rounded-lg border border-border px-3 py-2 font-mono text-sm outline-none focus:border-red-500"
             />
 
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setDelOpen(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
               >
                 Bekor qilish
               </button>

@@ -117,7 +117,7 @@ const Pagination = ({
               </Button>
 
               {showStartEllipsis && (
-                <span className="px-2 text-gray-400">...</span>
+                <span className="px-2 text-muted-foreground">...</span>
               )}
             </>
           )}
@@ -140,7 +140,7 @@ const Pagination = ({
           {showLastPage && (
             <>
               {showEndEllipsis && (
-                <span className="px-2 text-gray-400">...</span>
+                <span className="px-2 text-muted-foreground">...</span>
               )}
 
               <Button

@@ -7,7 +7,7 @@ const PRESETS = [
 ];
 
 const PeriodToggle = ({ value = "all", onChange }) => (
-  <div className="inline-flex items-center gap-1 rounded-lg border bg-white p-1">
+  <div className="inline-flex items-center gap-1 rounded-lg border bg-card p-1">
     {PRESETS.map((p) => (
       <button
         key={p.value}

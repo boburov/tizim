@@ -39,7 +39,7 @@ const ScheduleRow = ({ row, idx, duplicate, disabled, onUpdate, onRemove }) => {
         className={cn(
           "grid gap-2 items-center px-2 py-1.5",
           GRID_COLS,
-          duplicate && "bg-red-50",
+          duplicate && "bg-red-50 dark:bg-red-500/10",
         )}
       >
         <Select
@@ -77,13 +77,13 @@ const ScheduleRow = ({ row, idx, duplicate, disabled, onUpdate, onRemove }) => {
           disabled={disabled}
           onClick={onRemove}
           aria-label="Qatorni o'chirish"
-          className="size-9 text-red-500 hover:text-red-700 hover:bg-red-50"
+          className="size-9 text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10"
         >
           <Trash2 className="size-4" />
         </Button>
       </div>
       {duplicate && (
-        <p className="px-2 pb-1.5 text-[11px] text-red-600">
+        <p className="px-2 pb-1.5 text-[11px] text-red-600 dark:text-red-300">
           {DAY_LABELS_FULL_UZ[row.day]} {row.startTime} allaqachon bor (bir xil
           vaqt takrorlanmasin)
         </p>
@@ -129,7 +129,7 @@ const GroupScheduleField = ({ value = [], onChange, disabled = false }) => {
         </span>
       </div>
 
-      <div className="border rounded-md overflow-hidden bg-white">
+      <div className="border rounded-md overflow-hidden bg-card">
         {value.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-muted-foreground">
             Hech qanday dars kuni qo'shilmagan
@@ -139,7 +139,7 @@ const GroupScheduleField = ({ value = [], onChange, disabled = false }) => {
             {/* Sub-header */}
             <div
               className={cn(
-                "grid gap-2 px-2 py-1.5 bg-gray-50 border-b text-[11px] uppercase tracking-wide text-muted-foreground font-medium",
+                "grid gap-2 px-2 py-1.5 bg-muted border-b text-[11px] uppercase tracking-wide text-muted-foreground font-medium",
                 GRID_COLS,
               )}
             >
@@ -171,7 +171,7 @@ const GroupScheduleField = ({ value = [], onChange, disabled = false }) => {
           onClick={addRow}
           disabled={disabled || !canAddMore}
           title={!canAddMore ? "Maksimal qatorlar soni" : undefined}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-gray-50 border-t disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted border-t disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Plus className="size-4" />
           Qator qo'shish

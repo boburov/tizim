@@ -14,7 +14,7 @@ import TopAbsentList from "./TopAbsentList";
 import GroupBreakdownTable from "./GroupBreakdownTable";
 import useDashboardQuery from "../hooks/useDashboardQuery";
 
-const StatCard = ({ icon: Icon, iconClass, label, value, valueClass = "text-gray-900", hint }) => (
+const StatCard = ({ icon: Icon, iconClass, label, value, valueClass = "text-foreground", hint }) => (
   <Card className="flex items-center gap-3">
     <span className={`grid place-items-center size-10 shrink-0 rounded-lg ${iconClass}`}>
       <Icon className="size-5" />
@@ -81,7 +81,7 @@ const AttendanceOverallPanel = () => {
   if (isLoading) return <DashboardSkeleton />;
   if (!data) {
     return (
-      <div className="border rounded-md bg-white p-12 text-center">
+      <div className="border rounded-md bg-card p-12 text-center">
         <p className="text-muted-foreground">Tanlangan davr uchun davomat ma'lumotlari topilmadi</p>
       </div>
     );
@@ -92,10 +92,10 @@ const AttendanceOverallPanel = () => {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard
           icon={TrendingUp}
-          iconClass="bg-emerald-50 text-emerald-600"
+          iconClass="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
           label="Umumiy davomat"
           value={data.overallRate !== null ? `${data.overallRate}%` : "-"}
-          valueClass="text-emerald-600"
+          valueClass="text-emerald-600 dark:text-emerald-300"
         />
         <StatCard
           icon={Users}
@@ -105,24 +105,24 @@ const AttendanceOverallPanel = () => {
         />
         <StatCard
           icon={AlertTriangle}
-          iconClass="bg-rose-50 text-rose-500"
+          iconClass="bg-rose-50 dark:bg-rose-500/10 text-rose-500 dark:text-rose-400"
           label="Past davomatlilar"
           value={data.lowAttendanceStudents?.length || 0}
-          valueClass="text-rose-500"
+          valueClass="text-rose-500 dark:text-rose-400"
           hint={`${data.threshold}% dan past`}
         />
         <StatCard
           icon={CalendarDays}
-          iconClass="bg-slate-100 text-slate-500"
+          iconClass="bg-muted text-muted-foreground"
           label="Jami darslar"
           value={data.aggregate?.totalClasses || 0}
         />
         <StatCard
           icon={CalendarX}
-          iconClass="bg-amber-50 text-amber-500"
+          iconClass="bg-amber-50 dark:bg-amber-500/10 text-amber-500 dark:text-amber-400"
           label="Belgilanmagan"
           value={data.aggregate?.unmarked || 0}
-          valueClass="text-amber-600"
+          valueClass="text-amber-600 dark:text-amber-300"
           hint="o'qituvchi belgilamagan"
         />
       </div>

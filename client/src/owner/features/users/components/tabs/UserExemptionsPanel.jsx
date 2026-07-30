@@ -6,11 +6,11 @@ import { MODAL } from "@/shared/constants/modals";
 import { ExemptionsTable } from "@/owner/features/attendanceExemptions";
 
 const NoGroupNotice = () => (
-  <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-    <AlertTriangle className="size-5 shrink-0 text-amber-500" />
+  <div className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-4 text-sm">
+    <AlertTriangle className="size-5 shrink-0 text-amber-500 dark:text-amber-400" />
     <div>
-      <p className="font-medium text-amber-800">O'quvchi hech qaysi guruhda emas</p>
-      <p className="text-amber-700">
+      <p className="font-medium text-amber-800 dark:text-amber-300">O'quvchi hech qaysi guruhda emas</p>
+      <p className="text-amber-700 dark:text-amber-300">
         To'lov, chegirma va boshqa amallar uchun avval o'quvchini guruhga qo'shing.
       </p>
     </div>

@@ -22,7 +22,7 @@ const UserGroupHistoryTable = ({ items = [], isLoading = false }) => {
   }
 
   return (
-    <div className="border rounded-sm overflow-x-auto bg-white">
+    <div className="border rounded-sm overflow-x-auto bg-card">
       <table className="w-full text-sm">
         <thead className=" text-left">
           <tr>
@@ -47,7 +47,7 @@ const UserGroupHistoryTable = ({ items = [], isLoading = false }) => {
                     className={
                       m.leftAt
                         ? "text-muted-foreground"
-                        : "text-green-600 font-medium"
+                        : "text-green-600 dark:text-green-300 font-medium"
                     }
                   >
                     {status}

@@ -187,6 +187,19 @@ export const qk = Object.freeze({
     churnedStudents: (params) => ["adminDashboard", "churnedStudents", params],
   },
 
+  // AI maslahatchi
+  ai: {
+    all: () => ["ai"],
+    // Barcha insight ro'yxatlari prefiksi - mutatsiyadan keyin shuni
+    // invalidate qilish yetarli (actionCenter ham shu prefiks ostida).
+    insights: () => ["ai", "insights"],
+    list: (params) => ["ai", "insights", "list", params],
+    actionCenter: (params) => ["ai", "insights", "actionCenter", params],
+    // Ro'yxat sahifasidagi badge'lar: N ta subyekt uchun BITTA so'rov.
+    bySubjects: (ids) => ["ai", "insights", "bySubjects", ids],
+    config: (branchId) => ["ai", "config", branchId ?? null],
+  },
+
   // Finance (Moliya)
   finance: {
     all: () => ["finance"],

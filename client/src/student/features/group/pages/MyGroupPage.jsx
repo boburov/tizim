@@ -19,7 +19,7 @@ const MyGroupPage = () => {
 
   if (!data || !data.group) {
     return (
-      <div className="border rounded-lg p-12 text-center bg-white">
+      <div className="border rounded-lg p-12 text-center bg-card">
         <p className="text-muted-foreground">
           Hozircha hech qaysi guruhga biriktirilmagansiz. Administrator bilan bog'laning.
         </p>

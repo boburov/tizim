@@ -66,12 +66,12 @@ const MultiSelectSearch = ({
           type="button"
           variant="outline"
           disabled={props.disabled || isLoading}
-          className="justify-between font-normal px-3 hover:bg-white"
+          className="justify-between font-normal px-3 hover:bg-card"
         >
           <span
             className={cn(
               "line-clamp-1",
-              selectedCount ? "text-black" : "text-gray-500",
+              selectedCount ? "text-foreground" : "text-muted-foreground",
             )}
           >
             {triggerLabel}
@@ -100,8 +100,8 @@ const MultiSelectSearch = ({
                       className={cn(
                         "flex size-4 shrink-0 items-center justify-center rounded border",
                         checked
-                          ? "bg-primary border-primary text-white"
-                          : "border-gray-300",
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "border-border",
                       )}
                     >
                       {checked && <Check className="size-3" />}

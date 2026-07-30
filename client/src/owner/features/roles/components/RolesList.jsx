@@ -40,13 +40,13 @@ const FreezeToggle = ({ role, reason, isPending, onToggle }) => {
         className={cn(
           "ml-auto flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
           isFrozen
-            ? "border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300"
+            ? "border-sky-200 dark:border-sky-500/30 bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300"
             : "border-transparent bg-muted text-muted-foreground",
           isDisabled
             ? "cursor-not-allowed opacity-50"
             : isFrozen
-              ? "hover:bg-sky-200 dark:hover:bg-sky-900"
-              : "hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 dark:hover:border-sky-900 dark:hover:bg-sky-950 dark:hover:text-sky-300",
+              ? "hover:bg-sky-200 dark:hover:bg-sky-500/25"
+              : "hover:border-sky-200 dark:hover:border-sky-500/30 hover:bg-sky-50 dark:hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-300",
         )}
       >
         {isPending ? (
@@ -92,7 +92,7 @@ const RolesList = ({ roles = [], onSelect, onToggleFreeze, pendingValue }) => {
           className={cn(
             "group relative rounded-xl border px-4 py-3.5 transition-colors hover:bg-muted/50",
             role.isFrozen &&
-              "border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20",
+              "border-sky-200 dark:border-sky-500/30 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20",
           )}
         >
           {/* Kartochkaning butun yuzasi tahrirlash havolasi. Muzlatish tugmasi

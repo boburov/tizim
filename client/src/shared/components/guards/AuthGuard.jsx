@@ -18,7 +18,7 @@ const AuthGuard = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center fixed inset-0 z-50 size-full bg-gray-100">
+      <div className="flex items-center justify-center fixed inset-0 z-50 size-full bg-muted">
         <div className="size-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
       </div>
     );

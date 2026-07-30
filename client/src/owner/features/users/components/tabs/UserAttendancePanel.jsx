@@ -14,15 +14,15 @@ const AttendanceSummaryCard = ({ summary }) => {
       </Card>
       <Card>
         <p className="text-xs text-muted-foreground">Keldi</p>
-        <p className="text-xl font-semibold text-green-600">{summary.present}</p>
+        <p className="text-xl font-semibold text-green-600 dark:text-green-300">{summary.present}</p>
       </Card>
       <Card>
         <p className="text-xs text-muted-foreground">Kelmadi</p>
-        <p className="text-xl font-semibold text-red-600">{summary.absent}</p>
+        <p className="text-xl font-semibold text-red-600 dark:text-red-300">{summary.absent}</p>
       </Card>
       <Card>
         <p className="text-xs text-muted-foreground">Sababli</p>
-        <p className="text-xl font-semibold text-amber-600">{summary.excused}</p>
+        <p className="text-xl font-semibold text-amber-600 dark:text-amber-300">{summary.excused}</p>
       </Card>
     </div>
   );

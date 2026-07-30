@@ -66,12 +66,12 @@ const ApprovalRowActions = ({
               disabled={disabled}
               onSelect={() => onApprove?.(approval)}
             >
-              <Check className="size-4 text-emerald-600" />
+              <Check className="size-4 text-emerald-600 dark:text-emerald-300" />
               Tasdiqlash
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={disabled}
-              className="text-red-600 focus:text-red-700"
+              className="text-red-600 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
               onSelect={() => onReject?.(approval)}
             >
               <X className="size-4" />
@@ -101,7 +101,7 @@ const ApprovalRowActions = ({
         )}
 
         {reason && (
-          <p className="px-2 py-1.5 text-xs text-amber-600">{reason}</p>
+          <p className="px-2 py-1.5 text-xs text-amber-600 dark:text-amber-300">{reason}</p>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

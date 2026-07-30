@@ -134,7 +134,7 @@ const CreateMenu = () => {
           title="Yaratish"
           aria-label="Yaratish"
           className={cn(
-            "flex items-center gap-2 w-full rounded-md bg-primary text-white hover:bg-primary/90 transition-colors",
+            "flex items-center gap-2 w-full rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors",
             isCollapsed ? "h-8 justify-center px-1.5" : "h-9 px-2.5 text-sm",
           )}
         >

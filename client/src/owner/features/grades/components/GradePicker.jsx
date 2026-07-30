@@ -19,7 +19,7 @@ const GradePicker = ({ value, onChange, disabled = false }) => {
               "size-9 rounded-md border text-sm font-semibold transition",
               active
                 ? getGradeColor(n)
-                : "border-gray-200 text-gray-400 hover:border-gray-300 hover:bg-gray-50",
+                : "border-border text-muted-foreground hover:border-border hover:bg-muted",
               disabled && "cursor-not-allowed opacity-60",
             )}
             aria-label={`Ball ${n}`}

@@ -41,7 +41,7 @@ const StatusChips = ({ value = "", onChange }) => (
               ? chip.tone
                 ? activeTone[chip.tone]
                 : "border-primary bg-primary text-primary-foreground"
-              : "border-border bg-white text-muted-foreground hover:bg-muted",
+              : "border-border bg-card text-muted-foreground hover:bg-muted",
           )}
         >
           {chip.label}

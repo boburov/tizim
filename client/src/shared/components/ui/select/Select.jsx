@@ -46,7 +46,7 @@ const Select = ({
       {/* Trigger */}
       <SelectTrigger
         className={cn(
-          "h-10 bg-white text-base outline-2 outline-primary md:text-sm",
+          "h-10 bg-card text-base outline-2 outline-primary md:text-sm",
           triggerClassName,
         )}
       >

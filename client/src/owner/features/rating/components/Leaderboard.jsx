@@ -51,9 +51,9 @@ const rankItems = (items) => {
 
 // Podium uchun ikonka
 const PODIUM = {
-  1: { icon: Crown, ring: "ring-amber-300", bg: "bg-amber-50", chip: "bg-amber-400", order: "order-2 sm:scale-105", text: "text-amber-600" },
-  2: { icon: Trophy, ring: "ring-slate-300", bg: "bg-slate-50", chip: "bg-slate-400", order: "order-1", text: "text-slate-600" },
-  3: { icon: Medal, ring: "ring-orange-300", bg: "bg-orange-50", chip: "bg-orange-400", order: "order-3", text: "text-orange-600" },
+  1: { icon: Crown, ring: "ring-amber-300", bg: "bg-amber-50 dark:bg-amber-500/10", chip: "bg-amber-400", order: "order-2 sm:scale-105", text: "text-amber-600 dark:text-amber-300" },
+  2: { icon: Trophy, ring: "ring-border", bg: "bg-muted", chip: "bg-muted-foreground/50", order: "order-1", text: "text-muted-foreground" },
+  3: { icon: Medal, ring: "ring-orange-300", bg: "bg-orange-50 dark:bg-orange-500/10", chip: "bg-orange-400", order: "order-3", text: "text-orange-600 dark:text-orange-300" },
 };
 
 const PodiumCard = ({ it, slot, isMe }) => {
@@ -63,7 +63,7 @@ const PodiumCard = ({ it, slot, isMe }) => {
   return (
     <div
       className={cn(
-        "flex flex-1 flex-col items-center rounded-xl border bg-white p-4 text-center ring-1",
+        "flex flex-1 flex-col items-center rounded-xl border bg-card p-4 text-center ring-1",
         p.ring,
         p.bg,
         p.order,
@@ -73,12 +73,12 @@ const PodiumCard = ({ it, slot, isMe }) => {
       <span className={cn("grid size-10 place-items-center rounded-full text-white", p.chip)}>
         <Icon className="size-5" />
       </span>
-      <p className="mt-2 truncate text-sm font-semibold text-gray-900">
+      <p className="mt-2 truncate text-sm font-semibold text-foreground">
         {it.student.firstName} {it.student.lastName}
         {isMe && <span className="ml-1 text-xs font-normal text-primary">(siz)</span>}
       </p>
       <p className={cn("text-xs font-medium", p.text)}>{it.rank}-o'rin</p>
-      <p className="mt-1 text-lg font-bold tabular-nums text-gray-900">
+      <p className="mt-1 text-lg font-bold tabular-nums text-foreground">
         {it.point}
         <span className="ml-1 text-xs font-normal text-muted-foreground">ball</span>
       </p>
@@ -103,8 +103,8 @@ const Leaderboard = ({
 
   if (!ranked.length) {
     return (
-      <div className="rounded-lg border border-dashed bg-white p-10 text-center">
-        <Trophy className="mx-auto size-8 text-gray-300" />
+      <div className="rounded-lg border border-dashed bg-card p-10 text-center">
+        <Trophy className="mx-auto size-8 text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">{emptyText}</p>
       </div>
     );

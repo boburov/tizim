@@ -8,7 +8,7 @@ import {
 import useGroupMonthlyAttendanceQuery from "../hooks/useGroupMonthlyAttendanceQuery";
 import useMatrixCellMutation from "../hooks/useMatrixCellMutation";
 
-const bgOf = (status) => STATUS_DOT_CLASS[status] || "bg-slate-300";
+const bgOf = (status) => STATUS_DOT_CLASS[status] || "bg-muted-foreground/30";
 
 // Bu jadvalda faqat Keldi/Kelmadi ko'rinadi. Sababli(excused) va
 // Sababsiz(absent) - ikkalasi ham "Kelmadi" deb ko'rsatiladi.
@@ -17,11 +17,11 @@ const asBinary = (status) => (status === "excused" ? "absent" : status);
 // Har kun sarlavhasidagi mini hisob: faqat Keldi va Kelmadi.
 // Kelmadi = jami kelmagan (sababli + sababsiz).
 const HEADER_STATS = [
-  { key: "present", label: "Keldi", text: "text-emerald-600", value: (c) => c.present },
+  { key: "present", label: "Keldi", text: "text-emerald-600 dark:text-emerald-300", value: (c) => c.present },
   {
     key: "notcome",
     label: "Kelmadi",
-    text: "text-rose-600",
+    text: "text-rose-600 dark:text-rose-300",
     value: (c) => c.absent + c.excused,
   },
 ];
@@ -51,7 +51,7 @@ const LegendItem = ({ swatch, children }) => (
 );
 
 const Legend = () => (
-  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-600">
+  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
     {VISIBLE_STATUSES.map((s) => (
       <LegendItem
         key={s}
@@ -62,7 +62,7 @@ const Legend = () => (
     ))}
     <LegendItem
       swatch={
-        <span className="block w-2.5 h-2.5 rounded-full border-2 border-gray-300" />
+        <span className="block w-2.5 h-2.5 rounded-full border-2 border-border" />
       }
     >
       Belgilanmagan
@@ -146,15 +146,15 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
     <Card className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Legend />
-        <p className="text-[11px] text-gray-400">
+        <p className="text-[11px] text-muted-foreground">
           Katakni bosib davomat belgilang
         </p>
       </div>
-      <div className="relative overflow-x-auto rounded-md border border-gray-100">
+      <div className="relative overflow-x-auto rounded-md border border-border">
         <table className="w-auto border-separate border-spacing-0 text-xs">
           <thead>
             <tr>
-              <th className="sticky left-0 z-20 w-48 min-w-[12rem] bg-white border-b border-r border-gray-200 px-3 py-2.5 text-left font-semibold text-gray-500 whitespace-nowrap">
+              <th className="sticky left-0 z-20 w-48 min-w-[12rem] bg-card border-b border-r border-border px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
                 O'quvchi
               </th>
               {dates.map((d) => {
@@ -164,8 +164,8 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                 const headerCls = d.isHoliday
                   ? "text-rose-300"
                   : d.isClassDay
-                    ? "text-gray-500"
-                    : "text-gray-300";
+                    ? "text-muted-foreground"
+                    : "text-muted-foreground";
                 return (
                   <th
                     key={colKey}
@@ -176,10 +176,10 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                           ? `${day}-kun, ${d.startTime}`
                           : undefined
                     }
-                    className={`w-16 min-w-[4rem] border-b border-r border-gray-200 px-0 py-2 text-center font-semibold ${headerCls}`}
+                    className={`w-16 min-w-[4rem] border-b border-r border-border px-0 py-2 text-center font-semibold ${headerCls}`}
                   >
                     <div className="text-[13px] leading-none">{day}</div>
-                    <div className="mt-0.5 text-[10px] font-normal uppercase tracking-wide text-gray-400">
+                    <div className="mt-0.5 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">
                       {d.slot ? d.startTime : DAY_SHORT[d.dayOfWeek]}
                     </div>
                     {/* Kunlik hisob - doim 4 ta slot (0 bo'lsa ham), tekis turadi */}
@@ -191,7 +191,7 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                             key={s.key}
                             title={`${s.label}: ${v}`}
                             className={`text-[10px] leading-none tabular-nums ${
-                              v ? s.text : "text-gray-300"
+                              v ? s.text : "text-muted-foreground"
                             }`}
                           >
                             {v}
@@ -210,15 +210,15 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
               const name = `${row.student.firstName || ""} ${row.student.lastName || ""}`.trim();
               return (
                 <tr key={sid} className="group">
-                  <td className="sticky left-0 z-10 w-48 min-w-[12rem] bg-white border-b border-r border-gray-200 px-3 py-2 truncate text-gray-700 group-hover:bg-gray-50">
+                  <td className="sticky left-0 z-10 w-48 min-w-[12rem] bg-card border-b border-r border-border px-3 py-2 truncate text-foreground group-hover:bg-muted">
                     {name || row.student.username || "-"}
                   </td>
                   {dates.map((d) => {
                     const colKey = d.colKey || d.dateKey;
                     const cell = row.cells?.[colKey];
-                    const cellCls = `w-16 h-11 border-b border-r border-gray-200 ${
+                    const cellCls = `w-16 h-11 border-b border-r border-border ${
                       d.isHoliday ? "bg-rose-50/50" : ""
-                    } group-hover:bg-gray-50`;
+                    } group-hover:bg-muted`;
                     if (!d.isClassDay || cell === null || cell === undefined) {
                       return <td key={colKey} className={cellCls} />;
                     }
@@ -227,7 +227,7 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                     // Sababli(excused) → Kelmadi(absent) rangida ko'rsatiladi
                     const dotCls = displayed
                       ? `w-4 h-4 ${bgOf(asBinary(displayed))}`
-                      : "w-3 h-3 border-2 border-gray-300 group-hover/cell:border-gray-400";
+                      : "w-3 h-3 border-2 border-border group-hover/cell:border-muted-foreground";
                     return (
                       <td key={colKey} className={cellCls}>
                         <Tooltip
@@ -240,7 +240,7 @@ const GroupMonthlyMatrix = ({ groupId, year, month }) => {
                           <button
                             type="button"
                             onClick={() => handleCellClick(sid, d, cell)}
-                            className="group/cell flex h-11 w-full items-center justify-center rounded transition-colors hover:bg-gray-100"
+                            className="group/cell flex h-11 w-full items-center justify-center rounded transition-colors hover:bg-muted"
                           >
                             <span className={`block rounded-full ${dotCls}`} />
                           </button>

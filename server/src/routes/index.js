@@ -29,6 +29,7 @@ import depositsRouter from "../modules/deposits/deposits.routes.js";
 import teacherSalaryRouter from "../modules/teacherSalary/teacherSalary.routes.js";
 import financeReportRouter from "../modules/financeReport/financeReport.routes.js";
 import expenseApprovalsRouter from "../modules/expenseApprovals/expenseApprovals.routes.js";
+import aiRouter from "../modules/ai/ai.routes.js";
 
 const router = Router();
 
@@ -82,5 +83,8 @@ router.use("/finance-report", financeReportRouter);
 // o'zgarishi ham bor. Ikkalasi bir xil routerga boradi.
 router.use("/expense-approvals", expenseApprovalsRouter);
 router.use("/approvals", expenseApprovalsRouter);
+
+// AI maslahatchi (insight'lar, Action Center, sozlamalar)
+router.use("/ai", aiRouter);
 
 export default router;

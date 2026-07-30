@@ -3,6 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Temani BIRINCHI bo'yashdan OLDIN qo'llaymiz - aks holda React
+      yuklanguncha sahifa oq bo'lib turib, keyin qorong'iga sakraydi.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var isDark =
+            stored === "dark" ||
+            ((!stored || stored === "system") &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+          document.documentElement.classList.toggle("dark", isDark);
+          document.documentElement.style.colorScheme = isDark
+            ? "dark"
+            : "light";
+        } catch (e) {
+          /* localStorage yopiq bo'lsa - light rejimda davom etamiz */
+        }
+      })();
+    </script>
+
+    <meta name="color-scheme" content="light dark" />
     <title>Super Admin Panel</title>
   </head>
   <body>

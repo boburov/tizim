@@ -14,19 +14,19 @@ const initials = (name = "") =>
 
 // Reference: "Team Collaboration" - bu yerda eng band o'qituvchilar (o'quvchilar soni bo'yicha).
 const TopTeachersList = ({ items = [] }) => (
-  <div className="flex h-full flex-col rounded-2xl border border-zinc-200/80 bg-white p-5">
+  <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-5">
     <div className="flex items-center justify-between">
-      <h2 className="font-semibold text-zinc-900">Faol o'qituvchilar</h2>
+      <h2 className="font-semibold text-foreground">Faol o'qituvchilar</h2>
       <Link
         to="/owner/teachers"
-        className="flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-600 transition hover:border-primary/40 hover:text-primary"
+        className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary"
       >
         Barchasi <ArrowUpRight className="size-3" />
       </Link>
     </div>
 
     {items.length === 0 ? (
-      <p className="mt-6 text-sm text-zinc-400">Ma'lumot yo'q</p>
+      <p className="mt-6 text-sm text-muted-foreground">Ma'lumot yo'q</p>
     ) : (
       <ul className="mt-4 space-y-3">
         {items.map((t) => (
@@ -35,10 +35,10 @@ const TopTeachersList = ({ items = [] }) => (
               {initials(t.name)}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-zinc-900">{t.name}</p>
-              <p className="text-xs text-zinc-500">{t.groupsCount} ta guruh</p>
+              <p className="truncate text-sm font-medium text-foreground">{t.name}</p>
+              <p className="text-xs text-muted-foreground">{t.groupsCount} ta guruh</p>
             </div>
-            <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-600">
+            <span className="shrink-0 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-300">
               {t.studentsCount} o'quvchi
             </span>
           </li>

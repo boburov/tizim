@@ -15,7 +15,7 @@ const EmptyState = ({
 }) => (
   <div
     className={cn(
-      "flex flex-col items-center justify-center rounded-lg border border-dashed bg-white text-center",
+      "flex flex-col items-center justify-center rounded-lg border border-dashed bg-card text-center",
       compact ? "gap-1.5 p-6" : "gap-2 p-10",
       className,
     )}

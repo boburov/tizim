@@ -52,8 +52,8 @@ export default function BrandPreview({ name, brandColor, logoUrl, domain, classN
       className={cn(
         'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition',
         view === key
-          ? 'bg-white text-slate-800 shadow-sm'
-          : 'text-slate-500 hover:text-slate-700',
+          ? 'bg-card text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground',
       )}
     >
       <Icon size={13} /> {label}
@@ -63,22 +63,22 @@ export default function BrandPreview({ name, brandColor, logoUrl, domain, classN
   return (
     <div className={className}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-slate-700">Ko'rinishi</span>
-        <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+        <span className="text-sm font-medium text-foreground">Ko'rinishi</span>
+        <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
           {tab('panel', 'Panel', LayoutGrid)}
           {tab('login', 'Kirish', LogIn)}
         </div>
       </div>
 
       {/* Brauzer oynasi taqlidi */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex items-center gap-2 border-b border-border bg-muted px-3 py-2">
           <span className="flex gap-1">
             <i className="h-2 w-2 rounded-full bg-red-400" />
             <i className="h-2 w-2 rounded-full bg-amber-400" />
             <i className="h-2 w-2 rounded-full bg-emerald-400" />
           </span>
-          <span className="ml-1 flex-1 truncate rounded-md bg-white px-2 py-0.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
+          <span className="ml-1 flex-1 truncate rounded-md bg-card px-2 py-0.5 text-[11px] text-muted-foreground ring-1 ring-border">
             {host}
           </span>
         </div>
@@ -86,10 +86,10 @@ export default function BrandPreview({ name, brandColor, logoUrl, domain, classN
         {view === 'panel' ? (
           <div className="flex h-[268px] text-[10px]">
             {/* Sidebar */}
-            <div className="flex w-[104px] shrink-0 flex-col gap-1 border-r border-slate-200 bg-slate-50/70 p-2">
+            <div className="flex w-[104px] shrink-0 flex-col gap-1 border-r border-border bg-muted/80 p-2">
               <div className="mb-1 flex items-center gap-1.5">
                 <Logo logoUrl={logoUrl} name={title} color={color} />
-                <span className="truncate font-semibold text-slate-700">{title}</span>
+                <span className="truncate font-semibold text-foreground">{title}</span>
               </div>
               {NAV.map((item, i) => (
                 <div
@@ -110,8 +110,8 @@ export default function BrandPreview({ name, brandColor, logoUrl, domain, classN
             <div className="flex-1 overflow-hidden p-3">
               <div className="mb-3 flex items-center justify-between">
                 <div>
-                  <div className="text-xs font-semibold text-slate-800">Bosh sahifa</div>
-                  <div className="text-slate-400">Umumiy ko'rsatkichlar</div>
+                  <div className="text-xs font-semibold text-foreground">Bosh sahifa</div>
+                  <div className="text-muted-foreground">Umumiy ko'rsatkichlar</div>
                 </div>
                 <div
                   className="rounded-md px-2.5 py-1 font-medium"
@@ -125,9 +125,9 @@ export default function BrandPreview({ name, brandColor, logoUrl, domain, classN
                 {STATS.map((s) => (
                   <div
                     key={s.label}
-                    className="rounded-lg border border-slate-200 bg-white p-2"
+                    className="rounded-lg border border-border bg-card p-2"
                   >
-                    <div className="truncate text-slate-400">{s.label}</div>
+                    <div className="truncate text-muted-foreground">{s.label}</div>
                     <div className="text-sm font-semibold" style={{ color }}>
                       {s.value}
                     </div>
@@ -135,7 +135,7 @@ export default function BrandPreview({ name, brandColor, logoUrl, domain, classN
                 ))}
               </div>
 
-              <div className="rounded-lg border border-slate-200">
+              <div className="rounded-lg border border-border">
                 <div
                   className="rounded-t-lg px-2 py-1.5 font-medium"
                   style={{ background: withAlpha(color, 0.1), color }}
@@ -145,14 +145,14 @@ export default function BrandPreview({ name, brandColor, logoUrl, domain, classN
                 {[0, 1, 2].map((r) => (
                   <div
                     key={r}
-                    className="flex items-center gap-2 border-t border-slate-100 px-2 py-1.5"
+                    className="flex items-center gap-2 border-t border-border px-2 py-1.5"
                   >
                     <span
                       className="h-4 w-4 shrink-0 rounded-full"
                       style={{ background: withAlpha(color, 0.18) }}
                     />
-                    <span className="h-1.5 flex-1 rounded bg-slate-100" />
-                    <span className="h-1.5 w-8 rounded bg-slate-100" />
+                    <span className="h-1.5 flex-1 rounded bg-muted" />
+                    <span className="h-1.5 w-8 rounded bg-muted" />
                   </div>
                 ))}
               </div>
@@ -162,17 +162,17 @@ export default function BrandPreview({ name, brandColor, logoUrl, domain, classN
           // Kirish sahifasi — tenant client'dagi AuthLayout matnlari bilan bir xil
           <div className="flex h-[268px] flex-col items-center justify-center px-8 text-center">
             <Logo logoUrl={logoUrl} name={title} color={color} size="lg" />
-            <div className="mt-3 text-sm font-semibold text-slate-800">
+            <div className="mt-3 text-sm font-semibold text-foreground">
               Tizimga kirish
             </div>
-            <div className="mt-1 text-[11px] text-slate-500">
+            <div className="mt-1 text-[11px] text-muted-foreground">
               {title} o'quv markazi tizimiga kirish
             </div>
             <div className="mt-4 w-full max-w-[220px] space-y-2">
-              <div className="rounded-md border border-slate-200 px-2 py-1.5 text-left text-[10px] text-slate-400">
+              <div className="rounded-md border border-border px-2 py-1.5 text-left text-[10px] text-muted-foreground">
                 +998 90 123 45 67
               </div>
-              <div className="rounded-md border border-slate-200 px-2 py-1.5 text-left text-[10px] text-slate-400">
+              <div className="rounded-md border border-border px-2 py-1.5 text-left text-[10px] text-muted-foreground">
                 ••••••••
               </div>
               <div
@@ -186,7 +186,7 @@ export default function BrandPreview({ name, brandColor, logoUrl, domain, classN
         )}
       </div>
 
-      <p className="mt-2 text-xs text-slate-400">
+      <p className="mt-2 text-xs text-muted-foreground">
         Taxminiy ko'rinish — brend rang, nom va logo shu tarzda qo'llanadi.
       </p>
     </div>

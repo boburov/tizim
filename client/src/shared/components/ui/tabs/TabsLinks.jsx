@@ -6,12 +6,12 @@ import { cn } from "@/shared/utils/cn";
 
 // Mirrors shadcn TabsList/TabsTrigger classes so styling stays identical
 const LIST_CLASS =
-  "inline-flex h-10 items-center justify-center rounded-sm bg-white p-1 text-muted-foreground border";
+  "inline-flex h-10 items-center justify-center rounded-sm bg-card p-1 text-muted-foreground border";
 
 const TRIGGER_CLASS =
   "inline-flex items-center justify-center whitespace-nowrap rounded-[2px] px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
 
-const TRIGGER_ACTIVE_CLASS = "bg-primary text-white shadow-sm";
+const TRIGGER_ACTIVE_CLASS = "bg-primary text-primary-foreground shadow-sm";
 
 const TabsLinks = ({
   items = [],

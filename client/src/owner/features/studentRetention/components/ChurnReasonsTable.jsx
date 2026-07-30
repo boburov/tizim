@@ -24,12 +24,12 @@ const ChurnReasonsTable = ({ reasons = [] }) => {
                   </span>
                   <span className="shrink-0 text-muted-foreground">
                     {r.count} ta
-                    <span className="ml-2 text-xs text-zinc-400">
+                    <span className="ml-2 text-xs text-muted-foreground">
                       o'rtacha {formatMonths(r.avgDurationMonths)}
                     </span>
                   </span>
                 </div>
-                <div className="relative h-2 overflow-hidden rounded bg-zinc-100">
+                <div className="relative h-2 overflow-hidden rounded bg-muted">
                   <div
                     className="absolute inset-y-0 left-0 rounded bg-rose-500"
                     style={{ width: `${barPct}%` }}

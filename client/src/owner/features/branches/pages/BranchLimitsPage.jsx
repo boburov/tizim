@@ -80,13 +80,13 @@ const BranchLimitsPage = () => {
     {
       key: "name",
       header: "Filial",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => <span className="text-sm font-medium">{row.name}</span>,
     },
     {
       key: "threshold",
       header: "Tasdiq limiti",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => <LimitRow branch={row} />,
     },
   ];
@@ -102,7 +102,7 @@ const BranchLimitsPage = () => {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Limitlar</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Limitdan oshgan chiqim tasdiqdan o'tadi. Bo'sh qoldirilsa tasdiq
           talab qilinmaydi.
         </p>

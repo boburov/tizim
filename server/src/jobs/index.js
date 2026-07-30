@@ -35,6 +35,9 @@ import defineUsageHeartbeat, {
   isHeartbeatConfigured,
   sendHeartbeat,
 } from "./usageHeartbeat.job.js";
+import defineAiNightlyRecompute, {
+  JOB_NAME as AI_RECOMPUTE_JOB,
+} from "./aiNightlyRecompute.job.js";
 import { catchUpMonthlyGeneration } from "./catchUpMonthly.js";
 import * as groupsService from "../modules/groups/services/groups.service.js";
 
@@ -57,6 +60,7 @@ export const startJobs = async () => {
   defineGenerateMonthlySalary(agenda);
   defineAutoEndGroups(agenda);
   defineDailyAccrueFinance(agenda);
+  defineAiNightlyRecompute(agenda);
   defineUsageHeartbeat(agenda);
 
   await agenda.start();
@@ -85,6 +89,11 @@ export const startJobs = async () => {
   // Kunlik dars-asosli qarz accrual - har kuni 00:20 da (kurs arxivlashdan keyin:
   // tugagan guruh yangi dars accrual qilmasin).
   await every("20 0 * * *", DAILY_ACCRUE_JOB);
+
+  // AI qayta hisoblash - har kuni 01:00 da. Kunlik accrual (00:20) va kurs
+  // arxivlashdan (00:10) KEYIN: aks holda qarz kunlari va faol guruhlar
+  // ro'yxati eski bo'lib, ballar bir kun orqada qolardi.
+  await every("0 1 * * *", AI_RECOMPUTE_JOB);
 
   // Admin panelga usage heartbeat - har 15 daqiqada. Faqat admin panel
   // orqali provision qilingan tenantlarda ishlaydi (ADMIN_API_URL bo'lsa);

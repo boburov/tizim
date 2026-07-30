@@ -195,13 +195,13 @@ const ExpenseApprovalsPage = () => {
     {
       key: "kind",
       header: "So'rov",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => <ApprovalKindCell approval={row} />,
     },
     {
       key: "amount",
       header: "Summa / O'zgarish",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => (
         <span className="whitespace-nowrap text-sm font-medium tabular-nums">
           {approvalHeadline(row)}
@@ -211,9 +211,9 @@ const ExpenseApprovalsPage = () => {
     {
       key: "category",
       header: "Kategoriya",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => (
-        <span className="whitespace-nowrap rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
+        <span className="whitespace-nowrap rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
           {CATEGORY_LABELS[row.category]}
         </span>
       ),
@@ -221,21 +221,21 @@ const ExpenseApprovalsPage = () => {
     {
       key: "status",
       header: "Holat",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => <ApprovalStatusPill status={row.status} />,
     },
     {
       key: "requestedBy",
       header: "So'rovchi",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => <ApprovalRequesterCell user={row.requestedBy} />,
     },
     {
       key: "branch",
       header: "Filial",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => (
-        <span className="whitespace-nowrap text-sm text-zinc-600">
+        <span className="whitespace-nowrap text-sm text-muted-foreground">
           {row.branchId?.name || "—"}
         </span>
       ),
@@ -243,9 +243,9 @@ const ExpenseApprovalsPage = () => {
     {
       key: "createdAt",
       header: "Sana",
-      headerClassName: "px-4 py-2.5 text-left font-medium text-zinc-600",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => (
-        <span className="whitespace-nowrap text-sm text-zinc-600">
+        <span className="whitespace-nowrap text-sm text-muted-foreground">
           {formatDateTimeUz(row.createdAt)}
         </span>
       ),
@@ -271,7 +271,7 @@ const ExpenseApprovalsPage = () => {
         <span className="text-sm font-medium">{approvalHeadline(row)}</span>
         <ApprovalStatusPill status={row.status} />
       </div>
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-muted-foreground">
         {fullName(row.requestedBy)} · {formatDateTimeUz(row.createdAt)}
       </p>
     </div>

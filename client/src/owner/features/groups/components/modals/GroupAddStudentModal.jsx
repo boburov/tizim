@@ -126,7 +126,7 @@ const GroupAddStudentModal = ({
   if (conflicts.length) {
     return (
       <div className="space-y-4">
-        <div className="flex items-start gap-2.5 rounded-md bg-amber-50 p-3 text-amber-800">
+        <div className="flex items-start gap-2.5 rounded-md bg-amber-50 dark:bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 size-5 shrink-0" />
           <p className="text-sm">
             Quyidagi o'quvchilarning shu kun va soatda boshqa guruhda darsi bor.
@@ -138,10 +138,10 @@ const GroupAddStudentModal = ({
           {conflicts.map((c) => (
             <li
               key={c.studentId}
-              className="rounded-md border border-gray-200 p-2.5 text-sm"
+              className="rounded-md border border-border p-2.5 text-sm"
             >
-              <p className="font-medium text-black">{c.studentName}</p>
-              <ul className="mt-1 space-y-0.5 text-gray-600">
+              <p className="font-medium text-foreground">{c.studentName}</p>
+              <ul className="mt-1 space-y-0.5 text-muted-foreground">
                 {c.conflicts.map((x, i) => (
                   <li key={i}>
                     {x.groupName} — {x.dayLabel} {x.startTime}-{x.endTime}

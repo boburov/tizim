@@ -71,7 +71,7 @@ const ModalWrapper = ({
     <Drawer open={isOpen} onOpenChange={hanldeCloseModal}>
       <DrawerContent className={cn("px-5 pb-5 max-h-[90dvh]", className)}>
         {/* Header */}
-        <DialogHeader className="bg-white pb-3.5 shrink-0">
+        <DialogHeader className="bg-card pb-3.5 shrink-0">
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>

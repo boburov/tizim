@@ -44,7 +44,7 @@ const ChannelSelector = ({ value = [], onChange, disabled = false }) => {
               "disabled:cursor-not-allowed disabled:opacity-50",
               active
                 ? "border-primary bg-primary/5 ring-1 ring-primary"
-                : "border-border bg-white hover:border-primary/40 hover:bg-muted/30",
+                : "border-border bg-card hover:border-primary/40 hover:bg-muted/30",
             )}
           >
             <span

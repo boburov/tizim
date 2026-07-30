@@ -43,14 +43,14 @@ const StudentObligationsTable = ({ rows = [], isLoading, showMonth = false }) =>
       key: "paid",
       header: "To'langan",
       headerClassName: headerCls,
-      cell: (r) => <span className="text-emerald-600">{formatMoney(r.paidAmount || 0)}</span>,
+      cell: (r) => <span className="text-emerald-600 dark:text-emerald-300">{formatMoney(r.paidAmount || 0)}</span>,
     },
     {
       key: "remaining",
       header: "Qoldiq",
       headerClassName: headerCls,
       cell: (r) => (
-        <span className="font-semibold text-rose-600">{formatMoney(r.remaining || 0)}</span>
+        <span className="font-semibold text-rose-600 dark:text-rose-300">{formatMoney(r.remaining || 0)}</span>
       ),
     },
   ];
@@ -61,7 +61,7 @@ const StudentObligationsTable = ({ rows = [], isLoading, showMonth = false }) =>
         <span className="font-medium">
           {r.student?.firstName} {r.student?.lastName}
         </span>
-        <span className="font-semibold text-rose-600">{formatMoney(r.remaining || 0)}</span>
+        <span className="font-semibold text-rose-600 dark:text-rose-300">{formatMoney(r.remaining || 0)}</span>
       </div>
       <p className="text-xs text-muted-foreground">
         {r.group?.name}

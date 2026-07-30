@@ -33,7 +33,7 @@ const GroupArchivePanel = () => {
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Yuklanmoqda...</p>
         ) : isError ? (
-          <p className="text-sm text-red-600">Tarixni yuklashda xatolik</p>
+          <p className="text-sm text-red-600 dark:text-red-300">Tarixni yuklashda xatolik</p>
         ) : (
           <ActivityTimeline items={items} context="group" />
         )}

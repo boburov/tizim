@@ -90,7 +90,7 @@ const NotificationsListPage = () => {
       </header>
 
       {/* Toolbar: status tablar + filtrlar bitta toza qatorda */}
-      <div className="space-y-3 rounded-lg border bg-white p-3">
+      <div className="space-y-3 rounded-lg border bg-card p-3">
         {/* Status tablar */}
         <div className="flex flex-wrap gap-1.5">
           {STATUS_CHIPS.map((c) => {
@@ -104,7 +104,7 @@ const NotificationsListPage = () => {
                   "rounded-full border px-3 py-1 text-sm font-medium transition",
                   active
                     ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-white text-muted-foreground hover:border-primary/40",
+                    : "border-border bg-card text-muted-foreground hover:border-primary/40",
                 )}
               >
                 {c.label}

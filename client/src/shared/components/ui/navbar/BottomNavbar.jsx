@@ -17,7 +17,7 @@ const BottomNavbar = () => {
   return (
     <div className="fixed top-auto inset-0 z-20 flex justify-center pb-4">
       <div className="container">
-        <nav className="bottom-navigation flex items-center gap-1 p-1 rounded-full bg-white xs:p-1.5">
+        <nav className="bottom-navigation flex items-center gap-1 p-1 rounded-full bg-card xs:p-1.5">
           {navItems.map((nav) => (
             <NavLink
               to={nav.path}
@@ -26,8 +26,8 @@ const BottomNavbar = () => {
                 cn(
                   "flex flex-col items-center justify-center relative w-full h-12 rounded-full transition-all duration-300 xs:h-14",
                   isActive
-                    ? "bg-blue-100 text-blue-600"
-                    : "text-gray-500 hover:bg-white/40 hover:text-gray-900",
+                    ? "bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )
               }
             >

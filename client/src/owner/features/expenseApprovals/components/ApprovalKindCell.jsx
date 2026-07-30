@@ -15,7 +15,7 @@ const ApprovalKindCell = ({ approval }) => {
     <div className="flex min-w-0 items-center gap-3">
       <span
         className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg ${
-          meta?.cls || "bg-zinc-100 text-zinc-500"
+          meta?.cls || "bg-muted text-muted-foreground"
         }`}
       >
         {Icon ? <Icon size={17} strokeWidth={2} /> : null}
@@ -26,7 +26,7 @@ const ApprovalKindCell = ({ approval }) => {
           {KIND_LABELS[approval.kind] || approval.kind}
         </p>
         {subtitle && (
-          <p className="truncate text-xs text-zinc-500">
+          <p className="truncate text-xs text-muted-foreground">
             {subtitle}
             {approval.subjectName && approval.contextName
               ? ` · ${approval.contextName}`

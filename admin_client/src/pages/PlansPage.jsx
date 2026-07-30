@@ -127,14 +127,14 @@ export default function PlansPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Tariflar</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Narx va limitlarni belgilang — mijozlar shulardan tanlaydi
           </p>
         </div>
         {isSuperAdmin && (
           <button
             onClick={openNew}
-            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
+            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-brand-dark"
           >
             <Plus size={18} /> Yangi tarif
           </button>
@@ -142,11 +142,11 @@ export default function PlansPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-slate-500">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="animate-spin" size={18} /> Yuklanmoqda…
         </div>
       ) : !plans?.length ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
+        <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center text-muted-foreground">
           Hali tarif yo'q.
         </div>
       ) : (
@@ -154,20 +154,20 @@ export default function PlansPage() {
           {plans.map((p) => (
             <div
               key={p.id}
-              className={`rounded-xl border bg-white p-5 ${
-                p.isActive ? 'border-slate-200' : 'border-slate-200 opacity-60'
+              className={`rounded-xl border bg-card p-5 ${
+                p.isActive ? 'border-border' : 'border-border opacity-60'
               }`}
             >
               <div className="mb-3 flex items-start justify-between">
                 <div>
                   <div className="font-semibold">{p.name}</div>
-                  <div className="font-mono text-xs text-slate-400">{p.key}</div>
+                  <div className="font-mono text-xs text-muted-foreground">{p.key}</div>
                 </div>
                 {isSuperAdmin && (
                   <div className="flex gap-1">
                     <button
                       onClick={() => openEdit(p)}
-                      className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-brand"
+                      className="rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-brand"
                     >
                       <Pencil size={15} />
                     </button>
@@ -176,7 +176,7 @@ export default function PlansPage() {
                         if (confirm(`"${p.name}" tarifi o'chirilsinmi?`))
                           remove.mutate(p.id);
                       }}
-                      className="rounded p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                      className="rounded p-1 text-muted-foreground transition hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -189,7 +189,7 @@ export default function PlansPage() {
                   {Number(p.price) === 0 ? 'Bepul' : money(p.price, p.currency)}
                 </span>
                 {Number(p.price) > 0 && (
-                  <span className="text-sm text-slate-500">
+                  <span className="text-sm text-muted-foreground">
                     {' '}
                     / {INTERVAL_LABEL[p.interval]}
                   </span>
@@ -197,19 +197,19 @@ export default function PlansPage() {
               </div>
 
               {p.description && (
-                <p className="mb-3 text-sm text-slate-500">{p.description}</p>
+                <p className="mb-3 text-sm text-muted-foreground">{p.description}</p>
               )}
 
-              <ul className="space-y-1.5 border-t border-slate-100 pt-3 text-sm">
+              <ul className="space-y-1.5 border-t border-border pt-3 text-sm">
                 {p.features.map((pf) => (
                   <li key={pf.id} className="flex items-center justify-between">
-                    <span className="text-slate-600">{pf.feature.name}</span>
-                    <span className="font-medium text-slate-700">
+                    <span className="text-muted-foreground">{pf.feature.name}</span>
+                    <span className="font-medium text-foreground">
                       {pf.feature.type === 'BOOLEAN' ? (
                         pf.value > 0 ? (
-                          <Check size={15} className="text-emerald-600" />
+                          <Check size={15} className="text-emerald-600 dark:text-emerald-300" />
                         ) : (
-                          <X size={15} className="text-slate-300" />
+                          <X size={15} className="text-muted-foreground" />
                         )
                       ) : pf.value === -1 ? (
                         <InfinityIcon size={15} />
@@ -222,7 +222,7 @@ export default function PlansPage() {
               </ul>
 
               {p.trialDays > 0 && (
-                <div className="mt-3 rounded bg-emerald-50 px-2 py-1 text-center text-xs text-emerald-700">
+                <div className="mt-3 rounded bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 text-center text-xs text-emerald-700 dark:text-emerald-300">
                   {p.trialDays} kun bepul sinov
                 </div>
               )}
@@ -233,15 +233,15 @@ export default function PlansPage() {
 
       {/* --- Yaratish/tahrirlash modali --- */}
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4">
-          <div className="my-8 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+          <div className="my-8 w-full max-w-lg rounded-xl bg-card p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-semibold">
                 {editing === 'new' ? 'Yangi tarif' : `Tahrirlash: ${form.name}`}
               </h3>
               <button
                 onClick={closeForm}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-muted-foreground hover:text-muted-foreground"
               >
                 <X size={20} />
               </button>
@@ -259,7 +259,7 @@ export default function PlansPage() {
                       setForm({ ...form, key: e.target.value.toLowerCase() })
                     }
                     placeholder="masalan: standart"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-brand"
+                    className="w-full rounded-lg border border-border px-3 py-2 font-mono text-sm outline-none focus:border-brand"
                   />
                 </div>
               )}
@@ -270,7 +270,7 @@ export default function PlansPage() {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="Standart"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                 />
               </div>
 
@@ -281,7 +281,7 @@ export default function PlansPage() {
                   onChange={(e) =>
                     setForm({ ...form, description: e.target.value })
                   }
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                 />
               </div>
 
@@ -295,7 +295,7 @@ export default function PlansPage() {
                     min="0"
                     value={form.price}
                     onChange={(e) => setForm({ ...form, price: e.target.value })}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                   />
                 </div>
                 <div>
@@ -305,7 +305,7 @@ export default function PlansPage() {
                     onChange={(e) =>
                       setForm({ ...form, interval: e.target.value })
                     }
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                   >
                     <option value="MONTHLY">Oylik</option>
                     <option value="YEARLY">Yillik</option>
@@ -326,7 +326,7 @@ export default function PlansPage() {
                     onChange={(e) =>
                       setForm({ ...form, trialDays: e.target.value })
                     }
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                   />
                 </div>
                 <div>
@@ -339,7 +339,7 @@ export default function PlansPage() {
                     onChange={(e) =>
                       setForm({ ...form, sortOrder: e.target.value })
                     }
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand"
                   />
                 </div>
               </div>
@@ -356,9 +356,9 @@ export default function PlansPage() {
               </label>
 
               {/* Limitlar */}
-              <div className="border-t border-slate-200 pt-3">
+              <div className="border-t border-border pt-3">
                 <div className="mb-2 text-sm font-medium">Limitlar</div>
-                <p className="mb-3 text-xs text-slate-500">
+                <p className="mb-3 text-xs text-muted-foreground">
                   Cheksiz uchun <span className="font-mono">-1</span> yozing.
                   Yoqish/o'chirish uchun 1 yoki 0.
                 </p>
@@ -368,17 +368,17 @@ export default function PlansPage() {
                       key={f.id}
                       className="flex items-center justify-between gap-3"
                     >
-                      <label className="text-sm text-slate-600">
+                      <label className="text-sm text-muted-foreground">
                         {f.name}
                         {f.unit && (
-                          <span className="text-slate-400"> ({f.unit})</span>
+                          <span className="text-muted-foreground"> ({f.unit})</span>
                         )}
                       </label>
                       {f.type === 'BOOLEAN' ? (
                         <select
                           value={form.features[f.key] ?? 0}
                           onChange={(e) => setFeature(f.key, e.target.value)}
-                          className="w-32 rounded border border-slate-300 px-2 py-1 text-sm"
+                          className="w-32 rounded border border-border px-2 py-1 text-sm"
                         >
                           <option value={1}>Yoqilgan</option>
                           <option value={0}>O'chirilgan</option>
@@ -390,7 +390,7 @@ export default function PlansPage() {
                           value={form.features[f.key] ?? ''}
                           onChange={(e) => setFeature(f.key, e.target.value)}
                           placeholder="—"
-                          className="w-32 rounded border border-slate-300 px-2 py-1 text-sm"
+                          className="w-32 rounded border border-border px-2 py-1 text-sm"
                         />
                       )}
                     </div>
@@ -402,14 +402,14 @@ export default function PlansPage() {
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={closeForm}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
               >
                 Bekor qilish
               </button>
               <button
                 onClick={() => save.mutate(form)}
                 disabled={save.isPending || !form.name}
-                className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-brand-dark disabled:opacity-50"
               >
                 {save.isPending && <Loader2 className="animate-spin" size={16} />}
                 Saqlash

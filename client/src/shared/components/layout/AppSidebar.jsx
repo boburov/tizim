@@ -1,5 +1,14 @@
 // Icons
-import { LogOut, PanelLeft, ChevronRight, ArrowLeftToLine } from "lucide-react";
+import {
+  Sun,
+  Moon,
+  Check,
+  LogOut,
+  Monitor,
+  PanelLeft,
+  ChevronRight,
+  ArrowLeftToLine,
+} from "lucide-react";
 
 // Router
 import { Link } from "react-router-dom";
@@ -44,6 +53,7 @@ import BranchSwitcher from "./BranchSwitcher";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
+import useTheme, { THEME_OPTIONS } from "@/shared/hooks/useTheme";
 import useLogout from "@/features/auth/hooks/useLogout";
 import usePermissions from "@/shared/hooks/usePermissions";
 import useActiveBranch from "@/shared/hooks/useActiveBranch";
@@ -289,10 +299,17 @@ const Main = () => {
   );
 };
 
+const THEME_ITEMS = [
+  { value: THEME_OPTIONS.LIGHT, label: "Yorug'", Icon: Sun },
+  { value: THEME_OPTIONS.DARK, label: "Qorong'i", Icon: Moon },
+  { value: THEME_OPTIONS.SYSTEM, label: "Tizim bo'yicha", Icon: Monitor },
+];
+
 const Footer = () => {
   const { user } = useAuth();
   const { mutate: logout } = useLogout();
   const isMobile = useIsMobile();
+  const { theme, setTheme } = useTheme();
 
   if (!user) return null;
 
@@ -308,7 +325,7 @@ const Footer = () => {
                 size="lg"
                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
-                <div className="flex items-center justify-center size-8 shrink-0 bg-primary rounded-[2px] uppercase text-white">
+                <div className="flex items-center justify-center size-8 shrink-0 bg-primary rounded-[2px] uppercase text-primary-foreground">
                   {initial}
                 </div>
 
@@ -335,7 +352,7 @@ const Footer = () => {
             >
               <DropdownMenuLabel className="!p-0 font-normal">
                 <div className="flex items-center gap-2 text-left text-sm">
-                  <div className="flex items-center justify-center size-8 shrink-0 bg-primary rounded-[2px] uppercase text-white">
+                  <div className="flex items-center justify-center size-8 shrink-0 bg-primary rounded-[2px] uppercase text-primary-foreground">
                     {initial}
                   </div>
 
@@ -349,6 +366,28 @@ const Footer = () => {
                   </div>
                 </div>
               </DropdownMenuLabel>
+
+              <DropdownMenuSeparator />
+
+              {/* Mavzu: Yorug' / Qorong'i / Tizim bo'yicha (avtomatik) */}
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                Mavzu
+              </DropdownMenuLabel>
+
+              {THEME_ITEMS.map(({ value, label, Icon }) => (
+                <DropdownMenuItem
+                  key={value}
+                  onSelect={(event) => {
+                    // Menyu yopilib ketmasin - foydalanuvchi natijani darhol ko'rsin
+                    event.preventDefault();
+                    setTheme(value);
+                  }}
+                >
+                  <Icon strokeWidth={1.5} />
+                  <span className="flex-1">{label}</span>
+                  {theme === value && <Check className="size-4 shrink-0" />}
+                </DropdownMenuItem>
+              ))}
 
               <DropdownMenuSeparator />
 

@@ -25,7 +25,7 @@ const HEAT_CLASS = {
   present: "bg-emerald-500",
   absent: "bg-rose-500",
   excused: "bg-amber-400",
-  exempt: "bg-gray-300",
+  exempt: "bg-muted-foreground/30",
 };
 
 // Bir kunda bir nechta guruh statusi bo'lsa, ko'rinadigan rang ustuvorligi
@@ -70,9 +70,9 @@ const LEGEND = [
   { cls: "bg-emerald-500", label: STATUS_LABEL.present },
   { cls: "bg-rose-500", label: STATUS_LABEL.absent },
   { cls: "bg-amber-400", label: STATUS_LABEL.excused },
-  { cls: "bg-gray-300", label: STATUS_LABEL.exempt },
-  { cls: "bg-white ring-1 ring-inset ring-gray-300", label: "Belgilanmagan" },
-  { cls: "bg-gray-100", label: "Dars kuni emas" },
+  { cls: "bg-muted-foreground/30", label: STATUS_LABEL.exempt },
+  { cls: "bg-card ring-1 ring-inset ring-border", label: "Belgilanmagan" },
+  { cls: "bg-muted", label: "Dars kuni emas" },
 ];
 
 const StatPill = ({ label, value, className }) => (
@@ -119,7 +119,7 @@ const AttendanceYearHeatmap = ({ data, year, onPrevYear, onNextYear }) => {
             type="button"
             onClick={onPrevYear}
             aria-label="Oldingi yil"
-            className="grid size-8 place-items-center rounded-md border bg-white hover:bg-gray-50"
+            className="grid size-8 place-items-center rounded-md border bg-card hover:bg-muted"
           >
             <ChevronLeft className="size-4" />
           </button>
@@ -127,7 +127,7 @@ const AttendanceYearHeatmap = ({ data, year, onPrevYear, onNextYear }) => {
             type="button"
             onClick={onNextYear}
             aria-label="Keyingi yil"
-            className="grid size-8 place-items-center rounded-md border bg-white hover:bg-gray-50"
+            className="grid size-8 place-items-center rounded-md border bg-card hover:bg-muted"
           >
             <ChevronRight className="size-4" />
           </button>
@@ -136,9 +136,9 @@ const AttendanceYearHeatmap = ({ data, year, onPrevYear, onNextYear }) => {
 
       {/* Yillik xulosa */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <StatPill label="keldi" value={stats.present} className="text-emerald-600" />
-        <StatPill label="kelmadi" value={stats.absent} className="text-rose-600" />
-        <StatPill label="sababli" value={stats.excused} className="text-amber-600" />
+        <StatPill label="keldi" value={stats.present} className="text-emerald-600 dark:text-emerald-300" />
+        <StatPill label="kelmadi" value={stats.absent} className="text-rose-600 dark:text-rose-300" />
+        <StatPill label="sababli" value={stats.excused} className="text-amber-600 dark:text-amber-300" />
         <StatPill label="jami dars kuni" value={stats.total} />
       </div>
 
@@ -184,7 +184,7 @@ const AttendanceYearHeatmap = ({ data, year, onPrevYear, onNextYear }) => {
                       <div
                         key={day}
                         title={`${day}-${monthName.toLowerCase()}, ${year}\nDars kuni emas`}
-                        className={`size-3.5 rounded-[3px] bg-gray-100 ${
+                        className={`size-3.5 rounded-[3px] bg-muted ${
                           isToday ? "ring-2 ring-sky-400" : ""
                         }`}
                       />
@@ -194,7 +194,7 @@ const AttendanceYearHeatmap = ({ data, year, onPrevYear, onNextYear }) => {
                   const status = aggStatus(entries);
                   const color = status
                     ? HEAT_CLASS[status]
-                    : "bg-white ring-1 ring-inset ring-gray-300";
+                    : "bg-card ring-1 ring-inset ring-border";
                   return (
                     <div
                       key={day}

@@ -27,12 +27,12 @@ const LogUserCell = ({ user, userRole, actorLabel }) => {
 
   return (
     <div className="flex items-center gap-3">
-      <Avatar className="size-9 border border-slate-200">
+      <Avatar className="size-9 border border-border">
         <AvatarFallback
           className={
             isKnown
-              ? "bg-slate-100 text-slate-700 text-xs font-semibold"
-              : "bg-slate-50 text-slate-400 text-xs font-semibold"
+              ? "bg-muted text-foreground text-xs font-semibold"
+              : "bg-muted text-muted-foreground text-xs font-semibold"
           }
         >
           {isKnown ? (
@@ -45,10 +45,10 @@ const LogUserCell = ({ user, userRole, actorLabel }) => {
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-slate-900">
+        <div className="truncate text-sm font-medium text-foreground">
           {displayName}
         </div>
-        <div className="truncate text-xs text-slate-500">
+        <div className="truncate text-xs text-muted-foreground">
           {ROLE_LABELS[userRole] || userRole || "-"}
         </div>
       </div>

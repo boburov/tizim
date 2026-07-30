@@ -8,7 +8,7 @@ const KNOB_CLASS = {
   present: "bg-green-500",
   absent: "bg-red-500",
   excused: "bg-amber-500",
-  exempt: "bg-gray-500",
+  exempt: "bg-muted-foreground",
 };
 
 const BulkStatusSlider = ({ onPick, disabled = false }) => {
@@ -53,7 +53,7 @@ const BulkStatusSlider = ({ onPick, disabled = false }) => {
       onPointerMove={onPointerMove}
       onPointerUp={stopDrag}
       className={cn(
-        "relative flex w-full max-w-md touch-none select-none rounded-full border border-gray-200 bg-gray-100 p-1",
+        "relative flex w-full max-w-md touch-none select-none rounded-full border border-border bg-muted p-1",
         disabled ? "pointer-events-none opacity-50" : "cursor-pointer",
       )}
     >

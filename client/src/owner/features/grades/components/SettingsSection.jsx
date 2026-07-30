@@ -13,7 +13,7 @@ const SettingsSection = ({
   return (
     <section
       className={cn(
-        "rounded-md border bg-white p-4 xs:p-5",
+        "rounded-md border bg-card p-4 xs:p-5",
         className,
       )}
     >
@@ -24,7 +24,7 @@ const SettingsSection = ({
           </span>
         )}
         <div className="min-w-0">
-          <h2 className="font-semibold text-gray-900">{title}</h2>
+          <h2 className="font-semibold text-foreground">{title}</h2>
           {description && (
             <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
           )}
@@ -46,7 +46,7 @@ export const SettingRow = ({ label, hint = "", control, className = "" }) => (
     )}
   >
     <div className="min-w-0">
-      <p className="text-sm font-medium text-gray-800">{label}</p>
+      <p className="text-sm font-medium text-foreground">{label}</p>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
     </div>
     <div className="shrink-0">{control}</div>

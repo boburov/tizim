@@ -28,24 +28,24 @@ export default function UsagePage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Foydalanish</h1>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Har loyihaning limitlari va hozirgi holati
         </p>
       </div>
 
       {exceededCount > 0 && (
-        <div className="mb-5 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="mb-5 flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle size={17} />
           {exceededCount} ta loyihada limit oshgan — tarifni oshirish kerak
         </div>
       )}
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-slate-500">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="animate-spin" size={18} /> Yuklanmoqda…
         </div>
       ) : !data?.length ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
+        <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center text-muted-foreground">
           Hali loyiha yo'q.
         </div>
       ) : (
@@ -53,7 +53,7 @@ export default function UsagePage() {
           {data.map((t) => (
             <div
               key={t.id}
-              className="rounded-xl border border-slate-200 bg-white p-5"
+              className="rounded-xl border border-border bg-card p-5"
             >
               <div className="mb-4 flex items-start justify-between">
                 <div>
@@ -63,7 +63,7 @@ export default function UsagePage() {
                   >
                     {t.name}
                   </Link>
-                  <div className="text-xs text-slate-500">{t.domain}</div>
+                  <div className="text-xs text-muted-foreground">{t.domain}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span
@@ -73,7 +73,7 @@ export default function UsagePage() {
                   </span>
                   <span
                     className={`flex items-center gap-1 text-xs ${
-                      t.online ? 'text-emerald-600' : 'text-slate-400'
+                      t.online ? 'text-emerald-600 dark:text-emerald-300' : 'text-muted-foreground'
                     }`}
                     title={`Oxirgi aloqa: ${timeAgo(t.lastHeartbeatAt)}`}
                   >
@@ -84,10 +84,10 @@ export default function UsagePage() {
               </div>
 
               <div className="mb-3 flex items-center gap-2 text-sm">
-                <span className="text-slate-500">Tarif:</span>
+                <span className="text-muted-foreground">Tarif:</span>
                 <span className="font-medium">
                   {t.planName || (
-                    <span className="text-amber-600">biriktirilmagan</span>
+                    <span className="text-amber-600 dark:text-amber-300">biriktirilmagan</span>
                   )}
                 </span>
               </div>

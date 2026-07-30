@@ -56,7 +56,7 @@ const FeedbackListPage = () => {
       </header>
 
       {/* Toolbar: qidiruv + tur */}
-      <div className="flex flex-col gap-3 rounded-lg border bg-white p-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center">
         <div className="flex-1">
           <InputField
             name="search"

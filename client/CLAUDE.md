@@ -138,6 +138,70 @@ Exceptions (only these three cases):
 
 Details - `.claude/skills/useobjectstate-bilan-state-boshqarish/SKILL.md`.
 
+## Theming (light / dark)
+
+The theme works **automatically from the OS setting** (`defaultTheme="system"`), and the user can override it (Light / Dark / System). The choice is stored in `localStorage` under the `theme` key.
+
+- `shared/components/theme/ThemeProvider.jsx` - wraps `next-themes` (mounted in `main.jsx`).
+- `shared/components/theme/ThemeToggle.jsx` - `variant="menu"` (3 options) or `variant="switch"` (single button).
+- `shared/hooks/useTheme.js` - `{ theme, resolvedTheme, isDark, isSystem, setTheme, toggleTheme }`.
+- `index.html` has a synchronous script that applies the theme **before first paint** (prevents FOUC). It reads the same `theme` key - do not rename it.
+
+### Colour rules - IMPORTANT
+
+**Never write hardcoded colours** (`bg-white`, `text-gray-500`, `border-slate-200`). They do not adapt to dark mode. Use semantic tokens:
+
+| Instead of | Use |
+|---|---|
+| `bg-white` | `bg-card` |
+| `bg-gray-50` / `bg-gray-100` | `bg-muted` |
+| `bg-gray-200` | `bg-accent` |
+| `text-gray-900` / `700` | `text-foreground` |
+| `text-gray-500` / `400` | `text-muted-foreground` |
+| `border-gray-200` | `border-border` |
+| `text-white` on `bg-primary` | `text-primary-foreground` |
+
+Status tokens also exist: `success`, `warning`, `info`, `destructive` (each with a `-foreground` pair).
+
+**Status colours** (green = ok, red = error) carry meaning, so they are not converted to tokens - instead give them a `dark:` variant:
+
+```jsx
+<span className="bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" />
+```
+
+Modal overlays / scrims stay `bg-black/40` - they must be dark in both themes.
+
+### Brand colour from `.env`
+
+Colours are given as **HSL channels without the `hsl()` wrapper**: `"<hue> <saturation>% <lightness>%"`.
+
+| Variable | Mode | Required |
+|---|---|---|
+| `VITE_APP_PRIMARY` | light | no |
+| `VITE_APP_BACKGROUND` | light | no |
+| `VITE_APP_PRIMARY_DARK` | dark | no - derived if absent |
+| `VITE_APP_BACKGROUND_DARK` | dark | no - derived if absent |
+
+`shared/constants/app.js` → `applyAppTheme()` injects a `<style>` tag scoped as `:root:not(.dark)` / `:root.dark`. Token generation lives in `shared/lib/theme/brandTokens.js`.
+
+**If the dark values are omitted** they are derived from the light ones: the hue is kept and the lightness is raised until contrast reaches at least 4.5:1 against the dark background.
+
+**If the dark values are given** they are used as-is; only contrast is enforced (lightness may be nudged, the hue never changes).
+
+> Careful with a **black** brand colour (`0 0% 0%`). Black cannot be shown on a dark background, so the automatic mode turns it into a grey. To keep the brand look, set `VITE_APP_PRIMARY_DARK` yourself.
+
+When `VITE_APP_BACKGROUND_DARK` is supplied, all the other dark surfaces (`card`, `muted`, `accent`, `border`, `input`, `sidebar`) are stepped off **that** value, so a custom dark background stays tonally consistent.
+
+> Do not use `documentElement.style.setProperty()` for this - an inline style beats `.dark { ... }` rules and dark mode would silently stop working.
+
+### Contrast check
+
+```bash
+npm run check:contrast   # WCAG AA (4.5:1) - CSS tokens + .env derived values
+```
+
+Run it after changing any colour token; it exits non-zero on failure.
+
 ## Language rules
 
 - UI text - Uzbek (`"Saqlash"`, `"Bekor qilish"`, `"Talabalar ro'yxati"`).

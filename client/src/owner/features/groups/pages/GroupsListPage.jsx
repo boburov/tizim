@@ -82,7 +82,7 @@ const GroupsListPage = () => {
       )}
 
       {!isLoading && groups.length === 0 && (
-        <div className="border rounded-lg p-12 text-center bg-white">
+        <div className="border rounded-lg p-12 text-center bg-card">
           <Search className="size-10 mx-auto text-muted-foreground mb-3" />
           <p className="text-muted-foreground">
             Hech qanday guruh topilmadi. "Yangi guruh" tugmasini bosib boshlang.

@@ -37,7 +37,7 @@ const InputPwd = ({
         onClick={toggleVisibility}
         title={isVisible ? "Parolni yashirish" : "Parolni ko'rsatish"}
         aria-label={isVisible ? "Parolni yashirish" : "Parolni ko'rsatish"}
-        className="flex items-center justify-center absolute inset-y-1 right-1 size-8 rounded-sm text-gray-500 transition-colors disabled:opacity-50 outline-primary"
+        className="flex items-center justify-center absolute inset-y-1 right-1 size-8 rounded-sm text-muted-foreground transition-colors disabled:opacity-50 outline-primary"
       >
         {isVisible ? (
           <EyeOff size={20} strokeWidth={1.5} />

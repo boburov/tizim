@@ -29,8 +29,8 @@ const KpiTile = ({
   // statik sinflar bilan beramiz (Tailwind dinamik sinflarni generatsiya qilmaydi).
   const positiveDeltaClass =
     tone === "expense"
-      ? "bg-rose-50 text-rose-600"
-      : "bg-emerald-50 text-emerald-600";
+      ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300"
+      : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
 
   const body = (
     <div
@@ -38,7 +38,7 @@ const KpiTile = ({
         "group relative flex h-full flex-col justify-between overflow-hidden rounded-2xl border p-5 transition",
         hero
           ? "border-transparent bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-          : "border-zinc-200/80 bg-white hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md",
+          : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md",
       )}
     >
       {hero && (
@@ -48,7 +48,7 @@ const KpiTile = ({
         <p
           className={cn(
             "text-sm font-medium",
-            hero ? "text-primary-foreground/90" : "text-zinc-600",
+            hero ? "text-primary-foreground/90" : "text-muted-foreground",
           )}
         >
           {label}
@@ -58,7 +58,7 @@ const KpiTile = ({
             "flex size-8 items-center justify-center rounded-full transition",
             hero
               ? "bg-white/15 text-primary-foreground"
-              : "bg-zinc-100 text-zinc-500 group-hover:bg-primary/10 group-hover:text-primary",
+              : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
           )}
         >
           {to ? <ArrowUpRight className="size-4" /> : <Icon className="size-4" />}
@@ -69,7 +69,7 @@ const KpiTile = ({
         className={cn(
           "mt-6 font-semibold tracking-tight tabular-nums",
           isMoney ? "text-2xl" : "text-3xl",
-          hero ? "text-white" : "text-zinc-900",
+          hero ? "text-white" : "text-foreground",
         )}
       >
         {hasValue ? (
@@ -79,14 +79,14 @@ const KpiTile = ({
             suffix={suffix}
           />
         ) : (
-          <span className={hero ? "text-white/70" : "text-zinc-400"}>—</span>
+          <span className={hero ? "text-white/70" : "text-muted-foreground"}>—</span>
         )}
       </p>
 
       <div
         className={cn(
           "mt-2 flex items-center gap-1.5 text-xs",
-          hero ? "text-primary-foreground/80" : "text-zinc-500",
+          hero ? "text-primary-foreground/80" : "text-muted-foreground",
         )}
       >
         {delta != null && (
@@ -97,7 +97,7 @@ const KpiTile = ({
                 ? "bg-white/15 text-white"
                 : delta >= 0
                   ? positiveDeltaClass
-                  : "bg-rose-50 text-rose-600",
+                  : "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300",
             )}
           >
             <TrendingUp className={cn("size-3", delta < 0 && "rotate-180")} />

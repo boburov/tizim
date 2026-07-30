@@ -84,12 +84,12 @@ const CONFIG_SUMMARY = {
 };
 
 const STATUS_META = {
-  pending: { label: "Kutilmoqda", cls: "bg-amber-100 text-amber-700", icon: Clock },
-  approved: { label: "Tasdiqlandi", cls: "bg-blue-100 text-blue-700", icon: Check },
-  executed: { label: "Bajarildi", cls: "bg-emerald-100 text-emerald-700", icon: Check },
-  rejected: { label: "Rad etildi", cls: "bg-red-100 text-red-700", icon: X },
-  canceled: { label: "Bekor qilindi", cls: "bg-gray-100 text-gray-600", icon: Ban },
-  failed: { label: "Xato", cls: "bg-red-100 text-red-700", icon: AlertTriangle },
+  pending: { label: "Kutilmoqda", cls: "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300", icon: Clock },
+  approved: { label: "Tasdiqlandi", cls: "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300", icon: Check },
+  executed: { label: "Bajarildi", cls: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", icon: Check },
+  rejected: { label: "Rad etildi", cls: "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300", icon: X },
+  canceled: { label: "Bekor qilindi", cls: "bg-muted text-muted-foreground", icon: Ban },
+  failed: { label: "Xato", cls: "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300", icon: AlertTriangle },
 };
 
 const fullName = (u) =>
@@ -177,12 +177,12 @@ const ApprovalCard = ({ approval }) => {
           </div>
         )}
         {approval.failureReason && (
-          <div className="text-red-600">Xato: {approval.failureReason}</div>
+          <div className="text-red-600 dark:text-red-300">Xato: {approval.failureReason}</div>
         )}
       </div>
 
       {isOwnRequest && isPending && has(decidePermission) && (
-        <p className="text-xs text-amber-600">
+        <p className="text-xs text-amber-600 dark:text-amber-300">
           O'z so'rovingizni o'zingiz tasdiqlay olmaysiz
         </p>
       )}

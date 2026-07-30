@@ -7,6 +7,9 @@ import "./styles/index.css";
 import { applyAppTheme } from "@/shared/constants/app";
 applyAppTheme();
 
+// Theme (light / dark / system)
+import ThemeProvider from "@/shared/components/theme/ThemeProvider";
+
 // Toaster
 import { Toaster } from "sonner";
 
@@ -53,19 +56,21 @@ if (
 
 createRoot(document.getElementById("root")).render(
   <ErrorBoundary>
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <Provider store={store}>
-          <Routes />
+    <ThemeProvider>
+      <BrowserRouter>
+        <QueryClientProvider client={queryClient}>
+          <Provider store={store}>
+            <Routes />
 
-          <Toaster
-            richColors
-            position="top-right"
-            offset={{ top: 24 }}
-            mobileOffset={{ top: 24 }}
-          />
-        </Provider>
-      </QueryClientProvider>
-    </BrowserRouter>
+            <Toaster
+              richColors
+              position="top-right"
+              offset={{ top: 24 }}
+              mobileOffset={{ top: 24 }}
+            />
+          </Provider>
+        </QueryClientProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   </ErrorBoundary>,
 );

@@ -101,7 +101,7 @@ const DateRangePicker = ({
         <button
           type="button"
           className={cn(
-            "inline-flex h-10 items-center gap-2 rounded-md border bg-white px-3 text-sm transition-colors hover:border-foreground/20",
+            "inline-flex h-10 items-center gap-2 rounded-md border bg-card px-3 text-sm transition-colors hover:border-foreground/20",
             !hasValue && "text-muted-foreground",
             className,
           )}

@@ -74,14 +74,14 @@ export default function CreateTenantPage() {
   };
 
   const field =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20';
-  const label = 'mb-1 block text-sm font-medium text-slate-700';
+    'w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20';
+  const label = 'mb-1 block text-sm font-medium text-foreground';
 
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Yangi loyiha</h1>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Tizimni tanlang, brend ma'lumotlarini kiriting — server va client avtomatik
           yaratiladi (alohida baza bilan).
         </p>
@@ -90,7 +90,7 @@ export default function CreateTenantPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
       <form
         onSubmit={submit}
-        className="space-y-5 rounded-xl border border-slate-200 bg-white p-6"
+        className="space-y-5 rounded-xl border border-border bg-card p-6"
       >
         {/* Tizim tanlash (dinamik) — kartochka ko'rinishidagi radio guruh */}
         <fieldset>
@@ -101,12 +101,12 @@ export default function CreateTenantPage() {
               {[0, 1].map((i) => (
                 <div
                   key={i}
-                  className="h-[86px] animate-pulse rounded-xl border border-slate-200 bg-slate-50"
+                  className="h-[86px] animate-pulse rounded-xl border border-border bg-muted"
                 />
               ))}
             </div>
           ) : !templates?.length ? (
-            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="flex items-start gap-2 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               <span>
                 Faol tizim shabloni topilmadi. Avval "Sozlamalar"da tizim qo'shing.
@@ -126,7 +126,7 @@ export default function CreateTenantPage() {
                       'focus-within:ring-2 focus-within:ring-brand/30',
                       active
                         ? 'border-brand bg-brand/5 shadow-sm'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
+                        : 'border-border hover:border-border hover:bg-muted',
                     )}
                   >
                     <input
@@ -140,17 +140,17 @@ export default function CreateTenantPage() {
                     <span
                       className={cn(
                         'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition',
-                        active ? 'bg-brand text-white' : 'bg-slate-100 text-slate-500',
+                        active ? 'bg-brand text-primary-foreground' : 'bg-muted text-muted-foreground',
                       )}
                     >
                       <Icon size={18} />
                     </span>
                     <span className="min-w-0 pr-5">
-                      <span className="block text-sm font-medium text-slate-800">
+                      <span className="block text-sm font-medium text-foreground">
                         {t.name}
                       </span>
                       {t.description && (
-                        <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">
+                        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
                           {t.description}
                         </span>
                       )}
@@ -168,7 +168,7 @@ export default function CreateTenantPage() {
             </div>
           )}
 
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-muted-foreground">
             Hozircha o'quv markaz tizimi. Keyinchalik boshqa tizimlar qo'shiladi.
           </p>
         </fieldset>
@@ -193,7 +193,7 @@ export default function CreateTenantPage() {
             placeholder="bilim.example.uz"
             required
           />
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             Yaratilgandan so'ng DNS uchun IP beriladi.
           </p>
         </div>
@@ -205,7 +205,7 @@ export default function CreateTenantPage() {
               type="color"
               value={form.brandColor}
               onChange={set('brandColor')}
-              className="h-10 w-16 cursor-pointer rounded-lg border border-slate-300"
+              className="h-10 w-16 cursor-pointer rounded-lg border border-border"
             />
           </div>
           <div>
@@ -227,7 +227,7 @@ export default function CreateTenantPage() {
             onChange={set('botToken')}
             placeholder="123456:ABC-DEF..."
           />
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             Ixtiyoriy. Bo'lmasa bot o'chirilgan holda ishga tushadi.
           </p>
         </div>
@@ -236,14 +236,14 @@ export default function CreateTenantPage() {
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
           >
             Bekor qilish
           </button>
           <button
             type="submit"
             disabled={mutation.isPending || !form.systemTemplateId}
-            className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-60"
+            className="flex items-center gap-2 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-brand-dark disabled:opacity-60"
           >
             {mutation.isPending ? (
               <Loader2 size={16} className="animate-spin" />

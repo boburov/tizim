@@ -139,7 +139,7 @@ const AudienceSelector = ({ value, onChange, disabled = false }) => {
                 "flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition disabled:opacity-50",
                 active
                   ? "border-primary bg-primary/5 ring-1 ring-primary"
-                  : "border-border bg-white hover:border-primary/40 hover:bg-muted/30",
+                  : "border-border bg-card hover:border-primary/40 hover:bg-muted/30",
               )}
             >
               <Icon

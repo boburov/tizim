@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   MessagesSquare,
   Settings,
+  Sparkles,
   Wallet,
 } from "lucide-react";
 
@@ -37,6 +38,16 @@ const ownerSidebar = [
     url: "/owner/expense-approvals",
     badge: "approvals",
     permissionAnyOf: ["finance.read", "approvals.decide_config"],
+  },
+
+  // AI vazifalar markazi: YAKKA link, "Bosh sahifa"dan keyin darhol.
+  // Sabab - bu ertalabki birinchi ekran bo'lishi kerak ("bugun nima
+  // qilaman?"), guruh ichiga yashirilsa kundalik odatga aylanmaydi.
+  {
+    title: "AI markaz",
+    icon: Sparkles,
+    url: "/owner/ai",
+    permission: "ai.read",
   },
 
   {

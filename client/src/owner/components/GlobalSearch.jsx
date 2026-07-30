@@ -371,13 +371,13 @@ const GlobalSearch = ({ renderTrigger }) => {
                 </div>
               )}
             </CommandList>
-            <div className="flex items-center justify-between gap-2 border-t px-3 py-2 text-[11px] text-muted-foreground bg-gray-50">
+            <div className="flex items-center justify-between gap-2 border-t px-3 py-2 text-[11px] text-muted-foreground bg-muted">
               <span>
-                <kbd className="px-1 py-0.5 rounded border bg-white">↑↓</kbd> tanlash
+                <kbd className="px-1 py-0.5 rounded border bg-card">↑↓</kbd> tanlash
                 {"  "}
-                <kbd className="ml-2 px-1 py-0.5 rounded border bg-white">Enter</kbd> o'tish
+                <kbd className="ml-2 px-1 py-0.5 rounded border bg-card">Enter</kbd> o'tish
                 {"  "}
-                <kbd className="ml-2 px-1 py-0.5 rounded border bg-white">Esc</kbd> yopish
+                <kbd className="ml-2 px-1 py-0.5 rounded border bg-card">Esc</kbd> yopish
               </span>
               <span>
                 {searching

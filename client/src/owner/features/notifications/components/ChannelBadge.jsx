@@ -3,10 +3,10 @@ import { cn } from "@/shared/utils/cn";
 import { CHANNEL_SHORT_LABEL } from "@/shared/constants/notification";
 
 const META = {
-  telegram: { icon: Send, className: "border-sky-200 bg-sky-50 text-sky-700" },
+  telegram: { icon: Send, className: "border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300" },
   inapp: {
     icon: Smartphone,
-    className: "border-violet-200 bg-violet-50 text-violet-700",
+    className: "border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300",
   },
 };
 

@@ -23,7 +23,7 @@ const calc = (p) => {
 
 const ProgressBar = ({ pct, barColor }) => (
   <div className="flex min-w-[100px] items-center gap-2">
-    <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
       <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
     </div>
     <span className="w-9 shrink-0 text-right text-xs font-medium text-muted-foreground">{pct}%</span>
@@ -33,7 +33,7 @@ const ProgressBar = ({ pct, barColor }) => (
 const NameLink = ({ payment }) => (
   <Link
     to={`/owner/finance/student-payments/student/${payment.student?._id}`}
-    className="font-medium text-gray-900 hover:underline"
+    className="font-medium text-foreground hover:underline"
   >
     {payment.student?.firstName} {payment.student?.lastName}
   </Link>
@@ -85,7 +85,7 @@ const StudentPaymentsTable = ({ rows = [], isLoading }) => {
       key: "paid",
       header: "To'langan",
       headerClassName: headerCls,
-      cell: (r) => <span className="text-emerald-600">{formatMoney(calc(r).paid)}</span>,
+      cell: (r) => <span className="text-emerald-600 dark:text-emerald-300">{formatMoney(calc(r).paid)}</span>,
     },
     {
       key: "remaining",
@@ -94,7 +94,7 @@ const StudentPaymentsTable = ({ rows = [], isLoading }) => {
       cell: (r) => {
         const { remaining } = calc(r);
         return (
-          <span className={remaining > 0 ? "font-semibold text-rose-600" : "text-muted-foreground"}>
+          <span className={remaining > 0 ? "font-semibold text-rose-600 dark:text-rose-300" : "text-muted-foreground"}>
             {formatMoney(remaining)}
           </span>
         );
@@ -121,8 +121,8 @@ const StudentPaymentsTable = ({ rows = [], isLoading }) => {
         <ProgressBar pct={pct} barColor={barColor} />
         <div className="flex flex-wrap justify-between gap-x-3 text-xs">
           <span className="text-muted-foreground">Kerak: {formatMoney(expected)}</span>
-          <span className="text-emerald-600">To'langan: {formatMoney(paid)}</span>
-          <span className={remaining > 0 ? "text-rose-600" : "text-muted-foreground"}>
+          <span className="text-emerald-600 dark:text-emerald-300">To'langan: {formatMoney(paid)}</span>
+          <span className={remaining > 0 ? "text-rose-600 dark:text-rose-300" : "text-muted-foreground"}>
             To'lanmagan: {formatMoney(remaining)}
           </span>
         </div>

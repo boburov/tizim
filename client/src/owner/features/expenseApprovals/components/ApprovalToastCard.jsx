@@ -38,14 +38,14 @@ const ApprovalToastCard = ({ approval, onClose, onOpenDetail }) => {
   const busy = approving || rejecting;
 
   return (
-    <div className="w-[356px] max-w-[calc(100vw-2rem)] rounded-lg border bg-white p-3 shadow-lg">
+    <div className="w-[356px] max-w-[calc(100vw-2rem)] rounded-lg border bg-card p-3 shadow-lg">
       <div className="mb-2 flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-zinc-500">Yangi tasdiq so'rovi</p>
+        <p className="text-xs font-medium text-muted-foreground">Yangi tasdiq so'rovi</p>
         <button
           type="button"
           onClick={onClose}
           aria-label="Yopish"
-          className="-mr-1 -mt-1 rounded p-1 text-zinc-400 transition hover:bg-muted hover:text-zinc-600"
+          className="-mr-1 -mt-1 rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-muted-foreground"
         >
           <X size={14} strokeWidth={2} />
         </button>
@@ -61,7 +61,7 @@ const ApprovalToastCard = ({ approval, onClose, onOpenDetail }) => {
 
       <div className="mt-2 space-y-0.5">
         <p className="text-sm font-semibold">{approvalHeadline(approval)}</p>
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-muted-foreground">
           {fullName(approval.requestedBy)}
           {hasMultipleBranches && approval.branchId?.name
             ? ` · ${approval.branchId.name}`
@@ -84,14 +84,14 @@ const ApprovalToastCard = ({ approval, onClose, onOpenDetail }) => {
             type="button"
             disabled={busy}
             onClick={() => reject({ id: approval._id })}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-red-200 dark:border-red-500/30 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-50"
           >
             <X size={15} strokeWidth={2.5} />
             Rad etish
           </button>
         </div>
       ) : (
-        reason && <p className="mt-2 text-xs text-amber-600">{reason}</p>
+        reason && <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">{reason}</p>
       )}
     </div>
   );

@@ -25,7 +25,7 @@ const UserTelegramCard = ({ telegram }) => {
   return (
     <Card>
       <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-500">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-500/10 text-sky-500 dark:text-sky-400">
           <Send className="size-5" />
         </div>
         <div className="min-w-0 flex-1">

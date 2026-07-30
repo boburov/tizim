@@ -85,7 +85,7 @@ const MessageComposer = ({ value, onChange, channels = [], disabled = false }) =
             ref={textareaRef}
             rows={6}
             className={cn(
-              "w-full rounded-[2px] border border-input bg-white px-3 py-2 text-sm outline-2 outline-primary",
+              "w-full rounded-[2px] border border-input bg-card px-3 py-2 text-sm outline-2 outline-primary",
               "disabled:cursor-not-allowed disabled:opacity-50",
             )}
             placeholder="Xabar matnini yozing yoki shablon tanlang..."

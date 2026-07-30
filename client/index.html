@@ -7,6 +7,34 @@
     <!-- Favicon -->
     <link rel="icon" href="%VITE_APP_LOGO%" />
 
+    <!--
+      Temani BIRINCHI bo'yashdan OLDIN qo'llaymiz.
+      Bu bo'lmasa, React yuklanguncha sahifa oq (light) bo'lib turadi va
+      keyin qorong'iga "sakraydi" (FOUC). Skript sinxron va <head> ichida
+      bo'lishi shart. Kalit `next-themes` bilan bir xil: "theme".
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var isDark =
+            stored === "dark" ||
+            ((!stored || stored === "system") &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+          document.documentElement.classList.toggle("dark", isDark);
+          document.documentElement.style.colorScheme = isDark
+            ? "dark"
+            : "light";
+        } catch (e) {
+          /* localStorage yopiq bo'lsa - light rejimda davom etamiz */
+        }
+      })();
+    </script>
+
+    <!-- Brauzer UI (scrollbar, form kontrollari) ham temaga moslashsin -->
+    <meta name="color-scheme" content="light dark" />
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

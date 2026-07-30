@@ -38,6 +38,21 @@ const groupSchema = new mongoose.Schema(
       index: true,
     },
     name: { type: String, trim: true, required: true },
+
+    // KURS (yo'nalish). null = biriktirilmagan (eski guruhlar yoki aralash
+    // dastur). Hisobotda bunday guruhlar "Kursi belgilanmagan" qatoriga
+    // tushadi - jimgina yo'qolmaydi.
+    //
+    // DIQQAT: kurs bo'yicha moliyaviy hisobot GURUH orqali filialga
+    // bog'lanadi (Group.branchId), shuning uchun Course'ning o'zida
+    // branchId kerak emas - course.model.js dagi izohga qarang.
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
+      default: null,
+      index: true,
+    },
+
     schedule: { type: [scheduleItemSchema], default: [] },
     teachers: [
       { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },

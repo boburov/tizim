@@ -69,6 +69,7 @@ import {
   BranchLimitsPage,
 } from "@/owner/features/branches";
 import { ExpenseApprovalsPage } from "@/owner/features/expenseApprovals";
+import { ActionCenterPage } from "@/owner/features/ai";
 import {
   FeedbackPage,
   FeedbackListPage,
@@ -276,6 +277,18 @@ const OwnerRoutes = () => (
           fallback="/owner"
         >
           <ExpenseApprovalsPage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* AI vazifalar markazi - kunlik prioritetli ro'yxat. Alohida chatbot
+        sahifasi ATAYLAB yo'q: AI modullar ichiga o'rnatiladi, bu sahifa
+        esa faqat "bugun nima qilish kerak" savoliga javob beradi. */}
+    <Route
+      path="ai"
+      element={
+        <PermissionGuard required="ai.read" fallback="/owner">
+          <ActionCenterPage />
         </PermissionGuard>
       }
     />

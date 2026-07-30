@@ -23,11 +23,11 @@ const BulkDecideBar = ({ selected = [], onApprove, onReject, onClear, busy }) =>
   );
 
   return (
-    <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-lg border bg-white p-3 shadow-lg">
+    <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3 shadow-lg">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{selected.length} ta tanlandi</p>
         {total > 0 && (
-          <p className="text-xs text-zinc-500">Jami chiqim: {formatMoney(total)}</p>
+          <p className="text-xs text-muted-foreground">Jami chiqim: {formatMoney(total)}</p>
         )}
       </div>
 

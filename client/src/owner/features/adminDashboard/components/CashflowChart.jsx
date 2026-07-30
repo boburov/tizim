@@ -34,12 +34,12 @@ const CashflowChart = () => {
   const net = totalIncome - totalExpense;
 
   return (
-    <div className="rounded-2xl border border-zinc-200/80 bg-white p-5">
+    <div className="rounded-2xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h2 className="font-semibold text-zinc-900">Moliyaviy oqim</h2>
+        <h2 className="font-semibold text-foreground">Moliyaviy oqim</h2>
 
         {/* Tablar */}
-        <div className="flex rounded-lg bg-zinc-100 p-0.5">
+        <div className="flex rounded-lg bg-muted p-0.5">
           {TABS.map((t) => (
             <button
               key={t.value}
@@ -48,8 +48,8 @@ const CashflowChart = () => {
               className={cn(
                 "rounded-md px-3 py-1 text-xs font-medium transition",
                 range === t.value
-                  ? "bg-white text-primary shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-700",
+                  ? "bg-card text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {t.label}
@@ -61,23 +61,23 @@ const CashflowChart = () => {
       {/* Xulosa */}
       <div className="mt-4 flex flex-wrap gap-4">
         <div>
-          <p className="text-[11px] text-zinc-500">Kirim</p>
+          <p className="text-[11px] text-muted-foreground">Kirim</p>
           <p className="text-sm font-semibold text-primary">
             {formatMoney(totalIncome)}
           </p>
         </div>
         <div>
-          <p className="text-[11px] text-zinc-500">Chiqim</p>
-          <p className="text-sm font-semibold text-rose-600">
+          <p className="text-[11px] text-muted-foreground">Chiqim</p>
+          <p className="text-sm font-semibold text-rose-600 dark:text-rose-300">
             {formatMoney(totalExpense)}
           </p>
         </div>
         <div>
-          <p className="text-[11px] text-zinc-500">Sof</p>
+          <p className="text-[11px] text-muted-foreground">Sof</p>
           <p
             className={cn(
               "text-sm font-semibold",
-              net >= 0 ? "text-emerald-600" : "text-rose-600",
+              net >= 0 ? "text-emerald-600 dark:text-emerald-300" : "text-rose-600 dark:text-rose-300",
             )}
           >
             {net > 0 ? "+" : ""}
@@ -88,9 +88,9 @@ const CashflowChart = () => {
 
       {/* Bar chart */}
       {isLoading ? (
-        <div className="mt-6 h-44 animate-pulse rounded-xl bg-zinc-100" />
+        <div className="mt-6 h-44 animate-pulse rounded-xl bg-muted" />
       ) : buckets.length === 0 ? (
-        <p className="mt-6 text-sm text-zinc-400">Ma'lumot yo'q</p>
+        <p className="mt-6 text-sm text-muted-foreground">Ma'lumot yo'q</p>
       ) : (
         <div className="mt-6 flex h-44 items-end gap-1.5 sm:gap-2">
           {buckets.map((b, i) => {
@@ -104,7 +104,7 @@ const CashflowChart = () => {
               >
                 {/* Tooltip */}
                 {has && (
-                  <div className="pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 shadow transition group-hover:opacity-100">
+                  <div className="pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] text-background opacity-0 shadow transition group-hover:opacity-100">
                     <span className="text-primary-foreground">
                       {shortMoney(b.income)}
                     </span>
@@ -128,7 +128,7 @@ const CashflowChart = () => {
                     }}
                   />
                 </div>
-                <span className="mt-1.5 truncate text-[10px] text-zinc-500">
+                <span className="mt-1.5 truncate text-[10px] text-muted-foreground">
                   {b.label}
                 </span>
               </div>
@@ -138,7 +138,7 @@ const CashflowChart = () => {
       )}
 
       {/* Legend */}
-      <div className="mt-4 flex gap-4 text-xs text-zinc-500">
+      <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className="size-2.5 rounded-full bg-primary" /> Kirim
         </span>

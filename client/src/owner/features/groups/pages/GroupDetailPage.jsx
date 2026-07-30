@@ -66,7 +66,7 @@ const GroupDetailPage = () => {
         <button
           type="button"
           onClick={goBack}
-          className="text-blue-600 hover:underline cursor-pointer"
+          className="text-blue-600 dark:text-blue-300 hover:underline cursor-pointer"
         >
           Guruhlar ro'yxatiga qaytish
         </button>
@@ -91,7 +91,7 @@ const GroupDetailPage = () => {
           <h1 className="text-2xl font-semibold">{group.name}</h1>
           <Badge variant="secondary">{group.studentsCount} o'quvchi</Badge>
           {isEnded && (
-            <Badge className="bg-gray-200 text-gray-700">Tugagan</Badge>
+            <Badge className="bg-accent text-foreground">Tugagan</Badge>
           )}
         </div>
 
@@ -140,7 +140,7 @@ const GroupDetailPage = () => {
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    className="text-red-600 focus:text-red-700"
+                    className="text-red-600 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
                     onSelect={() =>
                       openModal(MODAL.GROUP_PERMANENT_DELETE, { group })
                     }
@@ -156,7 +156,7 @@ const GroupDetailPage = () => {
       </div>
 
       {isEnded && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
           Kurs{" "}
           {endKey && (
             <>

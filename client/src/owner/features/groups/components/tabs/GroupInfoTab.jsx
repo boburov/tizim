@@ -119,7 +119,7 @@ const GroupInfoTab = ({ group }) => {
 
       <GroupStatsPanel groupId={group._id} />
 
-      <details className="group/details border rounded-sm bg-white">
+      <details className="group/details border rounded-sm bg-card">
         <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground select-none">
           Tarix (a'zolik o'zgarishlari)
         </summary>

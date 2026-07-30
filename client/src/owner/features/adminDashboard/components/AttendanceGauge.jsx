@@ -11,12 +11,12 @@ const AttendanceGauge = ({ gauge }) => {
   const legend = [
     { label: "Kelgan", value: gauge?.present ?? 0, color: "bg-primary" },
     { label: "Kechikkan", value: gauge?.late ?? 0, color: "bg-primary/40" },
-    { label: "Kelmagan", value: gauge?.absent ?? 0, color: "bg-zinc-200" },
+    { label: "Kelmagan", value: gauge?.absent ?? 0, color: "bg-accent" },
   ];
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-zinc-200/80 bg-white p-5">
-      <h2 className="font-semibold text-zinc-900">Bugungi davomat</h2>
+    <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-5">
+      <h2 className="font-semibold text-foreground">Bugungi davomat</h2>
 
       <div className="relative mx-auto mt-4 w-full max-w-[220px]">
         <svg viewBox="0 0 160 90" className="w-full">
@@ -40,10 +40,10 @@ const AttendanceGauge = ({ gauge }) => {
           )}
         </svg>
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
-          <span className="text-3xl font-bold tabular-nums text-zinc-900">
+          <span className="text-3xl font-bold tabular-nums text-foreground">
             {hasData ? `${rate}%` : "-"}
           </span>
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-muted-foreground">
             {hasData ? `${gauge.total} ta belgilangan` : "Ma'lumot yo'q"}
           </span>
         </div>
@@ -53,8 +53,8 @@ const AttendanceGauge = ({ gauge }) => {
         {legend.map((l) => (
           <div key={l.label} className="flex items-center gap-1.5">
             <span className={`size-2.5 rounded-full ${l.color}`} />
-            <span className="text-xs text-zinc-600">
-              {l.label} <span className="font-semibold text-zinc-900">{l.value}</span>
+            <span className="text-xs text-muted-foreground">
+              {l.label} <span className="font-semibold text-foreground">{l.value}</span>
             </span>
           </div>
         ))}

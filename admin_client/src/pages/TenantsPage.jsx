@@ -22,24 +22,24 @@ export default function TenantsPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Loyihalar</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Yaratilgan o'quv markazlar va boshqa tizimlar
           </p>
         </div>
         <Link
           to="/tenants/new"
-          className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
+          className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-brand-dark"
         >
           <Plus size={18} /> Yangi loyiha
         </Link>
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-slate-500">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="animate-spin" size={18} /> Yuklanmoqda…
         </div>
       ) : !data?.length ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
+        <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center text-muted-foreground">
           Hali loyiha yo'q. "Yangi loyiha" tugmasi bilan boshlang.
         </div>
       ) : (
@@ -48,7 +48,7 @@ export default function TenantsPage() {
             <Link
               key={t.id}
               to={`/tenants/${t.id}`}
-              className="rounded-xl border border-slate-200 bg-white p-5 transition hover:shadow-md"
+              className="rounded-xl border border-border bg-card p-5 transition hover:shadow-md"
             >
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -58,7 +58,7 @@ export default function TenantsPage() {
                   />
                   <div>
                     <div className="font-medium">{t.name}</div>
-                    <div className="text-xs text-slate-500">{t.domain}</div>
+                    <div className="text-xs text-muted-foreground">{t.domain}</div>
                   </div>
                 </div>
               </div>
@@ -68,7 +68,7 @@ export default function TenantsPage() {
                 >
                   {STATUS_LABEL[t.status] || t.status}
                 </span>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-muted-foreground">
                   {t.systemTemplate?.name}
                 </span>
               </div>

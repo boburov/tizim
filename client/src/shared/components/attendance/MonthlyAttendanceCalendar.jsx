@@ -57,7 +57,7 @@ const cellColor = (entries) => {
   for (const e of entries) {
     if (e.status) return STATUS_BADGE_CLASS[e.status] || "";
   }
-  return "bg-white border";
+  return "bg-card border";
 };
 
 const MonthlyAttendanceCalendar = ({ data, year, month, onPrevMonth, onNextMonth }) => {
@@ -77,14 +77,14 @@ const MonthlyAttendanceCalendar = ({ data, year, month, onPrevMonth, onNextMonth
           <button
             type="button"
             onClick={onPrevMonth}
-            className="size-8 rounded-md border bg-white hover:bg-gray-50 text-sm"
+            className="size-8 rounded-md border bg-card hover:bg-muted text-sm"
           >
             ‹
           </button>
           <button
             type="button"
             onClick={onNextMonth}
-            className="size-8 rounded-md border bg-white hover:bg-gray-50 text-sm"
+            className="size-8 rounded-md border bg-card hover:bg-muted text-sm"
           >
             ›
           </button>
@@ -110,7 +110,7 @@ const MonthlyAttendanceCalendar = ({ data, year, month, onPrevMonth, onNextMonth
               key={d.dateKey}
               title={hasClass ? cellTitle(entries) : "Dars kuni emas"}
               className={`aspect-square rounded text-sm flex items-center justify-center ${
-                hasClass ? cellColor(entries) : "bg-gray-50 text-gray-400"
+                hasClass ? cellColor(entries) : "bg-muted text-muted-foreground"
               }`}
             >
               <div className="flex flex-col items-center justify-center leading-tight">

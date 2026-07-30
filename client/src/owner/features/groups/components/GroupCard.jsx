@@ -83,7 +83,7 @@ const GroupCard = ({ group, archived = false }) => {
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      className="text-red-600 focus:text-red-700"
+                      className="text-red-600 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
                       onSelect={() =>
                         openModal(MODAL.GROUP_PERMANENT_DELETE, { group })
                       }
@@ -136,7 +136,7 @@ const GroupCard = ({ group, archived = false }) => {
             {group.monthlyFee != null ? (
               formatMoney(group.monthlyFee)
             ) : (
-              <span className="text-amber-600">Belgilanmagan</span>
+              <span className="text-amber-600 dark:text-amber-300">Belgilanmagan</span>
             )}
           </div>
 

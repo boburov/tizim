@@ -49,7 +49,7 @@ const LeadsTable = ({ items = [], isLoading = false }) => {
             type="button"
             variant="ghost"
             size="icon"
-            className="size-8 text-gray-500 hover:text-gray-700"
+            className="size-8 text-muted-foreground hover:text-foreground"
             aria-label="Amallar"
           >
             <MoreVertical className="size-4" />
@@ -75,7 +75,7 @@ const LeadsTable = ({ items = [], isLoading = false }) => {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            className="text-red-600 focus:text-red-700"
+            className="text-red-600 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
             onSelect={() => openModal(MODAL.LEAD_DELETE, { lead: l })}
           >
             <Trash2 className="size-4" />
@@ -109,7 +109,7 @@ const LeadsTable = ({ items = [], isLoading = false }) => {
           </span>
           {l.followUpAt && !l.followUpNotifiedAt && (
             <BellRing
-              className="size-3.5 shrink-0 text-amber-500"
+              className="size-3.5 shrink-0 text-amber-500 dark:text-amber-400"
               title={`Qayta bog'lanish: ${formatDateUz(l.followUpAt)}`}
             />
           )}
@@ -121,7 +121,7 @@ const LeadsTable = ({ items = [], isLoading = false }) => {
       header: "Telefon",
       headerClassName: th,
       cell: (l) => (
-        <span className="text-gray-600">{formatPhone(l.phone) || "-"}</span>
+        <span className="text-muted-foreground">{formatPhone(l.phone) || "-"}</span>
       ),
     },
     {

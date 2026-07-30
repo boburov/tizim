@@ -9,10 +9,10 @@ export const STATUS_LABEL = {
 };
 
 export const STATUS_BADGE_CLASS = {
-  present: "bg-green-100 text-green-700",
-  absent: "bg-red-100 text-red-700",
-  excused: "bg-amber-100 text-amber-700",
-  exempt: "bg-gray-100 text-gray-600",
+  present: "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300",
+  absent: "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300",
+  excused: "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  exempt: "bg-muted text-muted-foreground",
 };
 
 // To'liq to'ldirilgan nuqta/katak ranglari (matritsada ko'rinarli bo'lsin)
@@ -20,7 +20,7 @@ export const STATUS_DOT_CLASS = {
   present: "bg-emerald-500",
   absent: "bg-rose-500",
   excused: "bg-amber-500",
-  exempt: "bg-slate-400",
+  exempt: "bg-muted-foreground/50",
 };
 
 export const STATUS_EMOJI = {

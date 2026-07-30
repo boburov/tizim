@@ -54,7 +54,7 @@ const MyAttendancePage = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
           <p className="text-sm text-muted-foreground">Davomat foizi</p>
-          <p className="text-2xl font-semibold text-blue-600">
+          <p className="text-2xl font-semibold text-blue-600 dark:text-blue-300">
             {summary?.attendanceRate !== null && summary?.attendanceRate !== undefined
               ? `${summary.attendanceRate}%`
               : "-"}
@@ -66,13 +66,13 @@ const MyAttendancePage = () => {
         </Card>
         <Card>
           <p className="text-sm text-muted-foreground">Keldi</p>
-          <p className="text-2xl font-semibold text-green-600">
+          <p className="text-2xl font-semibold text-green-600 dark:text-green-300">
             {summary?.present || 0}
           </p>
         </Card>
         <Card>
           <p className="text-sm text-muted-foreground">Kelmadi</p>
-          <p className="text-2xl font-semibold text-red-600">
+          <p className="text-2xl font-semibold text-red-600 dark:text-red-300">
             {summary?.absent || 0}
           </p>
         </Card>

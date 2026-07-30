@@ -13,7 +13,7 @@ import useOverviewQuery from "../hooks/useOverviewQuery";
 import useStudentFlowQuery from "../hooks/useStudentFlowQuery";
 
 const SkeletonBlock = ({ className = "" }) => (
-  <div className={`animate-pulse rounded-2xl bg-zinc-100 ${className}`} />
+  <div className={`animate-pulse rounded-2xl bg-muted ${className}`} />
 );
 
 const AdminDashboardPage = () => {
@@ -31,7 +31,7 @@ const AdminDashboardPage = () => {
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-zinc-900">
+        <h1 className="text-2xl font-semibold text-foreground">
           Boshqaruv paneli
         </h1>
         <DashboardTopbar />

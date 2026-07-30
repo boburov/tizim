@@ -4,7 +4,7 @@ import * as React from "react";
 import { cn } from "@/shared/utils/cn.js";
 
 export const inputBaseClasses =
-  "flex h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-base outline-2 outline-primary outline-offset-0 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm";
+  "flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base outline-2 outline-primary outline-offset-0 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm";
 
 // Barcha textli inputlar uchun standart belgi limiti (caller o'zi override qila oladi)
 const DEFAULT_MAX_LENGTH = 20;

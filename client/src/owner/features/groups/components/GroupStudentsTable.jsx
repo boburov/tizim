@@ -44,7 +44,7 @@ const GroupStudentsTable = ({ group }) => {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 overflow-x-auto bg-white">
+    <div className="rounded-lg border border-border overflow-x-auto bg-card">
       <table className="w-full min-w-[820px] table-fixed text-sm">
         <colgroup>
           <col className="w-12" />
@@ -55,7 +55,7 @@ const GroupStudentsTable = ({ group }) => {
           <col className="w-[16%]" />
         </colgroup>
         <thead>
-          <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-400">
+          <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
             <th className="px-4 py-3">#</th>
             <th className="px-4 py-3">Ism familiya</th>
             <th className="px-4 py-3">Telefon</th>
@@ -64,10 +64,10 @@ const GroupStudentsTable = ({ group }) => {
             <th className="px-4 py-3 text-right">Amallar</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border">
           {students.map((s, i) => (
-            <tr key={s._id} className="transition-colors hover:bg-gray-50">
-              <td className="px-4 py-3 text-gray-400">{i + 1}</td>
+            <tr key={s._id} className="transition-colors hover:bg-muted">
+              <td className="px-4 py-3 text-muted-foreground">{i + 1}</td>
               <td className="px-4 py-3">
                 <Link
                   to={`/owner/users/${s._id}`}
@@ -77,7 +77,7 @@ const GroupStudentsTable = ({ group }) => {
                   {s.firstName} {s.lastName}
                 </Link>
               </td>
-              <td className="px-4 py-3 text-gray-600">
+              <td className="px-4 py-3 text-muted-foreground">
                 <span
                   className="block truncate"
                   title={formatPhone(s.phone) || "-"}
@@ -92,7 +92,7 @@ const GroupStudentsTable = ({ group }) => {
                       href={`https://t.me/${s.telegram.username}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex min-w-0 items-center gap-1 font-medium text-sky-600 hover:text-sky-700 hover:underline"
+                      className="flex min-w-0 items-center gap-1 font-medium text-sky-600 dark:text-sky-300 hover:text-sky-700 dark:hover:text-sky-300 hover:underline"
                       title={`@${s.telegram.username}`}
                     >
                       <Send className="size-3.5 shrink-0" />
@@ -100,7 +100,7 @@ const GroupStudentsTable = ({ group }) => {
                     </a>
                   ) : (
                     <span
-                      className="flex min-w-0 items-center gap-1 font-medium text-emerald-600"
+                      className="flex min-w-0 items-center gap-1 font-medium text-emerald-600 dark:text-emerald-300"
                       title={`Telegram ID: ${s.telegram.telegramId}`}
                     >
                       <Send className="size-3.5 shrink-0" />
@@ -108,10 +108,10 @@ const GroupStudentsTable = ({ group }) => {
                     </span>
                   )
                 ) : (
-                  <span className="text-gray-300">Bog'lanmagan</span>
+                  <span className="text-muted-foreground">Bog'lanmagan</span>
                 )}
               </td>
-              <td className="px-4 py-3 text-gray-600">
+              <td className="px-4 py-3 text-muted-foreground">
                 {s.joinedAt ? formatDateUzLong(s.joinedAt) : "-"}
               </td>
               <td className="px-4 py-3">
@@ -122,7 +122,7 @@ const GroupStudentsTable = ({ group }) => {
                     size="icon"
                     title="Login va parol"
                     aria-label="Login va parol"
-                    className="size-8 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                    className="size-8 text-amber-600 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300"
                     onClick={() =>
                       openModal(MODAL.USER_PASSWORD, { user: s })
                     }
@@ -137,7 +137,7 @@ const GroupStudentsTable = ({ group }) => {
                         size="icon"
                         title="Amallar"
                         aria-label="Amallar"
-                        className="size-8 text-gray-500 hover:text-gray-700"
+                        className="size-8 text-muted-foreground hover:text-foreground"
                       >
                         <MoreVertical className="size-4" />
                       </Button>
@@ -156,7 +156,7 @@ const GroupStudentsTable = ({ group }) => {
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        className="text-red-600 focus:text-red-700"
+                        className="text-red-600 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
                         onSelect={() =>
                           openModal(MODAL.GROUP_REMOVE_STUDENT, {
                             groupId: group._id,

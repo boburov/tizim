@@ -44,20 +44,20 @@ export default function SitePreview({ tenant }) {
   if (tenant.status === 'DELETED') return null;
 
   return (
-    <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
+    <div className="mb-5 rounded-xl border border-border bg-card p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 font-medium text-slate-800">
+        <h2 className="flex items-center gap-2 font-medium text-foreground">
           <Monitor size={17} /> Sayt preview
           {isLoading ? (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
               tekshirilmoqda…
             </span>
           ) : live ? (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+            <span className="rounded-full bg-emerald-100 dark:bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
               Tirik{data.elapsedMs ? ` · ${data.elapsedMs} ms` : ''}
             </span>
           ) : (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+            <span className="rounded-full bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
               Javob bermadi
             </span>
           )}
@@ -65,7 +65,7 @@ export default function SitePreview({ tenant }) {
 
         <div className="flex items-center gap-2">
           {live && (
-            <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+            <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
               {[
                 ['desktop', Monitor],
                 ['mobile', Smartphone],
@@ -77,8 +77,8 @@ export default function SitePreview({ tenant }) {
                   className={cn(
                     'rounded-md p-1.5 transition',
                     device === key
-                      ? 'bg-white text-slate-800 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700',
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   <Icon size={15} />
@@ -90,7 +90,7 @@ export default function SitePreview({ tenant }) {
           <button
             onClick={reload}
             disabled={isFetching}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted disabled:opacity-50"
           >
             <RefreshCw size={14} className={isFetching ? 'animate-spin' : undefined} />
             Yangilash
@@ -101,7 +101,7 @@ export default function SitePreview({ tenant }) {
               href={url}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-dark"
+              className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-brand-dark"
             >
               <ExternalLink size={14} /> Ochish
             </a>
@@ -113,12 +113,12 @@ export default function SitePreview({ tenant }) {
         <>
           <div
             className={cn(
-              'relative mx-auto overflow-hidden rounded-xl border border-slate-200 bg-slate-50 transition-all',
+              'relative mx-auto overflow-hidden rounded-xl border border-border bg-muted transition-all',
               device === 'mobile' ? 'w-[390px] max-w-full' : 'w-full',
             )}
           >
             {frameLoading && (
-              <div className="absolute inset-0 flex items-center justify-center gap-2 bg-white text-sm text-slate-500">
+              <div className="absolute inset-0 flex items-center justify-center gap-2 bg-card text-sm text-muted-foreground">
                 <Loader2 size={16} className="animate-spin" /> Sayt yuklanmoqda…
               </div>
             )}
@@ -128,11 +128,11 @@ export default function SitePreview({ tenant }) {
               title={`${tenant.name} — preview`}
               onLoad={() => setFrameLoading(false)}
               sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-              className="w-full bg-white"
+              className="w-full bg-card"
               style={{ height: FRAME_H }}
             />
           </div>
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-muted-foreground">
             {url} · Ba'zi saytlar iframe ichida ochilmasligi mumkin — u holda
             "Ochish" tugmasidan foydalaning.
           </p>
@@ -140,7 +140,7 @@ export default function SitePreview({ tenant }) {
       ) : (
         <>
           {!isLoading && (
-            <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
               <TriangleAlert size={16} className="mt-0.5 shrink-0" />
               <div>
                 <div>{data?.message}</div>

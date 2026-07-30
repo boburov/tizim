@@ -15,7 +15,7 @@ import ApprovalQuickRow from "../ApprovalQuickRow";
  */
 const MissedApprovalsModal = ({ approvals = [], total = 0, close }) => (
   <div className="space-y-3">
-    <p className="text-sm text-zinc-600">
+    <p className="text-sm text-muted-foreground">
       Sizning qaroringizni <span className="font-semibold">{total} ta</span>{" "}
       so'rov kutmoqda.
     </p>

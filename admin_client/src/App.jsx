@@ -15,7 +15,7 @@ import PortalHomePage from './portal/pages/PortalHomePage';
 
 function Loading() {
   return (
-    <div className="flex h-screen items-center justify-center text-slate-500">
+    <div className="flex h-screen items-center justify-center text-muted-foreground">
       Yuklanmoqda…
     </div>
   );

@@ -75,6 +75,15 @@ export const PERMISSIONS = Object.freeze({
   // maosh stavkasi belgilash huquqini bermaydi.
   APPROVALS_DECIDE_CONFIG: "approvals.decide_config",
 
+  // Kurslar (yo'nalish katalogi)
+  COURSES_READ: "courses.read",
+  COURSES_MANAGE: "courses.manage",
+
+  // AI maslahatchi
+  AI_READ: "ai.read",
+  AI_ASSISTANT: "ai.assistant",
+  AI_CONFIG: "ai.config",
+
   // Filiallar
   BRANCHES_READ: "branches.read",
   BRANCHES_CREATE: "branches.create",

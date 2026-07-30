@@ -63,14 +63,14 @@ const BranchCard = ({ branch }) => {
             {branch.isMain && (
               <span
                 title="Asosiy filial"
-                className="flex items-center gap-1 shrink-0 text-xs text-amber-600"
+                className="flex items-center gap-1 shrink-0 text-xs text-amber-600 dark:text-amber-300"
               >
                 <Star size={12} strokeWidth={2} />
                 Asosiy
               </span>
             )}
             {isFrozen && (
-              <span className="flex items-center gap-1 shrink-0 text-xs text-sky-600">
+              <span className="flex items-center gap-1 shrink-0 text-xs text-sky-600 dark:text-sky-300">
                 <Snowflake size={12} strokeWidth={2} />
                 Muzlatilgan
               </span>

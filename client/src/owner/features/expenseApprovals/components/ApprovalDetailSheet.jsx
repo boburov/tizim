@@ -27,7 +27,7 @@ import { CATEGORY_LABELS } from "../constants";
 const Row = ({ label, children }) =>
   children ? (
     <div className="flex gap-3 py-2 text-sm">
-      <span className="w-32 shrink-0 text-zinc-500">{label}</span>
+      <span className="w-32 shrink-0 text-muted-foreground">{label}</span>
       <span className="min-w-0 flex-1 break-words">{children}</span>
     </div>
   ) : null;
@@ -79,7 +79,7 @@ const ApprovalDetailSheet = ({
             )}
             <Row label="So'rovchi">
               {fullName(approval.requestedBy)}
-              <span className="block text-xs text-zinc-500">
+              <span className="block text-xs text-muted-foreground">
                 {formatDateTimeUz(approval.createdAt)}
               </span>
             </Row>
@@ -105,7 +105,7 @@ const ApprovalDetailSheet = ({
               <Row label="Qaror">
                 {fullName(approval.decidedBy)}
                 {approval.decidedAt && (
-                  <span className="block text-xs text-zinc-500">
+                  <span className="block text-xs text-muted-foreground">
                     {formatDateTimeUz(approval.decidedAt)}
                   </span>
                 )}
@@ -117,14 +117,14 @@ const ApprovalDetailSheet = ({
 
             {approval.failureReason && (
               <div className="py-2">
-                <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">
+                <p className="rounded-md bg-red-50 dark:bg-red-500/10 p-2 text-sm text-red-700 dark:text-red-300">
                   {approval.failureReason}
                 </p>
               </div>
             )}
           </div>
 
-          {reason && <p className="mt-4 text-xs text-amber-600">{reason}</p>}
+          {reason && <p className="mt-4 text-xs text-amber-600 dark:text-amber-300">{reason}</p>}
         </div>
 
         {(canDecide || canCancel || canRetry) && (

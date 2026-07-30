@@ -177,7 +177,7 @@ const RoleFormPage = ({ mode = "edit" }) => {
             <Button
               type="button"
               variant="outline"
-              className="text-red-600 hover:text-red-700"
+              className="text-red-600 dark:text-red-300 hover:text-red-700 dark:hover:text-red-300"
               onClick={() => openModal(MODAL.ROLE_DELETE, { role })}
             >
               <Trash2 className="mr-1.5 size-4" />
@@ -189,10 +189,10 @@ const RoleFormPage = ({ mode = "edit" }) => {
 
       {/* Muzlatilgan rol ogohlantirishi */}
       {role?.isFrozen && (
-        <div className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm dark:border-sky-900 dark:bg-sky-950/40">
-          <Snowflake className="mt-0.5 size-4 shrink-0 text-sky-600 dark:text-sky-400" />
+        <div className="flex items-start gap-3 rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 p-4 text-sm dark:border-sky-900 dark:bg-sky-950/40">
+          <Snowflake className="mt-0.5 size-4 shrink-0 text-sky-600 dark:text-sky-300 dark:text-sky-400" />
           <div>
-            <p className="font-medium text-sky-900 dark:text-sky-200">
+            <p className="font-medium text-sky-900 dark:text-sky-300 dark:text-sky-200">
               Bu rol muzlatilgan
             </p>
             <p className="mt-0.5 text-sky-800/80 dark:text-sky-300/80">

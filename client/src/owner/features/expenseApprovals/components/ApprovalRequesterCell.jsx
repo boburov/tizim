@@ -10,7 +10,7 @@ const ApprovalRequesterCell = ({ user }) => (
     <div className="min-w-0">
       <p className="truncate text-sm">{fullName(user)}</p>
       {user?.username && (
-        <p className="truncate text-xs text-zinc-500">{user.username}</p>
+        <p className="truncate text-xs text-muted-foreground">{user.username}</p>
       )}
     </div>
   </div>

@@ -54,7 +54,7 @@ const GroupRemoveStudentModal = ({
   if (debtAmount != null) {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+        <div className="rounded-lg border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-300 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
           <p className="mb-1 font-semibold">Qarz aniqlandi</p>
           <p>
             <span className="font-semibold">{studentName}</span> o'quvchisida hali{" "}

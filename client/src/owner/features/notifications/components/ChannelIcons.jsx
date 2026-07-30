@@ -28,9 +28,9 @@ const IconDot = ({ channel, tone = "muted", label }) => {
   const Icon = meta.icon;
   const toneClass = {
     muted: "text-muted-foreground",
-    telegram: "text-sky-600",
-    success: "text-emerald-600",
-    danger: "text-red-500",
+    telegram: "text-sky-600 dark:text-sky-300",
+    success: "text-emerald-600 dark:text-emerald-300",
+    danger: "text-red-500 dark:text-red-400",
     off: "text-muted-foreground/40",
   }[tone];
 

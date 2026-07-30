@@ -23,7 +23,7 @@ const EnrollmentTrendChart = ({ items = [] }) => {
                 className="group flex min-w-[28px] flex-1 flex-col items-center justify-end gap-1.5"
                 title={`${MONTH_LABELS[it.month - 1]} ${it.year}: ${it.count} ta`}
               >
-                <span className="text-xs font-medium text-zinc-600">
+                <span className="text-xs font-medium text-muted-foreground">
                   {it.count || ""}
                 </span>
                 <div

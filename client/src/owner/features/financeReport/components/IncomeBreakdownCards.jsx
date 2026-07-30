@@ -14,29 +14,29 @@ import { formatMoney } from "@/shared/utils/formatMoney";
 const Card = ({ icon: Icon, label, value, hint, tone = "default", to }) => {
   const toneClasses =
     tone === "debt"
-      ? "text-rose-600"
+      ? "text-rose-600 dark:text-rose-300"
       : tone === "loss"
-        ? "text-amber-700"
-        : "text-zinc-900";
+        ? "text-amber-700 dark:text-amber-300"
+        : "text-foreground";
 
   const inner = (
     <div
       className={cn(
         "group flex h-full flex-col justify-between rounded-2xl border p-5 transition",
         tone === "loss"
-          ? "border-amber-200 bg-amber-50"
-          : "border-zinc-200/80 bg-white",
+          ? "border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10"
+          : "border-border bg-card",
         to && "hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md",
       )}
     >
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-zinc-600">{label}</p>
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
         <span
           className={cn(
             "flex size-8 items-center justify-center rounded-full transition",
             tone === "loss"
-              ? "bg-amber-100 text-amber-600"
-              : "bg-zinc-100 text-zinc-500 group-hover:bg-primary/10 group-hover:text-primary",
+              ? "bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300"
+              : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
           )}
         >
           {to ? <ArrowUpRight className="size-4" /> : <Icon className="size-4" />}
@@ -45,7 +45,7 @@ const Card = ({ icon: Icon, label, value, hint, tone = "default", to }) => {
       <p className={cn("mt-6 text-2xl font-semibold tracking-tight tabular-nums", toneClasses)}>
         {formatMoney(value || 0)}
       </p>
-      <p className="mt-1 text-xs text-zinc-500">{hint}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 

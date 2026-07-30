@@ -50,7 +50,7 @@ const RoleDeleteModal = ({ role, close, isLoading, setIsLoading, onDeleted }) =>
 
       {hasUsers && (
         <div className="space-y-3">
-          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <p className="rounded-lg bg-amber-50 dark:bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-300 dark:bg-amber-950/40 dark:text-amber-200">
             Bu rolda {role.userCount} ta foydalanuvchi bor. Ularni qaysi rolga
             o'tkazamiz?
           </p>

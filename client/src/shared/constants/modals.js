@@ -121,4 +121,7 @@ export const MODAL = Object.freeze({
   // Tasdiqlar
   APPROVAL_BULK_DECIDE: "approval:bulkDecide",
   APPROVAL_MISSED: "approval:missed",
+
+  // AI maslahatchi
+  AI_INSIGHT_DISMISS: "ai:insightDismiss",
 });

@@ -12,19 +12,19 @@ const ACTION_LABELS = {
 };
 
 const ACTION_CLASS = {
-  CREATE: "text-emerald-700",
-  UPDATE: "text-blue-700",
-  DELETE: "text-rose-700",
-  LOGIN: "text-violet-700",
-  LOGOUT: "text-slate-600",
-  SYSTEM: "text-slate-500",
+  CREATE: "text-emerald-700 dark:text-emerald-300",
+  UPDATE: "text-blue-700 dark:text-blue-300",
+  DELETE: "text-rose-700 dark:text-rose-300",
+  LOGIN: "text-violet-700 dark:text-violet-300",
+  LOGOUT: "text-muted-foreground",
+  SYSTEM: "text-muted-foreground",
 };
 
 const ActionBadge = ({ action, failed = false }) => {
   // Muvaffaqiyatsiz so'rovda amal emas, xato ta'kidlanadi
   if (failed) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold tracking-wide text-rose-600">
+      <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold tracking-wide text-rose-600 dark:text-rose-300">
         <span className="size-1.5 rounded-full bg-rose-500" />
         {ACTION_LABELS[action] || action}
       </span>

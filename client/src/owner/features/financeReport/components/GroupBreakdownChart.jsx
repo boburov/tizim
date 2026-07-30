@@ -9,13 +9,13 @@ const GroupBreakdownChart = ({ items = [], isLoading = false }) => {
   );
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-zinc-200/80 bg-white p-5">
+    <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-semibold text-zinc-900">Guruhlar kesimi</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">Kirim va chiqim bo'yicha</p>
+          <h2 className="font-semibold text-foreground">Guruhlar kesimi</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Kirim va chiqim bo'yicha</p>
         </div>
-        <div className="flex gap-3 text-xs text-zinc-500">
+        <div className="flex gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full bg-primary" /> Kirim
           </span>
@@ -28,11 +28,11 @@ const GroupBreakdownChart = ({ items = [], isLoading = false }) => {
       {isLoading ? (
         <div className="mt-4 space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-10 animate-pulse rounded-lg bg-zinc-100" />
+            <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p className="mt-6 text-sm text-zinc-400">Ma'lumot yo'q</p>
+        <p className="mt-6 text-sm text-muted-foreground">Ma'lumot yo'q</p>
       ) : (
         <div className="mt-4 flex-1 space-y-4">
           {items.map((it) => {
@@ -41,13 +41,13 @@ const GroupBreakdownChart = ({ items = [], isLoading = false }) => {
             return (
               <div key={it.groupId}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-zinc-700">
+                  <span className="truncate text-sm font-medium text-foreground">
                     {it.groupName}
                   </span>
                   <span
                     className={cn(
                       "shrink-0 text-xs font-semibold tabular-nums",
-                      it.net >= 0 ? "text-emerald-600" : "text-rose-600",
+                      it.net >= 0 ? "text-emerald-600 dark:text-emerald-300" : "text-rose-600 dark:text-rose-300",
                     )}
                   >
                     {it.net > 0 ? "+" : ""}
@@ -55,13 +55,13 @@ const GroupBreakdownChart = ({ items = [], isLoading = false }) => {
                   </span>
                 </div>
                 <div className="mt-1.5 space-y-1">
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-50">
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-primary transition-all duration-500"
                       style={{ width: `${Math.max(incW, it.income > 0 ? 2 : 0)}%` }}
                     />
                   </div>
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-50">
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-rose-500 transition-all duration-500"
                       style={{ width: `${Math.max(expW, it.expense > 0 ? 2 : 0)}%` }}

@@ -32,7 +32,7 @@ const DataTable = ({
     return (
       <div className={cn("space-y-2", className)}>
         {/* Desktop skeleton */}
-        <div className="hidden overflow-hidden rounded-lg border bg-white md:block">
+        <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
           {Array.from({ length: skeletonRows }).map((_, i) => (
             <div
               key={i}
@@ -61,7 +61,7 @@ const DataTable = ({
   return (
     <div className={className}>
       {/* ===== Desktop: jadval ===== */}
-      <div className="hidden overflow-hidden rounded-lg border bg-white md:block">
+      <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -106,7 +106,7 @@ const DataTable = ({
             key={rowKey(row)}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
             className={cn(
-              "rounded-lg border bg-white p-3",
+              "rounded-lg border bg-card p-3",
               onRowClick && "cursor-pointer transition-colors active:bg-muted/50",
             )}
           >

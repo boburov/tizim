@@ -9,35 +9,35 @@ export const MAX_GRADE = 5;
 
 export const GRADE_TOKENS = {
   5: {
-    soft: "bg-green-100 text-green-800 border-green-300",
+    soft: "bg-green-100 dark:bg-green-500/15 text-green-800 dark:text-green-300 border-green-300 dark:border-green-500/30",
     solid: "bg-green-500 text-white border-green-500",
     dot: "bg-green-500",
     ring: "ring-green-400",
     label: "A'lo",
   },
   4: {
-    soft: "bg-blue-100 text-blue-800 border-blue-300",
+    soft: "bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-300 dark:border-blue-500/30",
     solid: "bg-blue-500 text-white border-blue-500",
     dot: "bg-blue-500",
     ring: "ring-blue-400",
     label: "Yaxshi",
   },
   3: {
-    soft: "bg-yellow-100 text-yellow-800 border-yellow-300",
-    solid: "bg-yellow-400 text-yellow-950 border-yellow-400",
+    soft: "bg-yellow-100 dark:bg-yellow-500/15 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-500/30",
+    solid: "bg-yellow-400 text-yellow-950 dark:text-yellow-300 border-yellow-400",
     dot: "bg-yellow-400",
     ring: "ring-yellow-400",
     label: "Qoniqarli",
   },
   2: {
-    soft: "bg-orange-100 text-orange-800 border-orange-300",
+    soft: "bg-orange-100 dark:bg-orange-500/15 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-500/30",
     solid: "bg-orange-500 text-white border-orange-500",
     dot: "bg-orange-500",
     ring: "ring-orange-400",
     label: "Bo'sh",
   },
   1: {
-    soft: "bg-red-100 text-red-800 border-red-300",
+    soft: "bg-red-100 dark:bg-red-500/15 text-red-800 dark:text-red-300 border-red-300 dark:border-red-500/30",
     solid: "bg-red-500 text-white border-red-500",
     dot: "bg-red-500",
     ring: "ring-red-400",
@@ -46,10 +46,10 @@ export const GRADE_TOKENS = {
 };
 
 const FALLBACK_TOKEN = {
-  soft: "bg-gray-100 text-gray-700 border-gray-300",
-  solid: "bg-gray-400 text-white border-gray-400",
-  dot: "bg-gray-400",
-  ring: "ring-gray-400",
+  soft: "bg-muted text-foreground border-border",
+  solid: "bg-muted-foreground/50 text-white border-input",
+  dot: "bg-muted-foreground/50",
+  ring: "ring-border",
   label: "",
 };
 

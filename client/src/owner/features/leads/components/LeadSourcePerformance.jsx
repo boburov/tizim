@@ -20,7 +20,7 @@ const LeadSourcePerformance = ({ rows = [] }) => (
               <tr key={r.id || "none"}>
                 <td className="py-2 font-medium">{r.name}</td>
                 <td className="py-2 text-right">{r.total}</td>
-                <td className="py-2 text-right text-green-600">{r.enrolled}</td>
+                <td className="py-2 text-right text-green-600 dark:text-green-300">{r.enrolled}</td>
                 <td className="py-2 text-right font-medium">
                   {r.conversionRate}%
                 </td>

@@ -15,15 +15,15 @@ import Button from "@/shared/components/ui/button/Button";
 import { resolveHomePath } from "@/shared/constants/roles";
 
 const Container = ({ children }) => (
-  <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-b from-slate-50 to-blue-50">
-    <div className="max-w-md w-full bg-white border rounded-2xl shadow-sm p-6 space-y-4 text-center">
+  <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-b from-muted to-blue-50">
+    <div className="max-w-md w-full bg-card border rounded-2xl shadow-sm p-6 space-y-4 text-center">
       {children}
     </div>
   </div>
 );
 
 const Spinner = () => (
-  <div className="inline-block size-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+  <div className="inline-block size-8 border-4 border-blue-200 dark:border-blue-500/30 border-t-blue-600 rounded-full animate-spin" />
 );
 
 const BotAuthPage = () => {
@@ -153,7 +153,7 @@ const BotAuthPage = () => {
             disabled={isLoggingIn}
             onChange={(e) => ui.setField("password", e.target.value)}
           />
-          {ui.errorMsg && <p className="text-sm text-red-600">{ui.errorMsg}</p>}
+          {ui.errorMsg && <p className="text-sm text-red-600 dark:text-red-300">{ui.errorMsg}</p>}
           <Button type="submit" disabled={isLoggingIn} className="w-full">
             {isLoggingIn ? "Kirilyapti..." : "Kirish va bog'lash"}
           </Button>
@@ -170,7 +170,7 @@ const BotAuthPage = () => {
         <p className="text-sm text-muted-foreground">{ui.errorMsg}</p>
         <a
           href="/login"
-          className="inline-block mt-2 text-sm text-blue-600 hover:underline"
+          className="inline-block mt-2 text-sm text-blue-600 dark:text-blue-300 hover:underline"
         >
           Telefon va parol bilan kirish →
         </a>

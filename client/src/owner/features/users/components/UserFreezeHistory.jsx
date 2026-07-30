@@ -16,9 +16,9 @@ const UserFreezeHistory = ({ studentId }) => {
     u ? `${u.firstName || ""} ${u.lastName || ""}`.trim() : "";
 
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="rounded-lg border bg-card p-4">
       <div className="mb-3 flex items-center gap-2">
-        <Snowflake className="size-4 text-sky-600" />
+        <Snowflake className="size-4 text-sky-600 dark:text-sky-300" />
         <h3 className="font-medium">Muzlatish tarixi</h3>
       </div>
       <ul className="divide-y">
@@ -35,9 +35,9 @@ const UserFreezeHistory = ({ studentId }) => {
                   {f.endDate ? formatDateUzLong(f.endDate) : "hozir"}
                 </span>
                 {active ? (
-                  <Badge className="bg-sky-100 text-sky-700">Muzlatilgan</Badge>
+                  <Badge className="bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300">Muzlatilgan</Badge>
                 ) : (
-                  <Badge className="bg-gray-100 text-gray-600">Chiqarilgan</Badge>
+                  <Badge className="bg-muted text-muted-foreground">Chiqarilgan</Badge>
                 )}
               </div>
               <div className="text-muted-foreground">

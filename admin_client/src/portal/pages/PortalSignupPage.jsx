@@ -42,14 +42,14 @@ export default function PortalSignupPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
+    <div className="flex min-h-screen items-center justify-center bg-muted px-4 py-10">
+      <div className="w-full max-w-sm rounded-2xl bg-card p-8 shadow-xl ring-1 ring-border">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand text-white">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand text-primary-foreground">
             <Rocket size={24} />
           </div>
           <h1 className="text-xl font-semibold">Ro'yxatdan o'tish</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Bepul sinov bilan boshlang
           </p>
         </div>
@@ -60,26 +60,26 @@ export default function PortalSignupPage() {
         />
 
         <div className="my-5 flex items-center gap-3">
-          <span className="h-px flex-1 bg-slate-200" />
-          <span className="text-xs text-slate-400">yoki</span>
-          <span className="h-px flex-1 bg-slate-200" />
+          <span className="h-px flex-1 bg-accent" />
+          <span className="text-xs text-muted-foreground">yoki</span>
+          <span className="h-px flex-1 bg-accent" />
         </div>
 
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               To'liq ism
             </label>
             <input
               required
               value={form.fullName}
               onChange={(e) => setField('fullName', e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
               placeholder="Ism Familiya"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Email
             </label>
             <input
@@ -87,12 +87,12 @@ export default function PortalSignupPage() {
               required
               value={form.email}
               onChange={(e) => setField('email', e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
               placeholder="siz@example.uz"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Parol
             </label>
             <input
@@ -101,19 +101,19 @@ export default function PortalSignupPage() {
               minLength={8}
               value={form.password}
               onChange={(e) => setField('password', e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
               placeholder="Kamida 8 ta belgi"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Tashkilot nomi
-              <span className="ml-1 font-normal text-slate-400">(ixtiyoriy)</span>
+              <span className="ml-1 font-normal text-muted-foreground">(ixtiyoriy)</span>
             </label>
             <input
               value={form.companyName}
               onChange={(e) => setField('companyName', e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
               placeholder="O'quv markaz nomi"
             />
           </div>
@@ -121,14 +121,14 @@ export default function PortalSignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand py-2.5 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-brand-dark disabled:opacity-60"
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
             Ro'yxatdan o'tish
           </button>
         </form>
 
-        <p className="mt-5 text-center text-sm text-slate-500">
+        <p className="mt-5 text-center text-sm text-muted-foreground">
           Hisobingiz bormi?{' '}
           <Link
             to="/login"

@@ -158,7 +158,7 @@ const UserEditModal = ({ user, close, isLoading, setIsLoading }) => {
         />
       )}
 
-      <div className="flex gap-2 pt-2 sticky bottom-0 bg-white">
+      <div className="flex gap-2 pt-2 sticky bottom-0 bg-card">
         <Button
           type="button"
           variant="outline"

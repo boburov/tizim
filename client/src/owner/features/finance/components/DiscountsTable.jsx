@@ -67,7 +67,7 @@ const DiscountsTable = ({ rows = [], isLoading, onEdit, onDelete }) => {
           </button>
           <button
             type="button"
-            className="text-rose-500 hover:text-rose-700"
+            className="text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
             onClick={() => onDelete?.(r)}
             aria-label="O'chirish"
           >
@@ -96,7 +96,7 @@ const DiscountsTable = ({ rows = [], isLoading, onEdit, onDelete }) => {
             <Pencil className="size-4 text-muted-foreground" />
           </button>
           <button type="button" onClick={() => onDelete?.(r)} aria-label="O'chirish">
-            <Trash2 className="size-4 text-rose-500" />
+            <Trash2 className="size-4 text-rose-500 dark:text-rose-400" />
           </button>
         </div>
       </div>

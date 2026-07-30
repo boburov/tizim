@@ -9,13 +9,13 @@ const AttendanceLegend = () => (
     {ATTENDANCE_STATUSES.map((s) => (
       <span key={s} className="flex items-center gap-1.5">
         <span
-          className={`inline-block size-3 rounded ${STATUS_BADGE_CLASS[s]?.split(" ")[0] || "bg-gray-300"}`}
+          className={`inline-block size-3 rounded ${STATUS_BADGE_CLASS[s]?.split(" ")[0] || "bg-muted-foreground/30"}`}
         />
         <span>{STATUS_LABEL[s]}</span>
       </span>
     ))}
     <span className="flex items-center gap-1.5">
-      <span className="inline-block size-3 rounded border bg-white" />
+      <span className="inline-block size-3 rounded border bg-card" />
       <span>Belgilanmagan</span>
     </span>
   </div>
