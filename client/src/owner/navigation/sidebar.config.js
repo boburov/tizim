@@ -3,9 +3,9 @@ import {
   Building2,
   GraduationCap,
   LayoutDashboard,
+  Bot,
   MessagesSquare,
   Settings,
-  Sparkles,
   Wallet,
 } from "lucide-react";
 
@@ -45,7 +45,7 @@ const ownerSidebar = [
   // qilaman?"), guruh ichiga yashirilsa kundalik odatga aylanmaydi.
   {
     title: "AI markaz",
-    icon: Sparkles,
+    icon: Bot,
     url: "/owner/ai",
     permission: "ai.read",
   },

@@ -1716,3 +1716,23 @@ Build o'tdi. Oxirgi qadam — yangi ruxsatlar DB ga tushishi uchun seed'ni teksh
 <sub>session `86bb824a` · branch `main` · 63 ta qadam</sub>
 
 ---
+
+## 2026-07-30 12:52 — ai iconini orniga bot iconini ishlating
+
+**So'rov**
+
+> ai iconini orniga bot iconini ishlating
+
+**O'zgargan fayllar (1)**
+
+- `client/src/owner/navigation/sidebar.config.js` — tahrirlandi
+
+**Buyruqlar (1)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "Sparkles" src/ | grep -v node_modules; echo "--- Sparkles qolmadi ---"; npx eslint src/owner/navigation…
+```
+
+<sub>session `86bb824a` · branch `main` · 3 ta qadam</sub>
+
+---
