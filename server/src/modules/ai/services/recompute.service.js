@@ -13,6 +13,7 @@ import { recomputeGroupInsights } from "./groupInsight.service.js";
 import { recomputeCourseInsights } from "./courseInsight.service.js";
 import { recomputeLeadInsights } from "./leadInsight.service.js";
 import { recomputeFinanceInsights } from "./financeInsight.service.js";
+import { recomputeRankings } from "./ranking.service.js";
 
 // QAYTA HISOBLASH ORKESTRATORI - "AI o'zi kuzatib turadi" da'vosining
 // haqiqiy dvigateli. Foydalanuvchi hech narsa so'ramaydi: bu job kechasi
@@ -31,11 +32,14 @@ import { recomputeFinanceInsights } from "./financeInsight.service.js";
  *   3. courses           - guruh ro'yxati va medianani QAYTA ISHLATADI (2 dan)
  *   4. leads             - mustaqil
  *   5. finance           - churn ballarini O'QIYDI (1 dan), shuning uchun OXIRIDA
+ *   6. rankings          - mustaqil, lekin OXIRIDA: u eng og'ir bosqich
+ *                          (barcha o'quvchi bo'yicha signal) va yiqilsa
+ *                          insight'lar allaqachon yozilgan bo'lishi kerak
  *
  * Agar moliya o'quvchidan oldin ishlasa, daromad bashorati KECHAGI churn
  * ballariga tayanadi va har kuni bir kun orqada qolgan son ko'rsatadi.
  */
-const FULL_PIPELINE = ["students", "groups", "courses", "leads", "finance"];
+const FULL_PIPELINE = ["students", "groups", "courses", "leads", "finance", "rankings"];
 
 // TEZ (fast) rejim - kunduzi har 3 soatda ishlaydigan qism.
 //
@@ -61,6 +65,12 @@ const RUNNERS = {
   }),
   finance: async (branchId, now) => ({
     finance: await recomputeFinanceInsights(branchId, now),
+  }),
+  // Reytinglar insight EMAS - ular chegara qo'llamaydi va AiRanking
+  // snapshotiga yoziladi. Shuning uchun openCounts() ga ta'sir qilmaydi
+  // va o'z statistikasini qaytaradi.
+  rankings: async (branchId) => ({
+    rankings: await recomputeRankings(branchId),
   }),
 };
 

@@ -4,8 +4,10 @@ import logger from "../config/logger.js";
 import { hashPassword } from "../helpers/password.helper.js";
 import { ROLES } from "../constants/roles.js";
 import User from "../models/user.model.js";
+import Branch from "../models/branch.model.js";
 import Group from "../models/group.model.js";
 import GroupMembership from "../models/groupMembership.model.js";
+import TeacherGroupPeriod from "../models/teacherGroupPeriod.model.js";
 import Attendance from "../models/attendance.model.js";
 import AttendanceSettings from "../models/attendanceSettings.model.js";
 import AttendanceExemption from "../models/attendanceExemption.model.js";
@@ -126,9 +128,58 @@ const seed = async () => {
     throw new Error("Owner yo'q. Avval `npm run seed:owner` ishga tushiring.");
   }
 
+  // FILIAL - seed filial migratsiyasidan OLDIN yozilgan, shuning uchun
+  // guruhlarni branchId'siz yaratardi va `Group` validatsiyasi yiqilardi.
+  // Filial endi majburiy: bitta "Asosiy filial" ta'minlanadi va barcha
+  // foydalanuvchi/guruh shunga biriktiriladi. Idempotent - qayta ishga
+  // tushirilsa mavjudini oladi.
+  let branch = await Branch.findOne({ isMain: true, isDeleted: false });
+  if (!branch) {
+    branch = await Branch.create({
+      name: "Asosiy filial",
+      code: "MAIN",
+      isMain: true,
+      isActive: true,
+    });
+  }
+  // Owner ham filialga bog'lanadi - aks holda u kirganda "filial tanlang"
+  // holatida qolib ketadi va AI bashorati (filialga bog'liq) ishlamaydi.
+  if (!owner.homeBranchId) {
+    await User.updateOne({ _id: owner._id }, { $set: { homeBranchId: branch._id } });
+  }
+
+  // --- ESKI DEMO MA'LUMOTNI TOZALASH (idempotent qayta ishga tushirish) ---
+  //
+  // NEGA KERAK: seed ilgari faqat QO'SHARDI. Ikkinchi marta ishga
+  // tushirilsa 800 o'quvchi 1600 bo'lardi, guruhlar ikkilanardi va AI
+  // analitikasi ma'nosiz sonlar ustida ishlardi. multiBranchDemo.seed.js
+  // allaqachon shu naqshni qo'llaydi.
+  //
+  // SAQLANADI: owner, rollar, ruxsatlar, bildirishnoma shablonlari.
+  // O'CHIRILADI: faqat demo o'quvchi/o'qituvchi va ularga bog'liq yozuvlar.
+  const removedUsers = await User.deleteMany({
+    role: { $in: [ROLES.STUDENT, ROLES.TEACHER] },
+  });
+  await Promise.all([
+    Group.deleteMany({}),
+    GroupMembership.deleteMany({}),
+    TeacherGroupPeriod.deleteMany({}),
+    Attendance.deleteMany({}),
+    AttendanceExemption.deleteMany({}),
+    Feedback.deleteMany({}),
+  ]);
+  if (removedUsers.deletedCount) {
+    logger.info(`Eski demo ma'lumot tozalandi: ${removedUsers.deletedCount} foydalanuvchi`);
+  }
+
   const passwordHash = await hashPassword(COMMON_PASSWORD);
-  const now = new Date(2026, 4, 26);
-  const yearAgo = new Date(2025, 4, 26);
+  // NEGA QOTIRILGAN SANA EMAS: ilgari bu yerda `new Date(2026, 4, 26)`
+  // turardi. Seed shu sanagacha davomat yozardi va real vaqt undan
+  // o'tib ketgach AI ning 28 kunlik oynasi (davomat, baho trendi)
+  // BO'SH qolardi - butun analitika nol ko'rsatardi va sabab
+  // ko'rinmasdi. Seed doim "bugungacha" ma'lumot berishi kerak.
+  const now = new Date();
+  const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
   const teacherDocs = [];
   for (let i = 1; i <= TEACHER_COUNT; i++) {
@@ -145,6 +196,7 @@ const seed = async () => {
       gender,
       birthDate: randDate(new Date(1975, 0, 1), new Date(1995, 11, 31)),
       hiredAt: randDate(new Date(2022, 0, 1), new Date(2024, 11, 31)),
+      homeBranchId: branch._id,
       isActive: true,
     });
   }
@@ -173,6 +225,7 @@ const seed = async () => {
       parentName: `${pick(LAST_NAMES)} ${pick(MALE_FIRST)}`,
       parentPhone: genPhone(i + 5000),
       enrolledAt,
+      homeBranchId: branch._id,
       isActive: true,
     });
   }
@@ -189,11 +242,31 @@ const seed = async () => {
       name: `${dirName} ${letter}-${num}`,
       schedule: genSchedule(),
       teachers: [teacher._id],
+      branchId: branch._id,
       isActive: true,
     });
   }
   const groups = await Group.insertMany(groupDocs);
   logger.info(`${groups.length} ta guruh yaratildi`);
+
+  // O'QITUVCHI–GURUH DAVRLARI.
+  //
+  // Group.teachers[] YETARLI EMAS: AI (teacher.signal.js → loadTeachers)
+  // ataylab TeacherGroupPeriod dan o'qiydi, chunki massiv tarixsiz -
+  // o'tgan oy ketgan o'qituvchini ham "hozir ishlayapti" deb ko'rsatardi.
+  // Seed bu yozuvlarni yaratmasa, AI filialda BITTA ham o'qituvchi
+  // ko'rmaydi va o'qituvchi analitikasi butunlay bo'sh qoladi.
+  const periodDocs = groups.map((g, i) => ({
+    teacher: g.teachers[0],
+    group: g._id,
+    startDate: randDate(yearAgo, new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)),
+    endDate: null, // hozir dars beradi
+    salaryType: "percent",
+    percentRate: 40 + (i % 3) * 5,
+    createdBy: owner._id,
+  }));
+  await TeacherGroupPeriod.insertMany(periodDocs);
+  logger.info(`${periodDocs.length} ta o'qituvchi-guruh davri yaratildi`);
 
   const membershipDocs = [];
   for (const student of students) {

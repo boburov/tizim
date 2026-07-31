@@ -5,6 +5,10 @@ export const aiAPI = {
   // (kecha / bugun / keyin / hozir).
   briefing: (params) => http.get("/ai/briefing", { params }),
 
+  // Reytinglar: uchtasi ham bitta so'rovda (ular yonma-yon ko'rsatiladi
+  // va bir xil tungi hisoblashdan chiqadi).
+  rankings: () => http.get("/ai/rankings"),
+
   // Hisobotlar: kunlik / haftalik / oylik.
   reports: (params) => http.get("/ai/reports", { params }),
   report: (id) => http.get(`/ai/reports/${id}`),

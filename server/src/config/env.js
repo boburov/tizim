@@ -64,6 +64,19 @@ const env = Object.freeze({
   // filial UI'sini jimgina yo'qotardi. Yakka markaz buni ochiq e'lon qiladi.
   MULTI_BRANCH:
     String(process.env.MULTI_BRANCH || "true").toLowerCase() === "true",
+
+  // --- AI NARRATOR (Gemini) ---
+  //
+  // Bo'sh bo'lsa narrator BUTUNLAY o'chiq: tizim deterministik shablon
+  // matnda ishlaydi va hech narsa buzilmaydi. `need()` ATAYLAB
+  // ishlatilmadi - kalitsiz server ishga tushmay qolsa, ixtiyoriy
+  // yaxshilanish majburiy bog'liqlikka aylanardi.
+  //
+  // Gemini bepul darajasi (free tier) shu maqsad uchun yetarli: narrator
+  // faqat YANGI yoki faktorlari O'ZGARGAN insight uchun chaqiriladi
+  // (narrationHash keshi), ya'ni kuniga o'nlab so'rov, minglab emas.
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
+  GEMINI_MODEL: process.env.GEMINI_MODEL || "gemini-2.5-flash",
 });
 
 export const isProd = env.NODE_ENV === "production";

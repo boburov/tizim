@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Insight from "../../../models/insight.model.js";
 import { AI_ENGINE_VERSION } from "../../../models/aiConfig.model.js";
 import { kindMeta, isOpportunity } from "../insightKinds.js";
+import { subjectHref } from "./subjectLink.service.js";
 
 // INSIGHT YOZISH qatlami - barcha domen servislari uchun BITTA yo'l.
 //
@@ -82,6 +83,17 @@ export const buildInsight = ({
     subjectType: meta.subject,
     subjectId: toId(subjectId),
     subjectLabel,
+    // SUBYEKT PROFILIGA HAVOLA - kartadagi ism bosiladigan bo'lishi uchun.
+    //
+    // Nega yozish paytida hisoblanadi (frontend'da emas): bir xil
+    // moslashuv reyting qatorlarida va kelajakdagi hisobot/Telegram
+    // matnida ham kerak. Frontend'da qilinsa, hisobotdagi havola
+    // boshqacha qurilardi va ikkisi jimgina ayrilib ketardi.
+    //
+    // Havolasi bo'lmagan tur (kurs) uchun null qoladi va UI ismni
+    // oddiy matn sifatida chizadi - 404 ga olib boradigan havola
+    // umuman havolasizlikdan yomonroq.
+    subjectHref: subjectHref(meta.subject, subjectId),
     title,
     kind,
     domain: meta.domain,

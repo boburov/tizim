@@ -25,6 +25,7 @@ import actionCenter from "./handlers/actionCenter.handler.js";
 import bySubjects from "./handlers/bySubjects.handler.js";
 import byDomain from "./handlers/byDomain.handler.js";
 import briefing from "./handlers/briefing.handler.js";
+import rankings from "./handlers/rankings.handler.js";
 import listReports from "./handlers/listReports.handler.js";
 import getReport from "./handlers/getReport.handler.js";
 import latestReport from "./handlers/latestReport.handler.js";
@@ -47,6 +48,18 @@ router.get(
   requirePermission(PERMISSIONS.AI_READ),
   validate(briefingSchema),
   briefing,
+);
+
+// --- REYTINGLAR: "eng ko'p kechiktirganlar / qoldirganlar / o'qituvchilar" ---
+//
+// Validator YO'Q: so'rov parametri yo'q (filial kontekstdan olinadi,
+// limit tungi hisoblashda belgilanadi). Bo'sh zod sxemasi qo'shish
+// hech narsani tekshirmagan holda yana bir fayl yaratardi.
+router.get(
+  "/rankings",
+  requireAuth,
+  requirePermission(PERMISSIONS.AI_READ),
+  rankings,
 );
 
 // --- HISOBOTLAR (kunlik / haftalik / oylik) ---

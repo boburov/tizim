@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Attendance from "../../../models/attendance.model.js";
 import Grade from "../../../models/grade.model.js";
 import StudentPayment from "../../../models/studentPayment.model.js";
+import PaymentTransaction from "../../../models/paymentTransaction.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import StudentFreeze from "../../../models/studentFreeze.model.js";
 import {
@@ -461,8 +462,19 @@ export const groupChurnSignal = async (windows) => {
  * tranzaksiya sanasi tarixni saqlaydi.
  */
 export const paymentDisciplineSignal = async (studentIds, now) => {
-  const PaymentTransaction = mongoose.models.PaymentTransaction;
-  if (!PaymentTransaction) return new Map();
+  // MODEL TO'G'RIDAN-TO'G'RI IMPORT QILINADI.
+  //
+  // Ilgari bu yerda `mongoose.models.PaymentTransaction` turardi va model
+  // ro'yxatda bo'lmasa jimgina BO'SH Map qaytarardi. Model esa faqat
+  // boshqa modul (moliya) uni import qilgan bo'lsa ro'yxatga tushardi -
+  // ya'ni HTTP jarayonida ishlardi, alohida job/skript jarayonida esa
+  // YO'Q. Natijada to'lov intizomi signali jimgina o'chib qolardi va
+  // payment_risk balli kechikish TARIXISIZ hisoblanardi - xato hech
+  // qayerda ko'rinmasdi, chunki bo'sh Map ham "hech kim kechiktirmagan"
+  // deb o'qilardi.
+  //
+  // Aylanma import xavfi yo'q: paymentTransaction.model.js faqat mongoose
+  // va softDelete plaginini import qiladi.
 
   // Oxirgi 12 oy - undan uzoq tarix bugungi xulq-atvorni aks ettirmaydi.
   const since = new Date(now.getTime() - 365 * DAY_MS);

@@ -13,6 +13,7 @@
     "seed:fake-data": "node src/seeds/fakeData.seed.js",
     "seed:fake-extras": "node src/seeds/fakeExtras.seed.js",
     "seed:fake-extras2": "node src/seeds/fakeExtras2.seed.js",
+    "seed:ai-demo": "node src/seeds/aiDemoFinance.seed.js",
     "migrate:attendance-slot": "node src/seeds/migrateAttendanceSlot.seed.js",
     "migrate:remove-plain-passwords": "node src/seeds/removePlainPasswords.seed.js",
     "migrate:membership-index": "node src/seeds/migrateMembershipIndex.seed.js",

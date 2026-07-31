@@ -7,6 +7,7 @@ import GroupMembership from "../../../models/groupMembership.model.js";
 import TeacherAttendance from "../../../models/teacherAttendance.model.js";
 import TeacherAbsence from "../../../models/teacherAbsence.model.js";
 import TeacherGroupPeriod from "../../../models/teacherGroupPeriod.model.js";
+import PaymentTransaction from "../../../models/paymentTransaction.model.js";
 import { ROLES } from "../../../constants/roles.js";
 import { buildWindows } from "./student.signal.js";
 
@@ -330,8 +331,92 @@ export const teacherOutcomeSignal = async (teachers, now) => {
   return out;
 };
 
+/**
+ * TO'LOV INTIZOMI - o'qituvchi guruhlaridagi o'quvchilar o'z vaqtida
+ * to'laydimi.
+ *
+ * NEGA BU O'QITUVCHI KO'RSATKICHI: dars sifati to'lov intizomiga
+ * bilvosita, lekin kuchli ta'sir qiladi. Ota-ona farzandining darsdan
+ * qoniqqanini ko'rsa - to'lovni kechiktirmaydi; qoniqmasa - "keyingi oy
+ * ko'ramiz" deb cho'zadi. To'lov intizomi shuning uchun qoniqishning
+ * ENG ERTA o'lchanadigan belgisi (shikoyat kelguncha uch oy o'tadi).
+ *
+ * MUHIM CHEKLOV: bu signal HECH QACHON yolg'iz ishlatilmaydi va vazni eng
+ * kichigi (0.25). Sabab - to'lov ko'p jihatdan oilaning moliyaviy
+ * ahvoliga bog'liq, o'qituvchiga emas. Kambag'alroq hududdagi filialda
+ * ishlayotgan o'qituvchini shu ko'rsatkich uchun jazolash adolatsiz
+ * bo'lardi. Aynan shuning uchun ball XOM nisbatdan emas, FILIAL
+ * O'RTACHASIDAN FARQdan chiqariladi (teacherBaseline) - bir xil
+ * hududdagi hamkasblar bilan taqqoslanadi.
+ *
+ * 5 kunlik imtiyoz student.signal.js dagi paymentDisciplineSignal bilan
+ * BIR XIL - ikki joyda turli qoida bo'lsa, bir xil o'quvchi bir joyda
+ * "kechiktirgan", boshqasida "o'z vaqtida" bo'lib chiqardi.
+ */
+export const teacherPaymentSignal = async (teachers, now) => {
+  const allGroupIds = [...new Set(teachers.flatMap((t) => t.groupIds.map(String)))];
+  if (!allGroupIds.length) return new Map();
+
+  // Oxirgi 6 oy: undan uzoq tarix hozirgi o'qituvchining ishini aks
+  // ettirmaydi (guruhga yangi biriktirilgan bo'lishi mumkin).
+  const since = new Date(now.getTime() - 182 * DAY_MS);
+
+  const rows = await PaymentTransaction.aggregate([
+    {
+      $match: {
+        group: { $in: allGroupIds.map(toId) },
+        paidAt: { $gte: since },
+      },
+    },
+    // Har (o'quvchi, guruh, davr) uchun OXIRGI to'lov - davr shunda yopilgan.
+    {
+      $group: {
+        _id: {
+          group: "$group",
+          student: "$student",
+          year: "$year",
+          month: "$month",
+        },
+        lastPaidAt: { $max: "$paidAt" },
+      },
+    },
+  ]);
+
+  const byGroup = new Map();
+  for (const r of rows) {
+    const gid = String(r._id.group);
+    if (!byGroup.has(gid)) byGroup.set(gid, { periods: 0, onTime: 0 });
+    const entry = byGroup.get(gid);
+    const periodEnd = new Date(Date.UTC(r._id.year, r._id.month, 0));
+    const lateDays = Math.floor((r.lastPaidAt - periodEnd) / DAY_MS);
+    entry.periods += 1;
+    if (lateDays <= 5) entry.onTime += 1;
+  }
+
+  const out = new Map();
+  for (const t of teachers) {
+    let periods = 0;
+    let onTime = 0;
+    for (const gid of t.groupIds) {
+      const g = byGroup.get(String(gid));
+      if (!g) continue;
+      periods += g.periods;
+      onTime += g.onTime;
+    }
+    out.set(String(t._id), {
+      periods,
+      onTime,
+      // null = o'lchanmagan. 0 EMAS: "to'lov ma'lumoti yo'q" va "hech kim
+      // o'z vaqtida to'lamagan" butunlay boshqa narsa, va ularni 0 bilan
+      // aralashtirish yangi o'qituvchini eng yomon deb ko'rsatardi.
+      onTimeRatio: periods > 0 ? onTime / periods : null,
+    });
+  }
+  return out;
+};
+
 /** Filialdagi o'rtacha ko'rsatkich - o'qituvchini shunga NISBATAN baholash uchun. */
-export const teacherBaseline = (outcomes, loads) => {
+export const teacherBaseline = (outcomes, loads, payments) => {
   const rates = [...outcomes.values()].map((o) => o.attendanceRate).filter((v) => v != null);
   const improvements = [...outcomes.values()]
     .map((o) => o.gradeImprovement)
@@ -340,9 +425,16 @@ export const teacherBaseline = (outcomes, loads) => {
 
   const mean = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
 
+  // To'lov intizomi bazasi: FILIAL o'rtachasi. O'qituvchi shunga nisbatan
+  // baholanadi - hudud/narx ta'siri ikkala tomondan ham teng ayiriladi.
+  const payRatios = payments
+    ? [...payments.values()].map((p) => p.onTimeRatio).filter((v) => v != null)
+    : [];
+
   return {
     attendanceRate: mean(rates),
     gradeImprovement: mean(improvements),
+    paymentOnTimeRatio: mean(payRatios),
     studentsPerTeacher: mean(studentCounts),
     // Namuna hajmi: 1-2 o'qituvchili filialda "o'rtachadan past" ma'nosiz.
     // Scoring shu songa qarab ishonchni pasaytiradi.
@@ -358,13 +450,14 @@ export const collectTeacherSignals = async (branchId, now = new Date()) => {
   const teacherIds = teachers.map((t) => String(t._id));
   const groupIds = groups.map((g) => g._id);
 
-  const [absence, loads, outcomes] = await Promise.all([
+  const [absence, loads, outcomes, payments] = await Promise.all([
     teacherAbsenceSignal(teacherIds, groupIds, now),
     teacherLoadSignal(teachers),
     teacherOutcomeSignal(teachers, now),
+    teacherPaymentSignal(teachers, now),
   ]);
 
-  const baseline = teacherBaseline(outcomes, loads);
+  const baseline = teacherBaseline(outcomes, loads, payments);
 
   const signals = new Map();
   for (const t of teachers) {
@@ -388,6 +481,7 @@ export const collectTeacherSignals = async (branchId, now = new Date()) => {
         gradeSamples: 0,
         groupsWithGrades: 0,
       },
+      payment: payments.get(tid) || { periods: 0, onTime: 0, onTimeRatio: null },
       baseline,
     });
   }

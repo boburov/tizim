@@ -2375,3 +2375,196 @@ Unique partial indeks bor — poyga DB darajasida to'silad
 <sub>session `c8965728` · branch `main` · 27 ta qadam</sub>
 
 ---
+
+## 2026-08-01 00:59 — databaseni 0 qilib faqat owner seedni ozini ishga tushurib koring test
+
+**So'rov**
+
+> databaseni 0 qilib faqat owner seedni ozini ishga tushurib koring test qilaman
+
+**Buyruqlar (10)**
+
+```sh
+ls -la /Users/shukrullo/Desktop/lc-total && cat package.json 2>/dev/null | head -60
+find /Users/shukrullo/Desktop/lc-total -iname "*seed*" -not -path "*/node_modules/*" -not -path "*/.git/*" | head -50
+cat /Users/shukrullo/Desktop/lc-total/server/src/seeds/owner.seed.js
+cat /Users/shukrullo/Desktop/lc-total/server/package.json; echo "---ENV---"; ls -la /Users/shukrullo/Desktop/lc-total/server | head -30
+cd /Users/shukrullo/Desktop/lc-total/server && grep -E "MONGO|NODE_ENV|OWNER_PASSWORD" .env
+cat /Users/shukrullo/Desktop/lc-total/server/src/config/db.js
+node -e " import('mongoose').then(async (m)=>{ const mongoose=m.default; await mongoose.connect('mongodb://127.0.0.1:27017/bayyina'); const cols = await mongoos…
+node -e " import('mongoose').then(async (m)=>{ const mongoose=m.default; await mongoose.connect('mongodb://127.0.0.1:27017/bayyina'); await mongoose.connection.…
+npm run seed:owner 2>&1 | tail -20
+ps aux | grep -E "node .*(src/index.js|nodemon)" | grep -v grep | head
+```
+
+**Natija**
+
+I'll check the seed setup first.
+
+Local dev DB: `mongodb://127.0.0.1:27017/bayyina`, `NODE_ENV=development`. Bazani tozalashdan oldin hozirgi holatini ko'ramiz.
+
+Bazani to'liq drop qilaman (dev, local).
+
+<sub>session `8bd32c1b` · branch `main` · 11 ta qadam</sub>
+
+---
+
+## 2026-08-01 01:13 — /llm-council menga tizimdagi ai markaz qismi hech nqaday qiymat bermay
+
+**So'rov**
+
+> /llm-council menga tizimdagi ai markaz qismi hech nqaday qiymat bermayapti yani oquv markazni rivojiga hissa qoshmayapti qisqasi juda yomon menga bu qisimdaeng kop tolovni kechiktradigan oquvchilarni chqarib berish kerak va baho oquvchilar davomatiga qarab agar teacherni studentlari davomat baho va tolovlari yaxhsi bo'lsa ai uji manabu oqtuvchini maoshni kotarish kerak deb maslahat berishi kerak bo'ladi va kop dars qoldirayotgan oquvchi kop tolovni kechiktrayotgan oquvchi ni chiqarishi kerak va ushbu oquvchin bilan ishlashimiz kerak deyishi kerak va kimnudur murojat qilganda osha oadmni ustiga bosilsa profile sahifasiga olib otishi kerrak men shuni oylab turibman hozirda qisqa lekin foydali ushbu men aytgan featurelarni kengaytrish uchun funksiya qoshishimiz kerak bo'ladi ai uchun kuchliroq analitika qiladihgan ai dan foydalanishimiz kerak hozircha tekin lekin uni kuchaytrish qiyin ish bo'lib ketmasligi kerak avval plan tuzib olamiz va muhokamadan song men tasdiqlab feedback beraman shu asosida ishi boshlaymiz
+
+**Buyruqlar (21)**
+
+```sh
+ls /Users/shukrullo/Desktop/lc-total && echo "---ENV---" && ls -a /Users/shukrullo/Desktop/lc-total | grep -i env
+find . -type d -name node_modules -prune -o -type f \( -name "*.ts" -o -name "*.tsx" \) -print | grep -iE "ai|signal|pulse|insight" | head -60
+ls server/src client/src 2>/dev/null && echo "---" && find server/src -type d | head -60
+grep -rliE "ai|signal|pulse" --include="*.ts" --include="*.tsx" server/src client/src 2>/dev/null | head -60
+find server/src/modules/ai -type f | head -80 && echo "=== SIZES ===" && find server/src/modules/ai -type f -name "*.js" -exec wc -l {} + | sort -rn | head -40
+grep -rli "ai" client/src --include="*.jsx" --include="*.js" -l | grep -iE "ai|insight|signal" | head -40
+grep -rniE "openai|gemini|anthropic|groq|ollama|llm|gpt" server/src server/package.json server/.env.example 2>/dev/null | head -30; echo "=== ENV KEYS ==="; ls …
+grep -rn "href" server/src/modules/ai/services/*.js | head -40
+ls -a /Users/shukrullo/Desktop/lc-total/.env 2>/dev/null; ls /Users/shukrullo/.claude/skills/llm-council/scripts/; grep -c "" /Users/shukrullo/Desktop/lc-total/…
+head -40 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py; echo "=== KEYS ==="; env | grep -iE "OPENAI|GEMINI" | sed 's/=.*/=SET/'; echo "=== o…
+ls server/src/jobs/ && echo "=== ai job ===" && cat server/src/jobs/index.js 2>/dev/null | head -60
+grep -rn "path=\|element=" client/src/owner/routes/index.jsx | grep -iE "student|user|ai" | head -30
+which gemini codex 2>&1; echo "---"; sed -n 40,140p /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/cfab39f3-28d5-470a-93a9-5d87bf8b1569/scratchpad/council_prompt.txt <<'EOF' Context: An education…
+python3 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py "$(cat /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/cfab39f3-28d5-470a-93…
+cd /Users/shukrullo/Desktop/lc-total/server && grep -E "^MONGO|^DB_" .env | sed 's#//.*@#//***@#' ; which mongosh || echo "no mongosh"
+node -e " import('mongoose').then(async (m)=>{ await m.default.connect('mongodb://127.0.0.1:27017/bayyina',{serverSelectionTimeoutMS:3000}); const db=m.default.…
+ls server/src/seeds/ && grep -n "\"seed\|scripts" -A 12 server/package.json | head -25
+ls src/seeds && echo "=== scripts ===" && node -e "console.log(JSON.stringify(require('./package.json').scripts,null,2))"
+grep -n "^export\|^const collect\|^const detect" server/src/modules/ai/services/studentInsight.service.js server/src/modules/ai/signals/student.signal.js server…
+cd /Users/shukrullo/Desktop/lc-total && grep -n "^export" server/src/modules/ai/signals/student.signal.js server/src/modules/ai/signals/teacher.signal.js server…
+```
+
+**Natija**
+
+I'll start by understanding the current AI center implementation, then consult the council.
+
+Gemini CLI mavjud, ChatGPT (codex CLI / API kalit) yo'q. Kengashni ishga tushiraman:
+
+<sub>session `cfab39f3` · branch `main` · 29 ta qadam</sub>
+
+---
+
+## 2026-08-01 01:19 — tasdiqlayman ishni boshlayvering
+
+**So'rov**
+
+> tasdiqlayman ishni boshlayvering
+
+**O'zgargan fayllar (26)**
+
+- `server/src/seeds/fakeData.seed.js` — tahrirlandi
+- `server/src/seeds/aiDemoFinance.seed.js` — yaratildi/qayta yozildi
+- `server/package.json` — tahrirlandi
+- `server/src/models/aiRanking.model.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/services/ranking.service.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/ai/services/subjectLink.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/signals/teacher.signal.js` — tahrirlandi
+- `server/src/modules/ai/scoring/teacher.scoring.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/ai/services/recompute.service.js` — tahrirlandi
+- `server/src/modules/ai/handlers/rankings.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/ai.routes.js` — tahrirlandi
+- `server/src/modules/ai/signals/student.signal.js` — tahrirlandi
+- `client/src/shared/lib/query/keys.js` — tahrirlandi
+- `client/src/owner/features/ai/api/ai.api.js` — tahrirlandi
+- `client/src/owner/features/ai/hooks/useRankingsQuery.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/AiRankingBoard.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/pages/OperationsCenterPage.jsx` — tahrirlandi
+- `server/src/modules/ai/services/insightWriter.service.js` — tahrirlandi
+- `server/src/models/insight.model.js` — tahrirlandi
+- `client/src/shared/components/ai/AiInsightCard.jsx` — tahrirlandi
+- `server/src/config/env.js` — tahrirlandi
+- `server/src/modules/ai/services/gemini.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/services/narrationQueue.service.js` — yaratildi/qayta yozildi
+- `server/src/jobs/aiNarration.job.js` — yaratildi/qayta yozildi
+- `server/src/jobs/index.js` — tahrirlandi
+- `server/tests/aiAdvisor.test.js` — tahrirlandi
+
+**Buyruqlar (58)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && npm run seed:all 2>&1 | tail -40
+head -50 src/seeds/multiBranchDemo.seed.js && echo "=== MIGRATE BRANCHES ===" && head -40 src/seeds/migrateBranches.seed.js
+grep -n "Branch\|branchId\|Attendance\|Grade\b" src/seeds/fakeData.seed.js | head -30; echo "=== EXTRAS ==="; grep -n "^import\|branchId" src/seeds/fakeExtras.s…
+sed -n '1,60p' src/seeds/fakeData.seed.js
+grep -n "Group.insertMany\|await Group\|const groups\|User.insertMany\|branch" src/seeds/fakeData.seed.js | head -20; echo "---"; sed -n '130,200p' src/seeds/fa…
+grep -n "branchId" src/models/user.model.js src/models/group.model.js src/models/groupMembership.model.js src/models/attendance.model.js src/models/feedback.mod…
+sed -n '30,100p' src/models/user.model.js
+npm run seed:fake-data 2>&1 | tail -25
+npm run seed:fake-extras 2>&1 | tail -15; echo "===== EXTRAS2 ====="; npm run seed:fake-extras2 2>&1 | tail -15
+node -e " import('mongoose').then(async (m)=>{ await m.default.connect('mongodb://127.0.0.1:27017/bayyina',{serverSelectionTimeoutMS:3000}); const db=m.default.…
+sed -n '1,45p' src/jobs/catchUpMonthly.js; echo "=== FEE MODEL ==="; grep -n "type:\|required\|default" src/models/groupFee.model.js | head -25
+grep -n "export const regenerate" -A 40 src/modules/finance/services/report.service.js | head -60
+grep -n "price\|Price\|amount" src/models/group.model.js | head -10; echo "=== generateMonth (fee) ==="; grep -n "export const generateMonth" -A 45 src/modules/…
+grep -n "ensureGroupFee" -A 30 src/modules/finance/services/groupFee.service.js | head -40; echo "=== STUDENT PAYMENT generateMonth ==="; grep -n "export const …
+grep -n "export" src/helpers/branchContext.helper.js | head -20; echo "=== PAYMENT TX MODEL ==="; sed -n '1,60p' src/models/paymentTransaction.model.js; echo "=…
+sed -n '1,70p' src/models/studentPayment.model.js
+npm run seed:ai-demo 2>&1 | tail -25
+grep -rn "INSIGHT_SUBJECT_TYPES" src/ | head -5; grep -n "INSIGHT_SUBJECT_TYPES" -A 4 src/models/insight.model.js | head -12
+sed -n '8,20p' src/models/insight.model.js; echo "=== course/branch routes ==="; grep -n "courses\|branches" ../client/src/owner/routes/index.jsx | head -10
+grep -n "path=\"courses\|path=\"kurslar\|CoursesPage" ../client/src/owner/routes/index.jsx | head -5
+grep -rn "yo-nalish\|directions\|Course" ../client/src/owner/routes/index.jsx | head -8
+grep -n "sampleConfidence" -A 25 src/modules/ai/scoring/common.scoring.js | head -35
+node -e " import('dotenv/config').then(async () => { const { connectDB, disconnectDB } = await import('./src/config/db.js'); const { runWithBranchContext } = aw…
+node -e " import('dotenv/config').then(async () => { const { connectDB, disconnectDB } = await import('./src/config/db.js'); const Attendance = (await import('.…
+grep -n "now\b" src/seeds/fakeData.seed.js | head -20; echo "=== TGP MODEL ==="; grep -n "type:\|required" src/models/teacherGroupPeriod.model.js | head -20
+# … yana 33 ta
+```
+
+**Natija**
+
+Tasdiq oldim. Boshlaymiz.
+
+Endi teacher/student/group hujjatlariga filialni biriktiraman:
+
+Endi moliya + baho ma'lumotini yaratadigan seed yozaman:
+
+Endi asosiy reyting servisi:
+
+Endi teacher reytingi (Bosqich 3 ning asosiy qismi). Avval mavjud o'qituvchi signallarini o'qib olay:
+
+Endi o'qituvchi kompozit ballini hisoblaydigan sof scoring moduli:
+
+Endi o'qituvchi reytingini ranking servisiga qo'shaman:
+
+Endi asosiy `recompute` funksiyasiga o'qituvchi reytingini qo'shaman:
+
+Endi endpoint — handler, validator va route:
+
+Endi backendni test qilaman — reytinglar haqiqiy ma'lumotda ishlayaptimi:
+
+Endi `TeacherGroupPeriod` yozuvlarini seed'ga qo'shaman (o'qituvchi analitikasining manba haqiqati):
+
+Seed additiv (tozalamaydi) — o'zim yozgan ma'lumotni tozalab qaytadan yuritaman:
+
+Massaviy o'chirish avtomatik rejimda bloklandi — bu to'g'ri, chunki bu qaytarib bo'lmaydigan amal. Sizdan tasdiq so'rayman:
+
+Tozalashni seed ichiga — idempotent qilib yozaman:
+
+Endi uchala reytingni haqiqiy ma'lumotda sinab ko'raman:
+
+Uchta muammo ko'rinyapti. Avval eng jiddiysini tekshiraman — to'lov intizomi signali:
+
+`mongoose.models.PaymentTransaction` hech qachon ro'yxatdan o'tmaydi — bu **mavjud kodda jimgina xato**: `paymentDisciplineSignal` doim bo'sh Map qaytarib kelgan, ya'ni to'lov tarixi signali umuman ishlamagan. To'g'ridan-to'g'ri import bilan tuzataman:
+
+Endi asosiy modellashtirish xatosi: **hech qachon to'lamagan o'quvchi "intizomli" bo'lib ko'rinadi** (tranzaksiya yo'q → kechikish nisbati 0):
+
+Izoh bloki buzilgan — tuzataman:
+
+Uchala reyting to'g'ri ishlayapti. Lekin `raiseCandidates: 0` — maosh tavsiyasi hech qachon chiqmaydi. Sabab: mutlaq chegara (0.72) real tarqalishga (eng yuqorisi 0.69) yetib bormaydi. Gate'ni **nisbiy** qilaman:
+
+Backend to'liq ishlayapti. Endi frontend:
+
+Endi r
+
+…(qisqartirildi)
+
+<sub>session `cfab39f3` · branch `main` · 160 ta qadam</sub>
+
+---

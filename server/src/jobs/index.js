@@ -52,6 +52,9 @@ import defineAiReports, {
 import defineAiMorningDigest, {
   JOB_NAME as AI_DIGEST_JOB,
 } from "./aiMorningDigest.job.js";
+import defineAiNarration, {
+  JOB_NAME as AI_NARRATION_JOB,
+} from "./aiNarration.job.js";
 import { catchUpMonthlyGeneration } from "./catchUpMonthly.js";
 import * as groupsService from "../modules/groups/services/groups.service.js";
 
@@ -79,6 +82,7 @@ export const startJobs = async () => {
   defineAiLifecycle(agenda);
   defineAiReports(agenda);
   defineAiMorningDigest(agenda);
+  defineAiNarration(agenda);
   defineUsageHeartbeat(agenda);
 
   await agenda.start();
@@ -146,6 +150,18 @@ export const startJobs = async () => {
   // Faqat kun ichida o'zgaradigan detektorlar ishlaydi; og'ir trend
   // hisoblashlari tungi jobda qoladi. Tunda ishlamaydi - o'zgarish yo'q.
   await every("0 9,12,15,18,21 * * *", AI_INTRADAY_JOB);
+
+  // AI narrator - har soatning 25-daqiqasida.
+  //
+  // NEGA SOATLIK VA NEGA QAYTA HISOBLASHDAN AJRATILGAN: narrator Gemini
+  // bepul darajasidan foydalanadi va bir yurishda atigi 25 ta insight
+  // ishlaydi. Uni qayta hisoblash oxiriga ulasak, 400 ta insight bir
+  // zumda navbatga tushib limitga urilardi va ko'pchiligi matnsiz
+  // qolardi. Soatlik yurish yuklamani kunga tekis yoyadi.
+  //
+  // 25-daqiqa: boshqa joblar soatning 0/5/10/20-daqiqalarida turadi -
+  // ular bilan bir vaqtda ishlamasin.
+  await every("25 * * * *", AI_NARRATION_JOB);
 
   // Admin panelga usage heartbeat - har 15 daqiqada. Faqat admin panel
   // orqali provision qilingan tenantlarda ishlaydi (ADMIN_API_URL bo'lsa);

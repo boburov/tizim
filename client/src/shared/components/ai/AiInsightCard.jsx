@@ -53,6 +53,7 @@ const AiInsightCard = ({
 
   const {
     subjectLabel,
+    subjectHref,
     severity,
     score,
     confidence,
@@ -79,7 +80,29 @@ const AiInsightCard = ({
     >
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate font-semibold text-foreground">{subjectLabel}</h3>
+          {/* ISM BOSILADIGAN - to'g'ridan-to'g'ri profilga.
+              Ilgari bu oddiy matn edi va owner "Aziz Karimov ketish
+              arafasida" ni o'qigach ismni qidiruvga QO'LDA kiritishga
+              majbur bo'lardi. Har kuni 20 ta karta ustida takrorlanadigan
+              bu ishqalanish aynan sahifani ochishni to'xtatadigan narsa.
+
+              subjectHref null bo'lsa (kurs kabi profil sahifasi yo'q
+              turlar, va eski insight'lar) - oddiy matn. Ishlamaydigan
+              havola 404 ga olib boradi va butun sahifaga ishonchni
+              yo'qotadi. */}
+          {subjectHref ? (
+            <Link
+              to={subjectHref}
+              className="group inline-flex max-w-full items-center gap-1"
+            >
+              <h3 className="truncate font-semibold text-foreground group-hover:underline">
+                {subjectLabel}
+              </h3>
+              <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
+            </Link>
+          ) : (
+            <h3 className="truncate font-semibold text-foreground">{subjectLabel}</h3>
+          )}
           {expectedImpact?.label && (
             <p className="mt-0.5 text-sm text-muted-foreground">
               {expectedImpact.label}

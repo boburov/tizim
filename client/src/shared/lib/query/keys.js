@@ -213,6 +213,14 @@ export const qk = Object.freeze({
     report: (id) => ["ai", "reports", "detail", id],
     latestReport: (period) => ["ai", "reports", "latest", period ?? "daily"],
 
+    // Reytinglar ("eng ko'p kechiktirganlar / qoldirganlar / o'qituvchilar").
+    //
+    // `insights` prefiksi ostida EMAS: reyting insight mutatsiyasidan
+    // (ko'rdim/bajarildi) o'zgarmaydi - u tungi snapshotdan o'qiladi.
+    // Insight prefiksiga qo'shsak har "Bajarildi" bosilganda uchala
+    // reyting bekordan-bekor qayta so'ralardi.
+    rankings: () => ["ai", "rankings"],
+
     config: (branchId) => ["ai", "config", branchId ?? null],
   },
 

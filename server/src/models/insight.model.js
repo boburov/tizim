@@ -102,6 +102,11 @@ const insightSchema = new mongoose.Schema(
     },
     // Nomi snapshot: subyekt o'chsa/o'zgarsa ham tarixiy insight o'qiladi.
     subjectLabel: { type: String, default: "" },
+    // Subyekt profiliga havola ("/owner/users/<id>"). buildInsight()
+    // subjectType'dan avtomatik quradi (subjectLink.service.js).
+    // null = bu tur uchun profil sahifasi yo'q (mas. kurs) - UI ismni
+    // bosilmaydigan matn sifatida chizadi.
+    subjectHref: { type: String, default: null },
 
     kind: { type: String, enum: INSIGHT_KINDS, required: true },
 

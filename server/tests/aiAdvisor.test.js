@@ -892,6 +892,330 @@ const runDbTests = async () => {
   /vazifa e'tibor kutmoqda|Eng muhimi:/.test(nowText)
     ? bad("'hozir' izohi sarlavha bilan takrorlanmaydi", nowText.slice(0, 80))
     : ok("'hozir' izohi sarlavha bilan takrorlanmaydi");
+
+  // ════════════════════════════════════════════════════════════
+  // 16. REYTINGLAR  ← "HECH TO'LAMAGANLAR TUZOG'I" REGRESSIYASI
+  //
+  // Eng jiddiy modellashtirish xatosi shu yerda qulflanadi:
+  //
+  // Kechikish nisbati TRANZAKSIYALARDAN hisoblanadi, ya'ni faqat
+  // TO'LAGAN o'quvchi o'lchanadi. Umuman to'lamagan o'quvchining
+  // tranzaksiyasi yo'q → lateRatio = 0 → u "eng intizomli" bo'lib
+  // ko'rinadi va reyting TAGIGA tushadi.
+  //
+  // Ya'ni "eng ko'p to'lovni kechiktirganlar" ro'yxati eng yomon
+  // to'lovchini KO'RSATMAY qo'yardi - reyting aynan teskarisini
+  // qilardi. Test buni aniq ushlaydi: hech to'lamagan o'quvchi
+  // ba'zan kechiktirgandan YUQORIDA turishi shart.
+  // ════════════════════════════════════════════════════════════
+  head("16. REYTINGLAR (hech to'lamaganlar tuzog'i)");
+
+  const User = (await import("../src/models/user.model.js")).default;
+  const Group = (await import("../src/models/group.model.js")).default;
+  const GroupMembership = (await import("../src/models/groupMembership.model.js")).default;
+  const StudentPayment = (await import("../src/models/studentPayment.model.js")).default;
+  const PaymentTransaction = (await import("../src/models/paymentTransaction.model.js")).default;
+  const { recomputeRankings, readAllRankings } = await import(
+    "../src/modules/ai/services/ranking.service.js"
+  );
+
+  const rankNow = new Date();
+  const rankGroup = await Group.create({
+    name: "Reyting guruhi",
+    branchId: A._id,
+    isActive: true,
+  });
+
+  /** Test o'quvchisi + a'zoligi. */
+  const mkStudent = async (firstName) => {
+    const u = await User.create({
+      firstName,
+      lastName: "Testov",
+      username: `rank_${firstName.toLowerCase()}_${Date.now()}`,
+      phone: `9989${Math.floor(Math.random() * 100000000)}`,
+      passwordHash: "x",
+      role: "student",
+      homeBranchId: A._id,
+      enrolledAt: new Date(rankNow.getTime() - 400 * DAY),
+      isActive: true,
+    });
+    await GroupMembership.create({ student: u._id, group: rankGroup._id, leftAt: null });
+    return u;
+  };
+
+  /** Oylik to'lov yozuvi (+ ixtiyoriy tranzaksiya). */
+  const mkPayment = async (student, monthsAgo, { paid, paidLateDays }) => {
+    const d = new Date(
+      Date.UTC(rankNow.getUTCFullYear(), rankNow.getUTCMonth() - monthsAgo, 1),
+    );
+    const year = d.getUTCFullYear();
+    const month = d.getUTCMonth() + 1;
+    const expected = 500000;
+    const p = await StudentPayment.create({
+      branchId: A._id,
+      student: student._id,
+      group: rankGroup._id,
+      year,
+      month,
+      baseFee: expected,
+      expectedAmount: expected,
+      paidAmount: paid ? expected : 0,
+      status: paid ? "paid" : "unpaid",
+      writtenOff: false,
+    });
+    if (paid) {
+      const periodEnd = new Date(Date.UTC(year, month, 0));
+      await PaymentTransaction.create({
+        branchId: A._id,
+        payment: p._id,
+        student: student._id,
+        group: rankGroup._id,
+        year,
+        month,
+        amount: expected,
+        source: "direct",
+        method: "cash",
+        paidAt: new Date(periodEnd.getTime() + paidLateDays * DAY),
+      });
+    }
+  };
+
+  // "Hech to'lamagan": 6 oy yozuv bor, birontasi ham to'lanmagan.
+  // Tranzaksiyasi YO'Q → eski kodda lateRatio = 0 chiqardi.
+  const neverPays = await mkStudent("Hechto");
+  for (let m = 1; m <= 6; m++) await mkPayment(neverPays, m, { paid: false });
+
+  // "Ba'zan kechiktiradi": hammasini to'lagan, 2 tasi kechikkan.
+  const sometimesLate = await mkStudent("Bazan");
+  for (let m = 1; m <= 6; m++) {
+    await mkPayment(sometimesLate, m, { paid: true, paidLateDays: m <= 2 ? 20 : 1 });
+  }
+
+  // "Har doim o'z vaqtida": nazorat guruhi - reytingga umuman kirmasligi kerak.
+  const alwaysOnTime = await mkStudent("Vaqtida");
+  for (let m = 1; m <= 6; m++) {
+    await mkPayment(alwaysOnTime, m, { paid: true, paidLateDays: 1 });
+  }
+
+  await inBranch(A._id, () => recomputeRankings(A._id));
+  const ranks = await readAllRankings(A._id);
+  const payRows = ranks.payment_delay?.rows || [];
+
+  const posOf = (u) => payRows.findIndex((r) => String(r.subjectId) === String(u._id));
+  const iNever = posOf(neverPays);
+  const iSometimes = posOf(sometimesLate);
+  const iAlways = posOf(alwaysOnTime);
+
+  iNever >= 0
+    ? ok("hech to'lamagan o'quvchi reytingda bor", `${iNever + 1}-o'rin`)
+    : bad("hech to'lamagan o'quvchi reytingda bor", "ro'yxatda yo'q");
+
+  iNever >= 0 && iSometimes >= 0 && iNever < iSometimes
+    ? ok("hech to'lamagan ba'zan kechiktirgandan YUQORIDA")
+    : bad(
+        "hech to'lamagan ba'zan kechiktirgandan YUQORIDA",
+        `hech: ${iNever}, ba'zan: ${iSometimes}`,
+      );
+
+  iAlways === -1
+    ? ok("o'z vaqtida to'lovchi reytingga kirmaydi")
+    : bad("o'z vaqtida to'lovchi reytingga kirmaydi", `${iAlways + 1}-o'rin`);
+
+  // Ishonch: 6 davrlik dalili bor o'quvchi "ma'lumot yetarli emas"
+  // bo'lib chiqmasligi kerak. Eski kodda bashorat ishonchi olinardi va
+  // u tranzaksiyasiz o'quvchida 0 ga tushardi - ya'ni UI ballni
+  // butunlay yashirardi.
+  const neverRow = payRows[iNever];
+  neverRow && neverRow.confidence >= 0.4
+    ? ok("hech to'lamaganning ishonchi yetarli", `${Math.round(neverRow.confidence * 100)}%`)
+    : bad(
+        "hech to'lamaganning ishonchi yetarli",
+        `${neverRow ? Math.round(neverRow.confidence * 100) : "?"}%`,
+      );
+
+  // Har bir qator profil havolasiga ega bo'lishi shart - bu reytingning
+  // asosiy qiymati (ismni bosib odamga o'tish).
+  payRows.every((r) => r.href?.startsWith("/owner/users/"))
+    ? ok("har bir reyting qatorida profil havolasi bor")
+    : bad("har bir reyting qatorida profil havolasi bor", "havolasiz qator bor");
+
+  // Filial izolyatsiyasi: B filialida reyting bo'sh bo'lishi kerak.
+  await inBranch(B._id, () => recomputeRankings(B._id));
+  const bRanks = await readAllRankings(B._id);
+  (bRanks.payment_delay?.rows || []).length === 0
+    ? ok("reyting begona filialga sizmaydi")
+    : bad("reyting begona filialga sizmaydi", `${bRanks.payment_delay.rows.length} qator`);
+};
+
+// ════════════════════════════════════════════════════════════════
+// 14. O'QITUVCHI KOMPOZIT BAHOSI + MAOSH TAVSIYASI (DB kerak emas)
+//
+// Ikkita REGRESSIYA shu yerda qulflanadi:
+//
+//  a) "Qiyin guruh jazosi" - ball XOM O'RTACHADAN emas, filial
+//     bazasidan FARQdan chiqishi shart. Aks holda kuchli guruh olgan
+//     o'qituvchi doim yuqorida, qiyin guruh olgani doim pastda bo'ladi
+//     va reyting o'qituvchini emas, unga berilgan guruhni baholaydi.
+//
+//  b) "Yetib bo'lmaydigan chegara" - maosh tavsiyasi MUTLAQ chegara
+//     (score >= 0.72) bilan qo'yilgan edi va real ma'lumotda HECH
+//     QACHON ishlamadi: 40 o'qituvchilik filialda eng yaxshisi 0.69
+//     to'plagan. Sabab tuzilmaviy - ball tarqalishi filialning bir
+//     xilligiga bog'liq, ya'ni mutlaq chegara o'qituvchini emas,
+//     JAMOANING TARQOQLIGINI o'lchaydi. Endi chegara NISBIY (yuqori 10%).
+// ════════════════════════════════════════════════════════════════
+const testTeacherScoring = async () => {
+  head("14. O'QITUVCHI BAHOSI VA MAOSH GATE'I");
+
+  const { scoreTeacher, qualifiesForRaise, RAISE_GATE } = await import(
+    "../src/modules/ai/scoring/teacher.scoring.js"
+  );
+
+  const baseline = {
+    attendanceRate: 0.8,
+    gradeImprovement: 0.1,
+    paymentOnTimeRatio: 0.7,
+    sampleSize: 10,
+  };
+
+  // --- (a) Xom o'rtacha EMAS, lift ---
+  //
+  // Ikki o'qituvchi: birinchisining XOM ko'rsatkichi yuqori, lekin u
+  // filial o'rtachasida turibdi. Ikkinchisiniki past ko'rinadi, lekin
+  // u o'z bazasidan YUQORI. Ball ikkinchisiga ustunlik berishi kerak.
+  const atBaseline = scoreTeacher({
+    outcome: { attendanceRate: 0.8, gradeImprovement: 0.1, gradeSamples: 200, lessons: 300 },
+    payment: { onTimeRatio: 0.7, periods: 50 },
+    baseline,
+  });
+  const aboveBaseline = scoreTeacher({
+    outcome: { attendanceRate: 0.88, gradeImprovement: 0.35, gradeSamples: 200, lessons: 300 },
+    payment: { onTimeRatio: 0.85, periods: 50 },
+    baseline,
+  });
+
+  Math.abs(atBaseline.score - 0.5) < 0.01
+    ? ok("bazadagi o'qituvchi aynan 0.5 oladi", atBaseline.score.toFixed(3))
+    : bad("bazadagi o'qituvchi aynan 0.5 oladi", `kelgan ${atBaseline.score}`);
+
+  aboveBaseline.score > atBaseline.score
+    ? ok("bazadan yuqori o'qituvchi yuqoriroq ball oladi")
+    : bad("bazadan yuqori o'qituvchi yuqoriroq ball oladi", `${aboveBaseline.score} <= ${atBaseline.score}`);
+
+  eq("uchala o'lchov ham o'lchandi", aboveBaseline.measured, 3);
+
+  // --- O'lchanmagan o'qituvchi: null, 0 EMAS ---
+  //
+  // 0 berish uni ro'yxat TAGIGA tushirardi, ya'ni "yomon ishlayapti"
+  // degan yolg'on xabar. null = "o'lchanmagan" va u reytingga kirmaydi.
+  const unmeasured = scoreTeacher({
+    outcome: { attendanceRate: null, gradeImprovement: null, gradeSamples: 0, lessons: 0 },
+    payment: { onTimeRatio: null, periods: 0 },
+    baseline,
+  });
+  unmeasured.score === null
+    ? ok("ma'lumotsiz o'qituvchi ball olmaydi (null, 0 emas)")
+    : bad("ma'lumotsiz o'qituvchi ball olmaydi", `kelgan ${unmeasured.score}`);
+
+  // --- Bir o'lchov yo'q bo'lsa qolganlari bo'yicha to'liq baholanadi ---
+  const noGrades = scoreTeacher({
+    outcome: { attendanceRate: 0.88, gradeImprovement: null, gradeSamples: 0, lessons: 300 },
+    payment: { onTimeRatio: 0.85, periods: 50 },
+    baseline,
+  });
+  noGrades.score != null && noGrades.measured === 2
+    ? ok("bahosi yo'q o'qituvchi qolgan 2 o'lchov bo'yicha baholandi")
+    : bad("bahosi yo'q o'qituvchi qolgan 2 o'lchov bo'yicha baholandi", JSON.stringify(noGrades.measured));
+
+  // --- (b) NISBIY GATE: real tarqalishda ishlashi SHART ---
+  //
+  // Bu aynan yiqilgan holat: eng yaxshi o'qituvchi 0.69 to'plagan.
+  // Mutlaq chegara (0.72) bilan tavsiya hech kimga chiqmasdi.
+  const realistic = { score: 0.66, confidence: 0.78, measured: 3 };
+  qualifiesForRaise(realistic, baseline, { rank: 1, total: 40 })
+    ? ok("40 o'qituvchidan 1-o'rin (0.66) maosh tavsiyasini oladi")
+    : bad("40 o'qituvchidan 1-o'rin (0.66) maosh tavsiyasini oladi", "gate yetib bo'lmaydigan");
+
+  // 5-o'rin 40 tadan = yuqori 12.5%, ya'ni 10% dan tashqarida.
+  qualifiesForRaise(realistic, baseline, { rank: 5, total: 40 })
+    ? bad("5-o'rin tavsiya OLMAYDI", "yuqori 10% dan tashqarida bo'lishi kerak")
+    : ok("5-o'rin tavsiya olmaydi (yuqori 10% dan tashqarida)");
+
+  // --- Mutlaq POL saqlanadi: "yomon jamoaning eng yaxshisi" ---
+  //
+  // Yuqori 10% da bo'lish o'rtachadan PAST bo'lishni istisno qilmaydi.
+  // Hamma yomon ishlayotgan filialda 1-o'rin ham tavsiya olmasligi kerak.
+  qualifiesForRaise(
+    { score: 0.45, confidence: 0.9, measured: 3 },
+    baseline,
+    { rank: 1, total: 40 },
+  )
+    ? bad("bazadan past 1-o'rin tavsiya OLMAYDI", "mutlaq pol ishlamadi")
+    : ok("bazadan past 1-o'rin tavsiya olmaydi (mutlaq pol)");
+
+  // --- Kichik filialda ham ishlaydi (Math.ceil) ---
+  qualifiesForRaise(realistic, baseline, { rank: 1, total: 6 })
+    ? ok("6 o'qituvchilik filialda 1-o'rin tavsiya oladi")
+    : bad("6 o'qituvchilik filialda 1-o'rin tavsiya oladi", "Math.ceil ishlamadi");
+
+  // --- Tengdosh namunasi kichik bo'lsa tavsiya YO'Q ---
+  qualifiesForRaise(realistic, { ...baseline, sampleSize: 2 }, { rank: 1, total: 2 })
+    ? bad("2 o'qituvchilik filialda tavsiya YO'Q", "minPeerSample ishlamadi")
+    : ok("2 o'qituvchilik filialda tavsiya yo'q (taqqoslash ma'nosiz)");
+
+  // --- Ishonch past bo'lsa tavsiya YO'Q ---
+  qualifiesForRaise({ score: 0.9, confidence: 0.3, measured: 3 }, baseline, { rank: 1, total: 40 })
+    ? bad("ishonchsiz ball tavsiya BERMAYDI", "minConfidence ishlamadi")
+    : ok("ishonchsiz ball tavsiya bermaydi");
+
+  // --- Bitta o'lchovga tayangan baho tavsiya BERMAYDI ---
+  qualifiesForRaise({ score: 0.9, confidence: 0.9, measured: 1 }, baseline, { rank: 1, total: 40 })
+    ? bad("bitta o'lchovli baho tavsiya BERMAYDI", "minDimensions ishlamadi")
+    : ok("bitta o'lchovli baho tavsiya bermaydi");
+
+  RAISE_GATE.topPercentile > 0 && RAISE_GATE.minScore > 0.5
+    ? ok("gate nisbiy VA mutlaq polga ega")
+    : bad("gate nisbiy VA mutlaq polga ega", JSON.stringify(RAISE_GATE));
+};
+
+// ════════════════════════════════════════════════════════════════
+// 15. SUBYEKT HAVOLALARI (DB kerak emas)
+//
+// Kartadagi ism bosilganda profilga o'tishi kerak. Eng muhim qoida:
+// SAHIFASI YO'Q tur uchun havola BERILMAYDI - 404 ga olib boradigan
+// havola umuman havolasizlikdan yomonroq, chunki u butun sahifaga
+// ishonchni bir marotaba va butunlay yo'qotadi.
+// ════════════════════════════════════════════════════════════════
+const testSubjectLinks = async () => {
+  head("15. SUBYEKT PROFIL HAVOLALARI");
+
+  const { subjectHref } = await import(
+    "../src/modules/ai/services/subjectLink.service.js"
+  );
+  const id = "6a6d0c6ade5ea2d6bbba81d5";
+
+  eq("o'quvchi → /owner/users/:id", subjectHref("student", id), `/owner/users/${id}`);
+  eq("o'qituvchi → /owner/users/:id", subjectHref("teacher", id), `/owner/users/${id}`);
+  eq("guruh → /owner/groups/:id", subjectHref("group", id), `/owner/groups/${id}/o-quvchilar`);
+  eq("lid → /owner/leads?leadId=", subjectHref("lead", id), `/owner/leads?leadId=${id}`);
+
+  // Kurs sahifasi marshrutda YO'Q - havola ham bo'lmasligi kerak.
+  subjectHref("course", id) === null
+    ? ok("kurs uchun havola yo'q (sahifasi mavjud emas)")
+    : bad("kurs uchun havola yo'q", subjectHref("course", id));
+
+  subjectHref("student", null) === null
+    ? ok("ID bo'lmasa havola yo'q")
+    : bad("ID bo'lmasa havola yo'q", subjectHref("student", null));
+
+  // BARCHA taksonomiya turlari qamrab olingan - yangi tur qo'shilsa
+  // bu test uni eslatib turadi (jimgina havolasiz qolmasin).
+  const uncovered = INSIGHT_SUBJECT_TYPES.filter(
+    (t) => subjectHref(t, id) === undefined,
+  );
+  uncovered.length === 0
+    ? ok("barcha subyekt turlari ko'rib chiqilgan", `${INSIGHT_SUBJECT_TYPES.length} ta`)
+    : bad("barcha subyekt turlari ko'rib chiqilgan", uncovered.join(", "));
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -903,6 +1227,8 @@ const main = async () => {
   testValidators();
   testRouteOrder();
   await testPeriodMeta();
+  await testTeacherScoring();
+  await testSubjectLinks();
 
   // DB testlari
   await mongoose.connect(TEST_DB);

@@ -4,6 +4,7 @@ import {
   CalendarDays,
   FileText,
   Lightbulb,
+  ListOrdered,
   RefreshCw,
   Sparkles,
   Sunrise,
@@ -15,7 +16,9 @@ import { MODAL } from "@/shared/constants/modals";
 import { formatMoney } from "@/shared/utils/formatMoney";
 import AiInsightCard from "@/shared/components/ai/AiInsightCard";
 import useBriefingQuery from "../hooks/useBriefingQuery";
+import useRankingsQuery from "../hooks/useRankingsQuery";
 import { useLatestReportQuery } from "../hooks/useReportsQuery";
+import AiRankingBoard from "../components/AiRankingBoard";
 import {
   useAckInsightMutation,
   useResolveInsightMutation,
@@ -67,6 +70,7 @@ const SectionSkeleton = () => (
 
 const OperationsCenterPage = () => {
   const { data, isLoading, isError } = useBriefingQuery();
+  const { data: rankings, isLoading: rankingsLoading } = useRankingsQuery();
   const { data: latestReport } = useLatestReportQuery("daily");
   const { openModal } = useModal(MODAL.AI_INSIGHT_DISMISS);
 
@@ -191,8 +195,22 @@ const OperationsCenterPage = () => {
             narration={data.next ? data.next.narration : "Bashorat uchun filial tanlang."}
           />
 
+          {/* REYTINGLAR - bashoratdan KEYIN, harakatdan OLDIN.
+              Tartib tasodifiy emas: bashorat "nima bo'lishi mumkin" ni
+              aytadi, reyting esa "u KIMDAN keladi" ni - ya'ni bashoratni
+              ismlarga aylantiradi. Reytingni harakatlardan keyin qo'ysak,
+              owner qaror qabul qilgandan keyin uni kim haqidaligini
+              bilardi. */}
           <BriefingSection
             step="04"
+            question="Kimga e'tibor qaratay?"
+            icon={ListOrdered}
+          >
+            <AiRankingBoard data={rankings} isLoading={rankingsLoading} />
+          </BriefingSection>
+
+          <BriefingSection
+            step="05"
             question="Hozir nima qilishim kerak?"
             // Bu hint SAQLANADI - u uslubiy izoh emas, sanoq.
             hint={
