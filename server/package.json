@@ -33,7 +33,11 @@
     "test:approval": "node tests/approvalModel.test.js",
     "test:config-approval": "node tests/configApprovals.test.js",
     "test:director": "node tests/directorRole.test.js",
-    "test:ai": "node tests/aiAdvisor.test.js"
+    "test:ai": "node tests/aiAdvisor.test.js",
+    "test:scope": "node tests/branchScopeExploit.test.js",
+    "test:priv": "MULTI_BRANCH=true node tests/privEscalation.test.js",
+    "test:money-prop": "node tests/moneyProperty.test.js",
+    "test:race": "node tests/paymentRace.test.js"
   },
   "dependencies": {
     "agenda": "^5.0.0",
