@@ -57,7 +57,7 @@ const ownerSidebar = [
   // sababning aynan o'zi buziladi. Ularga havola brifing sahifasining
   // sarlavhasida turadi.
   {
-    title: "AI markaz",
+    title: "AI maslahatchi",
     icon: Bot,
     url: "/owner/ai",
     permission: "ai.read",

@@ -47,7 +47,7 @@ export const SEARCH_INDEX = [
     permission: "admin_dashboard.read",
   },
   {
-    title: "AI markaz",
+    title: "AI maslahatchi",
     description: "Kunlik brifing: kecha, bugun, keyin va hozir nima qilish kerak",
     keywords:
       "ai, sun'iy intellekt, brifing, briefing, tahlil, tavsiya, insight, maslahat, operatsiya",
