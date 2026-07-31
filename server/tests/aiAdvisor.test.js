@@ -1219,6 +1219,198 @@ const testSubjectLinks = async () => {
 };
 
 // ════════════════════════════════════════════════════════════════
+// 17. HAVOLALAR HAQIQIY MARSHRUTGA TUSHADIMI  ← 404 REGRESSIYASI
+//
+// NEGA BU TEST BOR: AI kartasining butun ishonchliligi "Ishingni
+// ko'rsat" havolalariga tayanadi - owner har bir raqamni bosib
+// tekshira olishi kerak. Havola 404 qaytarsa, karta aynan TESKARI
+// natija beradi: u tekshirib bo'lmaydigan da'vo bo'lib qoladi va
+// owner butun sahifaga ishonishni to'xtatadi.
+//
+// HAQIQIY XATO: `/owner/students/:id?tab=finance` havolasi barcha
+// to'lov insight'larida turardi, lekin marshrut jadvalida
+// `students/:id` UMUMAN YO'Q - `students` ostida faqat statik tablar
+// bor. Xato hech qanday testda ko'rinmasdi, chunki server tomonda
+// havola shunchaki matn.
+//
+// USUL: marshrutlar frontend faylidan (routes/index.jsx) o'qiladi va
+// AI modulidagi HAR BIR href shu jadvalga solishtiriladi. Ya'ni test
+// ikki tomonni bog'laydi - marshrut o'chirilsa yoki qayta nomlansa,
+// AI havolasi jimgina buzilmaydi.
+// ════════════════════════════════════════════════════════════════
+const ROUTES_FILE = new URL(
+  "../../client/src/owner/routes/index.jsx",
+  import.meta.url,
+);
+
+/**
+ * routes/index.jsx dan to'liq marshrut ro'yxatini chiqaradi.
+ *
+ * JSX ni qo'lda o'qiymiz (parser kutubxonasiz): har `<Route` tegi
+ * uchun `path` atributi olinadi va ichma-ich joylashuv stek bilan
+ * kuzatiladi. `{...}` ichidagi `>` belgilari teg oxiri deb
+ * hisoblanmaydi - element prop'larida JSX bo'ladi.
+ */
+const parseOwnerRoutes = (src) => {
+  const routes = new Set();
+  const stack = [];
+  let i = 0;
+
+  while (i < src.length) {
+    const open = src.indexOf("<Route", i);
+    const close = src.indexOf("</Route>", i);
+    if (open === -1 && close === -1) break;
+
+    if (close !== -1 && (open === -1 || close < open)) {
+      stack.pop();
+      i = close + 8;
+      continue;
+    }
+
+    let j = open + 6;
+    let depth = 0;
+    let selfClose = false;
+    for (; j < src.length; j += 1) {
+      const c = src[j];
+      if (c === "{") depth += 1;
+      else if (c === "}") depth -= 1;
+      else if (depth === 0 && c === ">") {
+        selfClose = src[j - 1] === "/";
+        break;
+      }
+    }
+
+    const tag = src.slice(open, j + 1);
+    const m = tag.match(/path="([^"]+)"/);
+    const seg = m ? m[1] : null;
+    if (seg) {
+      const full = [...stack.filter(Boolean), seg].join("/");
+      // YALANG'OCH `*` TASHLANADI - bu 404 sahifasining o'zi
+      // (`<Route path="*" element={<NotFoundPage />} />`), manzil emas.
+      //
+      // Uni jadvalda qoldirish testni MA'NOSIZ qilardi: u har qanday
+      // manzilga mos kelib, "hamma havola ishlaydi" deb yolg'on o'tardi.
+      // Aynan shu holatni quyidagi salbiy nazorat tutdi.
+      if (full !== "*") routes.add(`/owner/${full}`);
+    }
+    if (!selfClose) stack.push(seg);
+    i = j + 1;
+  }
+  return routes;
+};
+
+/** Haqiqiy manzil marshrut naqshiga mos keladimi (`:param` har narsani yutadi). */
+const matchesRoute = (href, routes) => {
+  // Query va hash tashlanadi - marshrut ularni ko'rmaydi.
+  const path = href.split("?")[0].split("#")[0].replace(/\/$/, "");
+  const parts = path.split("/").filter(Boolean);
+
+  for (const pattern of routes) {
+    const pp = pattern.split("/").filter(Boolean);
+    // `*` splat: shu joygacha mos kelsa yetarli.
+    const splat = pp[pp.length - 1] === "*";
+    if (!splat && pp.length !== parts.length) continue;
+    if (splat && parts.length < pp.length - 1) continue;
+
+    let okMatch = true;
+    for (let k = 0; k < pp.length; k += 1) {
+      if (pp[k] === "*") break;
+      if (pp[k].startsWith(":")) continue; // parametr - har narsa mos
+      if (pp[k] !== parts[k]) {
+        okMatch = false;
+        break;
+      }
+    }
+    if (okMatch) return true;
+  }
+  return false;
+};
+
+const testHrefsResolve = async () => {
+  head("17. AI HAVOLALARI HAQIQIY MARSHRUTGA TUSHADI (404 regressiyasi)");
+
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+
+  if (!fs.existsSync(ROUTES_FILE)) {
+    ok("frontend marshrut fayli topilmadi - test o'tkazib yuborildi");
+    return;
+  }
+
+  const routes = parseOwnerRoutes(fs.readFileSync(ROUTES_FILE, "utf8"));
+  routes.size > 50
+    ? ok("marshrut jadvali o'qildi", `${routes.size} ta`)
+    : bad("marshrut jadvali o'qildi", `faqat ${routes.size} ta - parser buzuq`);
+
+  // `users/:id` bo'lishi SHART: subjectHref butunlay shunga tayanadi.
+  routes.has("/owner/users/:id")
+    ? ok("/owner/users/:id marshruti mavjud")
+    : bad("/owner/users/:id marshruti mavjud", "topilmadi");
+
+  // --- (a) subjectLink.service.js chiqaradigan havolalar ---
+  const { subjectHref } = await import(
+    "../src/modules/ai/services/subjectLink.service.js"
+  );
+  const fakeId = "507f1f77bcf86cd799439011";
+  let brokenSubject = 0;
+  for (const type of INSIGHT_SUBJECT_TYPES) {
+    const href = subjectHref(type, fakeId);
+    if (href == null) continue; // sahifasi yo'q tur - ataylab havolasiz
+    if (!matchesRoute(href, routes)) {
+      brokenSubject += 1;
+      bad(`  subjectHref("${type}")`, `${href} — marshrut yo'q`);
+    }
+  }
+  eq("barcha subjectHref manzillari marshrutga tushadi", brokenSubject, 0);
+
+  // --- (b) Barcha detektorlardagi `href:` matnlari ---
+  //
+  // Manba KOD o'zi skanerlanadi: shu tarzda yangi detektor qo'shilganda
+  // uning havolasi ham avtomatik tekshiriladi - testni yangilash
+  // kerak emas va yangi buzuq havola jimgina o'tib ketmaydi.
+  const aiDir = path.resolve(
+    path.dirname(new URL(import.meta.url).pathname),
+    "../src/modules/ai",
+  );
+  const walk = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = path.join(dir, e.name);
+      return e.isDirectory() ? walk(p) : p.endsWith(".js") ? [p] : [];
+    });
+
+  const found = [];
+  for (const file of walk(aiDir)) {
+    const text = fs.readFileSync(file, "utf8");
+    for (const m of text.matchAll(/href: *[`"']([^`"']+)[`"']/g)) {
+      // Shablon o'zgaruvchisi (`${id}`) o'rniga soxta ID qo'yamiz.
+      const href = m[1].replace(/\$\{[^}]*\}/g, fakeId);
+      if (!href.startsWith("/owner/")) continue;
+      found.push({ href, file: path.basename(file) });
+    }
+  }
+
+  found.length > 5
+    ? ok("detektor havolalari topildi", `${found.length} ta`)
+    : bad("detektor havolalari topildi", `faqat ${found.length} ta - skaner buzuq`);
+
+  const broken = found.filter((f) => !matchesRoute(f.href, routes));
+  eq("barcha detektor havolalari marshrutga tushadi", broken.length, 0);
+  for (const b of broken) bad(`  ${b.file}`, `${b.href} — marshrut yo'q`);
+
+  // --- (c) Salbiy nazorat: parser haqiqatan ham buzuqni TUTADIMI ---
+  //
+  // Busiz test jimgina "hammasi mos" deb o'tib ketishi mumkin edi
+  // (mas. matchesRoute doim true qaytarsa).
+  matchesRoute("/owner/bunday-sahifa-yoq/123", routes)
+    ? bad("mavjud bo'lmagan manzil RAD ETILADI", "parser hammasini qabul qilyapti")
+    : ok("mavjud bo'lmagan manzil rad etiladi (nazorat)");
+
+  matchesRoute(`/owner/students/${fakeId}?tab=finance`, routes)
+    ? bad("eski buzuq havola RAD ETILADI", "students/:id yo'q edi, lekin mos keldi")
+    : ok("eski buzuq havola rad etiladi (students/:id yo'q)");
+};
+
+// ════════════════════════════════════════════════════════════════
 const main = async () => {
   console.log("\n\x1b[1m AI MASLAHATCHI — TO'LIQ TEST\x1b[0m");
 
@@ -1229,6 +1421,7 @@ const main = async () => {
   await testPeriodMeta();
   await testTeacherScoring();
   await testSubjectLinks();
+  await testHrefsResolve();
 
   // DB testlari
   await mongoose.connect(TEST_DB);

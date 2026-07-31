@@ -32,8 +32,13 @@ const PANEL_PARAMS = { status: "pending", limit: 20, sort: "-createdAt" };
  *
  * Toast faqat SESSIYA DAVOMIDA kelgan yangi so'rovlarni ko'rsatadi -
  * bu panel esa butun kutilayotgan navbatni istalgan payt ochadi.
+ *
+ * `renderTrigger` - tugma ko'rinishini tashqaridan berish uchun
+ * (GlobalSearch bilan bir xil naqsh). Sidebar undan foydalanib panelni
+ * menyudagi "Tasdiqlar" QATORIGA biriktiradi: ilgari qidiruv yonida
+ * alohida qo'ng'iroq turardi va bir xil sanoq ikki joyda takrorlanardi.
  */
-const ApprovalsBell = ({ className = "" }) => {
+const ApprovalsBell = ({ className = "", renderTrigger }) => {
   const { hasAny } = usePermissions();
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -61,23 +66,28 @@ const ApprovalsBell = ({ className = "" }) => {
   return (
     <>
       <Sheet open={open} onOpenChange={setOpen}>
-        {/* Tugma ko'rinishi bildirishnoma qo'ng'irog'i bilan bir xil:
-            oq fon + chegara + doira. Yalang'och ikonka bosiladigan
-            joyga o'xshamasdi. */}
-        <button
-          type="button"
-          title="Tasdiqlar"
-          onClick={() => setOpen(true)}
-          aria-label={`Tasdiqlar (${count} ta kutilmoqda)`}
-          className={`relative inline-flex size-9 shrink-0 items-center justify-center rounded-xl border bg-card transition hover:bg-muted ${className}`}
-        >
-          <BadgeCheck strokeWidth={1.5} className="size-5" />
-          {count > 0 && (
-            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium leading-none text-white">
-              {count > 99 ? "99+" : count}
-            </span>
-          )}
-        </button>
+        {/* Trigger tashqaridan berilishi mumkin (sidebar menyu qatori),
+            aks holda mustaqil qo'ng'iroq tugmasi. Uning ko'rinishi
+            bildirishnoma qo'ng'irog'i bilan bir xil: oq fon + chegara +
+            doira. Yalang'och ikonka bosiladigan joyga o'xshamasdi. */}
+        {renderTrigger ? (
+          renderTrigger({ open: () => setOpen(true), count })
+        ) : (
+          <button
+            type="button"
+            title="Tasdiqlar"
+            onClick={() => setOpen(true)}
+            aria-label={`Tasdiqlar (${count} ta kutilmoqda)`}
+            className={`relative inline-flex size-9 shrink-0 items-center justify-center rounded-xl border bg-card transition hover:bg-muted ${className}`}
+          >
+            <BadgeCheck strokeWidth={1.5} className="size-5" />
+            {count > 0 && (
+              <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium leading-none text-white">
+                {count > 99 ? "99+" : count}
+              </span>
+            )}
+          </button>
+        )}
 
         <SheetContent
           side="right"
@@ -103,17 +113,22 @@ const ApprovalsBell = ({ className = "" }) => {
             ))}
           </div>
 
-          {total > items.length && (
-            <div className="border-t p-4">
-              <Link
-                to="/owner/expense-approvals"
-                onClick={() => setOpen(false)}
-                className="block rounded-md border py-2 text-center text-sm transition hover:bg-muted"
-              >
-                Barchasini ko'rish ({total})
-              </Link>
-            </div>
-          )}
+          {/* To'liq sahifaga havola DOIM ko'rinadi.
+              Ilgari u faqat navbat 20 tadan (PANEL_PARAMS.limit) oshganda
+              chiqardi - bu panel qidiruv yonidagi qo'shimcha qo'ng'iroq
+              bo'lgani, sahifaga esa menyudagi link orqali o'tilgani uchun
+              yetarli edi. Endi panel menyu qatorining O'ZIDAN ochiladi,
+              ya'ni bu havola sahifaga yagona yo'l: yashirilsa, kam so'rov
+              bo'lganda to'liq ro'yxatga umuman o'tib bo'lmasdi. */}
+          <div className="border-t p-4">
+            <Link
+              to="/owner/expense-approvals"
+              onClick={() => setOpen(false)}
+              className="block rounded-md border py-2 text-center text-sm transition hover:bg-muted"
+            >
+              Barchasini ko'rish{total > 0 ? ` (${total})` : ""}
+            </Link>
+          </div>
         </SheetContent>
       </Sheet>
 

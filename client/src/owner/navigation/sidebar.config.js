@@ -30,13 +30,20 @@ const ownerSidebar = [
     permission: "admin_dashboard.read",
   },
 
-  // Ataylab YAKKA link: bitta sahifa uchun ochiladigan guruh ortiqcha
-  // bosish qadamini qo'shardi. Badge kutilayotgan so'rovlar sonini ko'rsatadi.
+  // PANEL ochadigan qator (`sheet`), oddiy havola emas.
+  //
+  // Ilgari bu yakka link edi va kutilayotgan sanoq IKKI joyda turardi:
+  // shu qatordagi badge va qidiruv yonidagi alohida qo'ng'iroq tugmasi.
+  // Bitta narsa uchun ikkita bosiladigan element - foydalanuvchi qaysi
+  // birini bosishni bilmasdi, qo'ng'iroq esa qidiruv kengligini yerdi.
+  //
+  // Endi qator o'zi panelni ochadi: navbat sahifani tark etmasdan
+  // ko'riladi, to'liq ro'yxatga panel ichidagi "Barchasini ko'rish"
+  // olib boradi (marshrut o'zi joyida - /owner/expense-approvals).
   {
     title: "Tasdiqlar",
     icon: BadgeCheck,
-    url: "/owner/expense-approvals",
-    badge: "approvals",
+    sheet: "approvals",
     permissionAnyOf: ["finance.read", "approvals.decide_config"],
   },
 

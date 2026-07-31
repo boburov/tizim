@@ -123,7 +123,17 @@ const buildSourceRefs = (sid, signals, kinds) => {
       model: "StudentPayment",
       ids: signals.debt.ids,
       total: signals.debt.ids.length,
-      href: `/owner/students/${sid}?tab=finance`,
+      // DIQQAT: bu yerda `/owner/students/${sid}?tab=finance` turardi va u
+      // 404 qaytarardi - marshrut jadvalida `students/:id` UMUMAN YO'Q
+      // (`students` ostida faqat statik tablar bor: tolovlar, qarzdorlar,
+      // statistika, chiqib-ketish). O'quvchining to'lov tarixi aslida
+      // alohida sahifada ochiladi.
+      //
+      // Bu xato eng zararli turdagi xato edi: karta ishonchli ko'rinardi,
+      // "Ishingni ko'rsat" tugmasi bor edi, lekin bosilganda owner 404
+      // olardi - ya'ni AI aynan tekshirib bo'lmaydigan da'vo qilib turardi.
+      // Endi havolalar test bilan qulflangan (aiAdvisor.test.js, 17-bo'lim).
+      href: `/owner/finance/student-payments/student/${sid}`,
     });
   }
   return refs;

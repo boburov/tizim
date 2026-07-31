@@ -133,10 +133,7 @@ const Header = () => {
 
 const Main = () => {
   const isMobile = useIsMobile();
-  const { toggleSidebar, state } = useSidebar();
-  // Yig'ilgan sidebar faqat ikonka kengligida - qidiruv va tasdiqlar
-  // tugmasi yonma-yon sig'maydi, shuning uchun ustma-ust joylashadi.
-  const isCollapsed = state === "collapsed" && !isMobile;
+  const { toggleSidebar } = useSidebar();
   const { role, roleType, multiBranch } = useAuth();
   const { isAllBranches } = useActiveBranch();
   const { has, hasAny } = usePermissions();
@@ -173,11 +170,12 @@ const Main = () => {
 
   // Filter sub-items by permission.
   //
-  // Ikki xil yozuv bor:
-  //   - GURUH: `items` massivi bor -> ochiladigan collapsible.
+  // Uch xil yozuv bor:
+  //   - GURUH:      `items` massivi bor -> ochiladigan collapsible.
   //   - YAKKA LINK: `url` bor, `items` yo'q -> to'g'ridan-to'g'ri havola.
-  // Yakka link ataylab qo'shildi: "Tasdiqlar" kabi bitta sahifali bo'lim
-  // uchun ochiladigan guruh ortiqcha bosish qadamini qo'shardi.
+  //   - PANEL:      `sheet` bor -> yonboshdan chiqadigan panelni ochadi.
+  // Yakka link ataylab qo'shildi: bitta sahifali bo'lim uchun ochiladigan
+  // guruh ortiqcha bosish qadamini qo'shardi.
   const filtered = navItems
     .filter(allowed)
     .map((item) => ({
@@ -185,7 +183,9 @@ const Main = () => {
       items: (item.items || []).filter(allowed),
     }))
     .filter((item) =>
-      item.items.length ? true : Boolean(item.url) && allowed(item),
+      item.items.length
+        ? true
+        : Boolean(item.url || item.sheet) && allowed(item),
     );
 
   return (
@@ -203,21 +203,14 @@ const Main = () => {
           nosozlik jimgina bo'lardi. */}
       {isOwnerPanel && (
         <>
+          {/* Qidiruv to'liq kenglikda. Tasdiqlar qo'ng'irog'i ilgari shu
+              yerda, qidiruv yonida turardi - u kenglikni yer, yig'ilgan
+              holatda ustma-ust tushardi va menyudagi "Tasdiqlar" qatori
+              bilan bir xil sanoqni takrorlardi. Endi panel o'sha
+              qatorning o'zidan ochiladi (pastda). */}
           <SidebarGroup className="gap-2 pb-0">
             <OwnerCreateMenu />
-            <div
-              className={
-                isCollapsed
-                  ? "flex flex-col items-center gap-2"
-                  : "flex items-center gap-1.5"
-              }
-            >
-              <div className="min-w-0 flex-1">
-                <OwnerGlobalSearch />
-              </div>
-              {/* Kutilayotgan tasdiqlar paneli - yonboshdan chiqadi */}
-              <OwnerApprovalsBell />
-            </div>
+            <OwnerGlobalSearch />
           </SidebarGroup>
           <OwnerCreateModals />
           {/* Bildirishnoma qatlamining YAGONA mount nuqtasi: sidebar har
@@ -230,7 +223,27 @@ const Main = () => {
         <SidebarGroupLabel>Platforma</SidebarGroupLabel>
         <SidebarMenu>
           {filtered.map((item) =>
-            item.items.length === 0 ? (
+            item.sheet === "approvals" ? (
+              /* Panel qatori - sahifaga o'tmaydi, yonboshdan tasdiqlar
+                 navbatini ochadi. Ko'rinishi qo'shni linklar bilan bir
+                 xil; yig'ilgan holatda SidebarMenuButton o'zi ikonka +
+                 tooltip'ga aylanadi, alohida moslash kerak emas. */
+              <SidebarMenuItem key={item.title}>
+                <OwnerApprovalsBell
+                  renderTrigger={({ open }) => (
+                    <SidebarMenuButton
+                      onClick={open}
+                      tooltip={item.title}
+                      className="h-auto py-2.5"
+                    >
+                      {item.icon && <item.icon strokeWidth={1.5} />}
+                      <span>{item.title}</span>
+                      <OwnerApprovalsBadge className="ml-auto" />
+                    </SidebarMenuButton>
+                  )}
+                />
+              </SidebarMenuItem>
+            ) : item.items.length === 0 ? (
               /* Yakka link - collapsible'siz, to'g'ridan-to'g'ri sahifaga */
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton
@@ -244,9 +257,6 @@ const Main = () => {
                   >
                     {item.icon && <item.icon strokeWidth={1.5} />}
                     <span>{item.title}</span>
-                    {item.badge === "approvals" && (
-                      <OwnerApprovalsBadge className="ml-auto" />
-                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
