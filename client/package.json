@@ -7,6 +7,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "check:contrast": "node scripts/check-contrast.mjs",
+    "check:ai-metrics": "node scripts/check-ai-metrics.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

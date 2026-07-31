@@ -2103,3 +2103,86 @@ Endi u faqat **sondan kelib chiqmaydigan** xulosani aytadi:
 <sub>session `de0b93b7` · branch `main` · 11 ta qadam</sub>
 
 ---
+
+## 2026-07-30 20:58 — ushbu ai maslahatchini ayamasdan test qiling
+
+**So'rov**
+
+> ushbu ai maslahatchini ayamasdan test qiling
+
+**O'zgargan fayllar (7)**
+
+- `server/tests/aiAdvisor.test.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/package.json` — tahrirlandi
+- `server/src/modules/ai/services/insight.service.js` — tahrirlandi
+- `server/src/modules/ai/validators/insight.validator.js` — tahrirlandi
+- `server/src/modules/ai/ai.routes.js` — tahrirlandi
+- `client/scripts/check-ai-metrics.mjs` — yaratildi/qayta yozildi
+- `client/package.json` — tahrirlandi
+
+**Buyruqlar (27)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && cat package.json
+ls -a | head -20; echo "---MONGO---"; (nc -z localhost 27017 && echo "MONGO PORT OPEN") || echo "mongo not on 27017"; echo "---ENV---"; ls .env* 2>/dev/null
+ls tests/ && echo "=== PATTERN ===" && head -60 tests/localDayGuard.test.js
+ls tests/helpers/ && echo "=== DB CONNECT PATTERN ===" && sed -n '1,70p' tests/branchLeak.test.js
+sed -n '44,150p' src/modules/ai/services/insightWriter.service.js
+grep -n "required\|type:" src/models/branch.model.js | head -25; echo "---ENGINE---"; grep -n "AI_ENGINE_VERSION" src/models/aiConfig.model.js
+npm run test:ai 2>&1 | tail -80
+sed -n '25,60p' src/modules/ai/signals/pulse.signal.js
+npm run test:ai 2>&1 | sed -n '1,45p'
+npm run test:ai 2>&1 | tail -12
+npm run test:ai 2>&1 | grep -A14 "5. IMKONIYAT" | head -18; echo "=== YAKUN ==="; npm run test:ai 2>&1 | tail -8
+sed -n '282,320p' src/modules/ai/signals/finance.signal.js
+sed -n '193,285p' src/modules/ai/signals/finance.signal.js | grep -n "collectionRate\|collectionSample\|return"
+grep -n "enum\|required\|type:" src/models/aiRun.model.js | head -20
+npm run test:ai 2>&1 | sed -n '/12. RECOMPUTE/,$p'
+sed -n '1,40p' src/middleware/auth.js; echo "=== JWT ==="; grep -n "^export" src/utils/jwt.js
+sed -n '1,45p' src/middleware/requirePermission.js
+node --input-type=module -e " import r from './src/modules/ai/ai.routes.js'; const l = r.stack.filter(x=>x.route)[0]; console.log('path:', l.route.path); consol…
+node --input-type=module -e " import r from './src/modules/ai/ai.routes.js'; import requireAuth from './src/middleware/auth.js'; const routes = r.stack.filter(x…
+cat src/modules/ai/handlers/getConfig.handler.js
+node --input-type=module -e " import mongoose from 'mongoose'; await mongoose.connect('mongodb://127.0.0.1:27017/lc_ai_probe'); const { resolveConfig } = await …
+npm run test:ai 2>&1 | sed -n '/3. ROUTE TARTIBI/,/4. HISOBOT/p'; echo "=== YAKUN ==="; npm run test:ai 2>&1 | tail -4
+cd /Users/shukrullo/Desktop/lc-total/client && node -e "const p=require('./package.json'); console.log('scripts:', JSON.stringify(p.scripts)); console.log('vite…
+node scripts/check-ai-metrics.mjs 2>&1 | tail -35
+cp src/owner/features/ai/utils/metric.utils.js /tmp/mu.bak && sed -i '' 's|if (unit === "so.m") return formatMoney(value);|if (unit === "so'"'"'m") return `${fo…
+# … yana 2 ta
+```
+
+**Natija**
+
+"Ayamasdan" — demak haqiqiy ma'lumot bilan ishga tushirib ko'raman. Avval test infratuzilmasini tekshiray.
+
+MongoDB ishlayapti, `.env` bor, va `tests/` papkasida oddiy node testlari bor. Mavjud namunani o'qiy.
+
+Yaxshi namuna. Endi test yozish uchun kerakli imzolarni yig'ay.
+
+Hammasi bor: Mongo ishlayapti, test namunasi aniq. Endi to'liq test yozaman — sof mantiq, DB, filial izolyatsiyasi va route tartibi.
+
+99/100. Bitta yiqildi — tekshiray, bu kod xatosimi yoki test xatosimi.
+
+Kod to'g'ri, **test noto'g'ri edi**. Toshkent UTC+5, ya'ni 21:45 UTC allaqachon *ertangi* mahalliy kun — shuning uchun kalit haqli ravishda o'zgargan.
+
+Testni to'g'rilayman va ayni paytda foydaliroq qilaman — mahalliy kun chegarasini tekshiradigan qilib:
+
+101/101. Lekin "ayamasdan" degani — testning **tishi bor-yo'qligini** ham tekshirish kerak. Regressiya testi eski xatoni haqiqatan tutadimi? Vaqtincha buzib ko'raman.
+
+Testning tishi bor. Eski xato aynan tutildi: **3 ta imkoniyat xavf ro'yxatiga sizib o'tdi**, yashil ro'yxat esa bo'sh qoldi.
+
+Diqqatga sazovor tafsilot: `summary` to'g'ri qolgan (u alohida aggregation'da `stance` ishlatadi) — ya'ni eski xatoda sanoq "3 ta imkoniyat" deb turardi, lekin yashil ro'yxat bo'sh edi. Aynan shu owner ko'radigan simptom. Tuzatishni qaytaraman:
+
+Endi eng katta sinovdan o'tmagan yuza — **haqiqiy recompute quvuri**. Lekin avval yangi narration kodimda shubhali joyni tekshiray:
+
+`historicalCollectionRate` ma'lumot bo'lmasa neytral `1` qaytaradi (null emas) — shubham asossiz chiqdi, guard to'g'ri.
+
+Endi eng katta sinovdan o'tmagan qism: **haqiqiy detektor quvuri** va **izoh matni sifati**.
+
+114/114. Endi qolgan ikkita sinovdan o'tmagan yuza: **HTTP qatlami** (men qo'shgan route'lar hech qachon haqiqiy so'rov bilan tekshirilmagan) va **frontend polyarlik mantiqi*
+
+…(qisqartirildi)
+
+<sub>session `de0b93b7` · branch `main` · 40 ta qadam</sub>
+
+---

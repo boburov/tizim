@@ -67,6 +67,15 @@ export const reportIdSchema = z.object({
   params: z.object({ id: objectId }),
 });
 
+// Sozlamalarni o'qish: branchId QUERY'dan keladi va to'g'ridan-to'g'ri
+// Mongo so'roviga tushadi. Validatsiyasiz "?branchId=abc" CastError
+// beradi va foydalanuvchi toza 400 o'rniga 500 ko'radi.
+export const getConfigSchema = z.object({
+  query: z.object({
+    branchId: objectId.optional(),
+  }),
+});
+
 // Ro'yxat sahifasi uchun: N ta o'quvchining badge'ini BITTA so'rovda olish.
 // POST, chunki 200 ta ID query string'ga sig'maydi.
 export const bySubjectsSchema = z.object({

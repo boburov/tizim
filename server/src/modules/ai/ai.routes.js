@@ -13,6 +13,7 @@ import {
   listReportsSchema,
   latestReportSchema,
   reportIdSchema,
+  getConfigSchema,
   idParamSchema,
   dismissSchema,
   updateConfigSchema,
@@ -126,7 +127,13 @@ router.post(
 );
 
 // --- Sozlamalar (AI_CONFIG - eng tor huquq: vaznlar BARCHA ballni siljitadi) ---
-router.get("/config", requireAuth, requirePermission(PERMISSIONS.AI_CONFIG), getConfig);
+router.get(
+  "/config",
+  requireAuth,
+  requirePermission(PERMISSIONS.AI_CONFIG),
+  validate(getConfigSchema),
+  getConfig,
+);
 router.put(
   "/config",
   requireAuth,
