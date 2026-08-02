@@ -1,76 +1,85 @@
 import { Link } from "react-router-dom";
-import {
-  AlertTriangle,
-  CalendarDays,
-  FileText,
-  Lightbulb,
-  ListOrdered,
-  RefreshCw,
-  Sparkles,
-  Sunrise,
-  TrendingUp,
-} from "lucide-react";
+import { FileText, ListTodo, RefreshCw } from "lucide-react";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import useModal from "@/shared/hooks/useModal";
 import { MODAL } from "@/shared/constants/modals";
-import { formatMoney } from "@/shared/utils/formatMoney";
-import AiInsightCard from "@/shared/components/ai/AiInsightCard";
 import useBriefingQuery from "../hooks/useBriefingQuery";
 import useRankingsQuery from "../hooks/useRankingsQuery";
 import { useLatestReportQuery } from "../hooks/useReportsQuery";
-import AiRankingBoard from "../components/AiRankingBoard";
 import {
   useAckInsightMutation,
   useResolveInsightMutation,
   useRecomputeMutation,
 } from "../hooks/useInsightMutations";
 import InsightDismissModal from "../components/modals/InsightDismissModal";
-import BriefingSection from "../components/BriefingSection";
+import DashboardSection, {
+  SectionEmpty,
+} from "../components/dashboard/DashboardSection";
+import AiDailySummary from "../components/dashboard/AiDailySummary";
+import AiKpiGrid from "../components/dashboard/AiKpiGrid";
+import AiCriticalAlerts from "../components/dashboard/AiCriticalAlerts";
+import AiRecommendations from "../components/dashboard/AiRecommendations";
+import AiHealthScore from "../components/dashboard/AiHealthScore";
+import AiForecast from "../components/dashboard/AiForecast";
+import AiTopTeachers from "../components/dashboard/AiTopTeachers";
+import AiStudentsAtRisk from "../components/dashboard/AiStudentsAtRisk";
+import AiRecentActivity from "../components/dashboard/AiRecentActivity";
+import { relativeUz } from "../utils/dashboard.utils";
 
-// AI OPERATSIYALAR MARKAZI - tajribali COO kabi ishlaydigan sahifa.
+// AI DASHBOARD - owner uchun ijroiya paneli.
 //
-// Sahifa DOIM to'rtta savolga shu tartibda javob beradi:
-//   1. Kecha nima bo'ldi?           → o'lchangan fakt
-//   2. Bugun nima bo'layapti?       → holat
-//   3. Keyin nima bo'lishi mumkin?  → bashorat
-//   4. Hozir nima qilishim kerak?   → ustuvorlangan harakatlar
+// SAHIFANING YAGONA SAVOLI: "men hozir nima qilishim kerak?"
 //
-// TARTIB TASODIFIY EMAS (backend'dagi briefing.service.js izohiga qarang):
-// fakt → holat → bashorat → harakat. Owner bashoratga faktni ko'rmasdan
-// ishonmaydi, harakatga esa bashoratni ko'rmasdan kirishmaydi.
+// TARTIB TASODIFIY EMAS - u qaror qabul qilish tartibi:
 //
-// Bu sahifa "vazifalar ro'yxati" EMAS - u kunning hikoyasi. To'liq
-// insight ro'yxati /owner/ai/tasks da qoladi.
+//   1. Xulosa       → holat va birinchi qadam        (5 soniya)
+//   2. KPI          → qaror uchun oltita raqam       (15 soniya)
+//   3. Ogohlantirish→ nima buzilgan, nima qilinadi   (1 daqiqa)
+//   4. Tavsiya      → nima qilsam o'saman
+//   5. Salomatlik   → qaysi yo'nalish zaif
+//   6. Bashorat     → qayoqqa ketyapmiz
+//   7. Jamoa        → kim yaxshi, kimni yo'qotamiz, kim nima qildi
+//
+// Yuqoridan pastga qarab SHOSHILINCHLIK kamayadi va CHUQURLIK ortadi.
+// Owner istalgan joyda to'xtashi mumkin va shu joygacha o'qigani
+// o'zicha to'liq javob bo'ladi - progressiv ochilishning asosiy
+// ma'nosi shu.
+//
+// ESKI SAHIFA NEGA QAYTA ISHLANDI: u to'rtta bo'limda 16 ta ko'rsatkich
+// katakchasi va har bo'lim tepasida uslubiy izoh ko'rsatardi. O'n
+// oltita raqam - bu nol raqam: owner qaysi biri muhimligini ajrata
+// olmagach, hech biriga qaramaydi. Endi birinchi ekranda oltita raqam
+// va bitta tugma bor.
 
-/** "2 soat oldin" - AI qachon o'ylagani. Owner uchun aniq soatdan muhimroq. */
-const relativeUz = (dateLike) => {
-  if (!dateLike) return null;
-  const diff = Date.now() - new Date(dateLike).getTime();
-  if (Number.isNaN(diff)) return null;
-  const mins = Math.round(diff / 60000);
-  if (mins < 1) return "hozirgina";
-  if (mins < 60) return `${mins} daqiqa oldin`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} soat oldin`;
-  const days = Math.round(hours / 24);
-  return `${days} kun oldin`;
-};
-
-const SectionSkeleton = () => (
-  <div className="space-y-3">
-    <div className="h-6 w-64 animate-pulse rounded bg-muted" />
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="h-24 animate-pulse rounded-xl bg-muted/60" />
+const DashboardSkeleton = () => (
+  <div className="space-y-10">
+    <div className="h-44 animate-pulse rounded-2xl bg-muted/60" />
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="h-36 animate-pulse rounded-xl bg-muted/50" />
       ))}
     </div>
-    <div className="h-16 animate-pulse rounded-xl bg-muted/40" />
+    <div className="space-y-2.5">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-24 animate-pulse rounded-xl bg-muted/40" />
+      ))}
+    </div>
   </div>
+);
+
+const HeaderLink = ({ to, icon: Icon, children }) => (
+  <Link
+    to={to}
+    className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+  >
+    <Icon className="size-4" />
+    {children}
+  </Link>
 );
 
 const OperationsCenterPage = () => {
   const { data, isLoading, isError } = useBriefingQuery();
-  const { data: rankings, isLoading: rankingsLoading } = useRankingsQuery();
+  const { data: rankings } = useRankingsQuery();
   const { data: latestReport } = useLatestReportQuery("daily");
   const { openModal } = useModal(MODAL.AI_INSIGHT_DISMISS);
 
@@ -84,49 +93,32 @@ const OperationsCenterPage = () => {
     onDismiss: (i) => openModal(MODAL.AI_INSIGHT_DISMISS, i),
   };
 
-  const lastRunAt = relativeUz(data?.lastRun?.at);
+  const risks = data?.now?.risks || [];
+  const opportunities = data?.now?.opportunities || [];
   const counts = data?.now?.counts;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-foreground">
-            AI operatsiyalar markazi
-          </h1>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
-            {data?.branch?.name && <span>{data.branch.name}</span>}
-            {/* "AI oxirgi marta qachon o'yladi" - bu qator bo'lmasa sahifa
-                yana bir statik dashboard bo'lib qoladi. */}
-            {lastRunAt && (
-              <span className="inline-flex items-center gap-1">
-                <Sparkles className="size-3.5" />
-                Oxirgi tahlil: {lastRunAt}
-              </span>
-            )}
+          <h1 className="text-xl font-semibold text-foreground">AI maslahatchi</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {data?.branch?.name || "Barcha filiallar"}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to="/owner/ai/reports"
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <FileText className="size-4" />
+          <HeaderLink to="/owner/ai/reports" icon={FileText}>
             Hisobotlar
-          </Link>
-          <Link
-            to="/owner/ai/tasks"
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <AlertTriangle className="size-4" />
+          </HeaderLink>
+          <HeaderLink to="/owner/ai/tasks" icon={ListTodo}>
             Barcha vazifalar
-          </Link>
+          </HeaderLink>
           <button
             type="button"
             onClick={() => recompute.mutate(undefined)}
             disabled={recompute.isPending}
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
           >
             <RefreshCw className={`size-4 ${recompute.isPending ? "animate-spin" : ""}`} />
             Qayta hisoblash
@@ -134,255 +126,131 @@ const OperationsCenterPage = () => {
         </div>
       </header>
 
-      {/* `data.headline` ATAYLAB KO'RSATILMAYDI.
-          U backend'da now + yesterday + today narration'larini BIRLASHTIRIB
-          quriladi (briefing.service.js), ya'ni quyidagi uchta bo'limning
-          matnini SO'ZMA-SO'Z takrorlaydi. Ekranda bir xil jumla ikki marta
-          turishi sahifani "ko'p gapiradigan" qilib ko'rsatadi va owner
-          ikkalasini ham o'qimay qo'yadi. Xulosa kerak bo'lsa - u
-          bo'limlardan farq qiladigan matn bo'lishi kerak. */}
-
       {isError && (
         <div className="rounded-xl border bg-card p-8 text-center">
-          <p className="font-medium text-foreground">Brifing yuklanmadi</p>
+          <p className="font-medium text-foreground">Ma'lumot yuklanmadi</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Ma'lumotni olishda xatolik yuz berdi. Sahifani yangilab ko'ring.
+            Tahlilni olishda xatolik yuz berdi. Sahifani yangilab ko'ring.
           </p>
         </div>
       )}
 
-      {isLoading && (
-        <div className="space-y-8">
-          <SectionSkeleton />
-          <SectionSkeleton />
-        </div>
-      )}
+      {isLoading && <DashboardSkeleton />}
 
       {data && (
         <>
-          {/* `hint` FAQAT ma'lumot tashiganda beriladi.
-              Ilgari har bo'limda uslubiy izoh turardi ("O'lchangan fakt —
-              oldingi kun bilan taqqoslangan"). U owner'ga emas, kod
-              o'qiyotgan dasturchiga qaratilgan edi: owner raqamni
-              qanday hisoblaganimizni emas, RAQAMNI ko'rgani keladi. */}
-          <BriefingSection
-            step="01"
-            question="Kecha nima bo'ldi?"
-            icon={CalendarDays}
-            metrics={data.yesterday?.metrics}
-            narration={data.yesterday?.narration}
+          {/* 1. XULOSA - besh soniyalik javob. */}
+          <AiDailySummary
+            summary={data.summary}
+            health={data.health}
+            lastRunLabel={relativeUz(data.lastRun?.at)}
           />
 
-          <BriefingSection
-            step="02"
-            question="Bugun nima bo'layapti?"
-            icon={Sunrise}
-            metrics={data.today?.metrics}
-            narration={data.today?.narration}
+          {/* 2. KPI - qaror uchun oltita raqam, har biri izohi bilan. */}
+          <DashboardSection
+            title="Asosiy ko'rsatkichlar"
+            hint="Har bir raqam ostida sababi va oqibati"
           >
-            <TodayDetails today={data.today} />
-          </BriefingSection>
+            <AiKpiGrid kpis={data.kpis} />
+          </DashboardSection>
 
-          <BriefingSection
-            step="03"
-            question="Keyin nima bo'lishi mumkin?"
-            icon={TrendingUp}
-            metrics={data.next?.metrics}
-            // Fallback FAQAT bashorat umuman yo'q bo'lganda ("barcha
-            // filiallar" rejimi). Bashorat bor, lekin aytadigan gap yo'q
-            // bo'lsa - izoh chizilmaydi, `||` esa bu ikki holatni
-            // ajratmay, bekordan-bekor matn ko'rsatardi.
-            narration={data.next ? data.next.narration : "Bashorat uchun filial tanlang."}
-          />
-
-          {/* REYTINGLAR - bashoratdan KEYIN, harakatdan OLDIN.
-              Tartib tasodifiy emas: bashorat "nima bo'lishi mumkin" ni
-              aytadi, reyting esa "u KIMDAN keladi" ni - ya'ni bashoratni
-              ismlarga aylantiradi. Reytingni harakatlardan keyin qo'ysak,
-              owner qaror qabul qilgandan keyin uni kim haqidaligini
-              bilardi. */}
-          <BriefingSection
-            step="04"
-            question="Kimga e'tibor qaratay?"
-            icon={ListOrdered}
+          {/* 3. OGOHLANTIRISHLAR - shoshilinchlik bo'yicha (backend
+                tartibi: ta'sir × ehtimol × shoshilinchlik). */}
+          <DashboardSection
+            title="Kritik ogohlantirishlar"
+            hint="Eng shoshilinchidan boshlab — har birida tayyor harakat"
+            count={counts ? counts.high + counts.medium : null}
+            to={risks.length ? "/owner/ai/tasks" : undefined}
           >
-            <AiRankingBoard data={rankings} isLoading={rankingsLoading} />
-          </BriefingSection>
+            {risks.length > 0 ? (
+              <AiCriticalAlerts items={risks} {...handlers} />
+            ) : (
+              <SectionEmpty
+                title="Shoshilinch vazifa yo'q"
+                hint="Barcha ko'rsatkichlar normal doirada. Keyingi tahlildan so'ng ro'yxat yangilanadi."
+              />
+            )}
+          </DashboardSection>
 
-          <BriefingSection
-            step="05"
-            question="Hozir nima qilishim kerak?"
-            // Bu hint SAQLANADI - u uslubiy izoh emas, sanoq.
-            hint={
-              counts
-                ? `${counts.high} yuqori · ${counts.medium} o'rta · ${counts.opportunities} imkoniyat`
-                : undefined
-            }
-            icon={AlertTriangle}
-            tone="text-rose-600 dark:text-rose-400"
-            narration={data.now?.narration}
+          {/* 4. TAVSIYALAR - xavfdan ALOHIDA. Aralashtirilgan ro'yxatda
+                owner imkoniyatni "yana bir muammo" deb o'qiydi. */}
+          <DashboardSection
+            title="AI tavsiyalari"
+            hint="O'sish qadamlari — bir bosishda kerakli ekranga o'tadi"
+            count={counts?.opportunities}
           >
-            <ActionLists now={data.now} handlers={handlers} />
-          </BriefingSection>
+            {opportunities.length > 0 ? (
+              <AiRecommendations items={opportunities} onResolve={handlers.onResolve} />
+            ) : (
+              <SectionEmpty
+                title="Hozircha yangi imkoniyat topilmadi"
+                hint="AI o'sish signallarini har tungi hisoblashda qaytadan qidiradi."
+              />
+            )}
+          </DashboardSection>
+
+          {/* 5. SALOMATLIK - "qaysi yo'nalish zaif". */}
+          <DashboardSection
+            title="Biznes salomatligi"
+            hint="Beshta yo'nalish, 100 ballik shkala — ball ostida sababi"
+          >
+            <AiHealthScore health={data.health} />
+          </DashboardSection>
+
+          {/* 6. BASHORAT - "qayoqqa ketyapmiz". */}
+          <DashboardSection
+            title="Bashorat"
+            hint="Keyingi oy daromadi va keyingi 7 kun davomati"
+          >
+            <AiForecast forecast={data.forecast} />
+          </DashboardSection>
+
+          {/* 7. JAMOA VA O'QUVCHILAR - ismlar. Bashorat "nima bo'ladi"
+                ni aytadi, bu bo'lim esa "u KIMDAN keladi" ni. */}
+          <DashboardSection title="Jamoa va o'quvchilar">
+            {rankings?.branchRequired ? (
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div className="rounded-xl border bg-card p-6 text-center lg:col-span-2">
+                  <p className="text-sm text-muted-foreground">
+                    Reytinglar filial ichida hisoblanadi — yuqoridan filial tanlang.
+                  </p>
+                </div>
+                <AiRecentActivity />
+              </div>
+            ) : (
+              <div className="grid gap-3 lg:grid-cols-3">
+                <AiTopTeachers ranking={rankings?.teacher} />
+                <AiStudentsAtRisk rankings={rankings} />
+                <AiRecentActivity />
+              </div>
+            )}
+          </DashboardSection>
+
+          {/* So'nggi kunlik hisobot - halqani yopadi: "AI kecha nima dedi". */}
+          {latestReport && (
+            <section className="rounded-xl border bg-card p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-semibold text-foreground">{latestReport.title}</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    {latestReport.summary}
+                  </p>
+                </div>
+                <Link
+                  to={`/owner/ai/reports/${latestReport._id}`}
+                  className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  To'liq hisobot
+                </Link>
+              </div>
+            </section>
+          )}
         </>
-      )}
-
-      {/* So'nggi kunlik hisobot - halqani yopadi: "AI kecha nima dedi". */}
-      {latestReport && (
-        <section className="rounded-xl border bg-card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="font-semibold text-foreground">{latestReport.title}</h2>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                {latestReport.summary}
-              </p>
-            </div>
-            <Link
-              to={`/owner/ai/reports/${latestReport._id}`}
-              className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              To'liq hisobot
-            </Link>
-          </div>
-        </section>
       )}
 
       <ModalWrapper name={MODAL.AI_INSIGHT_DISMISS} title="Baho noto'g'rimi?">
         <InsightDismissModal />
       </ModalWrapper>
-    </div>
-  );
-};
-
-/** Bugungi holatning tafsilotlari - ro'yxatlar, raqam emas. */
-const TodayDetails = ({ today }) => {
-  if (!today) return null;
-  const unmarked = today.lessons?.unmarkedGroups || [];
-  const absent = today.likelyAbsent || [];
-  const followUps = today.followUps || [];
-  if (!unmarked.length && !absent.length && !followUps.length) return null;
-
-  return (
-    <div className="grid gap-3 lg:grid-cols-3">
-      <DetailList
-        title="Davomat belgilanmagan"
-        empty="Hammasi belgilangan"
-        items={unmarked.map((g) => ({
-          id: g._id,
-          label: g.name,
-          // Dars vaqti - o'qituvchini qaysi guruh bo'yicha chaqirishni
-          // aytadi. Faqat guruh nomi bilan owner jadvalni ochishi kerak edi.
-          hint: g.slots?.length ? g.slots.join(", ") : null,
-        }))}
-      />
-      <DetailList
-        title="Bugun kelmasligi mumkin"
-        empty="Naqsh topilmadi"
-        items={absent.map((s) => ({
-          id: s.studentId,
-          label: s.name,
-          hint: s.hint || null,
-        }))}
-      />
-      <DetailList
-        title="Bog'lanish kerak"
-        empty="Navbatda lid yo'q"
-        items={followUps.map((f) => ({
-          id: f._id,
-          label: f.name,
-          hint: f.overdue ? "muddati o'tgan" : null,
-        }))}
-      />
-    </div>
-  );
-};
-
-const DetailList = ({ title, items, empty }) => (
-  <div className="rounded-xl border bg-card p-4">
-    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-      {title}
-      <span className="ml-1 tabular-nums">({items.length})</span>
-    </h3>
-    {items.length === 0 ? (
-      <p className="mt-2 text-sm text-muted-foreground">{empty}</p>
-    ) : (
-      <ul className="mt-2 space-y-1.5">
-        {items.slice(0, 6).map((it) => (
-          <li key={it.id} className="flex items-baseline justify-between gap-2 text-sm">
-            <span className="truncate text-foreground">{it.label}</span>
-            {it.hint && (
-              <span className="shrink-0 text-xs text-muted-foreground">{it.hint}</span>
-            )}
-          </li>
-        ))}
-        {items.length > 6 && (
-          <li className="text-xs text-muted-foreground">
-            va yana {items.length - 6} ta
-          </li>
-        )}
-      </ul>
-    )}
-  </div>
-);
-
-/**
- * Xavf va imkoniyat ALOHIDA ro'yxatda.
- *
- * Aralashtirilgan ro'yxatda owner imkoniyatni "yana bir muammo" deb
- * o'qiydi va ikkalasiga ham e'tibor bermay qo'yadi.
- */
-const ActionLists = ({ now, handlers }) => {
-  if (!now) return null;
-  const risks = now.risks || [];
-  const opportunities = now.opportunities || [];
-
-  if (!risks.length && !opportunities.length) {
-    return (
-      <div className="rounded-xl border bg-card p-8 text-center">
-        <p className="font-medium text-foreground">Shoshilinch vazifa yo'q</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Barcha ko'rsatkichlar normal doirada. Keyingi tahlildan so'ng ro'yxat yangilanadi.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      {risks.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            <AlertTriangle className="size-4 text-rose-600 dark:text-rose-400" />
-            E'tibor talab qiladi
-            <span className="font-normal tabular-nums">({risks.length})</span>
-          </h3>
-          <div className="grid gap-3 lg:grid-cols-2">
-            {risks.map((it) => (
-              <AiInsightCard key={it._id} insight={it} {...handlers} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {opportunities.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            <Lightbulb className="size-4 text-emerald-600 dark:text-emerald-400" />
-            O'sish imkoniyatlari
-            <span className="font-normal tabular-nums">({opportunities.length})</span>
-            {now.counts?.upside > 0 && (
-              <span className="font-normal text-emerald-600 dark:text-emerald-400">
-                ~{formatMoney(now.counts.upside)}
-              </span>
-            )}
-          </h3>
-          <div className="grid gap-3 lg:grid-cols-2">
-            {opportunities.map((it) => (
-              <AiInsightCard key={it._id} insight={it} {...handlers} />
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

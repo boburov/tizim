@@ -3316,3 +3316,111 @@ Now the student payments imp
 <sub>session `b242ca9d` · branch `main` · 76 ta qadam</sub>
 
 ---
+
+## 2026-08-02 12:58 — You are a Senior Product Designer with 15+ years of experience designi
+
+**So'rov**
+
+> You are a Senior Product Designer with 15+ years of experience designing enterprise SaaS products such as Notion, Linear, Stripe Dashboard, Slack Analytics, HubSpot, and Microsoft Power BI.
+> Redesign this AI Dashboard for an Education Center CRM used by owners, directors, and branch managers.
+> The current dashboard contains valuable analytics but suffers from poor information hierarchy, excessive text, visual overload, and weak prioritization.
+> Goals
+> Make the dashboard understandable in under 5 seconds.
+> Highlight only the most important business metrics.
+> Replace long paragraphs with concise AI summaries.
+> Transform passive reports into actionable recommendations.
+> Design around the question: "What should the owner do next?"
+> Dashboard Structure
+> AI Daily Summary (Today's overview in natural language)
+> Primary KPI Cards (maximum 6)
+> Critical Alerts (sorted by urgency)
+> AI Recommendations with one-click actions
+> Business Health Score (Finance, Students, Teachers, Marketing, Sales)
+> Revenue & Attendance Forecast
+> Top Performing Teachers
+> Students at Risk
+> Recent Activities
+> UX Principles
+> Progressive disclosure.
+> Clear visual hierarchy.
+> Maximum readability.
+> Large whitespace.
+> Modern enterprise SaaS aest
+> …
+
+**O'zgargan fayllar (21)**
+
+- `server/src/modules/ai/signals/health.signal.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/ai/signals/pulse.signal.js` — tahrirlandi
+- `server/src/constants/calendar.js` — yaratildi/qayta yozildi
+- `server/src/modules/ai/services/report.service.js` — tahrirlandi
+- `server/src/modules/ai/services/briefing.service.js` — tahrirlandi
+- `client/src/owner/features/ai/utils/dashboard.utils.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/utils/metric.utils.js` — tahrirlandi
+- `client/src/shared/utils/formatMoney.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/DashboardSection.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/ScoreRing.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/AiDailySummary.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/AiKpiGrid.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/AiCriticalAlerts.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/AiRecommendations.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/AiHealthScore.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/AiForecast.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/AiTopTeachers.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/AiStudentsAtRisk.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/ai/components/dashboard/AiRecentActivity.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/ai/pages/OperationsCenterPage.jsx` — yaratildi/qayta yozildi
+- `server/tests/aiAdvisor.test.js` — tahrirlandi
+
+**Buyruqlar (54)**
+
+```sh
+ls -la && echo "---CLIENT---" && ls client/src && echo "---OWNER FEATURES---" && ls client/src/owner/features
+find . -path ./node_modules -prune -o -type d -iname "*ai*" -print 2>/dev/null | head -50 && echo "---AI FILES---" && find . -path ./node_modules -prune -o -typ…
+find client/src/owner/features/ai client/src/shared/components/ai -type f | sort && echo "===LINES===" && find client/src/owner/features/ai client/src/shared/co…
+find server/src/modules/ai -type f | sort && echo "===" && cat server/src/modules/ai/ai.routes.js
+cat client/src/owner/features/ai/index.js client/src/owner/features/ai/api/ai.api.js client/src/owner/features/ai/hooks/useBriefingQuery.js client/src/owner/fea…
+cat client/src/owner/features/activityLogs/api/*.api.js 2>/dev/null; echo "===HOOKS==="; ls client/src/owner/features/activityLogs/hooks; echo "===MODEL==="; se…
+grep -n "recommendedActions" -A 25 server/src/modules/ai/services/insightWriter.service.js | head -80; echo "=== OPENCOUNTS ==="; grep -n "openCounts" -A 40 ser…
+ls client/src/shared/components/shadcn client/src/shared/components/ui 2>/dev/null; echo "=== RECHARTS USAGE ==="; grep -rln "recharts" client/src | head -20; e…
+cat client/src/owner/features/activityLogs/hooks/useActivityLogsQuery.js; echo "=== SERVER LIST HANDLER ==="; sed -n 1,80p server/src/modules/activityLogs/handl…
+sed -n 1,120p client/src/owner/features/studentStats/components/EnrollmentTrendChart.jsx; echo "=== QK AI ==="; grep -n -A20 "ai:" client/src/shared/lib/query/k…
+ls client/src/owner/features/activityLogs/components; echo "=== ACTION LABELS ==="; grep -rn "action" client/src/owner/features/activityLogs/utils/* 2>/dev/null…
+cat client/src/shared/components/ui/card/Card.jsx 2>/dev/null; echo "=== TOKENS ==="; grep -n "success\|warning\|info\|destructive" client/src/styles/*.css clie…
+grep -n -A30 "no-restricted-syntax" client/eslint.config.js | head -60
+sed -n 1,75p client/eslint.config.js
+grep -rhn "key: \"" server/src/modules/ai/services/*Insight.service.js | grep -v "label\|unit" | head -60; echo "=== ACTIONS BLOCKS ==="; grep -rn -B2 -A6 "reco…
+grep -n "path=" client/src/owner/routes/index.jsx | sed 's/^\s*//' | head -80
+grep -rn "buildBriefing" server/src --include=*.js | grep -v "briefing.service.js:"; echo "=== AiMetricTile/BriefingSection usage ==="; grep -rn "AiMetricTile\|…
+grep -rn "buildBriefing" server/src | grep -v "services/briefing.service.js"; echo "=== BriefingSection usage ==="; grep -rn "BriefingSection" client/src | grep…
+grep -n "rows:\|rank:\|label:\|note:\|href:\|metrics:\|totals\|scanned" server/src/modules/ai/services/ranking.service.js | head -60; echo "=== RANK HANDLER ===…
+sed -n 1,80p server/src/helpers/branchContext.helper.js
+grep -n "enum" server/src/models/lead.model.js | head -10; echo "=== FEEDBACK ==="; grep -n "enum\|status" server/src/models/feedback.model.js | head -15
+grep -rn "LEAD_STATUSES\s*=" server/src | head -3; grep -rn "FEEDBACK_STATUSES\s*=" server/src | head -3
+grep -n "role\|branch\|isActive\|isDeleted" server/src/models/user.model.js | head -25
+grep -n -B5 -A20 "role: \"teacher\"\|ROLES.TEACHER" server/src/modules/ai/services/ranking.service.js | head -50; echo "=== USER BRANCH FILTER HELPER ==="; grep…
+grep -rn "MONTH_LABELS\|oktabr\|iyul" server/src/constants/*.js server/src/utils/*.js 2>/dev/null | head -5; echo "=== report service month label ==="; grep -rn…
+# … yana 29 ta
+```
+
+**Natija**
+
+Avval mavjud AI dashboard kodini ko'rib chiqaman.
+
+Endi backend qismini yozaman.
+
+Endi davomat bashoratini qo'shaman.
+
+Endi KPI, xulosa va bashorat bloklarini yozaman.
+
+Endi frontend dizayn qatlamini yozaman.
+
+Endi dashboard komponentlarini yozaman.
+
+Endi pastki panellarni yozaman.
+
+Endi asosiy sahifani qayta yozaman.
+
+<sub>session `36a46083` · branch `main` · 115 ta qadam</sub>
+
+---

@@ -5,6 +5,7 @@ import { AI_ENGINE_VERSION } from "../../../models/aiConfig.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { parsePagination, buildMeta } from "../../../utils/pagination.js";
+import { MONTH_NAMES_UZ } from "../../../constants/calendar.js";
 import {
   runWithBranchContext,
   branchFilter,
@@ -33,10 +34,9 @@ import { fmtMoney } from "./insightWriter.service.js";
 //   weekly  → trend (o'tgan hafta bilan taqqoslash) + kurs kesimi
 //   monthly → ijroiya xulosasi (bashorat + yopiq halqa natijalari)
 
-const MONTH_NAMES = [
-  "yanvar", "fevral", "mart", "aprel", "may", "iyun",
-  "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr",
-];
+// Oy nomlari umumiy konstantadan olinadi - "sentabr"/"sentyabr" kabi
+// farqlar bir sahifada yonma-yon chiqmasligi uchun.
+const MONTH_NAMES = MONTH_NAMES_UZ;
 
 const pct = (v) => (v == null ? null : Math.round(v * 100));
 

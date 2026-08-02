@@ -718,6 +718,125 @@ const runDbTests = async () => {
     : bad("'hozir' bo'limida sanoq bor", "counts yo'q");
 
   // ════════════════════════════════════════════════════════════
+  // 10b. IJROIYA QATLAMI (dashboard birinchi ekrani)
+  //
+  // NEGA ALOHIDA TEKSHIRILADI: bu to'rtta blok dashboardning
+  // BIRINCHI ekranini to'ldiradi va owner ko'radigan yagona narsa
+  // shu bo'lishi mumkin. Ulardagi xato yiqilmaydi - u shunchaki
+  // "hammasi joyida" deb ko'rsatadi va aynan shu eng qimmat xato.
+  // ════════════════════════════════════════════════════════════
+  head("10b. IJROIYA QATLAMI (xulosa / KPI / salomatlik / bashorat)");
+
+  // --- XULOSA ---
+  briefing.summary?.text
+    ? ok("kunlik xulosa yozildi", `"${briefing.summary.text.slice(0, 48)}…"`)
+    : bad("kunlik xulosa yozildi", "matn yo'q");
+
+  ["critical", "warning", "good"].includes(briefing.summary?.level)
+    ? ok("xulosa darajasi to'g'ri", briefing.summary.level)
+    : bad("xulosa darajasi to'g'ri", `${briefing.summary?.level}`);
+
+  // Xulosa UCH JUMLADAN oshmasligi kerak: to'rtinchisi qo'shilishi
+  // bilan blok "paragraf" ga aylanadi va o'qilmay qoladi.
+  const summarySentences = (briefing.summary?.text || "")
+    .split(/(?<=[.!?])\s+/)
+    .filter(Boolean).length;
+  summarySentences > 0 && summarySentences <= 3
+    ? ok("xulosa uch jumladan oshmadi", `${summarySentences} ta`)
+    : bad("xulosa uch jumladan oshmadi", `${summarySentences} ta jumla`);
+
+  // ESKI `headline` QAYTMASLIGI KERAK - u pastdagi bo'limlar matnini
+  // so'zma-so'z takrorlardi va aynan shuning uchun olib tashlandi.
+  briefing.headline === undefined
+    ? ok("takrorlovchi 'headline' olib tashlandi")
+    : bad("takrorlovchi 'headline' olib tashlandi", "hali ham qaytmoqda");
+
+  // --- KPI ---
+  Array.isArray(briefing.kpis) && briefing.kpis.length > 0
+    ? ok("KPI kartalari qurildi", `${briefing.kpis.length} ta`)
+    : bad("KPI kartalari qurildi", `${briefing.kpis?.length}`);
+
+  briefing.kpis?.length <= 6
+    ? ok("KPI soni oltitadan oshmadi")
+    : bad("KPI soni oltitadan oshmadi", `${briefing.kpis.length} ta`);
+
+  // HAR BIR KPI kontekst bilan keladi: kontekstsiz raqam owner'ni
+  // harakatga undamaydi, u shunchaki hisobot bo'lib qoladi.
+  const kpiNoContext = (briefing.kpis || []).filter((k) => !k.why || !k.next);
+  eq("har bir KPI'da 'nega' va 'keyin' bor", kpiNoContext.length, 0);
+
+  const kpiNoKey = (briefing.kpis || []).filter((k) => !k.key || !k.label);
+  eq("har bir KPI'da key va label bor", kpiNoKey.length, 0);
+
+  // Matnda NaN/undefined chiqib qolishi - eng ko'p uchraydigan xato.
+  const kpiJunk = (briefing.kpis || []).filter((k) =>
+    /NaN|undefined|null/.test(`${k.why} ${k.next} ${k.hint}`),
+  );
+  eq("KPI matnlarida NaN/undefined yo'q", kpiJunk.length, 0);
+
+  // --- SALOMATLIK ---
+  Array.isArray(briefing.health?.domains) && briefing.health.domains.length === 5
+    ? ok("beshta yo'nalish baholandi")
+    : bad("beshta yo'nalish baholandi", `${briefing.health?.domains?.length}`);
+
+  const domainKeys = (briefing.health?.domains || []).map((d) => d.key).sort();
+  eq(
+    "yo'nalish kalitlari to'liq",
+    domainKeys.join(","),
+    "finance,marketing,sales,students,teachers",
+  );
+
+  // Ball [0,100] oralig'ida yoki null. Oraliqdan chiqqan ball
+  // o'lchagichni to'lib toshgan holda chizardi.
+  const badScore = (briefing.health?.domains || []).filter(
+    (d) => d.score != null && (d.score < 0 || d.score > 100),
+  );
+  eq("ballar 0..100 oralig'ida", badScore.length, 0);
+
+  // HAR BIR BALL YONIDA SABAB. "Moliya 48" o'zi hech narsa aytmaydi.
+  const noteless = (briefing.health?.domains || []).filter((d) => !d.note);
+  eq("har bir yo'nalishda sabab matni bor", noteless.length, 0);
+
+  // XOM AGREGATLAR MIJOZGA UZATILMASLIGI KERAK - javob hajmini
+  // ikki barobar oshirardi.
+  briefing.health?.raw === undefined
+    ? ok("ichki agregatlar javobdan chiqarildi")
+    : bad("ichki agregatlar javobdan chiqarildi", "raw qaytmoqda");
+
+  // --- BASHORAT ---
+  briefing.forecast?.revenue?.history?.length === 5
+    ? ok("daromad tarixi 5 tugagan oy")
+    : bad("daromad tarixi 5 tugagan oy", `${briefing.forecast?.revenue?.history?.length}`);
+
+  // JORIY OY TARIXDA BO'LMASLIGI SHART: u yarim to'lgan va to'liq
+  // oylar yonida "daromad tushib ketdi" degan yolg'on beradi.
+  const currentKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  (briefing.forecast?.revenue?.history || []).every((h) => h.key !== currentKey)
+    ? ok("joriy (yarim) oy diagrammaga kirmadi")
+    : bad("joriy (yarim) oy diagrammaga kirmadi", currentKey);
+
+  // Bashorat ustuni NET bo'lishi shart - tarixiy ustunlar haqiqatda
+  // yig'ilgan pulni ko'rsatadi, yalpi bashorat ular yonida sun'iy
+  // o'sish ko'rinishini berardi.
+  const fNext = briefing.forecast?.revenue?.next;
+  fNext && fNext.amount <= fNext.gross
+    ? ok("bashorat ustuni net (yalpidan katta emas)")
+    : bad("bashorat ustuni net", `${fNext?.amount} > ${fNext?.gross}`);
+
+  fNext?.isForecast === true
+    ? ok("bashorat ustuni belgilangan")
+    : bad("bashorat ustuni belgilangan", `${fNext?.isForecast}`);
+
+  // Bo'sh bazada davomat naqshi HISOBLANMASLIGI kerak - to'qib
+  // chiqarilgan foiz ko'rsatishdan ko'ra halol bo'sh holat yaxshi.
+  briefing.forecast?.attendance?.insufficient === true
+    ? ok("ma'lumotsiz davomat bashorati berilmadi", "insufficient")
+    : bad(
+        "ma'lumotsiz davomat bashorati berilmadi",
+        `insufficient=${briefing.forecast?.attendance?.insufficient}`,
+      );
+
+  // ════════════════════════════════════════════════════════════
   // 11. HISOBOT IDEMPOTENTLIGI
   //
   // Job qayta ishga tushsa (restart, retry) hisobot IKKILANMASLIGI

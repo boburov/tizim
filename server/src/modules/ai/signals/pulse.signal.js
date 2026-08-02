@@ -29,6 +29,22 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const toId = (v) => new mongoose.Types.ObjectId(String(v));
 
+// Hafta kunlari - DUSHANBADAN boshlab, GROUP_DAYS bilan bir xil tartibda.
+// Bitta manba: ilgari bu ro'yxat todaySnapshot ichida yashiringan edi va
+// bashorat kodi uni qayta yozishga majbur bo'lardi.
+export const WEEKDAY_LABELS_UZ = [
+  "dushanba",
+  "seshanba",
+  "chorshanba",
+  "payshanba",
+  "juma",
+  "shanba",
+  "yakshanba",
+];
+
+/** Sanadan hafta kuni indeksi (0 = dushanba). */
+const weekdayIndex = (d) => (new Date(new Date(d).getTime() + TZ_OFFSET_MS).getUTCDay() + 6) % 7;
+
 // Toshkent vaqti bo'yicha kun boshi. Server UTC da bo'lishi mumkin,
 // lekin "kecha" degan tushuncha MAHALLIY kun bo'yicha bo'lishi kerak -
 // aks holda kechqurun 22:00 da kiritilgan davomat "ertaga" ga tushib
@@ -412,9 +428,7 @@ export const todaySnapshot = async (now = new Date()) => {
   const unmarked = todayGroups.filter((g) => !markedByGroup.has(String(g._id)));
 
   // Naqsh insight'ining "naqsh kuchi" faktori qiymati - hafta kuni nomi.
-  const todayName = [
-    "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba", "yakshanba",
-  ][dowIndex];
+  const todayName = WEEKDAY_LABELS_UZ[dowIndex];
   const likelyAbsent = patternRows
     .filter((i) => {
       const f = (i.factors || []).find((x) => x.key === "weekdayGap");
@@ -450,6 +464,175 @@ export const todaySnapshot = async (now = new Date()) => {
     })),
     paymentsDue: { amount: due.amount, students: (due.students || []).length },
     likelyAbsent,
+  };
+};
+
+/**
+ * DAVOMAT BASHORATI - o'tgan 4 haftaning HAFTA KUNI naqshi.
+ *
+ * NEGA TREND EMAS, NAQSH: o'quv markazida davomat kun bo'yicha
+ * o'zgaradi, hafta bo'yicha emas. Shanba kuni har doim pastroq, chunki
+ * o'quvchilar dam olishni afzal ko'radi. Umumiy "davomat 84%" degan
+ * son bu farqni yashiradi va owner shanba kuni 60% ga tushganini hech
+ * qachon ko'rmaydi.
+ *
+ * BASHORAT HISOBI OCHIQ: "payshanba kunlari oxirgi 4 haftada o'rtacha
+ * 78% — kelasi payshanbada ham shunga yaqin kutiladi". Bu tekshirilishi
+ * mumkin va shuning uchun ishonchli.
+ *
+ * MA'LUMOT YETARLI BO'LMASA `insufficient: true` qaytadi - to'qib
+ * chiqarilgan foiz ko'rsatishdan ko'ra halol bo'sh holat yaxshiroq.
+ */
+export const attendanceOutlook = async (
+  now = new Date(),
+  { historyDays = 14, forecastDays = 7, patternWeeks = 4 } = {},
+) => {
+  const todayStart = localDayStart(now);
+  const patternStart = new Date(todayStart.getTime() - patternWeeks * 7 * DAY_MS);
+
+  const groups = await Group.find({
+    ...branchFilter(),
+    isDeleted: false,
+    isActive: true,
+  })
+    .select("_id schedule startDate")
+    .lean();
+
+  const groupIds = groups.map((g) => g._id);
+
+  const rows = groupIds.length
+    ? await Attendance.aggregate([
+        {
+          $match: {
+            group: { $in: groupIds },
+            isDeleted: false,
+            date: { $gte: patternStart, $lt: todayStart },
+          },
+        },
+        {
+          $group: {
+            _id: "$dateKey",
+            present: { $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] } },
+            absent: { $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] } },
+          },
+        },
+      ])
+    : [];
+
+  const byDay = new Map(rows.map((r) => [r._id, r]));
+
+  // Hafta kuni bo'yicha yig'indi - naqshning o'zi.
+  const weekday = WEEKDAY_LABELS_UZ.map((label, i) => ({
+    index: i,
+    label,
+    present: 0,
+    absent: 0,
+    days: 0,
+  }));
+
+  let totalMarked = 0;
+  for (let i = 0; i < patternWeeks * 7; i += 1) {
+    const d = new Date(patternStart.getTime() + i * DAY_MS);
+    const row = byDay.get(localDayKey(d));
+    if (!row) continue;
+    const marked = row.present + row.absent;
+    if (!marked) continue;
+    const w = weekday[weekdayIndex(d)];
+    w.present += row.present;
+    w.absent += row.absent;
+    w.days += 1;
+    totalMarked += marked;
+  }
+
+  for (const w of weekday) {
+    const marked = w.present + w.absent;
+    w.rate = marked > 0 ? w.present / marked : null;
+    // O'rtacha nechta yozuv - kutilayotgan kelmaganlar sonini shundan
+    // chiqaramiz ("~14 o'quvchi kelmasligi mumkin").
+    w.avgMarked = w.days > 0 ? Math.round(marked / w.days) : 0;
+  }
+
+  // KO'RINADIGAN TARIX - grafik uchun oxirgi N kun. Darssiz kunlar
+  // ATAYLAB tashlab yuborilmaydi: bo'sh ustun "bu kuni dars yo'q" ni
+  // ko'rsatadi, uni o'chirish esa haftani qisqartirib, naqshni buzardi.
+  const history = [];
+  for (let i = historyDays; i >= 1; i -= 1) {
+    const d = new Date(todayStart.getTime() - i * DAY_MS);
+    const row = byDay.get(localDayKey(d));
+    const marked = row ? row.present + row.absent : 0;
+    history.push({
+      dateKey: localDayKey(d),
+      weekday: WEEKDAY_LABELS_UZ[weekdayIndex(d)],
+      marked,
+      rate: marked > 0 ? row.present / marked : null,
+    });
+  }
+
+  // 30 tadan kam yozuv - naqsh emas, shovqin.
+  if (totalMarked < 30) {
+    return {
+      insufficient: true,
+      sample: totalMarked,
+      history,
+      weekday,
+      projection: [],
+      expectedRate: null,
+      expectedAbsent: 0,
+      worstDay: null,
+    };
+  }
+
+  // KELGUSI KUNLAR - jadval bo'yicha darsi bor kunlargina.
+  const projection = [];
+  for (let i = 0; i < forecastDays; i += 1) {
+    const d = new Date(todayStart.getTime() + i * DAY_MS);
+    const wi = weekdayIndex(d);
+    const dayKeySchedule = GROUP_DAYS[wi];
+    const scheduledGroups = groups.filter(
+      (g) =>
+        (!g.startDate || new Date(g.startDate) <= d) &&
+        (g.schedule || []).some(
+          (s) =>
+            s.day === dayKeySchedule &&
+            (!s.effectiveFrom || new Date(s.effectiveFrom) <= d),
+        ),
+    ).length;
+
+    if (!scheduledGroups) continue;
+
+    const w = weekday[wi];
+    projection.push({
+      dateKey: localDayKey(d),
+      weekday: w.label,
+      isToday: i === 0,
+      scheduledGroups,
+      // Naqsh yo'q kun (mas. hech qachon dars bo'lmagan yakshanba) -
+      // foiz ham yo'q. Umumiy o'rtachani qo'yish yolg'on bo'lardi.
+      expectedRate: w.rate,
+      expectedAbsent: w.rate == null ? null : Math.round(w.avgMarked * (1 - w.rate)),
+    });
+  }
+
+  const rated = projection.filter((p) => p.expectedRate != null);
+  const expectedRate = rated.length
+    ? rated.reduce((s, p) => s + p.expectedRate, 0) / rated.length
+    : null;
+  const expectedAbsent = rated.reduce((s, p) => s + (p.expectedAbsent || 0), 0);
+
+  // ENG XAVFLI KUN - tavsiya aynan shu kunga beriladi.
+  const worstDay = rated.length
+    ? rated.reduce((worst, p) => (p.expectedRate < worst.expectedRate ? p : worst))
+    : null;
+
+  return {
+    insufficient: false,
+    sample: totalMarked,
+    history,
+    weekday,
+    projection,
+    expectedRate,
+    expectedAbsent,
+    worstDay,
   };
 };
 

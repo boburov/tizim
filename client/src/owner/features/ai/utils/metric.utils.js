@@ -13,6 +13,8 @@ import { formatMoney } from "@/shared/utils/formatMoney";
 // rang bermaslik xavfsizroq.
 
 const HIGHER_IS_BETTER = new Set([
+  // dashboard KPI
+  "cashIn", "students",
   // brifing
   "revenue", "attendance", "studentFlow", "leads", "forecastGross",
   "collectionRate", "lessons",

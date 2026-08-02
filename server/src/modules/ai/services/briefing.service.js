@@ -6,8 +6,17 @@ import {
   periodPulse,
   todaySnapshot,
   yesterdayWindow,
+  attendanceOutlook,
 } from "../signals/pulse.signal.js";
-import { revenueForecast, overdueSignal } from "../signals/finance.signal.js";
+import {
+  revenueForecast,
+  overdueSignal,
+  collectedByMonth,
+  shiftMonth,
+  monthKey,
+} from "../signals/finance.signal.js";
+import { businessHealth } from "../signals/health.signal.js";
+import { monthNameUz } from "../../../constants/calendar.js";
 import { fmtMoney } from "./insightWriter.service.js";
 import { openCounts } from "./recompute.service.js";
 
@@ -308,6 +317,312 @@ const buildNow = async (limit = 6) => {
   };
 };
 
+// ======================================================================
+// IJROIYA QATLAMI - xulosa, KPI, bashorat.
+//
+// Yuqoridagi to'rtta blok (kecha/bugun/keyin/hozir) TAFSILOT beradi.
+// Quyidagi uchtasi esa dashboardning BIRINCHI EKRANINI to'ldiradi:
+// owner 5 soniyada "biznes qanday va men nima qilishim kerak" degan
+// savolga javob olishi kerak, tafsilotga esa keyin tushadi.
+// ======================================================================
+
+/**
+ * KPI KARTALARI - eng ko'pi bilan OLTITA.
+ *
+ * NEGA CHEKLOV: ilgari sahifada 16 ta ko'rsatkich katakchasi bor edi
+ * (to'rtta bo'limda to'rttadan). O'n oltita raqam - bu nol raqam:
+ * owner qaysi biri muhimligini ajrata olmagach, hech biriga qaramaydi.
+ *
+ * HAR BIR KARTA UCHTA SAVOLGA JAVOB BERADI:
+ *   value/hint → nima?         (raqam va uning o'lchovi)
+ *   why        → nega shunday?  (sababi - raqamdan kelib chiqmaydi)
+ *   next       → keyin nima?    (oqibati yoki kutilma)
+ *
+ * `why` va `next` MAJBURIY. Kontekstsiz raqam owner'ni harakatga
+ * undamaydi - u shunchaki hisobot bo'lib qoladi.
+ */
+const buildKpis = ({ raw, forecast, attendance }) => {
+  const { pulse30, prior30, overdue, cashflow, activeStudents, churnOpen, leadPipeline } = raw;
+
+  const kpis = [];
+
+  // --- 1. Bu oy kirim ---------------------------------------------------
+  // Oy YARIM o'tgan bo'lsa jami kirimni o'tgan oynikiga taqqoslash
+  // noto'g'ri bo'lardi. Shuning uchun taqqoslash PROYEKSIYA bo'yicha:
+  // "shu tezlikda oy oxirida qancha bo'ladi".
+  const lastMonthCollected = raw.lastMonthCollected;
+  kpis.push({
+    key: "cashIn",
+    label: "Bu oy kirim",
+    value: cashflow.inflow,
+    unit: "so'm",
+    delta:
+      lastMonthCollected > 0
+        ? Math.round(((cashflow.projectedInflow - lastMonthCollected) / lastMonthCollected) * 100)
+        : null,
+    hint: `oyning ${Math.round(cashflow.monthProgress * 100)}% i o'tdi`,
+    why:
+      cashflow.outflow > 0
+        ? `Maosh chiqimi ${fmtMoney(cashflow.outflow)} so'm — sof qoldiq ${fmtMoney(cashflow.net)} so'm.`
+        : "Bu oyda maosh to'lovi hali yozilmagan.",
+    next: `Shu tezlikda oy oxirigacha ~${fmtMoney(Math.round(cashflow.projectedInflow))} so'm kutilmoqda.`,
+    href: "/owner/finance/accounting",
+  });
+
+  // --- 2. Muddati o'tgan qarz -------------------------------------------
+  const overdueShare =
+    cashflow.projectedInflow > 0 ? overdue.amount / cashflow.projectedInflow : null;
+  kpis.push({
+    key: "overdue",
+    label: "Muddati o'tgan qarz",
+    value: overdue.amount,
+    unit: "so'm",
+    delta: null,
+    hint: overdue.students ? `${overdue.students} o'quvchi` : "qarzdor yo'q",
+    why: overdue.maxDebtDays
+      ? `Eng eski qarzning muddati ${overdue.maxDebtDays} kun oldin o'tgan.`
+      : "Barcha tugagan davrlar yopilgan.",
+    next:
+      overdueShare > 0.02
+        ? `Yig'ilsa bu oy kirimi ${Math.round(overdueShare * 100)}% ga oshadi.`
+        : "Kirimga sezilarli ta'sir qilmaydi.",
+    href: "/owner/students/qarzdorlar",
+  });
+
+  // --- 3. Davomat --------------------------------------------------------
+  const attRate = pct(pulse30.attendance.rate);
+  const priorRate = pct(prior30.attendance.rate);
+  kpis.push({
+    key: "attendance",
+    label: "Davomat (30 kun)",
+    value: attRate,
+    unit: "%",
+    delta: delta(pulse30.attendance.rate, prior30.attendance.rate),
+    hint: `${pulse30.attendance.marked} yozuv`,
+    why:
+      pulse30.attendance.absent > 0
+        ? `${pulse30.attendance.absent} dars sababsiz qoldirilgan.`
+        : "Sababsiz qoldirilgan dars yo'q.",
+    next:
+      attendance && !attendance.insufficient && attendance.expectedRate != null
+        ? `Keyingi 7 kunda ~${pct(attendance.expectedRate)}% kutilmoqda (${attendance.expectedAbsent} kelmasligi mumkin).`
+        : priorRate != null
+          ? "Naqsh hisoblanishi uchun ma'lumot yig'ilmoqda."
+          : "Davomat yozuvlari hali yetarli emas.",
+    href: "/owner/attendance",
+  });
+
+  // --- 4. Faol o'quvchilar -----------------------------------------------
+  const net = pulse30.students.joined - pulse30.students.left;
+  kpis.push({
+    key: "students",
+    label: "Faol o'quvchilar",
+    value: activeStudents,
+    unit: "ta",
+    delta: null,
+    hint: `+${pulse30.students.joined} / −${pulse30.students.left} (30 kun)`,
+    why:
+      net < 0
+        ? `Oxirgi 30 kunda baza ${Math.abs(net)} taga qisqardi.`
+        : net > 0
+          ? `Oxirgi 30 kunda baza ${net} taga o'sdi.`
+          : "Oxirgi 30 kunda baza o'zgarmadi.",
+    next:
+      churnOpen > 0 && activeStudents > 0
+        ? `${churnOpen} o'quvchi ketish xavfida — hammasi ketsa baza ${Math.round((churnOpen / activeStudents) * 100)}% qisqaradi.`
+        : "Ketish xavfi ro'yxati bo'sh.",
+    href: "/owner/students",
+  });
+
+  // --- 5. Keyingi oy bashorati -------------------------------------------
+  // FAQAT aniq filial tanlanganda. "Barcha filiallar" rejimida bashorat
+  // hisoblanmaydi (turli narxlar aralashadi), shuning uchun karta
+  // umuman chizilmaydi - bo'sh karta ko'rsatishdan yaxshiroq.
+  if (forecast) {
+    kpis.push({
+      key: "forecastGross",
+      label: "Keyingi oy bashorati",
+      value: Math.round(forecast.forecastGross),
+      unit: "so'm",
+      delta: Math.round(forecast.deltaRatio * 100),
+      hint: `${forecast.activeStudents} faol o'quvchi`,
+      why:
+        forecast.atRisk > 0
+          ? `Ketish xavfi hisobga olingan: −${fmtMoney(Math.round(forecast.atRisk))} so'm.`
+          : "Ketish xavfi topilmadi — baza to'liq hisoblandi.",
+      next: `Tarixiy yig'ish darajasi ${pct(forecast.collectionRate)}% — real kutilma ${fmtMoney(Math.round(forecast.forecastNet))} so'm.`,
+      href: "/owner/finance/accounting",
+    });
+  }
+
+  // --- 6. Lid konversiyasi ------------------------------------------------
+  // Oyna 60 kun: 30 kunlik lid soni ko'p markazlarda 20 tadan kam va
+  // bunday namunada konversiya har hafta 15% ga sakraydi.
+  const created = pulse30.leads.created + prior30.leads.created;
+  const enrolled = pulse30.leads.enrolled + prior30.leads.enrolled;
+  const conversion = created >= 5 ? enrolled / created : null;
+  kpis.push({
+    key: "conversion",
+    label: "Lid konversiyasi",
+    value: conversion == null ? null : pct(conversion),
+    unit: "%",
+    delta:
+      prior30.leads.created >= 5 && pulse30.leads.created >= 5
+        ? delta(
+            pulse30.leads.enrolled / pulse30.leads.created,
+            prior30.leads.enrolled / prior30.leads.created,
+          )
+        : null,
+    hint: created ? `60 kunda ${created} liddan ${enrolled} tasi` : "lid kelmadi",
+    why: leadPipeline.overdue
+      ? `${leadPipeline.overdue} lid bilan bog'lanish muddati o'tgan.`
+      : `${leadPipeline.open} lid navbatda kutmoqda.`,
+    next:
+      conversion != null
+        ? `Har 10 ta yangi lid ~${Math.round(conversion * 10)} o'quvchi keltiradi.`
+        : "Konversiya uchun lid soni yetarli emas.",
+    href: "/owner/leads",
+  });
+
+  return kpis;
+};
+
+/**
+ * BASHORAT BLOKI - daromad va davomat.
+ *
+ * DIAGRAMMA QOIDASI: tarixiy ustunlar HAQIQATDA YIG'ILGAN pulni
+ * ko'rsatadi, shuning uchun bashorat ustuni ham NET (yig'ish darajasiga
+ * ko'paytirilgan) bo'lishi shart. Yalpi (gross) bashoratni yig'ilgan
+ * pul yoniga qo'yish diagrammani sun'iy o'sib borayotgan qilib
+ * ko'rsatardi - va bu eng yomon turdagi yolg'on: ko'zga ishonarli
+ * ko'rinadigan yolg'on.
+ */
+const buildForecastBlock = async ({ now, forecast, attendance }) => {
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth() + 1;
+
+  const collected = await collectedByMonth(7, now);
+  const byKey = new Map(collected.map((r) => [r.key, r]));
+
+  // Oxirgi 5 TUGAGAN oy. Joriy oy ATAYLAB yo'q: u yarim to'lgan va
+  // to'liq oylar yonida "daromad tushib ketdi" degan yolg'on ko'rinish
+  // berardi. Joriy oy KPI kartasida o'z konteksti bilan turadi.
+  const history = [5, 4, 3, 2, 1]
+    .map((back) => shiftMonth(year, month, -back))
+    .map((p) => {
+      const key = monthKey(p);
+      const row = byKey.get(key);
+      return {
+        key,
+        label: monthNameUz(p.month),
+        amount: row?.amount || 0,
+        transactions: row?.count || 0,
+        isForecast: false,
+      };
+    });
+
+  const nextPeriod = shiftMonth(year, month, 1);
+
+  return {
+    revenue: {
+      history,
+      next: forecast
+        ? {
+            key: monthKey(nextPeriod),
+            label: monthNameUz(nextPeriod.month),
+            // Diagramma NET ustunni chizadi (yuqoridagi izohga qarang),
+            // gross esa tafsilotda ko'rsatiladi.
+            amount: Math.round(forecast.forecastNet),
+            gross: Math.round(forecast.forecastGross),
+            atRisk: Math.round(forecast.atRisk),
+            riskyStudents: forecast.riskyStudents,
+            activeStudents: forecast.activeStudents,
+            collectionRate: pct(forecast.collectionRate),
+            collectionSample: forecast.collectionSample,
+            isForecast: true,
+          }
+        : null,
+      // O'tgan oy bilan taqqoslash - bashorat ustunining o'sish/pasayish
+      // belgisi shundan chiqadi.
+      lastActual: history[history.length - 1]?.amount || 0,
+    },
+    attendance,
+  };
+};
+
+/**
+ * AI KUNLIK XULOSA - sahifaning eng tepasidagi uch jumla.
+ *
+ * NEGA `headline` DAN BOSHQA: eski `headline` uchta bo'lim izohini
+ * BIRLASHTIRARDI, ya'ni pastdagi matnni so'zma-so'z takrorlardi.
+ * Bu xulosa esa boshqa savolga javob beradi - "bugun eng muhim narsa
+ * nima va uni kim hal qiladi".
+ *
+ * UCH JUMLADAN OSHMAYDI. To'rtinchi jumla qo'shilishi bilan bu blok
+ * "paragraf" ga aylanadi va owner uni o'qimay o'tib ketadi - aynan
+ * shundan qochish uchun qayta ishlandi.
+ */
+const buildSummary = ({ counts, risks, opportunities, health, today, overdue }) => {
+  const urgent = counts.high;
+  const level = urgent > 0 ? "critical" : counts.medium > 0 ? "warning" : "good";
+
+  const lines = [];
+
+  // 1-jumla: HOLAT. Nechta ish va qanchalik shoshilinch.
+  if (urgent > 0) {
+    lines.push(`Bugun ${urgent} ta shoshilinch ish bor.`);
+  } else if (counts.medium > 0) {
+    lines.push(`Shoshilinch ish yo'q, ${counts.medium} ta vazifa navbatda.`);
+  } else {
+    lines.push("Shoshilinch ish yo'q — ko'rsatkichlar normal doirada.");
+  }
+
+  // 2-jumla: PUL yoki eng katta muammo. Owner uchun "nega bu muhim".
+  const top = risks[0];
+  if (counts.impactAtRisk > 0 && top) {
+    lines.push(
+      `Jami ${fmtMoney(counts.impactAtRisk)} so'm xavf ostida, eng kattasi — ${top.subjectLabel}.`,
+    );
+  } else if (counts.impactAtRisk > 0) {
+    lines.push(`Jami ${fmtMoney(counts.impactAtRisk)} so'm xavf ostida.`);
+  } else if (overdue?.amount > 0) {
+    lines.push(`${fmtMoney(overdue.amount)} so'm eski qarz hali yig'ilmagan.`);
+  } else if (today?.lessons?.unmarkedGroups?.length) {
+    lines.push(`${today.lessons.unmarkedGroups.length} guruhda davomat belgilanmagan.`);
+  }
+
+  // 3-jumla: ZAIF NUQTA yoki imkoniyat. Kunning "keyingi qadami".
+  const weakest = (health?.domains || [])
+    .filter((d) => d.score != null)
+    .sort((a, b) => a.score - b.score)[0];
+
+  if (weakest && weakest.score < 60) {
+    lines.push(`Eng zaif yo'nalish — ${weakest.label} (${weakest.score}): ${weakest.note}`);
+  } else if (counts.opportunities > 0 && counts.upside > 0) {
+    lines.push(
+      `${counts.opportunities} ta o'sish imkoniyati ham topildi — taxminan ${fmtMoney(counts.upside)} so'm.`,
+    );
+  } else if (opportunities.length > 0) {
+    lines.push(`${opportunities.length} ta o'sish imkoniyati ham topildi.`);
+  }
+
+  // BIRLAMCHI HARAKAT - sahifadagi YAGONA to'q tugma.
+  //
+  // Nega bitta: ikkita teng ko'rinishdagi tugma "qaysi birini bosay"
+  // degan pauza yaratadi, va o'sha pauza owner'ning sahifadan chiqib
+  // ketishiga yetarli. Manzil eng ustuvor xavfning manba havolasidan
+  // olinadi - u aynan muammo turgan ekranga olib boradi.
+  const primaryAction = top
+    ? {
+        label: top.recommendedActions?.[0]?.label || `${top.subjectLabel} bilan ishlash`,
+        href: top.sourceRefs?.[0]?.href || top.subjectHref || "/owner/ai/tasks",
+        insightId: String(top._id),
+      }
+    : null;
+
+  return { level, text: lines.join(" "), primaryAction };
+};
+
 /**
  * TO'LIQ BRIFING - dashboard bitta so'rovda hammasini oladi.
  *
@@ -327,7 +642,7 @@ export const buildBriefing = async ({ now = new Date(), actionLimit = 6 } = {}) 
   // ma'noga ega). "Barcha filiallar" rejimida u o'tkazib yuboriladi -
   // uni filiallar bo'ylab qo'shish har xil narxlarni aralashtirib
   // ma'nosiz son berardi.
-  const [yesterday, today, now4, lastRun] = await Promise.all([
+  const [yesterday, today, now4, lastRun, health, attendance] = await Promise.all([
     buildYesterday(now),
     buildToday(now),
     buildNow(actionLimit),
@@ -335,13 +650,44 @@ export const buildBriefing = async ({ now = new Date(), actionLimit = 6 } = {}) 
       .sort({ startedAt: -1 })
       .select("startedAt finishedAt scope trigger durationMs")
       .lean(),
+    businessHealth(now),
+    attendanceOutlook(now),
   ]);
 
   const next = branchId ? await buildNext(branchId, now) : null;
 
+  // Bashorat bloki KPI'lardan OLDIN quriladi: "bu oy kirim" kartasining
+  // o'zgarish foizi o'tgan TUGAGAN oy bilan taqqoslanadi va o'sha son
+  // aynan shu yerda hisoblanadi. Ikkinchi marta so'rash bir xil javob
+  // uchun ikkinchi aggregation bo'lardi.
+  const forecast = await buildForecastBlock({
+    now,
+    forecast: next?.forecast || null,
+    attendance,
+  });
+
+  const kpis = buildKpis({
+    raw: { ...health.raw, lastMonthCollected: forecast.revenue.lastActual },
+    forecast: next?.forecast || null,
+    attendance,
+  });
+
+  const summary = buildSummary({
+    counts: now4.counts,
+    risks: now4.risks,
+    opportunities: now4.opportunities,
+    health,
+    today,
+    overdue: health.raw.overdue,
+  });
+
   const branch = branchId
     ? await Branch.findById(branchId).select("name").lean()
     : null;
+
+  // `health.raw` MIJOZGA UZATILMAYDI: u ichki hisob materiali (ikkita
+  // to'liq puls kesimi) va javob hajmini bekorga ikki barobar oshirardi.
+  const { raw: _healthRaw, ...healthPublic } = health;
 
   return {
     generatedAt: now,
@@ -356,14 +702,22 @@ export const buildBriefing = async ({ now = new Date(), actionLimit = 6 } = {}) 
           durationMs: lastRun.durationMs,
         }
       : null,
+
+    // --- IJROIYA QATLAMI (birinchi ekran) ---
+    //
+    // TARTIB DASHBOARDDAGI TARTIB BILAN BIR XIL: xulosa → KPI →
+    // salomatlik → bashorat. Javob shaklini ekran shakliga moslash
+    // frontend'ni "ma'lumotni qayta joylashtiruvchi" bo'lishdan
+    // saqlaydi: u shunchaki chizadi.
+    summary,
+    kpis,
+    health: healthPublic,
+    forecast,
+
+    // --- TAFSILOT QATLAMI (pastki bo'limlar va boshqa sahifalar) ---
     yesterday,
     today,
     next,
     now: now4,
-    // Butun brifingning bir paragrafli xulosasi - ko'p owner faqat shuni
-    // o'qiydi, shuning uchun u o'zini o'zi tushuntiradigan bo'lishi kerak.
-    headline: [now4.narration, yesterday.narration, today.narration]
-      .filter(Boolean)
-      .join(" "),
   };
 };
