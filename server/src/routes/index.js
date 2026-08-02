@@ -31,6 +31,7 @@ import financeReportRouter from "../modules/financeReport/financeReport.routes.j
 import expenseApprovalsRouter from "../modules/expenseApprovals/expenseApprovals.routes.js";
 import aiRouter from "../modules/ai/ai.routes.js";
 import exportsRouter from "../modules/exports/exports.routes.js";
+import importsRouter from "../modules/imports/imports.routes.js";
 
 const router = Router();
 
@@ -91,5 +92,9 @@ router.use("/ai", aiRouter);
 // Excel eksport. Ruxsat har bir hisobot turining O'ZIDA belgilangan
 // (exports/registry), shuning uchun bu yerda umumiy requirePermission yo'q.
 router.use("/exports", exportsRouter);
+
+// Excel import. Eksportdan farqli: ruxsat YOZISH huquqiga bog'langan
+// (finance.pay, salary.pay) - ro'yxatni ko'rish huquqi yetarli emas.
+router.use("/imports", importsRouter);
 
 export default router;

@@ -1,6 +1,7 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
 import ApiError from "../../../utils/ApiError.js";
 import Branch from "../../../models/branch.model.js";
+import { sendXlsx } from "../../../utils/sendXlsx.js";
 import { resolveColumns } from "../registry/index.js";
 import { generateXlsx } from "../services/exports.service.js";
 
@@ -72,20 +73,8 @@ const download = asyncHandler(async (req, res) => {
 
   const fileName = `${asciiSlug(dataset.fileBase)}-${stamp(generatedAt)}.xlsx`;
 
-  res.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  );
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-  );
-  res.setHeader("Content-Length", buffer.byteLength);
   // Qatorlar sonini client toast'da ko'rsatadi (tana - binar, o'qib bo'lmaydi).
-  res.setHeader("X-Export-Rows", String(rowCount));
-  res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, X-Export-Rows");
-
-  res.end(Buffer.from(buffer));
+  sendXlsx(res, buffer, fileName, { "X-Export-Rows": rowCount });
 });
 
 export default download;

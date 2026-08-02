@@ -231,6 +231,13 @@ export const qk = Object.freeze({
     datasets: () => ["exports", "datasets"],
   },
 
+  // Excel import. Ko'rib chiqish/tasdiqlash - mutatsiya, keshlanmaydi.
+  imports: {
+    all: () => ["imports"],
+    importers: () => ["imports", "importers"],
+    history: (params) => ["imports", "history", params],
+  },
+
   // Finance (Moliya)
   finance: {
     all: () => ["finance"],

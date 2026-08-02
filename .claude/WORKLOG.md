@@ -3163,3 +3163,156 @@ Server lint is broken pre-existing (no config file). Let me check whether any cl
 <sub>session `b242ca9d` · branch `main` · 97 ta qadam</sub>
 
 ---
+
+## 2026-08-02 11:45 — # Excel Import System for Education Center CRM Implement a professiona
+
+**So'rov**
+
+> # Excel Import System for Education Center CRM
+>
+> Implement a professional **Excel Import System** across the entire platform. The import process must be reusable, scalable, and use the same architecture for every module.
+>
+> ## General Requirements
+>
+> * Support `.xlsx` and `.csv` files.
+> * Downloadable Excel templates for every import page.
+> * Validate all rows before saving.
+> * Display row numbers and clear validation errors.
+> * Allow users to fix errors and re-upload.
+> * Show an import preview before confirmation.
+> * Support bulk insert/update using database transactions.
+> * Return a detailed import report:
+>
+>   * Total rows
+>   * Successfully imported
+>   * Failed rows
+>   * Error messages
+> * If one row fails, continue validating the remaining rows.
+> * Prevent duplicate records.
+> * Validate required fields, data types, dates, phone numbers, IDs, and relationships.
+>
+> ---
+>
+> # 1. Teacher Salary Import
+>
+> Create a page where administrators can upload teacher salary information using Excel.
+>
+> Columns:
+>
+> * Teacher ID (or Employee ID)
+> * Teacher Name (optional for verification)
+> * Month
+> * Year
+> * Base Salary
+> * Bonus
+> * Penalty
+> * Additional Payment
+> * Total Salary
+> * Payment Status
+> * Payment Date
+> * Notes
+>
+> Validation:
+>
+> * T
+> …
+
+**O'zgargan fayllar (36)**
+
+- `server/src/modules/imports/services/sheetReader.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/services/coerce.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/services/importEngine.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/services/template.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/registry/studentPayments.importer.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/registry/teacherSalaryPayments.importer.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/registry/index.js` — yaratildi/qayta yozildi
+- `server/src/models/importJob.model.js` — yaratildi/qayta yozildi
+- `server/src/middleware/requireImporterPermission.js` — yaratildi/qayta yozildi
+- `server/src/middleware/uploadSheet.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/handlers/preview.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/handlers/commit.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/handlers/template.handler.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/imports/utils/sendXlsx.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/handlers/errorReport.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/handlers/importers.list.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/handlers/history.list.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/validators/imports.validator.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/imports.routes.js` — yaratildi/qayta yozildi
+- `server/src/routes/index.js` — tahrirlandi
+- `server/src/modules/exports/handlers/download.handler.js` — tahrirlandi
+- `client/src/shared/api/endpoints.js` — tahrirlandi
+- `client/src/shared/lib/query/keys.js` — tahrirlandi
+- `client/src/shared/api/import.api.js` — yaratildi/qayta yozildi
+- `client/src/shared/utils/downloadFile.js` — yaratildi/qayta yozildi
+- `client/src/shared/hooks/useExport.js` — yaratildi/qayta yozildi
+- `client/src/shared/hooks/useImport.js` — yaratildi/qayta yozildi
+- `client/src/shared/components/import/ImportDropzone.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/components/import/ImportPreviewTable.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/shared/components/import/ImportModal.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/components/import/ImportButton.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/teacherSalary/components/TeacherSalariesPanel.jsx` — tahrirlandi
+- `client/src/owner/features/finance/components/StudentPaymentsPanel.jsx` — tahrirlandi
+- `server/tests/importEngine.test.js` — yaratildi/qayta yozildi
+- `server/package.json` — tahrirlandi
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/b242ca9d-c98e-4e41-9b66-3634b297873e/scratchpad/importSmoke.mjs` — yaratildi/qayta yozildi
+
+**Buyruqlar (27)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && echo "=== runFinanceTxn ===" && cat src/modules/finance/services/financeTxn.helper.js
+echo "=== replica set? ===" && mongosh --quiet --eval "try{ const s=db.hello(); print('setName: '+(s.setName||'NONE - STANDALONE')); }catch(e){print('err '+e)}"…
+echo "=== transaction.create service ===" && sed -n '1,120p' src/modules/finance/services/transaction.service.js 2>/dev/null || ls src/modules/finance/services/
+echo "=== models grep expense/income ===" && ls src/models/ | grep -iE "expense|income|cost|outlay" ; echo "(none above = no expense model)"; echo "=== expenseA…
+echo "=== approval model (kinds) ===" && sed -n '1,100p' src/models/approval.model.js
+echo "=== teacherSalary model ===" && sed -n '1,70p' src/models/teacherSalary.model.js && echo "=== salaryTransaction model ===" && sed -n '1,60p' src/models/sa…
+echo "=== teacherSalary services ===" && ls src/modules/teacherSalary/services/ && echo "=== exported fns ===" && grep -n "^export const" src/modules/teacherSal…
+echo "=== enforceLimit MW ===" && sed -n '1,45p' src/middleware/enforceLimit.js
+npm install multer 2>&1 | tail -4
+sed -n '90,165p' src/modules/teacherSalary/services/salaryTransaction.service.js
+echo "=== phone util ===" && cat src/utils/phone.js && echo "=== parseLocalDay ===" && grep -n "export const parseLocalDay" -A 25 src/helpers/attendance.helper.…
+sed -n '1,70p' src/models/paymentTransaction.model.js
+sed -n '120,175p' src/modules/finance/services/transaction.service.js
+sed -n '1,90p' src/modules/teacherSalary/services/salaryTransaction.service.js
+mkdir -p src/utils && mv src/modules/imports/utils/sendXlsx.js src/utils/sendXlsx.js && rmdir src/modules/imports/utils 2>/dev/null; ls src/utils/ && echo "--- …
+node -e "import('./src/routes/index.js').then(()=>console.log('ROUTES OK')).catch(e=>{console.error('FAIL:',e.message);process.exit(1)})" 2>&1 | tail -5
+npm run test:export 2>&1 | tail -8
+sed -n '1,60p' /Users/shukrullo/Desktop/lc-total/client/src/shared/components/ui/input/InputField.jsx
+ls /Users/shukrullo/Desktop/lc-total/client/src/owner/features/teacherSalary/pages/ /Users/shukrullo/Desktop/lc-total/client/src/owner/features/teacherSalary/co…
+sed -n '1,60p' /Users/shukrullo/Desktop/lc-total/client/src/owner/features/teacherSalary/components/TeacherSalariesPanel.jsx
+sed -n '60,120p' /Users/shukrullo/Desktop/lc-total/client/src/owner/features/teacherSalary/components/TeacherSalariesPanel.jsx
+npm run test:import 2>&1 | tail -60
+cd /Users/shukrullo/Desktop/lc-total/client && npx eslint src/shared/components/import/ src/shared/hooks/useImport.js src/shared/hooks/useExport.js src/shared/a…
+npm run build 2>&1 | tail -10
+cd /Users/shukrullo/Desktop/lc-total/server && cp /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/b242ca9d-c98e-4e41-9b66-3634b297873e/scratchpad/impo…
+# … yana 2 ta
+```
+
+**Natija**
+
+This is the mirror of the export system, and considerably larger. Before building, I need to verify three things that will shape the whole design: transaction support, how finance records are actually written, and whether Expense/Other-Income models exist.
+
+`runFinanceTxn` already handles the standalone-Mongo fallback — I'll reuse it rather than invent my own. Now the finance write paths.
+
+Two critical findings already. Let me verify the expense situation and the salary write path.
+
+I have the full picture now. One important finding before I build:
+
+**The requested columns don't match this codebase's finance model.** There is no `Expense` or `Other Income` model at all — money leaving the system is only salary payments and deposit withdrawals, recorded as `Approval` command-logs. And `TeacherSalary` has no `bonus`/`penalty`/`totalSalary` fields: `expectedAmount` is *computed* by `recalc()` from group revenue and proration, per teacher **+ group** + month. Student payments likewise must flow through `transaction.service.create()` — the allocation engine that spreads money across unpaid months oldest-first and pushes overflow to deposit. Inserting raw rows would corrupt the ledger.
+
+So I'm building the reusable engine + full UX as specified, with importers that write through the real services. I'll detail what I deliberately did not build at the end.
+
+Confirmed — the salary service returns `{pendingApproval: true}` when over the branch expense limit. My importer must treat that as a valid outcome, not an error. Building the generic reader first.
+
+Now the reusable field-coercion primitives. Let me reuse the codebase's existing phone/date helpers rather than write new ones.
+
+Now the core engine.
+
+Now the template + failed-rows report generator.
+
+Now the student payments imp
+
+…(qisqartirildi)
+
+<sub>session `b242ca9d` · branch `main` · 76 ta qadam</sub>
+
+---

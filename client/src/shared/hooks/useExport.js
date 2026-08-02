@@ -5,6 +5,7 @@ import { toast } from "sonner";
 // API
 import { exportAPI } from "@/shared/api/export.api";
 import { qk } from "@/shared/lib/query/keys";
+import { saveResponseAsFile, readErrorMessage } from "@/shared/utils/downloadFile";
 
 /**
  * Eksport qilinadigan hisobotlar va ularning ustunlari.
@@ -21,52 +22,6 @@ export const useExportDatasetsQuery = (options = {}) =>
     ...options,
   });
 
-// Content-Disposition'dan fayl nomini ajratib oladi.
-// Server ikkita variant yuboradi: filename="..." (ASCII) va
-// filename*=UTF-8''... (to'liq). Ikkinchisi ustun.
-const parseFileName = (disposition, fallback) => {
-  if (!disposition) return fallback;
-  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
-  if (utf8?.[1]) {
-    try {
-      return decodeURIComponent(utf8[1]);
-    } catch {
-      /* buzuq kodlash - ASCII variantiga tushamiz */
-    }
-  }
-  const ascii = /filename="?([^";]+)"?/i.exec(disposition);
-  return ascii?.[1] || fallback;
-};
-
-// Blob'ni brauzerda yuklab olishga majburlaydi.
-const saveBlob = (blob, fileName) => {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  // Darhol revoke qilinsa Safari yuklab ulgurmaydi.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
-
-// Xato javobi ham blob bo'lib keladi (responseType: "blob").
-// Ichidagi JSON xabarni o'qiymiz, aks holda foydalanuvchi
-// "[object Blob]" ko'radi.
-const readBlobError = async (error) => {
-  const data = error?.response?.data;
-  if (data instanceof Blob) {
-    try {
-      const parsed = JSON.parse(await data.text());
-      if (parsed?.message) return parsed.message;
-    } catch {
-      /* JSON emas - umumiy xabarga tushamiz */
-    }
-  }
-  return error?.response?.data?.message || "Faylni yuklab bo'lmadi";
-};
-
 /**
  * XLSX yuklab olish mutatsiyasi.
  *
@@ -79,11 +34,7 @@ export const useExportMutation = ({ onSuccess, onError } = {}) =>
     mutationFn: ({ datasetKey, columns, filters }) =>
       exportAPI.download(datasetKey, { columns, filters }),
     onSuccess: (response) => {
-      const fileName = parseFileName(
-        response.headers?.["content-disposition"],
-        "export.xlsx",
-      );
-      saveBlob(response.data, fileName);
+      saveResponseAsFile(response, "export.xlsx");
 
       const rows = Number(response.headers?.["x-export-rows"]);
       toast.success(
@@ -92,7 +43,7 @@ export const useExportMutation = ({ onSuccess, onError } = {}) =>
       onSuccess?.(response);
     },
     onError: async (error) => {
-      toast.error(await readBlobError(error));
+      toast.error(await readErrorMessage(error, "Faylni yuklab bo'lmadi"));
       onError?.(error);
     },
   });

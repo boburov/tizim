@@ -39,7 +39,8 @@
     "test:priv": "MULTI_BRANCH=true node tests/privEscalation.test.js",
     "test:money-prop": "node tests/moneyProperty.test.js",
     "test:race": "node tests/paymentRace.test.js",
-    "test:export": "node tests/exportScope.test.js"
+    "test:export": "node tests/exportScope.test.js",
+    "test:import": "node tests/importEngine.test.js"
   },
   "dependencies": {
     "agenda": "^5.0.0",

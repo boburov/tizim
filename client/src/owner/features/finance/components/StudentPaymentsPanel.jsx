@@ -8,6 +8,7 @@ import ErrorState from "@/shared/components/ui/feedback/ErrorState";
 import Pagination from "@/shared/components/ui/pagination/Pagination";
 import Button from "@/shared/components/ui/button/Button";
 import ExportButton from "@/shared/components/export/ExportButton";
+import ImportButton from "@/shared/components/import/ImportButton";
 import useObjectState from "@/shared/hooks/useObjectState";
 import useDebounce from "@/shared/hooks/useDebounce";
 import useGroupsListQuery from "@/owner/features/groups/hooks/useGroupsListQuery";
@@ -86,6 +87,12 @@ const StudentPaymentsPanel = () => {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-end gap-3">
+        {/* Ommaviy to'lov kiritish. Ruxsati (finance.pay) bo'lmasa
+            tugma umuman render qilinmaydi. */}
+        <ImportButton
+          importerKey="student-payments"
+          title="To'lovlarni Excel'dan yuklash"
+        />
         {/* Eksport joriy filtrlarni oladi - page/limit ATAYLAB yuborilmaydi:
             ko'rinib turgan sahifa emas, butun natija yuklab olinadi. */}
         <ExportButton

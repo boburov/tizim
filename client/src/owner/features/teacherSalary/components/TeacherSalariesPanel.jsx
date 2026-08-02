@@ -4,6 +4,7 @@ import SelectField from "@/shared/components/ui/select/SelectField";
 import SelectYear from "@/shared/components/ui/select/SelectYear";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import EmptyState from "@/shared/components/ui/feedback/EmptyState";
+import ImportButton from "@/shared/components/import/ImportButton";
 import useObjectState from "@/shared/hooks/useObjectState";
 import useDebounce from "@/shared/hooks/useDebounce";
 import useGroupsListQuery from "@/owner/features/groups/hooks/useGroupsListQuery";
@@ -74,14 +75,24 @@ const TeacherSalariesPanel = () => {
             options={groupOptions}
           />
         </div>
-        <InputField
-          name="search"
-          type="search"
-          label="Qidiruv"
-          placeholder="O'qituvchi ismi..."
-          value={filters.search}
-          onChange={(e) => filters.setField("search", e.target.value)}
-        />
+        <div className="flex flex-wrap items-end gap-3">
+          <InputField
+            name="search"
+            type="search"
+            label="Qidiruv"
+            className="min-w-[200px] flex-1"
+            placeholder="O'qituvchi ismi..."
+            value={filters.search}
+            onChange={(e) => filters.setField("search", e.target.value)}
+          />
+          {/* Maosh to'lovlarini ommaviy kiritish. Ruxsati (salary.pay)
+              bo'lmasa tugma umuman render qilinmaydi. */}
+          <ImportButton
+            size="default"
+            importerKey="teacher-salary-payments"
+            title="Maosh to'lovlarini Excel'dan yuklash"
+          />
+        </div>
       </div>
 
       {salaries.length === 0 && !isLoading ? (

@@ -200,6 +200,16 @@ export const ENDPOINTS = Object.freeze({
     download: (datasetKey) => `/exports/${datasetKey}`,
   },
 
+  // Excel import. Ustun tavsifi ham serverdan keladi (importers).
+  imports: {
+    importers: "/imports/importers",
+    history: "/imports/history",
+    template: (key) => `/imports/${key}/template`,
+    preview: (key) => `/imports/${key}/preview`,
+    commit: (key) => `/imports/${key}/commit`,
+    errorReport: (key) => `/imports/${key}/error-report`,
+  },
+
   // Finance (Moliya)
   finance: {
     groupFees: "/finance/group-fees",
