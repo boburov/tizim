@@ -2,6 +2,7 @@ import {
   DEFAULT_CHURN_WEIGHTS,
   DEFAULT_THRESHOLDS,
 } from "../../../models/aiConfig.model.js";
+import { softNorm } from "./common.scoring.js";
 
 // SCORING QATLAMI - sof funksiyalar. DB yo'q, I/O yo'q, LLM yo'q.
 // Kirish: signals + config. Chiqish: ball + faktorlar + ishonch.
@@ -12,11 +13,13 @@ import {
 // (b) owner uni sozlay oladi, (c) backtest bilan kalibrlanadi.
 // "Sabab" matni SHU YERDAN chiqadi, LLM dan emas.
 
-/** Xom qiymatni [0,1] ga siqadi. full = "to'liq yomon" nuqtasi. */
-const norm = (value, full) => {
-  if (value == null || !Number.isFinite(value) || full <= 0) return 0;
-  return Math.max(0, Math.min(1, value / full));
-};
+// Bu yerdagi faktorlarning hech birida tabiiy shift YO'Q: davomat 40%
+// dan ko'proq ham pasayishi, qarz 30 kundan ancha oshishi, dars
+// qoldirish 4 tadan ko'p bo'lishi mumkin - va bularning har biri
+// qo'shimcha ma'no tashiydi. Qattiq kesuvchi `norm` bo'lsa, chegaradan
+// oshgan hamma o'quvchi bir xil ball olib, ro'yxat ustuvorlikni
+// ko'rsatishni to'xtatardi.
+const norm = softNorm;
 
 /**
  * Logistik siqish. Nega kerak: sof vaznli yig'indi chekkalarda yomon

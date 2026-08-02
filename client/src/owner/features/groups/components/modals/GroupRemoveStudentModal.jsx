@@ -58,7 +58,7 @@ const GroupRemoveStudentModal = ({
           <p className="mb-1 font-semibold">Qarz aniqlandi</p>
           <p>
             <span className="font-semibold">{studentName}</span> o'quvchisida hali{" "}
-            <span className="font-semibold">{formatMoney(debtAmount)} so'm</span>{" "}
+            <span className="font-semibold">{formatMoney(debtAmount)}</span>{" "}
             to'lanmagan qarz bor. Agar hozir chiqarsangiz, bu qarz{" "}
             <span className="font-semibold">Undirilmagan to'lov (hisobdan chiqarilgan)</span>{" "}
             sifatida yoziladi. O'quvchi bu summani endi to'lashi shart emas va u

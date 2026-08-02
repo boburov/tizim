@@ -100,7 +100,7 @@ const AiReportsPage = () => {
                     </span>
                   )}
                   {r.insightSnapshot?.impactAtRisk > 0 && (
-                    <span>{formatMoney(r.insightSnapshot.impactAtRisk)} so'm xavf ostida</span>
+                    <span>{formatMoney(r.insightSnapshot.impactAtRisk)} xavf ostida</span>
                   )}
                 </div>
               </div>

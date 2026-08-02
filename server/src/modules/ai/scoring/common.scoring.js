@@ -14,6 +14,40 @@ export const norm = (value, full) => {
   return Math.max(0, Math.min(1, value / full));
 };
 
+// `softNorm` egilish nuqtasi: `full` ga yetganda shu qiymat chiqadi,
+// qolgan 0.15 esa undan keyingi butun diapazonga taqsimlanadi.
+const SOFT_KNEE = 0.85;
+// Dumning cho'zilishi: qancha katta bo'lsa, `full` dan keyin shuncha
+// sekin o'sadi. 4 = "full dan 4 barobar oshganda dumning yarmi".
+const SOFT_TAIL = 4;
+
+/**
+ * CHEGARASIZ kattaliklar uchun normallashtirish - `norm` dan farqli
+ * o'laroq `full` dan oshgandan keyin ham O'SISHDA DAVOM ETADI.
+ *
+ * NEGA KERAK. `norm` qattiq kesadi: `full` dan oshgan hamma qiymat 1
+ * bo'lib qoladi. `debtDaysFull = 30` bo'lganda 120 kunlik qarzdor 400
+ * kunlik bilan AYNAN bir xil ball olardi va ro'yxat ustuvorlikni
+ * ko'rsatishni to'xtatardi - hamma 94% ga yopishib qolardi.
+ *
+ * QAYERDA ISHLATILADI. Faqat tabiiy shifti YO'Q kattaliklarda: qarz
+ * kunlari, to'lanmagan davrlar soni, ketma-ket qoldirilgan darslar,
+ * muzlatishlar soni. Tabiiy chegarasi bor nisbatlar (davomat foizi,
+ * guruhdagi ketish ulushi) `norm` da qoladi - u yerda chegaradan oshish
+ * ma'noga ega emas.
+ *
+ * Shakli: [0, full] oralig'ida CHIZIQLI (0 → SOFT_KNEE), undan keyin
+ * giperbolik dum. 1 ga hech qachon yetmaydi, monoton o'sadi - shuning
+ * uchun tartib har doim saqlanadi.
+ */
+export const softNorm = (value, full) => {
+  if (value == null || !Number.isFinite(value) || !(full > 0)) return 0;
+  const x = Math.max(0, value / full);
+  if (x <= 1) return x * SOFT_KNEE;
+  const over = x - 1;
+  return SOFT_KNEE + (1 - SOFT_KNEE) * (over / (over + SOFT_TAIL));
+};
+
 /**
  * Logistik siqish - ballni [0,1] bo'ylab yoyadi.
  * Sof vaznli yig'indi chekkalarda yomon tarqaladi: hamma o'rtada

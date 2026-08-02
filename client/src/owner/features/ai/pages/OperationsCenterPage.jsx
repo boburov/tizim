@@ -372,7 +372,7 @@ const ActionLists = ({ now, handlers }) => {
             <span className="font-normal tabular-nums">({opportunities.length})</span>
             {now.counts?.upside > 0 && (
               <span className="font-normal text-emerald-600 dark:text-emerald-400">
-                ~{formatMoney(now.counts.upside)} so'm
+                ~{formatMoney(now.counts.upside)}
               </span>
             )}
           </h3>

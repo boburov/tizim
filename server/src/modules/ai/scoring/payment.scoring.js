@@ -3,6 +3,7 @@ import {
   DEFAULT_THRESHOLDS,
 } from "../../../models/aiConfig.model.js";
 import { computeConfidence } from "./churn.scoring.js";
+import { softNorm } from "./common.scoring.js";
 
 // TO'LOV XAVFI - churn'dan ALOHIDA model.
 //
@@ -16,10 +17,11 @@ import { computeConfidence } from "./churn.scoring.js";
 // keyin g'oyib bo'lgan o'quvchi churn xavfi, to'lov xavfi emas.
 // Bitta ballda birlashtirish ikkalasini ham ko'rinmas qilardi.
 
-const norm = (value, full) => {
-  if (value == null || !Number.isFinite(value) || full <= 0) return 0;
-  return Math.max(0, Math.min(1, value / full));
-};
+// Bu yerdagi HAMMA faktor chegarasiz: qarz kunlari, to'lanmagan davrlar
+// va kechikish nisbati `full` dan oshishi mumkin va oshgani MA'NOGA EGA.
+// Shuning uchun qattiq `norm` emas, `softNorm` - aks holda chegaradan
+// oshgan hamma o'quvchi bir xil ball olardi.
+const norm = softNorm;
 
 const squash = (x, k = 6, x0 = 0.45) => 1 / (1 + Math.exp(-k * (x - x0)));
 

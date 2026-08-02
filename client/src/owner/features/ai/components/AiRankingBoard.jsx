@@ -21,7 +21,8 @@ import { formatMoney } from "@/shared/utils/formatMoney";
 
 /** Qiymatni birligiga qarab formatlaydi (pul alohida - u uzun son). */
 const formatMetric = (m) => {
-  if (m.unit === "so'm") return `${formatMoney(m.value)} so'm`;
+  // `so'm` ni formatMoney() O'ZI qo'shadi - takrorlash "so'm so'm" berardi.
+  if (m.unit === "so'm") return formatMoney(m.value);
   return `${m.value}${m.unit ? ` ${m.unit}` : ""}`;
 };
 
@@ -183,7 +184,7 @@ const AiRankingBoard = ({ data, isLoading }) => {
         title="Eng ko'p to'lovni kechiktirganlar"
         subtitle={
           payment?.totals?.debtAmount > 0
-            ? `Jami qarz: ${formatMoney(payment.totals.debtAmount)} so'm · ${payment.totals.affected} o'quvchi`
+            ? `Jami qarz: ${formatMoney(payment.totals.debtAmount)} · ${payment.totals.affected} o'quvchi`
             : payment
               ? `${payment.scanned} o'quvchi tekshirildi`
               : null

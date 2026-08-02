@@ -94,8 +94,9 @@ const AiDomainPanel = ({ data, isLoading, title = "AI tahlili", className = "" }
 
       {summary?.impactAtRisk > 0 && (
         <p className="mt-1 text-xs text-muted-foreground">
-          {formatMoney(summary.impactAtRisk)} so'm xavf ostida
-          {summary.upside > 0 && ` · ~${formatMoney(summary.upside)} so'm imkoniyat`}
+          {/* `so'm` ni formatMoney() O'ZI qo'shadi - takrorlash "so'm so'm" berardi. */}
+          {formatMoney(summary.impactAtRisk)} xavf ostida
+          {summary.upside > 0 && ` · ~${formatMoney(summary.upside)} imkoniyat`}
         </p>
       )}
 
