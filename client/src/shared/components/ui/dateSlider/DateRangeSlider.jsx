@@ -161,7 +161,7 @@ const DateRangeSlider = ({
           aria-valuenow={day}
           onPointerDown={onThumbDown(which)}
           onKeyDown={onThumbKey(which)}
-          className="flex size-6 touch-none items-center justify-center rounded-full border-2 border-white bg-primary text-[10px] font-bold text-primary-foreground shadow outline-none ring-primary/30 focus-visible:ring-2"
+          className="flex size-6 touch-none items-center justify-center rounded-full border-2 border-background bg-primary text-[10px] font-bold text-primary-foreground shadow outline-none ring-primary/30 focus-visible:ring-2"
           style={{ cursor: disabled ? "not-allowed" : "grab" }}
         >
           {letter}

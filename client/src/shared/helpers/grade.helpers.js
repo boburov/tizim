@@ -47,7 +47,9 @@ export const GRADE_TOKENS = {
 
 const FALLBACK_TOKEN = {
   soft: "bg-muted text-foreground border-border",
-  solid: "bg-muted-foreground/50 text-white border-input",
+  // `bg-muted-foreground/50` bo'lmaydi: light rejimda u ochib ketadi va
+  // oq yozuv o'qilmay qoladi. Ikkala temada ham xavfsiz qat'iy neytral.
+  solid: "bg-slate-500 text-white border-slate-500",
   dot: "bg-muted-foreground/50",
   ring: "ring-border",
   label: "",

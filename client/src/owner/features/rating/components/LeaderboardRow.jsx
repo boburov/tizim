@@ -7,7 +7,7 @@ import { cn } from "@/shared/utils/cn";
 // Top-3 medal uslubi (oltin/kumush/bronza), qolgani neytral.
 const RANK_STYLE = {
   1: { badge: "bg-amber-400 text-white", bar: "bg-amber-400", ring: "ring-amber-200" },
-  2: { badge: "bg-muted-foreground/50 text-white", bar: "bg-muted-foreground/50", ring: "ring-border" },
+  2: { badge: "bg-slate-500 text-white", bar: "bg-slate-500", ring: "ring-border" },
   3: { badge: "bg-orange-400 text-white", bar: "bg-orange-400", ring: "ring-orange-200" },
 };
 const DEFAULT_STYLE = {

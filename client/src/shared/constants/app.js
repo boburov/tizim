@@ -1,5 +1,5 @@
 // Tizim nomi .env orqali sozlanadi; logo/favicon public/ papkadan olinadi
-import { parseHsl } from "@/shared/utils/color";
+import { parseHsl, validateHsl } from "@/shared/utils/color";
 import {
   buildLightTokens,
   buildDarkTokens,
@@ -36,8 +36,36 @@ const toCssBlock = (selector, tokens) => {
  * rejim hech qachon ishlamas edi. Endi o'rniga <style> teg qo'shiladi va
  * qoidalar `:root:not(.dark)` / `:root.dark` bilan alohida chegaralanadi.
  */
+/**
+ * .env dagi rang qiymatlarini tekshiradi va muammoni konsolga chiqaradi.
+ *
+ * Ataylab BLOKLAMAYDI: noto'g'ri qiymat sababli ishlab turgan panel
+ * ochilmay qolishi kerak emas. Xatoni ushlash uchun asosiy to'siq -
+ * `npm run check:contrast` (CI'da ishlaydi), bu esa ishlab chiqish
+ * paytida darhol ko'rinadigan ogohlantirish.
+ */
+const warnOnInvalidTheme = () => {
+  if (!import.meta.env.DEV) return;
+
+  const issues = [
+    validateHsl(APP_THEME.primary, "VITE_APP_PRIMARY"),
+    validateHsl(APP_THEME.background, "VITE_APP_BACKGROUND"),
+    validateHsl(APP_THEME.primaryDark, "VITE_APP_PRIMARY_DARK"),
+    validateHsl(APP_THEME.backgroundDark, "VITE_APP_BACKGROUND_DARK"),
+  ].flatMap((result) => result.issues);
+
+  if (issues.length === 0) return;
+
+  console.warn(
+    `[tema] .env dagi rang qiymatlarida muammo bor:\n` +
+      issues.map((issue) => `  - ${issue}`).join("\n"),
+  );
+};
+
 export const applyAppTheme = () => {
   if (typeof document === "undefined") return;
+
+  warnOnInvalidTheme();
 
   const brand = {
     primary: parseHsl(APP_THEME.primary),

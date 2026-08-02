@@ -41,8 +41,8 @@ const ListItem = ({
   to,
   onClick,
   className = "",
-  gradientFrom = "from-gray-300",
-  gradientTo = "to-gray-500",
+  gradientFrom = "from-primary/80",
+  gradientTo = "to-primary",
   disabled = false,
   trailing,
   subContent,
@@ -67,7 +67,7 @@ const ListItem = ({
           >
             <Icon
               strokeWidth={1.5}
-              className={cn("size-5 text-white xs:size-6")}
+              className={cn("size-5 text-primary-foreground xs:size-6")}
             />
           </div>
         )}

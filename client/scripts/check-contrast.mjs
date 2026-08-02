@@ -15,7 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseHsl, contrastRatio } from "../src/shared/utils/color.js";
+import { parseHsl, contrastRatio, validateHsl } from "../src/shared/utils/color.js";
 import {
   buildLightTokens,
   buildDarkTokens,
@@ -130,6 +130,41 @@ check("index.css - dark", dark);
 
 // .env brend ranglari qo'llangandagi holat
 const envFile = path.join(ROOT, ".env");
+
+/**
+ * Kontrastdan OLDIN qiymatning o'zi to'g'rimi - shuni tekshiramiz.
+ *
+ * Buni tashlab ketib bo'lmaydi: `parseHsl` diapazondan chiqqan qiymatni
+ * jimgina chegaraga suradi. "4 2% 115%" -> yorug'lik 100% -> brend rangi
+ * SOF OQ. Hosil bo'lgan tokenlar o'zaro kontrastli bo'lgani uchun
+ * quyidagi tekshiruvlar hammasi "ok" beradi - xato faqat ekranda
+ * ko'rinadi. Shuning uchun alohida to'siq kerak.
+ */
+const ENV_COLOR_KEYS = [
+  "VITE_APP_PRIMARY",
+  "VITE_APP_BACKGROUND",
+  "VITE_APP_PRIMARY_DARK",
+  "VITE_APP_BACKGROUND_DARK",
+];
+
+console.log("\n### .env rang qiymatlari");
+let envIssues = 0;
+for (const key of ENV_COLOR_KEYS) {
+  const raw = readEnv(envFile, key);
+  const { ok, issues } = validateHsl(raw, key);
+  if (raw === undefined) continue;
+
+  checks += 1;
+  if (ok) {
+    console.log(`  ok    ${key} = ${raw}`);
+  } else {
+    envIssues += issues.length;
+    failures += 1;
+    for (const issue of issues) console.log(`  XATO  ${issue}`);
+  }
+}
+if (envIssues === 0) console.log("  (diapazon xatolari topilmadi)");
+
 const brand = {
   primary: parseHsl(readEnv(envFile, "VITE_APP_PRIMARY")),
   background: parseHsl(readEnv(envFile, "VITE_APP_BACKGROUND")),

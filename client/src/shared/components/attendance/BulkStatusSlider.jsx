@@ -8,7 +8,11 @@ const KNOB_CLASS = {
   present: "bg-green-500",
   absent: "bg-red-500",
   excused: "bg-amber-500",
-  exempt: "bg-muted-foreground",
+  // DIQQAT: knob ustidagi yozuv doim oq (`text-white`), chunki qolgan
+  // holatlar to'yingan rangda. Shuning uchun bu yerda `bg-muted-foreground`
+  // ishlatib bo'lmaydi - u dark rejimda OCH bo'lib qoladi va oq yozuv
+  // ko'rinmay qoladi. Ikkala temada ham oq matn o'qiladigan qat'iy neytral.
+  exempt: "bg-slate-500",
 };
 
 const BulkStatusSlider = ({ onPick, disabled = false }) => {

@@ -36,7 +36,7 @@ const PaginationButton = ({ className, isActive, size = "icon", onClick, disable
       "inline-flex items-center justify-center rounded-lg text-sm transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
       size === "icon" ? "h-9 w-9" : "h-9 px-4",
       isActive
-        ? "bg-blue-600 text-white font-medium"
+        ? "bg-primary text-primary-foreground font-medium"
         : "border bg-card text-foreground hover:bg-muted",
       className,
     )}

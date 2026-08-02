@@ -21,6 +21,55 @@ export const parseHsl = (token) => {
   return { h: ((h % 360) + 360) % 360, s: clamp(s, 0, 100), l: clamp(l, 0, 100) };
 };
 
+/**
+ * Tokenni tekshiradi va DIAPAZONDAN CHIQQAN qiymatlarni aytib beradi.
+ *
+ * NEGA KERAK: `parseHsl` noto'g'ri qiymatni jimgina chegaraga suradi.
+ * Masalan `"4 2% 115%"` -> `l: 100` bo'lib SOF OQ rang chiqadi. Tokenlar
+ * o'zaro kontrastli bo'lgani uchun `check:contrast` ham buni "joyida" deb
+ * biladi - xato faqat ekranda ko'rinadi. Shuning uchun clamp qilishdan
+ * OLDIN qiymatni alohida tekshiramiz.
+ *
+ * Sof funksiya - Node (`check:contrast`) va brauzerda birdek ishlaydi.
+ *
+ * @returns {{ ok: boolean, issues: string[], value: {h,s,l}|null }}
+ */
+export const validateHsl = (token, label = "rang") => {
+  if (token === undefined || token === null || token === "") {
+    return { ok: true, issues: [], value: null };
+  }
+
+  const value = parseHsl(token);
+  if (!value) {
+    return {
+      ok: false,
+      value: null,
+      issues: [
+        `${label}: "${token}" o'qib bo'lmadi. Kutilgan format: "<tus> <to'yinganlik>% <yorug'lik>%" (masalan "33 33% 35%").`,
+      ],
+    };
+  }
+
+  const parts = String(token).trim().replace(/,/g, " ").split(/\s+/);
+  const [, rawS, rawL] = parts.map((part) => parseFloat(part));
+  const issues = [];
+
+  if (rawS < 0 || rawS > 100) {
+    issues.push(
+      `${label}: to'yinganlik (saturation) ${rawS}% - 0..100 oralig'idan tashqarida, ${value.s}% ga surildi.`,
+    );
+  }
+  if (rawL < 0 || rawL > 100) {
+    issues.push(
+      `${label}: yorug'lik (lightness) ${rawL}% - 0..100 oralig'idan tashqarida, ${value.l}% ga surildi.` +
+        (value.l === 100 ? " Natijada rang SOF OQ bo'lib qoladi." : "") +
+        (value.l === 0 ? " Natijada rang SOF QORA bo'lib qoladi." : ""),
+    );
+  }
+
+  return { ok: issues.length === 0, issues, value };
+};
+
 /** { h, s, l } -> "33 33% 35%" */
 export const formatHsl = ({ h, s, l }) =>
   `${Math.round(h)} ${Math.round(s)}% ${Math.round(l)}%`;

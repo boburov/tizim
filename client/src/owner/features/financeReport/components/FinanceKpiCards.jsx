@@ -25,12 +25,13 @@ const KpiTile = ({
   to,
 }) => {
   const hasValue = value !== null && value !== undefined;
-  // Xarajat kartasida o'sish ijobiy emas - shuning uchun har doim rose/emerald juftligini
-  // statik sinflar bilan beramiz (Tailwind dinamik sinflarni generatsiya qilmaydi).
+  // Xarajat kartasida o'sish ijobiy emas - shuning uchun destructive/success
+  // juftligini statik sinflar bilan beramiz (Tailwind dinamik sinflarni
+  // generatsiya qilmaydi).
   const positiveDeltaClass =
     tone === "expense"
-      ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300"
-      : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
+      ? "bg-destructive/10 text-destructive"
+      : "bg-success/10 text-success";
 
   const body = (
     <div
@@ -42,7 +43,7 @@ const KpiTile = ({
       )}
     >
       {hero && (
-        <div className="pointer-events-none absolute -right-8 -top-10 size-36 rounded-full bg-white/10 blur-2xl" />
+        <div className="pointer-events-none absolute -right-8 -top-10 size-36 rounded-full bg-primary-foreground/10 blur-2xl" />
       )}
       <div className="flex items-center justify-between">
         <p
@@ -57,7 +58,7 @@ const KpiTile = ({
           className={cn(
             "flex size-8 items-center justify-center rounded-full transition",
             hero
-              ? "bg-white/15 text-primary-foreground"
+              ? "bg-primary-foreground/15 text-primary-foreground"
               : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
           )}
         >
@@ -69,7 +70,7 @@ const KpiTile = ({
         className={cn(
           "mt-6 font-semibold tracking-tight tabular-nums",
           isMoney ? "text-2xl" : "text-3xl",
-          hero ? "text-white" : "text-foreground",
+          hero ? "text-primary-foreground" : "text-foreground",
         )}
       >
         {hasValue ? (
@@ -79,7 +80,7 @@ const KpiTile = ({
             suffix={suffix}
           />
         ) : (
-          <span className={hero ? "text-white/70" : "text-muted-foreground"}>—</span>
+          <span className={hero ? "text-primary-foreground/70" : "text-muted-foreground"}>—</span>
         )}
       </p>
 
@@ -94,10 +95,10 @@ const KpiTile = ({
             className={cn(
               "flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-medium",
               hero
-                ? "bg-white/15 text-white"
+                ? "bg-primary-foreground/15 text-primary-foreground"
                 : delta >= 0
                   ? positiveDeltaClass
-                  : "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300",
+                  : "bg-destructive/10 text-destructive",
             )}
           >
             <TrendingUp className={cn("size-3", delta < 0 && "rotate-180")} />

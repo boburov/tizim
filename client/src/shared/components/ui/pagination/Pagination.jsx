@@ -158,7 +158,7 @@ const Pagination = ({
 
       {/* Current Page Only (when showPageNumbers is false) */}
       {!showPageNumbers && (
-        <span className="px-4 py-2 bg-blue-500 text-white rounded-lg font-medium">
+        <span className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium">
           {currentPage}
         </span>
       )}

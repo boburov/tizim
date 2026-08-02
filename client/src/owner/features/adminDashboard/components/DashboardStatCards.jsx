@@ -23,7 +23,7 @@ const StatTile = ({ icon: Icon, label, value, suffix, isMoney, hint, delta, to, 
       )}
     >
       {hero && (
-        <div className="pointer-events-none absolute -right-8 -top-10 size-36 rounded-full bg-white/10 blur-2xl" />
+        <div className="pointer-events-none absolute -right-8 -top-10 size-36 rounded-full bg-primary-foreground/10 blur-2xl" />
       )}
       <div className="flex items-center justify-between">
         <p
@@ -38,7 +38,7 @@ const StatTile = ({ icon: Icon, label, value, suffix, isMoney, hint, delta, to, 
           className={cn(
             "flex size-8 items-center justify-center rounded-full transition",
             hero
-              ? "bg-white/15 text-primary-foreground"
+              ? "bg-primary-foreground/15 text-primary-foreground"
               : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
           )}
         >
@@ -50,7 +50,7 @@ const StatTile = ({ icon: Icon, label, value, suffix, isMoney, hint, delta, to, 
         className={cn(
           "mt-6 font-semibold tracking-tight tabular-nums",
           isMoney ? "text-2xl" : "text-4xl",
-          hero ? "text-white" : "text-foreground",
+          hero ? "text-primary-foreground" : "text-foreground",
         )}
       >
         <AnimatedCounter
@@ -71,10 +71,10 @@ const StatTile = ({ icon: Icon, label, value, suffix, isMoney, hint, delta, to, 
             className={cn(
               "flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-medium",
               hero
-                ? "bg-white/15 text-white"
+                ? "bg-primary-foreground/15 text-primary-foreground"
                 : delta >= 0
-                  ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
-                  : "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300",
+                  ? "bg-success/10 text-success"
+                  : "bg-destructive/10 text-destructive",
             )}
           >
             <TrendingUp className={cn("size-3", delta < 0 && "rotate-180")} />

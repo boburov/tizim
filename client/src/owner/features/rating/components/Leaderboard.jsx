@@ -52,7 +52,7 @@ const rankItems = (items) => {
 // Podium uchun ikonka
 const PODIUM = {
   1: { icon: Crown, ring: "ring-amber-300", bg: "bg-amber-50 dark:bg-amber-500/10", chip: "bg-amber-400", order: "order-2 sm:scale-105", text: "text-amber-600 dark:text-amber-300" },
-  2: { icon: Trophy, ring: "ring-border", bg: "bg-muted", chip: "bg-muted-foreground/50", order: "order-1", text: "text-muted-foreground" },
+  2: { icon: Trophy, ring: "ring-border", bg: "bg-muted", chip: "bg-slate-500", order: "order-1", text: "text-muted-foreground" },
   3: { icon: Medal, ring: "ring-orange-300", bg: "bg-orange-50 dark:bg-orange-500/10", chip: "bg-orange-400", order: "order-3", text: "text-orange-600 dark:text-orange-300" },
 };
 

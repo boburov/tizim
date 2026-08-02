@@ -163,6 +163,13 @@ The theme works **automatically from the OS setting** (`defaultTheme="system"`),
 
 Status tokens also exist: `success`, `warning`, `info`, `destructive` (each with a `-foreground` pair).
 
+This rule is **enforced by ESLint** (`no-restricted-syntax` in `eslint.config.js`) - neutral palette classes fail the lint. Two deliberate exemptions:
+
+- `bg-*-500` / `border-*-500` neutrals (e.g. `bg-slate-500`) are allowed. That mid-neutral clears 4.5:1 against white text in **both** themes, so it is the correct choice for surfaces that always carry white text (status knobs, rank chips) where no token works - a token would flip lightness and hide the text. `text-*-500` is still blocked.
+- `bg-black/NN` scrims stay black in both themes.
+
+> Beware `bg-muted-foreground` behind white text: it is dark in light mode but **light in dark mode**, so the text disappears. Use the fixed neutral instead.
+
 **Status colours** (green = ok, red = error) carry meaning, so they are not converted to tokens - instead give them a `dark:` variant:
 
 ```jsx
@@ -201,6 +208,12 @@ npm run check:contrast   # WCAG AA (4.5:1) - CSS tokens + .env derived values
 ```
 
 Run it after changing any colour token; it exits non-zero on failure.
+
+It also **range-checks the raw `.env` values first**. This matters: `parseHsl` silently clamps out-of-range input, so `VITE_APP_PRIMARY=4 2% 115%` became lightness `100%` - a pure white brand. The derived tokens were still mutually contrastful, so every contrast assertion passed while the UI rendered white cards in dark mode. Contrast alone cannot catch this; the range check can.
+
+The same validation (`validateHsl` in `shared/utils/color.js`) logs a `console.warn` in dev via `applyAppTheme()`. It deliberately does not throw - a bad colour should not take down a running panel.
+
+> A lightness of `0%` or `100%` is *in* range but still unusable as `--primary`. In light mode `ensureContrast` pushes it back to a readable value, but in dark mode a white brand stays white. If a brand surface looks wrong, check the raw `.env` value before suspecting the token maths.
 
 ## Language rules
 
