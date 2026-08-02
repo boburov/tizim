@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 
 export const HTTP_METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"];
+
+// Built-in aktyor rollari. FAQAT ma'lumot uchun (UI yorlig'i, filtr
+// takliflari) - schema'da enum sifatida ISHLATILMAYDI, pastdagi izohga
+// qarang.
 export const ACTOR_ROLES = ["owner", "teacher", "student", "system"];
 
 const activityLogSchema = new mongoose.Schema(
@@ -10,10 +14,23 @@ const activityLogSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    // ROLLAR DINAMIK - shuning uchun bu yerda enum YO'Q.
+    //
+    // Ilgari enum: ACTOR_ROLES edi va bu JIMGINA audit yo'qotishga olib
+    // kelardi: owner custom rol yaratganda ("direktor", "buxgalter"),
+    // o'sha roldagi xodimning HAR BIR yozish amali (POST/PATCH/DELETE)
+    // ValidationError bilan yiqilardi. auditLog.middleware xatoni yutib,
+    // faqat WARN yozadi - ya'ni jurnal to'lmayotgani sezilmasdan qolardi.
+    // Aynan o'sha xodimlar (direktor, buxgalter) eng ko'p kuzatilishi
+    // kerak bo'lgan amallarni bajaradi.
+    //
+    // Bu user.model.js'dagi `role` maydoni bilan bir xil mulohaza:
+    // rol haqiqiyligi service qatlamida tekshiriladi, model qatlamida emas.
     userRole: {
       type: String,
-      enum: ACTOR_ROLES,
       default: "system",
+      trim: true,
+      lowercase: true,
     },
     // user null bo'lgan so'rovlarda (masalan login) kiritilgan login/telefon.
     // Jadvalda "Mehmon" o'rniga kim urinayotganini ko'rsatish uchun.

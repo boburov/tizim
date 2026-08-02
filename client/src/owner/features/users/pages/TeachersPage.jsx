@@ -9,6 +9,7 @@ import { Plus, UserCog } from "lucide-react";
 
 // Components
 import Button from "@/shared/components/ui/button/Button";
+import ExportButton from "@/shared/components/export/ExportButton";
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import UserStatusFilter from "../components/UserStatusFilter";
 import UserModals from "../components/UserModals";
@@ -64,26 +65,38 @@ const TeachersPage = () => {
     <div className="space-y-4">
       <header className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">O'qituvchilar</h1>
-        {isList && effectiveStatus !== "archived" && (
+        {isList && (
           <div className="flex items-center gap-2">
-            {/* Xodim - direktor/administrator (custom rol + filial) */}
-            {has(PERMISSIONS.ROLES_UPDATE) && (
-              <Button
-                variant="outline"
-                onClick={() => openModal(MODAL.STAFF_CREATE)}
-              >
-                <UserCog className="size-4" />
-                Xodim qo'shish
-              </Button>
+            {/* Eksport arxiv holatida ham kerak (yil oxiri hisoboti),
+                shuning uchun "archived" shartidan tashqarida. */}
+            <ExportButton
+              size="default"
+              datasetKey="teachers"
+              title="O'qituvchilarni Excelga yuklash"
+              filters={{ status: effectiveStatus }}
+            />
+            {effectiveStatus !== "archived" && (
+              <>
+                {/* Xodim - direktor/administrator (custom rol + filial) */}
+                {has(PERMISSIONS.ROLES_UPDATE) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => openModal(MODAL.STAFF_CREATE)}
+                  >
+                    <UserCog className="size-4" />
+                    Xodim qo'shish
+                  </Button>
+                )}
+                <Button
+                  onClick={() =>
+                    openModal(MODAL.USER_CREATE, { defaultRole: ROLES.TEACHER })
+                  }
+                >
+                  <Plus className="size-4" />
+                  Yangi o'qituvchi
+                </Button>
+              </>
             )}
-            <Button
-              onClick={() =>
-                openModal(MODAL.USER_CREATE, { defaultRole: ROLES.TEACHER })
-              }
-            >
-              <Plus className="size-4" />
-              Yangi o'qituvchi
-            </Button>
           </div>
         )}
       </header>

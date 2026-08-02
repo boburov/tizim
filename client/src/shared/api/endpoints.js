@@ -193,6 +193,13 @@ export const ENDPOINTS = Object.freeze({
     churnedStudents: "/admin-dashboard/churned-students",
   },
 
+  // Excel eksport. Ustunlar ro'yxati SERVERDAN olinadi (datasets) -
+  // client'da qattiq yozilmaydi, aks holda ikkalasi bir-biridan uzoqlashadi.
+  exports: {
+    datasets: "/exports/datasets",
+    download: (datasetKey) => `/exports/${datasetKey}`,
+  },
+
   // Finance (Moliya)
   finance: {
     groupFees: "/finance/group-fees",

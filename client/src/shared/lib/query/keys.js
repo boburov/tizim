@@ -224,6 +224,13 @@ export const qk = Object.freeze({
     config: (branchId) => ["ai", "config", branchId ?? null],
   },
 
+  // Excel eksport. Faqat reyestr (dataset'lar + ustunlar) keshlanadi -
+  // yuklab olishning o'zi mutatsiya, uning keshi yo'q.
+  exports: {
+    all: () => ["exports"],
+    datasets: () => ["exports", "datasets"],
+  },
+
   // Finance (Moliya)
   finance: {
     all: () => ["finance"],

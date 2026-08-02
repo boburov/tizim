@@ -7,6 +7,7 @@ import EmptyState from "@/shared/components/ui/feedback/EmptyState";
 import ErrorState from "@/shared/components/ui/feedback/ErrorState";
 import Pagination from "@/shared/components/ui/pagination/Pagination";
 import Button from "@/shared/components/ui/button/Button";
+import ExportButton from "@/shared/components/export/ExportButton";
 import useObjectState from "@/shared/hooks/useObjectState";
 import useDebounce from "@/shared/hooks/useDebounce";
 import useGroupsListQuery from "@/owner/features/groups/hooks/useGroupsListQuery";
@@ -85,6 +86,18 @@ const StudentPaymentsPanel = () => {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-end gap-3">
+        {/* Eksport joriy filtrlarni oladi - page/limit ATAYLAB yuborilmaydi:
+            ko'rinib turgan sahifa emas, butun natija yuklab olinadi. */}
+        <ExportButton
+          datasetKey="student-payments"
+          title="To'lovlarni Excelga yuklash"
+          filters={{
+            groupId: filters.groupId || undefined,
+            year: filters.year,
+            month: filters.month,
+            search: debouncedSearch || undefined,
+          }}
+        />
         <MonthPicker
           year={filters.year}
           month={filters.month}

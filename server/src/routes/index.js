@@ -30,6 +30,7 @@ import teacherSalaryRouter from "../modules/teacherSalary/teacherSalary.routes.j
 import financeReportRouter from "../modules/financeReport/financeReport.routes.js";
 import expenseApprovalsRouter from "../modules/expenseApprovals/expenseApprovals.routes.js";
 import aiRouter from "../modules/ai/ai.routes.js";
+import exportsRouter from "../modules/exports/exports.routes.js";
 
 const router = Router();
 
@@ -86,5 +87,9 @@ router.use("/approvals", expenseApprovalsRouter);
 
 // AI maslahatchi (insight'lar, Action Center, sozlamalar)
 router.use("/ai", aiRouter);
+
+// Excel eksport. Ruxsat har bir hisobot turining O'ZIDA belgilangan
+// (exports/registry), shuning uchun bu yerda umumiy requirePermission yo'q.
+router.use("/exports", exportsRouter);
 
 export default router;

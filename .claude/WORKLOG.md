@@ -2885,3 +2885,281 @@ Qoida endi 5 ta buzilishni ham ushlaydi, to'g'ri ishlatilganlarga tegmaydi, `src
 <sub>session `5f7a96f3` · branch `main` · 68 ta qadam</sub>
 
 ---
+
+## 2026-08-02 10:50 — barcha sahifalardagi ai tizzimi tizim uchun yetarli muammoni yecha olm
+
+**So'rov**
+
+> barcha sahifalardagi ai tizzimi tizim uchun yetarli muammoni yecha olmayapti
+
+**O'zgargan fayllar (8)**
+
+- `client/src/shared/components/ai/AiDomainPanel.jsx` — tahrirlandi
+- `client/src/owner/features/ai/pages/AiReportsPage.jsx` — tahrirlandi
+- `client/src/owner/features/ai/components/AiRankingBoard.jsx` — tahrirlandi
+- `client/src/owner/features/ai/pages/OperationsCenterPage.jsx` — tahrirlandi
+- `client/src/owner/features/groups/components/modals/GroupRemoveStudentModal.jsx` — tahrirlandi
+- `server/src/modules/ai/scoring/common.scoring.js` — tahrirlandi
+- `server/src/modules/ai/scoring/payment.scoring.js` — tahrirlandi
+- `server/src/modules/ai/scoring/churn.scoring.js` — tahrirlandi
+
+**Buyruqlar (35)**
+
+```sh
+echo "=== CLIENT AI ==="; find client/src -ipath '*ai*' -name '*.js*' | grep -v node_modules | head -40; echo; echo "=== SERVER AI ==="; find server -ipath '*ai…
+grep -rln "anthropic\|openai\|gemini\|claude\|gpt-" server --include='*.js' --include='*.json' -i 2>/dev/null | grep -v node_modules | head -20; echo "=== serve…
+grep -rn "so'm so'm\|so‘m so‘m\|xavf ostida" client/src server/src --include='*.js*' | head
+cd /Users/shukrullo/Desktop/lc-total/client && grep -n -A12 "formatMoney" src/shared/utils/formatMoney.js | head -25; echo "=== AiDomainPanel 90-100 ==="; sed -…
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "GEMINI\|AI_\|apiKey\|model" src/config/env.js | head -20; echo "=== gemini.service head ==="; sed -n '1,…
+grep -n -A14 "DEFAULT_PAYMENT_WEIGHTS\s*=" src/models/aiConfig.model.js; grep -n -A14 "DEFAULT_THRESHOLDS\s*=" src/models/aiConfig.model.js; echo "=== GEMINI ka…
+node --input-type=module -e " import('./src/modules/ai/scoring/payment.scoring.js').then(({scorePaymentRisk})=>{ const mk=(lateRatio,debtDays,periods,drop)=>({ …
+echo "=== reyting/tartiblash mantiqi ==="; grep -rn "sort(" src/modules/ai/services/studentInsight.service.js src/modules/ai/handlers/rankings.handler.js 2>/dev…
+cd /Users/shukrullo/Desktop/lc-total/client && sed -n '98,108p' src/owner/features/ai/pages/AiReportsPage.jsx; echo "=== ActionCenter: harakat tugmalari bormi =…
+grep -rn "formatMoney(.*)} so'm\|formatMoney(.*) so'm" src --include='*.jsx' --include='*.js' | head; echo "--- qolgani yo'q bo'lsa bo'sh ---"; echo "=== build …
+npm run build 2>&1 | grep -E "error|Error|✗|line" | head -8
+npm run build >/dev/null 2>&1 && echo "✓ build o'tdi" || { echo "✗ hali yiqilyapti"; npx vite build 2>&1 | grep -A5 "Transform failed" | head; }
+sed -n '22,26p' src/owner/features/ai/components/AiRankingBoard.jsx; echo "---186---"; sed -n '184,188p' src/owner/features/ai/components/AiRankingBoard.jsx; ec…
+echo "=== qolgan takror 'so'm' ==="; grep -rn "formatMoney([^)]*)[^)]*} so'm\|formatMoney(.*) so'm\`" src --include='*.jsx' --include='*.js' || echo "(toza)"; e…
+cd /Users/shukrullo/Desktop/lc-total/server && echo "=== common.scoring.js ==="; cat src/modules/ai/scoring/common.scoring.js 2>/dev/null | head -60; echo "=== …
+echo "=== priority qayerda hisoblanadi ==="; grep -rn "priority" src/modules/ai --include='*.js' | grep -v "^.*://" | head -20; echo; echo "=== insight.model.js…
+grep -n -B6 -A40 "computePriority" src/modules/ai/services/insightWriter.service.js | head -70
+sed -n '110,130p' src/modules/ai/services/insight.service.js; echo "=== byDomain handler ==="; sed -n '1,40p' src/modules/ai/handlers/byDomain.handler.js
+grep -n '"test"\|"scripts"' -A6 package.json | head -12; echo "=== TESTLAR ==="; npm test 2>&1 | tail -25
+ls tests/; echo "=== aiAdvisor testini chopish ==="; node --test tests/aiAdvisor.test.js 2>&1 | tail -20
+node --test tests/aiAdvisor.test.js 2>&1 | grep -E "NATIJA|✗|fail|Error" | head -20; echo "=== EXIT ==="; node --test tests/aiAdvisor.test.js >/dev/null 2>&1 &&…
+node --input-type=module -e " import('./src/modules/ai/scoring/payment.scoring.js').then(async ({scorePaymentRisk})=>{ const {softNorm}=await import('./src/modu…
+node --input-type=module -e " Promise.all([ import('./src/modules/ai/scoring/payment.scoring.js'), import('./src/models/aiConfig.model.js'), ]).then(([{scorePay…
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5f7a96f3-0907-41ff-ab72-089edf4b245a/scratchpad/cmp.mjs <<'EOF' import { scorePaymentRisk } from…
+for f in tests/*.test.js; do printf "%-34s" "$(basename $f)"; node --test "$f" >/dev/null 2>&1 && echo "✓" || echo "✗ YIQILDI"; done
+# … yana 10 ta
+```
+
+**Natija**
+
+AI tizimini tekshiray — avval nima qurilganini va u qanday ishlayotganini ko'ray.
+
+Katta AI tizim bor — signals, scoring, insights, rankings, narration (Gemini). Skrinshotda esa hamma ball **94–96%** — bu shubhali. Scoring mantiqini ko'ray.
+
+Ikkita aniq nuqson topildi. Chuqurroq tekshiray.
+
+Arxitektura aslida yaxshi o'ylangan (LLM faqat matn yozadi, ballar deterministik). Muammo boshqa joyda — ballar **to'yinib qolgan**. Buni raqam bilan isbotlay.
+
+Isbotlandi. Ball **to'yinib qoladi**:
+
+| Holat | Ball |
+|---|---|
+| 45 kun qarz | 95.3% |
+| 120 kun qarz, 8 davr | 96.4% |
+| **400 kun qarz, 20 davr** | **96.4%** ← bir xil |
+
+400 kunlik qarzdor 120 kunlik bilan **aynan bir xil** ball oladi. Shuning uchun skrinshotda hamma 94%. Yana bir tekshiruv — reyting pul miqdorini hisobga oladimi?
+
+`impactAtRisk` faqat **ko'rsatish uchun yig'iladi** — tartiblashda umuman ishlatilmaydi. Tartibni faqat ball belgilaydi. Avval arzimas "so'm so'm" bugini tuzatay.
+
+Build yiqildi — JSX izohni noto'g'ri joyga qo'ydim. Xatoni ko'ray va tuzatay.
+
+Yo'q, bu ham noto'g'ri — JSX ichida `//` matn bo'lib chiqadi. Izohni butunlay olib tashlayman.
+
+Endi qolgan 4 ta "so'm so'm" ni ham tuzatay.
+
+Tekshiruv tugadi. Sabab topildi — va u LLM'da emas.
+
+## Nega AI muammoni yechmayapti
+
+**1. Ball to'yinib qoladi — reyting ma'nosini yo'qotgan.**
+
+[payment.scoring.js](server/src/modules/ai/scoring/payment.scoring.js#L19-L24) da `norm()` qiymatni chegarada kesadi: 30 kundan oshgan qarz, 3 tadan oshgan davr — hammasi `1.0` ga aylanadi. Yuqoridagi jadval buni ko'rsatdi: **120 kunlik va 400 kunlik qarzdor bir xil 96.4%**. Maktabda ko'pchilik kechikkanda butun ro'yxat 94–96% ga yopishib qoladi. Skrinshotdagi uchta 94% — aynan shu.
+
+**2. Pul miqdori reytingga umuman ta'sir qilmaydi.**
+
+`impactAtRisk` hisoblanadi va ekran
+
+…(qisqartirildi)
+
+<sub>session `5f7a96f3` · branch `main` · 57 ta qadam</sub>
+
+---
+
+## 2026-08-02 11:06 — hozirda tizimda exel formatda yuklab olish mavjud emas misol uchun oqu
+
+**So'rov**
+
+> hozirda tizimda exel formatda yuklab olish mavjud emas misol uchun oquvchilarning bu oylik tolovlari oqtuvchilar va ularni malumotlari /llm-council hullas bosganda customize ham qila olishi kerak yani men ortiqcha narsani belgilan chiqarib yuboraman va yuklab olia olishim kerak menga plan tuzib ber qanay yana tizim uchun qulaylik keltrsak bo'ladi shu exel format uchun
+
+**Buyruqlar (26)**
+
+```sh
+ls -la && cat package.json 2>/dev/null | head -60
+git log --oneline -5 && echo "---STRUCTURE---" && find . -maxdepth 3 -type d -not -path "*/node_modules*" -not -path "*/.git/*" -not -path "*/.next/*" | head -6…
+echo "=== CLIENT PKG ===" && cat client/package.json && echo "=== SERVER PKG ===" && cat server/package.json
+echo "=== EXPORT/EXCEL/CSV refs ===" && grep -rniE "xlsx|exceljs|csv|export.*excel|download.*file" --include="*.ts" --include="*.tsx" -l client/src server/src 2…
+echo "=== SERVER SRC ===" && find server/src -maxdepth 2 -type d | sort && echo "=== ROUTES ===" && ls server/src/routes 2>/dev/null && echo "=== MODELS ===" &&…
+echo "=== CLIENT FEATURES ===" && ls client/src/features 2>/dev/null && echo "=== OWNER ===" && find client/src/owner -maxdepth 2 -type d 2>/dev/null | head -40…
+echo "=== FINANCE MODULE ===" && ls -la server/src/modules/finance/ && echo "=== FINANCE ROUTES ===" && cat server/src/modules/finance/*routes*.js 2>/dev/null |…
+echo "=== ROUTES INDEX ===" && cat server/src/routes/index.js && echo "=== MIDDLEWARE ===" && ls server/src/middleware/
+echo "=== PAYMENT LIST HANDLER ===" && cat server/src/modules/finance/handlers/studentPayment.list.handler.js && echo "=== PAYMENT VALIDATOR ===" && cat server/…
+echo "=== PERMISSIONS ===" && cat server/src/constants/permissions.js | head -100
+echo "=== PAYMENT SERVICE ===" && cat server/src/modules/finance/services/studentPayment.service.js | head -90
+echo "=== CLIENT FINANCE ===" && find client/src/owner/features/finance -type f | head -40 && echo "=== SHARED API ===" && ls client/src/shared/api/ && echo "==…
+echo "=== HTTP ===" && cat client/src/shared/api/http.js && echo "=== FINANCE API ===" && cat client/src/owner/features/finance/api/finance.api.js
+echo "=== TABLE UI ===" && ls client/src/shared/components/ui/table/ && echo "=== SAMPLE TABLE ===" && head -70 client/src/owner/features/finance/components/Stu…
+ls -la /Users/shukrullo/.claude/skills/llm-council/ && echo "=== SCRIPTS ===" && ls -la /Users/shukrullo/.claude/skills/llm-council/scripts/ && echo "=== ENV CH…
+head -60 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py
+ls -la /Users/shukrullo/.claude/skills/llm-council/.env 2>/dev/null || echo "NO SKILL .env"; echo "---"; env | grep -oE "^(OPENAI_API_KEY|GEMINI_API_KEY|ANTHROP…
+for c in gemini codex; do printf "%s: " "$c"; command -v $c || echo "NOT FOUND"; done
+tail -70 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py
+python3 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py "You are advising on a production education-CRM codebase. Design an Excel (XLSX) expor…
+echo "=== branchContext helper ===" && cat server/src/helpers/branchContext.helper.js
+echo "=== JOBS ===" && ls server/src/jobs/ && echo "=== AUDIT MW ===" && cat server/src/middleware/auditLog.middleware.js | head -50
+echo "=== AUTH MW ===" && cat server/src/middleware/auth.js && echo "=== WHERE runWithBranchContext IS CALLED ===" && grep -rn "runWithBranchContext" server/src…
+echo "=== JOBS INDEX ===" && head -60 server/src/jobs/index.js && echo "=== BOT SERVICES ===" && ls server/src/bot/services/ && echo "=== sendDocument? ===" && …
+cat client/src/shared/components/ui/table/DataTable.jsx | head -60
+# … yana 1 ta
+```
+
+**Natija**
+
+I'll start by understanding your codebase's structure, then consult the council as you asked.
+
+Let me explore the stack and check what export capabilities already exist.
+
+No export code exists yet. Let me map the domain — routes, models, and the relevant list pages.
+
+Now let me examine the key patterns — finance module, list endpoints, permissions, and shared table components.
+
+Let me look at the list handler patterns, permissions, and branch scoping — critical for a correct export design.
+
+I have a clear picture of the codebase. Now let me consult the council as you asked.
+
+The script prefers CLI tools over API keys. Let me check what's available.
+
+Now let me query the council with the full codebase context.
+
+Gemini responded; ChatGPT was unavailable (no `codex` CLI and no `OPENAI_API_KEY`). Let me verify the council's assumptions against your actual code before I build the plan.
+
+This is important — the branch context is `AsyncLocalStorage`-based and request-scoped. Let me verify how the context is established, since that determines whether a background job can safely generate exports.
+
+I have what I need. One last check on the table component and the users/teachers list service.
+
+<sub>session `b242ca9d` · branch `main` · 27 ta qadam</sub>
+
+---
+
+## 2026-08-02 11:19 — aytilgan barcha takliflar yaxshi ishni boshlang
+
+**So'rov**
+
+> aytilgan barcha takliflar yaxshi ishni boshlang
+
+**O'zgargan fayllar (23)**
+
+- `server/src/modules/exports/registry/studentPayments.dataset.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/exports/registry/teachers.dataset.js` — yaratildi/qayta yozildi
+- `server/src/modules/exports/registry/index.js` — yaratildi/qayta yozildi
+- `server/src/modules/exports/services/xlsxWriter.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/exports/services/exports.service.js` — yaratildi/qayta yozildi
+- `server/src/middleware/requireDatasetPermission.js` — yaratildi/qayta yozildi
+- `server/src/modules/exports/validators/export.validator.js` — yaratildi/qayta yozildi
+- `server/src/modules/exports/handlers/datasets.list.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/exports/handlers/download.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/exports/exports.routes.js` — yaratildi/qayta yozildi
+- `server/src/routes/index.js` — tahrirlandi
+- `client/src/shared/api/endpoints.js` — tahrirlandi
+- `client/src/shared/api/export.api.js` — yaratildi/qayta yozildi
+- `client/src/shared/hooks/useExport.js` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/shared/components/export/ExportModal.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/shared/components/export/ExportButton.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/shared/lib/query/keys.js` — tahrirlandi
+- `client/src/owner/features/finance/components/StudentPaymentsPanel.jsx` — tahrirlandi
+- `client/src/owner/features/users/pages/TeachersPage.jsx` — tahrirlandi
+- `server/tests/exportScope.test.js` — yaratildi/qayta yozildi
+- `server/package.json` — tahrirlandi
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/b242ca9d-c98e-4e41-9b66-3634b297873e/scratchpad/httpSmoke.mjs` — yaratildi/qayta yozildi
+- `server/src/models/activityLog.model.js` — tahrirlandi
+
+**Buyruqlar (52)**
+
+```sh
+echo "=== validate MW ===" && cat server/src/middleware/validate.js && echo "=== requirePermission MW ===" && cat server/src/middleware/requirePermission.js
+echo "=== users.routes.js ===" && cat server/src/modules/users/users.routes.js | head -90
+echo "=== users.service list ===" && sed -n '1,140p' server/src/modules/users/services/users.service.js
+echo "=== users list validator ===" && cat server/src/modules/users/validators/list.validator.js && echo "=== ROLES ===" && cat server/src/constants/roles.js &&…
+sed -n '126,240p' server/src/modules/users/services/users.service.js
+grep -n "export const list" server/src/modules/finance/services/studentPayment.service.js && sed -n "$(grep -n 'export const list' server/src/modules/finance/se…
+echo "=== endpoints.js (finance+users) ===" && grep -n "finance\|users\|ENDPOINTS = \|^};" client/src/shared/api/endpoints.js | head -40 && echo "=== shadcn ===…
+echo "=== MODAL constants ===" && cat client/src/shared/constants/modals.js | head -50 && echo "=== useModal ===" && cat client/src/shared/hooks/useModal.js
+echo "=== ModalWrapper ===" && cat client/src/shared/components/ui/modal/ModalWrapper.jsx && echo "=== DiscountCreateModal ===" && head -70 client/src/owner/fea…
+echo "=== where modals are registered ===" && grep -rn "DiscountCreateModal" client/src --include="*.jsx" | grep -v "components/modals/DiscountCreateModal.jsx:"…
+echo "=== CreateModals ===" && cat client/src/owner/components/CreateModals.jsx | head -60
+echo "=== test convention ===" && head -60 server/tests/branchScopeExploit.test.js
+cd /Users/shukrullo/Desktop/lc-total/server && npm install exceljs 2>&1 | tail -15
+npm audit --json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print('exceljs-related:', [k for k,v in d.get('vulnerabilities',{}).items() …
+echo "=== studentPayment.model ===" && grep -n "^\s*[a-zA-Z]*:\s*{" server/src/models/studentPayment.model.js | head -40 && echo "--- full schema head ---" && s…
+sed -n '1,90p' /Users/shukrullo/Desktop/lc-total/server/src/models/studentPayment.model.js
+sed -n '1,110p' /Users/shukrullo/Desktop/lc-total/server/src/models/user.model.js
+cat /Users/shukrullo/Desktop/lc-total/server/src/utils/ApiError.js && echo "=== errorHandler ===" && cat /Users/shukrullo/Desktop/lc-total/server/src/middleware…
+cat /Users/shukrullo/Desktop/lc-total/server/src/helpers/permission.helper.js
+echo "=== Button ===" && sed -n '1,50p' /Users/shukrullo/Desktop/lc-total/client/src/shared/components/ui/button/Button.jsx && echo "=== endpoints tail ===" && …
+echo "=== StudentPaymentsPanel ===" && cat /Users/shukrullo/Desktop/lc-total/client/src/owner/features/finance/components/StudentPaymentsPanel.jsx
+cat /Users/shukrullo/Desktop/lc-total/client/src/shared/store/modal.slice.js
+echo "=== useDebounce/useObjectState ===" && cat /Users/shukrullo/Desktop/lc-total/client/src/shared/hooks/useObjectState.js && echo "=== sonner toast usage ===…
+sed -n '190,215p' /Users/shukrullo/Desktop/lc-total/client/src/shared/api/endpoints.js
+grep -rn 'type="checkbox"' /Users/shukrullo/Desktop/lc-total/client/src --include="*.jsx" | head -5
+# … yana 27 ta
+```
+
+**Natija**
+
+All suggestions approved — starting Phase 1. Let me set up tracking and read the code I need to match conventions.
+
+I have all the conventions. Installing exceljs and starting the server module.
+
+exceljs installed. Let me check the models so the export columns map to real fields.
+
+Note: cwd shifted to `server/` after the install. Using absolute paths now.
+
+Now I have the full picture. Note `passwordHash` holds a **plaintext** password with `select: false` — that's exactly what the whitelist test must guard. Let me build the server module.
+
+Now writing the server export module.
+
+Now the teachers dataset and registry index.
+
+`hasPermission` matches my usage. Now the workbook writer.
+
+Now the export service that pages through the existing list services.
+
+Now the handlers.
+
+Now wiring the router into the app.
+
+Server side is wired. Now the client. Let me check a few UI conventions first.
+
+Modal slice supports dynamic names. Now the client files.
+
+Native checkboxes match the existing pattern. Writing the modal and button.
+
+Now wiring into the pages. Let me find the teachers page.
+
+Client CLAUDE.md has conventions I must follow — the `qk` query-key registry in particular. Let me check it.
+
+Let me add the query key to the registry and fix my hook to use it.
+
+Now wiring the button into both pages.
+
+Teachers tab statuses (`all`/`active`/`archived`) match my dataset schema exactly. Wiring the button.
+
+Now the regression tests. Let me study the existing test's fixture setup.
+
+Now the regression tests — including an end-to-end check that re-reads the generated XLSX.
+
+Now let me run the tests and lint.
+
+All 13 checks pass, including the XLSX file-content assertions. Now lint on both sides.
+
+Server lint is broken pre-existing (no config file). Let me check whether any client lint err
+
+…(qisqartirildi)
+
+<sub>session `b242ca9d` · branch `main` · 97 ta qadam</sub>
+
+---
