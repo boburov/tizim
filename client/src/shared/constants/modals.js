@@ -81,6 +81,10 @@ export const MODAL = Object.freeze({
   HOLIDAY_EDIT: "holiday:edit",
   HOLIDAY_DELETE: "holiday:delete",
 
+  // Vazifalar (matn + fayl)
+  ASSIGNMENT_SEND: "assignment:send",
+  ASSIGNMENT_DELETE: "assignment:delete",
+
   // Roles & access (custom rollar)
   ROLE_CREATE: "role:create",
   ROLE_DELETE: "role:delete",

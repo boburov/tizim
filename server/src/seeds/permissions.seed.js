@@ -90,6 +90,8 @@ const seed = async () => {
         permIds[PERMISSIONS.GRADES_RECORD],
         permIds[PERMISSIONS.RATING_READ],
         permIds[PERMISSIONS.NOTIFICATIONS_SEND],
+        permIds[PERMISSIONS.ASSIGNMENTS_READ],
+        permIds[PERMISSIONS.ASSIGNMENTS_SEND],
       ].filter(Boolean);
       await Role.findOneAndUpdate(
         { value },
@@ -178,6 +180,10 @@ const seed = async () => {
     PERMISSIONS.SALARY_PAY,
     PERMISSIONS.NOTIFICATIONS_READ,
     PERMISSIONS.NOTIFICATIONS_SEND,
+    // Vazifalarni KO'RA oladi (kvota kimning fayllari bilan to'layotganini
+    // bilishi kerak), lekin ASSIGNMENTS_SEND ataylab berilmagan: yuborish
+    // diskni yeydi va u o'qituvchining ishi.
+    PERMISSIONS.ASSIGNMENTS_READ,
     PERMISSIONS.FEEDBACK_READ,
     PERMISSIONS.FEEDBACK_RESPOND,
   ];

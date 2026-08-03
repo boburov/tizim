@@ -32,6 +32,8 @@ import expenseApprovalsRouter from "../modules/expenseApprovals/expenseApprovals
 import aiRouter from "../modules/ai/ai.routes.js";
 import exportsRouter from "../modules/exports/exports.routes.js";
 import importsRouter from "../modules/imports/imports.routes.js";
+import assignmentsRouter from "../modules/assignments/assignments.routes.js";
+import storageRouter from "../modules/storage/storage.routes.js";
 
 const router = Router();
 
@@ -66,6 +68,12 @@ router.use("/notification-templates", notificationTemplatesRouter);
 router.use("/holidays", holidaysRouter);
 router.use("/feedback", feedbackRouter);
 router.use("/feedback-types", feedbackTypesRouter);
+
+// Vazifalar (o'qituvchi -> guruh o'quvchilari: matn + fayl, bot orqali).
+router.use("/assignments", assignmentsRouter);
+
+// Fayl saqlash kvotasi (sidebar indikatori shu manzildan oziqlanadi).
+router.use("/storage", storageRouter);
 
 // Bot mini-app authentication (Telegram WebApp initData)
 router.use("/bot-auth", botAuthRouter);

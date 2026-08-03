@@ -59,6 +59,10 @@ import {
   NotificationDetailPage,
   MyInboxPage as OwnerInboxPage,
 } from "@/owner/features/notifications";
+import {
+  AssignmentsListPage,
+  AssignmentDetailPage,
+} from "@/owner/features/assignments";
 import { NotificationTemplatesListPage } from "@/owner/features/notificationTemplates";
 import { HolidaysListPage } from "@/owner/features/holidays";
 import { RolesPage, RoleFormPage } from "@/owner/features/roles";
@@ -264,6 +268,24 @@ const OwnerRoutes = () => (
     <Route path="notifications" element={<NotificationsListPage />} />
     <Route path="notifications/:id" element={<NotificationDetailPage />} />
     <Route path="inbox" element={<OwnerInboxPage />} />
+
+    {/* Vazifalar - matn + fayl, guruh o'quvchilariga bot orqali */}
+    <Route
+      path="assignments"
+      element={
+        <PermissionGuard required="assignments.read">
+          <AssignmentsListPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="assignments/:id"
+      element={
+        <PermissionGuard required="assignments.read">
+          <AssignmentDetailPage />
+        </PermissionGuard>
+      }
+    />
 
     <Route path="feedback" element={<FeedbackPage />}>
       <Route index element={<FeedbackListPage />} />

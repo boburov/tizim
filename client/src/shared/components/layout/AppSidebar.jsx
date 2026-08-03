@@ -50,6 +50,7 @@ import {
 
 // Components
 import BranchSwitcher from "./BranchSwitcher";
+import StorageQuota from "./StorageQuota";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
@@ -305,6 +306,11 @@ const Main = () => {
           )}
         </SidebarMenu>
       </SidebarGroup>
+
+      {/* FAYL XOTIRASI - faqat fayl YUKLAY oladiganlar uchun.
+          O'quvchi panelida ko'rsatilmaydi: u fayl yuklamaydi, ya'ni raqam
+          unga hech qanday qaror bermaydi - faqat menyuni chalg'itardi. */}
+      {(isOwnerPanel || roleType === ROLES.TEACHER) && <StorageQuota />}
     </SidebarContent>
   );
 };

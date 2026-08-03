@@ -169,6 +169,11 @@ const ownerSidebar = [
         url: "/owner/notifications",
         permission: "notifications.read",
       },
+      {
+        title: "Vazifalar",
+        url: "/owner/assignments",
+        permission: "assignments.read",
+      },
       { title: "Feedback", url: "/owner/feedback", permission: "feedback.read" },
     ],
   },

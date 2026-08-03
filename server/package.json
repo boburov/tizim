@@ -7,6 +7,7 @@
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "lint": "eslint .",
+    "db:clean": "node src/seeds/cleanDatabase.seed.js",
     "seed:permissions": "node src/seeds/permissions.seed.js",
     "seed:owner": "node src/seeds/owner.seed.js",
     "seed:communication": "node src/seeds/communicationDefaults.seed.js",
@@ -40,7 +41,8 @@
     "test:money-prop": "node tests/moneyProperty.test.js",
     "test:race": "node tests/paymentRace.test.js",
     "test:export": "node tests/exportScope.test.js",
-    "test:import": "node tests/importEngine.test.js"
+    "test:import": "node tests/importEngine.test.js",
+    "test:assignment": "node tests/assignmentStorage.test.js"
   },
   "dependencies": {
     "agenda": "^5.0.0",

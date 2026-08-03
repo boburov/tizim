@@ -64,6 +64,19 @@ export const subscribeActiveBranch = (callback) => {
  */
 export const isBranchIdValid = (branchId, { branches, canSeeAllBranches }) => {
   if (!branchId) return false;
-  if (branchId === ALL_BRANCHES) return Boolean(canSeeAllBranches);
+
+  // "Barcha filiallar" faqat ROSTDAN HAM bir nechta filial bo'lgandagina
+  // mavjud - useActiveBranch'dagi optionCount bilan AYNI qoida.
+  //
+  // NEGA filiallar soni ham tekshiriladi: `canSeeAllBranches` yolg'iz
+  // yetmaydi (egada u DOIM true). Ilgari markaz bitta filialga qisqarganda
+  // localStorage'dagi eski "all" qiymati YAROQLI deb qolar, useActiveBranch
+  // uni tuzatmas edi - natijada tanlagichda "Barcha filiallar" muzlab qolib,
+  // har bir yaratish amali «Barcha filiallar» rejimida yaratib bo'lmaydi"
+  // xatosi bilan tugardi.
+  if (branchId === ALL_BRANCHES) {
+    return Boolean(canSeeAllBranches) && (branches || []).length > 1;
+  }
+
   return (branches || []).some((b) => String(b._id) === String(branchId));
 };

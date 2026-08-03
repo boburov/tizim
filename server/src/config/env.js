@@ -1,10 +1,20 @@
 import "dotenv/config";
+import path from "node:path";
 
 // Required env var; throws on boot if missing
 const need = (key) => {
   const v = process.env[key];
   if (!v) throw new Error(`ENV o'zgaruvchisi yo'q: ${key}`);
   return v;
+};
+
+// Musbat son; bo'sh, nol yoki buzuq qiymatda standartga qaytadi.
+// Number("") = 0 bo'lgani uchun oddiy `|| fallback` yetarli emas:
+// STORAGE_QUOTA_GB=0 yozib qo'yilsa kvota nolga tushib, HAR QANDAY fayl
+// rad etilardi - bu sozlama xatosi uchun juda qattiq jazо.
+const positiveNumber = (raw, fallback) => {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
 // Vergul bilan ajratilgan domenlar ro'yxati -> tozalangan massiv
@@ -89,6 +99,28 @@ const env = Object.freeze({
   // Shuning uchun amaldagi chegara har doim ikkalasining KICHIGI.
   // 4000 ≈ $1.9/oy - eng arzon pullik tarifda ham marja musbat qoladi.
   AI_MONTHLY_CALL_CAP: Number(process.env.AI_MONTHLY_CALL_CAP || 4000),
+
+  // --- FAYL SAQLASH (vazifa biriktirmalari) ---
+  //
+  // Ikkala chegara ham BAYTGA aylantiriladi: solishtirish har doim bayt
+  // bilan bo'ladi, sozlama esa odam o'qiydigan birlikda (GB / MB) turadi.
+  //
+  // STORAGE_QUOTA_GB - butun o'quv markazining umumiy disk chegarasi.
+  //   Chegara to'lgach yangi fayl UMUMAN qabul qilinmaydi (matn ketaveradi).
+  // MAX_UPLOAD_MB   - BITTA fayl uchun chegara. Telegram hujjat chegarasi
+  //   50 MB, shuning uchun bu qiymatni undan oshirish ma'nosiz: fayl
+  //   yuklanardi-yu, botga bermay qolardi.
+  STORAGE_QUOTA_BYTES: Math.round(
+    positiveNumber(process.env.STORAGE_QUOTA_GB, 5) * 1024 * 1024 * 1024,
+  ),
+  MAX_UPLOAD_BYTES: Math.round(
+    positiveNumber(process.env.MAX_UPLOAD_MB, 5) * 1024 * 1024,
+  ),
+
+  // Fayllar diskda shu papkada saqlanadi (jarayon ishlaydigan papkaga
+  // nisbatan). Docker/deploy'da bu papka VOLUME bo'lishi kerak - aks holda
+  // konteyner qayta qurilganda barcha biriktirmalar yo'qoladi.
+  UPLOAD_DIR: path.resolve(process.cwd(), process.env.UPLOAD_DIR || "uploads"),
 });
 
 export const isProd = env.NODE_ENV === "production";

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 
 // Hooks
 import useObjectState from "@/shared/hooks/useObjectState";
+import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
 
 // Sonner
@@ -10,6 +11,7 @@ import { toast } from "sonner";
 
 // Components
 import InputField from "@/shared/components/ui/input/InputField";
+import SelectField from "@/shared/components/ui/select/SelectField";
 import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
 import GroupScheduleField from "./GroupScheduleField";
@@ -24,6 +26,8 @@ import { toDateInput } from "@/shared/utils/formatDate";
 import { scheduleActiveOn } from "@/shared/utils/formatSchedule";
 
 const buildInitial = (group) => ({
+  // Faqat yaratishda va faqat "Barcha filiallar" rejimida so'raladi.
+  branchId: "",
   name: group?.name || "",
   // Versiyalash: tahrirlashda faqat HOZIRGI amaldagi versiya qatorlarini
   // ko'rsatamiz (effectiveFrom'siz, toza). Tarixiy versiyalar serverda saqlanadi.
@@ -64,6 +68,7 @@ const GroupForm = ({
   const isEdit = Boolean(initial);
 
   const {
+    branchId,
     name,
     schedule,
     teacher,
@@ -73,6 +78,17 @@ const GroupForm = ({
     scheduleEffectiveFrom,
     setField,
   } = useObjectState(buildInitial(initial));
+
+  // FILIAL. Odatda server aktiv filialdan (x-branch-id) oladi. Lekin
+  // "Barcha filiallar" rejimida aktiv filial YO'Q - guruh qaysi filialda
+  // ochilayotganini SO'RAYMIZ. Guruh filial ko'lamining ildizi bo'lgani
+  // uchun bu tanlov keyin davomat/to'lov/maoshga ham tarqaladi.
+  const { branches, isAllBranches, multiBranch } = useActiveBranch();
+  const needsBranch = !isEdit && multiBranch && isAllBranches;
+  const branchOptions = useMemo(
+    () => branches.map((b) => ({ value: String(b._id), label: b.name })),
+    [branches],
+  );
 
   // O'qituvchi tanlash uchun ro'yxat - faqat yangi guruh yaratishda kerak.
   const { data: teachersData } = useUsersListQuery({
@@ -148,6 +164,10 @@ const GroupForm = ({
     }
     // Yangi guruh - kurs tugash sanasidan boshqa hamma maydon majburiy.
     if (!isEdit) {
+      if (needsBranch && !branchId) {
+        toast.error("Filialni tanlang");
+        return;
+      }
       if (schedule.length === 0) {
         toast.error("Kamida bitta dars kuni qo'shing");
         return;
@@ -187,6 +207,9 @@ const GroupForm = ({
       payload.teachers = [teacher];
       // Oylik narx majburiy - joriy oy GroupFee summasi bo'ladi.
       payload.monthlyPrice = Number(monthlyPrice);
+      // "Barcha filiallar" rejimida tanlangan filial. Boshqa holatda
+      // yubormaymiz - server aktiv filialdan aniqlaydi.
+      if (needsBranch && branchId) payload.branchId = branchId;
     }
 
     onSubmit(payload);
@@ -194,6 +217,21 @@ const GroupForm = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {/* "Barcha filiallar" rejimi: guruh qaysi filialda ochilishi */}
+      {needsBranch && (
+        <SelectField
+          name="branchId"
+          label="Filial"
+          placeholder="Filialni tanlang"
+          value={branchId}
+          onChange={(v) => setField("branchId", v?.target?.value ?? v)}
+          options={branchOptions}
+          required
+          error={!branchId}
+          disabled={isLoading}
+        />
+      )}
+
       {/* 1-qator: nom */}
       <InputField
         name="name"

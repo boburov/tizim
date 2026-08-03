@@ -42,7 +42,14 @@ const leadFields = {
 };
 
 export const createSchema = z.object({
-  body: z.object(leadFields),
+  body: z.object({
+    ...leadFields,
+    // FAQAT yaratishda: "Barcha filiallar" rejimida client formada qaysi
+    // filialga yozishni so'raydi. Bo'sh bo'lsa server aktiv filialdan
+    // (yoki markazda yagona filial bo'lsa - o'shandan) aniqlaydi.
+    // Tahrirlashda YO'Q: lidni filialdan filialga ko'chirish alohida amal.
+    branchId: z.string().nullable().optional(),
+  }),
 });
 
 export const updateSchema = z.object({

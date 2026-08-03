@@ -23,6 +23,10 @@ import {
   TeacherNotificationDetailPage,
   MyInboxPage,
 } from "@/teacher/features/notifications";
+import {
+  TeacherAssignmentsListPage,
+  TeacherAssignmentDetailPage,
+} from "@/teacher/features/assignments";
 import { MyFeedbackPage } from "@/teacher/features/feedback";
 import { TeacherFinancePage } from "@/teacher/features/finance";
 import NotFoundPage from "@/shared/components/ui/feedback/NotFoundPage";
@@ -43,6 +47,8 @@ const TeacherRoutes = () => (
     <Route path="attendance/:groupId" element={<TeacherAttendanceMarkPage />} />
     <Route path="grades" element={<TeacherGradesPage />} />
     <Route path="grades/:groupId" element={<TeacherGradesMarkPage />} />
+    <Route path="assignments" element={<TeacherAssignmentsListPage />} />
+    <Route path="assignments/:id" element={<TeacherAssignmentDetailPage />} />
     <Route path="notifications" element={<TeacherNotificationsListPage />} />
     <Route
       path="notifications/:id"

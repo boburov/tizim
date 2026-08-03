@@ -348,10 +348,13 @@ export const create = async (body, currentUser) => {
       null,
     );
   }
+  // FILIAL: guruh filial ko'lamining ildizi - davomat/to'lov/maosh
+  // shu guruh orqali filialga bog'lanadi. "Barcha filiallar" rejimida
+  // client formada aniq filialni so'raydi va `branchId` bilan yuboradi.
+  const branchId = await resolveBranchForWrite(currentUser, body.branchId);
+
   const group = await Group.create({
-    // FILIAL: guruh filial ko'lamining ildizi - davomat/to'lov/maosh
-    // shu guruh orqali filialga bog'lanadi.
-    branchId: resolveBranchForWrite(currentUser),
+    branchId,
     name: body.name.trim(),
     schedule: normalizeSchedule(body.schedule, { dropEffective: true }),
     // teachers[] - davrlardan HOSILA kesh; assignTeacher syncGroupTeachersCache qiladi.

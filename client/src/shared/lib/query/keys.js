@@ -142,6 +142,21 @@ export const qk = Object.freeze({
     inbox: (params) => ["notifications", "inbox", params],
     unreadCount: () => ["notifications", "inbox", "unreadCount"],
   },
+  // Vazifalar (matn + fayl)
+  assignments: {
+    all: () => ["assignments"],
+    list: (params) => ["assignments", "list", params],
+    one: (id) => ["assignments", "detail", id],
+    recipients: (id, params) => ["assignments", id, "recipients", params],
+    preview: (groupIds) => ["assignments", "preview", groupIds],
+    my: (params) => ["assignments", "my", params],
+  },
+
+  // Fayl saqlash kvotasi
+  storage: {
+    usage: () => ["storage", "usage"],
+  },
+
   systemNotifications: {
     all: () => ["systemNotifications"],
     list: (params) => ["systemNotifications", "list", params],

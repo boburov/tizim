@@ -3,6 +3,7 @@ import ApiError from "../utils/ApiError.js";
 import { PERMISSIONS } from "../constants/permissions.js";
 import { hasPermission } from "./permission.helper.js";
 import env from "../config/env.js";
+import logger from "../config/logger.js";
 
 // Filialga kirish huquqini hisoblash. requireAuth'dan keyin ishlaydi.
 
@@ -43,6 +44,50 @@ export const resolveMainBranchId = async () => {
 
   mainBranchIdCache = main ? String(main._id) : null;
   return mainBranchIdCache;
+};
+
+/**
+ * BOOTSTRAP: markazda KAMIDA BITTA filial bo'lishini kafolatlaydi.
+ *
+ * NEGA KERAK: `branchId` Group/Lead/to'lov modellarida `required: true`,
+ * ya'ni filialsiz bazada HAR QANDAY yozish amali yiqilardi - lid ham,
+ * guruh ham, foydalanuvchi ham. Yangi o'rnatma esa qo'lda
+ * `npm run migrate:branches` ishga tushirilmaguncha aynan shu holatda
+ * turardi. Endi bunday holat umuman mavjud emas: server ko'tarilishi
+ * bilan "Asosiy filial" paydo bo'ladi.
+ *
+ * IDEMPOTENT: birorta filial bo'lsa (o'chirilganlaridan tashqari) hech
+ * narsa qilmaydi, shuning uchun har ishga tushishda chaqirsa bo'ladi.
+ *
+ * @returns {Promise<object|null>} yaratilgan filial yoki null
+ */
+export const ensureMainBranch = async () => {
+  const existing = await Branch.countDocuments({ isDeleted: false });
+  if (existing > 0) return null;
+
+  let branch;
+  try {
+    branch = await Branch.create({
+      name: "Asosiy filial",
+      code: "MAIN",
+      isMain: true,
+      isActive: true,
+    });
+  } catch (err) {
+    // POYGA: ikkita instans bir vaqtda ko'tarilsa, `isMain` unique partial
+    // indeksi ikkinchisini rad etadi. Bu xato EMAS - filial baribir bor.
+    if (err?.code === 11000) {
+      clearMainBranchCache();
+      return null;
+    }
+    throw err;
+  }
+
+  // Kesh `undefined` bo'lmasligi mumkin (bu chaqiruvdan oldin kimdir
+  // resolveMainBranchId() qilgan bo'lsa u yerda `null` yozilib qolgan).
+  clearMainBranchCache();
+  logger.info({ branchId: String(branch._id) }, "Asosiy filial avtomatik yaratildi");
+  return branch;
 };
 
 /**

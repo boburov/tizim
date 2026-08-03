@@ -48,6 +48,13 @@ export const PERMISSIONS = Object.freeze({
   FEEDBACK_RESPOND: "feedback.respond",
   FEEDBACK_TYPES_MANAGE: "feedback_types.manage",
 
+  // Vazifalar (matn + fayl, guruh o'quvchilariga bot orqali).
+  // NOTIFICATIONS_SEND dan ATAYLAB ajratilgan: vazifa markazning DISKINI
+  // yeydi. Xabar yuborish huquqi bor xodim avtomatik ravishda kvotani
+  // to'ldirish huquqini OLMASLIGI kerak.
+  ASSIGNMENTS_READ: "assignments.read",
+  ASSIGNMENTS_SEND: "assignments.send",
+
   // Admin dashboard + audit (Bo'lak 9)
   ADMIN_DASHBOARD_READ: "admin_dashboard.read",
   ACTIVITY_LOGS_READ: "activity_logs.read",
@@ -180,6 +187,15 @@ export const PERMISSION_LABELS = {
     group: "feedback",
   },
 
+  [PERMISSIONS.ASSIGNMENTS_READ]: {
+    label: "Vazifalarni ko'rish",
+    group: "assignments",
+  },
+  [PERMISSIONS.ASSIGNMENTS_SEND]: {
+    label: "Vazifa yuborish",
+    group: "assignments",
+  },
+
   [PERMISSIONS.ADMIN_DASHBOARD_READ]: {
     label: "Boshqaruv panelini ko'rish",
     group: "admin",
@@ -294,6 +310,7 @@ export const MODULE_META = {
   finance: { label: "Moliya", order: 120 },
   salary: { label: "Maoshlar", order: 130 },
   approvals: { label: "Tasdiqlar", order: 135 },
+  assignments: { label: "Vazifalar", order: 138 },
   notifications: { label: "Bildirishnomalar", order: 140 },
   notification_templates: { label: "Bildirishnoma shablonlari", order: 150 },
   holidays: { label: "Bayramlar", order: 160 },

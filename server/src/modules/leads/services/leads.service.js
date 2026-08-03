@@ -75,9 +75,12 @@ export const create = async (body, currentUser) => {
 
   const status = body.status || "new";
 
+  // FILIAL: lid qaysi filialga kelgan. "Barcha filiallar" rejimida client
+  // formada aniq filialni so'raydi va uni `branchId` bilan yuboradi.
+  const branchId = await resolveBranchForWrite(currentUser, body.branchId);
+
   const lead = await Lead.create({
-    // FILIAL: lid qaysi filialga kelgan.
-    branchId: resolveBranchForWrite(currentUser),
+    branchId,
     firstName: String(body.firstName).trim(),
     lastName: body.lastName ? String(body.lastName).trim() : "",
     age: body.age ?? null,

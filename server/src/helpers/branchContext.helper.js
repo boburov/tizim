@@ -155,23 +155,67 @@ export const branchGroupFilter = async (field = "group") => {
 };
 
 /**
+ * Markazda FAQAT BITTA filial bormi - bo'lsa o'sha filial ID'si.
+ *
+ * `limit(2)`: aniq sonini bilish shart emas, "bittami yoki ko'pmi" yetarli.
+ */
+const resolveSoleBranchId = async () => {
+  const Branch = mongoose.models.Branch;
+  if (!Branch) return null;
+  const branches = await Branch.find({ isDeleted: false })
+    .select("_id")
+    .limit(2)
+    .lean();
+  return branches.length === 1 ? branches[0]._id : null;
+};
+
+/**
  * YOZISH uchun filialni aniqlaydi.
  *
- * Yangi hujjat (guruh, lid) DOIM aniq bitta filialga tegishli bo'ladi -
- * "barcha filiallar" rejimida yozib bo'lmaydi, chunki qaysi filialga
- * yozish noma'lum. Bunday holda foydalanuvchi filial tanlashi kerak.
+ * Yangi hujjat (guruh, lid) DOIM aniq bitta filialga tegishli bo'ladi.
+ * Manba tartibi:
+ *   1. Formada OCHIQ tanlangan filial (`requestedBranchId`)
+ *   2. Aktiv filial (x-branch-id konteksti)
+ *   3. Markazda yagona filial bo'lsa - o'sha
+ *   4. Foydalanuvchining asosiy filiali (kontekstsiz job/seed uchun)
  *
  * @param {object} [user] - fallback uchun (homeBranchId)
- * @returns {mongoose.Types.ObjectId}
+ * @param {string} [requestedBranchId] - formada tanlangan filial
+ * @returns {Promise<mongoose.Types.ObjectId>}
  * @throws {Error} filial aniqlanmasa
  */
-export const resolveBranchForWrite = (user) => {
+export const resolveBranchForWrite = async (user, requestedBranchId = null) => {
   const ctx = storage.getStore();
 
-  // Aniq filial tanlangan - eng oddiy holat.
+  // 1) OCHIQ TANLANGAN filial: client "Barcha filiallar" rejimida turib
+  // formada qaysi filialga yozishni ko'rsatgan.
+  //
+  // IMTIYOZ OSHIRISHDAN HIMOYA: tanlangan filial chaqiruvchining O'Z
+  // ko'lamida ekani tekshiriladi - aks holda A filial direktori so'rovni
+  // qo'lda o'zgartirib B filialga yozib qo'yardi.
+  if (requestedBranchId) {
+    if (!isBranchAllowed(requestedBranchId)) {
+      const err = new Error("Bu filialga yozish huquqingiz yo'q");
+      err.statusCode = 403;
+      throw err;
+    }
+    return toObjectId(requestedBranchId);
+  }
+
+  // 2) Aniq filial tanlangan - eng oddiy holat.
   if (ctx?.branchId) return toObjectId(ctx.branchId);
 
-  // "BARCHA FILIALLAR" rejimida yozish TAQIQLANADI.
+  // 3) YAGONA FILIAL: "Barcha filiallar" va "o'sha filial" ayni bir narsa,
+  // ya'ni noaniqlik YO'Q - so'rashning ma'nosi ham yo'q.
+  //
+  // Bu client'ning eskirgan holatiga qarshi himoya: localStorage'da qolib
+  // ketgan "all" qiymati tufayli bitta filialli markazda har bir yaratish
+  // amali xato bilan tugardi. Ruxsat baribir tekshiriladi - hech qaysi
+  // filialga biriktirilmagan xodim shu yo'l bilan yozib qo'ymasin.
+  const soleId = await resolveSoleBranchId();
+  if (soleId && isBranchAllowed(soleId)) return toObjectId(soleId);
+
+  // 4) "BARCHA FILIALLAR" rejimida yozish TAQIQLANADI (filial bir nechta).
   //
   // Ilgari bu yerda foydalanuvchining uy filialiga jimgina tushardik -
   // lekin owner konsolidatsiya ko'rinishida turib guruh yaratsa, u

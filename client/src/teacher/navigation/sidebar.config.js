@@ -18,6 +18,11 @@ const teacherSidebar = [
         title: "Baholash",
         url: "/teacher/grades",
       },
+      {
+        title: "Vazifalar",
+        url: "/teacher/assignments",
+        permission: "assignments.read",
+      },
     ],
   },
   {

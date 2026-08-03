@@ -14,6 +14,7 @@ import defineLowAttendanceDigest, {
 } from "./lowAttendanceDigest.job.js";
 import defineNotificationDeliver from "./notificationDeliver.job.js";
 import defineNotificationSchedule from "./notificationSchedule.job.js";
+import defineAssignmentDeliver from "./assignmentDeliver.job.js";
 import defineLeadFollowupReminders, {
   JOB_NAME as LEAD_FOLLOWUP_JOB,
 } from "./leadFollowupReminders.job.js";
@@ -72,6 +73,7 @@ export const startJobs = async () => {
   defineLowAttendanceDigest(agenda);
   defineNotificationDeliver(agenda);
   defineNotificationSchedule(agenda);
+  defineAssignmentDeliver(agenda);
   defineLeadFollowupReminders(agenda);
   defineGenerateMonthlyFinance(agenda);
   defineGenerateMonthlySalary(agenda);

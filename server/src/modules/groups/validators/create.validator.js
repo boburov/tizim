@@ -8,6 +8,10 @@ const emptyToUndef = (v) => (v === "" || v == null ? undefined : v);
 export const createSchema = z.object({
   // Kurs tugash sanasidan boshqa hamma maydon MAJBURIY.
   body: z.object({
+    // "Barcha filiallar" rejimida client formada qaysi filialga yozishni
+    // so'raydi. Bo'sh bo'lsa server aktiv filialdan (yoki markazda yagona
+    // filial bo'lsa - o'shandan) aniqlaydi.
+    branchId: z.string().nullable().optional(),
     name: z
       .string({ required_error: "Guruh nomini kiriting" })
       .min(2, "Kamida 2 belgidan iborat bo'lishi kerak")

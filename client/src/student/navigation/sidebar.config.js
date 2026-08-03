@@ -15,6 +15,10 @@ const studentSidebar = [
         url: "/student/attendance",
       },
       {
+        title: "Vazifalarim",
+        url: "/student/assignments",
+      },
+      {
         title: "Reyting",
         url: "/student/rating",
       },

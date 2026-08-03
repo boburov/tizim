@@ -54,6 +54,11 @@ export const PERMISSIONS = Object.freeze({
   FEEDBACK_RESPOND: "feedback.respond",
   FEEDBACK_TYPES_MANAGE: "feedback_types.manage",
 
+  // Vazifalar (matn + fayl). Yuborish diskni yeydi, shuning uchun
+  // ko'rish huquqidan ajratilgan.
+  ASSIGNMENTS_READ: "assignments.read",
+  ASSIGNMENTS_SEND: "assignments.send",
+
   // Admin / boshqaruv paneli (Bo'lak 9)
   ADMIN_DASHBOARD_READ: "admin_dashboard.read",
   ACTIVITY_LOGS_READ: "activity_logs.read",

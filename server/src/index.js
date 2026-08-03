@@ -5,6 +5,7 @@ import { connectDB, disconnectDB } from "./config/db.js";
 import { startJobs, stopJobs } from "./jobs/index.js";
 import { startBot, stopBot } from "./bot/index.js";
 import Branch from "./models/branch.model.js";
+import { ensureMainBranch } from "./helpers/branchAccess.helper.js";
 
 // MULTI_BRANCH=false, lekin bazada bir nechta filial bor - mos kelmovchilik.
 //
@@ -49,6 +50,10 @@ const warnBranchModeMismatch = async () => {
 
 const start = async () => {
   await connectDB();
+  // FILIAL KAFOLATI: bazada birorta filial bo'lmasa "Asosiy filial"
+  // yaratiladi. Shundan keyin markaz DOIM kamida bitta filialli bo'ladi,
+  // ya'ni "filial tanlanmagan" turkumidagi yozish xatolari tug'ilmaydi.
+  await ensureMainBranch();
   await warnBranchModeMismatch();
   await startJobs();
   await startBot().catch((err) => logger.error({ err }, "Bot ishga tushmadi"));

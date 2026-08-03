@@ -193,6 +193,22 @@ export const ENDPOINTS = Object.freeze({
     churnedStudents: "/admin-dashboard/churned-students",
   },
 
+  // Vazifalar (matn + fayl, guruh o'quvchilariga bot orqali)
+  assignments: {
+    base: "/assignments",
+    byId: (id) => `/assignments/${id}`,
+    preview: "/assignments/preview",
+    recipients: (id) => `/assignments/${id}/recipients`,
+    file: (id) => `/assignments/${id}/file`,
+    my: "/assignments/my",
+    markRead: (id) => `/assignments/my/${id}/read`,
+  },
+
+  // Fayl saqlash kvotasi (sidebar indikatori)
+  storage: {
+    usage: "/storage/usage",
+  },
+
   // Excel eksport. Ustunlar ro'yxati SERVERDAN olinadi (datasets) -
   // client'da qattiq yozilmaydi, aks holda ikkalasi bir-biridan uzoqlashadi.
   exports: {
