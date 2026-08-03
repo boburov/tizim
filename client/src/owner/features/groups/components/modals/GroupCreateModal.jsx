@@ -1,10 +1,13 @@
 import GroupForm from "../GroupForm";
 import useGroupCreateMutation from "../../hooks/useGroupCreateMutation";
 
-const GroupCreateModal = ({ close, isLoading, setIsLoading }) => {
+// `onCreated` - selectdan "Yangi qo'shish" orqali ochilganda beriladi:
+// yaratilgan guruh darhol tanlanishi uchun (CreatableSelectField).
+const GroupCreateModal = ({ close, isLoading, setIsLoading, onCreated }) => {
   const { mutate } = useGroupCreateMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsLoading(false);
+      onCreated?.(data);
       close?.();
     },
     onError: () => setIsLoading(false),

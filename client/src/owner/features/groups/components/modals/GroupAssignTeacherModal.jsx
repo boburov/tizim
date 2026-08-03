@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import Button from "@/shared/components/ui/button/Button";
-import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
+import UserCreateModal from "@/owner/features/users/components/UserCreateModal";
+import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
+import { qk } from "@/shared/lib/query/keys";
 import useGroupUpdateMutation from "../../hooks/useGroupUpdateMutation";
 import useAvailableTeachersQuery from "../../hooks/useAvailableTeachersQuery";
 
@@ -20,6 +25,7 @@ const GroupAssignTeacherModal = ({ group, close, isLoading, setIsLoading }) => {
   const isReplace = Boolean(currentId);
 
   const [teacher, setTeacher] = useState("");
+  const qc = useQueryClient();
 
   // Faqat guruh jadvalidagi vaqtlarda BO'SH o'qituvchilar (band bo'lganlar chiqmaydi).
   const { data: available, isLoading: loadingTeachers } =
@@ -67,7 +73,7 @@ const GroupAssignTeacherModal = ({ group, close, isLoading, setIsLoading }) => {
         </p>
       )}
 
-      <SelectField
+      <CreatableSelectField
         searchable
         required
         label="O'qituvchi"
@@ -80,6 +86,20 @@ const GroupAssignTeacherModal = ({ group, close, isLoading, setIsLoading }) => {
         searchPlaceholder="O'qituvchi qidirish..."
         emptyText="Bu vaqtlarda bo'sh o'qituvchi yo'q"
         disabled={isLoading || loadingTeachers}
+        createLabel="Yangi o'qituvchi"
+        createTitle="Yangi o'qituvchi"
+        createPermission={PERMISSIONS.USERS_CREATE}
+        create={<UserCreateModal defaultRole={ROLES.TEACHER} />}
+        // Bu ro'yxat HOSILA (server band o'qituvchilarni kesib tashlaydi) va
+        // o'z kaliti bor - foydalanuvchi mutatsiyasi uni yangilamaydi. Yangi
+        // o'qituvchining jadvali bo'sh, demak qayta so'ralganda ro'yxatga
+        // albatta tushadi; shuning uchun shu kalitni qo'lda bekor qilamiz.
+        onCreated={(t) => {
+          qc.invalidateQueries({
+            queryKey: qk.groups.availableTeachers(group?._id),
+          });
+          setTeacher(t._id);
+        }}
       />
 
       <p className="text-xs text-muted-foreground">

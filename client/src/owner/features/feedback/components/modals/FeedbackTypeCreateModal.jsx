@@ -3,11 +3,19 @@ import InputField from "@/shared/components/ui/input/InputField";
 import Button from "@/shared/components/ui/button/Button";
 import { useFeedbackTypeCreateMutation } from "../../hooks/useFeedbackTypeMutations";
 
-const FeedbackTypeCreateModal = ({ close, isLoading, setIsLoading }) => {
+// `onCreated` - selectdan "Yangi qo'shish" orqali ochilganda beriladi:
+// yaratilgan tur darhol tanlanishi uchun (CreatableSelectField).
+const FeedbackTypeCreateModal = ({
+  close,
+  isLoading,
+  setIsLoading,
+  onCreated,
+}) => {
   const [name, setName] = useState("");
   const { mutate } = useFeedbackTypeCreateMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsLoading(false);
+      onCreated?.(data);
       close?.();
     },
     onError: () => setIsLoading(false),

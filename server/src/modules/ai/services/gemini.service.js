@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import env from "../../../config/env.js";
 import logger from "../../../config/logger.js";
+import { recordUsage } from "./aiBudget.service.js";
 
 // GEMINI NARRATOR - deterministik shablonning USTIGA qo'yiladigan qatlam.
 //
@@ -114,12 +115,33 @@ Xulosa:`;
  * XATO YUTILADI, TASHLANMAYDI: narrator ixtiyoriy bezak. Uning xatosi
  * tungi qayta hisoblashni to'xtatsa, bitta API uzilishi butun AI
  * markazini bir kunga o'chirib qo'yardi.
+ *
+ * HAR BIR CHIQISH JURNALGA YOZILADI - muvaffaqiyatlisi ham, xatosi ham.
+ * Sabab: AI qatlami pullik sotiladi va tannarxi o'lchanmasa, oyning
+ * oxirida faqat Google hisobidagi umumiy raqam qoladi. Xato yozuvlari
+ * esa chegarani to'g'ri tanlash uchun kerak - 429 naqshi ko'rinmasa,
+ * limit past qo'yilganini bilib bo'lmaydi.
  */
 export const generateNarration = async (insight, model = env.GEMINI_MODEL) => {
   if (!isNarrationConfigured()) return null;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const startedAt = Date.now();
+
+  // Har chiqish yo'lida bir xil yoziladi, shuning uchun bitta joyda.
+  const log = (ok, errorCode, usage = {}) =>
+    recordUsage({
+      branchId: insight?.branchId || null,
+      provider: "gemini",
+      model,
+      kind: "narration",
+      inputTokens: usage.promptTokenCount || 0,
+      outputTokens: usage.candidatesTokenCount || 0,
+      latencyMs: Date.now() - startedAt,
+      ok,
+      errorCode,
+    });
 
   try {
     const res = await fetch(
@@ -145,22 +167,37 @@ export const generateNarration = async (insight, model = env.GEMINI_MODEL) => {
       // bepul darajada kunlik limit tugashi normal.
       const level = res.status === 429 ? "debug" : "warn";
       logger[level]({ status: res.status }, "Gemini narrator javob bermadi");
+      await log(false, String(res.status));
       return null;
     }
 
     const data = await res.json();
+    const usage = data?.usageMetadata || {};
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return null;
+    if (!text) {
+      // Bo'sh javob TOKEN SARFLAGAN bo'lishi mumkin (masalan xavfsizlik
+      // filtri kesib tashlagan), shuning uchun ok: false bo'lsa ham
+      // usage yoziladi - aks holda tannarx kam ko'rinardi.
+      await log(false, "empty", usage);
+      return null;
+    }
 
     const clean = text.trim();
     // Bo'sh yoki g'ayritabiiy uzun javob ishlatilmaydi: shablon matn
     // undan har doim yaxshiroq.
-    if (clean.length < 10 || clean.length > 600) return null;
+    if (clean.length < 10 || clean.length > 600) {
+      await log(false, "invalid_length", usage);
+      return null;
+    }
+
+    await log(true, "", usage);
     return clean;
   } catch (err) {
-    if (err?.name !== "AbortError") {
+    const aborted = err?.name === "AbortError";
+    if (!aborted) {
       logger.warn({ err: err.message }, "Gemini narrator xatosi");
     }
+    await log(false, aborted ? "timeout" : "network");
     return null;
   } finally {
     clearTimeout(timer);

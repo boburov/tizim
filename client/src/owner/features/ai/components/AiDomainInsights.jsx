@@ -12,7 +12,13 @@ import { useDomainInsightsQuery } from "../hooks/useDomainInsightsQuery";
 // ko'rinmasligi kerak va so'rov ham YUBORILMASLIGI kerak (aks holda
 // har bir modul sahifasi 403 qaytaradigan keraksiz so'rov qilardi).
 
-const AiDomainInsights = ({ domain, title, limit = 4, className = "" }) => {
+const AiDomainInsights = ({
+  domain,
+  title,
+  icon,
+  limit = 4,
+  className = "",
+}) => {
   const { has } = usePermissions();
   const allowed = has("ai.read");
 
@@ -29,6 +35,7 @@ const AiDomainInsights = ({ domain, title, limit = 4, className = "" }) => {
       data={data}
       isLoading={isLoading}
       title={title}
+      icon={icon}
       className={className}
     />
   );

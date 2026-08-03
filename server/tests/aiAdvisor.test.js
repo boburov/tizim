@@ -38,6 +38,17 @@ import {
 } from "../src/modules/ai/validators/insight.validator.js";
 import aiRouter from "../src/modules/ai/ai.routes.js";
 import requireAuth from "../src/middleware/auth.js";
+import { setEntitlements } from "../src/config/entitlements.js";
+import {
+  isAiEnabled,
+  resolveCallCap,
+  openBudget,
+  recordUsage,
+} from "../src/modules/ai/services/aiBudget.service.js";
+import AiUsageLog, {
+  estimateCostUsd,
+  usageMonthKey,
+} from "../src/models/aiUsageLog.model.js";
 
 const TEST_DB = "mongodb://127.0.0.1:27017/lc_ai_test";
 
@@ -252,6 +263,191 @@ const testRouteOrder = () => {
   );
   eq("kirish oladigan yo'llar validatsiyalangan", unvalidated.length, 0);
   for (const l of unvalidated) bad("  validatsiyasiz", l.route.path);
+
+  // ── TARIF DARVOZASI (paywall) ──
+  //
+  // AI qatlami pullik. Darvoza router darajasida turadi, ya'ni uni
+  // o'chirib qo'yish BITTA qatorni o'chirish bilan bo'ladi va hech
+  // qanday route testi buni sezmasdi - endpointlar avvalgidek ishlab
+  // turaverardi, faqat bepul. Shuning uchun tekshiruv XATTI-HARAKAT
+  // bo'yicha: darvozani uchta holatda chaqirib ko'ramiz.
+  const gate = aiRouter.stack.find((l) => !l.route);
+  if (!gate) {
+    bad("tarif darvozasi montaj qilingan", "router.use(...) topilmadi");
+  } else {
+    const callGate = () => {
+      let captured = "chaqirilmadi";
+      gate.handle({}, {}, (e) => {
+        captured = e;
+      });
+      return captured;
+    };
+
+    setEntitlements({ limits: { ai_advisor: 0 } });
+    eq("tarifda AI yo'q → 402 Payment Required", callGate()?.statusCode, 402);
+
+    setEntitlements({ limits: { ai_advisor: 1 } });
+    eq("tarifda AI bor → o'tkazadi", callGate(), undefined);
+
+    // Aloqa yo'qolganda OCHIQ yiqilishi SHART: admin server o'chgani
+    // uchun to'lagan mijozning sahifasini o'chirib qo'yib bo'lmaydi.
+    setEntitlements({ limits: {} });
+    eq("entitlement kelmagan → o'tkazadi (ochiq yiqiladi)", callGate(), undefined);
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// 3b. AI BYUDJETI - CHEGARA HAL QILISH (DB kerak emas)
+//
+// Bu bo'lim mahsulot mantiqini emas, PULNI qo'riqlaydi.
+//
+// Byudjet qatlamining butun ma'nosi bitta qoidada: chegara har doim
+// MIN(tarif, mahalliy env). Bu qoida buzilsa hech narsa yiqilmaydi va
+// hech qanday xato ko'rinmaydi - shunchaki oy oxirida Google hisobi
+// kutilganidan katta keladi. Aynan shuning uchun u testda turadi.
+//
+// Eng muhim holat - 6-tekshiruv: tarif "cheksiz" (-1) desa ham
+// mahalliy chegara ushlab qolishi SHART. Boshqa limitlar bizga hech
+// narsaga tushmaydi, AI chaqiruvi esa har biri uchun pul.
+// ════════════════════════════════════════════════════════════════
+const testAiBudgetResolution = () => {
+  head("3b. AI BYUDJETI (chegara hal qilish)");
+
+  const envCap = Number(process.env.AI_MONTHLY_CALL_CAP || 4000);
+
+  // Aloqa yo'q: kirish OCHIQ, xarajat YOPIQ. Ikkalasi bitta holatda.
+  setEntitlements({ limits: {} });
+  eq("aloqa yo'q → AI ochiq (mijoz bloklanmaydi)", isAiEnabled(), true);
+  eq("aloqa yo'q → chegara env qiymati (cheksiz emas)", resolveCallCap(), envCap);
+
+  setEntitlements({ limits: { ai_advisor: 0, ai_calls_month: 0 } });
+  eq("free tarif → AI yopiq", isAiEnabled(), false);
+  eq("free tarif → chegara 0", resolveCallCap(), 0);
+
+  setEntitlements({ limits: { ai_advisor: 0, ai_calls_month: 4000 } });
+  eq("basic (add-on'siz) → AI yopiq", isAiEnabled(), false);
+
+  setEntitlements({ limits: { ai_advisor: 1, ai_calls_month: 4000 } });
+  eq("basic + add-on → AI ochiq", isAiEnabled(), true);
+
+  // Tarif env'dan KATTA: env ushlab qoladi.
+  setEntitlements({ limits: { ai_advisor: 1, ai_calls_month: 999999 } });
+  eq("tarif > env → env olinadi", resolveCallCap(), envCap);
+
+  // Tarif env'dan KICHIK: tarif ushlab qoladi (mijoz sotib olganidan
+  // ko'p sarflamaymiz).
+  setEntitlements({ limits: { ai_advisor: 1, ai_calls_month: 10 } });
+  eq("tarif < env → tarif olinadi", resolveCallCap(), 10);
+
+  // "Cheksiz" AI uchun ishlamaydi.
+  setEntitlements({ limits: { ai_advisor: 1, ai_calls_month: -1 } });
+  eq("tarif 'cheksiz' → baribir env chegarasi", resolveCallCap(), envCap);
+
+  // ── TANNARX HISOBI ──
+  const one = estimateCostUsd("gemini-2.5-flash", 300, 150);
+  eq("bitta izoh narxi ($)", one.toFixed(6), "0.000465");
+  eq("4000 izoh ($)", (one * 4000).toFixed(2), "1.86");
+
+  // Noma'lum modelni 0 deb hisoblash - eng qimmatga tushadigan xato:
+  // yangi model ulanadi, jurnal "xarajat yo'q" deb turadi.
+  const unknown = estimateCostUsd("hali-yozilmagan-model", 300, 150);
+  unknown > one
+    ? ok("noma'lum model eng qimmat tarifda hisoblanadi", `$${unknown.toFixed(5)}`)
+    : bad("noma'lum model narxi", `${unknown} — 0 yoki arzon bo'lib qoldi`);
+
+  eq("token yo'q → narx 0", estimateCostUsd("gemini-2.5-flash", 0, 0), 0);
+  eq("oy kaliti formati", /^\d{4}-\d{2}$/.test(usageMonthKey()), true);
+
+  // Keyingi testlar uchun holatni tiklaymiz (entitlements global kesh).
+  setEntitlements({ limits: {} });
+};
+
+// ════════════════════════════════════════════════════════════════
+// 17. AI BYUDJETI - SANASH (DB kerak)
+//
+// `calls` va `costUsd` ATAYLAB boshqacha sanaladi va bu farq oson
+// yo'qoladi: kimdir "soddalashtirib" ikkalasini ham ok:true bo'yicha
+// sanasa, kesilgan javoblarning tokeni tannarxdan tushib qolardi va
+// modul haqiqatdagidan arzonroq ko'rinardi.
+// ════════════════════════════════════════════════════════════════
+const testAiBudgetUsage = async () => {
+  head("17. AI BYUDJETI (sanash)");
+
+  await AiUsageLog.deleteMany({});
+  const month = usageMonthKey();
+
+  // 3 ta muvaffaqiyatli
+  for (let i = 0; i < 3; i += 1) {
+    await recordUsage({
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      kind: "narration",
+      inputTokens: 300,
+      outputTokens: 150,
+      ok: true,
+    });
+  }
+  // 1 ta kesilgan javob: MIJOZGA yozilmadi, lekin TOKEN sarfladi
+  await recordUsage({
+    provider: "gemini",
+    model: "gemini-2.5-flash",
+    kind: "narration",
+    inputTokens: 300,
+    outputTokens: 150,
+    ok: false,
+    errorCode: "invalid_length",
+  });
+  // 1 ta 429: tokensiz, bizga tushmadi
+  await recordUsage({
+    provider: "gemini",
+    model: "gemini-2.5-flash",
+    kind: "narration",
+    ok: false,
+    errorCode: "429",
+  });
+
+  setEntitlements({ limits: { ai_advisor: 1, ai_calls_month: 5 } });
+  const budget = await openBudget();
+
+  eq("chaqiruv sanog'i — faqat muvaffaqiyatlilar", budget.usedAtStart, 3);
+  eq("oy kaliti", budget.monthKey, month);
+  eq("chegara", budget.cap, 5);
+  eq("qolgan", budget.remaining, 2);
+
+  // Tannarx 4 ta chaqiruvni qamrashi kerak (3 ok + 1 kesilgan), 3 tasini emas.
+  const expected = Number((estimateCostUsd("gemini-2.5-flash", 300, 150) * 4).toFixed(4));
+  eq("tannarx kesilgan javobni ham hisoblaydi", budget.costUsdAtStart, expected);
+
+  // ── Sarflash ──
+  budget.spend();
+  eq("sarflagandan keyin qolgan", budget.remaining, 1);
+  eq("hali sarflasa bo'ladi", budget.canSpend(), true);
+  budget.spend();
+  eq("chegara tugadi", budget.canSpend(), false);
+  eq("qolgan manfiy bo'lmaydi", budget.remaining, 0);
+
+  // ── Chegara oshib ketgan holat ──
+  setEntitlements({ limits: { ai_advisor: 1, ai_calls_month: 1 } });
+  const tight = await openBudget();
+  eq("sarf chegaradan ko'p → darhol yopiq", tight.canSpend(), false);
+  eq("qolgan 0 (manfiy emas)", tight.remaining, 0);
+
+  // ── Boshqa oy aralashmaydi ──
+  await AiUsageLog.create({
+    monthKey: "2000-01",
+    provider: "gemini",
+    model: "gemini-2.5-flash",
+    kind: "narration",
+    inputTokens: 300,
+    outputTokens: 150,
+    costUsd: 1,
+    ok: true,
+  });
+  const afterOld = await openBudget();
+  eq("eski oy joriy byudjetga qo'shilmaydi", afterOld.usedAtStart, 3);
+
+  await AiUsageLog.deleteMany({});
+  setEntitlements({ limits: {} });
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -1537,6 +1733,7 @@ const main = async () => {
   testTaxonomy();
   testValidators();
   testRouteOrder();
+  testAiBudgetResolution();
   await testPeriodMeta();
   await testTeacherScoring();
   await testSubjectLinks();
@@ -1552,6 +1749,7 @@ const main = async () => {
 
   try {
     await runDbTests();
+    await testAiBudgetUsage();
   } catch (err) {
     bad("DB testlari", `kutilmagan xato: ${err.message}`);
     console.error(err);

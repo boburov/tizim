@@ -1,10 +1,15 @@
 import { useMemo } from "react";
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
 import useObjectState from "@/shared/hooks/useObjectState";
 import useGroupsListQuery from "@/owner/features/groups/hooks/useGroupsListQuery";
 import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
+import UserCreateModal from "@/owner/features/users/components/UserCreateModal";
+import GroupCreateModal from "@/owner/features/groups/components/modals/GroupCreateModal";
+import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import MonthPicker from "../MonthPicker";
 import { useDiscountCreateMutation } from "../../hooks/useFinanceMutations";
 
@@ -72,7 +77,7 @@ const DiscountCreateModal = ({ close, setIsLoading }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <SelectField
+      <CreatableSelectField
         searchable
         label="O'quvchi"
         required
@@ -80,8 +85,13 @@ const DiscountCreateModal = ({ close, setIsLoading }) => {
         value={form.student}
         onChange={(v) => form.setField("student", v)}
         options={studentOptions}
+        createLabel="Yangi o'quvchi"
+        createTitle="Yangi o'quvchi"
+        createPermission={PERMISSIONS.USERS_CREATE}
+        create={<UserCreateModal defaultRole={ROLES.STUDENT} />}
+        onCreated={(s) => form.setField("student", s._id)}
       />
-      <SelectField
+      <CreatableSelectField
         searchable
         label="Guruh"
         required
@@ -89,6 +99,12 @@ const DiscountCreateModal = ({ close, setIsLoading }) => {
         value={form.group}
         onChange={(v) => form.setField("group", v)}
         options={groupOptions}
+        createLabel="Yangi guruh"
+        createTitle="Yangi guruh"
+        createClassName="max-w-2xl"
+        createPermission={PERMISSIONS.GROUPS_CREATE}
+        create={<GroupCreateModal />}
+        onCreated={(g) => form.setField("group", g._id)}
       />
       <div className="grid grid-cols-2 gap-3">
         <SelectField

@@ -1,7 +1,8 @@
 // Components
 import Button from "@/shared/components/ui/button/Button";
-import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import InputField from "@/shared/components/ui/input/InputField";
+import ArchiveReasonCreateModal from "@/owner/features/archiveReasons/components/ArchiveReasonCreateModal";
 
 // Hooks
 import useObjectState from "@/shared/hooks/useObjectState";
@@ -10,6 +11,7 @@ import useArchiveReasonsQuery from "@/owner/features/archiveReasons/hooks/useArc
 
 // Constants
 import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import { toDateInput } from "@/shared/utils/formatDate";
 
 const UserDeleteModal = ({ user, close, isLoading, setIsLoading }) => {
@@ -63,13 +65,18 @@ const UserDeleteModal = ({ user, close, isLoading, setIsLoading }) => {
       />
 
       {isStudent && (
-        <SelectField
+        <CreatableSelectField
           searchable
           label="Arxivlash sababi"
           value={obj.reasonId}
           onChange={(v) => obj.setField("reasonId", v)}
           options={reasonOptions}
           disabled={isLoading}
+          createLabel="Yangi sabab"
+          createTitle="Yangi arxiv sababi"
+          createPermission={PERMISSIONS.ARCHIVE_REASONS_MANAGE}
+          create={<ArchiveReasonCreateModal />}
+          onCreated={(r) => obj.setField("reasonId", r._id)}
         />
       )}
 

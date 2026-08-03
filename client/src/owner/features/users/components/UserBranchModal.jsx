@@ -6,13 +6,16 @@ import { useRolesQuery } from "@/owner/features/roles";
 
 // Components
 import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
+import BranchCreateModal from "@/owner/features/branches/components/modals/BranchCreateModal";
 
 // Icons
 import { Plus, X } from "lucide-react";
 
 // Constants
 import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 
 /**
  * Foydalanuvchining FILIAL biriktiruvini tahrirlash.
@@ -86,7 +89,7 @@ const UserBranchModal = ({ close, isLoading, setIsLoading, data }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <SelectField
+      <CreatableSelectField
         name="homeBranchId"
         label="Asosiy filial"
         placeholder="Filialni tanlang"
@@ -96,6 +99,12 @@ const UserBranchModal = ({ close, isLoading, setIsLoading, data }) => {
         required
         disabled={isLoading}
         description="Yangi guruh va to'lovlar shu filialga yoziladi"
+        createLabel="Yangi filial"
+        createTitle="Yangi filial"
+        createClassName="max-w-lg"
+        createPermission={PERMISSIONS.BRANCHES_CREATE}
+        create={<BranchCreateModal />}
+        onCreated={(b) => obj.setField("homeBranchId", String(b._id))}
       />
 
       <div className="space-y-2 pt-2 border-t">

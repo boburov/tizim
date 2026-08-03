@@ -4,10 +4,13 @@ import useUserCreateMutation from "../hooks/useUserCreateMutation";
 
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
+import BranchCreateModal from "@/owner/features/branches/components/modals/BranchCreateModal";
 
 import { todayInput } from "@/shared/utils/formatDate";
 import { ROLES, ROLE_LABELS } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 
 const ROLE_OPTIONS = [
   { value: ROLES.STUDENT, label: ROLE_LABELS.student },
@@ -38,7 +41,15 @@ const initialState = (defaultRole) => ({
   hiredAt: "",
 });
 
-const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
+// `onCreated` - selectdan "Yangi qo'shish" orqali ochilganda beriladi:
+// yaratilgan o'quvchi/o'qituvchi darhol tanlanishi uchun.
+const UserCreateModal = ({
+  defaultRole,
+  close,
+  isLoading,
+  setIsLoading,
+  onCreated,
+}) => {
   const obj = useObjectState(initialState(defaultRole));
   const isStudent = obj.role === ROLES.STUDENT;
 
@@ -53,8 +64,9 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
   }));
 
   const { mutate } = useUserCreateMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsLoading(false);
+      onCreated?.(data);
       close?.();
     },
     onError: () => setIsLoading(false),
@@ -163,7 +175,7 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
       />
 
       {needsBranch && (
-        <SelectField
+        <CreatableSelectField
           label="Filial"
           placeholder="Filialni tanlang"
           value={obj.homeBranchId}
@@ -172,6 +184,12 @@ const UserCreateModal = ({ defaultRole, close, isLoading, setIsLoading }) => {
           required
           error={!obj.homeBranchId}
           disabled={isLoading}
+          createLabel="Yangi filial"
+          createTitle="Yangi filial"
+          createClassName="max-w-lg"
+          createPermission={PERMISSIONS.BRANCHES_CREATE}
+          create={<BranchCreateModal />}
+          onCreated={(b) => obj.setField("homeBranchId", String(b._id))}
         />
       )}
 

@@ -3,11 +3,14 @@ import Button from "@/shared/components/ui/button/Button";
 import TemplateFormFields from "./TemplateFormFields";
 import { useTemplateCreateMutation } from "../hooks/useTemplateMutations";
 
-const TemplateCreateModal = ({ close, isLoading, setIsLoading }) => {
+// `onCreated` - selectdan "Yangi qo'shish" orqali ochilganda beriladi:
+// yaratilgan shablon darhol tanlanishi uchun (CreatableSelectField).
+const TemplateCreateModal = ({ close, isLoading, setIsLoading, onCreated }) => {
   const obj = useObjectState({ name: "", body: "", category: "custom" });
   const { mutate } = useTemplateCreateMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsLoading(false);
+      onCreated?.(data);
       close?.();
     },
     onError: () => setIsLoading(false),

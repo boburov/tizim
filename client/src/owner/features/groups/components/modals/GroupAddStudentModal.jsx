@@ -6,8 +6,9 @@ import useObjectState from "@/shared/hooks/useObjectState";
 
 // Components
 import Button from "@/shared/components/ui/button/Button";
-import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import InputField from "@/shared/components/ui/input/InputField";
+import UserCreateModal from "@/owner/features/users/components/UserCreateModal";
 
 // Hooks
 import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
@@ -18,6 +19,7 @@ import { todayInput, toDateInput } from "@/shared/utils/formatDate";
 
 // Constants
 import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 
 const GroupAddStudentModal = ({
   groupId,
@@ -178,7 +180,7 @@ const GroupAddStudentModal = ({
   // ── Asosiy forma ──
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <SelectField
+      <CreatableSelectField
         multiple
         label="O'quvchilar"
         placeholder="O'quvchilarni tanlang"
@@ -189,6 +191,24 @@ const GroupAddStudentModal = ({
         isLoading={loadingStudents}
         required
         disabled={isLoading}
+        createLabel="Yangi o'quvchi"
+        createTitle="Yangi o'quvchi"
+        createPermission={PERMISSIONS.USERS_CREATE}
+        create={<UserCreateModal defaultRole={ROLES.STUDENT} />}
+        // KO'P TANLOVLI select: yangi o'quvchi mavjud tanlovlarni almashtirmaydi,
+        // ustiga qo'shiladi. `onSelectStudents` uni `students` ro'yxatidan topa
+        // olmasdi (so'rov hali yangilanmagan), shuning uchun boshlash sanasi
+        // chegarasi yaratilgan obyektning `enrolledAt` idan hisoblanadi.
+        onCreated={(s) => {
+          const next = [...(studentIds || []), s._id];
+          const enrolled = s?.enrolledAt ? toDateInput(s.enrolledAt) : undefined;
+          const nextMin = [joinMin, enrolled].filter(Boolean).sort().pop();
+          if (nextMin && joinedAt && joinedAt < nextMin) {
+            setFields({ studentIds: next, joinedAt: nextMin });
+            return;
+          }
+          setField("studentIds", next);
+        }}
       />
 
       <InputField

@@ -21,7 +21,7 @@ import {
 } from "@/shared/components/shadcn/command";
 
 // Icons
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 
 const SelectSearch = ({
   value,
@@ -31,6 +31,8 @@ const SelectSearch = ({
   triggerClassName = "",
   searchPlaceholder = "Qidirish...",
   emptyText = "Hech narsa topilmadi",
+  onAddNew,
+  addNewLabel = "Yangi",
   ...props
 }) => {
   const [open, setOpen] = useState(false);
@@ -43,6 +45,11 @@ const SelectSearch = ({
   const handleChange = (option) => {
     setOpen(false);
     onChange?.(option.value === value ? "" : option.value);
+  };
+
+  const handleAddNew = () => {
+    setOpen(false);
+    onAddNew?.();
   };
 
   return (
@@ -94,6 +101,22 @@ const SelectSearch = ({
               ))}
             </CommandGroup>
           </CommandList>
+
+          {/* "Yangi qo'shish" - CommandList'dan TASHQARIDA. Ichida bo'lsa
+              cmdk uni ham qidiruv bo'yicha filtrlab, aynan kerak bo'lgan
+              paytda (hech narsa topilmaganda) yashirib qo'yardi. */}
+          {onAddNew && (
+            <div className="border-t p-1">
+              <button
+                type="button"
+                onClick={handleAddNew}
+                className="flex w-full items-center gap-1.5 rounded-sm px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
+              >
+                <Plus className="size-4" />
+                {addNewLabel}
+              </button>
+            </div>
+          )}
         </Command>
       </PopoverContent>
     </Popover>

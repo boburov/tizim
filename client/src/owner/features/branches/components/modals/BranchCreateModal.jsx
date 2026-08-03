@@ -19,7 +19,9 @@ import { ROLES } from "@/shared/constants/roles";
  * Direktor blokini QISMAN to'ldirib bo'lmaydi: yo hammasi (ism, familiya,
  * login, parol), yo hech biri.
  */
-const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
+// `onCreated` - selectdan "Yangi qo'shish" orqali ochilganda beriladi:
+// yaratilgan filial darhol tanlanishi uchun (CreatableSelectField).
+const BranchCreateModal = ({ close, isLoading, setIsLoading, onCreated }) => {
   const obj = useObjectState({
     // Filial
     name: "",
@@ -44,8 +46,9 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading }) => {
     .map((r) => ({ value: r.value, label: r.label || r.value }));
 
   const { mutate } = useBranchCreateMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsLoading(false);
+      onCreated?.(data);
       close?.();
     },
     onError: () => setIsLoading(false),

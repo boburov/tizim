@@ -9,12 +9,14 @@ import useGroupAddStudentMutation from "../../hooks/useGroupAddStudentMutation";
 
 // Components
 import Button from "@/shared/components/ui/button/Button";
-import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import InputField from "@/shared/components/ui/input/InputField";
+import GroupCreateModal from "./GroupCreateModal";
 
 // Utils
 import { todayInput, toDateInput } from "@/shared/utils/formatDate";
 import { qk } from "@/shared/lib/query/keys";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 
 const StudentAddToGroupModal = ({
   studentId,
@@ -87,7 +89,7 @@ const StudentAddToGroupModal = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <SelectField
+      <CreatableSelectField
         searchable
         label="Guruh"
         placeholder="Guruhni tanlang"
@@ -98,6 +100,22 @@ const StudentAddToGroupModal = ({
         isLoading={loadingGroups}
         required
         disabled={isLoading}
+        createLabel="Yangi guruh"
+        createTitle="Yangi guruh"
+        createClassName="max-w-2xl"
+        createPermission={PERMISSIONS.GROUPS_CREATE}
+        create={<GroupCreateModal />}
+        // Yangi guruh so'rov ro'yxatiga hali tushmagan, shuning uchun
+        // `onSelectGroup` uni `available` ichidan topa olmasdi va boshlash
+        // sanasi guruh boshlanishidan oldin qolib ketardi - sanani
+        // yaratilgan obyektning o'zidan hisoblaymiz.
+        onCreated={(g) => {
+          const gStart = g?.startDate ? toDateInput(g.startDate) : undefined;
+          const earliest =
+            [gStart, enrolledInput].filter(Boolean).sort().pop() ||
+            todayInput();
+          setFields({ groupId: g._id, joinedAt: earliest });
+        }}
       />
 
       <InputField

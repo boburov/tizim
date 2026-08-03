@@ -93,8 +93,20 @@ const aiConfigSchema = new mongoose.Schema(
     },
 
     // LLM narrator yoqilganmi. false → deterministik shablon matn.
-    // Faza 1 da ATAYLAB false: tizim LLMsiz ham foydali bo'lishi kerak.
-    narrationEnabled: { type: Boolean, default: false },
+    //
+    // STANDART false EMAS, true - va bu ONGLI o'zgarish.
+    //
+    // Faza 1 da false to'g'ri edi: LLM hali sinalmagan va tizim usiz ham
+    // foydali bo'lishi kerak edi. Endi AI qatlami PULLIK sotiladi va
+    // to'lov paywall'i boshqa joyga - tarifdagi `ai_advisor` kalitiga
+    // ko'chdi (aiBudget.service.js). Bunday holatda standart false
+    // qolsa, pul to'lagan mijoz sotib olgan narsasini olmasdi va buni
+    // faqat sozlamalarni ochib bilib qolardi. Sotilgan, lekin jimgina
+    // o'chirilgan funksiya - eng yomon turdagi xato.
+    //
+    // Bu maydon endi EGA UCHUN o'chirgich: xohlasa quruq raqamlarga
+    // qaytadi. Mavjud hujjatlarda saqlangan qiymat o'zgarmaydi.
+    narrationEnabled: { type: Boolean, default: true },
     narrationModel: { type: String, default: "gemini-2.5-flash" },
 
     engineVersion: { type: String, default: AI_ENGINE_VERSION },

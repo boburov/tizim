@@ -1,6 +1,9 @@
 // Router
 import { Outlet, useLocation } from "react-router-dom";
 
+// Icons
+import { Activity } from "lucide-react";
+
 // Components
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import { AiDomainInsights } from "@/owner/features/ai";
@@ -38,10 +41,26 @@ const GroupsPage = () => {
           oching", "CEFR marketingini kuchaytiring") aynan shu sahifadan
           bajariladi. Ularni faqat Action Center'da qoldirish tavsiyani
           harakatdan uzib qo'yardi. */}
+      {/* TO'LIQ KENGLIK, ikki ustun emas. Ikki ustunda panellardan biri
+          bo'sh bo'lsa (masalan kurs bo'yicha hech narsa topilmasa) ikkinchisi
+          sahifaning yarmida osilib qolardi - qolgan yarmi bo'sh. Panel o'zi
+          bo'sh holatda `null` qaytargani uchun ustun ham to'ldirilmasdi.
+
+          Sarlavhada "AI" YO'Q: bu paneldagi guruh/kurs xulosalari qoida va
+          statistikadan chiqadi (to'ldirilish foizi, bo'sh dars vaqtlari), til
+          modelidan emas. Ikonka ham shunga qarab neytral (Activity). */}
       {isList && (
-        <div className="grid gap-3 lg:grid-cols-2">
-          <AiDomainInsights domain="groups" title="Guruhlar bo'yicha AI tahlili" />
-          <AiDomainInsights domain="courses" title="Kurslar bo'yicha AI tahlili" />
+        <div className="grid gap-3">
+          <AiDomainInsights
+            domain="groups"
+            icon={Activity}
+            title="Guruhlar bo'yicha tizim tahlili"
+          />
+          <AiDomainInsights
+            domain="courses"
+            icon={Activity}
+            title="Kurslar bo'yicha tizim tahlili"
+          />
         </div>
       )}
 

@@ -1,8 +1,10 @@
 import { Router } from "express";
 import requireAuth from "../../middleware/auth.js";
 import requirePermission from "../../middleware/requirePermission.js";
+import { requireFeature } from "../../middleware/enforceLimit.js";
 import validate from "../../middleware/validate.js";
 import { PERMISSIONS } from "../../constants/permissions.js";
+import { AI_FEATURE_KEY } from "./services/aiBudget.service.js";
 
 import {
   listSchema,
@@ -37,6 +39,25 @@ import updateConfig from "./handlers/updateConfig.handler.js";
 import recompute from "./handlers/recompute.handler.js";
 
 const router = Router();
+
+// --- TARIF DARVOZASI ---
+//
+// AI qatlami pullik. Tekshiruv router darajasida turadi, har route'da
+// alohida emas: shu modulga keyin qo'shiladigan har qanday endpoint
+// avtomatik yopiq bo'ladi. Bitta route'da yozishni unutish - paywall'ni
+// jimgina teshib qo'yishning eng oson yo'li.
+//
+// requireAuth'dan OLDIN qo'yilmaydi: tarifda yo'q ekanini bilish uchun
+// ham avval kim so'rayotganini bilish shart emas, lekin xato kodi
+// (402 vs 401) mantiqan aniqroq bo'lishi uchun tartib shunday qoldi -
+// har route o'z requireAuth'ini o'zi chaqiradi.
+//
+// MUHIM: bu tekshiruv OCHIQ yiqiladi. Admin server bilan aloqa
+// yo'qolsa entitlements keshida kalit bo'lmaydi va requireFeature "ha"
+// deydi. Bu ataylab: to'lagan mijozning sahifasini bizning tarmoq
+// muammomiz uchun o'chirib qo'yish mumkin emas. Xarajat esa bu yerda
+// emas, byudjet qatlamida ushlanadi - u YOPIQ yiqiladi.
+router.use(requireFeature(AI_FEATURE_KEY, "AI maslahatchi"));
 
 // --- BRIFING: dashboardning asosiy so'rovi (AI_READ) ---
 //

@@ -2,11 +2,14 @@ import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
 import useObjectState from "@/shared/hooks/useObjectState";
 import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import { formatMoney } from "@/shared/utils/formatMoney";
 import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
+import UserCreateModal from "@/owner/features/users/components/UserCreateModal";
 import useStudentPaymentHistoryQuery from "@/owner/features/finance/hooks/useStudentPaymentHistoryQuery";
 import { useAddTransactionMutation } from "@/owner/features/finance/hooks/useFinanceMutations";
 import {
@@ -170,13 +173,18 @@ const DepositFormModal = ({ mode = "add", student, close, setIsLoading }) => {
           {fullName(student)}
         </div>
       ) : (
-        <SelectField
+        <CreatableSelectField
           searchable
           label="O'quvchi"
           placeholder="O'quvchi tanlang..."
           value={form.studentId}
           onChange={onStudentChange}
           options={studentOptions}
+          createLabel="Yangi o'quvchi"
+          createTitle="Yangi o'quvchi"
+          createPermission={PERMISSIONS.USERS_CREATE}
+          create={<UserCreateModal defaultRole={ROLES.STUDENT} />}
+          onCreated={(s) => onStudentChange(s._id)}
         />
       )}
 

@@ -3,12 +3,20 @@ import Button from "@/shared/components/ui/button/Button";
 import ArchiveReasonFormFields from "./ArchiveReasonFormFields";
 import { useArchiveReasonCreateMutation } from "../hooks/useArchiveReasonMutations";
 
-const ArchiveReasonCreateModal = ({ close, isLoading, setIsLoading }) => {
+// `onCreated` - selectdan "Yangi qo'shish" orqali ochilganda beriladi:
+// yaratilgan sabab darhol tanlanishi uchun (CreatableSelectField).
+const ArchiveReasonCreateModal = ({
+  close,
+  isLoading,
+  setIsLoading,
+  onCreated,
+}) => {
   const obj = useObjectState({ title: "" });
 
   const { mutate } = useArchiveReasonCreateMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsLoading(false);
+      onCreated?.(data);
       close?.();
     },
     onError: () => setIsLoading(false),

@@ -61,11 +61,23 @@ const Group = ({ title, icon: Icon, iconTone, items, isOpportunity }) => {
 };
 
 /**
- * @param {object}  data       - /ai/insights/domain/:domain javobi
- * @param {boolean} isLoading
- * @param {string}  title      - panel sarlavhasi (mas. "Moliya bo'yicha AI tahlili")
+ * @param {object}   data       - /ai/insights/domain/:domain javobi
+ * @param {boolean}  isLoading
+ * @param {string}   title      - panel sarlavhasi (mas. "Moliya bo'yicha AI tahlili")
+ * @param {Function} icon       - sarlavha ikonkasi. Default `Sparkles` (AI belgisi).
+ *                                Hamma insight ham til modelidan chiqmaydi: bir
+ *                                qismi oddiy qoida/statistika (guruh to'ldirilishi,
+ *                                bo'sh dars vaqtlari). O'sha sahifalar buni
+ *                                "Tizim tahlili" deb atab, neytral ikonka beradi -
+ *                                shuning uchun ikonka propga chiqarilgan.
  */
-const AiDomainPanel = ({ data, isLoading, title = "AI tahlili", className = "" }) => {
+const AiDomainPanel = ({
+  data,
+  isLoading,
+  title = "AI tahlili",
+  icon: TitleIcon = Sparkles,
+  className = "",
+}) => {
   if (isLoading) {
     return <div className={cn("h-40 animate-pulse rounded-xl bg-muted/40", className)} />;
   }
@@ -80,7 +92,7 @@ const AiDomainPanel = ({ data, isLoading, title = "AI tahlili", className = "" }
     <section className={cn("rounded-xl border bg-card p-4 xs:p-5", className)}>
       <header className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 font-semibold text-foreground">
-          <Sparkles className="size-4 text-primary" />
+          <TitleIcon className="size-4 text-primary" />
           {title}
         </h3>
         <Link

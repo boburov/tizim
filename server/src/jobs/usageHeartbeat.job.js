@@ -5,6 +5,7 @@ import { setEntitlements } from "../config/entitlements.js";
 import User from "../models/user.model.js";
 import Group from "../models/group.model.js";
 import { ROLES } from "../constants/roles.js";
+import { monthlyUsage } from "../modules/ai/services/aiBudget.service.js";
 
 export const JOB_NAME = "usage.heartbeat";
 
@@ -40,6 +41,20 @@ export async function collectMetrics() {
     group_count: groupCount,
     active_group_count: activeGroupCount,
   };
+
+  // AI izoh chaqiruvlari (joriy oy). Admin panelda tarif limiti bilan
+  // yonma-yon ko'rinadi: "3 120 / 4 000".
+  //
+  // Bu metrika BOSHQALARIDAN FARQ QILADI: qolganlari mijozning hajmini
+  // o'lchaydi, bu esa BIZNING xarajatimizni. Shuning uchun u tannarxni
+  // ko'radigan yagona oyna - qaysi tenant qanchaga tushayotganini
+  // Google hisobini ochmasdan bilish uchun.
+  try {
+    const ai = await monthlyUsage();
+    metrics.ai_calls_month = ai.calls;
+  } catch (err) {
+    logger.debug({ err: err.message }, "AI usage metrikasi olinmadi");
+  }
 
   // Baza hajmi (MB) — mavjud bo'lsa qo'shamiz, xato bo'lsa o'tkazib yuboramiz
   try {

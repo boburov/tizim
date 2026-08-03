@@ -10,12 +10,14 @@ import { toast } from "sonner";
 
 // Components
 import InputField from "@/shared/components/ui/input/InputField";
-import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
 import GroupScheduleField from "./GroupScheduleField";
+import UserCreateModal from "@/owner/features/users/components/UserCreateModal";
 
 // Constants
 import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 
 // Utils
 import { toDateInput } from "@/shared/utils/formatDate";
@@ -228,7 +230,7 @@ const GroupForm = ({
       {/* O'qituvchi + oylik narx - faqat yangi guruh yaratishda */}
       {!isEdit && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SelectField
+          <CreatableSelectField
             searchable
             name="teacher"
             label="O'qituvchi"
@@ -240,6 +242,11 @@ const GroupForm = ({
             searchPlaceholder="O'qituvchi qidirish..."
             emptyText="O'qituvchi topilmadi"
             disabled={isLoading}
+            createLabel="Yangi o'qituvchi"
+            createTitle="Yangi o'qituvchi"
+            createPermission={PERMISSIONS.USERS_CREATE}
+            create={<UserCreateModal defaultRole={ROLES.TEACHER} />}
+            onCreated={(t) => setField("teacher", t._id)}
           />
           <InputField
             type="money"

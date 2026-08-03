@@ -3,12 +3,21 @@ import Button from "@/shared/components/ui/button/Button";
 import InputField from "@/shared/components/ui/input/InputField";
 import { useLeadOptionCreateMutation } from "../hooks/useLeadOptionMutations";
 
-const LeadOptionCreateModal = ({ kind, close, isLoading, setIsLoading }) => {
+// `onCreated` - selectdan "Yangi qo'shish" orqali ochilganda beriladi:
+// yaratilgan yozuv darhol tanlanishi uchun (CreatableSelectField).
+const LeadOptionCreateModal = ({
+  kind,
+  close,
+  isLoading,
+  setIsLoading,
+  onCreated,
+}) => {
   const [name, setName] = useState("");
 
   const { mutate } = useLeadOptionCreateMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsLoading(false);
+      onCreated?.(data);
       close?.();
     },
     onError: () => setIsLoading(false),

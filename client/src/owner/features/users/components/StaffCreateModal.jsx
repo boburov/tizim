@@ -9,10 +9,13 @@ import { useBranchesQuery } from "@/owner/features/branches";
 // Components
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
+import BranchCreateModal from "@/owner/features/branches/components/modals/BranchCreateModal";
 
 // Constants
 import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 
 const initialState = (homeBranchId) => ({
   firstName: "",
@@ -165,7 +168,7 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
         <p className="text-sm font-medium mb-2">Filial va ruxsatlar</p>
         <div className="grid grid-cols-2 gap-3">
           {multiBranch && (
-            <SelectField
+            <CreatableSelectField
               name="homeBranchId"
               label="Filial"
               placeholder="Filialni tanlang"
@@ -176,6 +179,12 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
               }
               required
               disabled={isLoading}
+              createLabel="Yangi filial"
+              createTitle="Yangi filial"
+              createClassName="max-w-lg"
+              createPermission={PERMISSIONS.BRANCHES_CREATE}
+              create={<BranchCreateModal />}
+              onCreated={(b) => obj.setField("homeBranchId", String(b._id))}
             />
           )}
           <SelectField

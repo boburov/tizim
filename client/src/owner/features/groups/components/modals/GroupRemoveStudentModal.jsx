@@ -1,6 +1,8 @@
 import { useState } from "react";
 import Button from "@/shared/components/ui/button/Button";
-import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
+import ArchiveReasonCreateModal from "@/owner/features/archiveReasons/components/ArchiveReasonCreateModal";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import useGroupRemoveStudentMutation from "../../hooks/useGroupRemoveStudentMutation";
 import useArchiveReasonsQuery from "@/owner/features/archiveReasons/hooks/useArchiveReasonsQuery";
 
@@ -98,13 +100,18 @@ const GroupRemoveStudentModal = ({
         Davomat va to'lov tarixi saqlanadi. Davom etasizmi?
       </p>
 
-      <SelectField
+      <CreatableSelectField
         searchable
         label="Chiqish sababi"
         value={reasonId}
         onChange={setReasonId}
         options={reasonOptions}
         disabled={isLoading}
+        createLabel="Yangi sabab"
+        createTitle="Yangi arxiv sababi"
+        createPermission={PERMISSIONS.ARCHIVE_REASONS_MANAGE}
+        create={<ArchiveReasonCreateModal />}
+        onCreated={(r) => setReasonId(r._id)}
       />
 
       <div className="flex gap-2">

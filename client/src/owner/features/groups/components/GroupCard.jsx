@@ -2,7 +2,13 @@
 import { Link } from "react-router-dom";
 
 // Icons
-import { MoreHorizontal, Pencil, Trash2, CalendarX } from "lucide-react";
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  CalendarX,
+  ChevronRight,
+} from "lucide-react";
 
 // Components
 import Card from "@/shared/components/ui/card/Card";
@@ -49,9 +55,16 @@ const GroupCard = ({ group, archived = false }) => {
 
   return (
     <Link to={`/owner/groups/${group._id}`} className="block group">
-      <Card className="h-full flex flex-col gap-3 transition-colors group-hover:border-primary">
+      {/* Kartochka BOSILADI (guruh detali), lekin ilgari buni faqat rangi
+          ozgina o'zgargan ramka bildirardi - odam kartani statik blok deb
+          o'ylardi. Endi ko'tarilish + soya + sarlavha rangi, va eng pastda
+          doimiy "Batafsil" yozuvi turadi (faqat hoverda chiqadigan ishora
+          sensorli ekranda umuman ko'rinmasdi). */}
+      <Card className="h-full flex flex-col gap-3 transition-all duration-150 group-hover:-translate-y-0.5 group-hover:border-primary group-hover:shadow-md">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-base">{group.name}</h3>
+          <h3 className="font-semibold text-base transition-colors group-hover:text-primary">
+            {group.name}
+          </h3>
 
           <span onClick={stopNav} className="shrink-0">
             <DropdownMenu>
@@ -155,6 +168,13 @@ const GroupCard = ({ group, archived = false }) => {
             </div>
           )}
         </div>
+
+        {/* `mt-auto` - kartochkalar balandligi har xil (jadval qatorlari
+            soni turlicha), bu esa yozuvni hammasida bir tekis pastga bosadi. */}
+        <span className="mt-auto flex items-center gap-1 border-t pt-2.5 text-xs font-medium text-muted-foreground transition-colors group-hover:text-primary">
+          Batafsil ko'rish
+          <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+        </span>
       </Card>
     </Link>
   );

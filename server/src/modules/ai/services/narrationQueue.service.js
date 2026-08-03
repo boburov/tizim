@@ -7,6 +7,7 @@ import {
   isNarrationConfigured,
   narrationHash,
 } from "./gemini.service.js";
+import { isAiEnabled, openBudget } from "./aiBudget.service.js";
 
 // NARRATOR NAVBATI - LLM matnini FON REJIMIDA yozadi.
 //
@@ -64,6 +65,25 @@ export const runNarrationQueue = async ({ limit = BATCH_SIZE } = {}) => {
     return { skipped: true, reason: "GEMINI_API_KEY yo'q" };
   }
 
+  // TARIF TEKSHIRUVI. AI qatlami pullik - tarifida yo'q tenantda
+  // narrator umuman ishlamaydi va bu HECH NARSANI buzmaydi: shablon
+  // matn joyida turadi, dashboard to'liq ishlaydi.
+  if (!isAiEnabled()) {
+    return { skipped: true, reason: "tarifda ai_advisor yo'q" };
+  }
+
+  // BYUDJET TEKSHIRUVI. Chegara tugagan bo'lsa yurish umuman
+  // boshlanmaydi - nomzodlarni yuklash ham keraksiz.
+  const budget = await openBudget();
+  if (!budget.canSpend()) {
+    return {
+      skipped: true,
+      reason: "oylik chegara tugadi",
+      used: budget.used,
+      cap: budget.cap,
+    };
+  }
+
   // Filial darajasida o'chirilgan bo'lsa - hurmat qilinadi.
   // Konfiguratsiya insight yozilgandan KEYIN o'zgargan bo'lishi mumkin,
   // shuning uchun tekshiruv har yurishda qayta o'qiladi.
@@ -72,13 +92,20 @@ export const runNarrationQueue = async ({ limit = BATCH_SIZE } = {}) => {
     configs.filter((c) => !c.narrationEnabled).map((c) => String(c.branchId)),
   );
 
-  const candidates = await loadCandidates(limit);
+  // Bu yurishda yozish mumkin bo'lgan eng katta son: navbat o'lchami va
+  // oyda qolgan byudjetning kichigi. Oy oxirida navbat o'zi kichrayadi.
+  const runLimit = Math.min(limit, budget.remaining);
+
+  const candidates = await loadCandidates(runLimit);
   let written = 0;
   let skipped = 0;
   let failed = 0;
 
   for (const insight of candidates) {
-    if (written >= limit) break;
+    if (written >= runLimit) break;
+    // Byudjet yurish DAVOMIDA ham tekshiriladi: bir vaqtning o'zida
+    // boshqa manba (masalan qo'lda recompute) sarflagan bo'lishi mumkin.
+    if (!budget.canSpend()) break;
     if (disabled.has(String(insight.branchId))) {
       skipped += 1;
       continue;
@@ -110,9 +137,19 @@ export const runNarrationQueue = async ({ limit = BATCH_SIZE } = {}) => {
       },
     );
     written += 1;
+    budget.spend();
   }
 
-  return { written, skipped, failed, candidates: candidates.length };
+  return {
+    written,
+    skipped,
+    failed,
+    candidates: candidates.length,
+    monthKey: budget.monthKey,
+    used: budget.used,
+    cap: budget.cap,
+    remaining: budget.remaining,
+  };
 };
 
 /** Jurnalga yozadigan o'ram - job shuni chaqiradi. */

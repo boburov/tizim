@@ -77,6 +77,18 @@ const env = Object.freeze({
   // (narrationHash keshi), ya'ni kuniga o'nlab so'rov, minglab emas.
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
   GEMINI_MODEL: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+
+  // Oylik LLM chaqiruvlarining MAHALLIY yuqori chegarasi.
+  //
+  // Tarif chegarasi (ai_calls_month) admin serverdan keladi, lekin unga
+  // YAKKA O'ZIGA tayanib bo'lmaydi: heartbeat yetib kelmasa entitlements
+  // qatlami limitni "cheksiz" deb hisoblaydi (mijozni bloklamaslik uchun
+  // ataylab shunday). Kirish huquqi uchun bu to'g'ri, XARAJAT uchun esa
+  // halokatli - bitta tarmoq uzilishi hisobni cheksiz ochib qo'yardi.
+  //
+  // Shuning uchun amaldagi chegara har doim ikkalasining KICHIGI.
+  // 4000 ≈ $1.9/oy - eng arzon pullik tarifda ham marja musbat qoladi.
+  AI_MONTHLY_CALL_CAP: Number(process.env.AI_MONTHLY_CALL_CAP || 4000),
 });
 
 export const isProd = env.NODE_ENV === "production";

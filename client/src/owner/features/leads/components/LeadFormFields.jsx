@@ -1,7 +1,10 @@
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import { LEAD_STATUS_OPTIONS } from "@/shared/constants/leadStatus";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import useLeadOptionsQuery from "../hooks/useLeadOptionsQuery";
+import LeadOptionCreateModal from "./LeadOptionCreateModal";
 
 const withEmpty = (data, placeholder = "-") => [
   { value: "", label: placeholder },
@@ -65,21 +68,31 @@ const LeadFormFields = ({ obj, disabled = false }) => {
       />
 
       <div className="grid grid-cols-2 gap-3">
-        <SelectField
+        <CreatableSelectField
           searchable
           label="Manba"
           value={obj.sourceId}
           onChange={(v) => obj.setField("sourceId", v)}
           options={withEmpty(sourceQ.data)}
           disabled={disabled}
+          createLabel="Yangi manba"
+          createTitle="Yangi manba"
+          createPermission={PERMISSIONS.LEADS_MANAGE}
+          create={<LeadOptionCreateModal kind="source" />}
+          onCreated={(o) => obj.setField("sourceId", o._id)}
         />
-        <SelectField
+        <CreatableSelectField
           searchable
           label="Yo'nalish"
           value={obj.directionId}
           onChange={(v) => obj.setField("directionId", v)}
           options={withEmpty(directionQ.data)}
           disabled={disabled}
+          createLabel="Yangi yo'nalish"
+          createTitle="Yangi yo'nalish"
+          createPermission={PERMISSIONS.LEADS_MANAGE}
+          create={<LeadOptionCreateModal kind="direction" />}
+          onCreated={(o) => obj.setField("directionId", o._id)}
         />
       </div>
 
@@ -102,13 +115,18 @@ const LeadFormFields = ({ obj, disabled = false }) => {
       </div>
 
       {obj.status === "rejected" && (
-        <SelectField
+        <CreatableSelectField
           searchable
           label="Rad etish sababi"
           value={obj.rejectionReasonId}
           onChange={(v) => obj.setField("rejectionReasonId", v)}
           options={withEmpty(rejectionQ.data)}
           disabled={disabled}
+          createLabel="Yangi sabab"
+          createTitle="Yangi rad etish sababi"
+          createPermission={PERMISSIONS.LEADS_MANAGE}
+          create={<LeadOptionCreateModal kind="rejection" />}
+          onCreated={(o) => obj.setField("rejectionReasonId", o._id)}
         />
       )}
 

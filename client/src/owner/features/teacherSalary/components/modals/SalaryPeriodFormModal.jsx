@@ -1,10 +1,13 @@
 import { useMemo } from "react";
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
+import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
 import useObjectState from "@/shared/hooks/useObjectState";
 import { ROLES } from "@/shared/constants/roles";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
+import UserCreateModal from "@/owner/features/users/components/UserCreateModal";
 import {
   useTeacherPeriodCreateMutation,
   useTeacherPeriodUpdateMutation,
@@ -89,13 +92,18 @@ const SalaryPeriodFormModal = ({ groupId, period, close, setIsLoading }) => {
           {fullName(period.teacher)}
         </div>
       ) : (
-        <SelectField
+        <CreatableSelectField
           searchable
           label="O'qituvchi"
           placeholder="O'qituvchi tanlang..."
           value={form.teacher}
           onChange={(v) => form.setField("teacher", v)}
           options={teacherOptions}
+          createLabel="Yangi o'qituvchi"
+          createTitle="Yangi o'qituvchi"
+          createPermission={PERMISSIONS.USERS_CREATE}
+          create={<UserCreateModal defaultRole={ROLES.TEACHER} />}
+          onCreated={(t) => form.setField("teacher", t._id)}
         />
       )}
 

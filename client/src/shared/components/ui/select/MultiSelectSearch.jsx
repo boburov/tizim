@@ -21,7 +21,7 @@ import {
 } from "@/shared/components/shadcn/command";
 
 // Icons
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 
 // Qidiriladigan KO'P TANLOVLI select. value - tanlangan qiymatlar massivi,
 // onChange - yangi massiv. Tanlanganda popover ochiq qoladi (ketma-ket tanlash).
@@ -33,6 +33,8 @@ const MultiSelectSearch = ({
   triggerClassName = "",
   searchPlaceholder = "Qidirish...",
   emptyText = "Hech narsa topilmadi",
+  onAddNew,
+  addNewLabel = "Yangi",
   ...props
 }) => {
   const [open, setOpen] = useState(false);
@@ -111,6 +113,26 @@ const MultiSelectSearch = ({
               })}
             </CommandGroup>
           </CommandList>
+
+          {/* "Yangi qo'shish" - CommandList'dan TASHQARIDA (cmdk filtri uni
+              qidiruv paytida yashirib qo'ymasligi uchun). Ko'p tanlovli
+              selectda popover ochiq qoladi, lekin bu yerda yopamiz: modal
+              ochilgani uchun ortidagi ro'yxat baribir ko'rinmaydi. */}
+          {onAddNew && (
+            <div className="border-t p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onAddNew();
+                }}
+                className="flex w-full items-center gap-1.5 rounded-sm px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
+              >
+                <Plus className="size-4" />
+                {addNewLabel}
+              </button>
+            </div>
+          )}
         </Command>
       </PopoverContent>
     </Popover>
