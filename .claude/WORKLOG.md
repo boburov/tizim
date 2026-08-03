@@ -3757,3 +3757,212 @@ Endi byudjet bo'limini qo'shaman (DB'li — sanash mantiqi eng qimmat joyi):
 <sub>session `7f5d71b3` · branch `main` · 71 ta qadam</sub>
 
 ---
+
+## 2026-08-03 20:58 — nega guruhlarni ustiga bosgnaimda guruh detail qismiga olib otmayapti 
+
+**So'rov**
+
+> nega guruhlarni ustiga bosgnaimda guruh detail qismiga olib otmayapti fix iqling
+
+**O'zgargan fayllar (1)**
+
+- `client/src/shared/components/ai/AiDomainPanel.jsx` — tahrirlandi
+
+**Buyruqlar (12)**
+
+```sh
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad && cat > webkit.mjs <<'EOF' import { webkit } from …
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad && npx playwright install webkit 2>&1 | tail -4 && …
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad && cat > wk2.mjs <<'EOF' import { webkit } from "pl…
+sed -n '1,60p' server/src/models/insight.model.js
+cat server/src/modules/ai/services/subjectLink.service.js | head -60
+grep -rn "subjectHref" server/src --include="*.js" | head -20; echo "=== domain handler ==="; find server/src/modules/ai -name "*domain*";
+curl -s -X POST http://localhost:5000/api/auth/login -H 'Content-Type: application/json' -d '{"login":"owner","password":"owner123"}' -c /private/tmp/claude-501…
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad && T=$(cat t.txt) && curl -s "http://localhost:5000…
+cd /Users/shukrullo/Desktop/lc-total/client && npm run lint 2>&1 | tail -2 && npm run build 2>&1 | tail -2
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad && cat > rows.mjs <<'EOF' import { chromium } from …
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad && cat > branch.mjs <<'EOF' import { chromium } fro…
+cd /Users/shukrullo/Desktop/lc-total/client && npm run lint 2>&1 | tail -2 && npm run build 2>&1 | tail -2 && cd /private/tmp/claude-501/-Users-shukrullo-Deskto…
+```
+
+**Natija**
+
+Test'da URL o'zgargan edi, lekin detail sahifasining skrinshotiga qaramabman. Ko'ray.
+
+Chromium'da ishlayapti. Siz Safari'dasiz — WebKit dvigatelida sinab ko'ray.
+
+WebKit testida kuki muammosi bor (o'zga port → ITP), bu sizdagi holat emas. Boshqa gumonni tekshiray: paneldagi **guruh qatorlari** bosilmaydi — ekranda eng ko'zga tashlanadigan guruh ro'yxati aynan o'sha.
+
+`subjectHref` allaqachon bor. Domen endpointi uni qaytaradimi — tekshiray.
+
+Sababi topildi. API har bir qator uchun **`subjectHref`** ni allaqachon qaytarayapti:
+
+```
+"subjectLabel": "Rus tili F-3",
+"subjectHref":  "/owner/groups/6a6d0c6bde5ea2d6bbba8514/o-quvchilar"
+```
+
+Lekin `AiDomainPanel` uni umuman ishlatmayapti — qatorlar oddiy matn bo'lib chizilgan. Ekrandagi eng ko'zga tashlanadigan guruh ro'yxati aynan shu panel, siz o'shalarni bosgansiz.
+
+`Bo'sh dars vaqtlari` ning subyekti `branch` ekan → `/owner/branches`. Yakka markaz rejimida u qayerga tushishini tekshiray.
+
+Tasdiqlandi — u Sozlamalarga tashlaydi. Bu ham xuddi siz aytgan muammo, shuning uchun bunday qatorni havola qilmayman.
+
+<sub>session `5092a6e1` · branch `main` · 17 ta qadam</sub>
+
+---
+
+## 2026-08-03 21:05 — hzorda ai dan maslahat olish qisimlar i qaytarda men korayotganlarim a
+
+**So'rov**
+
+> hzorda ai dan maslahat olish qisimlar i qaytarda men korayotganlarim ai emas tizimli maslahatga oxshamoqda  ?
+
+**O'zgargan fayllar (4)**
+
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/7f5d71b3-b870-44b7-bbc6-d98fcfa614f6/scratchpad/check-narration.mjs` — yaratildi/qayta yozildi
+- `server/_check2.mjs` — yaratildi/qayta yozildi
+- `server/src/modules/ai/services/gemini.service.js` — tahrirlandi
+- `server/src/modules/ai/services/narrationQueue.service.js` — tahrirlandi
+
+**Buyruqlar (8)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && grep -o "^MONGO_URL=.*" .env | sed 's|://.*@|://***@|' && echo "--- Gemini chaqiriladigan yagona joy ---" && grep…
+node /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/7f5d71b3-b870-44b7-bbc6-d98fcfa614f6/scratchpad/check-narration.mjs 2>&1 | tail -30
+echo "=== briefing narration manbasi ===" && grep -n "narration" src/modules/ai/services/briefing.service.js | head -20
+cp /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/7f5d71b3-b870-44b7-bbc6-d98fcfa614f6/scratchpad/check-narration.mjs ./_check.mjs && node ./_check.m…
+node ./_check2.mjs 2>&1 | tail -30; rm -f ./_check2.mjs
+grep -n "^export\|^const narrate\|^export const narrate" src/modules/ai/services/narration.service.js | head; echo "--- ishlatilishi ---"; grep -rn "narrate(" s…
+grep -n "narration" src/modules/ai/services/insightWriter.service.js | head -20
+node --check src/modules/ai/services/gemini.service.js && node --check src/modules/ai/services/narrationQueue.service.js && node tests/aiAdvisor.test.js 2>&1 | …
+```
+
+**Natija**
+
+Bu aniq javob beriladigan savol — kodda ham, bazangizda ham tekshiraman.
+
+Bazada aniq javob bor — va bitta jiddiy nuqson ham topildi. Tekshiraman:
+
+Topildi — va bu jiddiy. Avval nuqsonni ko'rsataman, keyin tuzataman.
+
+Siz haqsiz — va sabab men o'ylaganimdan jiddiyroq. Bazangizdan olingan raqamlar:
+
+## 1. Ko'rayotganingizning 95% i shablon
+
+```
+Jami insight              : 454
+Izoh matni bor            : 454
+Gemini yozgan             :  23   (5%)
+Shablondan                : 431   (95%)
+```
+
+Gemini butun kodbazada **bitta joyda** chaqiriladi — [gemini.service.js:125](server/src/modules/ai/services/gemini.service.js#L125), va uni faqat [narrationQueue.service.js](server/src/modules/ai/services/narrationQueue.service.js) ishlatadi. U faqat `Insight.narration` maydonini yozadi, boshqa hech narsani.
+
+| Ekranda ko'rayotganingiz | Manbasi |
+|---|---|
+| Brifing (kecha / bugun / keyin / hozir) izohlari | `lines.join(" ")` — **sof JS shablon** |
+| Kunlik / haftalik / oylik hisobot matni | **shablon** |
+| Reytinglar, Health Score, prognoz, Action Center | **deterministik hisob** |
+| Insight kartasidagi izoh matni | ⬅️ **faqat shu yerda LLM bo'lishi mumkin** |
+
+## 2. O'sha 23 tasi ham AI emas — buzuq
+
+```
+[ 21 belgi] Umida G'aniyevning ke
+[ 25 belgi] Gulchehra Davlatovning ke
+[ 20 belgi] Nodir Rajabovning ke
+[ 12 belgi] Aziza Xolmat
+```
+
+23 tadan **23 tasi** so'z o'rtasida kesilgan. Shablon matn esa to'liq:
+
+```
+Yusuf Norqulov — kechikib to'lash ehtimoli 90%.
+Sabablar:
+• To'lovlarning 100% i kechikib amalga oshirilgan.
+• Joriy qarz 183 kundan beri turibdi.
+Kutilayotgan qarz: 3 500 000 so'm.
+```
+
+**Sababi:** `gemini-2.5-flash` standart holatda "thinking" rejimida ishlaydi va **mulohaza tokenlari ham `maxOutputTokens` ichidan sanaladi**. 200 limit bilan model butun byudjetni mulohazaga
+
+…(qisqartirildi)
+
+<sub>session `7f5d71b3` · branch `main` · 20 ta qadam</sub>
+
+---
+
+## 2026-08-03 22:51 — oylik osish nega - 23 turibdi sababini aniqlasng
+
+**So'rov**
+
+> oylik osish nega - 23 turibdi sababini aniqlasng
+
+**O'zgargan fayllar (1)**
+
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad/diag.mjs` — yaratildi/qayta yozildi
+
+**Buyruqlar (15)**
+
+```sh
+ls server/src/modules/adminDashboard/ server/src/modules/adminDashboard/services 2>/dev/null && grep -rn "netChange\|growth\|Oylik o'sish\|monthlyGrowth" client…
+grep -n "netStudent\|net\b\|monthly\|Summary" server/src/modules/adminDashboard/services/adminDashboard.service.js | head -40
+grep -rn "netGrowth" server/src client/src --include="*.js" --include="*.jsx" | head -20
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad && T=$(cat t.txt) && curl -s "http://localhost:5000…
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad && T=$(cat t.txt) && grep -n "router" /Users/shukru…
+sed -n '20,64p' server/src/modules/adminDashboard/adminDashboard.routes.js
+grep -n "MONGO\|DB_URI\|MONGODB" server/.env | sed 's/\(mongodb[^ ]*\)/<uri>/' ; echo "--- mongosh bormi ---"; which mongosh mongo 2>/dev/null || echo "yo'q"
+cp /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/5092a6e1-c186-4279-9521-bcf7a1a09124/scratchpad/diag.mjs server/diag-tmp.mjs && cd server && node d…
+grep -n "type:\|ref:\|^\s*[a-zA-Z]*:" server/src/models/groupMembership.model.js | head -30
+ls server/src/models | grep -i member && grep -n "^\s*[a-zA-Z]*:\s*{" server/src/models/groupMembership.model.js 2>/dev/null || grep -n "^\s*[a-zA-Z]*:" server/…
+cd /Users/shukrullo/Desktop/lc-total && sed -n '1,60p' server/src/models/groupMembership.model.js
+cat > server/diag2-tmp.mjs <<'EOF' import "dotenv/config"; import mongoose from "mongoose"; await mongoose.connect(process.env.MONGO_URL); const db = mongoose.c…
+cd /Users/shukrullo/Desktop/lc-total && grep -rn "graduated" server/src --include="*.js" | grep -v "seed\|LEFT_REASONS =" | head -20
+sed -n '525,560p' server/src/modules/groups/services/groups.service.js
+sed -n '100,130p' client/src/owner/features/adminDashboard/components/DashboardStatCards.jsx; echo "=== delta render ==="; grep -n "delta" client/src/owner/feat…
+```
+
+**Natija**
+
+`mongosh` yo'q, lekin serverning o'z mongoose'i bilan faqat o'qiydigan skript yozaman.
+
+23 ta chiqish **2026-08-04** sanasida — ya'ni ertaga. Maydon nomlarini aniqlab, aniqroq tekshiray.
+
+Sabab aniqlandi. Bazadan olingan dalillar bilan:
+
+## Qisqa javob
+
+**-23 haqiqiy yo'qotish emas.** Bugun (2026-08-03) **"Matematika F-1"** guruhining kursi yakunlangan va uning 23 ta o'quvchisi `leftReason: "graduated"` bilan yopilgan. Ya'ni ular **kursni bitirgan**, markazni tashlab ketmagan.
+
+Bazadagi holat:
+
+| Tekshiruv | Natija |
+|---|---|
+| Avgustda chiqqan a'zoliklar | 23 — **hammasi bitta kunda: 2026-08-04** |
+| Chiqish sababi | `graduated` = 23 (boshqa sabab yo'q) |
+| Guruh | "Matematika F-1", `endDate = 2026-08-03`, `isActive = false` |
+| Bu 23 o'quvchi hali faolmi | **23 tasi ham faol** (arxivlanmagan) |
+| Ulardan boshqa guruhda o'qishda davom etayotgani | **21 ta** |
+| Avgustda qo'shilgan | 0 |
+| Bugungacha (03-avgust) real chiqqan | **0** |
+
+Ya'ni haqiqiy sof o'zgarish bugun **0**, ko'rsatilayotgani esa −23.
+
+## Uchta nuqson birikkan
+
+**1. `graduated` churn deb sanaladi.** [adminDashboard.service.js:238](server/src/modules/adminDashboard/services/adminDashboard.service.js#L238) `leftAt` bo'yicha hamma yozuvni sanaydi, `leftReason` ni umuman qaramaydi. Kodbazaning qolgan qismi buni **ataylab ajratadi**:
+
+- `retention.service.js:9` — «graduated = kursni bitirdi (ijobiy, churn emas)»
+- `group.signal.js:67` — «"transferred"/"graduated" ketish EMAS»
+- `report.service.js:219` — «...o'quvchi kursni tugatdi — bu ketish emas, muvaffaqiyat»
+
+Boshqaruv paneli — bu qoidani buzayotgan yagona joy.
+
+**2. `leftAt` kelajak sanasi.** [groups.service.js:539](server/src/modules/groups/services/groups.service.js#L539) kurs yakunlanganda `leftAt = endDate + 1 kun` qo'yadi (EXCLUSIVE chegara, oxir
+
+…(qisqartirildi)
+
+<sub>session `5092a6e1` · branch `main` · 18 ta qadam</sub>
+
+---

@@ -19,29 +19,74 @@ import AiRiskBadge from "./AiRiskBadge";
 // BO'SH HOLATDA HECH NARSA KO'RSATILMAYDI (`null` qaytadi): "AI hech
 // narsa topmadi" karta har bir sahifada doimiy bo'sh quti bo'lib turardi.
 
-const Row = ({ insight, isOpportunity }) => (
-  <li className="flex items-start justify-between gap-3 py-2">
-    <div className="min-w-0">
-      <p className="truncate text-sm font-medium text-foreground">
-        {insight.title || insight.subjectLabel}
-      </p>
-      {insight.expectedImpact?.label && (
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {insight.expectedImpact.label}
+// Qator BOSILADI va subyekt profiliga olib boradi (guruh → guruh detali,
+// o'quvchi → o'quvchi kartasi, ...). Manzilni server tayyorlaydi
+// (`subjectHref`, ai/services/subjectLink.service.js) - shu payt panel uni
+// e'tiborsiz qoldirib, oddiy matn chizardi. Natijada owner "Rus tili F-3 —
+// 16 o'quvchi" ni bosardi va hech narsa bo'lmasdi, holbuki panelning butun
+// maqsadi - muammodan uning manbasiga o'tish.
+//
+// FILIAL subyekti ATAYLAB havola qilinmaydi. Serverda u `/owner/branches` ga
+// ketadi, yakka markaz rejimida esa bu marshrut MultiBranchGuard orqali
+// `/owner/settings/markaz` ga yo'naltiriladi - ya'ni "Bo'sh dars vaqtlari"
+// maslahatini bosgan odam Sozlamalarda paydo bo'ladi. Filial baribir
+// "batafsil ko'riladigan" subyekt emas; kurs uchun server o'zi null beradi
+// (kurs profili sahifasi hali yo'q).
+const NON_DRILLABLE_SUBJECTS = new Set(["branch"]);
+
+const Row = ({ insight, isOpportunity }) => {
+  const href = NON_DRILLABLE_SUBJECTS.has(insight.subjectType)
+    ? null
+    : insight.subjectHref;
+
+  const inner = (
+    <>
+      <div className="min-w-0">
+        <p
+          className={cn(
+            "truncate text-sm font-medium text-foreground transition-colors",
+            href && "group-hover/row:text-primary",
+          )}
+        >
+          {insight.title || insight.subjectLabel}
         </p>
-      )}
-    </div>
-    {/* Imkoniyatda YORLIQ KO'RSATILMAYDI: "low" severity yashil rang
-        beradi (to'g'ri), lekin "Past" so'zi o'sish taklifi uchun
-        noto'g'ri o'qiladi — owner uni "ahamiyatsiz" deb tushunadi. */}
-    <AiRiskBadge
-      score={insight.score}
-      confidence={insight.confidence}
-      severity={isOpportunity ? "low" : insight.severity}
-      showLabel={!isOpportunity}
-    />
-  </li>
-);
+        {insight.expectedImpact?.label && (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {insight.expectedImpact.label}
+          </p>
+        )}
+      </div>
+      {/* Imkoniyatda YORLIQ KO'RSATILMAYDI: "low" severity yashil rang
+          beradi (to'g'ri), lekin "Past" so'zi o'sish taklifi uchun
+          noto'g'ri o'qiladi — owner uni "ahamiyatsiz" deb tushunadi. */}
+      <AiRiskBadge
+        score={insight.score}
+        confidence={insight.confidence}
+        severity={isOpportunity ? "low" : insight.severity}
+        showLabel={!isOpportunity}
+      />
+    </>
+  );
+
+  if (!href) {
+    return (
+      <li className="flex items-start justify-between gap-3 py-2">{inner}</li>
+    );
+  }
+
+  return (
+    <li>
+      {/* `-mx-2 px-2` - hover foni matn ustunidan bir oz chetga chiqadi,
+          shunda qator "bosiladigan qator" bo'lib ko'rinadi. */}
+      <Link
+        to={href}
+        className="group/row -mx-2 flex items-start justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted"
+      >
+        {inner}
+      </Link>
+    </li>
+  );
+};
 
 const Group = ({ title, icon: Icon, iconTone, items, isOpportunity }) => {
   if (!items?.length) return null;

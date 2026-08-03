@@ -6,6 +6,7 @@ import {
   generateNarration,
   isNarrationConfigured,
   narrationHash,
+  MIN_NARRATION_LENGTH,
 } from "./gemini.service.js";
 import { isAiEnabled, openBudget } from "./aiBudget.service.js";
 
@@ -113,7 +114,19 @@ export const runNarrationQueue = async ({ limit = BATCH_SIZE } = {}) => {
 
     const hash = narrationHash(insight);
     // Matn allaqachon SHU faktorlar uchun yozilgan - o'tkazib yuboramiz.
-    if (insight.narrationModel && insight.narrationHash === hash) {
+    //
+    // UCHINCHI SHART - O'ZINI TUZATISH.
+    //
+    // Uzunlik tekshiruvi ilgari 10 belgi edi va kesilgan javoblar
+    // ("Umida G'aniyevning ke") undan o'tib, bazaga yozilib qolgan.
+    // Ular uchun narrationModel va hash TO'G'RI, ya'ni yuqoridagi ikki
+    // shart bo'yicha ular ABADIY o'tkazib yuborilardi - hech qachon
+    // qayta so'ralmasdi va owner buzuq matnni ko'rib turaverardi.
+    //
+    // Shuning uchun qisqa LLM matni "yozilmagan" deb hisoblanadi va
+    // navbat uni o'zi qayta so'raydi. Migratsiya kerak emas.
+    const looksTruncated = (insight.narration || "").length < MIN_NARRATION_LENGTH;
+    if (insight.narrationModel && insight.narrationHash === hash && !looksTruncated) {
       skipped += 1;
       continue;
     }

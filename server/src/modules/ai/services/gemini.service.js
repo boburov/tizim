@@ -39,6 +39,23 @@ const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 // navbatni to'xtatib qo'yardi.
 const TIMEOUT_MS = 15000;
 
+/**
+ * QABUL QILINADIGAN ENG QISQA IZOH.
+ *
+ * Avval 10 edi va bu JIMGINA NUQSON keltirib chiqardi: kesilgan javob
+ * ("Umida G'aniyevning ke") 10 dan uzun bo'lgani uchun tekshiruvdan
+ * o'tib, to'liq shablon matnni ALMASHTIRIB yuborardi. Natijada LLM
+ * yoqilgan filialda matn shablondagidan YOMONROQ bo'lardi.
+ *
+ * 40 - eng qisqa haqiqiy jumladan ham past, lekin har qanday kesilgan
+ * bo'lakdan yuqori. Chegara "to'g'ri" tomonga xato qiladi: shubhali
+ * matnni rad etib, shablonni qoldirish har doim xavfsizroq.
+ */
+const MIN_NARRATION_LENGTH = 40;
+const MAX_NARRATION_LENGTH = 600;
+
+export { MIN_NARRATION_LENGTH };
+
 export const isNarrationConfigured = () => Boolean(env.GEMINI_API_KEY);
 
 /**
@@ -155,7 +172,23 @@ export const generateNarration = async (insight, model = env.GEMINI_MODEL) => {
             // Past harorat: bu ijodiy vazifa emas. Yuqori haroratda model
             // "chiroyli" jumla uchun raqamni bo'rttirishga moyil bo'ladi.
             temperature: 0.3,
-            maxOutputTokens: 200,
+
+            // MULOHAZA O'CHIRILGAN - eng muhim sozlama shu yerda.
+            //
+            // gemini-2.5-flash standart holatda "thinking" rejimida
+            // ishlaydi va MULOHAZA TOKENLARI ham maxOutputTokens ichidan
+            // sanaladi. 200 limit bilan model butun byudjetni mulohazaga
+            // sarflab, ko'rinadigan javobga 5-10 token qoldirardi -
+            // matn so'z o'rtasida kesilardi ("Umida G'aniyevning ke").
+            //
+            // Bu vazifa uchun mulohaza umuman kerak emas: raqamlar
+            // allaqachon hisoblangan, model faqat ularni jumlaga
+            // aylantiradi. Byudjetni 0 qilish ham tezroq, ham arzonroq.
+            thinkingConfig: { thinkingBudget: 0 },
+
+            // 2 jumla ≈ 60-80 token. 300 - zaxira bilan, chunki o'zbek
+            // tili tokenizatsiyada inglizchadan zichroq chiqadi.
+            maxOutputTokens: 300,
           },
         }),
         signal: controller.signal,
@@ -173,7 +206,22 @@ export const generateNarration = async (insight, model = env.GEMINI_MODEL) => {
 
     const data = await res.json();
     const usage = data?.usageMetadata || {};
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidate = data?.candidates?.[0];
+
+    // TUGASH SABABINI TEKSHIRAMIZ, matnni emas.
+    //
+    // "MAX_TOKENS" - javob kesilgan degani. Uzunlik tekshiruvi buni
+    // ba'zan tutadi, lekin har doim emas: model 39 ta belgi yozib
+    // kesilsa, matn "yetarli uzun" ko'rinardi. Provayder o'zi aytgan
+    // haqiqatga ishonish taxmin qilishdan aniqroq.
+    const finishReason = candidate?.finishReason;
+    if (finishReason && finishReason !== "STOP") {
+      logger.debug({ finishReason }, "Gemini javobi to'liq tugamadi");
+      await log(false, `finish_${String(finishReason).toLowerCase()}`, usage);
+      return null;
+    }
+
+    const text = candidate?.content?.parts?.[0]?.text;
     if (!text) {
       // Bo'sh javob TOKEN SARFLAGAN bo'lishi mumkin (masalan xavfsizlik
       // filtri kesib tashlagan), shuning uchun ok: false bo'lsa ham
@@ -183,9 +231,10 @@ export const generateNarration = async (insight, model = env.GEMINI_MODEL) => {
     }
 
     const clean = text.trim();
-    // Bo'sh yoki g'ayritabiiy uzun javob ishlatilmaydi: shablon matn
-    // undan har doim yaxshiroq.
-    if (clean.length < 10 || clean.length > 600) {
+    // Juda qisqa yoki g'ayritabiiy uzun javob ishlatilmaydi: shablon
+    // matn undan har doim yaxshiroq.
+    if (clean.length < MIN_NARRATION_LENGTH || clean.length > MAX_NARRATION_LENGTH) {
+      logger.debug({ length: clean.length }, "Gemini izohi rad etildi (uzunlik)");
       await log(false, "invalid_length", usage);
       return null;
     }
