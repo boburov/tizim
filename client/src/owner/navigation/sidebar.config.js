@@ -5,7 +5,9 @@ import {
   LayoutDashboard,
   Bot,
   MessagesSquare,
+  ScrollText,
   Settings,
+  Target,
   Wallet,
 } from "lucide-react";
 
@@ -61,6 +63,31 @@ const ownerSidebar = [
     icon: Bot,
     url: "/owner/ai",
     permission: "ai.read",
+  },
+
+  // LIDLAR: alohida yakka link, "O'quv jarayoni"dan OLDIN.
+  //
+  // Ilgari "Aloqa" ichida, bildirishnoma va feedback bilan yonma-yon
+  // turardi. Uchalasi ham "xabar almashish" degan yuza o'xshashlik
+  // bergani uchun bir joyga tushgan edi, lekin ish jihatidan boshqa
+  // narsalar: bildirishnoma va feedback - MAVJUD o'quvchi bilan aloqa,
+  // lid esa hali o'quvchi BO'LMAGAN odam. Sotuv ishi qo'llab-quvvatlash
+  // ishining ichiga ko'milgan edi.
+  //
+  // Voronka tartibi: lid -> o'quvchi. Shuning uchun "O'quv jarayoni"dan
+  // oldin turadi - menyuni yuqoridan pastga o'qigan odam odamning
+  // markazga kirish yo'lini ko'radi.
+  //
+  // `items` ATAYLAB yo'q: /owner/leads o'zi tabli sahifa (ro'yxat +
+  // statistika), va `items` qo'shilishi bilan AppSidebar buni
+  // ochiladigan guruhga aylantirib, yakka link bo'lmay qolardi.
+  // Ikonka `Target` - searchIndex.js dagi "Lidlar" yozuvi bilan bir xil,
+  // shunda qidiruvda va menyuda bir xil belgi ko'rinadi.
+  {
+    title: "Lidlar",
+    icon: Target,
+    url: "/owner/leads",
+    permission: "leads.read",
   },
 
   {
@@ -132,11 +159,11 @@ const ownerSidebar = [
     ],
   },
 
+  // Faqat MAVJUD o'quvchi/ota-ona bilan aloqa. Lidlar yuqorida, alohida.
   {
     title: "Aloqa",
     icon: MessagesSquare,
     items: [
-      { title: "Lidlar", url: "/owner/leads", permission: "leads.read" },
       {
         title: "Bildirishnomalar",
         url: "/owner/notifications",
@@ -144,6 +171,24 @@ const ownerSidebar = [
       },
       { title: "Feedback", url: "/owner/feedback", permission: "feedback.read" },
     ],
+  },
+
+  // AUDIT LOGLARI: alohida yakka link, Sozlamalardan OLDIN.
+  //
+  // Ilgari Sozlamalar > "Faoliyat loglari" edi. Noto'g'ri joy: Sozlamalar
+  // sahifalari biror narsani O'ZGARTIRISH uchun, log esa kim nima
+  // qilganini KUZATISH uchun - bu kundalik nazorat ishi, sozlash emas.
+  // Xavfsizlik hodisasini tekshirayotgan odam uni sozlamalar ichidan
+  // qidirmaydi.
+  //
+  // Marshrut ham qobiqdan chiqarildi (/owner/activity-logs), aks holda
+  // sahifa Sozlamalarning chap ustunli navigatsiyasi bilan ochilib,
+  // baribir "alohida bo'lim" bo'lmasdi.
+  {
+    title: "Audit loglari",
+    icon: ScrollText,
+    url: "/owner/activity-logs",
+    permission: "activity_logs.read",
   },
 
   // Ilgari 6 guruhga sochilgan 11 ta konfiguratsiya sahifasi shu yerda,

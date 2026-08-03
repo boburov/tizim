@@ -5,7 +5,6 @@ import { NavLink, Outlet } from "react-router-dom";
 import {
   UserCircle2,
   ShieldCheck,
-  ScrollText,
   Gauge,
   Building2,
   Archive,
@@ -48,12 +47,9 @@ const SECTIONS = [
         // ularda ham shu yozuv aktiv turishi kerak.
         exact: false,
       },
-      {
-        to: `${BASE}/loglar`,
-        label: "Faoliyat loglari",
-        icon: ScrollText,
-        permission: PERMISSIONS.ACTIVITY_LOGS_READ,
-      },
+      // "Faoliyat loglari" bu yerdan OLIB TASHLANDI - u endi sidebarda
+      // alohida bo'lim (/owner/activity-logs). Sozlamalar sozlash
+      // sahifalari uchun; log ko'rish esa kundalik kuzatuv ishi.
     ],
   },
   {

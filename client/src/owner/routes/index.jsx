@@ -321,6 +321,20 @@ const OwnerRoutes = () => (
         </PermissionGuard>
       }
     />
+
+    {/* AUDIT LOGLARI - sidebarda alohida bo'lim, shuning uchun marshrut
+        ham Sozlamalar qobig'idan TASHQARIDA. Ilgari /settings/loglar edi
+        va SettingsPage'ning chap ustunli navigatsiyasi bilan birga
+        ochilardi - "alohida bo'lim" bo'la olmasdi. Eski manzil quyida
+        redirect bo'lib qoldi. */}
+    <Route
+      path="activity-logs"
+      element={
+        <PermissionGuard required="activity_logs.read" fallback="/owner">
+          <ActivityLogsPage />
+        </PermissionGuard>
+      }
+    />
     <Route
       path="ai/reports/:id"
       element={
@@ -399,17 +413,15 @@ const OwnerRoutes = () => (
         }
       />
 
+      {/* Audit loglari yuqoriga, /owner/activity-logs ga ko'chdi. Eski
+          manzil saqlanadi - saqlangan havolalar va xatcho'plar uchun.
+          Sozlamalar BOLASI bo'lib qoladi: shunda `/settings/*` shoxi
+          o'zi bilan o'zi ziddiyatga tushmaydi. */}
       <Route
         path="loglar"
-        element={
-          <PermissionGuard
-            required="activity_logs.read"
-            fallback="/owner/settings"
-          >
-            <ActivityLogsPage />
-          </PermissionGuard>
-        }
+        element={<Navigate to="/owner/activity-logs" replace />}
       />
+
       {/* YAKKA MARKAZ: sidebarda "Filiallar" bo'limi yo'q, markaz ma'lumoti
           shu yerdan tahrirlanadi. BranchesPage bitta karta ko'rsatadi va
           "Yangi filial" tugmasini yashiradi. */}
@@ -623,10 +635,6 @@ const OwnerRoutes = () => (
     <Route
       path="roles/new"
       element={<Navigate to="/owner/settings/rollar/new" replace />}
-    />
-    <Route
-      path="activity-logs"
-      element={<Navigate to="/owner/settings/loglar" replace />}
     />
     <Route
       path="branches/limits"

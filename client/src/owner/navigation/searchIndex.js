@@ -357,7 +357,7 @@ export const SEARCH_INDEX = [
     description: "Tizimdagi yozish/o'zgartirish/o'chirish amallari tarixi",
     keywords:
       "audit, faoliyat, log, activity, tarix, history, security, kim, qachon",
-    url: "/owner/settings/loglar",
+    url: "/owner/activity-logs",
     icon: ShieldCheck,
     category: "Tizim",
     permission: "activity_logs.read",

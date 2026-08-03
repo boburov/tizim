@@ -48,7 +48,7 @@ const ActivityPanel = ({ limit }) => {
           <h3 className="text-sm font-semibold text-foreground">So'nggi harakatlar</h3>
         </div>
         <Link
-          to="/owner/settings/loglar"
+          to="/owner/activity-logs"
           className="text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           Jurnal

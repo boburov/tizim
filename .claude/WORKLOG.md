@@ -3424,3 +3424,97 @@ Endi asosiy sahifani qayta yozaman.
 <sub>session `36a46083` · branch `main` · 115 ta qadam</sub>
 
 ---
+
+## 2026-08-03 16:23 — Leadlarni sidebar alohida bo'limga olib qoying
+
+**So'rov**
+
+> Leadlarni sidebar alohida bo'limga olib qoying
+
+**O'zgargan fayllar (1)**
+
+- `client/src/owner/navigation/sidebar.config.js` — tahrirlandi
+
+**Buyruqlar (6)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "leads" src/owner/routes/index.jsx; echo "=== leads feature sahifalari ==="; ls src/owner/features/leads…
+sed -n '223,240p' src/owner/routes/index.jsx
+sed -n '25,30p;60,95p' src/owner/navigation/sidebar.config.js; echo "=== ALOQA endi ==="; sed -n '/title: "Aloqa"/,/^ },/p' src/owner/navigation/sidebar.config.…
+npm run build >/dev/null 2>&1 && echo "✓ build o'tdi" || { echo "✗ yiqildi"; npx vite build 2>&1 | tail -6; }; echo "=== lint ==="; npx eslint src/owner/navigat…
+sed -n '183,212p' src/owner/navigation/searchIndex.js; echo "=== searchIndex'da 'Aloqa' ==="; grep -n "Aloqa" src/owner/navigation/searchIndex.js
+npm run build >/dev/null 2>&1 && echo "✓ build o'tdi" || echo "✗ yiqildi"; npx eslint src/owner/navigation/sidebar.config.js && echo "✓ lint toza"
+```
+
+**Natija**
+
+Sidebar konfiguratsiyasini ko'ray.
+
+`Lidlar` hozir "Aloqa" guruhi ichida ([139-qator](client/src/owner/navigation/sidebar.config.js#L139)). Uni alohida bo'limga chiqarishdan oldin — lidlar bo'yicha nechta sahifa borligini ko'ray (yakka havolami yoki guruhmi).
+
+`/owner/leads` — bu tabli yagona sahifa (ro'yxat + statistika). Demak guruh emas, **yakka havola** bo'lishi kerak — bu fayldagi "har bir subyekt bitta havola" tamoyiliga mos.
+
+Build ✓, lint toza. Qidiruv indeksida ham "Lidlar" bor — u yerda eski guruh nomi qolmaganini tekshiray.
+
+Qidiruv indeksi allaqachon "Lidlar" kategoriyasini ishlatadi — eski guruhlash qolmagan. Lekin u yerda lidlar uchun **`Target`** ikonkasi ishlatilgan ekan; sidebar ham shunga mos bo'lgani yaxshi.
+
+<sub>session `5f7a96f3` · branch `main` · 12 ta qadam</sub>
+
+---
+
+## 2026-08-03 16:40 — Audit Loglarni alhohida qiling uni ham
+
+**So'rov**
+
+> Audit Loglarni alhohida qiling uni ham
+
+**O'zgargan fayllar (5)**
+
+- `client/src/owner/routes/index.jsx` — tahrirlandi
+- `client/src/owner/features/settings/pages/SettingsPage.jsx` — tahrirlandi
+- `client/src/owner/navigation/sidebar.config.js` — tahrirlandi
+- `client/src/owner/navigation/searchIndex.js` — tahrirlandi
+- `client/src/owner/features/ai/components/dashboard/AiRecentActivity.jsx` — tahrirlandi
+
+**Buyruqlar (12)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "activity\|audit\|log" src/owner/navigation/sidebar.config.js -i; echo "=== searchIndex ==="; grep -n -B…
+grep -rn "activityLogs\|activity-logs" src/owner/routes/index.jsx; echo "=== sahifalar ==="; ls src/owner/features/activityLogs/pages/ 2>/dev/null
+sed -n '620,640p' src/owner/routes/index.jsx; echo "=== 'loglar' marshruti ==="; grep -n "loglar" src/owner/routes/index.jsx src/owner/features/settings/**/*.js…
+sed -n '395,412p' src/owner/routes/index.jsx; echo "=== SettingsPage nav ro'yxati ==="; sed -n '40,62p' src/owner/features/settings/pages/SettingsPage.jsx
+grep -n "Outlet\|aside\|nav\|grid\|return (" src/owner/features/settings/pages/SettingsPage.jsx | head -15; echo "=== fayl uzunligi ==="; wc -l < src/owner/feat…
+grep -n 'path="settings"' src/owner/routes/index.jsx; echo "---"; sed -n '300,320p' src/owner/routes/index.jsx; echo "=== settings bloki tugashi ==="; sed -n '4…
+grep -n -B2 -A3 'path="activity-logs"' src/owner/routes/index.jsx
+grep -n "ScrollText" src/owner/features/settings/pages/SettingsPage.jsx; echo "=== searchIndex URL ==="; grep -n "settings/loglar" src/owner/navigation/searchIn…
+grep -c "ScrollText" src/owner/features/settings/pages/SettingsPage.jsx; echo "^ agar 1 bo'lsa faqat import qolgan (ishlatilmaydi)"; sed -n '1,12p' src/owner/fe…
+echo "=== eski URL qolganmi ==="; grep -rn "settings/loglar" src --include='*.js*' | grep -v "^src/owner/routes/index.jsx.*Ilgari" || echo "(faqat izoh va redir…
+npx eslint src -f json 2>/dev/null | python3 -c " import json,sys d=json.load(sys.stdin) touched=['sidebar.config.js','searchIndex.js','routes/index.jsx','Setti…
+grep -n 'path="activity-logs"\|path="loglar"' src/owner/routes/index.jsx; echo "--- har biri bittadan bo'lishi kerak ---"; echo; grep -n -A4 'path="loglar"' src…
+```
+
+**Natija**
+
+Audit loglar hozir qayerdaligini topay.
+
+Audit loglar hozir **Sozlamalar ichida** (`/owner/settings/loglar`). Marshrutni aniqlashtiray.
+
+Bu yerda tanlov bor — hozir `/owner/settings/loglar` Sozlamalar qobig'i ichida (chap ustunli navigatsiya bilan). Qobiqni tekshiray.
+
+Sozlamalar — chap ustunli qobiq (`<nav>` + `<Outlet/>`). Demak faqat sidebar'ga havola qo'shsam, sahifa baribir Sozlamalar ichida ochiladi — "alohida" bo'lmaydi. Marshrutni qobiqdan chiqarish kerak.
+
+Rejani aniqladim. Marshrutni Sozlamalar qobig'idan chiqarib, yuqori darajaga olaman va eski URL uchun redirect qoldiraman.
+
+Endi eski redirectni teskari qilaman.
+
+Endi Sozlamalar navigatsiyasidan olib tashlayman va sidebar'ga qo'shaman.
+
+Endi qidiruv indeksidagi URL va `SettingsPage` dagi ishlatilmay qolgan importni tekshiraman.
+
+Build ✓. Lint 22 ta (avval 23 edi) — mening fayllarimda xato yo'qligini tasdiqlay.
+
+Tegilgan fayllar toza. Marshrutlarni oxirgi marta tekshiray — takroriy yo'l qolmaganini.
+
+<sub>session `5f7a96f3` · branch `main` · 25 ta qadam</sub>
+
+---
