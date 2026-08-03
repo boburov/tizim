@@ -1,8 +1,22 @@
 import mongoose from "mongoose";
+import {
+  COMP_VARIABLE_TYPES,
+  COMP_PERCENT_BASES,
+} from "./teacherCompensation.model.js";
 
-// O'qituvchining bir guruh, bir oy uchun oylik maoshi. Maosh turi: fiksa, foiz
-// (guruh tushumidan %), yoki aralash. Snapshot maydonlar recalc() orqali yangilanadi.
-// O'chirilmaydi (softDelete yo'q) - o'quvchi to'lovi modeli kabi.
+// O'qituvchining bir oy uchun maosh QATORI. Snapshot maydonlar recalc() orqali
+// yangilanadi. O'chirilmaydi (softDelete yo'q) - o'quvchi to'lovi modeli kabi.
+//
+// QATOR TURLARI (kind):
+//   group     - GURUHDAN hosila o'zgaruvchi qism (foiz / o'quvchi / soat / guruh).
+//               group != null. Har guruh uchun alohida qator.
+//   base      - MARKAZ darajasidagi fiksa oylik (mas. 2 mln). group = null,
+//               oyiga BITTA qator. Guruhlar soniga BOG'LIQ EMAS - aynan shu
+//               sabab u guruh qatoriga qo'shilmaydi (3 guruh → 3x2mln bo'lardi).
+//   bonus     - KPI/mukofot (qo'lda, tasdiqdan o'tadi). group = null yoki guruh.
+//   deduction - jarima/ushlab qolish. expectedAmount MANFIY bo'ladi.
+export const SALARY_KINDS = ["group", "base", "bonus", "deduction"];
+
 const teacherSalarySchema = new mongoose.Schema(
   {
     // FILIAL (denormalizatsiya): guruhdan meros - chiqim hisobotlari uchun.
@@ -18,9 +32,18 @@ const teacherSalarySchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // GURUH: kind="group" da MAJBURIY, boshqa turlarda null (markaz darajasi).
+    // Validatsiya pre("validate") da - schema-level `required` shart emas.
     group: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Group",
+      default: null,
+      index: true,
+    },
+    kind: {
+      type: String,
+      enum: SALARY_KINDS,
+      default: "group",
       required: true,
       index: true,
     },
@@ -38,6 +61,30 @@ const teacherSalarySchema = new mongoose.Schema(
     workStartDate: { type: Date, default: null },
     workEndDate: { type: Date, default: null },
 
+    // ─── YANGI: o'zgaruvchi qism stavkasi (snapshot) ───
+    // Stavka qaysi turdan va QAYERDAN kelgani - hisobotda "nega shuncha?"
+    // savoliga javob berish uchun saqlanadi (stavka keyin o'zgarsa ham tarix
+    // buzilmaydi - StudentPayment.baseFee snapshot'i bilan bir xil mantiq).
+    variableType: {
+      type: String,
+      enum: [...COMP_VARIABLE_TYPES, null],
+      default: null,
+    },
+    variableRate: { type: Number, default: 0 },
+    percentBase: {
+      type: String,
+      enum: [...COMP_PERCENT_BASES, null],
+      default: null,
+    },
+    // Stavka manbai: "period" (guruh ustunligi) | "period_legacy" (eski maydon)
+    // | "compensation" (o'qituvchi standarti) | "none".
+    rateSource: { type: String, default: "none" },
+    compensation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TeacherCompensation",
+      default: null,
+    },
+
     // Snapshot (recalc paytida yangilanadi)
     groupRevenue: { type: Number, default: 0 },
     prorationFactor: { type: Number, default: 1 },
@@ -45,7 +92,20 @@ const teacherSalarySchema = new mongoose.Schema(
     totalDays: { type: Number, default: 0 },
     proratedFixed: { type: Number, default: 0 },
     percentAmount: { type: Number, default: 0 },
+    // per_student bazasi: proratsiyalangan O'QUVCHI-OY (headcount EMAS).
+    // Oy o'rtasida qo'shilgan o'quvchi 0.5 bo'lib sanaladi - aks holda
+    // oxirgi kuni qo'shilgan o'quvchi uchun to'liq 50k to'lanardi.
+    studentUnits: { type: Number, default: 0 },
+    perStudentAmount: { type: Number, default: 0 },
+    // per_lesson_hour bazasi: shu oyda O'TIB BO'LGAN dars soatlari.
+    lessonHours: { type: Number, default: 0 },
+    perHourAmount: { type: Number, default: 0 },
+    // per_group: guruh uchun qat'iy summa (proratsiyalangan).
+    perGroupAmount: { type: Number, default: 0 },
+
     baseEarnings: { type: Number, default: 0 },
+    // DIQQAT: kind="deduction" da MANFIY bo'lishi mumkin - shuning uchun
+    // min: 0 QO'YILMAGAN.
     expectedAmount: { type: Number, required: true, default: 0 },
 
     // To'langan (SalaryTransaction yig'indisidan keshlanadi)
@@ -61,15 +121,55 @@ const teacherSalarySchema = new mongoose.Schema(
       index: true,
     },
     source: { type: String, enum: ["auto", "manual"], default: "auto" },
+    // bonus/deduction uchun: nima uchun berilgani (KPI izohi).
+    reason: { type: String, trim: true, default: "" },
+    // bonus/deduction tasdiq orqali yaratilgan bo'lsa - qaysi so'rovdan.
+    approvalId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Approval",
+      default: null,
+    },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     recalculatedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
-// O'qituvchi + guruh + oy uchun bitta yozuv
+// kind="group" da guruh MAJBURIY; qolganlarida guruhsiz (markaz darajasi)
+// bo'lishi MUMKIN. Bu schema-level `required` bilan ifodalab bo'lmaydi.
+teacherSalarySchema.pre("validate", function (next) {
+  if (this.kind === "group" && !this.group) {
+    return next(new Error("Guruh qatori uchun guruh ko'rsatilishi shart"));
+  }
+  if (this.kind === "base" && this.group) {
+    return next(new Error("Fiksa (base) qatori guruhga bog'lanmaydi"));
+  }
+  next();
+});
+
+// ─── UNIKALLIK ───
+// Eski yagona indeks ({teacher,group,year,month}) ikkiga bo'lindi, chunki
+// `group: null` bo'lgan hujjatlar oddiy unique indeksda BIR-BIRIGA to'qnashardi
+// (MongoDB null'ni ham qiymat deb sanaydi) - ya'ni bir o'qituvchida base va
+// bonus qatori birga tura olmasdi.
+//
+// 1) Guruh qatorlari: guruh + oy + tur bo'yicha bitta.
 teacherSalarySchema.index(
-  { teacher: 1, group: 1, year: 1, month: 1 },
-  { unique: true },
+  { teacher: 1, group: 1, year: 1, month: 1, kind: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { group: { $type: "objectId" } },
+  },
+);
+// 2) Markaz (guruhsiz) qatorlari: oyiga bitta base.
+//    bonus/deduction bir oyda BIR NECHTA bo'lishi mumkin (har biri alohida
+//    KPI) - shuning uchun indeks faqat "base" bilan cheklangan.
+teacherSalarySchema.index(
+  { teacher: 1, year: 1, month: 1, kind: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { group: null, kind: "base" },
+  },
 );
 // Hisobotlar uchun
 teacherSalarySchema.index({ year: 1, month: 1, status: 1 });

@@ -437,6 +437,18 @@ const EXECUTORS = {
     const svc = await import("../../users/services/users.service.js");
     return svc.executeApprovedHire(approval);
   },
+  [APPROVAL_KINDS.TEACHER_COMPENSATION_SET]: async (approval) => {
+    const svc = await import("../../teacherSalary/services/teacherCompensation.service.js");
+    return svc.executeApprovedCompensation(approval);
+  },
+  [APPROVAL_KINDS.MEMBERSHIP_BACKDATE]: async (approval) => {
+    const svc = await import("../../groups/services/groups.service.js");
+    return svc.executeApprovedBackdate(approval);
+  },
+  [APPROVAL_KINDS.EXPENSE_CREATE]: async (approval) => {
+    const svc = await import("../../expenses/services/expense.service.js");
+    return svc.executeApprovedExpense(approval);
+  },
 };
 
 /**

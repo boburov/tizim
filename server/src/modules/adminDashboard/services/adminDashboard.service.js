@@ -4,6 +4,7 @@ import GroupMembership from "../../../models/groupMembership.model.js";
 import Attendance from "../../../models/attendance.model.js";
 import PaymentTransaction from "../../../models/paymentTransaction.model.js";
 import SalaryTransaction from "../../../models/salaryTransaction.model.js";
+import Expense from "../../../models/expense.model.js";
 import Lead from "../../../models/lead.model.js";
 import { ROLES } from "../../../constants/roles.js";
 import {
@@ -294,15 +295,25 @@ export const getStudentFlow = async ({ months = 6 } = {}) => {
 
 // === getCashflow (moliyaviy kirim/chiqim bar chart) ===
 // range: "week" | "month" -> kunlik buckets, "year" -> oylik buckets.
-// Kirim = PaymentTransaction (o'quvchi to'lovlari), Chiqim = SalaryTransaction (maoshlar).
-const sumByDay = async (Model, start, end) => {
+//
+// Kirim  = PaymentTransaction (o'quvchi to'lovlari)
+// Chiqim = SalaryTransaction (maosh) + Expense (ijara, kommunal, ta'mir...)
+//
+// MUHIM: ilgari chiqim FAQAT maoshdan iborat edi - grafik markazning haqiqiy
+// xarajatini ko'rsatmasdi va foyda doim yuqori ko'rinardi.
+//
+// Sana maydoni modelga qarab farq qiladi (paidAt / spentAt), shuning uchun
+// u parametr sifatida uzatiladi.
+const sumByDay = async (Model, start, end, dateField = "paidAt") => {
   const rows = await Model.aggregate([
-    // FILIAL: PaymentTransaction/SalaryTransaction'da branchId bor.
+    // FILIAL: PaymentTransaction/SalaryTransaction/Expense'da branchId bor.
     ...branchMatchStage(),
-    { $match: { paidAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
+    { $match: { [dateField]: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
     {
       $group: {
-        _id: { $dateToString: { format: "%Y-%m-%d", date: "$paidAt", timezone: "UTC" } },
+        _id: {
+          $dateToString: { format: "%Y-%m-%d", date: `$${dateField}`, timezone: "UTC" },
+        },
         total: { $sum: "$amount" },
       },
     },
@@ -312,15 +323,27 @@ const sumByDay = async (Model, start, end) => {
   return map;
 };
 
-const sumByMonth = async (Model, start, end) => {
+const sumByMonth = async (Model, start, end, dateField = "paidAt") => {
   const rows = await Model.aggregate([
     ...branchMatchStage(),
-    { $match: { paidAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
-    { $group: { _id: { $month: { date: "$paidAt", timezone: "UTC" } }, total: { $sum: "$amount" } } },
+    { $match: { [dateField]: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
+    {
+      $group: {
+        _id: { $month: { date: `$${dateField}`, timezone: "UTC" } },
+        total: { $sum: "$amount" },
+      },
+    },
   ]);
   const map = new Map();
   for (const r of rows) map.set(r._id, r.total);
   return map;
+};
+
+// Ikki bucket xaritasini qo'shadi (maosh + umumiy chiqim bitta "chiqim" ustuni).
+const mergeSums = (a, b) => {
+  const out = new Map(a);
+  for (const [k, v] of b) out.set(k, (out.get(k) || 0) + v);
+  return out;
 };
 
 const DAY_SHORT = ["Yak", "Du", "Se", "Ch", "Pa", "Ju", "Sh"];
@@ -333,10 +356,12 @@ export const getCashflow = async ({ range = "month" } = {}) => {
   if (range === "year") {
     const start = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
     const end = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
-    const [income, expense] = await Promise.all([
+    const [income, salaryExpense, opexExpense] = await Promise.all([
       sumByMonth(PaymentTransaction, start, end),
       sumByMonth(SalaryTransaction, start, end),
+      sumByMonth(Expense, start, end, "spentAt"),
     ]);
+    const expense = mergeSums(salaryExpense, opexExpense);
     const buckets = [];
     for (let m = 1; m <= 12; m += 1) {
       buckets.push({
@@ -362,10 +387,12 @@ export const getCashflow = async ({ range = "month" } = {}) => {
     end = new Date(Date.UTC(y, now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
   }
 
-  const [income, expense] = await Promise.all([
+  const [income, salaryExpense, opexExpense] = await Promise.all([
     sumByDay(PaymentTransaction, start, end),
     sumByDay(SalaryTransaction, start, end),
+    sumByDay(Expense, start, end, "spentAt"),
   ]);
+  const expense = mergeSums(salaryExpense, opexExpense);
 
   const buckets = [];
   const cursor = new Date(start);

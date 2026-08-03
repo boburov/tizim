@@ -12,6 +12,7 @@
     "seed:permissions": "node src/seeds/permissions.seed.js",
     "seed:owner": "node src/seeds/owner.seed.js",
     "seed:communication": "node src/seeds/communicationDefaults.seed.js",
+    "seed:expense-categories": "node src/seeds/expenseCategories.seed.js",
     "seed:fake-data": "node src/seeds/fakeData.seed.js",
     "seed:fake-extras": "node src/seeds/fakeExtras.seed.js",
     "seed:fake-extras2": "node src/seeds/fakeExtras2.seed.js",
@@ -43,7 +44,9 @@
     "test:race": "node tests/paymentRace.test.js",
     "test:export": "node tests/exportScope.test.js",
     "test:import": "node tests/importEngine.test.js",
-    "test:assignment": "node tests/assignmentStorage.test.js"
+    "test:assignment": "node tests/assignmentStorage.test.js",
+    "test:salary-rate": "node tests/salaryRate.test.js",
+    "migrate:teacher-compensation": "node src/seeds/migrateTeacherCompensation.seed.js"
   },
   "dependencies": {
     "agenda": "^5.0.0",

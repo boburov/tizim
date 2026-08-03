@@ -1,10 +1,42 @@
 import { z } from "zod";
 import { ROLES } from "../../../constants/roles.js";
 import { isFutureLocalDay } from "../../../helpers/attendance.helper.js";
+import {
+  COMP_BASE_TYPES,
+  COMP_VARIABLE_TYPES,
+  COMP_PERCENT_BASES,
+} from "../../../models/teacherCompensation.model.js";
 
 // gender faqat o'quvchi uchun - o'qituvchida jins so'ralmaydi.
 const STUDENT_FIELDS = ["enrolledAt", "gender"];
-const TEACHER_FIELDS = ["hiredAt"];
+const TEACHER_FIELDS = ["hiredAt", "compensation"];
+
+// ISHGA OLISHDA MAOSH (ixtiyoriy - "keyinroq belgilayman" tugmasi bosilsa
+// umuman yuborilmaydi). Ikki bosqichli modalning 2-qadami shu obyektni
+// to'ldiradi.
+const compensationSchema = z
+  .object({
+    effectiveFrom: z.coerce.date().optional(),
+    baseType: z.enum(COMP_BASE_TYPES).optional(),
+    baseAmount: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
+    variableType: z.enum(COMP_VARIABLE_TYPES).optional(),
+    variableRate: z.coerce.number().min(0).max(1_000_000_000).optional(),
+    percentBase: z.enum(COMP_PERCENT_BASES).optional(),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((d) => d.variableType !== "percent" || (d.variableRate ?? 0) <= 100, {
+    message: "Foiz stavkasi 100 dan oshmasligi kerak",
+    path: ["variableRate"],
+  })
+  .refine(
+    (d) =>
+      (d.baseType && d.baseType !== "none") ||
+      (d.variableType && d.variableType !== "none"),
+    {
+      message: "Kamida bitta maosh qismi (fiksa yoki o'zgaruvchi) tanlanishi kerak",
+      path: ["baseType"],
+    },
+  );
 
 export const registerUserSchema = z.object({
   body: z
@@ -28,6 +60,10 @@ export const registerUserSchema = z.object({
 
       // Teacher-only
       hiredAt: z.coerce.date().nullable().optional(),
+      // Teacher-only: ishga olish formasining 2-qadami. Berilmasa o'qituvchi
+      // maoshsiz yaratiladi va profil sahifasida "Maosh belgilanmagan"
+      // ogohlantirishi ko'rinadi.
+      compensation: compensationSchema.optional(),
 
       // FILIAL. Odatda aktiv filialdan (x-branch-id) olinadi, lekin
       // "Barcha filiallar" rejimida aktiv filial YO'Q - o'shanda client

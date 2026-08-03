@@ -8,6 +8,8 @@ const registerUser = asyncHandler(async (req, res) => {
   const user = await authService.registerUser(req.body, {
     allowedBranchIds: req.allowedBranchIds,
     canSeeAllBranches: req.canSeeAllBranches,
+    // Maosh stavkasi kim tomonidan ochilgani tarixda ko'rinsin.
+    userId: req.user?._id || null,
   });
   res.status(201).json({
     success: true,

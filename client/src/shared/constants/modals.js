@@ -119,6 +119,10 @@ export const MODAL = Object.freeze({
 
   // Teacher salary (O'qituvchi maoshlari)
   SALARY_ADD_PAYOUT: "salary:addPayout",
+  // O'qituvchining MARKAZ darajasidagi standart maosh stavkasi.
+  // SALARY_PERIOD_* dan farqi: u bitta GURUH uchun kelishuv, bu esa
+  // o'qituvchining barcha guruhlariga meros bo'ladigan standart.
+  TEACHER_COMPENSATION_SET: "teacherCompensation:set",
   SALARY_PERIOD_CREATE: "salary:periodCreate",
   SALARY_PERIOD_EDIT: "salary:periodEdit",
 

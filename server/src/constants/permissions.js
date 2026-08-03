@@ -68,6 +68,14 @@ export const PERMISSIONS = Object.freeze({
   SALARY_READ: "salary.read",
   SALARY_PAY: "salary.pay",
 
+  // UMUMIY CHIQIMLAR (ijara, kommunal, ta'mir, reklama, jihoz, soliq).
+  // SALARY_* dan ATAYLAB ajratilgan: maosh to'lash va ofis xarajatlarini
+  // yozish odatda BOSHQA odamlarning ishi (kassir / xo'jalik mudiri).
+  EXPENSES_READ: "expenses.read",
+  EXPENSES_CREATE: "expenses.create",
+  // Kategoriyalarni boshqarish va chiqimni O'CHIRISH - kuchliroq huquq.
+  EXPENSES_MANAGE: "expenses.manage",
+
   // Chiqim tasdig'i (limitdan oshgan to'lovlar).
   // FINANCE_APPROVE - tasdiqlash/rad etish huquqi. Bu ruxsat egasi limitdan
   // ham OZOD bo'ladi (u baribir o'zi tasdiqlay olardi).
@@ -211,6 +219,12 @@ export const PERMISSION_LABELS = {
 
   [PERMISSIONS.SALARY_READ]: { label: "Maoshlarni ko'rish", group: "finance" },
   [PERMISSIONS.SALARY_PAY]: { label: "Maosh to'lash", group: "finance" },
+  [PERMISSIONS.EXPENSES_READ]: { label: "Chiqimlarni ko'rish", group: "finance" },
+  [PERMISSIONS.EXPENSES_CREATE]: { label: "Chiqim qo'shish", group: "finance" },
+  [PERMISSIONS.EXPENSES_MANAGE]: {
+    label: "Chiqim kategoriyalari va o'chirish",
+    group: "finance",
+  },
   [PERMISSIONS.FINANCE_APPROVE]: {
     label: "Chiqimni tasdiqlash",
     group: "finance",

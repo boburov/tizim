@@ -49,7 +49,10 @@ export const ensureGroupFee = async (group, year, month, { session } = {}) => {
 // Eski o'quvchilarni qo'shganda o'tgan oylarda GroupFee bo'lmasa, qarz 0 chiqmasligi
 // uchun shu summa backfill qilinadi. Kelajakdagi (oshirilgan) tarif o'tmishga
 // tatbiq qilinmaydi - aks holda o'quvchi o'sha vaqtdagidan ortiq qarzdor bo'lardi.
-const nearestFeeAmount = async (group, year, month) => {
+// EKSPORT: previewBackdate shu funksiyani ishlatadi - u FAQAT O'QIYDI
+// (hech narsa yaratmaydi), shuning uchun "bu amal qancha qarz yaratadi?"
+// savoliga yon ta'sirsiz javob berish uchun aynan mos.
+export const nearestFeeAmount = async (group, year, month) => {
   const idx = year * 12 + (month - 1);
   const fees = await GroupFee.find({ group })
     .select({ year: 1, month: 1, amount: 1 })

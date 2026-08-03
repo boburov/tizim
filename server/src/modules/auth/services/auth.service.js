@@ -20,6 +20,7 @@ import env from "../../../config/env.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 import Branch from "../../../models/branch.model.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
+import logger from "../../../config/logger.js";
 
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -331,5 +332,36 @@ export const registerUser = async (body, scope = {}) => {
   }
 
   const user = await User.create(doc);
+
+  // ISHGA OLISHDA MAOSH (ikki bosqichli formaning 2-qadami).
+  //
+  // Best-effort: stavkadagi xato XODIM YARATILISHINI bekor QILMAYDI - u
+  // allaqachon saqlangan va bu yerda tranzaksiya yo'q. Xato bo'lsa
+  // o'qituvchi "maoshi belgilanmagan" holatda qoladi va profil sahifasida
+  // ogohlantirish ko'rinadi - bu "keyinroq belgilayman" bilan bir xil holat.
+  if (body.role === ROLES.TEACHER && body.compensation) {
+    try {
+      const compensationService = await import(
+        "../../teacherSalary/services/teacherCompensation.service.js"
+      );
+      await compensationService.setCompensation(
+        {
+          ...body.compensation,
+          teacher: user._id,
+          branchId: homeBranchId,
+          // Stavka ishga olingan kundan boshlanadi (aks holda oradagi
+          // kunlar stavkasiz qolib, maosh 0 chiqardi).
+          effectiveFrom: body.compensation.effectiveFrom || doc.hiredAt,
+        },
+        { _id: scope.userId || null },
+      );
+    } catch (err) {
+      logger.warn(
+        { err, userId: user._id },
+        "Ishga olishda maosh stavkasi belgilanmadi - profil orqali kiritish kerak",
+      );
+    }
+  }
+
   return sanitizeUser(user);
 };

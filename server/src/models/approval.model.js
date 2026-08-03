@@ -53,6 +53,17 @@ export const APPROVAL_KINDS = Object.freeze({
   // chegirma yopilib, yonidagi eshik ochiq qolardi.
   GROUP_FEE_SET: "group_fee_set", // (configuration)
   STAFF_HIRE: "staff_hire", // ishga olish (configuration)
+  // O'qituvchining MARKAZ darajasidagi standart maosh stavkasi.
+  // SALARY_TERMS bir guruhga ta'sir qiladi, bu esa o'qituvchining BARCHA
+  // guruhlariga - ya'ni iqtisodiy ta'siri kattaroq, shuning uchun u ham
+  // (undan ham kuchliroq sabab bilan) tasdiqdan o'tadi.
+  TEACHER_COMPENSATION_SET: "teacher_compensation_set", // (configuration)
+  // O'quvchini ORQAGA SANA bilan guruhga qo'shish: o'tgan oylar uchun
+  // QARZ YARATADI, ya'ni chegirmaning teskarisi. Summasi bor → financial.
+  MEMBERSHIP_BACKDATE: "membership_backdate", // (financial)
+  // UMUMIY CHIQIM (ijara, ta'mir, reklama, jihoz). Pul hisobdan chiqadi →
+  // financial, filial limitiga solishtiriladi.
+  EXPENSE_CREATE: "expense_create", // (financial)
 });
 
 export const ALL_APPROVAL_KINDS = Object.values(APPROVAL_KINDS);
@@ -66,6 +77,10 @@ export const KIND_CATEGORY = Object.freeze({
   [APPROVAL_KINDS.DISCOUNT_SET]: APPROVAL_CATEGORIES.CONFIGURATION,
   [APPROVAL_KINDS.GROUP_FEE_SET]: APPROVAL_CATEGORIES.CONFIGURATION,
   [APPROVAL_KINDS.STAFF_HIRE]: APPROVAL_CATEGORIES.CONFIGURATION,
+  [APPROVAL_KINDS.TEACHER_COMPENSATION_SET]: APPROVAL_CATEGORIES.CONFIGURATION,
+  // FINANCIAL: yaratiladigan qarz summasi limitga solishtiriladi.
+  [APPROVAL_KINDS.MEMBERSHIP_BACKDATE]: APPROVAL_CATEGORIES.FINANCIAL,
+  [APPROVAL_KINDS.EXPENSE_CREATE]: APPROVAL_CATEGORIES.FINANCIAL,
 });
 
 export const resolveCategory = (kind) => {

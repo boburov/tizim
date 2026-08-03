@@ -14,4 +14,21 @@ export const teacherSalaryAPI = {
   addTransaction: (body) => http.post(ENDPOINTS.teacherSalary.transactions, body),
   removeTransaction: (id) =>
     http.delete(ENDPOINTS.teacherSalary.transactionById(id)),
+
+  // ── STANDART MAOSH STAVKASI ──
+  // setCompensation YANGI davr ochadi (eskisini yopadi) - maosh TARIXI
+  // saqlanadi. amend esa amaldagi stavkani TUZATADI (xato kiritish uchun).
+  compensations: (teacherId) =>
+    http.get(ENDPOINTS.teacherSalary.compensationsByTeacher(teacherId)),
+  setCompensation: (body) =>
+    http.post(ENDPOINTS.teacherSalary.compensations, body),
+  amendCompensation: (id, body) =>
+    http.patch(ENDPOINTS.teacherSalary.compensationById(id), body),
+  removeCompensation: (id) =>
+    http.delete(ENDPOINTS.teacherSalary.compensationById(id)),
+
+  // ── KPI mukofoti / jarima ──
+  addAdjustment: (body) => http.post(ENDPOINTS.teacherSalary.adjustments, body),
+  removeAdjustment: (id) =>
+    http.delete(ENDPOINTS.teacherSalary.adjustmentById(id)),
 };

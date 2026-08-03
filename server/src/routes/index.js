@@ -12,6 +12,7 @@ import attendanceRouter from "../modules/attendance/attendance.routes.js";
 import teacherAttendanceRouter from "../modules/teacherAttendance/teacherAttendance.routes.js";
 import attendanceExemptionsRouter from "../modules/attendanceExemptions/attendanceExemptions.routes.js";
 import attendanceSettingsRouter from "../modules/attendanceSettings/attendanceSettings.routes.js";
+import lessonCancellationsRouter from "../modules/lessonCancellations/lessonCancellations.routes.js";
 import gradesRouter from "../modules/grades/grades.routes.js";
 import notificationsRouter from "../modules/notifications/notifications.routes.js";
 import systemNotificationsRouter from "../modules/systemNotifications/systemNotifications.routes.js";
@@ -27,6 +28,7 @@ import searchRouter from "../modules/search/search.routes.js";
 import financeRouter from "../modules/finance/finance.routes.js";
 import depositsRouter from "../modules/deposits/deposits.routes.js";
 import teacherSalaryRouter from "../modules/teacherSalary/teacherSalary.routes.js";
+import expensesRouter from "../modules/expenses/expenses.routes.js";
 import financeReportRouter from "../modules/financeReport/financeReport.routes.js";
 import expenseApprovalsRouter from "../modules/expenseApprovals/expenseApprovals.routes.js";
 import aiRouter from "../modules/ai/ai.routes.js";
@@ -57,6 +59,9 @@ router.use("/attendance", attendanceRouter);
 router.use("/teacher-attendance", teacherAttendanceRouter);
 router.use("/attendance-exemptions", attendanceExemptionsRouter);
 router.use("/attendance-settings", attendanceSettingsRouter);
+// Bekor qilingan darslar: o'tmagan dars uchun o'quvchi to'lamaydi va
+// o'qituvchining soatbay maoshiga ham sanalmaydi.
+router.use("/lesson-cancellations", lessonCancellationsRouter);
 
 // Grading subsystem
 router.use("/grades", gradesRouter);
@@ -87,6 +92,9 @@ router.use("/admin-dashboard", adminDashboardRouter);
 router.use("/finance", financeRouter);
 router.use("/deposits", depositsRouter);
 router.use("/teacher-salary", teacherSalaryRouter);
+// Umumiy chiqimlar (ijara, kommunal, ta'mir, reklama...). Maosh bu yerda EMAS -
+// u /teacher-salary da qoladi; hisobot ikkalasini qo'shib ko'rsatadi.
+router.use("/expenses", expensesRouter);
 router.use("/finance-report", financeReportRouter);
 // Tasdiqlar. "/expense-approvals" - eski (frontend shu manzilni biladi),
 // "/approvals" - yangi umumiy nom: ro'yxatda endi chiqim ham, sozlama

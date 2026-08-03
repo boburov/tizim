@@ -5,7 +5,8 @@ import TeacherSalary from "../../../models/teacherSalary.model.js";
 import SalaryTransaction from "../../../models/salaryTransaction.model.js";
 import Group from "../../../models/group.model.js";
 import DebtWriteOff from "../../../models/debtWriteOff.model.js";
-import { branchMatchStage } from "../../../helpers/branchContext.helper.js";
+import Expense from "../../../models/expense.model.js";
+import { branchMatchStage, branchFilter } from "../../../helpers/branchContext.helper.js";
 
 // === Sana yordamchilari (UTC) ===
 const monthRange = (year, month) => {
@@ -99,6 +100,62 @@ const billedAndOutstanding = async (Model, year, month) => {
   };
 };
 
+// UMUMIY CHIQIMLAR (ijara, kommunal, ta'mir, reklama, jihoz, soliq).
+//
+// Ikki o'lchov ATAYLAB ajratilgan - ular BOSHQA savolga javob beradi:
+//   cash    - `spentAt` oraliqda: "shu oy kassadan qancha pul chiqdi?"
+//   accrual - `accrualYear/Month`: "shu oyga QAYSI xarajatlar tegishli?"
+// Avgust ijarasini iyulda to'lasa: cash → iyul, accrual → avgust.
+// Foyda hisobi accrual bo'yicha, kassa oqimi cash bo'yicha bo'lishi kerak.
+//
+// FILIAL: markaz umumiy chiqimlari (branchId=null) HAR DOIM qo'shiladi -
+// aks holda ular hech bir filial hisobotiga tushmay, foyda sun'iy
+// yuqori ko'rinardi. Aynan shu maqsadda $or ishlatiladi.
+const expenseBranchMatch = () => {
+  const bf = branchFilter();
+  return Object.keys(bf).length ? [{ $match: { $or: [bf, { branchId: null }] } }] : [];
+};
+
+const sumExpensesCash = async (start, end) => {
+  const [row] = await Expense.aggregate([
+    ...expenseBranchMatch(),
+    { $match: { spentAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
+    { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
+  ]);
+  return { total: row?.total || 0, count: row?.count || 0 };
+};
+
+const sumExpensesAccrual = async (year, month) => {
+  const rows = await Expense.aggregate([
+    ...expenseBranchMatch(),
+    {
+      $match: {
+        accrualYear: Number(year),
+        accrualMonth: Number(month),
+        isDeleted: { $ne: true },
+      },
+    },
+    {
+      $group: {
+        _id: "$categoryKind",
+        total: { $sum: "$amount" },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+  const byKind = { operating: 0, payroll: 0, tax: 0, capital: 0 };
+  let total = 0;
+  let count = 0;
+  for (const r of rows) {
+    if (r._id in byKind) byKind[r._id] = r.total || 0;
+    total += r.total || 0;
+    count += r.count || 0;
+  }
+  // KAPITAL chiqim foydadan DARHOL ayrilmaydi - u aktiv sotib olish.
+  // Shuning uchun "foydaga ta'sir qiluvchi" summa alohida qaytariladi.
+  return { total, count, byKind, expensedTotal: total - byKind.capital };
+};
+
 // === getSummary: tanlangan oy uchun asosiy ko'rsatkichlar (KPI) ===
 export const getSummary = async ({ year, month } = {}) => {
   const now = new Date();
@@ -111,11 +168,14 @@ export const getSummary = async ({ year, month } = {}) => {
   const [
     incomeCash,
     incomeCashPrev,
-    expenseCash,
-    expenseCashPrev,
+    salaryCash,
+    salaryCashPrev,
     studentBilled,
     teacherBilled,
     paymentMethods,
+    opexCash,
+    opexCashPrev,
+    opexAccrual,
   ] = await Promise.all([
     sumTransactions(PaymentTransaction, start, end),
     sumTransactions(PaymentTransaction, prev.start, prev.end),
@@ -124,10 +184,32 @@ export const getSummary = async ({ year, month } = {}) => {
     billedAndOutstanding(StudentPayment, y, m),
     billedAndOutstanding(TeacherSalary, y, m),
     sumByMethod(start, end),
+    sumExpensesCash(start, end),
+    sumExpensesCash(prev.start, prev.end),
+    sumExpensesAccrual(y, m),
   ]);
 
-  const netProfit = incomeCash.total - expenseCash.total;
-  const netProfitPrev = incomeCashPrev.total - expenseCashPrev.total;
+  // ── JAMI CHIQIM ──
+  // Ilgari bu yerda FAQAT maosh bor edi (SalaryTransaction), ya'ni ijara,
+  // kommunal, ta'mir va reklama foydaga umuman ta'sir qilmasdi va "sof foyda"
+  // haqiqiydan doim YUQORI chiqardi. Endi ikkala manba qo'shiladi.
+  const expenseCashTotal = salaryCash.total + opexCash.total;
+  const expenseCashTotalPrev = salaryCashPrev.total + opexCashPrev.total;
+
+  // ── KASSA FOYDASI (cash basis): "shu oy qancha pul qoldi?" ──
+  const cashProfit = incomeCash.total - expenseCashTotal;
+  const cashProfitPrev = incomeCashPrev.total - expenseCashTotalPrev;
+
+  // ── HISOBLANGAN FOYDA (accrual basis): "shu oy qancha ISHLAB TOPDIK?" ──
+  //
+  // NEGA IKKALASI KERAK: o'quvchi to'lamagan bo'lsa ham dars o'tildi va
+  // o'qituvchiga haq hisoblandi - bu oyning HAQIQIY natijasi. Kassa foydasi
+  // esa likvidlikni ko'rsatadi. Ikkalasi ham to'g'ri, lekin BOSHQA savolga.
+  //
+  // Kapital chiqim (jihoz sotib olish) accrual foydadan AYRILMAYDI - u pul
+  // sarfi, lekin xarajat emas (aktiv aktivga aylandi).
+  const accrualExpense = teacherBilled.billed + opexAccrual.expensedTotal;
+  const accrualProfit = studentBilled.billed - accrualExpense;
 
   return {
     period: { year: y, month: m },
@@ -143,16 +225,33 @@ export const getSummary = async ({ year, month } = {}) => {
       count: incomeCash.count,
     },
     expense: {
-      paid: expenseCash.total,
+      // JAMI (maosh + umumiy chiqimlar) - dashboard shuni ko'rsatishi kerak.
+      paid: expenseCashTotal,
+      delta: delta(expenseCashTotal, expenseCashTotalPrev),
+      count: salaryCash.count + opexCash.count,
+      // Maosh qismi (eski maydonlar - orqaga moslik uchun saqlandi).
+      salaryPaid: salaryCash.total,
       billed: teacherBilled.billed,
       outstanding: teacherBilled.outstanding,
       rate: pct(teacherBilled.paid, teacherBilled.billed),
-      delta: delta(expenseCash.total, expenseCashPrev.total),
-      count: expenseCash.count,
+      // Umumiy chiqimlar qismi.
+      operatingPaid: opexCash.total,
+      operatingAccrued: opexAccrual.total,
+      byKind: opexAccrual.byKind,
+      // Kapital sarf - kassadan chiqdi, lekin foydadan ayrilmaydi.
+      capital: opexAccrual.byKind.capital,
     },
-    netProfit,
-    netProfitDelta: delta(netProfit, netProfitPrev),
-    margin: pct(netProfit, incomeCash.total),
+    // Kassa asosidagi foyda (eski nom - frontend buzilmasligi uchun saqlandi).
+    netProfit: cashProfit,
+    netProfitDelta: delta(cashProfit, cashProfitPrev),
+    margin: pct(cashProfit, incomeCash.total),
+    // Yangi: hisoblangan (accrual) foyda - biznesning haqiqiy natijasi.
+    accrual: {
+      revenue: studentBilled.billed,
+      expense: accrualExpense,
+      profit: accrualProfit,
+      margin: pct(accrualProfit, studentBilled.billed),
+    },
     paymentMethods,
   };
 };
@@ -163,18 +262,25 @@ export const getTrend = async ({ months = 12 } = {}) => {
   const result = [];
   for (const p of periods) {
     const { start, end } = monthRange(p.year, p.month);
-    const [income, expense, studentBilled] = await Promise.all([
+    // Trend ham JAMI chiqimni ko'rsatishi kerak - aks holda grafik va KPI
+    // kartochkasi bir-biriga zid raqam ko'rsatardi.
+    const [income, salary, studentBilled, opex] = await Promise.all([
       sumTransactions(PaymentTransaction, start, end),
       sumTransactions(SalaryTransaction, start, end),
       billedAndOutstanding(StudentPayment, p.year, p.month),
+      sumExpensesCash(start, end),
     ]);
+    const expenseTotal = salary.total + opex.total;
     result.push({
       year: p.year,
       month: p.month,
       label: MONTH_SHORT[p.month - 1],
       income: income.total,
-      expense: expense.total,
-      net: income.total - expense.total,
+      expense: expenseTotal,
+      // Chiqimning tarkibi - stacked bar uchun.
+      salaryExpense: salary.total,
+      operatingExpense: opex.total,
+      net: income.total - expenseTotal,
       outstanding: studentBilled.outstanding,
       badDebt: studentBilled.badDebt,
     });

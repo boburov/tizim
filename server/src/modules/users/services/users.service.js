@@ -2,6 +2,10 @@ import User from "../../../models/user.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import TeacherGroupPeriod from "../../../models/teacherGroupPeriod.model.js";
 import TeacherSalary from "../../../models/teacherSalary.model.js";
+// Butunlay o'chirishdan oldin AUDIT IZI tekshiriladi - maosh to'lovi yoki
+// davomat yozuvi bo'lgan o'qituvchi o'chirilmaydi (tarix buzilmasin).
+import SalaryTransaction from "../../../models/salaryTransaction.model.js";
+import Attendance from "../../../models/attendance.model.js";
 import Group from "../../../models/group.model.js";
 import ArchiveReason from "../../../models/archiveReason.model.js";
 import RefreshToken from "../../../models/refreshToken.model.js";
@@ -483,7 +487,46 @@ export const softRemove = async (id, { reasonId, archiveDate, by } = {}) => {
 
     user.isActive = false;
     user.archivedAt = archivedAt;
+
+    // ISHDAN BO'SHASH: o'qituvchi uchun arxivlash = ishdan bo'shash.
+    // terminatedAt EXCLUSIVE - shu kundan boshlab maosh hisoblanmaydi.
+    //
+    // NEGA MUHIM: fiksa oylik (kind="base") TeacherCompensation'dan
+    // avtomatik hisoblanadi va u guruhga bog'liq EMAS. Ya'ni guruhlari
+    // bo'shatilgan bo'lsa ham, terminatedAt qo'yilmasa o'qituvchiga har oy
+    // 2 mln hisoblanib boraverardi - "ishdan ketgan odamga maosh".
+    if (user.role === ROLES.TEACHER) {
+      user.terminatedAt = archivedAt;
+      if (reasonId) {
+        const reason = await ArchiveReason.findById(reasonId, { title: 1 }).lean();
+        if (reason) user.terminationReason = reason.title;
+      }
+    }
     await user.save();
+
+    // Ochiq maosh stavkasini yopamiz va shu sanadan keyingi oylarni qayta
+    // hisoblaymiz. Best-effort: xato bo'lsa arxivlash bekor QILINMAYDI
+    // (xodim allaqachon saqlangan), tungi job qolganini tuzatadi.
+    if (user.role === ROLES.TEACHER) {
+      try {
+        const TeacherCompensation = (
+          await import("../../../models/teacherCompensation.model.js")
+        ).default;
+        await TeacherCompensation.updateMany(
+          { teacher: user._id, effectiveTo: null, isDeleted: { $ne: true } },
+          { $set: { effectiveTo: archivedAt } },
+        );
+        const compensationService = await import(
+          "../../teacherSalary/services/teacherCompensation.service.js"
+        );
+        await compensationService.recomputeFrom(user._id, archivedAt);
+      } catch (err) {
+        logger.warn(
+          { err, userId: user._id },
+          "Ishdan bo'shatishda maosh stavkasi yopilmadi",
+        );
+      }
+    }
   }
 
   return user;
@@ -493,7 +536,33 @@ export const restore = async (id, { reasonId, by } = {}) => {
   const user = await getById(id);
   user.isActive = true;
   user.archivedAt = null;
+
+  // ISHGA QAYTARISH: terminatedAt olib tashlanadi, lekin YOPILGAN maosh
+  // stavkasi AVTOMATIK ochilmaydi - qaytgan o'qituvchi bilan yangi shartnoma
+  // tuzilishi mumkin va eski stavkani jimgina tiklash noto'g'ri bo'lardi.
+  // Owner uni profil sahifasidan qayta belgilaydi.
+  const wasTerminated = Boolean(user.terminatedAt);
+  user.terminatedAt = null;
+  user.terminationReason = "";
   await user.save();
+
+  if (user.role === ROLES.TEACHER && wasTerminated) {
+    try {
+      const compensationService = await import(
+        "../../teacherSalary/services/teacherCompensation.service.js"
+      );
+      const active = await compensationService.getActive(user._id);
+      if (!active) {
+        const name = `${user.firstName} ${user.lastName || ""}`.trim();
+        await systemNotificationsService.create({
+          message: `${name} ishga qaytarildi, lekin maosh stavkasi yopiq holatda. Uni qayta belgilang - aks holda maosh 0 bo'lib hisoblanadi.`,
+          link: `/users/${user._id}`,
+        });
+      }
+    } catch {
+      // bildirishnoma yuborilmasa ham qaytarish buzilmasin
+    }
+  }
 
   if (user.role === ROLES.STUDENT) {
     // archivedAt olib tashlangach yakunlash sanasi a'zolik tarixiga ko'ra qayta
@@ -531,19 +600,43 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
   const isStudent = user.role === ROLES.STUDENT;
   const isTeacher = user.role === ROLES.TEACHER;
 
-  // O'qituvchini o'chirish sharti: (1) faol guruhi bo'lmasin, (2) to'lanmagan
-  // (olmagan) oyliklari bo'lmasin.
+  // ─── O'QITUVCHINI BUTUNLAY O'CHIRISH: DEYARLI HAR DOIM TAQIQLANADI ───
+  //
+  // NEGA eski shart ("to'lanmagan maoshi yo'q") YETARLI EMAS EDI:
+  // maoshlar TO'LIQ to'langan bo'lsa ham, o'chirish SalaryTransaction
+  // yozuvlarini olib ketardi. Ya'ni o'tgan yilning yanvar oyidagi 15 mln
+  // so'mlik CHIQIM yo'q bo'lardi va o'sha oyning foydasi 15 mln ga OSHIB
+  // ketardi. Bu buxgalteriya emas, tarixni tahrirlash.
+  //
+  // Shuning uchun endi o'chirish FAQAT "hech qachon ishlamagan" xodim uchun
+  // ochiq (noto'g'ri yaratilgan hisob). Moliyaviy yoki audit izi bo'lsa -
+  // arxivlash (soft delete) yagona to'g'ri yo'l: tarix saqlanadi, xodim
+  // ro'yxatlardan yo'qoladi.
+  //
+  // DIQQAT: o'quvchilarga hech narsa bo'lmaydi - ular Group'ga tegishli,
+  // o'qituvchiga emas. Guruh, a'zolik, to'lov va qarz joyida qoladi.
   if (isTeacher) {
     await assertTeacherHasNoActiveGroup(user, "o'chiring");
-    const owed = await TeacherSalary.exists({
-      teacher: user._id,
-      isDeleted: { $ne: true },
-      $expr: { $lt: ["$paidAmount", "$expectedAmount"] },
-    });
-    if (owed) {
+
+    const [salaryCount, txnCount, periodCount, attendanceCount] = await Promise.all([
+      TeacherSalary.countDocuments({ teacher: user._id }),
+      SalaryTransaction.countDocuments({ teacher: user._id }),
+      TeacherGroupPeriod.countDocuments({ teacher: user._id }),
+      Attendance.countDocuments({ recordedBy: user._id }),
+    ]);
+
+    const traces = [];
+    if (salaryCount) traces.push(`${salaryCount} ta maosh yozuvi`);
+    if (txnCount) traces.push(`${txnCount} ta maosh to'lovi`);
+    if (periodCount) traces.push(`${periodCount} ta dars berish davri`);
+    if (attendanceCount) traces.push(`${attendanceCount} ta davomat yozuvi`);
+
+    if (traces.length) {
       throw new ApiError(
         400,
-        "O'qituvchining to'lanmagan (olmagan) oyliklari bor. Avval maoshlarni to'liq to'lang, so'ng o'chiring.",
+        `Bu o'qituvchida tarix bor (${traces.join(", ")}). Uni butunlay o'chirib bo'lmaydi - ` +
+          `o'chirilsa o'tgan oylarning chiqimi yo'qolib, foyda hisoboti yolg'on bo'lardi. ` +
+          `Buning o'rniga ARXIVLANG: tarix saqlanadi, o'qituvchi ro'yxatlardan yo'qoladi.`,
       );
     }
   }
@@ -743,6 +836,38 @@ export const createStaff = async (body, currentUser) => {
     // Kalendar kuni (UTC-midnight) - "bugun" mahalliy (Asia/Tashkent) kun bo'yicha.
     hiredAt: body.hiredAt ? parseLocalDay(body.hiredAt) : localTodayMidnight(),
   });
+
+  // ISHGA OLISHDA OYLIK: forma bilan birga kelgan bo'lsa darhol stavka ochamiz.
+  //
+  // TASDIQ TAKRORLANMAYDI: bu yerga yetib kelish uchun ishga olish so'rovining
+  // O'ZI allaqachon tasdiqdan o'tgan (yoki foydalanuvchida tasdiqdan ozod
+  // qiluvchi ruxsat bor). Ikkinchi marta tasdiq so'rash xodimni "yaratilgan,
+  // lekin maoshsiz" holatda qoldirardi.
+  //
+  // Best-effort: stavkadagi xato XODIM YARATILISHINI bekor qilmaydi - u
+  // allaqachon saqlangan va tranzaksiya yo'q. Xato qaytariladi, owner
+  // stavkani profil sahifasidan qayta kiritadi.
+  if (body.role === ROLES.TEACHER && body.compensation) {
+    try {
+      const compensationService = await import(
+        "../../teacherSalary/services/teacherCompensation.service.js"
+      );
+      await compensationService.setCompensation(
+        {
+          ...body.compensation,
+          teacher: user._id,
+          branchId: body.compensation.branchId ?? homeBranchId,
+          effectiveFrom: body.compensation.effectiveFrom || user.hiredAt,
+        },
+        currentUser,
+      );
+    } catch (err) {
+      logger.warn(
+        { err, userId: user._id },
+        "Ishga olishda maosh stavkasi belgilanmadi - profil orqali kiritish kerak",
+      );
+    }
+  }
 
   return buildUserProfile(user);
 };

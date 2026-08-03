@@ -7,6 +7,15 @@ import SelectField from "@/shared/components/ui/select/SelectField";
 import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
 import BranchCreateModal from "@/owner/features/branches/components/modals/BranchCreateModal";
+import CompensationFields from "@/owner/features/teacherSalary/components/CompensationFields";
+
+import {
+  BASE_TYPES,
+  VARIABLE_TYPES,
+  hasAnyPart,
+  toCompensationPayload,
+  describeCompensation,
+} from "@/owner/features/teacherSalary/utils/compensation";
 
 import { todayInput } from "@/shared/utils/formatDate";
 import { ROLES, ROLE_LABELS } from "@/shared/constants/roles";
@@ -23,6 +32,10 @@ const GENDER_OPTIONS = [
 ];
 
 const initialState = (defaultRole) => ({
+  // ── qadam boshqaruvi ──
+  // 1 = shaxsiy ma'lumot, 2 = maosh (faqat o'qituvchi uchun).
+  step: 1,
+
   firstName: "",
   lastName: "",
   username: "",
@@ -39,6 +52,15 @@ const initialState = (defaultRole) => ({
   // teacher
   birthDate: "",
   hiredAt: "",
+
+  // ── 2-qadam: maosh stavkasi ──
+  baseType: BASE_TYPES.FIXED_MONTHLY,
+  baseAmount: "",
+  variableType: VARIABLE_TYPES.NONE,
+  variableRate: "",
+  percentBase: "billed",
+  effectiveFrom: "",
+  note: "",
 });
 
 // `onCreated` - selectdan "Yangi qo'shish" orqali ochilganda beriladi:
@@ -52,6 +74,8 @@ const UserCreateModal = ({
 }) => {
   const obj = useObjectState(initialState(defaultRole));
   const isStudent = obj.role === ROLES.STUDENT;
+  const isTeacher = obj.role === ROLES.TEACHER;
+  const onSalaryStep = obj.step === 2;
 
   // FILIAL. Odatda server aktiv filialdan (x-branch-id) oladi. Lekin
   // "Barcha filiallar" rejimida aktiv filial YO'Q va server 400 qaytaradi
@@ -76,24 +100,31 @@ const UserCreateModal = ({
   const usernameShort =
     obj.username.trim().length > 0 && obj.username.trim().length < 3;
 
-  const isValid = () =>
+  // 1-qadam to'liqmi (maosh maydonlari bu yerda TEKSHIRILMAYDI - ular
+  // ixtiyoriy va 2-qadamda "keyinroq" bilan butunlay o'tkazib yuborilishi
+  // mumkin).
+  const isStepOneValid = () =>
     obj.firstName.trim() &&
     obj.lastName.trim() &&
     obj.username.trim().length >= 3 &&
     obj.password &&
     obj.role &&
-    // O'qituvchi uchun ishga olingan sana, o'quvchi uchun ro'yxatga olingan sana majburiy.
     (obj.role !== ROLES.TEACHER || obj.hiredAt) &&
     (obj.role !== ROLES.STUDENT || obj.enrolledAt) &&
-    // "Barcha filiallar" rejimida qaysi filialga yozishni bilish shart.
     (!needsBranch || obj.homeBranchId);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!isValid()) return;
-    // Rol majburiy: bo'sh yoki noto'g'ri qiymat bilan yuborilmasin
-    if (obj.role !== ROLES.STUDENT && obj.role !== ROLES.TEACHER) return;
+  // Kiritilgan maosh stavkasi yaroqlimi. Bo'sh bo'lishi ham MUMKIN
+  // ("keyinroq belgilayman"), lekin yarim to'ldirilgan bo'lmasligi kerak.
+  const salaryTouched =
+    (obj.baseType === BASE_TYPES.FIXED_MONTHLY && obj.baseAmount !== "") ||
+    (obj.variableType !== VARIABLE_TYPES.NONE && obj.variableRate !== "");
+  const salaryValid = hasAnyPart(obj);
+  const percentTooBig =
+    obj.variableType === VARIABLE_TYPES.PERCENT && Number(obj.variableRate) > 100;
 
+  // Foydalanuvchi hujjatini yig'adi. `withSalary=false` bo'lsa maosh
+  // qo'shilmaydi - "keyinroq belgilayman" yo'li.
+  const buildBody = (withSalary) => {
     const body = {
       firstName: obj.firstName.trim(),
       lastName: obj.lastName.trim(),
@@ -101,157 +132,282 @@ const UserCreateModal = ({
       password: obj.password,
       role: obj.role,
     };
-    // Telefon ixtiyoriy: faqat kiritilgan bo'lsa yuboriladi.
     if (needsBranch && obj.homeBranchId) body.homeBranchId = obj.homeBranchId;
     if (obj.phone.trim()) body.phone = obj.phone.trim();
     if (obj.gender) body.gender = obj.gender;
 
     if (isStudent) {
-      // Ro'yxatga olingan sana majburiy (isValid tekshiradi).
       body.enrolledAt = obj.enrolledAt;
     } else {
       if (obj.birthDate) body.birthDate = obj.birthDate;
       if (obj.hiredAt) body.hiredAt = obj.hiredAt;
+      if (withSalary && salaryValid) {
+        body.compensation = toCompensationPayload({
+          ...obj,
+          // Sana ko'rsatilmasa stavka ISHGA OLINGAN kundan boshlanadi -
+          // aks holda oradagi kunlar stavkasiz qolib, maosh 0 chiqardi.
+          effectiveFrom: obj.effectiveFrom || obj.hiredAt,
+        });
+      }
+    }
+    return body;
+  };
+
+  const submit = (withSalary) => {
+    setIsLoading(true);
+    mutate(buildBody(withSalary));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    // ── 1-qadam ──
+    if (!onSalaryStep) {
+      if (!isStepOneValid()) return;
+      if (obj.role !== ROLES.STUDENT && obj.role !== ROLES.TEACHER) return;
+
+      // O'quvchida maosh qadami YO'Q - darhol yaratiladi.
+      if (!isTeacher) return submit(false);
+
+      // O'qituvchi: maosh qadamiga o'tamiz.
+      return obj.setFields({
+        step: 2,
+        // Amal qilish sanasi default - ishga olingan kun.
+        effectiveFrom: obj.effectiveFrom || obj.hiredAt,
+      });
     }
 
-    setIsLoading(true);
-    mutate(body);
+    // ── 2-qadam ──
+    if (!salaryValid || percentTooBig) return;
+    submit(true);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <InputField
-          name="firstName"
-          label="Ism"
-          value={obj.firstName}
-          onChange={(e) => obj.setField("firstName", e.target.value)}
-          required
-          disabled={isLoading}
-        />
-        <InputField
-          name="lastName"
-          label="Familiya"
-          value={obj.lastName}
-          onChange={(e) => obj.setField("lastName", e.target.value)}
-          required
-          disabled={isLoading}
-        />
-      </div>
-      <InputField
-        name="username"
-        label="Login (username)"
-        placeholder="Kamida 3 ta belgi"
-        value={obj.username}
-        onChange={(e) => obj.setField("username", e.target.value)}
-        error={usernameShort}
-        required
-        disabled={isLoading}
-      />
-      <InputField
-        type="tel"
-        name="phone"
-        label="Telefon (ixtiyoriy)"
-        value={obj.phone}
-        onChange={(e) => obj.setField("phone", e.target.value)}
-        disabled={isLoading}
-      />
-      <InputField
-        type="password"
-        name="password"
-        label="Parol"
-        value={obj.password}
-        onChange={(e) => obj.setField("password", e.target.value)}
-        required
-        disabled={isLoading}
-      />
-      <SelectField
-        label="Rol"
-        value={obj.role}
-        onChange={(v) => obj.setField("role", v)}
-        options={ROLE_OPTIONS}
-        required
-        disabled={isLoading}
-      />
-
-      {needsBranch && (
-        <CreatableSelectField
-          label="Filial"
-          placeholder="Filialni tanlang"
-          value={obj.homeBranchId}
-          onChange={(v) => obj.setField("homeBranchId", v?.target?.value ?? v)}
-          options={branchOptions}
-          required
-          error={!obj.homeBranchId}
-          disabled={isLoading}
-          createLabel="Yangi filial"
-          createTitle="Yangi filial"
-          createClassName="max-w-lg"
-          createPermission={PERMISSIONS.BRANCHES_CREATE}
-          create={<BranchCreateModal />}
-          onCreated={(b) => obj.setField("homeBranchId", String(b._id))}
-        />
+      {/* Qadam indikatori - faqat o'qituvchida (o'quvchida bitta qadam). */}
+      {isTeacher && (
+        <div className="flex items-center gap-2 text-xs">
+          <span
+            className={
+              onSalaryStep
+                ? "text-muted-foreground"
+                : "font-medium text-foreground"
+            }
+          >
+            1. Ma'lumotlar
+          </span>
+          <span className="h-px flex-1 bg-border" />
+          <span
+            className={
+              onSalaryStep
+                ? "font-medium text-foreground"
+                : "text-muted-foreground"
+            }
+          >
+            2. Maosh
+          </span>
+        </div>
       )}
 
-      {isStudent ? (
-        <div className="grid grid-cols-2 gap-3">
+      {!onSalaryStep ? (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <InputField
+              name="firstName"
+              label="Ism"
+              value={obj.firstName}
+              onChange={(e) => obj.setField("firstName", e.target.value)}
+              required
+              disabled={isLoading}
+            />
+            <InputField
+              name="lastName"
+              label="Familiya"
+              value={obj.lastName}
+              onChange={(e) => obj.setField("lastName", e.target.value)}
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <InputField
+            name="username"
+            label="Login (username)"
+            placeholder="Kamida 3 ta belgi"
+            value={obj.username}
+            onChange={(e) => obj.setField("username", e.target.value)}
+            error={usernameShort}
+            required
+            disabled={isLoading}
+          />
+          <InputField
+            type="tel"
+            name="phone"
+            label="Telefon (ixtiyoriy)"
+            value={obj.phone}
+            onChange={(e) => obj.setField("phone", e.target.value)}
+            disabled={isLoading}
+          />
+          <InputField
+            type="password"
+            name="password"
+            label="Parol"
+            value={obj.password}
+            onChange={(e) => obj.setField("password", e.target.value)}
+            required
+            disabled={isLoading}
+          />
           <SelectField
-            label="Jinsi"
-            value={obj.gender}
-            onChange={(v) => obj.setField("gender", v)}
-            options={GENDER_OPTIONS}
-            placeholder="Tanlang"
-            disabled={isLoading}
-          />
-          <InputField
-            type="date"
-            name="enrolledAt"
-            label="Ro'yxatga olingan sana"
-            value={obj.enrolledAt}
-            max={todayInput()}
-            onChange={(e) => obj.setField("enrolledAt", e.target.value)}
-            required
-            error={isStudent && !obj.enrolledAt}
-            disabled={isLoading}
-          />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <InputField
-            type="date"
-            name="birthDate"
-            label="Tug'ilgan sana"
-            value={obj.birthDate}
-            onChange={(e) => obj.setField("birthDate", e.target.value)}
-            disabled={isLoading}
-          />
-          <InputField
-            type="date"
-            name="hiredAt"
-            label="Ishga olingan sana"
-            value={obj.hiredAt}
-            max={todayInput()}
-            onChange={(e) => obj.setField("hiredAt", e.target.value)}
+            label="Rol"
+            value={obj.role}
+            onChange={(v) => obj.setField("role", v)}
+            options={ROLE_OPTIONS}
             required
             disabled={isLoading}
           />
-        </div>
-      )}
 
-      <div className="flex gap-2 pt-1">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => close?.()}
-          disabled={isLoading}
-          className="flex-1"
-        >
-          Bekor qilish
-        </Button>
-        <Button type="submit" disabled={isLoading} className="flex-1">
-          {isLoading ? "Yaratilmoqda..." : "Yaratish"}
-        </Button>
-      </div>
+          {needsBranch && (
+            <CreatableSelectField
+              label="Filial"
+              placeholder="Filialni tanlang"
+              value={obj.homeBranchId}
+              onChange={(v) =>
+                obj.setField("homeBranchId", v?.target?.value ?? v)
+              }
+              options={branchOptions}
+              required
+              error={!obj.homeBranchId}
+              disabled={isLoading}
+              createLabel="Yangi filial"
+              createTitle="Yangi filial"
+              createClassName="max-w-lg"
+              createPermission={PERMISSIONS.BRANCHES_CREATE}
+              create={<BranchCreateModal />}
+              onCreated={(b) => obj.setField("homeBranchId", String(b._id))}
+            />
+          )}
+
+          {isStudent ? (
+            <div className="grid grid-cols-2 gap-3">
+              <SelectField
+                label="Jinsi"
+                value={obj.gender}
+                onChange={(v) => obj.setField("gender", v)}
+                options={GENDER_OPTIONS}
+                placeholder="Tanlang"
+                disabled={isLoading}
+              />
+              <InputField
+                type="date"
+                name="enrolledAt"
+                label="Ro'yxatga olingan sana"
+                value={obj.enrolledAt}
+                max={todayInput()}
+                onChange={(e) => obj.setField("enrolledAt", e.target.value)}
+                required
+                error={isStudent && !obj.enrolledAt}
+                disabled={isLoading}
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <InputField
+                type="date"
+                name="birthDate"
+                label="Tug'ilgan sana"
+                value={obj.birthDate}
+                onChange={(e) => obj.setField("birthDate", e.target.value)}
+                disabled={isLoading}
+              />
+              <InputField
+                type="date"
+                name="hiredAt"
+                label="Ishga olingan sana"
+                value={obj.hiredAt}
+                max={todayInput()}
+                onChange={(e) => obj.setField("hiredAt", e.target.value)}
+                required
+                disabled={isLoading}
+              />
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => close?.()}
+              disabled={isLoading}
+              className="flex-1"
+            >
+              Bekor qilish
+            </Button>
+            <Button
+              type="submit"
+              disabled={isLoading || !isStepOneValid()}
+              className="flex-1"
+            >
+              {isTeacher ? "Keyingisi" : isLoading ? "Yaratilmoqda..." : "Yaratish"}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">
+            <b>
+              {obj.firstName} {obj.lastName}
+            </b>{" "}
+            uchun maosh. Keyinroq ham belgilash mumkin, lekin stavkasiz
+            o'qituvchining maoshi <b>0</b> bo'lib hisoblanadi.
+          </p>
+
+          <CompensationFields form={obj} disabled={isLoading} />
+
+          {salaryValid && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Natija: </span>
+              <b>{describeCompensation(obj)}</b>
+            </div>
+          )}
+
+          {salaryTouched && !salaryValid && (
+            <p className="text-xs text-red-600 dark:text-red-300">
+              Stavka summasi kiritilmagan. To'ldiring yoki "Keyinroq
+              belgilayman" ni tanlang.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-2 pt-1 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => obj.setField("step", 1)}
+              disabled={isLoading}
+              className="sm:flex-1"
+            >
+              Orqaga
+            </Button>
+            {/* MAOSHSIZ YARATISH: forma to'liq bo'lmasa ham o'qituvchi
+                yaratiladi. Bu ATAYLAB alohida tugma - "Yaratish" ni bosib
+                jimgina maoshsiz qolib ketish eng yomon holat bo'lardi. */}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => submit(false)}
+              disabled={isLoading}
+              className="sm:flex-1"
+            >
+              Keyinroq belgilayman
+            </Button>
+            <Button
+              type="submit"
+              disabled={isLoading || !salaryValid || percentTooBig}
+              className="sm:flex-1"
+            >
+              {isLoading ? "Yaratilmoqda..." : "Yaratish"}
+            </Button>
+          </div>
+        </>
+      )}
     </form>
   );
 };

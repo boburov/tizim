@@ -76,6 +76,12 @@ const userSchema = new mongoose.Schema(
 
     // Faqat teacher rolidagi maydon
     hiredAt: { type: Date, default: null },
+    // ISHDAN BO'SHAGAN sana (EXCLUSIVE - shu kundan boshlab ishlamaydi).
+    // Maosh proratsiyasi shu chegaragacha hisoblanadi va ochiq
+    // TeacherGroupPeriod/TeacherCompensation davrlari shu sanada yopiladi.
+    // null = hali ishlayapti.
+    terminatedAt: { type: Date, default: null },
+    terminationReason: { type: String, trim: true, default: "" },
   },
   { timestamps: true },
 );

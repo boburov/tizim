@@ -294,5 +294,7 @@ export const qk = Object.freeze({
     myFinance: () => ["teacherSalary", "me", "finance"],
     obligations: (params) => ["teacherSalary", "obligations", params],
     report: (params) => ["teacherSalary", "report", params],
+    // O'qituvchi standart maosh stavkasi (tarix + amaldagisi).
+    compensations: (teacherId) => ["teacherSalary", "compensations", teacherId],
   },
 });

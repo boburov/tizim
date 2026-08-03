@@ -4304,3 +4304,275 @@ Endi interaktiv tasdiq va yakuniy oqimni sinayman:
 <sub>session `349bbb34` · branch `main` · 21 ta qadam</sub>
 
 ---
+
+## 2026-08-04 02:37 — berishim kerak bo'lgan savoolar bor hozirda tizim mongodb da ishlamoqd
+
+**So'rov**
+
+> berishim kerak bo'lgan savoolar bor hozirda tizim mongodb da ishlamoqda buni men postgresql + prismaga otkazsam bu men uchun yaxshi bo'aldimi yoki yoq' /llm-council
+
+**Buyruqlar (18)**
+
+```sh
+ls /Users/shukrullo/.claude/skills/llm-council/scripts/ 2>&1; echo "--- .env keys (working dir):"; grep -oE "^(OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_MODEL|GEMINI…
+sed -n 1,60p /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py
+which gemini codex 2>&1; echo "---"; ls .env 2>&1
+cd /Users/shukrullo/Desktop/lc-total/server && echo "modellar: $(ls src/models/*.model.js | wc -l)"; echo "aggregate chaqiruvlari: $(grep -rl "\.aggregate(" src…
+python3 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py "Men O'zbekistondagi o'quv markazlari uchun SaaS CRM yozganman. Hozirgi stack: Node.js…
+grep -n "def main\|is_cli_available\|def query_gemini\b\|source\|GEMINI_MODEL" /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py | head -30
+sed -n 183,200p /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py
+cd /Users/shukrullo/Desktop/lc-total && timeout 90 gemini -p "Javob bering: 2+2 nechchi?" 2>&1 | head -20; echo "EXIT=$?"
+gemini -p "Javob bering: 2+2 nechchi?" 2>&1 | head -20; echo "EXIT=${PIPESTATUS[0]}"
+echo "--- .env gitignore'dami:"; git check-ignore -v server/.env 2>&1 | head -2; echo "--- .env git tarixida bormi:"; git log --oneline --all -- server/.env 2>&…
+echo "--- WORKLOG git'da kuzatiladimi:"; git ls-files --error-unmatch .claude/WORKLOG.md >/dev/null 2>&1 && echo "HA - kuzatiladi" || echo "yo'q"; echo "--- kal…
+git log --oneline origin/main -1 2>&1; echo "--- 95a7b93 origin'ga push qilinganmi:"; git branch -r --contains 95a7b93 2>&1 | head -3; echo "--- repo public/pri…
+echo "=== WORKLOG.md dagi sir-namunalar ==="; grep -noiE "(AIza[0-9A-Za-z_-]{10,}|sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|[0-9]{8,10}:AA[A-Za-z0-9_-]{30,}|mo…
+cd server && echo "=== Mongo replica set (tranzaksiya uchun SHART) ==="; mongosh --quiet --eval 'const s=db.hello(); print(s.setName ? "Replica set: "+s.setName…
+cd server && cat > .tmp-rs.mjs <<'EOF' import "dotenv/config"; import mongoose from "mongoose"; await mongoose.connect(process.env.MONGO_URL); const info = awai…
+cat > /Users/shukrullo/Desktop/lc-total/server/.tmp-rs.mjs <<'EOF' import "dotenv/config"; import mongoose from "mongoose"; await mongoose.connect(process.env.M…
+echo "=== 'dev rejimida ogohlantiruvchi to'siq' amalda bormi? ==="; grep -rn "aggregate" src/models/plugins/*.js src/config/db.js 2>/dev/null | head -5; grep -r…
+ls src/modules | grep -i "pay\|financ\|salar" ; echo "---"; grep -rn "amount" src/modules/*/validators/*.js 2>/dev/null | grep -oE "amount:.*" | head -6
+```
+
+**Natija**
+
+`gemini` CLI bor, `codex` (ChatGPT) yo'q — kengashda faqat Gemini qatnasha oladi. Avval loyihaning aniq raqamlarini yig'ay:
+
+CLI ham sinaldi-yu, muvaffaqiyatsiz bo'lgan. To'g'ridan-to'g'ri tekshiray:
+
+Kengash ishlamadi, lekin sababi juda muhim:
+
+Kengashni to'xtatib turaman — jiddiyroq narsa chiqdi. Boshqa sirlar ham bormi tekshiray:
+
+Kengash ishlamadi — sababi jiddiy. Javob berishdan oldin ikkita faktni tekshiray:
+
+<sub>session `349bbb34` · branch `main` · 19 ta qadam</sub>
+
+---
+
+## 2026-08-04 02:59 — siz bergan counsil natijalari meni qoniqtirdi menga ushbu featureani b
+
+**So'rov**
+
+> siz bergan counsil natijalari meni qoniqtirdi menga ushbu featureani birma bir qoshib berng
+
+**O'zgargan fayllar (40)**
+
+- `server/src/models/teacherCompensation.model.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/models/teacherGroupPeriod.model.js` — tahrirlandi
+- `server/src/models/teacherSalary.model.js` — tahrirlandi
+- `server/src/models/salaryTransaction.model.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/rateResolver.helper.js` — yaratildi/qayta yozildi
+- `server/src/modules/teacherSalary/services/variableBase.helper.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/teacherSalary/services/teacherSalary.service.js` — tahrirlandi
+- `server/src/modules/groups/services/teacherGroupPeriod.service.js` — tahrirlandi
+- `server/src/models/user.model.js` — tahrirlandi
+- `server/tests/salaryRate.test.js` — yaratildi/qayta yozildi
+- `server/package.json` — tahrirlandi
+- `server/src/models/approval.model.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/teacherCompensation.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/expenseApprovals/services/expenseApproval.service.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/salaryAdjustment.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/teacherSalary/validators/teacherCompensation.validator.js` — yaratildi/qayta yozildi
+- `server/src/modules/teacherSalary/teacherSalary.routes.js` — tahrirlandi
+- `server/src/modules/users/services/users.service.js` — tahrirlandi
+- `server/src/modules/users/validators/createStaff.validator.js` — tahrirlandi
+- `server/src/seeds/migrateTeacherCompensation.seed.js` — yaratildi/qayta yozildi
+- `server/src/modules/teacherSalary/validators/teacherSalary.validator.js` — tahrirlandi
+- `server/src/models/expenseCategory.model.js` — yaratildi/qayta yozildi
+- `server/src/models/expense.model.js` — yaratildi/qayta yozildi
+- `server/src/modules/expenses/services/expense.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/expenses/services/expenseCategory.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/expenses/validators/expense.validator.js` — yaratildi/qayta yozildi
+- `server/src/modules/expenses/expenses.routes.js` — yaratildi/qayta yozildi
+- `server/src/constants/permissions.js` — tahrirlandi
+- `server/src/routes/index.js` — tahrirlandi
+- `server/src/seeds/expenseCategories.seed.js` — yaratildi/qayta yozildi
+- `server/src/modules/financeReport/services/financeReport.service.js` — tahrirlandi
+- `server/src/modules/adminDashboard/services/adminDashboard.service.js` — tahrirlandi
+- `server/src/modules/groups/services/groups.service.js` — tahrirlandi
+- `server/src/modules/finance/services/groupFee.service.js` — tahrirlandi
+- `server/src/modules/groups/validators/addStudent.validator.js` — tahrirlandi
+- `server/src/modules/groups/handlers/addStudent.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/groups/groups.routes.js` — tahrirlandi
+- `server/src/models/lessonCancellation.model.js` — yaratildi/qayta yozildi
+- `server/src/modules/finance/services/studentPayment.service.js` — tahrirlandi
+- `server/src/helpers/lessonCancellation.helper.js` — yaratildi/qayta yozildi
+
+**Buyruqlar (75)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && ls tests/ && cat package.json | head -30
+cd /Users/shukrullo/Desktop/lc-total/server/src && sed -n '176,270p' modules/teacherSalary/services/teacherSalary.service.js
+sed -n '80,200p' modules/teacherSalary/services/salaryCompute.helper.js
+grep -n "export const" modules/groups/services/teacherGroupPeriod.service.js && sed -n '1,60p' modules/groups/services/teacherGroupPeriod.service.js
+grep -n "export const getClassDaysInRange\|export const scheduleActiveOn\|export const toUtcMidnight\|export const localTodayMidnight\|export const holidayKeySe…
+sed -n '137,185p' helpers/attendance.helper.js
+grep -rn "holidayKeySetForRange" --include="*.js" . | grep -v node_modules | head
+grep -rn "computePeriodsSnapshot" --include="*.js" . | grep -v node_modules; echo "=== periodsForMonth ==="; sed -n '237,260p' modules/groups/services/teacherGr…
+grep -n "export const" helpers/branchContext.helper.js
+sed -n '329,345p' helpers/branchContext.helper.js; echo "=== hiredAt in user model ==="; grep -n "hiredAt\|enrolledAt\|homeBranchId" models/user.model.js
+cd /Users/shukrullo/Desktop/lc-total/server && node --input-type=module -e " import('./src/modules/teacherSalary/services/teacherSalary.service.js') .then(() =>…
+node --input-type=module -e " import('./src/modules/teacherSalary/services/teacherSalary.service.js') .then(() => console.log('OK')) .catch(e => { console.error…
+ls tests/helpers/ && head -50 tests/helpers/*.js 2>/dev/null | head -70; echo "=== test script ==="; grep -n "\"test\"" package.json
+grep -n "scripts" -A 45 package.json | grep -n "test\|node --test\|mocha\|jest"; echo "=== how a test runs ==="; head -40 tests/moneyProperty.test.js
+node tests/salaryRate.test.js 2>&1 | tail -60
+sed -n '484,600p' modules/groups/services/teacherGroupPeriod.service.js
+grep -n "APPROVAL_KINDS\.\|executeApproved\|const EXECUTORS\|switch" modules/expenseApprovals/services/expenseApproval.service.js | head -40
+cd /Users/shukrullo/Desktop/lc-total/server/src && sed -n '484,600p' modules/groups/services/teacherGroupPeriod.service.js
+grep -n "SALARY_TERMS\|STAFF_HIRE\|DISCOUNT_SET\|GROUP_FEE_SET\|executeApproved" modules/expenseApprovals/services/expenseApproval.service.js | head -30
+sed -n '405,460p' modules/expenseApprovals/services/expenseApproval.service.js; echo "=== createRequest signature ==="; grep -n "export const createRequest" -A …
+cat modules/teacherSalary/teacherSalary.routes.js; echo "=== handlers ==="; ls modules/teacherSalary/handlers modules/teacherSalary/validators
+head -40 modules/teacherSalary/validators/teacherSalary.validator.js; echo "=== PERMISSIONS salary ==="; grep -n "SALARY" constants/permissions.js
+grep -n "teacherPeriod\|salary" modules/groups/groups.routes.js | head -20; echo "=== all permissions list ==="; sed -n '55,90p' constants/permissions.js
+sed -n '170,200p' modules/groups/groups.routes.js; echo "=== create handler + gating pattern ==="; cat modules/groups/handlers/teacherPeriod.create.handler.js
+mkdir -p modules/teacherSalary/handlers && cat > modules/teacherSalary/handlers/compensation.list.handler.js <<'EOF' import asyncHandler from "../../../middlewa…
+# … yana 50 ta
+```
+
+**Natija**
+
+Council natijasi qabul qilindi. Endi ketma-ket implementatsiya qilaman. Avval aniq reja tuzib, kodni chuqurroq o'qib chiqaman.
+
+Hammasi tushunarli. Boshlaymiz — **1-qadam: `TeacherCompensation` modeli**.
+
+**2-qadam: `TeacherGroupPeriod` stavkalari — `null` = standartdan meros.**
+
+**3-qadam: `TeacherSalary` — `group` nullable + `kind` (base/group/bonus/deduction).**
+
+**4-qadam: stavka aniqlash (rate resolution) — eng muhim qism.**
+
+**5-qadam: `buildSnapshot` — segmentlar bo'yicha hisoblash.**
+
+Endi `buildSnapshot` ni segment asosiga o'tkazaman:
+
+Endi markaz darajasidagi **fiksa oylik (base)** qatorini yaratuvchi servis:
+
+Endi sintaksis va import zanjirini tekshiraman:
+
+Endi hisob-kitobni tekshiruvchi test yozaman (bazasiz, sof funksiyalar):
+
+34 ta test o'tdi. `package.json` ga qo'shaman:
+
+**6-qadam: kompensatsiya servisi + tasdiq (approval) integratsiyasi.**
+
+Endi KPI bonus/jarima qatorlari:
+
+Endi kompensatsiya uchun validator, handler'lar va route'lar:
+
+Endi **ishga olayotganda oylik belgilash** — foydalanuvchining asosiy talabi:
+
+**7-qadam: migratsiya skripti** (production uchun eng nozik qism):
+
+Q4 tugadi. Endi **Q5 — chiqimlar tizimi** (mutlaqo yo'q edi):
+
+Endi chiqim servisi (tasdiq limiti bilan):
+
+Endi kategoriya servisi, validator, handler'lar va route'lar:
+
+Endi standart kategoriyalar seed'i:
+
+Endi eng muhimi — **`netProfit` ni tuzatish** (hozir strukturaviy noto'g'ri):
+
+Bu 2 xato mening o'zgarishimdanmi — tekshirib ko'ray:
+
+Tasdiqlandi — o'sha 2 xato **mening o'zgarishimdan emas** (stash qilingan holatda ham aynan shu natija). Endi o'zgarishlarni tiklayman:
+
+Endi **Q3 — o'qituvchini hard delete qilishni to'xtatish**:
+
+Endi **ishdan bo'shatish (terminate)** oqimi:
+
+Endi **Q1 — orqaga sana bilan qo'shish: preview + tasdiq**:
+
+Endi backdate uchun tasdiq oqimi va `e
+
+…(qisqartirildi)
+
+<sub>session `39bbfed0` · branch `main` · 181 ta qadam</sub>
+
+---
+
+## 2026-08-04 03:55 — savol : UI orqali oqtuvchi uchun maoshni qnadya berlgilayman task : ui
+
+**So'rov**
+
+> savol : UI orqali oqtuvchi uchun maoshni qnadya berlgilayman task : ui jihatdan oqtuvchi yaratlinishi bilan u uchun oylik belgilash mukun bo'lsin yani 2 bsoqichli modal bo'lishi kerak va keyinroq belgilayman buttoni ham bo'lishi zarur va bu maoshlar to'gri sihlashini ham kafolatlashimiz lozim misl 10kun bir oquvchi 20kun bir oqtuchi otgan guruhga to'g'ri taqsmlanishi lozim va agar maosh update bo'lsa oldin to'lagan maoshlar uchun tasiri bo'lmasligi kerak
+
+**O'zgargan fayllar (11)**
+
+- `server/src/modules/auth/validators/registerUser.validator.js` — tahrirlandi
+- `server/src/modules/auth/services/auth.service.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/teacherSalary.service.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/teacherCompensation.service.js` — tahrirlandi
+- `client/src/owner/features/teacherSalary/utils/compensation.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/teacherSalary/hooks/useCompensationQuery.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/teacherSalary/hooks/useCompensationMutations.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/teacherSalary/components/CompensationFields.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/users/components/UserCreateModal.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/teacherSalary/components/modals/CompensationSetModal.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/teacherSalary/components/TeacherCompensationCard.jsx` — yaratildi/qayta yozildi
+
+**Buyruqlar (33)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && ls && cat package.json | head -40
+ls src 2>/dev/null && cat CLAUDE.md 2>/dev/null | head -60
+sed -n '60,140p' CLAUDE.md
+ls src/owner/features/ && echo "=== teachers feature ===" && find src/owner/features -ipath "*teacher*" -name "*.jsx" -o -ipath "*teacher*" -name "*.js" | head …
+ls src/owner/features/users/components/modals/ src/owner/features/users/components/ 2>/dev/null; echo "=== api ==="; cat src/owner/features/users/api/*.api.js 2…
+cat src/owner/features/teacherSalary/api/teacherSalary.api.js; echo "=== MODALS ==="; grep -n "TEACHER\|STAFF\|SALARY" src/shared/constants/modals.js
+cd /Users/shukrullo/Desktop/lc-total/server/src && grep -n "register-user\|registerUser" modules/auth/auth.routes.js; echo "=== registerUser service ==="; grep …
+sed -n '318,360p' modules/auth/services/auth.service.js 2>/dev/null || ls modules/auth/services/
+grep -n "^import logger\|import logger" modules/auth/services/auth.service.js; echo "--- handler scope ---"; cat modules/auth/handlers/registerUser.handler.js
+python3 - <<'PY' p="modules/auth/handlers/registerUser.handler.js" s=open(p).read() s=s.replace( """ const user = await authService.registerUser(req.body, { all…
+cat >> tests/salaryRate.test.js <<'EOF' // ═══════════════════════════════════════════════════════════════ // 7. IKKI O'QITUVCHI BIR GURUHDA — KUNLAR BO'YICHA T…
+npm run test:salary-rate 2>&1 | tail -32
+python3 - <<'PY' p="tests/salaryRate.test.js" s=open(p).read() start=s.index("// ───────────────────────────────────────────────────────────────\nconsole.log(\n…
+cd /Users/shukrullo/Desktop/lc-total/client && cat src/owner/features/users/components/UserModals.jsx 2>/dev/null | head -60; echo "=== ModalWrapper ==="; sed -…
+cat src/owner/features/users/hooks/useUserCreateMutation.js; echo "=== ENDPOINTS teacherSalary ==="; grep -n "teacherSalary" -A 15 src/shared/api/endpoints.js |…
+grep -n "teacherSalary" -A 12 src/shared/lib/query/keys.js | head -20; echo "=== InputField / SelectField props ==="; sed -n '1,45p' src/shared/components/ui/in…
+cat src/shared/components/ui/input/InputMoney.jsx; echo "=== usage example ==="; grep -rn 'type="money"' src/owner --include="*.jsx" | head -3
+python3 - <<'PY' p="src/shared/api/endpoints.js" s=open(p).read() old=""" transactions: "/teacher-salary/transactions", transactionById: (id) => `/teacher-salar…
+python3 - <<'PY' p="src/owner/features/teacherSalary/api/teacherSalary.api.js" s=open(p).read() old=""" // To'lovlar (chiqim) addTransaction: (body) => http.pos…
+sed -n '1,50p' src/shared/components/ui/select/SelectField.jsx
+grep -n "setFields\|setField\|resetState" src/shared/hooks/useObjectState.js | head
+ls src/owner/features/users/pages/ && grep -rn "UserPasswordCard\|TeacherSalariesPanel" src/owner/features/users/pages/*.jsx | head
+grep -n "import\|isTeacher\|ROLES.TEACHER\|Card\|Tabs" src/owner/features/users/pages/UserDetailPage.jsx | head -40
+sed -n '100,185p' src/owner/features/users/pages/UserDetailPage.jsx
+grep -n "export" src/shared/utils/formatDate.js | head -20
+# … yana 8 ta
+```
+
+**Natija**
+
+Avval frontend tuzilishini o'rganay.
+
+Muhim topilma: UI o'qituvchini `/auth/register-user` orqali yaratadi, `/users/staff` orqali emas. Avval backendni to'g'ri joyga ulayman.
+
+Endi **kafolat: to'langan maosh o'zgarmasligi**. `recalc` ga qulf qo'shaman:
+
+Endi **10 kun / 20 kun taqsimoti** kafolatini test bilan mustahkamlayman:
+
+Xulosa bloki noto'g'ri joyda qolgan — oxiriga ko'chiraman:
+
+50/50. Endi **frontend** — 2 bosqichli modal.
+
+Endi frontend. Avval API qatlami:
+
+Endi maosh turlari uchun umumiy konstanta va hook'lar:
+
+Endi maosh formasi (2-qadamda ham, profilda ham ishlatiladi):
+
+Endi 2 bosqichli modal:
+
+Endi o'qituvchi profilida maosh kartochkasi. Avval profil sahifasini topay:
+
+Endi maosh kartochkasi + belgilash modali:
+
+`toDateInput` mavjud. Endi kartochka:
+
+Build toza. Yakuniy tekshiruv — backend testlar:
+
+<sub>session `39bbfed0` · branch `main` · 52 ta qadam</sub>
+
+---

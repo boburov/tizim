@@ -26,6 +26,10 @@ import {
 } from "../../../helpers/attendance.helper.js";
 import { holidayKeySetForRange } from "../../holidays/services/holidays.service.js";
 import {
+  loadCancelledLessonKeys,
+  isCancelledSession,
+} from "../../../helpers/lessonCancellation.helper.js";
+import {
   loadFreezeWindows,
   isFrozenOn,
 } from "../../../helpers/studentFreeze.helper.js";
@@ -73,10 +77,18 @@ const loadMonthLessonDates = async (groupDoc, year, month) => {
     if (end.getTime() < monthEnd.getTime()) monthEnd = end;
   }
   if (monthEnd.getTime() < monthStart.getTime()) return [];
-  const holidaySet = await holidayKeySetForRange(monthStart, monthEnd);
-  return getClassDaysInRange(groupDoc, monthStart, monthEnd, holidaySet).map(
-    (s) => toUtcMidnight(s.date),
-  );
+
+  const [holidaySet, cancelledSet] = await Promise.all([
+    holidayKeySetForRange(monthStart, monthEnd),
+    // BEKOR QILINGAN DARSLAR: markaz aybi bilan o'tmagan dars uchun o'quvchi
+    // to'lamaydi. Holiday'dan farqi - u FAQAT shu guruhga tegishli
+    // (o'qituvchi kasal bo'ldi, xona band, svet o'chdi).
+    loadCancelledLessonKeys(groupDoc?._id, monthStart, monthEnd),
+  ]);
+
+  return getClassDaysInRange(groupDoc, monthStart, monthEnd, holidaySet)
+    .filter((s) => !isCancelledSession(cancelledSet, s))
+    .map((s) => toUtcMidnight(s.date));
 };
 
 // A'zolik davrlariga (leftAt EXCLUSIVE) to'g'ri keladigan va asOf sanasigacha

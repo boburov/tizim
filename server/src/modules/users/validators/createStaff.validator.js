@@ -1,4 +1,27 @@
 import { z } from "zod";
+import {
+  COMP_BASE_TYPES,
+  COMP_VARIABLE_TYPES,
+  COMP_PERCENT_BASES,
+} from "../../../models/teacherCompensation.model.js";
+
+// ISHGA OLISHDA MAOSH (ixtiyoriy). O'qituvchi uchun formaning o'zida
+// oylik belgilanadi - keyin alohida sahifaga o'tish shart emas.
+const compensationSchema = z
+  .object({
+    effectiveFrom: z.coerce.date().optional(),
+    baseType: z.enum(COMP_BASE_TYPES).optional(),
+    baseAmount: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
+    variableType: z.enum(COMP_VARIABLE_TYPES).optional(),
+    variableRate: z.coerce.number().min(0).max(1_000_000_000).optional(),
+    percentBase: z.enum(COMP_PERCENT_BASES).optional(),
+    branchId: z.string().min(1).nullable().optional(),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine(
+    (d) => d.variableType !== "percent" || (d.variableRate ?? 0) <= 100,
+    { message: "Foiz stavkasi 100 dan oshmasligi kerak", path: ["variableRate"] },
+  );
 
 const branchAssignmentSchema = z.object({
   branchId: z.string().min(1),
@@ -27,6 +50,8 @@ export const createStaffSchema = z.object({
     branchAssignments: z.array(branchAssignmentSchema).optional(),
     birthDate: z.coerce.date().optional().nullable(),
     hiredAt: z.coerce.date().optional().nullable(),
+    // Faqat o'qituvchi uchun ma'noli - boshqa rollarda e'tiborsiz qoldiriladi.
+    compensation: compensationSchema.optional(),
     // Tasdiq talab qilinganda so'rovchi qoldiradigan izoh (owner ko'radi).
     requestNote: z.string().trim().max(500).optional(),
   }),

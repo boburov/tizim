@@ -24,10 +24,13 @@ const salaryTransactionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // GURUH: guruh qatoriga to'lovda majburiy, markaz darajasidagi qatorlarda
+    // (fiksa oylik / KPI mukofoti) null - ular guruhga bog'lanmaydi.
+    // branchId baribir to'ldiriladi, shuning uchun chiqim hisoboti buzilmaydi.
     group: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Group",
-      required: true,
+      default: null,
       index: true,
     },
     year: { type: Number, required: true },

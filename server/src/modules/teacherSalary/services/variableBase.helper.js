@@ -1,0 +1,152 @@
+import mongoose from "mongoose";
+import GroupMembership from "../../../models/groupMembership.model.js";
+import StudentPayment from "../../../models/studentPayment.model.js";
+import PaymentTransaction from "../../../models/paymentTransaction.model.js";
+import {
+  toUtcMidnight,
+  getClassDaysInRange,
+} from "../../../helpers/attendance.helper.js";
+import { holidayKeySetForRange } from "../../holidays/services/holidays.service.js";
+import {
+  loadCancelledLessonKeys,
+  isCancelledSession,
+} from "../../../helpers/lessonCancellation.helper.js";
+
+// O'ZGARUVCHI MAOSH BAZALARI: har bir kanal uchun "nimaga ko'paytiriladi".
+//
+// Barcha bazalar SEGMENT oynasi bo'yicha hisoblanadi (oy emas) - stavka oy
+// o'rtasida o'zgarsa har segment o'z bazasini oladi.
+
+const DAY = 24 * 60 * 60 * 1000;
+
+const toObjectId = (id) =>
+  id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(String(id));
+
+const daysInMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+// Ikki yarim-ochiq oraliq kesishmasi (ms) - kunlar soni.
+const overlapDays = (aStart, aEndExcl, bStart, bEndExcl) => {
+  const s = Math.max(aStart, bStart);
+  const e = Math.min(aEndExcl, bEndExcl);
+  return e > s ? Math.round((e - s) / DAY) : 0;
+};
+
+/**
+ * per_student bazasi: PRORATSIYALANGAN O'QUVCHI-OY ("student units").
+ *
+ * NEGA headcount EMAS: oyning oxirgi kunida qo'shilgan o'quvchi uchun to'liq
+ * 50 000 so'm to'lash adolatsiz va manipulyatsiyaga ochiq bo'lardi (oy oxirida
+ * o'quvchi qo'shib maoshni shishirish). Har o'quvchi guruhda o'tkazgan kunlari
+ * ulushicha sanaladi: butun oy = 1.0, yarim oy = 0.5.
+ *
+ * Chiqib ketgan (leftAt) o'quvchi ham o'zi bo'lgan kunlar uchun sanaladi -
+ * o'qituvchi o'sha kunlar unga dars bergan.
+ */
+export const computeStudentUnits = async ({ group, year, month, segStart, segEndExcl }) => {
+  const monthStart = Date.UTC(year, month - 1, 1);
+  const monthEndExcl = Date.UTC(year, month, 1);
+  const lo = Math.max(monthStart, segStart.getTime());
+  const hi = Math.min(monthEndExcl, segEndExcl.getTime());
+  if (hi <= lo) return { units: 0, headcount: 0 };
+
+  const memberships = await GroupMembership.find(
+    {
+      group: toObjectId(group),
+      isDeleted: { $ne: true },
+      joinedAt: { $lt: new Date(hi) },
+      $or: [{ leftAt: null }, { leftAt: { $gt: new Date(lo) } }],
+    },
+    { student: 1, joinedAt: 1, leftAt: 1 },
+  ).lean();
+
+  const total = daysInMonth(year, month);
+  let units = 0;
+  const students = new Set();
+  for (const m of memberships) {
+    const mStart = toUtcMidnight(m.joinedAt).getTime();
+    // leftAt EXCLUSIVE - a'zolik va davomat bilan bir xil encoding.
+    const mEndExcl = m.leftAt ? toUtcMidnight(m.leftAt).getTime() : Infinity;
+    const days = overlapDays(lo, hi, mStart, mEndExcl);
+    if (days <= 0) continue;
+    units += days / total;
+    students.add(String(m.student));
+  }
+  return { units, headcount: students.size };
+};
+
+/**
+ * per_lesson_hour bazasi: segment oynasidagi DARS SOATLARI.
+ *
+ * Manba haqiqati - Group.schedule (versiyalangan) + Holiday. Davomat EMAS:
+ * o'qituvchi dars o'tgani uchun haq oladi, o'quvchilar kelgani uchun emas.
+ *
+ * BEKOR QILINGAN darslar ham chiqariladi - va aynan O'QUVCHI TO'LOVI bilan
+ * BIR XIL manbadan (lessonCancellation.helper). Ikki joyda ikki xil mantiq
+ * bo'lsa: o'quvchi to'lamagan dars uchun o'qituvchiga haq to'lanib, markaz
+ * har bekor qilingan darsda zarar ko'rardi.
+ */
+export const computeLessonHours = async ({ groupDoc, segStart, segEndExcl }) => {
+  if (!groupDoc) return { hours: 0, lessons: 0 };
+  const from = new Date(segStart);
+  // getClassDaysInRange INKLYUZIV oxirgi kun bilan ishlaydi, segment esa
+  // EKSKLYUZIV - shuning uchun bir kun ayiramiz.
+  const to = new Date(segEndExcl.getTime() - DAY);
+  if (to.getTime() < from.getTime()) return { hours: 0, lessons: 0 };
+
+  const [holidaySet, cancelledSet] = await Promise.all([
+    holidayKeySetForRange(from, to),
+    loadCancelledLessonKeys(groupDoc._id, from, to),
+  ]);
+  const sessions = getClassDaysInRange(groupDoc, from, to, holidaySet).filter(
+    (s) => !isCancelledSession(cancelledSet, s),
+  );
+
+  let minutes = 0;
+  for (const s of sessions) {
+    const [sh, sm] = s.startTime.split(":").map(Number);
+    const [eh, em] = s.endTime.split(":").map(Number);
+    minutes += eh * 60 + em - (sh * 60 + sm);
+  }
+  return { hours: minutes / 60, lessons: sessions.length };
+};
+
+/**
+ * percent bazasi: guruh oylik tushumi.
+ *   billed    - SUM(StudentPayment.expectedAmount) - hisoblangan (eski xulq-atvor).
+ *               O'quvchi to'lamasa ham o'qituvchi oladi: risk 100% markazda.
+ *   collected - SUM(PaymentTransaction.amount) - haqiqatda kassaga tushgan.
+ *               Risk o'qituvchi bilan bo'linadi.
+ *
+ * DIQQAT: bu yerda FILIAL filtri ATAYLAB yo'q - guruh ID'si bo'yicha
+ * qidirilmoqda va guruh bitta filialga tegishli (Group.branchId), demak
+ * natija allaqachon filial ichida.
+ */
+export const computeGroupRevenueBase = async (group, year, month, base = "billed") => {
+  const match = { group: toObjectId(group), year, month, isDeleted: { $ne: true } };
+  if (base === "collected") {
+    const agg = await PaymentTransaction.aggregate([
+      { $match: match },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    return agg.length ? agg[0].total : 0;
+  }
+  const agg = await StudentPayment.aggregate([
+    { $match: match },
+    { $group: { _id: null, total: { $sum: "$expectedAmount" } } },
+  ]);
+  return agg.length ? agg[0].total : 0;
+};
+
+/** Segment oy ichida qancha ulush egallaydi (per_group / percent proratsiyasi uchun). */
+export const segmentFactor = ({ year, month, segStart, segEndExcl }) => {
+  const monthStart = Date.UTC(year, month - 1, 1);
+  const monthEndExcl = Date.UTC(year, month, 1);
+  const days = overlapDays(
+    monthStart,
+    monthEndExcl,
+    segStart.getTime(),
+    segEndExcl.getTime(),
+  );
+  const total = daysInMonth(year, month);
+  return { factor: total > 0 ? days / total : 0, days, totalDays: total };
+};

@@ -243,7 +243,18 @@ export const periodsForMonth = async (teacher, group, year, month) => {
       group: toObjectId(group),
       isDeleted: { $ne: true },
     },
-    { startDate: 1, endDate: 1, salaryType: 1, fixedAmount: 1, percentRate: 1 },
+    {
+      startDate: 1,
+      endDate: 1,
+      // Yangi (ustunlik) stavka maydonlari - rateResolver shularni o'qiydi.
+      variableType: 1,
+      variableRate: 1,
+      percentBase: 1,
+      // Legacy - eski yozuvlarda stavka shu yerda.
+      salaryType: 1,
+      fixedAmount: 1,
+      percentRate: 1,
+    },
   ).lean();
   return rows.filter((r) => {
     const s = new Date(r.startDate).getTime();

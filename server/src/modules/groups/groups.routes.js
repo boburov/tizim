@@ -7,7 +7,10 @@ import { PERMISSIONS } from "../../constants/permissions.js";
 import { listSchema } from "./validators/list.validator.js";
 import { createSchema } from "./validators/create.validator.js";
 import { updateSchema } from "./validators/update.validator.js";
-import { addStudentSchema } from "./validators/addStudent.validator.js";
+import {
+  addStudentSchema,
+  backdatePreviewSchema,
+} from "./validators/addStudent.validator.js";
 import { addStudentsBulkSchema } from "./validators/addStudentsBulk.validator.js";
 import { updateMembershipSchema } from "./validators/updateMembership.validator.js";
 import {
@@ -33,6 +36,7 @@ import update from "./handlers/update.handler.js";
 import permanentRemove from "./handlers/permanentRemove.handler.js";
 import undelete from "./handlers/undelete.handler.js";
 import addStudent from "./handlers/addStudent.handler.js";
+import backdatePreview from "./handlers/backdatePreview.handler.js";
 import addStudentsBulk from "./handlers/addStudentsBulk.handler.js";
 import updateMembership from "./handlers/updateMembership.handler.js";
 import removeStudent from "./handlers/removeStudent.handler.js";
@@ -99,6 +103,16 @@ router.post(
   undelete,
 );
 
+// ORQAGA SANA TA'SIRI (preview) - hech narsa saqlamaydi, faqat hisoblaydi.
+// POST /:id/students dan OLDIN turishi shart emas (yo'l boshqacha), lekin
+// UI oqimida u birinchi chaqiriladi.
+router.get(
+  "/:id/students/backdate-preview",
+  requireAuth,
+  requirePermission(PERMISSIONS.GROUPS_MANAGE_STUDENTS),
+  validate(backdatePreviewSchema),
+  backdatePreview,
+);
 router.post(
   "/:id/students",
   requireAuth,

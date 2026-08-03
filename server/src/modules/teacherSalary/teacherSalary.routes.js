@@ -15,6 +15,20 @@ import {
   idParamSchema as transactionIdSchema,
 } from "./validators/salaryTransaction.validator.js";
 
+import {
+  setSchema as compensationSetSchema,
+  amendSchema as compensationAmendSchema,
+  idParamSchema as compensationIdSchema,
+  teacherIdParamSchema as compensationTeacherIdSchema,
+  adjustmentCreateSchema,
+} from "./validators/teacherCompensation.validator.js";
+
+import compensationList from "./handlers/compensation.list.handler.js";
+import compensationSet from "./handlers/compensation.set.handler.js";
+import compensationAmend from "./handlers/compensation.amend.handler.js";
+import compensationRemove from "./handlers/compensation.remove.handler.js";
+import adjustmentCreate from "./handlers/adjustment.create.handler.js";
+import adjustmentRemove from "./handlers/adjustment.remove.handler.js";
 import salaryList from "./handlers/salary.list.handler.js";
 import salaryGetById from "./handlers/salary.getById.handler.js";
 import salaryHistoryByTeacher from "./handlers/salary.historyByTeacher.handler.js";
@@ -59,6 +73,59 @@ router.get(
   requirePermission(PERMISSIONS.SALARY_READ),
   validate(obligationsSchema),
   obligations,
+);
+
+// ── O'QITUVCHI STANDART MAOSH STAVKASI (markaz darajasida) ──
+// Bu yerda o'qituvchi profilida/ishga olishda BIR MARTA belgilanadi va barcha
+// guruhlariga meros bo'ladi. Guruhga xos kelishuv bo'lsa - guruh davri
+// (teacher-periods) uni bekor qiladi.
+//
+// RUXSAT: SALARY_PAY ATAYLAB ishlatilmadi - "maosh to'lash" va "maosh
+// STAVKASINI belgilash" boshqa-boshqa vakolat (kassir to'laydi, stavkani
+// rahbariyat belgilaydi). approvals.decide_config yo'q bo'lsa tasdiqqa ketadi.
+router.get(
+  "/compensations/by-teacher/:teacherId",
+  requireAuth,
+  requirePermission(PERMISSIONS.SALARY_READ),
+  validate(compensationTeacherIdSchema),
+  compensationList,
+);
+router.post(
+  "/compensations",
+  requireAuth,
+  requirePermission(PERMISSIONS.FINANCE_MANAGE),
+  validate(compensationSetSchema),
+  compensationSet,
+);
+router.patch(
+  "/compensations/:id",
+  requireAuth,
+  requirePermission(PERMISSIONS.FINANCE_MANAGE),
+  validate(compensationAmendSchema),
+  compensationAmend,
+);
+router.delete(
+  "/compensations/:id",
+  requireAuth,
+  requirePermission(PERMISSIONS.FINANCE_MANAGE),
+  validate(compensationIdSchema),
+  compensationRemove,
+);
+
+// ── KPI MUKOFOTI / JARIMA (alohida maosh qatori) ──
+router.post(
+  "/adjustments",
+  requireAuth,
+  requirePermission(PERMISSIONS.FINANCE_MANAGE),
+  validate(adjustmentCreateSchema),
+  adjustmentCreate,
+);
+router.delete(
+  "/adjustments/:id",
+  requireAuth,
+  requirePermission(PERMISSIONS.FINANCE_MANAGE),
+  validate(compensationIdSchema),
+  adjustmentRemove,
 );
 
 // ── Maosh to'lovlari (chiqim) ──

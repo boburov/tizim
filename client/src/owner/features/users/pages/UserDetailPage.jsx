@@ -14,6 +14,7 @@ import UserPasswordModal from "../components/UserPasswordModal";
 import UserFreezeModal from "../components/UserFreezeModal";
 import UserUnfreezeModal from "../components/UserUnfreezeModal";
 import UserFreezeHistory from "../components/UserFreezeHistory";
+import { TeacherCompensationCard } from "@/owner/features/teacherSalary";
 import UserBranchModal from "../components/UserBranchModal";
 import {
   ExemptionCreateModal,
@@ -45,6 +46,7 @@ const UserDetailPage = () => {
   const { hasMultipleBranches } = useActiveBranch();
   const { data: profile, isLoading, isError } = useUserDetailQuery(id);
   const isStudent = profile?.role === ROLES.STUDENT;
+  const isTeacher = profile?.role === ROLES.TEACHER;
 
   // Ro'yxat endi rol bo'yicha ikkiga bo'lingan - qaysi biridan kelgan bo'lsa
   // o'shanga qaytaramiz.
@@ -166,6 +168,13 @@ const UserDetailPage = () => {
       </div>
 
       {isStudent && <UserFreezeHistory studentId={id} />}
+
+      {/* MAOSH STAVKASI - o'qituvchi profilining eng muhim moliyaviy bloki.
+          Tab ichida emas, ATAYLAB yuqorida: stavkasiz o'qituvchi maoshi 0
+          bo'lib hisoblanadi va bu darhol ko'zga tashlanishi kerak. */}
+      {isTeacher && (
+        <TeacherCompensationCard teacherId={id} hiredAt={profile.hiredAt} />
+      )}
 
       <TabsLinks items={tabs} />
       <Outlet context={{ profile, historyData, historyLoading, noActiveGroup }} />

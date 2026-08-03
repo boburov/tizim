@@ -272,5 +272,17 @@ export const ENDPOINTS = Object.freeze({
     obligations: "/teacher-salary/obligations",
     transactions: "/teacher-salary/transactions",
     transactionById: (id) => `/teacher-salary/transactions/${id}`,
+
+    // O'QITUVCHI STANDART MAOSH STAVKASI (markaz darajasida, sana-amalli).
+    // Guruh davri (teacher-periods) bu stavkani BEKOR QILISHI mumkin -
+    // ya'ni bu "standart", u esa "bu guruhda boshqacha kelishdik".
+    compensations: "/teacher-salary/compensations",
+    compensationById: (id) => `/teacher-salary/compensations/${id}`,
+    compensationsByTeacher: (teacherId) =>
+      `/teacher-salary/compensations/by-teacher/${teacherId}`,
+
+    // KPI mukofoti / jarima - alohida maosh qatori.
+    adjustments: "/teacher-salary/adjustments",
+    adjustmentById: (id) => `/teacher-salary/adjustments/${id}`,
   },
 });

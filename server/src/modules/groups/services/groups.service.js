@@ -17,6 +17,7 @@ import {
   branchFilter,
   branchGroupFilter,
   resolveBranchForWrite,
+  resolveBranchFromGroup,
 } from "../../../helpers/branchContext.helper.js";
 import { restoreGroup as cascadeRestoreGroup } from "../../../helpers/cascadeDelete.helper.js";
 import { hardDeleteGroupData } from "../../../helpers/userRelations.helper.js";
@@ -773,6 +774,134 @@ const ensureFinanceForMembershipRange = async (groupId, membership) => {
   } catch (err) {
     logger.warn({ err }, "A'zolik uchun oylik to'lovlar yaratilmadi");
   }
+};
+
+/**
+ * ORQAGA SANA QO'YISH TA'SIRINI OLDINDAN HISOBLAYDI (hech narsa saqlamaydi).
+ *
+ * NEGA KERAK: joinedAt o'tgan oyga qo'yilsa ensureFinanceForMembershipRange
+ * har bir oy uchun QARZ yaratadi - o'quvchi hech qanday ogohlantirishsiz
+ * to'satdan 3 oylik qarzdor bo'lib qoladi. Ilgari bu jimgina sodir bo'lardi.
+ *
+ * Endi UI avval shu funksiyani chaqirib "Bu amal 3 oy uchun 4 200 000 so'm
+ * qarz yaratadi. Davom etasizmi?" deb so'raydi va katta summa tasdiqdan o'tadi.
+ *
+ * @returns {{months: Array, monthCount: number, estimatedDebt: number, isBackdated: boolean}}
+ */
+export const previewBackdate = async (groupId, { joinedAt, leftAt } = {}) => {
+  const group = await ensureGroup(groupId);
+  const today = localTodayMidnight();
+
+  const groupStart = toUtcMidnight(group.startDate || group.createdAt);
+  const join = joinedAt ? toUtcMidnight(joinedAt) : groupStart;
+  const left = leftAt ? toUtcMidnight(leftAt) : null;
+  const endRef = left || today;
+
+  const months = [];
+  let year = join.getUTCFullYear();
+  let month = join.getUTCMonth() + 1;
+  const endYear = endRef.getUTCFullYear();
+  const endMonth = endRef.getUTCMonth() + 1;
+
+  // Joriy oy - "orqaga" hisoblanmaydi (odatiy qo'shish).
+  const currentKey = today.getUTCFullYear() * 100 + today.getUTCMonth() + 1;
+
+  let estimatedDebt = 0;
+  // Cheksiz siklga qarshi qo'riqchi: 10 yildan uzun oraliq real emas va
+  // noto'g'ri sana kiritilganda serverni osib qo'yardi.
+  let guard = 0;
+  while ((year < endYear || (year === endYear && month <= endMonth)) && guard < 120) {
+    guard += 1;
+    // Fee hali yaratilmagan bo'lsa o'sha vaqtda amalda bo'lgan eng yaqin
+    // tarif bilan taxmin qilamiz - aynan ensureGroupFeeBackfill ishlatadigan
+    // qiymat, ya'ni preview haqiqiy natijaga mos keladi.
+    const amount =
+      Number(await financeGroupFeeService.nearestFeeAmount(groupId, year, month)) || 0;
+    const isPast = year * 100 + month < currentKey;
+    months.push({ year, month, amount, isPast });
+    if (isPast) estimatedDebt += amount;
+
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+
+  return {
+    months,
+    monthCount: months.length,
+    pastMonthCount: months.filter((m) => m.isPast).length,
+    // Faqat O'TGAN oylar "yangi qarz" - joriy oy baribir yaratilardi.
+    estimatedDebt,
+    isBackdated: months.some((m) => m.isPast),
+    groupStartDate: group.startDate || null,
+  };
+};
+
+/**
+ * Orqaga sana bilan qo'shishni TASDIQQA yuboradi (a'zolik yaratmaydi).
+ *
+ * NEGA TASDIQ: o'tgan oyga qarz yozish - chegirma berishning TESKARISI.
+ * Chegirma allaqachon tasdiqdan o'tadi (DISCOUNT_SET), demak teskari
+ * yo'nalish ham o'tishi kerak, aks holda "eshik yopilib, yonidagi deraza
+ * ochiq" qolardi: qarzni sun'iy yaratib, keyin uni write-off qilish orqali
+ * pul o'g'irlash yo'li ochilardi.
+ */
+export const requestBackdate = async (groupId, studentId, body, currentUser) => {
+  const approvalService = await import(
+    "../../expenseApprovals/services/expenseApproval.service.js"
+  );
+  const { APPROVAL_KINDS } = await import("../../../models/approval.model.js");
+
+  const group = await ensureGroup(groupId);
+  const student = await ensureStudent(studentId);
+  const preview = await previewBackdate(groupId, body);
+  const branchId = await resolveBranchFromGroup(groupId);
+
+  return approvalService.createRequest({
+    branchId,
+    kind: APPROVAL_KINDS.MEMBERSHIP_BACKDATE,
+    // Limit bilan solishtiriladigan qiymat - YARATILADIGAN QARZ.
+    amount: Math.max(1, preview.estimatedDebt),
+    payload: {
+      group: String(groupId),
+      student: String(studentId),
+      joinedAt: body.joinedAt,
+      leftAt: body.leftAt ?? null,
+      previewDebt: preview.estimatedDebt,
+      previewMonths: preview.pastMonthCount,
+    },
+    // Bir o'quvchi + bir guruh uchun bitta kutilayotgan so'rov.
+    subjectKey: `membership_backdate:${String(groupId)}:${String(studentId)}`,
+    subjectName: `${student.firstName} ${student.lastName || ""}`.trim(),
+    contextName: `${group.name} - ${preview.pastMonthCount} oy, ${preview.estimatedDebt} so'm qarz`,
+    requestNote: body.requestNote,
+    currentUser,
+  });
+};
+
+/**
+ * Tasdiqlangan orqaga-sana so'rovini bajaradi.
+ *
+ * addStudent'ning O'ZINI chaqiradi - ya'ni barcha qo'riqchilar (guruh
+ * boshlangan sana, ro'yxatga olingan sana, davrlar kesishuvi) SHU YERDA
+ * QAYTA ishlaydi. So'rov va tasdiq orasida holat o'zgargan bo'lsa
+ * (o'quvchi allaqachon qo'shilgan, guruh arxivlangan) - approve() so'rovni
+ * FAILED qiladi va owner sababni ko'radi.
+ */
+export const executeApprovedBackdate = async (approval) => {
+  const p = approval?.payload || {};
+  if (!p.group || !p.student) {
+    throw new ApiError(400, "So'rovda guruh yoki o'quvchi ko'rsatilmagan");
+  }
+  // Tasdiq qo'riqchisi HANDLER qatlamida (servisda emas), shuning uchun bu
+  // yerdan chaqirilganda ikkinchi marta tasdiq so'ralmaydi - qo'shimcha
+  // bayroq kerak emas.
+  return addStudent(p.group, p.student, {
+    joinedAt: p.joinedAt,
+    leftAt: p.leftAt ?? null,
+  });
 };
 
 const DAY_LABELS_FULL_UZ = {
