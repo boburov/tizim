@@ -4261,3 +4261,46 @@ Testlar to'liq o'tdi (33/33). Bitta himoyani mustahkamlayman — fayl diskdan yo
 <sub>session `f6cd4171` · branch `main` · 192 ta qadam</sub>
 
 ---
+
+## 2026-08-04 02:08 — databaseni clean qiladigan shell command tayyorlab bering owner seedni
+
+**So'rov**
+
+> databaseni clean qiladigan shell command tayyorlab bering owner seedni run qilsin keyin shuni ozi yetadi
+
+**O'zgargan fayllar (3)**
+
+- `server/scripts/db-reset.sh` — tahrirlandi, yaratildi/qayta yozildi
+- `server/package.json` — tahrirlandi
+- `server/src/seeds/cleanDatabase.seed.js` — tahrirlandi
+
+**Buyruqlar (10)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n '6,20p' package.json; echo "=== owner.seed.js ==="; cat src/seeds/owner.seed.js
+grep -n "resolveRole" -A 30 src/helpers/permission.helper.js | head -45
+chmod +x scripts/db-reset.sh && bash -n scripts/db-reset.sh && echo "sintaksis OK"
+cat > .tmp-seed.mjs <<'EOF' import "dotenv/config"; import { connectDB, disconnectDB } from "./src/config/db.js"; import mongoose from "mongoose"; import User f…
+export MONGO_URL=mongodb://127.0.0.1:27017/bayyina_reset_test npm run db:reset -- -y 2>&1 | grep -v "INFO\|BotUser\|^>" | tail -12 echo "########## NATIJA #####…
+grep -n "cleanDatabase.seed.js" scripts/db-reset.sh
+export MONGO_URL=mongodb://127.0.0.1:27017/bayyina_reset_test node .tmp-seed.mjs 2>&1 | grep -v INFO echo "" echo "########## A) NOTO'G'RI nom kiritilsa #######…
+export MONGO_URL=mongodb://127.0.0.1:27017/bayyina_reset_test bash -n scripts/db-reset.sh && echo "sintaksis OK" echo "" echo "########## A) NOTO'G'RI nom -> be…
+export MONGO_URL=mongodb://127.0.0.1:27017/bayyina_reset_test echo "########## B) TO'G'RI nom -> to'liq oqim ##########" echo "bayyina_reset_test" | npm run db:…
+export MONGO_URL=mongodb://127.0.0.1:27017/bayyina_reset_test cat > .tmp-drop.mjs <<'EOF' import "dotenv/config"; import mongoose from "mongoose"; import { conn…
+```
+
+**Natija**
+
+Owner seed'ida lockout himoyasi bor — [permission.helper.js:31-32](server/src/helpers/permission.helper.js#L31-L32) da owner Role hujjati bo'lmasa ham `["*"]` oladi. Ya'ni rostdan ham owner seed yolg'iz yetadi. Shell script yozaman:
+
+Test bazasida to'liq sinayman (sizning bazangizga tegilmaydi):
+
+Ikkita nuqson bor: wrapper ichida «keyingi qadamlar» maslahati ortiqcha chiqyapti. Tuzataman:
+
+Endi interaktiv tasdiq va yakuniy oqimni sinayman:
+
+`«` belgisi o'zgaruvchi nomiga yopishib qolgan — bash uni ism deb o'qidi. Jingalak qavs bilan tuzataman:
+
+<sub>session `349bbb34` · branch `main` · 21 ta qadam</sub>
+
+---

@@ -27,6 +27,8 @@ import { connectDB, disconnectDB } from "../config/db.js";
 //   --drop             kolleksiyalar butunlay drop qilinadi (indekslar ham)
 //   --force-remote     MONGO_URL localhost bo'lmasa ham ruxsat
 //   --force-production NODE_ENV=production bo'lsa ham ruxsat
+//   --no-hints         "keyingi qadamlar" maslahatini chiqarmaydi
+//                      (db-reset.sh seed'larni o'zi ishga tushiradi)
 
 const argv = process.argv.slice(2);
 const hasFlag = (name) => argv.includes(`--${name}`);
@@ -42,6 +44,7 @@ const OPTS = {
   drop: hasFlag("drop"),
   forceRemote: hasFlag("force-remote"),
   forceProduction: hasFlag("force-production"),
+  noHints: hasFlag("no-hints"),
 };
 
 // --keep-auth bilan saqlanadigan modellar (tizimga kira olish uchun).
@@ -187,8 +190,11 @@ const clean = async () => {
   }
 
   if (!OPTS.confirmed) {
-    console.log("  Haqiqatan tozalash uchun:");
-    console.log(`    npm run db:clean -- --yes --db=${dbName}\n`);
+    // db-reset.sh o'zi tasdiq so'raydi - bu maslahat u yerda ortiqcha.
+    if (!OPTS.noHints) {
+      console.log("  Haqiqatan tozalash uchun:");
+      console.log(`    npm run db:clean -- --yes --db=${dbName}\n`);
+    }
     await disconnectDB();
     return;
   }
@@ -209,11 +215,16 @@ const clean = async () => {
   }
 
   logger.info({ database: dbName, removed }, "Baza tozalandi");
-  console.log("\n  Keyingi qadamlar:");
-  console.log("    npm run seed:permissions   # ruxsatlar va rollar");
-  if (!OPTS.keepAuth) console.log("    npm run seed:owner         # owner hisobi");
-  console.log("    npm run seed:communication # bayramlar va shablonlar");
-  console.log("  «Asosiy filial» server ishga tushganda o'zi yaratiladi.\n");
+
+  // db-reset.sh seed'larni O'ZI ishga tushiradi - u yerda bu maslahat
+  // faqat chalg'itardi ("owner seed qiling" deb yozib, keyin o'zi qilardi).
+  if (!OPTS.noHints) {
+    console.log("\n  Keyingi qadamlar:");
+    console.log("    npm run seed:permissions   # ruxsatlar va rollar");
+    if (!OPTS.keepAuth) console.log("    npm run seed:owner         # owner hisobi");
+    console.log("    npm run seed:communication # bayramlar va shablonlar");
+    console.log("  «Asosiy filial» server ishga tushganda o'zi yaratiladi.\n");
+  }
 
   await disconnectDB();
 };

@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "lint": "eslint .",
     "db:clean": "node src/seeds/cleanDatabase.seed.js",
+    "db:reset": "bash scripts/db-reset.sh",
     "seed:permissions": "node src/seeds/permissions.seed.js",
     "seed:owner": "node src/seeds/owner.seed.js",
     "seed:communication": "node src/seeds/communicationDefaults.seed.js",
