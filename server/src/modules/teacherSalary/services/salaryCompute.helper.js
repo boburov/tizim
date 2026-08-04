@@ -47,14 +47,28 @@ export const computePeriodsSnapshot = ({
   let activeFixed = 0;
   let activePercent = 0;
 
+  // BIR KUN IKKI MARTA TO'LANMAYDI.
+  //
+  // Davrlar kesishmasligi yozish qatlamida ta'minlanadi
+  // (assertPeriodInvariants), lekin hisoblash qatlami bunga KO'R-KO'RONA
+  // ishonmasligi kerak: kesishgan ikki davrda har biri factor=1 olardi va
+  // 2 mln lik stavka 4 mln bo'lib chiqardi.
+  //
+  // `claimedUntil` - shu nuqtagacha kunlar allaqachon boshqa davrga
+  // berilgan. Kesishgan qismni ERTAROQ boshlangan davr oladi (sorted),
+  // keyingisi faqat qolganini. rateResolver.helper.js dagi himoya bilan
+  // bir xil naqsh.
+  let claimedUntil = -Infinity;
+
   for (const p of sorted) {
     // Davrni guruh kurs oynasiga qisamiz (guruhdan oldin/keyingi kunlar sanalmaydi).
     const pStart = new Date(p.startDate).getTime();
     const pEndExcl = p.endDate ? new Date(p.endDate).getTime() : Infinity;
-    const effStart = Math.max(pStart, gStart);
+    const effStart = Math.max(pStart, gStart, claimedUntil);
     const effEndExcl = Math.min(pEndExcl, gEndExcl);
-    // Guruh oynasidan butunlay tashqarida - hissa qo'shmaydi.
+    // Guruh oynasidan butunlay tashqarida (yoki kunlari allaqachon berilgan).
     if (effStart >= effEndExcl) continue;
+    claimedUntil = effEndExcl;
 
     const { factor, payableDays: pd } = computeProration({
       year,

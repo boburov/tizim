@@ -384,6 +384,70 @@ head("7. Ikki o'qituvchi bir guruhda — kunlar bo'yicha taqsimot");
   eq("C da per_group yo'q", segs[2].rate.perGroup, 0);
 }
 
+
+// ═══════════════════════════════════════════════════════════════
+// 8. KESISHUVDAN HIMOYA (regressiya)
+// ═══════════════════════════════════════════════════════════════
+// Topilgan bug: amendCompensation effectiveFrom ni erkin o'zgartirardi va
+// yopilgan davr ustiga surib yuborish mumkin edi. Natijada bir kun IKKI
+// stavkaga tegishli bo'lib, 2 mln lik oylik 4 mln bo'lib chiqardi.
+//
+// Ikki qatlam himoya qo'yildi:
+//   1. servis: assertNoOverlap (yozishni rad etadi)
+//   2. hisoblash: segmentlar kesishmaydigan qilib qirqiladi
+// Bu blok IKKINCHI qatlamni tekshiradi - buzuq ma'lumot bazada
+// allaqachon bor bo'lsa ham pul ikki barobar bo'lmasligi kerak.
+head("8. Kesishgan stavkalar — hisoblash qatlami himoyasi");
+
+{
+  const NOV_START = D("2025-11-01");
+  const NOV_END_EXCL = D("2025-12-01");
+  // A: yanvar–dekabr, B: noyabrdan ochiq → noyabrda TO'LIQ kesishadi
+  const comps = [
+    { _id: "A", effectiveFrom: D("2025-01-01"), effectiveTo: D("2025-12-01"),
+      variableType: "per_group", variableRate: 1_000_000 },
+    { _id: "B", effectiveFrom: D("2025-11-01"), effectiveTo: null,
+      variableType: "per_group", variableRate: 1_000_000 },
+  ];
+  const period = { startDate: D("2025-01-01"), endDate: null, variableType: null, salaryType: null };
+  const segs = segmentPeriod(period, comps, NOV_START, NOV_END_EXCL);
+  const days = segs.reduce((s, x) => s + segmentDays(x), 0);
+  eq("kunlar oydan oshmadi", days, 30);
+  eq("kesishgan qism ERTAROQ stavkaga tegishli", segs[0].rate.compensationId, "A");
+}
+
+{
+  // FIKSA oylik - kesishuv to'g'ridan-to'g'ri oylikni ikki barobar qilardi.
+  const comps = [
+    { _id: "A", effectiveFrom: D("2025-01-01"), effectiveTo: D("2025-12-01"),
+      baseType: "fixed_monthly", baseAmount: 2_000_000, branchId: "b1" },
+    { _id: "B", effectiveFrom: D("2025-11-01"), effectiveTo: null,
+      baseType: "fixed_monthly", baseAmount: 2_000_000, branchId: "b1" },
+  ];
+  const segs = baseSegmentsForMonth(comps, 2025, 11);
+  const days = segs.reduce((s, x) => s + segmentDays(x), 0);
+  const pay = segs.reduce((s, x) => s + Math.round((x.amount * segmentDays(x)) / 30), 0);
+  eq("base kunlari oydan oshmadi", days, 30);
+  eq("oylik ikki barobar BO'LMADI", pay, 2_000_000);
+}
+
+{
+  // QISMAN kesishuv: A 1-20 noyabr, B 10-noyabrdan.
+  // Kutilgan: A 1-20 (19 kun... aslida 1-10 = 9 kun A, keyin B 10-30).
+  const comps = [
+    { _id: "A", effectiveFrom: D("2025-11-01"), effectiveTo: D("2025-11-21"),
+      variableType: "per_group", variableRate: 500_000 },
+    { _id: "B", effectiveFrom: D("2025-11-10"), effectiveTo: null,
+      variableType: "per_group", variableRate: 900_000 },
+  ];
+  const period = { startDate: D("2025-01-01"), endDate: null, variableType: null, salaryType: null };
+  const segs = segmentPeriod(period, comps, D("2025-11-01"), D("2025-12-01"));
+  const days = segs.reduce((s, x) => s + segmentDays(x), 0);
+  eq("qisman kesishuvda ham 30 kun", days, 30);
+  eq("A birinchi 20 kunni oldi", segmentDays(segs[0]), 20);
+  eq("B qolgan 10 kunni oldi", segmentDays(segs[1]), 10);
+}
+
 // ───────────────────────────────────────────────────────────────
 console.log(
   `\n\x1b[1mNatija:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ${

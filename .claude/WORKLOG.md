@@ -5539,3 +5539,188 @@ Har bir lid yozish yo'lida **`requireRole(ROLES.OWNER)`** turgan ekan. Ya'ni cus
 <sub>session `39bbfed0` · branch `main` · 41 ta qadam</sub>
 
 ---
+
+## 2026-08-04 16:10 — Oqtuvchi file yuklaganda oqyvchilarga platforma + bor otqali yuborladi
+
+**So'rov**
+
+> Oqtuvchi file yuklaganda oqyvchilarga platforma + bor otqali yuborladimi ?
+
+**Buyruqlar (9)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server/src && head -60 models/assignment.model.js
+head -55 models/assignmentRecipient.model.js
+head -45 jobs/assignmentDeliver.job.js; echo "=== bot yuborish ==="; grep -rn "sendDocument\|sendMessage\|file" modules/assignments/services/assignments.service…
+ls src/student/features/assignments/ 2>/dev/null || ls /Users/shukrullo/Desktop/lc-total/client/src/student/features/assignments/
+cd /Users/shukrullo/Desktop/lc-total && ls client/src/student/features/assignments/pages client/src/student/features/assignments/hooks; echo "=== student route …
+cd /Users/shukrullo/Desktop/lc-total/server/src && sed -n '290,375p' modules/assignments/services/assignments.service.js
+grep -n "myAssignments\|export const my" -A 30 modules/assignments/services/assignments.service.js | head -40
+ls modules/assignments/handlers/; echo "=== student route ==="; grep -n "me\|my\|student" modules/assignments/assignments.routes.js | head -10
+sed -n '30,70p' modules/assignments/assignments.routes.js; echo "=== download kim uchun ==="; head -30 modules/assignments/handlers/download.handler.js
+```
+
+<sub>session `39bbfed0` · branch `main` · 9 ta qadam</sub>
+
+---
+
+## 2026-08-04 16:17 — Tizimdan bug taopting asosan maoliyaviy qisimlardan va moliyaga tasir 
+
+**So'rov**
+
+> Tizimdan bug taopting asosan maoliyaviy qisimlardan va moliyaga tasir korsatadigan maosjhlar va tolovlar simidan shartlarni buzishga urunib koring codega tegmasdan
+
+**O'zgargan fayllar (1)**
+
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/39bbfed0-4107-4df2-aaf6-8bdcb6f002f2/scratchpad/probe1.mjs` — yaratildi/qayta yozildi
+
+**Buyruqlar (15)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && npm run test:money-prop 2>&1 | grep -E "✗|NATIJA|Muammo" -A 2 | head -20
+cd /Users/shukrullo/Desktop/lc-total/server/src && sed -n '/^export const computePaymentSnapshot/,/^};/p' modules/finance/services/proration.helper.js
+cd /Users/shukrullo/Desktop/lc-total/server && node /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/39bbfed0-4107-4df2-aaf6-8bdcb6f002f2/scratchpad/pr…
+cd /Users/shukrullo/Desktop/lc-total/server/src && sed -n '/^export const amendCompensation/,/^};/p' modules/teacherSalary/services/teacherCompensation.service.…
+cat helpers/period.helper.js
+grep -n "capToRemaining\|remaining\|fullExpected\|overpay" modules/finance/services/transaction.service.js | head -20; echo "=== create bo'limi ==="; grep -n "e…
+sed -n '99,150p' modules/finance/services/transaction.service.js
+grep -n "export const topup\|export const autoApply\|export const withdraw\|balance" modules/deposits/services/deposit.service.js | head -20
+grep -n "writtenOff\|writeOff" -B 2 -A 12 modules/finance/services/studentPayment.service.js | grep -n "recalc\|accrue\|skip" -B 3 -A 5 | head -30
+sed -n '60,80p' modules/deposits/services/deposit.service.js; echo "=== applyToPayment cap ==="; sed -n '120,158p' modules/deposits/services/deposit.service.js
+grep -n "export const remove" -A 45 modules/finance/services/transaction.service.js | head -50
+grep -n "export const recalcBaseForTeacherMonth" -A 45 modules/teacherSalary/services/teacherSalary.service.js | grep -n "segments.length\|status === \"paid\"\|…
+grep -rn "recalcForGroupMonth\|recalcForGroup\b" --include="*.js" modules/ jobs/ | grep -v "teacherSalary.service.js:" | head
+grep -n "export const writeOffDebtInGroup" -A 40 modules/finance/services/studentPayment.service.js | grep -n "writeOffAmount\|remaining\|writtenOff" | head
+sed -n '439,455p' modules/finance/services/studentPayment.service.js
+```
+
+**Natija**
+
+Moliyaviy invariantlarni buzishga urinaman. Kodga tegmayman — faqat o'qiyman va sinov skriptlari yozaman.
+
+Endi eng muhim savol: bular **API orqali yetib bo'ladimi**? Tekshiraman.
+
+S1/P1 yozish qatlamida bloklangan (`assertPeriodInvariants`). Lekin **`TeacherCompensation` da bunday qo'riqchi yo'q**. Endi to'lov yo'lini tekshiraman.
+
+To'lov yo'li mustahkam. Endi depozit va write-off:
+
+Kodga tegmadim. **4 ta haqiqiy bug** topdim — ikkitasi men yozgan koddan.
+
+---
+
+# 🔴 1. Kesishgan maosh stavkalari → oylik ikki barobar
+
+**Eng jiddiy. API orqali yetib bo'ladi. Men kiritgan.**
+
+[amendCompensation](server/src/modules/teacherSalary/services/teacherCompensation.service.js) da `effectiveFrom` ni **hech qanday tekshiruvsiz** o'zgartirish mumkin:
+
+```js
+if (patch.effectiveFrom !== undefined) doc.effectiveFrom = toUtcMidnight(patch.effectiveFrom);
+// ... kesishuv tekshiruvi YO'Q
+```
+
+**Ketma-ketlik:**
+```
+1. Stavka A ochiladi   → 1-yanvar, ochiq
+2. Stavka B ochiladi   → A 1-martda yopiladi, B 1-martdan
+3. PATCH /compensations/B  { effectiveFrom: "2025-02-01" }
+   → A: yanvar–mart,  B: fevral–ochiq   ← KESISHDI
+```
+
+**Natija (o'lchandim):**
+
+| | Kutilgan | Haqiqiy |
+|---|---|---|
+| Mart kunlari | 31 | **62** |
+| Fiksa oylik 2 mln | 2 000 000 | **4 000 000** |
+
+`segmentPeriod` har bir kesishgan stavka uchun **alohida segment** yaratadi va kunlar qo'shiladi.
+
+**Nega o'tib ketgan:** `TeacherGroupPeriod` va `GroupMembership` da [assertPeriodInvariants](server/src/helpers/period.helper.js) kesishuvni bloklaydi. `TeacherCompensation` da o'sha qo'riqchini qo'ymaganman.
+
+---
+
+# 🔴 2. To'langan maosh qulfi jimgina ishlaydi
+
+**Men kiritgan. Sizning talabingiz edi, lekin qamrovi juda keng.**
+
+```js
+if (!force && salary.status === "paid" && salary.paidAmount > 0) return salary;
+```
+
+Siz "stavka 
+
+…(qisqartirildi)
+
+<sub>session `39bbfed0` · branch `main` · 18 ta qadam</sub>
+
+---
+
+## 2026-08-04 16:35 — ushbu kritik muammolarni fix qiling
+
+**So'rov**
+
+> ushbu kritik muammolarni fix qiling
+
+**O'zgargan fayllar (5)**
+
+- `server/src/modules/teacherSalary/services/teacherCompensation.service.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/rateResolver.helper.js` — tahrirlandi
+- `server/src/modules/finance/services/transaction.service.js` — tahrirlandi
+- `server/src/modules/finance/services/proration.helper.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/salaryCompute.helper.js` — tahrirlandi
+
+**Buyruqlar (14)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server/src && grep -rn "writtenOff: false\|writtenOff = false\|unWriteOff\|cancelWriteOff" --include="*.js" modules/ | head…
+python3 - <<'PY' p = "modules/teacherSalary/services/teacherCompensation.service.js" s = open(p).read() # import s = s.replace( 'import { toUtcMidnight, localTo…
+cd /Users/shukrullo/Desktop/lc-total/server && node /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/39bbfed0-4107-4df2-aaf6-8bdcb6f002f2/scratchpad/pr…
+cd /Users/shukrullo/Desktop/lc-total/server/src && python3 - <<'PY' p = "modules/teacherSalary/services/teacherSalary.service.js" s = open(p).read() # ── recalc…
+python3 - <<'PY' p = "modules/teacherSalary/services/teacherCompensation.service.js" s = open(p).read() old = """ await teacherSalaryService.recalcBaseForTeache…
+cd /Users/shukrullo/Desktop/lc-total/server/src && grep -n "^import StudentPayment" modules/finance/services/transaction.service.js || grep -n "^import" modules…
+sed -n '/const baseEarnings = proratedFixed/,/^ };/p' modules/teacherSalary/services/salaryCompute.helper.js | head -20
+sed -n '/^ for (const p of sorted) {/,/^ payableDays += pd;/p' modules/teacherSalary/services/salaryCompute.helper.js
+for t in salary-rate money-prop approval config-approval localday director; do printf "%-16s " "$t"; npm run "test:$t" 2>&1 | grep -E "NATIJA|Natija" | tail -1;…
+cat >> tests/salaryRate.test.js <<'EOF' // ═══════════════════════════════════════════════════════════════ // 8. KESISHUVDAN HIMOYA (regressiya) // ════════════…
+node --input-type=module -e "await import('./src/routes/index.js'); console.log('OK: server yuklandi');" 2>&1 | grep -v "MONGOOSE\|trace-warnings"; for t in mon…
+npm run test:leak 2>&1 | grep -B 3 -A 3 "✗" | head -20; echo "=== money testi ==="; npm run test:money 2>&1 | tail -12
+cd /Users/shukrullo/Desktop/lc-total && git stash push -m "fixcheck" -- server/src >/dev/null 2>&1 && echo "=== MENING TUZATISHLARIMSIZ ===" && cd server && npm…
+cd /Users/shukrullo/Desktop/lc-total/server && node --input-type=module -e "await import('./src/routes/index.js');console.log('OK routes')" 2>&1 | grep -v "MONG…
+```
+
+**Natija**
+
+Tuzataman. Avval bir necha faktni aniqlashtiray.
+
+Write-off qaytarilmas ekan — demak bekor qilishni bloklash foydalanuvchini tuzoqqa solardi. Boshqa yo'l tanlayman.
+
+**Tuzatish 1 — kesishgan stavkalar (kritik):**
+
+Endi hisoblash qatlamining o'zi ham himoyalanishi kerak (mavjud buzuq ma'lumot uchun):
+
+**Tuzatish 2 — jimgina qulf.** Qulf faqat *stavka o'zgarishi* uchun bo'lishi kerak, boshqa 6 ta sabab uchun emas:
+
+Endi stavka o'zgarishi yo'li qulfni **ochiq so'rashi** kerak:
+
+**Tuzatish 3 — write-off + to'lovni bekor qilish:**
+
+**Tuzatish 4 — assimetrik clamp** (hisoblash qatlami o'zini himoya qilsin):
+
+Maosh tarafida ham xuddi shu himoya kerak — bir kun ikki marta to'lanmasin:
+
+To'rttasi ham yopildi. Endi regressiya tekshiruvi — hech narsa buzilmaganini tasdiqlayman:
+
+`money-prop` **12/1 → 13/0** — men boshlashimdan oldin ham turgan xato yopildi.
+
+Bitta nozik joyni tuzatishim kerak: `setCompensation` da tekshiruv **o'zgartirishdan keyin** turibdi.
+
+Endi qo'riqchi mantiqini test bilan mustahkamlayman:
+
+`test:leak` avval 56 toza edi, endi 1 sizish. Buni tekshirishim shart:
+
+Tasdiqlandi — o'sha sizish **mening tuzatishimdan emas** (stash qilingan holatda ham chiqadi; DB ma'lumoti o'zgargani uchun endi ko'rinmoqda). `test:money` esa ikkita filial talab qiladi — muhit masalasi.
+
+<sub>session `39bbfed0` · branch `main` · 22 ta qadam</sub>
+
+---

@@ -284,7 +284,7 @@ export const recalcStatus = async (salaryId) => {
 // keltirib chiqariladi - hisob davomida kelib tushgan parallel to'lov buzmaydi.
 // Retro o'zgarish expected'ni to'langandan pastga tushirsa, farq overpaidAmount
 // sifatida KO'RINADIGAN bo'lib saqlanadi (C6) - clamp bilan yashirilmaydi.
-export const recalc = async (salaryId, { force = false } = {}) => {
+export const recalc = async (salaryId, { force = false, lockPaid = false } = {}) => {
   const salary = await TeacherSalary.findById(salaryId);
   if (!salary) return null;
 
@@ -294,25 +294,27 @@ export const recalc = async (salaryId, { force = false } = {}) => {
   //    Aks holda owner kiritgan mukofot har kechqurun job'da nolga tushardi.
   if (salary.kind && salary.kind !== "group") return salary;
 
-  // ─── TO'LANGAN OY QULFLANADI ───
+  // ─── TO'LANGAN OY QULFI - FAQAT STAVKA O'ZGARISHIDA ───
   //
-  // Maosh TO'LIQ to'langan bo'lsa (status="paid"), stavka keyin o'zgarsa ham
-  // o'sha oy QAYTA HISOBLANMAYDI.
+  // `lockPaid` ni CHAQIRUVCHI beradi va u faqat bitta yo'ldan keladi:
+  // teacherCompensation.recomputeFrom (stavka o'zgardi).
   //
-  // NEGA: o'qituvchiga fevral uchun 2 mln to'landi. Mayda stavka 2.5 mln ga
-  // oshirildi va effectiveFrom xato bilan 1-yanvarga qo'yildi. Qulfsiz holatda
-  // fevral qayta hisoblanib, o'qituvchida "500 000 qarzdorlik" paydo bo'lardi
-  // (yoki teskarisi - overpaid). Ya'ni YOPILGAN va HISOB-KITOB QILINGAN davr
-  // keyingi qaror tufayli qayta ochilardi.
+  // NEGA UMUMIY QULF NOTO'G'RI EDI: recalc() ALTI xil sababdan chaqiriladi -
+  // guruh narxi o'zgardi, chegirma berildi, o'quvchi qo'shildi/chiqdi, dars
+  // bekor qilindi, o'quvchi o'chirildi. Bularning hammasi maoshning HAQIQIY
+  // bazasini o'zgartiradi:
+  //   martga o'quvchi qo'shildi → per_student bo'yicha o'qituvchiga yana
+  //   50 000 tegishli. Umumiy qulf buni JIMGINA bloklardi va o'qituvchi
+  //   haqini olmasdi - hech qayerda iz ham qolmasdi.
   //
-  // Bu buxgalteriyaning "yopilgan davr" (closed period) qoidasi: to'lov
-  // amalga oshgach, o'sha davr o'zgarmas bo'ladi.
+  // Stavka o'zgarishi esa BOSHQA narsa: "1-yanvardan oshirdik" degan qaror
+  // allaqachon to'langan fevralni qayta ochmasligi kerak (yopilgan davr).
   //
-  // QISMAN to'langan (partial) qatorlar QULFLANMAYDI - u yerda hisob-kitob
-  // hali tugamagan va tuzatish hali ham to'g'ri natija beradi.
+  // QISMAN to'langan (partial) qatorlar hech qachon qulflanmaydi - u yerda
+  // hisob-kitob hali tugamagan.
   //
-  // force=true - ongli tuzatish uchun (owner "qayta hisobla" tugmasi).
-  if (!force && salary.status === "paid" && salary.paidAmount > 0) {
+  // force=true - qulfni ochiq buzish (owner "qayta hisobla" tugmasi).
+  if (lockPaid && !force && salary.status === "paid" && salary.paidAmount > 0) {
     return salary;
   }
 
@@ -376,7 +378,12 @@ export const recalc = async (salaryId, { force = false } = {}) => {
 //
 // PRORATSIYA: ishga kirgan/bo'shagan oyda kalendar kunlar ulushicha. Stavka oy
 // o'rtasida oshirilsa - har segment o'z summasi bilan qo'shiladi.
-export const recalcBaseForTeacherMonth = async (teacher, year, month) => {
+export const recalcBaseForTeacherMonth = async (
+  teacher,
+  year,
+  month,
+  { lockPaid = false, force = false } = {},
+) => {
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEndExcl = new Date(Date.UTC(year, month, 1));
   const totalDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -399,10 +406,10 @@ export const recalcBaseForTeacherMonth = async (teacher, year, month) => {
     month,
   });
 
-  // TO'LANGAN OY QULFLANADI - recalc() dagi bilan bir xil qoida (yopilgan davr).
-  // Fiksa oylikda bu ayniqsa muhim: stavka oshirilganda effectiveFrom xato
-  // qo'yilsa, allaqachon to'langan barcha oylar qayta ochilib ketardi.
-  if (existing && existing.status === "paid" && existing.paidAmount > 0) {
+  // TO'LANGAN OY QULFI - recalc() dagi bilan bir xil shart: faqat STAVKA
+  // o'zgarishida. Fiksa oylikda bu ayniqsa muhim, chunki effectiveFrom xato
+  // qo'yilsa allaqachon to'langan barcha oylar qayta ochilib ketardi.
+  if (lockPaid && !force && existing?.status === "paid" && existing.paidAmount > 0) {
     return existing;
   }
 

@@ -134,10 +134,22 @@ export const computePaymentSnapshot = ({
   const main = sumPayableDays({ year, month, periods: effPeriods, freezeWindows });
   const totalDays = main.totalDays || daysInMonth(year, month);
 
+  // KUNLAR OYDAN OSHMASLIGI KERAK.
+  //
+  // sumPayableDays davrlarni QO'SHADI va ular kesishmasligiga ISHONADI
+  // (assertPeriodInvariants yozish qatlamida ta'minlaydi). Lekin ishonch
+  // yetarli emas: ilgari `factor` clamp qilinardi-yu, `proratedFee` XOM
+  // nisbatdan hisoblanardi. Kesishgan ikki davrda 600 000 lik oylik
+  // 1 200 000 bo'lib chiqardi - foydalanuvchi ikki barobar qarzdor bo'lardi.
+  //
+  // Endi kunlarning O'ZI chegaralanadi, ya'ni ikkala qiymat ham bir xil
+  // (himoyalangan) sondan chiqadi va ular hech qachon ajralib ketmaydi.
+  const payableDays = Math.min(main.payableDays, totalDays);
+
   const proratedFee = Math.round(
-    ((Number(baseFee) || 0) * main.payableDays) / totalDays,
+    ((Number(baseFee) || 0) * payableDays) / totalDays,
   );
-  const factor = clamp(main.payableDays / totalDays, 0, 1);
+  const factor = clamp(payableDays / totalDays, 0, 1);
 
   const discountApplied = resolveDiscountAmount(discounts, proratedFee);
   const expectedAmount = Math.max(0, proratedFee - discountApplied);

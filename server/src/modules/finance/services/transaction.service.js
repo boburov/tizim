@@ -182,6 +182,32 @@ export const remove = async (id, currentUser) => {
       t.deletedBy = currentUser?._id || null;
       await t.save({ session: session || undefined });
       await studentPaymentService.applyPaidDelta(t.payment, -t.amount, { session });
+
+      // YOMON QARZ TUZATISHI.
+      //
+      // `writeOffAmount` write-off PAYTIDAGI qoldiq bilan muzlatiladi
+      // (expected − paid). Shu oyning to'lovi keyin bekor qilinsa, haqiqiy
+      // yo'qotish o'sha summaga OSHADI, lekin writeOffAmount eski qiymatda
+      // qolib ketardi.
+      //
+      // Natijada hisobotda: `billed`/`paid` write-off qilinganlarni chiqarib
+      // tashlaydi, `badDebt` esa eskirgan raqamni oladi - ya'ni bekor
+      // qilingan summa hech qayerda ko'rinmay, JIMGINA yo'qolardi.
+      //
+      // Bekor qilishni bloklash mumkin emas: write-off'ni qaytarish oqimi
+      // yo'q va foydalanuvchi tuzoqqa tushib qolardi. Shuning uchun
+      // yo'qotish RAQAMI tuzatiladi.
+      const paymentDoc = await StudentPayment.findById(t.payment)
+        .select({ writtenOff: 1 })
+        .session(session || null);
+      if (paymentDoc?.writtenOff) {
+        await StudentPayment.updateOne(
+          { _id: t.payment },
+          { $inc: { writeOffAmount: t.amount } },
+          session ? { session } : undefined,
+        );
+      }
+
       // Depozitdan qoplangan to'lov bekor qilinsa - pul DEPOZITGA qaytadi (naqdga emas).
       // Refund void bilan bir xil tranzaksiyada - tashqi abort'da double-credit bo'lmasin.
       if (t.source === "deposit") {

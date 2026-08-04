@@ -129,15 +129,33 @@ export const segmentPeriod = (period, compensations, windowStart, windowEndExcl)
   }
 
   // Standart stavka oynalari bo'yicha kesamiz.
+  //
+  // IKKI MARTA SANASHDAN HIMOYA (ikkinchi qatlam):
+  // servis qatlamida kesishuv taqiqlangan (assertNoOverlap), lekin qo'riqchi
+  // qo'yilishidan OLDIN yaratilgan buzuq ma'lumot bazada qolgan bo'lishi
+  // mumkin. Kesishgan stavkalar segmentlarga aylansa, bir kun IKKI marta
+  // to'lanardi - 2 mln oylik 4 mln bo'lib chiqardi.
+  //
+  // Yechim: stavkalar sana bo'yicha tartiblanadi va har biri ALLAQACHON
+  // egallangan eng katta nuqtadan keyin boshlanadi. Ya'ni kesishgan qismni
+  // ERTAROQ boshlangan stavka oladi, keyingisi faqat qolgan qismini.
+  const sortedComps = [...compensations].sort(
+    (a, b) =>
+      toUtcMidnight(a.effectiveFrom).getTime() -
+      toUtcMidnight(b.effectiveFrom).getTime(),
+  );
+
   const segments = [];
-  for (const comp of compensations) {
+  let claimedUntil = -Infinity; // shu nuqtagacha kunlar allaqachon berilgan
+  for (const comp of sortedComps) {
     const cStart = toUtcMidnight(comp.effectiveFrom).getTime();
     const cEndExcl = comp.effectiveTo
       ? toUtcMidnight(comp.effectiveTo).getTime()
       : Infinity;
-    const s = Math.max(pStart, cStart);
+    const s = Math.max(pStart, cStart, claimedUntil);
     const e = Math.min(pEndExcl, cEndExcl);
     if (s >= e) continue;
+    claimedUntil = e;
 
     const rate = emptyRate();
     applyVariable(rate, comp.variableType, comp.variableRate, comp.percentBase);
@@ -166,16 +184,27 @@ export const baseSegmentsForMonth = (compensations, year, month, { from = null, 
   const lo = Math.max(monthStart, from ? toUtcMidnight(from).getTime() : -Infinity);
   const hi = Math.min(monthEndExcl, toExcl ? toUtcMidnight(toExcl).getTime() : Infinity);
 
+  // IKKI MARTA SANASHDAN HIMOYA - segmentPeriod dagi bilan bir xil sabab.
+  // Fiksa oylikda bu ayniqsa og'ir: kesishuv to'g'ridan-to'g'ri oylikni
+  // ikki barobar qiladi (2 mln → 4 mln).
+  const sortedComps = [...compensations].sort(
+    (a, b) =>
+      toUtcMidnight(a.effectiveFrom).getTime() -
+      toUtcMidnight(b.effectiveFrom).getTime(),
+  );
+
   const segments = [];
-  for (const comp of compensations) {
+  let claimedUntil = -Infinity;
+  for (const comp of sortedComps) {
     if (comp.baseType !== "fixed_monthly") continue;
     const cStart = toUtcMidnight(comp.effectiveFrom).getTime();
     const cEndExcl = comp.effectiveTo
       ? toUtcMidnight(comp.effectiveTo).getTime()
       : Infinity;
-    const s = Math.max(lo, cStart);
+    const s = Math.max(lo, cStart, claimedUntil);
     const e = Math.min(hi, cEndExcl);
     if (s >= e) continue;
+    claimedUntil = e;
     segments.push({
       start: new Date(s),
       endExcl: new Date(e),
@@ -184,7 +213,7 @@ export const baseSegmentsForMonth = (compensations, year, month, { from = null, 
       branchId: comp.branchId || null,
     });
   }
-  return segments.sort((a, b) => a.start - b.start);
+  return segments;
 };
 
 /** Segment nechta kun (butun kunlar) qamrab oladi. */

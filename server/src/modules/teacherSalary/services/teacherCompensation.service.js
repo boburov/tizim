@@ -7,6 +7,7 @@ import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { toUtcMidnight, localTodayMidnight } from "../../../helpers/attendance.helper.js";
+import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { resolveBranchForWrite } from "../../../helpers/branchContext.helper.js";
 import * as teacherSalaryService from "./teacherSalary.service.js";
 
@@ -21,6 +22,37 @@ const toObjectId = (id) => {
   if (id instanceof mongoose.Types.ObjectId) return id;
   if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
   return new mongoose.Types.ObjectId(String(id));
+};
+
+/**
+ * STAVKA DAVRLARI KESISHMASLIGI KERAK.
+ *
+ * NEGA MAJBURIY: rateResolver har bir kesishgan stavka uchun ALOHIDA
+ * segment yaratadi va kunlar QO'SHILADI. Ikki stavka bir kunni qamrasa,
+ * o'sha kun ikki marta to'lanadi - 2 mln oylik 4 mln bo'lib chiqadi.
+ *
+ * `setCompensation` da ochiq davrni yopish orqali bu holat yuzaga kelmasdi,
+ * lekin `amendCompensation` effectiveFrom ni ERKIN o'zgartirardi va
+ * yopilgan davr ustiga surib yuborish mumkin edi.
+ *
+ * TeacherGroupPeriod va GroupMembership da AYNAN SHU qo'riqchi bor
+ * (assertPeriodInvariants) - stavka davrlari ham xuddi shunday himoyalanadi.
+ */
+const assertNoOverlap = async (teacherId, candidate, excludeId = null) => {
+  const rows = await TeacherCompensation.find(
+    {
+      teacher: toObjectId(teacherId),
+      isDeleted: { $ne: true },
+      ...(excludeId ? { _id: { $ne: toObjectId(excludeId) } } : {}),
+    },
+    { effectiveFrom: 1, effectiveTo: 1 },
+  ).lean();
+
+  assertPeriodInvariants(
+    { startDate: candidate.effectiveFrom, endDate: candidate.effectiveTo || null },
+    rows.map((r) => ({ startDate: r.effectiveFrom, endDate: r.effectiveTo || null })),
+    "date",
+  );
 };
 
 const assertTeacher = async (teacherId) => {
@@ -98,6 +130,22 @@ export const setCompensation = async (body, currentUser) => {
         "Yangi stavka amaldagi stavkadan keyin boshlanishi kerak. Xato kiritilgan bo'lsa amaldagi stavkani tahrirlang.",
       );
     }
+  }
+
+  // KESISHUV TEKSHIRUVI HECH NARSA O'ZGARTIRILMASDAN OLDIN.
+  //
+  // Ochiq davr `from` da yopilishi KERAK, lekin uni oldin saqlab qo'yib
+  // keyin tekshirsak va tekshiruv yiqilsa - o'qituvchi STAVKASIZ qolardi
+  // (eskisi yopilgan, yangisi yaratilmagan). Shuning uchun ochiq davr
+  // ro'yxatdan chiqarilib, uning YOPILGAN holati qo'lda qo'shiladi.
+  const openId = open?._id || null;
+  await assertNoOverlap(
+    teacher._id,
+    { effectiveFrom: from, effectiveTo: null },
+    openId,
+  );
+
+  if (open) {
     open.effectiveTo = from;
     open.updatedBy = currentUser?._id || null;
     await open.save();
@@ -144,6 +192,16 @@ export const amendCompensation = async (id, patch, currentUser) => {
   if (patch.branchId !== undefined) doc.branchId = patch.branchId || null;
   if (patch.note !== undefined) doc.note = patch.note;
   doc.updatedBy = currentUser?._id || null;
+
+  // KESISHUV QO'RIQCHISI - aynan shu yerda yo'q edi.
+  // effectiveFrom orqaga surilsa, yopilgan oldingi davr ustiga tushib
+  // qolardi va o'sha oy maoshi IKKI BAROBAR hisoblanardi.
+  await assertNoOverlap(
+    doc.teacher,
+    { effectiveFrom: doc.effectiveFrom, effectiveTo: doc.effectiveTo },
+    doc._id,
+  );
+
   await doc.save();
 
   // Sana orqaga surilgan bo'lsa - eskiroq nuqtadan qayta hisoblaymiz.
@@ -210,10 +268,16 @@ export const recomputeFrom = async (teacherId, fromDate) => {
         if (r.status === "paid" && r.paidAmount > 0) lockedRows += 1;
       }
 
-      await teacherSalaryService.recalcBaseForTeacherMonth(teacherId, year, month);
+      // lockPaid: BU YO'L stavka o'zgarishidan keladi - allaqachon to'langan
+      // (yopilgan) oylar qayta ochilmasligi kerak. Boshqa chaqiruvchilar
+      // (o'quvchi qo'shildi, narx o'zgardi) qulfsiz chaqiradi, chunki u
+      // yerda maoshning HAQIQIY bazasi o'zgargan.
+      await teacherSalaryService.recalcBaseForTeacherMonth(teacherId, year, month, {
+        lockPaid: true,
+      });
       for (const r of rows) {
         if (r.kind !== "group") continue;
-        await teacherSalaryService.recalc(r._id);
+        await teacherSalaryService.recalc(r._id, { lockPaid: true });
       }
       months += 1;
     } catch (err) {
