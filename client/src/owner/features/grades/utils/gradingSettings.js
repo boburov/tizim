@@ -19,7 +19,6 @@ export const DEFAULT_GRADING_SETTINGS = Object.freeze({
 
   // Avtomatlashtirish
   autoRemindUngraded: false, // baholanmagan o'quvchilar uchun avto-eslatma
-  notifyParents: false, // natijani ota-onaga bildirishnoma orqali yuborish
   notifyStudents: false, // natijani o'quvchiga bildirishnoma orqali yuborish
 });
 
@@ -40,13 +39,18 @@ export const TOP_N_OPTIONS = [
 
 // localStorage'dan o'qish - buzilgan/eski bo'lsa defaultga qaytadi, har doim
 // defaults bilan birlashtiriladi (kelajakda yangi maydon qo'shilsa ham ishlaydi).
+//
+// FAQAT defaultda mavjud kalitlar qaytariladi: olib tashlangan sozlama eski
+// brauzerda saqlanib qolgan bo'lsa ham formaga sizib kirmaydi (aks holda u
+// "saqlangan" tasvirda qolib, sahifa doim "saqlanmagan o'zgarishlar bor"
+// deb ko'rsatardi).
 export const loadGradingSettings = () => {
   try {
     const raw =
       typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_GRADING_SETTINGS };
     const parsed = JSON.parse(raw);
-    return {
+    const merged = {
       ...DEFAULT_GRADING_SETTINGS,
       ...parsed,
       gradeLabels: {
@@ -54,6 +58,9 @@ export const loadGradingSettings = () => {
         ...(parsed.gradeLabels || {}),
       },
     };
+    return Object.fromEntries(
+      Object.keys(DEFAULT_GRADING_SETTINGS).map((k) => [k, merged[k]]),
+    );
   } catch {
     return { ...DEFAULT_GRADING_SETTINGS };
   }

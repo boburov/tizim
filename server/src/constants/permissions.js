@@ -3,7 +3,22 @@ export const PERMISSIONS = Object.freeze({
   USERS_READ: "users.read",
   ARCHIVE_REASONS_MANAGE: "archive_reasons.manage",
 
+  // LIDLAR. Uch darajaga ATAYLAB ajratilgan - "resepshin" roli uchun.
+  //
+  // Resepshin telefonga javob beradi: lid yaratadi, ro'yxatni ko'radi va
+  // status siljitadi. LEKIN u o'quvchiga aylantirishi (guruhga yozish -
+  // moliyaviy majburiyat yaratadi) yoki lidni o'chirishi MUMKIN EMAS.
+  //
+  // Ilgari faqat leads.manage bor edi va u hammasini birdan berardi:
+  // lid yaratish huquqi bergan odam avtomatik ravishda o'chirish va
+  // guruhga qabul qilish huquqini ham olardi.
   LEADS_READ: "leads.read",
+  LEADS_CREATE: "leads.create",
+  // Tahrirlash + status o'zgartirish + eslatma qo'yish.
+  LEADS_UPDATE: "leads.update",
+  // ENG KUCHLI: o'quvchiga aylantirish, o'chirish, manba/sabab ro'yxatlarini
+  // boshqarish. Orqaga moslik uchun u LEADS_CREATE/UPDATE ni ham QAMRAYDI -
+  // qarang permission.helper.js: PERMISSION_IMPLIES.
   LEADS_MANAGE: "leads.manage",
 
   STUDENTS_READ: "students.read",
@@ -136,7 +151,15 @@ export const PERMISSION_LABELS = {
     group: "users",
   },
   [PERMISSIONS.LEADS_READ]: { label: "Lidlarni ko'rish", group: "leads" },
-  [PERMISSIONS.LEADS_MANAGE]: { label: "Lidlarni boshqarish", group: "leads" },
+  [PERMISSIONS.LEADS_CREATE]: { label: "Lid qo'shish", group: "leads" },
+  [PERMISSIONS.LEADS_UPDATE]: {
+    label: "Lidni tahrirlash va status o'zgartirish",
+    group: "leads",
+  },
+  [PERMISSIONS.LEADS_MANAGE]: {
+    label: "Lidlarni to'liq boshqarish (aylantirish, o'chirish)",
+    group: "leads",
+  },
 
   [PERMISSIONS.STUDENTS_READ]: { label: "O'quvchilarni ko'rish", group: "students" },
   [PERMISSIONS.STUDENTS_CREATE]: { label: "O'quvchilarni yaratish", group: "students" },

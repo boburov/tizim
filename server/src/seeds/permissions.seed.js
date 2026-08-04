@@ -209,6 +209,55 @@ const seed = async () => {
   );
   logger.info("Direktor roli tayyor");
 
+  // --- RESEPSHIN (qabul xodimi) roli ---
+  //
+  // Eng TOR rol: telefonga javob beradi, lid yozadi va u bilan ishlaydi.
+  //
+  // NIMA QILA OLADI:
+  //   leads.read    - lidlar ro'yxati va statistikasi
+  //   leads.create  - yangi lid qo'shish (asosiy ishi)
+  //   leads.update  - status siljitish, eslatma qo'yish, izoh yozish
+  //
+  // NIMA QILA OLMAYDI (ATAYLAB):
+  //   leads.manage  - o'quvchiga AYLANTIRISH va O'CHIRISH.
+  //     Aylantirish = guruhga yozish = moliyaviy majburiyat yaratish.
+  //     Bu resepshin qarori emas. O'chirish esa yo'qotish statistikasini
+  //     yo'q qiladi - lid o'chirilsa "nega kelmadi" tahlili ham yo'qoladi.
+  //   users.read    - butun foydalanuvchilar bazasi kerak emas.
+  //   finance.*     - pulga umuman aloqasi yo'q.
+  //
+  // Lid o'quvchiga aylantirilishi kerak bo'lsa, resepshin statusni
+  // "Sinovda qatnashdi" ga qo'yadi va direktor/owner qabul qiladi.
+  const receptionPermKeys = [
+    PERMISSIONS.LEADS_READ,
+    PERMISSIONS.LEADS_CREATE,
+    PERMISSIONS.LEADS_UPDATE,
+  ];
+  const receptionPermIds = receptionPermKeys.map((k) => permIds[k]).filter(Boolean);
+
+  await Role.findOneAndUpdate(
+    { value: "reception" },
+    {
+      // $setOnInsert - direktor rolidagi bilan bir xil sabab: owner
+      // ruxsatlarni o'zgartirgan bo'lsa, keyingi seed uni tiklamasin.
+      $setOnInsert: {
+        value: "reception",
+        label: "Resepshin",
+        description: "Qabul xodimi - lid qabul qiladi va ular bilan ishlaydi",
+        isSystem: false,
+        isFrozen: false,
+        roleType: ROLE_TYPES.STAFF,
+        // Kirgach darhol lidlar sahifasi ochiladi - uning yagona ish joyi.
+        // "/owner" bo'lsa u bo'sh dashboard'ga tushib, qayerga borishni
+        // izlab yurardi.
+        defaultPath: "/owner/leads",
+        permissions: receptionPermIds,
+      },
+    },
+    { upsert: true, new: true },
+  );
+  logger.info("Resepshin roli tayyor");
+
   await disconnectDB();
 };
 

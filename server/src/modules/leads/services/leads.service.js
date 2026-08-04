@@ -24,6 +24,7 @@ export const list = async ({
   status,
   source,
   direction,
+  engagement,
   search,
   from,
   to,
@@ -35,6 +36,30 @@ export const list = async ({
   if (status) filter.status = status;
   if (source) filter.source = source;
   if (direction) filter.direction = direction;
+
+  // ALOQA FILTRI.
+  //
+  // `no_contact` - lid kelgan, lekin hech kim qo'lga OLMAGAN: status hali
+  //   "new" va statusHistory'da faqat yaratilish yozuvi bor.
+  //   `$size: 1` aynan shuni beradi - "bironta ham status o'zgarmagan".
+  //
+  // `stale` - aloqa qilingan, lekin TASHLAB QO'YILGAN: ochiq bosqichda
+  //   turibdi, eslatma qo'yilmagan va oxirgi harakatdan beri STALE_DAYS
+  //   kun o'tgan. Bu lidlar jimgina o'ladi - hech kim ularni eslamaydi.
+  //
+  // Ikkalasi ham "yo'qotilgan sotuv"ning eng arzon manbai: mijoz allaqachon
+  // O'ZI qiziqib murojaat qilgan, faqat javob kutgan.
+  if (engagement === "no_contact") {
+    filter.status = "new";
+    filter.statusHistory = { $size: 1 };
+  } else if (engagement === "stale") {
+    const STALE_DAYS = 7;
+    filter.status = { $nin: ["enrolled", "rejected"] };
+    filter.followUpAt = null;
+    filter.updatedAt = {
+      $lt: new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000),
+    };
+  }
   if (from || to) {
     filter.createdAt = {};
     if (from) filter.createdAt.$gte = new Date(from);
@@ -42,7 +67,15 @@ export const list = async ({
   }
   if (search && search.trim()) {
     const rx = new RegExp(escapeRegex(search.trim()), "i");
-    filter.$or = [{ firstName: rx }, { lastName: rx }, { phone: rx }];
+    // QO'SHIMCHA RAQAM ham qidiriladi: xodim ota-onaning raqami bilan
+    // qo'ng'iroq qilib, "bu kim edi?" deb qidirsa lid TOPILISHI kerak.
+    // Aks holda ikkinchi raqamni saqlashning yarim ma'nosi yo'qolardi.
+    filter.$or = [
+      { firstName: rx },
+      { lastName: rx },
+      { phone: rx },
+      { parentPhone: rx },
+    ];
   }
 
   const skip = (page - 1) * limit;
@@ -70,9 +103,30 @@ const normalizeOptionalPhone = (raw) => {
   return p;
 };
 
+// IKKI RAQAM BIR XIL BO'LMASLIGI KERAK.
+//
+// Tekshiruv NORMALIZATSIYADAN KEYIN qilinadi: "+998 90 123 45 67" va
+// "998901234567" xom holda har xil satr, lekin bir xil raqam. Xom
+// solishtiruv bu xatoni o'tkazib yuborardi.
+//
+// Nega muhim: qo'shimcha raqamning butun ma'nosi - birinchisi javob
+// bermaganda BOSHQA odamga qo'ng'iroq qilish. Ikkalasi bir xil bo'lsa
+// maydon to'ldirilgan ko'rinadi-yu, hech qanday foyda bermaydi.
+const assertDistinctPhones = (phone, parentPhone) => {
+  if (phone && parentPhone && phone === parentPhone) {
+    throw new ApiError(
+      400,
+      "Qo'shimcha telefon asosiy raqam bilan bir xil bo'lmasligi kerak",
+    );
+  }
+};
+
 export const create = async (body, currentUser) => {
   const phone = normalizeOptionalPhone(body.phone);
   if (!phone) throw new ApiError(400, "Telefon kerak");
+
+  const parentPhone = normalizeOptionalPhone(body.parentPhone);
+  assertDistinctPhones(phone, parentPhone);
 
   const exists = await Lead.findOne({ phone });
   if (exists) throw new ApiError(409, "Bu telefon raqamli lid allaqachon mavjud");
@@ -89,11 +143,14 @@ export const create = async (body, currentUser) => {
     lastName: body.lastName ? String(body.lastName).trim() : "",
     age: body.age ?? null,
     phone,
-    parentPhone: body.parentPhone ? normalizeOptionalPhone(body.parentPhone) : null,
+    parentPhone,
     source: body.sourceId || null,
     direction: body.directionId || null,
     status,
     rejectionReason: body.rejectionReasonId || null,
+    rejectionNote: (body.rejectionNote || "").trim(),
+    // Darhol rad etilgan holatda yaratilsa - yopilish sanasi ham o'sha payt.
+    closedAt: status === "rejected" ? new Date() : null,
     trialDate: body.trialDate ? new Date(body.trialDate) : null,
     notes: body.notes || "",
     createdBy: currentUser?._id || null,
@@ -122,6 +179,17 @@ export const update = async (id, body, currentUser) => {
       ? normalizeOptionalPhone(body.parentPhone)
       : null;
   }
+  // Tekshiruv IKKALA maydon qo'llanganidan KEYIN: so'rovda faqat bittasi
+  // kelishi mumkin va u saqlangan ikkinchisi bilan to'qnashishi mumkin.
+  //
+  // FAQAT telefon TEGILGANDA tekshiriladi. Sabab: bu qoida joriy
+  // qilinishidan OLDIN yaratilgan lidlarda ikkala raqam bir xil bo'lishi
+  // mumkin. Har doim tekshirsak, o'sha eski lidning ISMINI tahrirlash ham
+  // "telefon bir xil" xatosi bilan bloklanardi - foydalanuvchi esa telefonga
+  // umuman tegmagan bo'lardi.
+  if (body.phone !== undefined || body.parentPhone !== undefined) {
+    assertDistinctPhones(lead.phone, lead.parentPhone);
+  }
   if (body.sourceId !== undefined) lead.source = body.sourceId || null;
   if (body.directionId !== undefined) lead.direction = body.directionId || null;
   if (body.rejectionReasonId !== undefined) {
@@ -131,14 +199,31 @@ export const update = async (id, body, currentUser) => {
     lead.trialDate = body.trialDate ? new Date(body.trialDate) : null;
   }
   if (body.notes !== undefined) lead.notes = body.notes || "";
+  if (body.rejectionNote !== undefined) {
+    lead.rejectionNote = (body.rejectionNote || "").trim();
+  }
 
   if (body.status !== undefined && body.status !== lead.status) {
+    const wasRejected = lead.status === "rejected";
     lead.status = body.status;
     lead.statusHistory.push({
       status: body.status,
       at: new Date(),
       by: currentUser?._id || null,
     });
+
+    if (body.status === "rejected") {
+      lead.closedAt = new Date();
+    } else if (wasRejected) {
+      // QAYTA OCHILDI: yopilish izlarini tozalaymiz.
+      //
+      // Aks holda "yopilgan lidlar" hisobotida u hali ham yopiq sanaladi va
+      // yo'qotish sababi statistikasi shishib ketardi - lid ikki marta
+      // (bir marta yopilgan, bir marta qayta yopilgan) sanalardi.
+      lead.closedAt = null;
+      lead.rejectionNote = "";
+      lead.rejectionReason = null;
+    }
   }
 
   await lead.save();
@@ -348,6 +433,13 @@ export const stats = async ({ from, to } = {}) => {
     statusHistory: 1,
     source: 1,
     direction: 1,
+    // Yo'qotish tahlili uchun: sabab (tanlangan) + izoh (erkin matn).
+    rejectionReason: 1,
+    rejectionNote: 1,
+    // "Aloqa qilinganmi?" savoliga javob beradigan maydonlar.
+    followUpAt: 1,
+    createdAt: 1,
+    updatedAt: 1,
   }).lean();
 
   // Faqat aktiv (o'chirilmagan) sozlamalar. O'chirilgan yoki yo'q bo'lib
@@ -375,8 +467,53 @@ export const stats = async ({ from, to } = {}) => {
   const srcAgg = new Map(); // id -> {total, enrolled}
   const dirAgg = new Map();
 
+  // RAD ETISH SABABLARI: "nega mijozlar kelmayapti?" savoliga javob.
+  // Voronka QAYERDA yo'qotayotganini ko'rsatadi, bu esa NEGA ekanini.
+  const rejAgg = new Map(); // id -> { count, withNote }
+  let rejectedTotal = 0;
+  // Sababi umuman yozilmagan yopilgan lidlar - ma'lumot sifati ko'rsatkichi.
+  let rejectedWithoutReason = 0;
+
+  // ALOQA HOLATI.
+  //
+  // "Aloqa qilinmagan" ta'rifi: statusHistory'da FAQAT yaratilish yozuvi bor
+  // va status hali "new". Ya'ni lid kelgan-u, hech kim uni qo'lga olmagan.
+  //
+  // Nega statusHistory bo'yicha, updatedAt bo'yicha emas: izoh yozilsa yoki
+  // telefon tuzatilsa updatedAt yangilanadi, lekin bu ALOQA qilinganini
+  // bildirmaydi. Status siljishi esa haqiqiy harakat belgisi.
+  const engagement = { noContact: 0, contacted: 0, closed: 0 };
+  let noContactOldestDays = 0;
+  const nowMs = Date.now();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
   for (const lead of leads) {
     byStatus[lead.status] = (byStatus[lead.status] || 0) + 1;
+
+    // ── Aloqa holati ──
+    const isClosed = lead.status === "rejected" || lead.status === "enrolled";
+    const touched = (lead.statusHistory || []).length > 1;
+    if (isClosed) {
+      engagement.closed += 1;
+    } else if (!touched && lead.status === "new") {
+      engagement.noContact += 1;
+      const days = Math.floor((nowMs - new Date(lead.createdAt).getTime()) / DAY_MS);
+      if (days > noContactOldestDays) noContactOldestDays = days;
+    } else {
+      engagement.contacted += 1;
+    }
+
+    // ── Rad etish sababi ──
+    if (lead.status === "rejected") {
+      rejectedTotal += 1;
+      const rawRej = lead.rejectionReason ? String(lead.rejectionReason) : null;
+      const rKey = rawRej && nameOf.has(rawRej) ? rawRej : "none";
+      if (rKey === "none") rejectedWithoutReason += 1;
+      if (!rejAgg.has(rKey)) rejAgg.set(rKey, { count: 0, withNote: 0 });
+      const row = rejAgg.get(rKey);
+      row.count += 1;
+      if ((lead.rejectionNote || "").trim()) row.withNote += 1;
+    }
 
     const furthest = furthestOf(lead);
     for (let i = 0; i <= furthest; i++) funnelCounts[i] += 1;
@@ -444,5 +581,42 @@ export const stats = async ({ from, to } = {}) => {
     bySource: toRows(srcAgg),
     byDirection: toRows(dirAgg),
     dropOffByStage,
+
+    // RAD ETISH SABABLARI - eng ko'p uchraganidan boshlab.
+    // `withNote` - nechtasida erkin izoh ham bor. Bu ma'lumot SIFATI
+    // ko'rsatkichi: izohsiz sabab ("Boshqa") tahlil uchun deyarli foydasiz.
+    byRejectionReason: Array.from(rejAgg.entries())
+      .map(([key, v]) => ({
+        id: key === "none" ? null : key,
+        name: key === "none" ? "Sabab ko'rsatilmagan" : nameOf.get(key),
+        count: v.count,
+        withNote: v.withNote,
+        share: pct(v.count, rejectedTotal),
+      }))
+      .sort((a, b) => b.count - a.count),
+
+    rejection: {
+      total: rejectedTotal,
+      withoutReason: rejectedWithoutReason,
+      // Izohi bor yopilgan lidlar ulushi - "nega?" tahlili qanchalik
+      // ishonchli bo'lishini ko'rsatadi.
+      noteCoverage: pct(
+        Array.from(rejAgg.values()).reduce((s, v) => s + v.withNote, 0),
+        rejectedTotal,
+      ),
+    },
+
+    // ALOQA HOLATI - "umuman aloqaga chiqilmagan" lidlar shu yerda.
+    engagement: {
+      ...engagement,
+      noContactOldestDays,
+      // Ochiq (yopilmagan) lidlar ichida hech kim tegmaganlari ulushi.
+      // Aynan shu raqam "sotuv nega o'lyapti" savoliga birinchi javob:
+      // lid kelgan, lekin hech kim qo'ng'iroq qilmagan.
+      noContactShare: pct(
+        engagement.noContact,
+        engagement.noContact + engagement.contacted,
+      ),
+    },
   };
 };

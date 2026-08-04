@@ -59,7 +59,6 @@ const RatingSettingsPage = () => {
     ratingTopN,
     countLateAsAbsent,
     autoRemindUngraded,
-    notifyParents,
     notifyStudents,
     setField,
     setFields,
@@ -94,7 +93,6 @@ const RatingSettingsPage = () => {
     ratingTopN,
     countLateAsAbsent,
     autoRemindUngraded,
-    notifyParents,
     notifyStudents,
   };
   const isDirty =
@@ -115,7 +113,6 @@ const RatingSettingsPage = () => {
       ratingTopN,
       countLateAsAbsent,
       autoRemindUngraded,
-      notifyParents,
       notifyStudents,
     });
     // Vaznlarni serverga (mavjud backend) - toast mutation ichida
@@ -290,16 +287,6 @@ const RatingSettingsPage = () => {
               <Switch
                 checked={autoRemindUngraded}
                 onChange={(v) => setField("autoRemindUngraded", v)}
-              />
-            }
-          />
-          <SettingRow
-            label="Ota-onaga bildirishnoma"
-            hint="Baho qo'yilganda natija ota-onaga bildirishnoma orqali yuboriladi."
-            control={
-              <Switch
-                checked={notifyParents}
-                onChange={(v) => setField("notifyParents", v)}
               />
             }
           />

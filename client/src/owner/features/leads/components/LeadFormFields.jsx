@@ -6,12 +6,27 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
 import useLeadOptionsQuery from "../hooks/useLeadOptionsQuery";
 import LeadOptionCreateModal from "./LeadOptionCreateModal";
 
+// Server bilan bir xil bo'lishi SHART (leads.validators.js: MIN_NOTE).
+const MIN_CLOSING_NOTE = 10;
+
 const withEmpty = (data, placeholder = "-") => [
   { value: "", label: placeholder },
   ...(data?.data || []).map((o) => ({ value: o._id, label: o.name })),
 ];
 
+// Ikki raqam bir xilligini tekshirish uchun: formatlash belgilarini
+// (probel, qavs, chiziqcha, +) tashlab faqat raqamlarni solishtiramiz.
+// "+998 90 123 45 67" va "998901234567" - bir xil raqam.
+const digitsOnly = (v) => String(v || "").replace(/\D/g, "");
+
 const LeadFormFields = ({ obj, disabled = false }) => {
+  // Ikkala maydon ham to'ldirilgan VA bir xil bo'lsa - xato.
+  // Server ham shuni rad etadi, lekin foydalanuvchi buni YOZAYOTGANDA
+  // ko'rishi kerak, saqlash tugmasini bosgandan keyin emas.
+  const bothPhonesSame =
+    digitsOnly(obj.phone).length > 0 &&
+    digitsOnly(obj.phone) === digitsOnly(obj.parentPhone);
+
   const sourceQ = useLeadOptionsQuery({ kind: "source" });
   const directionQ = useLeadOptionsQuery({ kind: "direction" });
   const rejectionQ = useLeadOptionsQuery({ kind: "rejection" });
@@ -36,6 +51,11 @@ const LeadFormFields = ({ obj, disabled = false }) => {
         />
       </div>
 
+      {/* IKKI TELEFON YONMA-YON.
+          Ilgari ikkinchisi pastda, alohida qatorda turardi va xodim uni
+          ko'pincha to'ldirmasdi. Lid bilan bog'lanib bo'lmasligi esa
+          sotuvni to'g'ridan-to'g'ri yo'qotadi - ikkinchi raqam aynan shu
+          xavfni kamaytiradi, shuning uchun u birinchisining YONIDA. */}
       <div className="grid grid-cols-2 gap-3">
         <InputField
           type="tel"
@@ -47,23 +67,32 @@ const LeadFormFields = ({ obj, disabled = false }) => {
           disabled={disabled}
         />
         <InputField
-          type="number"
-          name="age"
-          label="Yoshi"
-          min="1"
-          max="120"
-          value={obj.age}
-          onChange={(e) => obj.setField("age", e.target.value)}
+          type="tel"
+          name="parentPhone"
+          label="Qo'shimcha telefon"
+          description="O'zining yoki ota-onasining (ixtiyoriy)"
+          value={obj.parentPhone}
+          error={bothPhonesSame}
+          onChange={(e) => obj.setField("parentPhone", e.target.value)}
           disabled={disabled}
         />
       </div>
 
+      {bothPhonesSame && (
+        <p className="-mt-1 text-xs text-red-600 dark:text-red-300">
+          Ikkala raqam bir xil. Qo&apos;shimcha raqam BOSHQA odamniki
+          bo&apos;lishi kerak — aks holda undan foyda yo&apos;q.
+        </p>
+      )}
+
       <InputField
-        type="tel"
-        name="parentPhone"
-        label="Ota-ona telefoni"
-        value={obj.parentPhone}
-        onChange={(e) => obj.setField("parentPhone", e.target.value)}
+        type="number"
+        name="age"
+        label="Yoshi"
+        min="1"
+        max="120"
+        value={obj.age}
+        onChange={(e) => obj.setField("age", e.target.value)}
         disabled={disabled}
       />
 
@@ -115,19 +144,50 @@ const LeadFormFields = ({ obj, disabled = false }) => {
       </div>
 
       {obj.status === "rejected" && (
-        <CreatableSelectField
-          searchable
-          label="Rad etish sababi"
-          value={obj.rejectionReasonId}
-          onChange={(v) => obj.setField("rejectionReasonId", v)}
-          options={withEmpty(rejectionQ.data)}
-          disabled={disabled}
-          createLabel="Yangi sabab"
-          createTitle="Yangi rad etish sababi"
-          createPermission={PERMISSIONS.LEADS_MANAGE}
-          create={<LeadOptionCreateModal kind="rejection" />}
-          onCreated={(o) => obj.setField("rejectionReasonId", o._id)}
-        />
+        <>
+          <CreatableSelectField
+            searchable
+            label="Rad etish sababi"
+            value={obj.rejectionReasonId}
+            onChange={(v) => obj.setField("rejectionReasonId", v)}
+            options={withEmpty(rejectionQ.data)}
+            required
+            error={!obj.rejectionReasonId}
+            disabled={disabled}
+            createLabel="Yangi sabab"
+            createTitle="Yangi rad etish sababi"
+            createPermission={PERMISSIONS.LEADS_MANAGE}
+            create={<LeadOptionCreateModal kind="rejection" />}
+            onCreated={(o) => obj.setField("rejectionReasonId", o._id)}
+          />
+
+          {/* YOPISH IZOHI shu yerda ham majburiy: statusni tahrirlash
+              modalidan ham "rad etilgan" ga o'zgartirish mumkin va server
+              ikkala yo'lda ham bir xil talab qo'yadi. Bu maydon bo'lmasa
+              foydalanuvchi saqlash tugmasini bosib 400 xato olardi va
+              sababini tushunmasdi. */}
+          <div>
+            <label
+              htmlFor="rejectionNote"
+              className="mb-1 block text-sm font-medium"
+            >
+              Mijoz nima dedi?<span className="text-primary">*</span>
+            </label>
+            <textarea
+              id="rejectionNote"
+              rows={2}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="Narxi qimmat dedi, 400 mingga rozi edi"
+              value={obj.rejectionNote || ""}
+              onChange={(e) => obj.setField("rejectionNote", e.target.value)}
+              disabled={disabled}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Kamida {MIN_CLOSING_NOTE} ta belgi. Bu matn &quot;nega mijozlar
+              kelmayapti?&quot; tahlilining yagona manbai.
+            </p>
+          </div>
+        </>
       )}
 
       <div>

@@ -8,6 +8,12 @@ export const listSchema = z.object({
     status: statusEnum.optional(),
     source: z.string().optional(),
     direction: z.string().optional(),
+    // ALOQA holati bo'yicha filtr:
+    //   no_contact - hech kim qo'lga olmagan (status "new", tarix bo'sh)
+    //   stale      - aloqa qilingan, lekin 7+ kun tashlab qo'yilgan
+    // Status filtridan ATAYLAB ajratilgan: "new" statusdagi lidlarning
+    // bir qismi bilan allaqachon ishlangan bo'lishi mumkin.
+    engagement: z.enum(["no_contact", "stale"]).optional(),
     search: z.string().optional(),
     from: z.coerce.date().optional(),
     to: z.coerce.date().optional(),
@@ -39,17 +45,55 @@ const leadFields = {
   status: statusEnum.optional(),
   trialDate: z.coerce.date().nullable().optional(),
   notes: z.string().max(2000).optional(),
+  rejectionNote: z.string().max(1000).optional(),
+};
+
+// LIDNI YOPISHDA IZOH MAJBURIY.
+//
+// Bu qoida validatorga (servisga emas) ATAYLAB qo'yilgan: u create va
+// update ikkalasiga ham bir xil qo'llanishi kerak va foydalanuvchi 400
+// javobida aynan QAYSI maydon yetishmayotganini ko'rishi lozim.
+//
+// Minimal uzunlik 10 belgi: "yo'q", "ok", "-" kabi javoblar shartni
+// qanoatlantiradi-yu, tahlil uchun HECH NARSA bermaydi. 10 belgi odamni
+// hech bo'lmasa bitta mazmunli jumla yozishga majburlaydi.
+const MIN_NOTE = 10;
+
+export const assertClosingNote = (b, ctx) => {
+  if (b.status !== "rejected") return;
+
+  const note = (b.rejectionNote || "").trim();
+  if (note.length < MIN_NOTE) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["rejectionNote"],
+      message:
+        "Lidni yopishda izoh majburiy: mijoz nima dedi? " +
+        "(narx, joylashuv, vaqt, boshqa markaz...). Kamida 10 ta belgi.",
+    });
+  }
+  if (!b.rejectionReasonId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["rejectionReasonId"],
+      message: "Rad etish sababini tanlang",
+    });
+  }
 };
 
 export const createSchema = z.object({
-  body: z.object({
-    ...leadFields,
-    // FAQAT yaratishda: "Barcha filiallar" rejimida client formada qaysi
-    // filialga yozishni so'raydi. Bo'sh bo'lsa server aktiv filialdan
-    // (yoki markazda yagona filial bo'lsa - o'shandan) aniqlaydi.
-    // Tahrirlashda YO'Q: lidni filialdan filialga ko'chirish alohida amal.
-    branchId: z.string().nullable().optional(),
-  }),
+  body: z
+    .object({
+      ...leadFields,
+      // FAQAT yaratishda: "Barcha filiallar" rejimida client formada qaysi
+      // filialga yozishni so'raydi. Bo'sh bo'lsa server aktiv filialdan
+      // (yoki markazda yagona filial bo'lsa - o'shandan) aniqlaydi.
+      // Tahrirlashda YO'Q: lidni filialdan filialga ko'chirish alohida amal.
+      branchId: z.string().nullable().optional(),
+    })
+    // Lid darhol "rad etilgan" holatda yaratilishi ham mumkin (kelib
+    // so'radi-yu, qiziqmadi) - u holda ham izoh majburiy.
+    .superRefine(assertClosingNote),
 });
 
 export const updateSchema = z.object({
@@ -62,7 +106,8 @@ export const updateSchema = z.object({
     })
     .refine((b) => Object.keys(b).length > 0, {
       message: "Hech bo'lmaganda bitta maydon kerak",
-    }),
+    })
+    .superRefine(assertClosingNote),
 });
 
 export const reminderSchema = z.object({

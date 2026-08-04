@@ -17,6 +17,7 @@ const LeadEditModal = ({ lead, close, isLoading, setIsLoading }) => {
     status: lead?.status || "new",
     trialDate: toDateInput(lead?.trialDate),
     rejectionReasonId: lead?.rejectionReason?._id || "",
+    rejectionNote: lead?.rejectionNote || "",
     notes: lead?.notes || "",
   });
 
@@ -28,9 +29,16 @@ const LeadEditModal = ({ lead, close, isLoading, setIsLoading }) => {
     onError: () => setIsLoading(false),
   });
 
+  // Yopishda sabab va izoh MAJBURIY - server ham shuni talab qiladi.
+  // Tugmani oldindan o'chirib qo'yish 400 xatosidan yaxshiroq.
+  const closingIncomplete =
+    obj.status === "rejected" &&
+    (!obj.rejectionReasonId || (obj.rejectionNote || "").trim().length < 10);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!obj.firstName.trim() || !obj.phone) return;
+    if (closingIncomplete) return;
     setIsLoading(true);
     mutate({
       id: lead._id,
@@ -46,6 +54,8 @@ const LeadEditModal = ({ lead, close, isLoading, setIsLoading }) => {
         trialDate: obj.trialDate || null,
         rejectionReasonId:
           obj.status === "rejected" ? obj.rejectionReasonId || null : null,
+        rejectionNote:
+          obj.status === "rejected" ? (obj.rejectionNote || "").trim() : "",
         notes: obj.notes || "",
       },
     });
@@ -64,7 +74,11 @@ const LeadEditModal = ({ lead, close, isLoading, setIsLoading }) => {
         >
           Bekor qilish
         </Button>
-        <Button type="submit" disabled={isLoading} className="flex-1">
+        <Button
+          type="submit"
+          disabled={isLoading || closingIncomplete}
+          className="flex-1"
+        >
           {isLoading ? "Saqlanmoqda..." : "Saqlash"}
         </Button>
       </div>

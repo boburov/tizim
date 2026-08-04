@@ -6,6 +6,7 @@ import BranchFormFields from "../BranchFormFields";
 import { useBranchCreateMutation } from "../../hooks/useBranchMutations";
 import { useRolesQuery } from "@/owner/features/roles";
 import { ROLES } from "@/shared/constants/roles";
+import { phoneOrNull } from "@/shared/utils/formatPhone";
 
 /**
  * FILIAL yaratish. Majburiy maydon FAQAT bittta - filial nomi.
@@ -82,7 +83,9 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading, onCreated }) => {
     mutate({
       name: obj.name.trim(),
       address: obj.address.trim() || null,
-      phone: obj.phone.trim() || null,
+      // Telefon IXTIYORIY: chala terilgan maska qoldig'i ("+998 (90") null
+      // sifatida ketadi, "telefon noto'g'ri" deb rad etilmaydi.
+      phone: phoneOrNull(obj.phone),
       // Bloki bo'sh bo'lsa director UMUMAN yuborilmaydi - bo'sh obyekt
       // serverda validatsiyadan o'tmasdi.
       ...(dirUntouched
@@ -93,7 +96,7 @@ const BranchCreateModal = ({ close, isLoading, setIsLoading, onCreated }) => {
               lastName: obj.dirLastName.trim(),
               username: obj.dirUsername.trim().toLowerCase(),
               password: obj.dirPassword,
-              phone: obj.dirPhone || undefined,
+              phone: phoneOrNull(obj.dirPhone) || undefined,
               role: obj.dirRole || "director",
             },
           }),

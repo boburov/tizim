@@ -49,8 +49,38 @@ export const collectPermissions = async (role) => {
   return resolved.permissions;
 };
 
+// RUXSAT IYERARXIYASI: kuchli ruxsat kuchsizlarini QAMRAYDI.
+//
+// NEGA KERAK: `leads.manage` mavjud rollarga allaqachon berilgan. Lidlar
+// ruxsati uchtaga bo'linganda (read / create / update / manage) o'sha
+// rollar to'satdan lid YARATA OLMAY qolardi - ularda `leads.create`
+// yo'q edi, chunki u kecha mavjud emasdi.
+//
+// Iyerarxiya buni migratsiyasiz hal qiladi: `leads.manage` bor odam
+// avtomatik ravishda `leads.create` va `leads.update` ga ham ega.
+//
+// DIQQAT: bu ATAYLAB bir tomonlama. Teskarisi (create → manage) HECH
+// QACHON bo'lmasligi kerak - aks holda lid qo'shish huquqi berilgan
+// resepshin o'quvchilarni guruhga qabul qila olardi.
+const PERMISSION_IMPLIES = Object.freeze({
+  "leads.manage": ["leads.create", "leads.update"],
+});
+
 export const hasPermission = (permissions, key) => {
   if (!permissions) return false;
   if (permissions.includes("*")) return true;
-  return permissions.includes(key);
+  if (permissions.includes(key)) return true;
+
+  // Kuchliroq ruxsat shu kalitni qamraydimi.
+  for (const [parent, children] of Object.entries(PERMISSION_IMPLIES)) {
+    if (children.includes(key) && permissions.includes(parent)) return true;
+  }
+  return false;
 };
+
+/**
+ * Bir nechta kalitdan HAR QANDAY biri yetarli (OR).
+ * Route bir nechta ruxsat darajasiga ochiq bo'lganda ishlatiladi.
+ */
+export const hasAnyPermission = (permissions, keys = []) =>
+  keys.some((k) => hasPermission(permissions, k));

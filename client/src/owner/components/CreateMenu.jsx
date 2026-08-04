@@ -83,7 +83,7 @@ const GROUPS = [
         icon: Target,
         label: "Lid",
         hint: "Potensial mijoz",
-        permission: PERMISSIONS.LEADS_MANAGE,
+        permission: PERMISSIONS.LEADS_CREATE,
         modal: MODAL.LEAD_CREATE,
         data: null,
       },

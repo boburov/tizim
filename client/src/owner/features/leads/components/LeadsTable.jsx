@@ -19,6 +19,8 @@ import {
   DropdownMenuSeparator,
 } from "@/shared/components/shadcn/dropdown-menu";
 import useModal from "@/shared/hooks/useModal";
+import usePermissions from "@/shared/hooks/usePermissions";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import { MODAL } from "@/shared/constants/modals";
 import { LEAD_STATUS_OPTIONS } from "@/shared/constants/leadStatus";
 import { formatPhone } from "@/shared/utils/formatPhone";
@@ -64,7 +66,18 @@ const LeadsTable = ({
   const { openModal } = useModal();
   const { mutate: updateLead } = useLeadUpdateMutation();
 
-  const selectable = Boolean(selectedIds) && Boolean(onToggle);
+  const { has } = usePermissions();
+  // RESEPSHIN ROLI: lid yaratadi va status siljitadi, LEKIN o'quvchiga
+  // aylantira olmaydi (guruhga yozish = moliyaviy majburiyat) va o'chira
+  // olmaydi. Server ham shuni rad etadi - bu yerda tugmalar YASHIRILADI,
+  // aks holda foydalanuvchi bosib 403 xatosini olardi va nima uchun
+  // ishlamayotganini tushunmasdi.
+  const canUpdate = has(PERMISSIONS.LEADS_UPDATE);
+  const canManage = has(PERMISSIONS.LEADS_MANAGE);
+
+  // Tanlash faqat ommaviy AYLANTIRISH uchun kerak - u manage huquqi.
+  const selectable =
+    canManage && Boolean(selectedIds) && Boolean(onToggle);
   const selectedSet = new Set((selectedIds || []).map(String));
   const selectableItems = items.filter((l) => !l.studentId);
   const allSelected =
@@ -86,9 +99,10 @@ const LeadsTable = ({
 
   const handleStatus = (lead, next) => {
     if (!next || next === lead.status) return;
-    // Rad etish sababi kerak -> tahrirlash modali
+    // YOPISH alohida modal orqali: sabab VA izoh majburiy (server ham
+    // shuni talab qiladi). Boshqa statuslar bir bosishda o'zgaradi.
     if (next === "rejected") {
-      openModal(MODAL.LEAD_EDIT, { lead });
+      openModal(MODAL.LEAD_CLOSE, { lead });
       return;
     }
     updateLead({ id: lead._id, body: { status: next } });
@@ -109,31 +123,41 @@ const LeadsTable = ({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[12rem]">
-          <DropdownMenuItem onSelect={() => openModal(MODAL.LEAD_EDIT, { lead: l })}>
-            <Pencil className="size-4" />
-            Tahrirlash
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => openModal(MODAL.LEAD_REMINDER, { lead: l })}
-          >
-            <BellRing className="size-4" />
-            Eslatma bildirishnomasi
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!!l.studentId}
-            onSelect={() => openModal(MODAL.LEAD_CONVERT, { lead: l })}
-          >
-            <UserCheck className="size-4" />
-            {l.studentId ? "Aylantirilgan" : "O'quvchiga aylantirish"}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-red-600 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
-            onSelect={() => openModal(MODAL.LEAD_DELETE, { lead: l })}
-          >
-            <Trash2 className="size-4" />
-            O'chirish
-          </DropdownMenuItem>
+          {canUpdate && (
+            <>
+              <DropdownMenuItem
+                onSelect={() => openModal(MODAL.LEAD_EDIT, { lead: l })}
+              >
+                <Pencil className="size-4" />
+                Tahrirlash
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => openModal(MODAL.LEAD_REMINDER, { lead: l })}
+              >
+                <BellRing className="size-4" />
+                Eslatma bildirishnomasi
+              </DropdownMenuItem>
+            </>
+          )}
+          {canManage && (
+            <>
+              <DropdownMenuItem
+                disabled={!!l.studentId}
+                onSelect={() => openModal(MODAL.LEAD_CONVERT, { lead: l })}
+              >
+                <UserCheck className="size-4" />
+                {l.studentId ? "Aylantirilgan" : "O'quvchiga aylantirish"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-red-600 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
+                onSelect={() => openModal(MODAL.LEAD_DELETE, { lead: l })}
+              >
+                <Trash2 className="size-4" />
+                O'chirish
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -141,11 +165,15 @@ const LeadsTable = ({
 
   const statusCell = (l) => (
     <div onClick={(e) => e.stopPropagation()} className="max-w-[170px]">
+      {/* Faqat KO'RISH huquqi bo'lganlar uchun o'chirilgan: jadval bir xil
+          ko'rinadi, lekin status siljitib bo'lmaydi. Butunlay yashirsak
+          ustun kengligi o'zgarib, jadval rollar bo'yicha har xil chiqardi. */}
       <Select
         value={l.status}
         onChange={(v) => handleStatus(l, v)}
         options={LEAD_STATUS_OPTIONS}
         triggerClassName="h-8"
+        disabled={!canUpdate}
       />
     </div>
   );

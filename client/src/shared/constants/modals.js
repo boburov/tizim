@@ -43,6 +43,9 @@ export const MODAL = Object.freeze({
   // Leads
   LEAD_CREATE: "lead:create",
   LEAD_EDIT: "lead:edit",
+  // Lidni YOPISH: rad etish sababi + majburiy izoh. Tahrirlash modalidan
+  // ataylab ajratilgan - 10 ta maydon orasida eng muhimi ko'zdan qochardi.
+  LEAD_CLOSE: "lead:close",
   LEAD_DELETE: "lead:delete",
   LEAD_CONVERT: "lead:convert",
   LEAD_BULK_CONVERT: "lead:bulkConvert",

@@ -5,7 +5,12 @@ export const PERMISSIONS = Object.freeze({
   ARCHIVE_REASONS_MANAGE: "archive_reasons.manage",
 
   // Leads
+  // Lidlar uch darajada (server bilan bir xil): resepshin roli uchun
+  // yaratish/tahrirlash huquqi to'liq boshqaruvdan AJRATILGAN.
   LEADS_READ: "leads.read",
+  LEADS_CREATE: "leads.create",
+  LEADS_UPDATE: "leads.update",
+  // Eng kuchli: o'quvchiga aylantirish, o'chirish, sozlamalar.
   LEADS_MANAGE: "leads.manage",
 
   // Students

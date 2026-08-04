@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, UserCheck, X } from "lucide-react";
 import Button from "@/shared/components/ui/button/Button";
 import InputField from "@/shared/components/ui/input/InputField";
@@ -7,6 +8,8 @@ import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import Pagination from "@/shared/components/ui/pagination/Pagination";
 import ErrorState from "@/shared/components/ui/feedback/ErrorState";
 import useObjectState from "@/shared/hooks/useObjectState";
+import usePermissions from "@/shared/hooks/usePermissions";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import useDebounce from "@/shared/hooks/useDebounce";
 import useModal from "@/shared/hooks/useModal";
 import { MODAL } from "@/shared/constants/modals";
@@ -15,6 +18,7 @@ import { LEAD_STATUS_OPTIONS } from "@/shared/constants/leadStatus";
 import LeadsTable from "../components/LeadsTable";
 import LeadCreateModal from "../components/LeadCreateModal";
 import LeadEditModal from "../components/LeadEditModal";
+import LeadCloseModal from "../components/LeadCloseModal";
 import LeadDeleteModal from "../components/LeadDeleteModal";
 import LeadConvertModal from "../components/LeadConvertModal";
 import LeadBulkConvertModal from "../components/LeadBulkConvertModal";
@@ -29,9 +33,50 @@ const withAll = (data, label = "Barchasi") => [
   ...(data?.data || []).map((o) => ({ value: o._id, label: o.name })),
 ];
 
+// Aloqa holati filtri. Server bilan bir xil kalitlar (leads.validators.js).
+const ENGAGEMENT_OPTIONS = [
+  { value: "", label: "Aloqa holati: barchasi" },
+  { value: "no_contact", label: "Aloqa qilinmagan" },
+  { value: "stale", label: "Tashlab qo'yilgan (7+ kun)" },
+];
+
 const LeadsListPage = () => {
   const { openModal } = useModal();
-  const filters = useObjectState({ search: "", status: "", source: "", direction: "" });
+  const { has } = usePermissions();
+  // RESEPSHIN: lid qo'sha oladi, lekin ommaviy ravishda guruhga qabul
+  // qila olmaydi - u boshqa toifadagi qaror (joy, to'lov, jadval).
+  const canCreate = has(PERMISSIONS.LEADS_CREATE);
+  const canManage = has(PERMISSIONS.LEADS_MANAGE);
+  const filters = useObjectState({
+    search: "",
+    status: "",
+    source: "",
+    direction: "",
+  });
+
+  // ALOQA FILTRI - MANBA HAQIQATI URL'da, komponent state'ida EMAS.
+  //
+  // Nega: statistika sahifasidagi kartochkalar shu sahifaga turli parametr
+  // bilan olib keladi ("aloqa qilinmagan" va "tashlab qo'yilgan"). Agar
+  // qiymat useState boshlang'ich qiymatidan olinsa, foydalanuvchi ro'yxatda
+  // TURGANIDA ikkinchi kartochkaga o'tsa React Router komponentni QAYTA
+  // MOUNT QILMAYDI (bir xil route, faqat search param o'zgardi) va filtr
+  // eski holatda qotib qolardi - URL bir narsani, ro'yxat boshqa narsani
+  // ko'rsatardi.
+  //
+  // URL'dan o'qish bu muammoni butunlay yo'q qiladi va filtrni
+  // bookmark/ulashsa bo'ladigan qiladi.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const engagement = searchParams.get("engagement") || "";
+
+  const updateEngagement = (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set("engagement", value);
+    else next.delete("engagement");
+    setSearchParams(next, { replace: true });
+    setPage(1);
+    setSelectedIds([]);
+  };
   const [page, setPage] = useState(1);
   // Ko'p lidni birdan guruhga qabul qilish uchun tanlov. Faqat ID saqlanadi -
   // lid obyektlari ro'yxat yangilanganda eskirib qolmasligi uchun.
@@ -46,6 +91,7 @@ const LeadsListPage = () => {
     status: filters.status || undefined,
     source: filters.source || undefined,
     direction: filters.direction || undefined,
+    engagement: engagement || undefined,
     page,
     limit: LIMIT,
   });
@@ -85,13 +131,15 @@ const LeadsListPage = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         {/* Sarlavha LeadsPage qobig'ida */}
         <div />
-        <Button onClick={() => openModal(MODAL.LEAD_CREATE)}>
-          <Plus className="size-4" />
-          Yangi lid
-        </Button>
+        {canCreate && (
+          <Button onClick={() => openModal(MODAL.LEAD_CREATE)}>
+            <Plus className="size-4" />
+            Yangi lid
+          </Button>
+        )}
       </header>
 
-      <div className="grid grid-cols-1 gap-2 rounded-lg border bg-card p-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 rounded-lg border bg-card p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <InputField
           name="search"
           type="search"
@@ -116,10 +164,19 @@ const LeadsListPage = () => {
           onChange={(v) => update("direction", v)}
           options={withAll(directionQ.data, "Barcha yo'nalishlar")}
         />
+        {/* ALOQA holati - statusdan ATAYLAB ajratilgan filtr.
+            "Yangi" statusdagi lidlarning bir qismi bilan allaqachon
+            ishlangan bo'lishi mumkin, shuning uchun status filtri
+            "hech kim tegmagan" savoliga javob bermaydi. */}
+        <SelectField
+          value={engagement}
+          onChange={updateEngagement}
+          options={ENGAGEMENT_OPTIONS}
+        />
       </div>
 
-      {/* Tanlov paneli - faqat lid tanlanganda ko'rinadi. */}
-      {selectedLeads.length > 0 && (
+      {/* Tanlov paneli - lid tanlanganda VA ommaviy qabul huquqi bo'lganda. */}
+      {canManage && selectedLeads.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
           <p className="text-sm font-medium">
             {selectedLeads.length} ta lid tanlandi
@@ -180,6 +237,9 @@ const LeadsListPage = () => {
       {/* LEAD_CREATE global mount qilingan (owner/components/CreateModals) */}
       <ModalWrapper name={MODAL.LEAD_EDIT} title="Lidni tahrirlash" className="max-w-xl">
         <LeadEditModal />
+      </ModalWrapper>
+      <ModalWrapper name={MODAL.LEAD_CLOSE} title="Lidni yopish">
+        <LeadCloseModal />
       </ModalWrapper>
       <ModalWrapper name={MODAL.LEAD_DELETE} title="Lidni o'chirish">
         <LeadDeleteModal />

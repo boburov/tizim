@@ -16,6 +16,8 @@ import LeadFunnel from "../components/LeadFunnel";
 import LeadSourcePerformance from "../components/LeadSourcePerformance";
 import LeadDirectionDemand from "../components/LeadDirectionDemand";
 import LeadDropOff from "../components/LeadDropOff";
+import LeadRejectionReasons from "../components/LeadRejectionReasons";
+import LeadEngagement from "../components/LeadEngagement";
 import useLeadStatsQuery from "../hooks/useLeadStatsQuery";
 
 const now = new Date();
@@ -75,6 +77,13 @@ const LeadsStatsPage = () => {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <LeadFunnel funnel={data?.funnel || []} rates={data?.rates} />
             <LeadDropOff rows={data?.dropOffByStage || []} />
+            {/* NEGA yo'qotayotganimiz - voronkaning YONIDA turishi kerak:
+                "qayerda tushdi" va "nega tushdi" birga o'qiladi. */}
+            <LeadRejectionReasons
+              rows={data?.byRejectionReason || []}
+              rejection={data?.rejection}
+            />
+            <LeadEngagement engagement={data?.engagement} />
             <LeadSourcePerformance rows={data?.bySource || []} />
             <LeadDirectionDemand rows={data?.byDirection || []} />
           </div>
