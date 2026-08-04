@@ -135,6 +135,6 @@ export const MODAL = Object.freeze({
   APPROVAL_BULK_DECIDE: "approval:bulkDecide",
   APPROVAL_MISSED: "approval:missed",
 
-  // AI maslahatchi
+  // Tahlil markazi (ichki nom: ai)
   AI_INSIGHT_DISMISS: "ai:insightDismiss",
 });

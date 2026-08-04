@@ -4969,3 +4969,99 @@ Endi testni kengaytirib, hammasini tekshiraman:
 <sub>session `f6cd4171` · branch `main` · 38 ta qadam</sub>
 
 ---
+
+## 2026-08-04 13:47 — AI maslahatchi emas boshqa nom bilan atashimiz kerak sabab ai ishlatil
+
+**So'rov**
+
+> AI maslahatchi emas boshqa nom bilan atashimiz kerak sabab ai ishlatilinmayapti bu qisim uchun shu sabab variantlar bormi
+
+**Buyruqlar (17)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server/src && ls modules/ai/services/ modules/ai/signals/ 2>/dev/null; echo "=== LLM haqiqatan chaqiriladimi? ==="; grep -r…
+grep -rn "gemini.service\|geminiService" --include="*.js" modules/ jobs/ | grep -v "gemini.service.js:" | head; echo "=== GEMINI kaliti sozlanganmi? ==="; grep …
+head -30 modules/ai/services/narration.service.js; echo "=== insight manbasi: qoidami? ==="; head -25 modules/ai/signals/student.signal.js
+cd /Users/shukrullo/Desktop/lc-total/client && echo "=== UI'da ko'rinadigan 'AI' matnlari ==="; grep -rn "\"AI \|'AI \|>AI \| AI \b" src/ --include="*.jsx" --in…
+grep -rn "AI maslahatchi\|AI hisobotlar\|AI vazifalar\|AI tavsiyalari\|AI o'sish" src/ --include="*.jsx" --include="*.js"
+sed -n '45,75p' src/owner/navigation/searchIndex.js; echo "=== sidebar ==="; sed -n '58,68p' src/owner/navigation/sidebar.config.js
+python3 - <<'PY' edits = [ # ── Sidebar ── ("src/owner/navigation/sidebar.config.js", [(' title: "AI maslahatchi",\n icon: Bot,', ' title: "Tahlil markazi",\n i…
+grep -n "Bot\|Monitor" src/owner/navigation/sidebar.config.js | head -5; echo "=== hint qatori tekshiruvi ==="; grep -n "o'sish signallarini" src/owner/features…
+grep -rn "Bot" src/owner/navigation/sidebar.config.js; echo "--- lucide import bloki ---"; sed -n '1,20p' src/owner/navigation/sidebar.config.js
+python3 - <<'PY' p = "src/owner/navigation/sidebar.config.js" s = open(p).read() s = s.replace(" Bot,\n", " Monitor,\n", 1) open(p, "w").write(s) print("sidebar…
+python3 - <<'PY' p = "src/owner/navigation/searchIndex.js" s = open(p).read() pairs = [ # Asosiy sahifa. Kalit so'zlarda "ai" QOLDIRILADI: foydalanuvchi eski no…
+python3 - <<'PY' p = "src/owner/navigation/searchIndex.js" s = open(p).read() s = s.replace(" Bot,\n", " Monitor,\n", 1) open(p, "w").write(s) print("searchInde…
+python3 - <<'PY' note = """// TAHLIL MARKAZI - public API. // // DIQQAT: papka/route/ruxsat nomlari `ai` bo'lib QOLDI (/owner/ai, ai.read). // Ular ICHKI identi…
+grep -rn '"AI TAHLILI"\|"AI kecha nima dedi"\|"AI tahlili"\|har bir modulda AI Insights' src/ --include="*.jsx"
+python3 - <<'PY' edits = [ ("src/shared/components/ai/AiDomainPanel.jsx", '// MODUL AI PANELI - "har bir modulda AI Insights bo\'limi bo\'lsin" talabi.', '// MO…
+npx eslint src/ 2>&1 | grep -v "GroupFeeDetailPage\|RecipientCountPreview\|useMemo Hook\|Fast refresh\|^$" | tail -10; echo "=== BUILD ==="; npm run build 2>&1 …
+npx eslint src/owner/navigation src/owner/features/ai src/shared/components/ai src/shared/constants src/shared/lib/query && echo "✓ MENING FAYLLARIM TOZA (22 ta…
+```
+
+**Natija**
+
+Avval bu bo'lim aslida nima qilishini aniqlay — nom shunga mos bo'lishi kerak.
+
+Aniqlandi: bu bo'lim **butunlay qoida asosida** ishlaydi — [signals qatlami](server/src/modules/ai/signals/student.signal.js#L13) sof MongoDB aggregation, matn esa [shablon narrator](server/src/modules/ai/services/narration.service.js#L1) dan. Gemini fayli bor, lekin faqat `narrationQueue` ga ulangan va faol emas.
+
+**Tahlil markazi** + barcha ichki "AI" olib tashlanadi. Boshlayman:
+
+Endi qidiruv indeksi (kalit so'zlar bilan):
+
+Faqat izohlar qoldi. Ularni ham moslay + qolgan matnlarni to'liq tekshiray:
+
+Bajarildi — **Tahlil markazi**.
+
+## O'zgargan matnlar
+
+| Joy | Avval | Endi |
+|---|---|---|
+| Sidebar | AI maslahatchi | **Tahlil markazi** |
+| Sahifa sarlavhasi | AI maslahatchi | **Tahlil markazi** |
+| Vazifalar sahifasi | AI vazifalar markazi | **Vazifalar markazi** |
+| Hisobotlar sahifasi | AI hisobotlar | **Hisobotlar** |
+| Sahifa ichidagi blok | AI tavsiyalari | **Tavsiyalar** |
+| Tugma izohi | *AI o'sish signallarini...* | *Tizim o'sish signallarini...* |
+
+Sidebar ikonkasi ham `Bot` (🤖) → `Monitor` (🖥️), panellar bilan bir xil.
+
+## Uch qaror, sabablari bilan
+
+**1. Qidiruvda eski nom saqlandi.** [searchIndex.js](client/src/owner/navigation/searchIndex.js) da `keywords` ichida `"ai, maslahatchi, sun'iy intellekt"` **qoldirildi**. Siz `⌘K` bosib "ai" yozsangiz baribir topiladi — aks holda odam sahifa o'chirilgan deb o'ylardi.
+
+**2. Route va ruxsat o'zgarmadi.** `/owner/ai` va `ai.read` o'sha-o'sha. Sabab: ruxsat kaliti **bazada saqlanadi** — uni o'zgartirish migratsiya talab qiladi va noto'g'ri bajarilsa hamma rolda ruxsat yo'qolardi. Foydalanuvchi bu nomlarni ko'rmaydi. Buni izohlarda yozib qo'ydim.
+
+**3. `AiDomainPanel` dagi izoh ataylab qoldirildi** — u nega "AI tahlili" emasligini tush
+
+…(qisqartirildi)
+
+<sub>session `39bbfed0` · branch `main` · 18 ta qadam</sub>
+
+---
+
+## 2026-08-04 13:54 — /llm-council tizim uchun real yechim bera oladigan AI maslahatchi qosh
+
+**So'rov**
+
+> /llm-council tizim uchun real yechim bera oladigan AI maslahatchi qoshmoqchiman bu tizimli emas ai orqali hal qilinadigan muammo bo'lishi zariur takliflar bormi
+
+**Buyruqlar (6)**
+
+```sh
+grep -o "OPENAI_API_KEY\|GEMINI_API_KEY\|OPENAI_MODEL\|GEMINI_MODEL" ~/.env server/.env 2>/dev/null | sort -u; echo "--- CLI ---"; which gemini codex 2>/dev/nul…
+gemini -p "Reply with exactly: OK" 2>&1 | grep -iv "warning:\|ripgrep" | head -6
+cd /Users/shukrullo/Desktop/lc-total/server/src && echo "=== ERKIN MATN maydonlari (LLM qiymati shu yerda) ==="; for m in feedback lead attendance archiveReason…
+sed -n '1,45p' models/feedback.model.js; echo "=== LEAD statuslar/sabab ==="; grep -n "status\|lostReason\|source" models/lead.model.js | head -12
+echo "=== Mavjud AI-shaped signal turlari (qoida bilan yechilgan) ==="; grep -rn "^export const\|^const .* = (" modules/ai/signals/*.js | grep -o "signals/[a-z]…
+head -25 modules/ai/services/aiBudget.service.js; echo "=== gemini.service holati ==="; head -30 modules/ai/services/gemini.service.js
+```
+
+**Natija**
+
+Avval kalitlarni tekshiray — o'tgan safar Gemini kaliti bloklangan edi.
+
+Council hali ham bloklangan (o'sha kalit). Sizning savolingiz aniq javob talab qiladi — kodni tekshirib chiqaman.
+
+<sub>session `39bbfed0` · branch `main` · 6 ta qadam</sub>
+
+---

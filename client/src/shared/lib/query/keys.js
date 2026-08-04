@@ -206,7 +206,7 @@ export const qk = Object.freeze({
     churnedStudents: (params) => ["adminDashboard", "churnedStudents", params],
   },
 
-  // AI maslahatchi
+  // Tahlil markazi (ichki nom: ai)
   ai: {
     all: () => ["ai"],
     // Barcha insight ro'yxatlari prefiksi - mutatsiyadan keyin shuni

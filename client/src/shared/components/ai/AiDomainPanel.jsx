@@ -4,7 +4,7 @@ import { cn } from "@/shared/utils/cn";
 import { formatMoney } from "@/shared/utils/formatMoney";
 import AiRiskBadge from "./AiRiskBadge";
 
-// MODUL AI PANELI - "har bir modulda AI Insights bo'limi bo'lsin" talabi.
+// MODUL TAHLIL PANELI - "har bir modulda tahlil bo'limi bo'lsin" talabi.
 //
 // Bu panel ATAYLAB KICHIK. Modul sahifasi (o'quvchilar ro'yxati, moliya)
 // insight ro'yxati EMAS - u o'z ishini qiladi, panel esa uning ustidagi

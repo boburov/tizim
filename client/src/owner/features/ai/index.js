@@ -1,4 +1,9 @@
-// AI maslahatchi - public API.
+// TAHLIL MARKAZI - public API.
+//
+// DIQQAT: papka/route/ruxsat nomlari `ai` bo'lib QOLDI (/owner/ai, ai.read).
+// Ular ICHKI identifikatorlar: ruxsat kaliti bazada saqlanadi va uni
+// o'zgartirish migratsiya talab qilardi, foydalanuvchi esa ularni ko'rmaydi.
+// Foydalanuvchiga ko'rinadigan matn hamma joyda "Tahlil markazi".
 // Tashqi kod faqat shu fayldan import qiladi.
 
 export { default as OperationsCenterPage } from "./pages/OperationsCenterPage";

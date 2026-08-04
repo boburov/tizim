@@ -88,7 +88,7 @@ export const PERMISSIONS = Object.freeze({
   COURSES_READ: "courses.read",
   COURSES_MANAGE: "courses.manage",
 
-  // AI maslahatchi
+  // Tahlil markazi (ichki nom: ai)
   AI_READ: "ai.read",
   AI_ASSISTANT: "ai.assistant",
   AI_CONFIG: "ai.config",

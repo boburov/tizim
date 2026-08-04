@@ -3,7 +3,7 @@ import {
   Building2,
   GraduationCap,
   LayoutDashboard,
-  Bot,
+  Monitor,
   MessagesSquare,
   ScrollText,
   Settings,
@@ -59,8 +59,8 @@ const ownerSidebar = [
   // sababning aynan o'zi buziladi. Ularga havola brifing sahifasining
   // sarlavhasida turadi.
   {
-    title: "AI maslahatchi",
-    icon: Bot,
+    title: "Tahlil markazi",
+    icon: Monitor,
     url: "/owner/ai",
     permission: "ai.read",
   },

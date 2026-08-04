@@ -101,7 +101,7 @@ const OperationsCenterPage = () => {
     <div className="space-y-10">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-foreground">AI maslahatchi</h1>
+          <h1 className="text-xl font-semibold text-foreground">Tahlil markazi</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {data?.branch?.name || "Barcha filiallar"}
           </p>
@@ -175,7 +175,7 @@ const OperationsCenterPage = () => {
           {/* 4. TAVSIYALAR - xavfdan ALOHIDA. Aralashtirilgan ro'yxatda
                 owner imkoniyatni "yana bir muammo" deb o'qiydi. */}
           <DashboardSection
-            title="AI tavsiyalari"
+            title="Tavsiyalar"
             hint="O'sish qadamlari — bir bosishda kerakli ekranga o'tadi"
             count={counts?.opportunities}
           >
@@ -184,7 +184,7 @@ const OperationsCenterPage = () => {
             ) : (
               <SectionEmpty
                 title="Hozircha yangi imkoniyat topilmadi"
-                hint="AI o'sish signallarini har tungi hisoblashda qaytadan qidiradi."
+                hint="Tizim o'sish signallarini har tungi hisoblashda qaytadan qidiradi."
               />
             )}
           </DashboardSection>
@@ -226,7 +226,7 @@ const OperationsCenterPage = () => {
             )}
           </DashboardSection>
 
-          {/* So'nggi kunlik hisobot - halqani yopadi: "AI kecha nima dedi". */}
+          {/* So'nggi kunlik hisobot - halqani yopadi: "kecha nima aniqlangan edi". */}
           {latestReport && (
             <section className="rounded-xl border bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">

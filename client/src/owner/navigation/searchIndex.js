@@ -22,7 +22,7 @@ import {
   Receipt,
   BadgePercent,
   Banknote,
-  Bot,
+  Monitor,
   FileText,
   AlertTriangle,
 } from "lucide-react";
@@ -47,28 +47,31 @@ export const SEARCH_INDEX = [
     permission: "admin_dashboard.read",
   },
   {
-    title: "AI maslahatchi",
+    title: "Tahlil markazi",
     description: "Kunlik brifing: kecha, bugun, keyin va hozir nima qilish kerak",
+    // "ai" va "maslahatchi" ATAYLAB qoldirilgan: bo'lim qayta nomlangan,
+    // lekin foydalanuvchi eski nomni yozib qidirishi mumkin - topilmasa
+    // u sahifa o'chirilgan deb o'ylardi.
     keywords:
-      "ai, sun'iy intellekt, brifing, briefing, tahlil, tavsiya, insight, maslahat, operatsiya",
+      "tahlil, markaz, ai, maslahatchi, sun'iy intellekt, brifing, briefing, tavsiya, insight, operatsiya",
     url: "/owner/ai",
-    icon: Bot,
+    icon: Monitor,
     category: "Asosiy",
     permission: "ai.read",
   },
   {
-    title: "AI vazifalar",
+    title: "Vazifalar markazi",
     description: "Biznes ta'siri bo'yicha tartiblangan to'liq vazifalar ro'yxati",
-    keywords: "ai, vazifa, task, xavf, risk, imkoniyat, opportunity, action center",
+    keywords: "vazifa, task, ai, xavf, risk, imkoniyat, opportunity, action center",
     url: "/owner/ai/tasks",
     icon: AlertTriangle,
     category: "Asosiy",
     permission: "ai.read",
   },
   {
-    title: "AI hisobotlar",
+    title: "Hisobotlar",
     description: "Kunlik, haftalik va oylik avtomatik hisobotlar",
-    keywords: "ai, hisobot, report, kunlik, haftalik, oylik, daily, weekly, monthly",
+    keywords: "hisobot, report, ai, kunlik, haftalik, oylik, daily, weekly, monthly",
     url: "/owner/ai/reports",
     icon: FileText,
     category: "Asosiy",

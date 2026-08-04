@@ -31,7 +31,7 @@ const AiReportsPage = () => {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-xl font-semibold text-foreground">AI hisobotlar</h1>
+        <h1 className="text-xl font-semibold text-foreground">Hisobotlar</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Har kuni, hafta va oy oxirida avtomatik tuziladi
         </p>
