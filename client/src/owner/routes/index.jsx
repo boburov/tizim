@@ -63,6 +63,7 @@ import {
   AssignmentsListPage,
   AssignmentDetailPage,
 } from "@/owner/features/assignments";
+import { StorageAdminPage } from "@/owner/features/storage";
 import { NotificationTemplatesListPage } from "@/owner/features/notificationTemplates";
 import { HolidaysListPage } from "@/owner/features/holidays";
 import { RolesPage, RoleFormPage } from "@/owner/features/roles";
@@ -283,6 +284,17 @@ const OwnerRoutes = () => (
       element={
         <PermissionGuard required="assignments.read">
           <AssignmentDetailPage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* Fayl saqlagich boshqaruvi - sidebar'dagi kvota ko'rsatkichi
+        shu sahifaga olib keladi. */}
+    <Route
+      path="storage"
+      element={
+        <PermissionGuard required="storage.manage">
+          <StorageAdminPage />
         </PermissionGuard>
       }
     />

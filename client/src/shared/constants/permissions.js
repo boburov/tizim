@@ -59,6 +59,10 @@ export const PERMISSIONS = Object.freeze({
   ASSIGNMENTS_READ: "assignments.read",
   ASSIGNMENTS_SEND: "assignments.send",
 
+  // Fayl saqlagichni boshqarish (tozalash siyosati, qo'lda tozalash).
+  // Vazifa yuborish huquqidan ATAYLAB ajratilgan.
+  STORAGE_MANAGE: "storage.manage",
+
   // Admin / boshqaruv paneli (Bo'lak 9)
   ADMIN_DASHBOARD_READ: "admin_dashboard.read",
   ACTIVITY_LOGS_READ: "activity_logs.read",

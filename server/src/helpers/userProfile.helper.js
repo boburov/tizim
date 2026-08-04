@@ -1,6 +1,7 @@
 import User from "../models/user.model.js";
 import BotUser from "../models/botUser.model.js";
 import { ROLES } from "../constants/roles.js";
+import { botStatusOf, BOT_STATUS } from "./botStatus.helper.js";
 import {
   list as listGroups,
   findAllActiveForStudent,
@@ -27,6 +28,9 @@ const sanitizeUser = (user) => {
   return obj;
 };
 
+// Bog'lanish MA'LUMOTI (kim) va bog'lanish HOLATI (yetadimi) - ikki xil
+// savol. Ilgari faqat birinchisi qaytardi, shuning uchun profil sahifasi
+// "Telegram: @user" deb turaverardi, xabar esa aslida yetmasdi.
 const fetchTelegram = async (userId) => {
   const bot = await BotUser.findOne({ user: userId }).lean();
   if (!bot) return null;
@@ -36,6 +40,9 @@ const fetchTelegram = async (userId) => {
     firstName: bot.firstName,
     lastName: bot.lastName,
     languageCode: bot.languageCode,
+    isBlocked: !!bot.isBlocked,
+    lastSeenAt: bot.lastSeenAt || null,
+    status: botStatusOf(bot),
   };
 };
 
@@ -48,6 +55,11 @@ export const buildUserProfile = async (userInput) => {
 
   const base = sanitizeUser(user);
   const telegram = await fetchTelegram(user._id);
+  // `telegram` null bo'lishi mumkin (bog'lanmagan), `botStatus` esa HAR
+  // DOIM bor: UI "bog'lanmagan"ni ham holat sifatida ko'rsatishi kerak,
+  // shuning uchun uni har safar `telegram?.x` bilan chiqarish o'rniga
+  // tayyor maydon beramiz.
+  const botStatus = telegram?.status || BOT_STATUS.NOT_LINKED;
 
   if (user.role === ROLES.STUDENT) {
     const activeGroups = await findAllActiveForStudent(user._id);
@@ -85,6 +97,7 @@ export const buildUserProfile = async (userInput) => {
       isFrozen: !!activeFreeze,
       activeFreeze: activeFreeze || null,
       telegram,
+      botStatus,
     };
   }
 
@@ -107,6 +120,7 @@ export const buildUserProfile = async (userInput) => {
       years: calcYears(user.hiredAt),
       groups,
       telegram,
+      botStatus,
     };
   }
 
@@ -115,5 +129,6 @@ export const buildUserProfile = async (userInput) => {
     ...base,
     age: calcYears(user.birthDate),
     telegram,
+    botStatus,
   };
 };

@@ -5,47 +5,133 @@ import env from "../../../config/env.js";
 import logger from "../../../config/logger.js";
 import ApiError from "../../../utils/ApiError.js";
 import StoredFile from "../../../models/storedFile.model.js";
+import StorageUsage, { USAGE_KEY } from "../../../models/storageUsage.model.js";
 
-// Kvota agregatsiyasi keshi. Sidebar indikatori har sahifada so'raydi,
-// shuning uchun har so'rovda kolleksiyani yig'ish ortiqcha yuk bo'lardi.
-// Qisqa TTL: yozish amallari keshni ATAYLAB tozalaydi (invalidateUsage),
-// ya'ni foydalanuvchi o'z faylini yuklagach raqamni DARHOL yangilangan
-// holda ko'radi - eskirgan qiymat faqat boshqa sessiyalarda ko'rinadi.
-const USAGE_TTL_MS = 15 * 1000;
-let usageCache = null;
+// ───────────────────────────────────────────────────────────────────────
+// KVOTA HISOBI
+//
+// Band hajm ATOMIK hisoblagichda turadi (StorageUsage), agregatsiyada
+// emas. Sabab: agregatsiya faqat o'qish, kvota tekshiruvi esa
+// "o'qi -> qaror qil -> yoz". Ikki so'rov bir vaqtda o'qisa ikkalasi ham
+// "joy bor" javobini oladi va ikkalasi ham yozadi - chegara oshib ketadi.
+// Ko'p instansli deploy'da bu kafolatlangan holat, shuning uchun joy
+// YOZISHDAN OLDIN shartli $inc bilan band qilinadi.
+// ───────────────────────────────────────────────────────────────────────
 
-export const invalidateUsage = () => {
-  usageCache = null;
+/** Hisoblagich hujjati borligini kafolatlaydi (birinchi ishga tushish). */
+const ensureCounter = async () => {
+  const existing = await StorageUsage.findOne({ key: USAGE_KEY }).lean();
+  if (existing) return existing;
+
+  // Eski o'rnatmalarda fayllar bor, hisoblagich yo'q - shuning uchun
+  // noldan emas, MAVJUD fayllardan boshlaymiz.
+  const { usedBytes } = await aggregateFromFiles();
+  try {
+    return await StorageUsage.create({
+      key: USAGE_KEY,
+      usedBytes,
+      reconciledAt: new Date(),
+    });
+  } catch (err) {
+    // Ikki instans bir vaqtda yaratmoqchi bo'lsa biri E11000 oladi -
+    // bu xato emas, hujjat allaqachon bor degani.
+    if (err?.code === 11000) return StorageUsage.findOne({ key: USAGE_KEY }).lean();
+    throw err;
+  }
 };
 
-const aggregateUsage = async () => {
+const aggregateFromFiles = async () => {
   const [row] = await StoredFile.aggregate([
     { $match: { isDeleted: { $ne: true } } },
     { $group: { _id: null, usedBytes: { $sum: "$size" }, fileCount: { $sum: 1 } } },
   ]);
-  return {
-    usedBytes: row?.usedBytes || 0,
-    fileCount: row?.fileCount || 0,
-  };
+  return { usedBytes: row?.usedBytes || 0, fileCount: row?.fileCount || 0 };
+};
+
+/**
+ * Hisoblagichni HAQIQAT (diskdagi fayllar ro'yxati) bo'yicha qayta
+ * hisoblaydi.
+ *
+ * Kerak bo'ladigan holat: jarayon joyni band qilib, faylni yozishdan
+ * oldin yiqilsa, hisoblagichda "band" bo'lgan bayt qolib ketadi. Bu
+ * kvotani ASTA-SEKIN yeydi, shuning uchun server har ishga tushganda
+ * tekislanadi.
+ */
+export const reconcile = async () => {
+  const { usedBytes, fileCount } = await aggregateFromFiles();
+  const before = await StorageUsage.findOneAndUpdate(
+    { key: USAGE_KEY },
+    { $set: { usedBytes, reconciledAt: new Date() } },
+    { upsert: true, new: false },
+  ).lean();
+
+  const drift = (before?.usedBytes ?? usedBytes) - usedBytes;
+  if (drift !== 0) {
+    logger.warn(
+      { drift, usedBytes, fileCount },
+      "Saqlash hisoblagichi haqiqat bilan mos emas edi - tekislandi",
+    );
+  }
+  return { usedBytes, fileCount, drift };
+};
+
+/**
+ * Joyni ATOMIK band qiladi. Sig'masa null qaytadi (chaqiruvchi 507 beradi).
+ *
+ * Shart hujjatning O'ZIDA: `usedBytes <= quota - size`. MongoDB bitta
+ * hujjatga bo'lgan findOneAndUpdate'ni atomik bajaradi, ya'ni shart
+ * bajarilmasa hech narsa o'zgarmaydi va parallel ikkinchi so'rov shu
+ * yerda to'xtaydi.
+ */
+const reserve = async (size) => {
+  await ensureCounter();
+  const quota = env.STORAGE_QUOTA_BYTES;
+
+  const updated = await StorageUsage.findOneAndUpdate(
+    { key: USAGE_KEY, usedBytes: { $lte: quota - size } },
+    { $inc: { usedBytes: size } },
+    { new: true },
+  ).lean();
+
+  return updated || null;
+};
+
+/** Band qilingan joyni qaytaradi (yozish yiqilsa yoki fayl o'chsa). */
+const release = async (size) => {
+  if (!size) return;
+  await StorageUsage.updateOne({ key: USAGE_KEY }, { $inc: { usedBytes: -size } });
+  // Hisoblagich manfiyga tushib ketmasin (ikki marta release bo'lsa) -
+  // manfiy qiymat keyingi kvota tekshiruvini yolg'on "bo'sh" qilib
+  // ko'rsatardi.
+  await StorageUsage.updateOne(
+    { key: USAGE_KEY, usedBytes: { $lt: 0 } },
+    { $set: { usedBytes: 0 } },
+  );
 };
 
 /**
  * Markazning fayl kvotasi holati.
  *
- * Sidebar indikatori ham, yuklashdan oldingi tekshiruv ham shu yagona
- * manbadan oziqlanadi - aks holda UI "joy bor" deb turib, server rad
- * etadigan holat kelib chiqardi.
+ * Sidebar indikatori ham, formadagi tekshiruv ham shu yagona manbadan
+ * oziqlanadi - aks holda UI "joy bor" deb turib, server rad etardi.
+ *
+ * KESH YO'Q: bu bitta kichik hujjatni o'qish (indekslangan), qimmat
+ * emas. Ilgari 15 soniyalik kesh bor edi va aynan u xavfli edi -
+ * kvota tekshiruvi eskirgan, KICHIKROQ raqamni ko'rib faylni
+ * o'tkazib yuborishi mumkin edi. Klient tomonda TanStack allaqachon
+ * 30 soniya keshlaydi, ya'ni so'rovlar soni baribir kam.
  */
 export const getUsage = async () => {
-  if (usageCache && Date.now() - usageCache.at < USAGE_TTL_MS) {
-    return usageCache.value;
-  }
-
-  const { usedBytes, fileCount } = await aggregateUsage();
+  const counter = await ensureCounter();
+  const usedBytes = Math.max(0, counter?.usedBytes || 0);
   const quotaBytes = env.STORAGE_QUOTA_BYTES;
   const freeBytes = Math.max(0, quotaBytes - usedBytes);
+  // Fayl SONI hisoblagichda saqlanmaydi - u kvota qaroriga ta'sir
+  // qilmaydi, shuning uchun indekslangan countDocuments yetarli
+  // (bayt yig'indisi kabi agregatsiya kerak emas).
+  const fileCount = await StoredFile.countDocuments({ isDeleted: { $ne: true } });
 
-  const value = {
+  return {
     usedBytes,
     quotaBytes,
     freeBytes,
@@ -54,24 +140,14 @@ export const getUsage = async () => {
     // yozishi uchun alohida so'rov kerak bo'lmasin.
     maxUploadBytes: env.MAX_UPLOAD_BYTES,
     percent: quotaBytes > 0 ? Math.min(100, (usedBytes / quotaBytes) * 100) : 0,
+    // "To'lgan" = eng katta ruxsat etilgan fayl ham sig'maydi. Aynan shu
+    // paytda UI fayl tanlashni butunlay bekor qiladi.
     isFull: freeBytes < env.MAX_UPLOAD_BYTES,
   };
-
-  usageCache = { at: Date.now(), value };
-  return value;
 };
 
-/**
- * Fayl kvotaga SIG'ADIMI. Sig'masa - 507 bilan to'xtatadi.
- *
- * NEGA 507 (Insufficient Storage): 400 "sen noto'g'ri yubording" degani,
- * 413 esa "fayl juda katta" degani. Bu yerda esa fayl to'g'ri va o'lchami
- * ham joyida - markazning JOYI tugagan. Klient shu kodga qarab boshqacha
- * xabar ko'rsatadi ("joy bo'shating", "faylni kichraytiring" emas).
- */
-export const assertQuota = async (incomingBytes) => {
-  const size = Number(incomingBytes) || 0;
-
+/** Bitta fayl chegarasi (kvotadan MUSTAQIL tekshiruv). */
+const assertFileSize = (size) => {
   if (size > env.MAX_UPLOAD_BYTES) {
     throw new ApiError(
       413,
@@ -82,26 +158,40 @@ export const assertQuota = async (incomingBytes) => {
       },
     );
   }
+};
+
+const quotaError = async (size) => {
+  const usage = await getUsage();
+  return new ApiError(
+    507,
+    `Saqlash joyi to'lgan (${formatBytes(usage.usedBytes)} / ${formatBytes(
+      usage.quotaBytes,
+    )}). Eski fayllarni o'chirib joy bo'shating.`,
+    {
+      code: "STORAGE_QUOTA_EXCEEDED",
+      details: {
+        usedBytes: usage.usedBytes,
+        quotaBytes: usage.quotaBytes,
+        freeBytes: usage.freeBytes,
+        incomingBytes: size,
+      },
+    },
+  );
+};
+
+/**
+ * Fayl sig'adimi - HECH NARSA yozmasdan tekshiradi (forma uchun).
+ *
+ * DIQQAT: bu faqat OLDINDAN ogohlantirish. Haqiqiy kafolat `saveBuffer`
+ * ichidagi atomik band qilishda - shu funksiya "sig'adi" desa ham, ayni
+ * o'sha lahzada boshqa so'rov joyni egallab qo'yishi mumkin.
+ */
+export const assertQuota = async (incomingBytes) => {
+  const size = Number(incomingBytes) || 0;
+  assertFileSize(size);
 
   const usage = await getUsage();
-  if (usage.usedBytes + size > usage.quotaBytes) {
-    throw new ApiError(
-      507,
-      `Saqlash joyi to'lgan (${formatBytes(usage.usedBytes)} / ${formatBytes(
-        usage.quotaBytes,
-      )}). Eski fayllarni o'chirib joy bo'shating.`,
-      {
-        code: "STORAGE_QUOTA_EXCEEDED",
-        details: {
-          usedBytes: usage.usedBytes,
-          quotaBytes: usage.quotaBytes,
-          freeBytes: usage.freeBytes,
-          incomingBytes: size,
-        },
-      },
-    );
-  }
-
+  if (usage.usedBytes + size > usage.quotaBytes) throw await quotaError(size);
   return usage;
 };
 
@@ -115,10 +205,15 @@ const safeExtension = (originalName) => {
 /**
  * Buferni diskka yozadi va StoredFile hujjatini yaratadi.
  *
- * Kvota tekshiruvi shu yerda QAYTA bajariladi (handler'da ham bo'lsa-da):
- * tekshiruv bilan yozish orasida boshqa so'rov joyni egallab qo'ygan
- * bo'lishi mumkin. Bu poygani butunlay yopmaydi (buning uchun tranzaksion
- * hisoblagich kerak), lekin oynani millisekundlarga qisqartiradi.
+ * TARTIB MUHIM va u aynan shunday bo'lishi kerak:
+ *
+ *   1) fayl o'lchami chegarasi        -> 413
+ *   2) joyni ATOMIK band qilish       -> 507 (kvota kafolati SHU YERDA)
+ *   3) diskka yozish                  -> yiqilsa joy qaytariladi
+ *   4) StoredFile yaratish            -> yiqilsa fayl ham, joy ham qaytariladi
+ *
+ * 2-qadam yozishdan OLDIN turgani uchun ikki parallel so'rov birgalikda
+ * kvotadan oshira olmaydi: ikkinchisi shartli $inc'da to'xtaydi.
  */
 export const saveBuffer = async ({
   buffer,
@@ -128,7 +223,10 @@ export const saveBuffer = async ({
   purpose = "assignment",
 }) => {
   if (!buffer?.length) throw new ApiError(400, "Fayl bo'sh");
-  await assertQuota(buffer.length);
+  const size = buffer.length;
+
+  assertFileSize(size);
+  if (!(await reserve(size))) throw await quotaError(size);
 
   // YYYY/MM bo'yicha papkalash: bitta papkada o'n minglab fayl to'planib
   // qolmasin (ba'zi fayl tizimlarida bu ro'yxatlashni sekinlashtiradi).
@@ -142,25 +240,30 @@ export const saveBuffer = async ({
   const absDir = path.join(env.UPLOAD_DIR, subDir);
   const absPath = path.join(env.UPLOAD_DIR, relPath);
 
-  await fs.mkdir(absDir, { recursive: true });
-  await fs.writeFile(absPath, buffer);
+  try {
+    await fs.mkdir(absDir, { recursive: true });
+    await fs.writeFile(absPath, buffer);
+  } catch (err) {
+    // Yozilmagan fayl joy egallamasligi kerak.
+    await release(size);
+    throw err;
+  }
 
   try {
-    const doc = await StoredFile.create({
+    return await StoredFile.create({
       originalName: String(originalName || "fayl").slice(0, 255),
       storedName,
       relPath,
       mimeType: mimeType || "application/octet-stream",
-      size: buffer.length,
+      size,
       purpose,
       uploadedBy: userId || null,
     });
-    invalidateUsage();
-    return doc;
   } catch (err) {
-    // Baza yozuvi yaratilmasa diskdagi fayl YETIM qolardi: u kvotada
-    // ko'rinmaydi, lekin joyni egallab turadi. Shuning uchun tozalaymiz.
+    // Baza yozuvi yaratilmasa diskdagi fayl YETIM qolardi: u ro'yxatda
+    // ko'rinmaydi, lekin joyni egallab turadi. Ikkalasini ham qaytaramiz.
     await fs.unlink(absPath).catch(() => null);
+    await release(size);
     throw err;
   }
 };
@@ -183,17 +286,20 @@ export const readFile = async (storedFile) => {
 };
 
 /**
- * Faylni diskdan o'chiradi va hujjatni arxivlaydi (soft-delete).
+ * Faylni diskdan o'chiradi, hujjatni arxivlaydi va joyni bo'shatadi.
  *
  * Hujjat ATAYLAB butunlay o'chirilmaydi: vazifa tarixida "fayl bor edi"
- * degani ko'rinib tursin. Kvota esa faqat isDeleted=false bo'yicha
- * yig'ilgani uchun joy darhol bo'shaydi.
+ * degani ko'rinib tursin.
+ *
+ * Hisoblagich FAQAT hujjat haqiqatan "o'chirilgan"ga o'tganda kamayadi
+ * (`modifiedCount`) - aks holda ikki marta o'chirish so'rovi joyni ikki
+ * marta bo'shatib, hisobni buzardi.
  */
 export const removeFile = async (storedFile, userId) => {
   if (!storedFile) return;
-  await fs.unlink(absolutePathOf(storedFile)).catch(() => null);
-  await StoredFile.updateOne(
-    { _id: storedFile._id },
+
+  const res = await StoredFile.updateOne(
+    { _id: storedFile._id, isDeleted: { $ne: true } },
     {
       $set: {
         isDeleted: true,
@@ -203,7 +309,11 @@ export const removeFile = async (storedFile, userId) => {
       },
     },
   );
-  invalidateUsage();
+
+  if (!res.modifiedCount) return; // allaqachon o'chirilgan - qayta hisoblamaymiz
+
+  await fs.unlink(absolutePathOf(storedFile)).catch(() => null);
+  await release(storedFile.size);
 };
 
 /** Telegram file_id ni keshlaydi - keyingi yuborishlar tez bo'lsin. */

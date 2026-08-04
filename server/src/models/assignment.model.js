@@ -38,6 +38,14 @@ const assignmentSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Fayl TOZALASH natijasida olib tashlangan vaqti.
+    //
+    // Havola (`file`) null qilinadi - aks holda tafsilot sahifasida
+    // ishlamaydigan "Yuklab olish" tugmasi turaverardi. Lekin "fayl
+    // umuman bo'lmagan" va "fayl bor edi, joy uchun o'chirildi" - ikki
+    // xil holat, shuning uchun izi shu maydonda qoladi.
+    fileRemovedAt: { type: Date, default: null },
+
     // Topshirish muddati (ixtiyoriy) - matnga qo'shib yuboriladi.
     dueDate: { type: Date, default: null },
 

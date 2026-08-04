@@ -13,6 +13,7 @@ import {
   createSchema,
   updateSchema,
   convertSchema,
+  convertBulkSchema,
   reminderSchema,
 } from "./validators/leads.validators.js";
 
@@ -22,6 +23,7 @@ import create from "./handlers/create.handler.js";
 import update from "./handlers/update.handler.js";
 import remove from "./handlers/remove.handler.js";
 import convert from "./handlers/convert.handler.js";
+import convertBulk from "./handlers/convertBulk.handler.js";
 import reminder from "./handlers/reminder.handler.js";
 import stats from "./handlers/stats.handler.js";
 
@@ -56,6 +58,17 @@ router.post(
   requirePermission(PERMISSIONS.LEADS_MANAGE),
   validate(createSchema),
   create,
+);
+// Ko'p lidni bir martada aylantirish. "/:id/convert" dan OLDIN turadi -
+// aks holda "convert-bulk" `:id` sifatida tutilib ketmasligi uchun (bu yerda
+// yo'llar farq qiladi, lekin tartib niyatni ochiq ko'rsatadi).
+router.post(
+  "/convert-bulk",
+  requireAuth,
+  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.LEADS_MANAGE),
+  validate(convertBulkSchema),
+  convertBulk,
 );
 router.post(
   "/:id/convert",

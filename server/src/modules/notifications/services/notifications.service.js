@@ -10,6 +10,10 @@ import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import {
+  fetchBotStatusMap,
+  BOT_STATUS,
+} from "../../../helpers/botStatus.helper.js";
+import {
   personalizeManyForUser,
   personalizeBulk,
 } from "./personalizeBody.helper.js";
@@ -194,7 +198,44 @@ export const resolveAudience = async (audience, currentUser) => {
 // hisoblaydi (xabar yaratmasdan). Wizard'da "N ta foydalanuvchiga boradi".
 export const previewAudience = async (audience, currentUser) => {
   const recipientIds = await resolveAudience(audience, currentUser);
-  return { count: recipientIds.length };
+
+  // Telegram yetkazish holati bo'yicha taqsimot.
+  //
+  // NEGA shu yerda: yuboruvchi "N kishiga boradi" degan raqamga ishonib
+  // yuborardi, lekin botni bloklaganlarga xabar UMUMAN yetmasdi va buni
+  // faqat keyin, oluvchilar jadvalidan bilib olardi. Endi ogohlantirish
+  // yuborishdan OLDIN chiqadi.
+  const users = await User.find(
+    { _id: { $in: recipientIds } },
+    { firstName: 1, lastName: 1, phone: 1 },
+  ).lean();
+  const botMap = await fetchBotStatusMap(recipientIds);
+
+  const buckets = { linked: [], blocked: [], not_linked: [] };
+  for (const u of users) {
+    const status = botMap.get(String(u._id))?.status || BOT_STATUS.NOT_LINKED;
+    buckets[status].push(u);
+  }
+
+  const brief = (list) =>
+    list.map((u) => ({
+      _id: u._id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      phone: u.phone,
+    }));
+
+  return {
+    // `count` eski nom - klient shunga tayanadi, o'zgartirilmaydi.
+    count: recipientIds.length,
+    total: recipientIds.length,
+    deliverable: buckets.linked.length,
+    blocked: buckets.blocked.length,
+    noBot: buckets.not_linked.length,
+    // Raqamdan ko'ra ISM foydaliroq: xodim ularga qo'ng'iroq qila oladi.
+    blockedStudents: brief(buckets.blocked),
+    noBotStudents: brief(buckets.not_linked),
+  };
 };
 
 // Cheklangan parallellik bilan ishlovchi pool (tashqi kutubxonasiz)

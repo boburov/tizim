@@ -3,3 +3,4 @@ export { default as UserActiveGroupsList } from "./UserActiveGroupsList";
 export { default as UserTaughtGroupsList } from "./UserTaughtGroupsList";
 export { default as UserTelegramCard } from "./UserTelegramCard";
 export { default as UserGroupHistoryTable } from "./UserGroupHistoryTable";
+export { default as BotStatusBadge } from "./BotStatusBadge";

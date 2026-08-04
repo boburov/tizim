@@ -8,6 +8,7 @@ export const leadsAPI = {
   update: (id, body) => http.patch(ENDPOINTS.leads.byId(id), body),
   remove: (id) => http.delete(ENDPOINTS.leads.byId(id)),
   convert: (id, body) => http.post(ENDPOINTS.leads.convert(id), body),
+  convertBulk: (body) => http.post(ENDPOINTS.leads.convertBulk, body),
   setReminder: (id, body) => http.post(ENDPOINTS.leads.reminder(id), body),
   stats: (params) => http.get(ENDPOINTS.leads.stats, { params }),
 };

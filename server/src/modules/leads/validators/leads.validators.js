@@ -73,15 +73,34 @@ export const reminderSchema = z.object({
   }),
 });
 
+const convertFields = {
+  firstName: z.string().min(1, "Ism kerak").max(60),
+  lastName: z.string().min(1, "Familiya kerak").max(60),
+  username: z.string().min(3, "Username kamida 3 belgidan iborat").max(40),
+  phone: z.string().min(9, "Telefon kerak"),
+  password: z.string().min(6, "Parol kamida 6 belgidan iborat"),
+  gender: z.enum(["male", "female"]).nullable().optional(),
+  enrolledAt: z.coerce.date().nullable().optional(),
+};
+
 export const convertSchema = z.object({
   params: z.object({ id: z.string().min(1) }),
   body: z.object({
-    firstName: z.string().min(1, "Ism kerak").max(60),
-    lastName: z.string().min(1, "Familiya kerak").max(60),
-    username: z.string().min(3, "Username kamida 3 belgidan iborat").max(40),
-    phone: z.string().min(9, "Telefon kerak"),
-    password: z.string().min(6, "Parol kamida 6 belgidan iborat"),
-    gender: z.enum(["male", "female"]).nullable().optional(),
-    enrolledAt: z.coerce.date().nullable().optional(),
+    ...convertFields,
+    // Ixtiyoriy: aylantirish bilan BIR VAQTDA guruhga qabul qilish.
+    // Bo'sh bo'lsa o'quvchi guruhsiz yaratiladi (eski xatti-harakat).
+    groupId: z.string().nullable().optional(),
+  }),
+});
+
+// Ko'p lidni bir martada aylantirish. Har lid uchun login/parol ALOHIDA
+// keladi - klient ularni generatsiya qiladi va operator tahrirlay oladi.
+export const convertBulkSchema = z.object({
+  body: z.object({
+    leads: z
+      .array(z.object({ id: z.string().min(1), ...convertFields }))
+      .min(1, "Kamida bitta lid tanlang")
+      .max(100, "Bir martada ko'pi bilan 100 ta lid"),
+    groupId: z.string().nullable().optional(),
   }),
 });

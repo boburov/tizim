@@ -40,13 +40,13 @@ const AiDailySummary = ({ summary, health, lastRunLabel }) => {
               {style.label}
             </span>
 
-            {/* "AI oxirgi marta qachon o'yladi" - bu qator bo'lmasa
+            {/* "Tahlil oxirgi marta qachon yangilandi" - bu qator bo'lmasa
                 xulosa statik matnga aylanadi va owner uning bugungi
                 ekaniga ishonmaydi. */}
             {lastRunLabel && (
               <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Sparkles className="size-3.5" />
-                AI tahlili: {lastRunLabel}
+                Tizim tahlili: {lastRunLabel}
               </span>
             )}
           </div>

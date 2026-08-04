@@ -112,10 +112,10 @@ const TeachersPage = () => {
         )}
       </div>
 
-      {/* AI tahlili - faqat ro'yxat tabida (maosh/davomat tablarida
+      {/* Tizim tahlili - faqat ro'yxat tabida (maosh/davomat tablarida
           kontekstdan chiqib ketardi). */}
       {isList && (
-        <AiDomainInsights domain="teachers" title="O'qituvchilar bo'yicha AI tahlili" />
+        <AiDomainInsights domain="teachers" title="O'qituvchilar bo'yicha tizim tahlili" />
       )}
 
       <Outlet context={{ status: effectiveStatus }} />

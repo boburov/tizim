@@ -26,7 +26,7 @@ const LeadsPage = () => {
 
       {/* Issiq lidlar, sovib qolganlar, konversiya pasayishi - hammasi
           ro'yxat tabida, chunki harakat (qo'ng'iroq qilish) shu yerda. */}
-      {isList && <AiDomainInsights domain="leads" title="Lidlar bo'yicha AI tahlili" />}
+      {isList && <AiDomainInsights domain="leads" title="Lidlar bo'yicha tizim tahlili" />}
 
       <Outlet />
     </div>

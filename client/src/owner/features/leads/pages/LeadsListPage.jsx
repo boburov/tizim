@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, UserCheck, X } from "lucide-react";
 import Button from "@/shared/components/ui/button/Button";
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
@@ -17,6 +17,7 @@ import LeadCreateModal from "../components/LeadCreateModal";
 import LeadEditModal from "../components/LeadEditModal";
 import LeadDeleteModal from "../components/LeadDeleteModal";
 import LeadConvertModal from "../components/LeadConvertModal";
+import LeadBulkConvertModal from "../components/LeadBulkConvertModal";
 import LeadReminderModal from "../components/LeadReminderModal";
 import useLeadsQuery from "../hooks/useLeadsQuery";
 import useLeadOptionsQuery from "../hooks/useLeadOptionsQuery";
@@ -32,6 +33,9 @@ const LeadsListPage = () => {
   const { openModal } = useModal();
   const filters = useObjectState({ search: "", status: "", source: "", direction: "" });
   const [page, setPage] = useState(1);
+  // Ko'p lidni birdan guruhga qabul qilish uchun tanlov. Faqat ID saqlanadi -
+  // lid obyektlari ro'yxat yangilanganda eskirib qolmasligi uchun.
+  const [selectedIds, setSelectedIds] = useState([]);
   const debouncedSearch = useDebounce(filters.search);
 
   const sourceQ = useLeadOptionsQuery({ kind: "source" });
@@ -53,7 +57,28 @@ const LeadsListPage = () => {
   const update = (key, value) => {
     filters.setField(key, value);
     setPage(1);
+    // Filtr o'zgarsa tanlangan lidlar ro'yxatdan chiqib ketadi - ko'rinmayotgan
+    // odamni guruhga qabul qilib qo'ymaslik uchun tanlov tozalanadi.
+    setSelectedIds([]);
   };
+
+  const toggleOne = (id, checked) =>
+    setSelectedIds((prev) =>
+      checked
+        ? [...new Set([...prev, String(id)])]
+        : prev.filter((x) => x !== String(id)),
+    );
+
+  // "Barchasini tanlash" - FAQAT joriy sahifadagi (va aylantirilmagan) lidlar.
+  const toggleAll = (ids, checked) =>
+    setSelectedIds((prev) => {
+      const page = ids.map(String);
+      if (!checked) return prev.filter((x) => !page.includes(x));
+      return [...new Set([...prev, ...page])];
+    });
+
+  // Modalga to'liq lid obyektlari kerak (ism/telefon login generatsiyasi uchun).
+  const selectedLeads = items.filter((l) => selectedIds.includes(String(l._id)));
 
   return (
     <div className="space-y-4">
@@ -93,15 +118,57 @@ const LeadsListPage = () => {
         />
       </div>
 
+      {/* Tanlov paneli - faqat lid tanlanganda ko'rinadi. */}
+      {selectedLeads.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+          <p className="text-sm font-medium">
+            {selectedLeads.length} ta lid tanlandi
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds([])}
+            >
+              <X className="size-4" />
+              Bekor qilish
+            </Button>
+            <Button
+              size="sm"
+              onClick={() =>
+                openModal(MODAL.LEAD_BULK_CONVERT, {
+                  leads: selectedLeads,
+                  onDone: () => setSelectedIds([]),
+                })
+              }
+            >
+              <UserCheck className="size-4" />
+              Guruhga qabul qilish
+            </Button>
+          </div>
+        </div>
+      )}
+
       {isError ? (
         <ErrorState onRetry={refetch} />
       ) : (
         <>
-          <LeadsTable items={items} isLoading={isLoading} />
+          <LeadsTable
+            items={items}
+            isLoading={isLoading}
+            selectedIds={selectedIds}
+            onToggle={toggleOne}
+            onToggleAll={toggleAll}
+          />
           {totalPages > 1 && (
             <Pagination
               currentPage={page}
-              onPageChange={setPage}
+              // Sahifa almashsa tanlov tozalanadi: boshqa sahifadagi lid
+              // ro'yxatda ko'rinmay turib tanlangan bo'lib qolardi.
+              onPageChange={(p) => {
+                setSelectedIds([]);
+                setPage(p);
+              }}
               totalPages={totalPages}
               hasNextPage={page < totalPages}
               hasPrevPage={page > 1}
@@ -119,6 +186,13 @@ const LeadsListPage = () => {
       </ModalWrapper>
       <ModalWrapper name={MODAL.LEAD_CONVERT} title="O'quvchiga aylantirish" className="max-w-xl">
         <LeadConvertModal />
+      </ModalWrapper>
+      <ModalWrapper
+        name={MODAL.LEAD_BULK_CONVERT}
+        title="Lidlarni guruhga qabul qilish"
+        className="max-w-3xl"
+      >
+        <LeadBulkConvertModal />
       </ModalWrapper>
       <ModalWrapper name={MODAL.LEAD_REMINDER} title="Qayta bog'lanish eslatmasi">
         <LeadReminderModal />

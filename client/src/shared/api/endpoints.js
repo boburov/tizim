@@ -60,6 +60,7 @@ export const ENDPOINTS = Object.freeze({
     base: "/leads",
     byId: (id) => `/leads/${id}`,
     convert: (id) => `/leads/${id}/convert`,
+    convertBulk: "/leads/convert-bulk",
     reminder: (id) => `/leads/${id}/reminder`,
     stats: "/leads/stats",
   },
@@ -201,12 +202,18 @@ export const ENDPOINTS = Object.freeze({
     recipients: (id) => `/assignments/${id}/recipients`,
     file: (id) => `/assignments/${id}/file`,
     my: "/assignments/my",
+    myUnreadCount: "/assignments/my/unread-count",
     markRead: (id) => `/assignments/my/${id}/read`,
   },
 
   // Fayl saqlash kvotasi (sidebar indikatori)
   storage: {
     usage: "/storage/usage",
+    settings: "/storage/settings",
+    cleanupPreview: "/storage/cleanup/preview",
+    cleanup: "/storage/cleanup",
+    files: "/storage/files",
+    fileById: (id) => `/storage/files/${id}`,
   },
 
   // Excel eksport. Ustunlar ro'yxati SERVERDAN olinadi (datasets) -

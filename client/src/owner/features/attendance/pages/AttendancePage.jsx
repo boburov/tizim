@@ -64,7 +64,7 @@ const AttendancePage = () => {
           tabida ko'rsatilmaydi: u yerda o'qituvchi tez ish qiladi va
           tahlil paneli faqat xalaqit berardi. */}
       {isReport && (
-        <AiDomainInsights domain="attendance" title="Davomat bo'yicha AI tahlili" />
+        <AiDomainInsights domain="attendance" title="Davomat bo'yicha tizim tahlili" />
       )}
 
       <Outlet context={{ year, month }} />

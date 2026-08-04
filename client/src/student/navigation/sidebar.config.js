@@ -17,6 +17,9 @@ const studentSidebar = [
       {
         title: "Vazifalarim",
         url: "/student/assignments",
+        // Botni bloklagan o'quvchi uchun platforma YAGONA kanal -
+        // o'qilmagan soni menyuda ko'rinib turishi kerak.
+        badge: "studentAssignments",
       },
       {
         title: "Reyting",

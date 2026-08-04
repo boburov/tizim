@@ -15,6 +15,7 @@ import UserFreezeModal from "../components/UserFreezeModal";
 import UserUnfreezeModal from "../components/UserUnfreezeModal";
 import UserFreezeHistory from "../components/UserFreezeHistory";
 import { TeacherCompensationCard } from "@/owner/features/teacherSalary";
+import { BotStatusBadge } from "@/shared/components/userProfile";
 import UserBranchModal from "../components/UserBranchModal";
 import {
   ExemptionCreateModal,
@@ -106,6 +107,10 @@ const UserDetailPage = () => {
           {isStudent && profile.isFrozen && (
             <Badge className="bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300">Muzlatilgan</Badge>
           )}
+          {/* BOT HOLATI sarlavhada: xabar yuborishdan oldin ko'ziga
+              tashlanishi kerak. "Ulangan" holat ko'rsatilmaydi - normal
+              holat uchun nishon ortiqcha shovqin. */}
+          <BotStatusBadge user={profile} className="shrink-0" />
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

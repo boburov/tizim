@@ -6,6 +6,7 @@ import { startJobs, stopJobs } from "./jobs/index.js";
 import { startBot, stopBot } from "./bot/index.js";
 import Branch from "./models/branch.model.js";
 import { ensureMainBranch } from "./helpers/branchAccess.helper.js";
+import { reconcile as reconcileStorage } from "./modules/storage/services/storage.service.js";
 
 // MULTI_BRANCH=false, lekin bazada bir nechta filial bor - mos kelmovchilik.
 //
@@ -55,6 +56,16 @@ const start = async () => {
   // ya'ni "filial tanlanmagan" turkumidagi yozish xatolari tug'ilmaydi.
   await ensureMainBranch();
   await warnBranchModeMismatch();
+
+  // SAQLASH HISOBLAGICHI: band hajm atomik hisoblagichda turadi, lekin
+  // jarayon joyni band qilib, faylni yozishdan oldin yiqilsa unda "band"
+  // bo'lgan bayt qolib ketadi. Har ishga tushishda uni haqiqat (diskdagi
+  // fayllar ro'yxati) bo'yicha tekislaymiz - aks holda kvota asta-sekin
+  // o'z-o'zidan kamayib borardi.
+  await reconcileStorage().catch((err) =>
+    logger.warn({ err }, "Saqlash hisoblagichini tekislab bo'lmadi"),
+  );
+
   await startJobs();
   await startBot().catch((err) => logger.error({ err }, "Bot ishga tushmadi"));
 

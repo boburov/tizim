@@ -8,8 +8,12 @@ import User from "../../../models/user.model.js";
 import BotUser from "../../../models/botUser.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
-import { ROLES } from "../../../constants/roles.js";
+import {
+  isTeacherActor,
+  isStudentActor,
+} from "../../../helpers/actor.helper.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import { botStatusOf, BOT_STATUS } from "../../../helpers/botStatus.helper.js";
 import { hasPermission } from "../../../helpers/permission.helper.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 import * as storageService from "../../storage/services/storage.service.js";
@@ -43,7 +47,7 @@ const resolveGroups = async (groupIds, currentUser) => {
     throw new ApiError(404, "Ba'zi guruhlar topilmadi");
   }
 
-  const isTeacher = currentUser?.role === ROLES.TEACHER;
+  const isTeacher = isTeacherActor(currentUser);
   if (isTeacher) {
     const mine = groups.every((g) =>
       (g.teachers || []).some((t) => String(t) === String(currentUser._id)),
@@ -120,15 +124,17 @@ const resolveRecipients = async (groups) => {
   return out;
 };
 
-// Bot holatidan boshlang'ich yetkazish statusi.
-//   bog'lanmagan  -> no_bot   (botga umuman kirmagan)
-//   bloklangan    -> blocked  (kirgan, keyin bloklagan)
-//   aks holda     -> pending  (yuborishga tayyor)
-const initialStatus = (botUser) => {
-  if (!botUser || !botUser.chatId) return "no_bot";
-  if (botUser.isBlocked) return "blocked";
-  return "pending";
+// Bot holatidan boshlang'ich yetkazish statusi. Xarita bitta joyda -
+// bot holati mantiqi butun tizimda YAGONA manbadan (botStatus.helper)
+// oziqlanadi, aks holda bildirishnoma va vazifa modullari vaqt o'tib
+// bir-biridan uzoqlashib ketardi.
+const STATUS_BY_BOT = {
+  [BOT_STATUS.LINKED]: "pending", // yuborishga tayyor
+  [BOT_STATUS.BLOCKED]: "blocked", // kirgan, keyin bloklagan
+  [BOT_STATUS.NOT_LINKED]: "no_bot", // botga umuman kirmagan
 };
+
+const initialStatus = (botUser) => STATUS_BY_BOT[botStatusOf(botUser)];
 
 /**
  * Yuborishdan OLDINGI ko'rib chiqish.
@@ -424,7 +430,7 @@ const recountAssignment = async (assignmentId) => {
 const scopeFilter = (currentUser) => {
   // O'qituvchi faqat O'ZI yuborganini ko'radi. Owner/xodim - filial
   // ko'lamidagi hammasini.
-  if (currentUser?.role === ROLES.TEACHER) return { sender: currentUser._id };
+  if (isTeacherActor(currentUser)) return { sender: currentUser._id };
   return {};
 };
 
@@ -465,7 +471,7 @@ export const getById = async (id, currentUser) => {
 
   if (!doc) throw new ApiError(404, "Vazifa topilmadi");
   if (
-    currentUser?.role === ROLES.TEACHER &&
+    isTeacherActor(currentUser) &&
     String(doc.sender?._id || doc.sender) !== String(currentUser._id)
   ) {
     throw new ApiError(403, "Ruxsat yo'q");
@@ -503,7 +509,7 @@ export const remove = async (id, currentUser) => {
   if (!doc) throw new ApiError(404, "Vazifa topilmadi");
 
   if (
-    currentUser?.role === ROLES.TEACHER &&
+    isTeacherActor(currentUser) &&
     String(doc.sender) !== String(currentUser._id)
   ) {
     throw new ApiError(403, "Faqat o'z vazifangizni o'chira olasiz");
@@ -556,7 +562,7 @@ const assertCanRead = async (assignment, currentUser, permissions) => {
   if (!currentUser) throw new ApiError(401, "Avtorizatsiyadan o'tilmagan");
   if (String(assignment.sender) === String(currentUser._id)) return;
 
-  if (currentUser.role === ROLES.STUDENT) {
+  if (isStudentActor(currentUser)) {
     const mine = await AssignmentRecipient.exists({
       assignment: assignment._id,
       student: currentUser._id,
@@ -569,7 +575,7 @@ const assertCanRead = async (assignment, currentUser, permissions) => {
   // rolda hammada bor va bo'lmasa o'qituvchi hamkasbining faylini yuklab
   // olardi. Uning uchun yagona shart - yuboruvchi bo'lishi (yuqorida
   // tekshirildi).
-  if (currentUser.role === ROLES.TEACHER) throw new ApiError(403, "Ruxsat yo'q");
+  if (isTeacherActor(currentUser)) throw new ApiError(403, "Ruxsat yo'q");
 
   if (!hasPermission(permissions, PERMISSIONS.ASSIGNMENTS_READ)) {
     throw new ApiError(403, "Ruxsat yo'q");
@@ -591,6 +597,10 @@ export const listForStudent = async (studentId, { page, limit, skip }) => {
           dueDate: 1,
           sentAt: 1,
           file: 1,
+          // Fayl tozalash bilan olib tashlangan bo'lsa o'quvchi buni
+          // ko'rishi kerak - aks holda "fayl bor edi shekilli" degan
+          // savol javobsiz qolardi.
+          fileRemovedAt: 1,
           sender: 1,
           isDeleted: 1,
         },
@@ -617,6 +627,25 @@ export const listForStudent = async (studentId, { page, limit, skip }) => {
     }));
 
   return { items, total };
+};
+
+/**
+ * O'qilmagan vazifalar soni (sidebar nishoni uchun).
+ *
+ * PLATFORMA kanali bot kanalidan MUSTAQIL: botni bloklagan o'quvchi
+ * xabarni faqat shu yerdan oladi, shuning uchun sanoq yetkazish
+ * holatiga umuman qaramaydi - `readAt` bo'yicha hisoblanadi.
+ */
+export const unreadCountForStudent = async (studentId) => {
+  const rows = await AssignmentRecipient.find({ student: studentId, readAt: null })
+    .select({ assignment: 1 })
+    .populate({ path: "assignment", select: { isDeleted: 1 } })
+    .lean();
+
+  // O'chirilgan vazifa sanoqqa kirmasin - ro'yxatda ham ko'rinmaydi,
+  // aks holda nishon hech qachon nolga tushmasdi.
+  const count = rows.filter((r) => r.assignment && !r.assignment.isDeleted).length;
+  return { count };
 };
 
 /** O'quvchi vazifani platformada ochdi. */

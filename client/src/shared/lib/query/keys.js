@@ -150,11 +150,15 @@ export const qk = Object.freeze({
     recipients: (id, params) => ["assignments", id, "recipients", params],
     preview: (groupIds) => ["assignments", "preview", groupIds],
     my: (params) => ["assignments", "my", params],
+    myUnreadCount: () => ["assignments", "my", "unreadCount"],
   },
 
   // Fayl saqlash kvotasi
   storage: {
+    all: () => ["storage"],
     usage: () => ["storage", "usage"],
+    settings: () => ["storage", "settings"],
+    files: (params) => ["storage", "files", params],
   },
 
   systemNotifications: {

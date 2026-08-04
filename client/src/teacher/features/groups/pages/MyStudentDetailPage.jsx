@@ -13,22 +13,38 @@ import {
 } from "@/owner/features/attendanceExemptions";
 import { formatPhone } from "@/shared/utils/formatPhone";
 import { MODAL } from "@/shared/constants/modals";
+import { BotStatusBadge } from "@/shared/components/userProfile";
+import { BOT_STATUS, resolveBotStatus } from "@/shared/constants/botStatus";
 
-const TelegramStatus = ({ telegram }) => {
-  if (!telegram) return <span className="text-muted-foreground">Bog'lanmagan</span>;
-  if (telegram.username) {
+/**
+ * Telegram holati.
+ *
+ * DIQQAT: bloklangan o'quvchida @username BOR, lekin xabar YETMAYDI.
+ * Shuning uchun havola holatdan keyin turadi - o'qituvchi avval
+ * "yetadimi" degan savolga javob oladi, keyin "kimga" degan.
+ */
+const TelegramStatus = ({ student }) => {
+  const status = resolveBotStatus(student);
+  const username = student?.telegram?.username;
+
+  if (status !== BOT_STATUS.LINKED) {
+    return <BotStatusBadge status={status} />;
+  }
+
+  if (username) {
     return (
       <a
-        href={`https://t.me/${telegram.username}`}
+        href={`https://t.me/${username}`}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex min-w-0 items-center gap-1 font-medium text-sky-600 dark:text-sky-300 hover:text-sky-700 dark:hover:text-sky-300 hover:underline"
       >
         <Send className="size-3.5 shrink-0" />
-        <span className="truncate">@{telegram.username}</span>
+        <span className="truncate">@{username}</span>
       </a>
     );
   }
+
   return (
     <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-300">
       <Send className="size-3.5 shrink-0" />
@@ -88,8 +104,8 @@ const MyStudentDetailPage = () => {
               {formatPhone(student.phone) || "-"}
             </span>
           </span>
-          <span className="text-muted-foreground">
-            Telegram: <TelegramStatus telegram={student.telegram} />
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            Telegram: <TelegramStatus student={student} />
           </span>
         </div>
       </Card>

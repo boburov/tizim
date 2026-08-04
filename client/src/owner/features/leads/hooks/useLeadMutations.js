@@ -63,15 +63,42 @@ export const useLeadReminderMutation = (options = {}) => {
   });
 };
 
+// Aylantirish keshni keng tozalaydi: o'quvchi paydo bo'ladi (users), guruhga
+// qo'shilgan bo'lsa guruh tarkibi va davomat ro'yxati ham o'zgaradi.
+const invalidateConverted = (qc) => {
+  qc.invalidateQueries({ queryKey: qk.leads.all() });
+  qc.invalidateQueries({ queryKey: qk.users.all() });
+  qc.invalidateQueries({ queryKey: qk.groups.all() });
+  qc.invalidateQueries({ queryKey: qk.attendance.all() });
+};
+
 export const useLeadConvertMutation = (options = {}) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }) =>
       leadsAPI.convert(id, body).then((r) => r.data.data),
     onSuccess: (data, vars, ctx) => {
-      qc.invalidateQueries({ queryKey: qk.leads.all() });
-      qc.invalidateQueries({ queryKey: qk.users.all() });
+      invalidateConverted(qc);
       toast.success("Lid o'quvchiga aylantirildi");
+      // Guruhga qo'shish alohida qadam: u yiqilsa aylantirish baribir
+      // o'tgan - operator buni BILISHI kerak, jimgina yutib yubormaymiz.
+      if (data?.groupError) {
+        toast.warning(`Guruhga qo'shilmadi: ${data.groupError}`);
+      }
+      options.onSuccess?.(data, vars, ctx);
+    },
+    onError: onErr(options),
+  });
+};
+
+export const useLeadConvertBulkMutation = (options = {}) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => leadsAPI.convertBulk(body).then((r) => r.data.data),
+    onSuccess: (data, vars, ctx) => {
+      invalidateConverted(qc);
+      // Toast bu yerda CHIQMAYDI: natija paneli har bir o'quvchining
+      // login/parolini va yiqilganlarning sababini to'liq ko'rsatadi.
       options.onSuccess?.(data, vars, ctx);
     },
     onError: onErr(options),

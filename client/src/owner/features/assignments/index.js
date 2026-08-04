@@ -22,7 +22,6 @@ export {
 // Qayta ishlatiladigan komponentlar
 export { default as AssignmentsTable } from "./components/AssignmentsTable";
 export { default as AssignmentRecipientsTable } from "./components/AssignmentRecipientsTable";
-export { default as BlockedWarning } from "./components/BlockedWarning";
 export { default as DeliveryStatusBadge } from "./components/DeliveryStatusBadge";
 export {
   DELIVERY_STATUS_META,

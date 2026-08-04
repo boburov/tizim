@@ -1,10 +1,11 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
 import { parsePagination, buildMeta } from "../../../utils/pagination.js";
+import { actorOf } from "../../../helpers/actor.helper.js";
 import * as service from "../services/assignments.service.js";
 
 const getRecipients = asyncHandler(async (req, res) => {
   // Egalik tekshiruvi getById ichida (o'qituvchi faqat o'zinikini ko'radi).
-  await service.getById(req.params.id, req.user);
+  await service.getById(req.params.id, actorOf(req));
 
   const { page, limit, skip } = parsePagination(req.query);
   const { items, total } = await service.getRecipientList(req.params.id, {

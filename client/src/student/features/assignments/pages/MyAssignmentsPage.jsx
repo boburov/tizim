@@ -7,6 +7,7 @@ import {
   Download,
   CalendarClock,
   Paperclip,
+  FileX,
 } from "lucide-react";
 
 // Components
@@ -79,6 +80,13 @@ const AssignmentCard = ({ row, onOpen, onDownload, downloading }) => {
 
       {a.body && (
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{a.body}</p>
+      )}
+
+      {!a.file && a.fileRemovedAt && (
+        <p className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          <FileX className="size-3.5 shrink-0" />
+          Biriktirilgan fayl o'chirilgan
+        </p>
       )}
 
       {a.file && (

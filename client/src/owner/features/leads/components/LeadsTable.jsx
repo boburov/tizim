@@ -5,6 +5,7 @@ import {
   MoreVertical,
   Inbox,
   BellRing,
+  Phone,
 } from "lucide-react";
 import DataTable from "@/shared/components/ui/table/DataTable";
 import Button from "@/shared/components/ui/button/Button";
@@ -27,9 +28,61 @@ import { useLeadUpdateMutation } from "../hooks/useLeadMutations";
 const th = "px-4 py-2.5 text-left text-xs font-medium text-muted-foreground";
 const dash = <span className="text-muted-foreground/50">-</span>;
 
-const LeadsTable = ({ items = [], isLoading = false }) => {
+// Telefonga bosilganda qo'ng'iroq. `tel:` uchun raqam TOZA bo'lishi kerak -
+// ko'rinishdagi qavs/chiziqchalar ba'zi qurilmalarda terishni buzadi.
+const telHref = (phone) => {
+  const cleaned = String(phone || "").replace(/[^\d+]/g, "");
+  if (!cleaned) return null;
+  return `tel:${cleaned.startsWith("+") ? cleaned : `+${cleaned}`}`;
+};
+
+const PhoneLink = ({ phone }) => {
+  const href = telHref(phone);
+  if (!href) return dash;
+  return (
+    <a
+      href={href}
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-primary hover:underline"
+      title="Qo'ng'iroq qilish"
+    >
+      <Phone className="size-3.5 shrink-0" />
+      {formatPhone(phone)}
+    </a>
+  );
+};
+
+// `selectedIds` berilsa jadval tanlash rejimida ishlaydi (ko'p lidni birdan
+// guruhga qabul qilish uchun). Aylantirilgan lidlar tanlanmaydi.
+const LeadsTable = ({
+  items = [],
+  isLoading = false,
+  selectedIds = null,
+  onToggle,
+  onToggleAll,
+}) => {
   const { openModal } = useModal();
   const { mutate: updateLead } = useLeadUpdateMutation();
+
+  const selectable = Boolean(selectedIds) && Boolean(onToggle);
+  const selectedSet = new Set((selectedIds || []).map(String));
+  const selectableItems = items.filter((l) => !l.studentId);
+  const allSelected =
+    selectableItems.length > 0 &&
+    selectableItems.every((l) => selectedSet.has(String(l._id)));
+
+  const checkbox = (l) => (
+    <input
+      type="checkbox"
+      aria-label={`${l.firstName} ${l.lastName} ni tanlash`}
+      checked={selectedSet.has(String(l._id))}
+      disabled={Boolean(l.studentId)}
+      title={l.studentId ? "Allaqachon o'quvchiga aylantirilgan" : undefined}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onToggle?.(l._id, e.target.checked)}
+      className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+    />
+  );
 
   const handleStatus = (lead, next) => {
     if (!next || next === lead.status) return;
@@ -98,6 +151,31 @@ const LeadsTable = ({ items = [], isLoading = false }) => {
   );
 
   const columns = [
+    ...(selectable
+      ? [
+          {
+            key: "select",
+            headerClassName: "px-4 py-2.5 w-10",
+            className: "w-10",
+            header: (
+              <input
+                type="checkbox"
+                aria-label="Barchasini tanlash"
+                checked={allSelected}
+                disabled={!selectableItems.length}
+                onChange={(e) =>
+                  onToggleAll?.(
+                    selectableItems.map((l) => l._id),
+                    e.target.checked,
+                  )
+                }
+                className="size-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+              />
+            ),
+            cell: checkbox,
+          },
+        ]
+      : []),
     {
       key: "name",
       header: "Ism",
@@ -120,9 +198,7 @@ const LeadsTable = ({ items = [], isLoading = false }) => {
       key: "phone",
       header: "Telefon",
       headerClassName: th,
-      cell: (l) => (
-        <span className="text-muted-foreground">{formatPhone(l.phone) || "-"}</span>
-      ),
+      cell: (l) => <PhoneLink phone={l.phone} />,
     },
     {
       key: "source",
@@ -164,13 +240,16 @@ const LeadsTable = ({ items = [], isLoading = false }) => {
   const renderCard = (l) => (
     <div className="space-y-2">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-medium">
-            {l.firstName} {l.lastName}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {formatPhone(l.phone) || "-"}
-          </p>
+        <div className="flex items-start gap-2">
+          {selectable && <span className="pt-1">{checkbox(l)}</span>}
+          <div>
+            <p className="font-medium">
+              {l.firstName} {l.lastName}
+            </p>
+            <p className="text-xs">
+              <PhoneLink phone={l.phone} />
+            </p>
+          </div>
         </div>
         {actions(l)}
       </div>

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, ChevronRight, Lightbulb, Sparkles } from "lucide-react";
+import { AlertTriangle, ChevronRight, Lightbulb, Monitor } from "lucide-react";
 import { cn } from "@/shared/utils/cn";
 import { formatMoney } from "@/shared/utils/formatMoney";
 import AiRiskBadge from "./AiRiskBadge";
@@ -108,19 +108,25 @@ const Group = ({ title, icon: Icon, iconTone, items, isOpportunity }) => {
 /**
  * @param {object}   data       - /ai/insights/domain/:domain javobi
  * @param {boolean}  isLoading
- * @param {string}   title      - panel sarlavhasi (mas. "Moliya bo'yicha AI tahlili")
- * @param {Function} icon       - sarlavha ikonkasi. Default `Sparkles` (AI belgisi).
- *                                Hamma insight ham til modelidan chiqmaydi: bir
- *                                qismi oddiy qoida/statistika (guruh to'ldirilishi,
- *                                bo'sh dars vaqtlari). O'sha sahifalar buni
- *                                "Tizim tahlili" deb atab, neytral ikonka beradi -
- *                                shuning uchun ikonka propga chiqarilgan.
+ * @param {string}   title      - panel sarlavhasi (mas. "Moliya bo'yicha tizim tahlili")
+ * @param {Function} icon       - sarlavha ikonkasi.
+ *
+ * NEGA "TIZIM TAHLILI", "AI TAHLILI" EMAS:
+ * bu paneldagi insight'lar amalda QOIDA VA STATISTIKADAN chiqadi (davomat
+ * pasayishi, qarz muddati, guruh to'ldirilishi, bo'sh dars vaqtlari) - til
+ * modeli chaqirilmaydi. Ularni "AI tahlili" deb atash foydalanuvchiga
+ * noto'g'ri va'da berardi: u xulosalarni "sun'iy intellekt aytdi" deb qabul
+ * qilib, ularga haqiqiydan ortiq ishonardi. Til modeli haqiqatan ulanganda
+ * sarlavhani qaytarish oson - matn shu yerda bitta joyda.
+ *
+ * Ikonka ham shu sababdan neytral (`Monitor` - tizim/monitoring belgisi),
+ * `Sparkles` esa AI belgisi bo'lgani uchun ishlatilmaydi.
  */
 const AiDomainPanel = ({
   data,
   isLoading,
-  title = "AI tahlili",
-  icon: TitleIcon = Sparkles,
+  title = "Tizim tahlili",
+  icon: TitleIcon = Monitor,
   className = "",
 }) => {
   if (isLoading) {

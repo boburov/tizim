@@ -93,12 +93,12 @@ const StudentsPage = () => {
         )}
       </div>
 
-      {/* AI tahlili - FAQAT ro'yxat tabida. To'lovlar/statistika tablarida
+      {/* Tizim tahlili - FAQAT ro'yxat tabida. To'lovlar/statistika tablarida
           o'quvchi insight'lari kontekstdan chiqib ketardi (u yerda owner
           boshqa savolga javob qidiradi). Ochiq insight bo'lmasa panel
           o'zini o'zi yashiradi. */}
       {isList && (
-        <AiDomainInsights domain="students" title="O'quvchilar bo'yicha AI tahlili" />
+        <AiDomainInsights domain="students" title="O'quvchilar bo'yicha tizim tahlili" />
       )}
 
       <Outlet context={{ status: effectiveStatus }} />

@@ -24,6 +24,7 @@ import preview from "./handlers/preview.handler.js";
 import remove from "./handlers/remove.handler.js";
 import download from "./handlers/download.handler.js";
 import myList from "./handlers/myList.handler.js";
+import myUnreadCount from "./handlers/myUnreadCount.handler.js";
 import markRead from "./handlers/markRead.handler.js";
 
 const router = Router();
@@ -31,6 +32,14 @@ const router = Router();
 // --- O'quvchi yuzasi ---
 // "/my" "/:id" naqshidan OLDIN turishi SHART, aks holda "my" ID deb
 // qabul qilinib, validator 400 qaytarardi.
+// "/my/unread-count" "/my" dan OLDIN emas, lekin "/my/:id/read" naqshi
+// bilan to'qnashmasligi uchun aniq yo'l sifatida beriladi.
+router.get(
+  "/my/unread-count",
+  requireAuth,
+  requireRole(ROLES.STUDENT),
+  myUnreadCount,
+);
 router.get(
   "/my",
   requireAuth,

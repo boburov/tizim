@@ -51,6 +51,7 @@ import {
 // Components
 import BranchSwitcher from "./BranchSwitcher";
 import StorageQuota from "./StorageQuota";
+import SidebarItemBadge from "./SidebarItemBadge";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
@@ -293,7 +294,14 @@ const Main = () => {
                             to={subItem.url}
                             onClick={isMobile ? toggleSidebar : undefined}
                           >
-                            {subItem.title}
+                            <span className="truncate">{subItem.title}</span>
+                            {/* Nishon (o'qilmagan soni). Konfiguratsiyada
+                                faqat kalit turadi - komponent reyestrda
+                                tanlanadi, shunda navigatsiya fayli
+                                so'rovlarga bog'lanmaydi. */}
+                            {subItem.badge && (
+                              <SidebarItemBadge kind={subItem.badge} />
+                            )}
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>

@@ -15,6 +15,9 @@ import defineLowAttendanceDigest, {
 import defineNotificationDeliver from "./notificationDeliver.job.js";
 import defineNotificationSchedule from "./notificationSchedule.job.js";
 import defineAssignmentDeliver from "./assignmentDeliver.job.js";
+import defineStorageCleanup, {
+  JOB_NAME as STORAGE_CLEANUP_JOB,
+} from "./storageCleanup.job.js";
 import defineLeadFollowupReminders, {
   JOB_NAME as LEAD_FOLLOWUP_JOB,
 } from "./leadFollowupReminders.job.js";
@@ -74,6 +77,7 @@ export const startJobs = async () => {
   defineNotificationDeliver(agenda);
   defineNotificationSchedule(agenda);
   defineAssignmentDeliver(agenda);
+  defineStorageCleanup(agenda);
   defineLeadFollowupReminders(agenda);
   defineGenerateMonthlyFinance(agenda);
   defineGenerateMonthlySalary(agenda);
@@ -107,6 +111,13 @@ export const startJobs = async () => {
   await every("5 0 1 * *", MONTHLY_FINANCE_JOB);
   // Oylik maosh generatsiyasi - har oy 1-sanasi 00:06 da (moliyadan keyin)
   await every("6 0 1 * *", MONTHLY_SALARY_JOB);
+
+  // Saqlagich avto-tozalash - har kuni 02:30 da. Job HAR KUNI yuradi,
+  // lekin ishni sozlamadagi chastota (haftalik/oylik/yarim yillik)
+  // bo'yicha vaqti kelganda bajaradi - chastota o'zgarsa cronni qayta
+  // yozish kerak bo'lmasin. 02:30 - token tozalash (03:00) va AI
+  // hisoblashdan (01:00) tashqarida, tungi eng bo'sh oyna.
+  await every("30 2 * * *", STORAGE_CLEANUP_JOB);
 
   // Tugash sanasi yetgan kurslarni avto-arxivlash - har kuni 00:10 da
   await every("10 0 * * *", AUTO_END_GROUPS_JOB);

@@ -246,7 +246,10 @@ const SendWizard = ({ close, isLoading, setIsLoading }) => {
                   )}
                 </SummaryRow>
               </div>
-              <RecipientCountPreview audience={audience} />
+              <RecipientCountPreview
+                audience={audience}
+                channels={form.channels}
+              />
             </div>
             <div className="space-y-2">
               <p className="text-sm font-medium">Xabar ko'rinishi</p>

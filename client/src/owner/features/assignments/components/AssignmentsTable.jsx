@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Paperclip, Ban, Check, ClipboardList } from "lucide-react";
+import { Paperclip, Ban, Check, ClipboardList, FileX } from "lucide-react";
 import DataTable from "@/shared/components/ui/table/DataTable";
 import EmptyState from "@/shared/components/ui/feedback/EmptyState";
 import { formatDateTimeUz } from "@/shared/utils/formatDate";
@@ -10,18 +10,31 @@ const th = "px-4 py-2.5 text-left text-xs font-medium text-muted-foreground";
 const groupNames = (a) =>
   (a.groups || []).map((g) => g?.name).filter(Boolean).join(", ") || "-";
 
-const FileCell = ({ a }) =>
-  a.file ? (
-    <span className="inline-flex items-center gap-1.5 text-xs">
-      <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="max-w-[160px] truncate">{a.file.originalName}</span>
-      <span className="shrink-0 text-muted-foreground">
-        {formatBytes(a.file.size)}
+// "Fayl yo'q" va "fayl bor edi, tozalashda o'chdi" - IKKI xil holat.
+// Ularni bir xil ko'rsatish o'qituvchini "men fayl yuborgan edim-ku"
+// degan javobsiz savol bilan qoldirardi.
+const FileCell = ({ a }) => {
+  if (a.file) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs">
+        <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="max-w-[160px] truncate">{a.file.originalName}</span>
+        <span className="shrink-0 text-muted-foreground">
+          {formatBytes(a.file.size)}
+        </span>
       </span>
-    </span>
-  ) : (
-    <span className="text-xs text-muted-foreground">Faylsiz</span>
-  );
+    );
+  }
+  if (a.fileRemovedAt) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+        <FileX className="size-3.5 shrink-0" />
+        Fayl o'chirilgan
+      </span>
+    );
+  }
+  return <span className="text-xs text-muted-foreground">Faylsiz</span>;
+};
 
 // Yetkazish xulosasi: yetgan / yetmagan. Yetmaganlar (bloklagan + botga
 // kirmagan + xato) BITTA raqamga yig'iladi - qatorda uch xil hisoblagich

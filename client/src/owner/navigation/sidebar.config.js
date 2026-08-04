@@ -174,6 +174,11 @@ const ownerSidebar = [
         url: "/owner/assignments",
         permission: "assignments.read",
       },
+      {
+        title: "Fayl saqlagich",
+        url: "/owner/storage",
+        permission: "storage.manage",
+      },
       { title: "Feedback", url: "/owner/feedback", permission: "feedback.read" },
     ],
   },

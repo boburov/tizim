@@ -1,5 +1,8 @@
 // Icons
-import { HardDrive } from "lucide-react";
+import { HardDrive, Settings2 } from "lucide-react";
+
+// Router
+import { Link } from "react-router-dom";
 
 // Sidebar
 import {
@@ -11,7 +14,11 @@ import {
 } from "@/shared/components/shadcn/sidebar";
 
 // Hooks
+import usePermissions from "@/shared/hooks/usePermissions";
 import useStorageUsageQuery, { formatBytes } from "@/shared/hooks/useStorageUsage";
+
+// Constants
+import { PERMISSIONS } from "@/shared/constants/permissions";
 
 // Utils
 import { cn } from "@/shared/utils/cn";
@@ -19,6 +26,11 @@ import { cn } from "@/shared/utils/cn";
 // Ogohlantirish bosqichlari. 80% dan keyin rang o'zgaradi: foydalanuvchi
 // joy tugashini FAYL RAD ETILGUNCHA emas, oldindan sezishi kerak.
 const WARN_PERCENT = 80;
+
+// Boshqaruv sahifasi. Kvota ko'rsatkichi shu yerga olib boradi -
+// "joy tugadi" degan xabarni ko'rgan odam DARHOL nima qilishni
+// bilishi kerak.
+const MANAGE_URL = "/owner/storage";
 
 const toneOf = (percent, isFull) => {
   if (isFull) {
@@ -50,7 +62,13 @@ const toneOf = (percent, isFull) => {
  */
 const StorageQuota = () => {
   const { state } = useSidebar();
+  const { has } = usePermissions();
   const { data, isLoading, isError } = useStorageUsageQuery();
+
+  // Boshqaruv sahifasiga havola FAQAT huquqi borlarga. O'qituvchi
+  // raqamni ko'radi, lekin tozalash sahifasiga kira olmaydi - unga
+  // ishlamaydigan havola ko'rsatish yolg'on va'da bo'lardi.
+  const canManage = has(PERMISSIONS.STORAGE_MANAGE);
 
   // Xato bo'lsa jimgina yashiramiz: kvota indikatori yordamchi ma'lumot,
   // uning yiqilishi butun menyuni buzmasligi kerak.
@@ -66,10 +84,17 @@ const StorageQuota = () => {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
+              asChild={canManage}
               tooltip={`Fayl xotirasi: ${label} (${percent}%)`}
               className="h-auto py-2.5"
             >
-              <HardDrive strokeWidth={1.5} className={tone.text} />
+              {canManage ? (
+                <Link to={MANAGE_URL}>
+                  <HardDrive strokeWidth={1.5} className={tone.text} />
+                </Link>
+              ) : (
+                <HardDrive strokeWidth={1.5} className={tone.text} />
+              )}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -77,12 +102,29 @@ const StorageQuota = () => {
     );
   }
 
+  const Wrapper = canManage ? Link : "div";
+  const wrapperProps = canManage
+    ? {
+        to: MANAGE_URL,
+        title: "Fayl saqlagichni boshqarish",
+        className:
+          "block rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-2 transition-colors hover:bg-sidebar-accent",
+      }
+    : {
+        className:
+          "rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-2",
+      };
+
   return (
     <SidebarGroup className="py-0">
-      <div className="rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-2">
+      <Wrapper {...wrapperProps}>
         <div className="flex items-center gap-2">
           <HardDrive size={16} strokeWidth={1.5} className={tone.text} />
           <span className="flex-1 truncate text-xs font-medium">Fayl xotirasi</span>
+          {/* Sozlash belgisi - blok bosiladigan ekanini bildiradi */}
+          {canManage && (
+            <Settings2 size={13} className="shrink-0 text-muted-foreground" />
+          )}
           <span className={cn("text-xs tabular-nums", tone.text)}>{percent}%</span>
         </div>
 
@@ -107,7 +149,7 @@ const StorageQuota = () => {
             {tone.hint}
           </p>
         )}
-      </div>
+      </Wrapper>
     </SidebarGroup>
   );
 };

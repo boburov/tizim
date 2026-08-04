@@ -4576,3 +4576,396 @@ Build toza. Yakuniy tekshiruv — backend testlar:
 <sub>session `39bbfed0` · branch `main` · 52 ta qadam</sub>
 
 ---
+
+## 2026-08-04 04:50 — Tizimda oqtuvchi faqat ozining oquvchilar uchun vaifa yubora olishi ke
+
+**So'rov**
+
+> Tizimda oqtuvchi faqat ozining oquvchilar uchun vaifa yubora olishi kerak va vazifa bot orqali ham platforma orqlai ham borishi kerak bo'ladi va teacher uchun nechta userga borgani va nechtasiga bormagani va botni blocklagan userlar uchun bu userlar botni  blocklagan deb user detailda ham oqtuvchi habar yubormoqchi yoki admin habar yubormoqchi bo'lganda ham
+
+**O'zgargan fayllar (25)**
+
+- `server/src/helpers/botStatus.helper.js` — yaratildi/qayta yozildi
+- `server/src/helpers/userProfile.helper.js` — tahrirlandi
+- `server/src/modules/groups/services/groups.service.js` — tahrirlandi
+- `server/src/modules/notifications/services/notifications.service.js` — tahrirlandi
+- `server/src/modules/assignments/services/assignments.service.js` — tahrirlandi
+- `server/src/modules/assignments/assignments.routes.js` — tahrirlandi
+- `client/src/shared/constants/botStatus.js` — yaratildi/qayta yozildi
+- `client/src/shared/components/userProfile/BotStatusBadge.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/components/userProfile/index.js` — tahrirlandi
+- `client/src/shared/components/userProfile/UserTelegramCard.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/users/pages/UserDetailPage.jsx` — tahrirlandi
+- `client/src/teacher/features/groups/pages/MyStudentDetailPage.jsx` — tahrirlandi
+- `client/src/shared/components/communication/BlockedWarning.jsx` — tahrirlandi
+- `client/src/owner/features/notifications/hooks/useAudiencePreviewQuery.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/notifications/components/RecipientCountPreview.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/notifications/components/SendWizard.jsx` — tahrirlandi
+- `client/src/owner/features/assignments/api/assignments.api.js` — tahrirlandi
+- `client/src/student/features/assignments/hooks/useMyAssignmentsQuery.js` — tahrirlandi
+- `client/src/student/features/assignments/index.js` — tahrirlandi
+- `client/src/student/features/assignments/components/StudentAssignmentsBadge.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/components/layout/SidebarItemBadge.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/components/layout/AppSidebar.jsx` — tahrirlandi
+- `client/src/student/navigation/sidebar.config.js` — tahrirlandi
+- `server/tests/assignmentStorage.test.js` — tahrirlandi
+- `server/src/helpers/actor.helper.js` — yaratildi/qayta yozildi
+
+**Buyruqlar (37)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && ls src/modules/users/handlers/ src/modules/users/services/ && echo "=== getById service ===" && grep -n "export c…
+cd /Users/shukrullo/Desktop/lc-total/client && cat src/owner/features/notifications/components/RecipientCountPreview.jsx && echo "=== student detail pages ===" …
+sed -n 1,120p src/owner/features/users/pages/UserDetailPage.jsx
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "buildUserProfile" -A 60 src/helpers/userProfile.helper.js | head -90
+sed -n 1,45p src/helpers/userProfile.helper.js
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "telegram" src/owner/features/users/ | head -20
+grep -rn "UserTelegramCard" src/ | head -5; echo "==="; find src -name "UserTelegramCard*" -exec cat {} \;
+cat src/owner/features/notifications/hooks/useAudiencePreviewQuery.js; echo "=== TEACHER STUDENT DETAIL ==="; sed -n 1,90p src/teacher/features/groups/pages/MyS…
+sed -n 1,60p src/owner/features/users/components/tabs/UserProfilePanel.jsx; echo "=== SHARED userProfile ==="; ls src/shared/components/userProfile/
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "telegram" src/modules/groups/services/groups.service.js | head -20
+sed -n 200,235p src/modules/groups/services/groups.service.js
+perl -0pi -e 's/(\n activeFreeze: activeFreeze \|\| null,\n telegram,\n)/ activeFreeze: activeFreeze || null,\n telegram,\n botStatus,\n/' src/helpers/userProfi…
+grep -n "^import\|BotUser" src/modules/groups/services/groups.service.js | head -25
+grep -cn "BotUser" src/modules/groups/services/groups.service.js
+grep -n "previewAudience" -A 8 src/modules/notifications/services/notifications.service.js; echo "=== preview handler ==="; cat src/modules/notifications/handle…
+cat > src/modules/assignments/handlers/myUnreadCount.handler.js <<'EOF' import asyncHandler from "../../../middleware/asyncHandler.js"; import * as service from…
+node -e "import('./src/routes/index.js').then(()=>{console.log('ROUTES OK');process.exit(0)}).catch(e=>{console.error(e.message);process.exit(1)})"
+cd /Users/shukrullo/Desktop/lc-total/client && cat src/shared/components/userProfile/index.js
+mkdir -p src/shared/components/communication && git mv src/owner/features/assignments/components/BlockedWarning.jsx src/shared/components/communication/BlockedW…
+python3 - <<'EOF' import re, pathlib p = pathlib.Path("src/owner/features/assignments/components/modals/AssignmentSendModal.jsx") s = p.read_text() s = s.replac…
+grep -n "RecipientCountPreview\|channels" src/owner/features/notifications/components/SendWizard.jsx | head -30
+sed -n 240,275p src/owner/features/notifications/components/SendWizard.jsx
+sed -n 190,215p src/owner/features/notifications/components/SendWizard.jsx
+python3 - <<'PY' import pathlib p = pathlib.Path("src/shared/api/endpoints.js") s = p.read_text() s = s.replace(' my: "/assignments/my",\n', ' my: "/assignments…
+grep -n "formatBotFailReason" -A 20 src/shared/constants/notification.js
+# … yana 12 ta
+```
+
+**Natija**
+
+Yaxshi, to'rtta ish bor. Avval mavjud joylarni ko'rib chiqay.
+
+Endi bot holatini hamma joyda ko'rsatadigan qatlam quraman. Avval server:
+
+Endi guruh a'zolari ro'yxatiga ham bot holatini qo'shaman:
+
+Endi bildirishnoma yuborishdan oldingi ogohlantirish (server tomoni):
+
+Server tayyor. Endi klient — bot holati badge'i (umumiy komponent):
+
+Endi `UserTelegramCard` — bloklangan holatni ko'rsatadigan qilib:
+
+Endi owner user-detail sarlavhasiga va o'qituvchi student-detail sahifasiga badge:
+
+Endi o'qituvchi panelidagi o'quvchi sahifasi:
+
+Endi `BlockedWarning`ni umumiy joyga ko'chirib, bildirishnoma yuborishda ham ishlataman:
+
+Endi bildirishnoma yuborish oynasida ogohlantirish. Avval hook'ni to'liq javob qaytaradigan qilaman:
+
+Endi o'quvchi sidebar'ida o'qilmagan vazifalar nishonini qo'shaman (platforma kanali ko'zga tashlansin):
+
+Endi testni kengaytiraman — bot holati va bildirishnoma ogohlantirishi uchun:
+
+O'qituvchi cheklovida bitta bo'shliq bor — custom rol (roleType `teacher`) tekshiruvdan chetlab o'tardi. Uni yopay:
+
+Endi handlerlar actor'ni uzatsin:
+
+<sub>session `f6cd4171` · branch `main` · 87 ta qadam</sub>
+
+---
+
+## 2026-08-04 05:07 — oquvchilar qarzdorliklar sahifasida telefon raqamlari ham korinishi ke
+
+**So'rov**
+
+> oquvchilar qarzdorliklar sahifasida telefon raqamlari ham korinishi kerak
+
+**O'zgargan fayllar (1)**
+
+- `client/src/owner/features/finance/components/StudentObligationsTable.jsx` — tahrirlandi
+
+**Buyruqlar (9)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rln "Qarzdorlar" src/ | head -10
+grep -n "Qarzdorlar" -B 8 -A 8 src/owner/features/users/pages/StudentsPage.jsx
+grep -rn "qarzdorlar" src/owner/routes/index.jsx | head -5; echo "=== debtors page ==="; grep -rln "QOLDIQ\|Qoldiq\|outstanding" src/owner/features/finance/ | h…
+cd /Users/shukrullo/Desktop/lc-total/server/src && grep -n "export const obligations" -A 60 modules/finance/services/studentPayment.service.js | head -70
+grep -n "safeStudentProjection" -A 8 modules/finance/services/studentPayment.service.js | head -12
+cd /Users/shukrullo/Desktop/lc-total/client && cat src/shared/utils/formatPhone.js 2>/dev/null || find src/shared/utils -name "*hone*"; echo "=== tel: link namu…
+grep -rn "formatPhone" src/owner --include="*.jsx" | head -5; echo "=== qanday korsatiladi ==="; grep -rn "formatPhone" -A 3 -B 3 src/owner/features/leads/compo…
+grep -rn "StudentObligationsTable" src/owner --include="*.jsx" | grep -v "components/StudentObligationsTable" | head
+npx eslint src/owner/features/finance/components/StudentObligationsTable.jsx && echo "LINT TOZA"; npm run build 2>&1 | tail -8
+```
+
+**Natija**
+
+Backend qarzdorlar ro'yxati telefon qaytaradimi — tekshiray:
+
+Naqsh aniq. Telefon ustunini qo'shaman:
+
+<sub>session `39bbfed0` · branch `main` · 13 ta qadam</sub>
+
+---
+
+## 2026-08-04 05:12 — hozirda ai ishlatilimayotgan ekan AI tahlili degan narsani tizim tahli
+
+**So'rov**
+
+> hozirda ai ishlatilimayotgan ekan AI tahlili degan narsani tizim tahliliga ozgatrishimiz kerak bo'ladi
+
+**O'zgargan fayllar (1)**
+
+- `client/src/shared/components/ai/AiDomainPanel.jsx` — tahrirlandi
+
+**Buyruqlar (11)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "AI tahlili\|tizim tahlili" src/ | head -20
+sed -n '100,175p' src/shared/components/ai/AiDomainPanel.jsx
+sed -n '50,70p' src/owner/features/groups/pages/GroupsPage.jsx
+find src -name "AiDomainInsights*"; echo "---"; cat src/shared/components/ai/AiDomainInsights.jsx 2>/dev/null || grep -rn "AiDomainInsights" src/shared/componen…
+cat src/owner/features/ai/components/AiDomainInsights.jsx; echo "=== AiDailySummary ==="; sed -n '40,58p' src/owner/features/ai/components/dashboard/AiDailySumm…
+grep -n "^import\|Sparkles\|Activity" src/shared/components/ai/AiDomainPanel.jsx | head -10
+python3 - <<'PY' import re edits = [ ("src/owner/features/attendance/pages/AttendancePage.jsx", ['<AiDomainInsights domain="attendance" title="Davomat bo\'yicha…
+python3 - <<'PY' # 1) Izohlardagi "AI tahlili" ham matnga mos bo'lsin. comment_edits = [ ("src/owner/features/users/pages/StudentsPage.jsx", "{/* AI tahlili - F…
+grep -n "Activity" src/owner/features/groups/pages/GroupsPage.jsx; echo "--- izoh tekshiruvi ---"; sed -n '44,66p' src/owner/features/groups/pages/GroupsPage.js…
+python3 - <<'PY' p = "src/owner/features/groups/pages/GroupsPage.jsx" s = open(p).read() # Endi ishlatilmaydigan import. s = s.replace('import { Activity } from…
+npx eslint src/shared/components/ai/AiDomainPanel.jsx src/owner/features/groups/pages/GroupsPage.jsx src/owner/features/users/pages/StudentsPage.jsx src/owner/f…
+```
+
+**Natija**
+
+Aniq — "Guruhlar" allaqachon "tizim tahlili" deydi, qolganlari "AI tahlili". Manbani topay:
+
+Barchasini bir xil qilaman — standart sarlavha va neytral ikonka:
+
+Endi barcha sahifa sarlavhalari:
+
+<sub>session `39bbfed0` · branch `main` · 13 ta qadam</sub>
+
+---
+
+## 2026-08-04 05:13 — ok storagega saqlanayotgan har bir KB hisobga olinishi kerak agar limi
+
+**So'rov**
+
+> ok storagega saqlanayotgan har bir KB hisobga olinishi kerak agar limitdan oshib ketsa vazifa yuklay olmasligi lozim  meimcha ushbu muammo allqachon oldi olindi ?
+
+**O'zgargan fayllar (4)**
+
+- `server/src/models/storageUsage.model.js` — yaratildi/qayta yozildi
+- `server/src/modules/storage/services/storage.service.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/index.js` — tahrirlandi
+- `server/tests/assignmentStorage.test.js` — tahrirlandi
+
+**Buyruqlar (9)**
+
+```sh
+grep -rn "invalidateUsage\|assertQuota" src/ | grep -v "storage.service.js"
+cd /Users/shukrullo/Desktop/lc-total/server && grep -rn "invalidateUsage\|assertQuota" src/ | grep -v "storage.service.js"
+sed -n 45,70p src/index.js
+node tests/assignmentStorage.test.js > /tmp/asg6.log 2>&1; echo "EXIT: $?"; sed -n '/2. Markaz kvotasi/,/3. Yuborishdan/p' /tmp/asg6.log; grep -E "Natija|✗" /tm…
+node tests/assignmentStorage.test.js > /tmp/asg7.log 2>&1; echo "EXIT: $?"; sed -n '/2b\. PARALLEL/,/3. Yuborishdan/p' /tmp/asg7.log; grep -E "Natija|✗" /tmp/as…
+mkdir -p /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f6cd4171-ec6d-4e99-824d-7331e4c54766/scratchpad && cat > /private/tmp/claude-501/-Users-shukr…
+cp /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f6cd4171-ec6d-4e99-824d-7331e4c54766/scratchpad/oldRace.mjs /Users/shukrullo/Desktop/lc-total/serve…
+node -e "import('./src/routes/index.js').then(()=>console.log('ROUTES OK')).catch(e=>{console.error(e.message);process.exit(1)})" && node tests/assignmentStorag…
+cd /Users/shukrullo/Desktop/lc-total/client && npx eslint src/owner/features/assignments src/student/features/assignments src/shared/components/layout src/share…
+```
+
+**Natija**
+
+Yaxshi savol — asosiy holat qopqilangan, lekin **bitta teshik bor** va uni ko'rsatib, yopib beray. Avval mavjud kodga qarayman:
+
+Muammoni topdim — ikkita joyda bayt "sirg'alib" chiqishi mumkin. Tuzatay:
+
+Endi server ishga tushganda hisoblagichni haqiqat bilan tekislash:
+
+Endi poygani (race) haqiqiy test bilan qulflayman:
+
+Bitta optimizatsiya — `getUsage` har chaqiruvda ortiqcha agregatsiya qilmasin:
+
+Eski xulqni ham tekshirib ko'ray — da'voim aniq bo'lsin:
+
+<sub>session `f6cd4171` · branch `main` · 17 ta qadam</sub>
+
+---
+
+## 2026-08-04 05:20 — shu iconi alamshtring shu systemdagini yoqmayapti monitor icon ishlati
+
+**So'rov**
+
+> shu iconi alamshtring shu systemdagini yoqmayapti monitor icon ishlating orniga
+
+**O'zgargan fayllar (1)**
+
+- `client/src/shared/components/ai/AiDomainPanel.jsx` — tahrirlandi
+
+**Buyruqlar (3)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && node -e " const l = require('lucide-react'); console.log(['Monitor','MonitorCheck','MonitorDot','MonitorCog'].map…
+grep -rn "Activity" src/owner/features/groups/pages/GroupsPage.jsx src/shared/components/ai/AiDomainPanel.jsx; echo "--- qolgan icon proplar ---"; grep -rn "ico…
+npx eslint src/shared/components/ai/AiDomainPanel.jsx && echo "LINT TOZA"; npm run build 2>&1 | tail -4
+```
+
+<sub>session `39bbfed0` · branch `main` · 5 ta qadam</sub>
+
+---
+
+## 2026-08-04 05:19 — lidlar qismida telfon raqamni ustiga bosganimizda tel qilishga avtomat
+
+**So'rov**
+
+> lidlar qismida telfon raqamni ustiga bosganimizda tel qilishga avtomatik olib otib ketishimiz kerak va oquvchini guruhga qabul qilayitganda login parolni bir yola berib guruhga qoshib ketishni ham shu yerda halq ilib keta olsa yaxhsi va guruhni ham yaratish buttoni bo'lsa select ichida + yaratish bo'lishi kerak yani bu yangi kelgan sotuvlar uchun alohida guruh ochishga moljallangan bo'ladi va koplab leadlarni bir martatni ozid aguruh ochib osha guruhga qabul qila olishimiz ham kerak login paroolni esa osonroq generate qilib berihsimiz kerak bo'ladi
+
+**O'zgargan fayllar (13)**
+
+- `server/src/modules/leads/services/leads.service.js` — tahrirlandi
+- `server/src/modules/leads/validators/leads.validators.js` — tahrirlandi
+- `server/src/modules/leads/handlers/convertBulk.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/leads/leads.routes.js` — tahrirlandi
+- `client/src/shared/utils/credentials.js` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/shared/api/endpoints.js` — tahrirlandi
+- `client/src/owner/features/leads/api/leads.api.js` — tahrirlandi
+- `client/src/owner/features/leads/hooks/useLeadMutations.js` — tahrirlandi
+- `client/src/owner/features/leads/components/LeadConvertModal.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/leads/components/LeadBulkConvertModal.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/shared/constants/modals.js` — tahrirlandi
+- `client/src/owner/features/leads/components/LeadsTable.jsx` — tahrirlandi
+- `client/src/owner/features/leads/pages/LeadsListPage.jsx` — tahrirlandi
+
+**Buyruqlar (46)**
+
+```sh
+find /Users/shukrullo/Desktop/lc-total/client/src/owner/features/leads -type f | head -50
+find /Users/shukrullo/Desktop/lc-total/server/src/modules/leads -type f | head -50
+grep -rn "Bu filialga foydalanuvchi biriktira olmaysiz" server/src | head -5; echo "---GROUPS SERVER---"; find server/src/modules/groups -type f | head -40
+find client/src/owner/features/groups -type f | head -40; echo "---DataTable selection---"; grep -n "select\|checkbox\|Checkbox" client/src/shared/components/ui…
+grep -rn "generatePassword\|generateUsername\|randomPassword\|suggestUsername\|transliterate" client/src server/src | head -20
+sed -n '1,120p' server/src/modules/groups/handlers/addStudentsBulk.handler.js && echo "===VALIDATOR===" && cat server/src/modules/groups/validators/addStudentsB…
+grep -n "registerUser" -A 80 server/src/modules/auth/services/auth.service.js | head -130
+grep -rn "registerUser" server/src | head -20; echo "===branchContext helper==="; grep -n "export const" server/src/helpers/branchContext.helper.js
+sed -n '1,25p' server/src/modules/auth/handlers/registerUser.handler.js; echo "===DataTable==="; sed -n '1,80p' client/src/shared/components/ui/table/DataTable.…
+ls client/src/shared/components/shadcn/ | head -40; echo "===formatPhone==="; cat client/src/shared/utils/formatPhone.js; echo "===leads endpoints==="; grep -n …
+cat client/src/owner/features/leads/hooks/useLeadMutations.js; echo "===API==="; cat client/src/owner/features/leads/api/leads.api.js; echo "===ROUTES==="; cat …
+grep -rln "checkbox\|Checkbox" client/src/shared/components client/src/owner | head -10; echo "===GROUPS LIST HOOK==="; cat client/src/owner/features/groups/hoo…
+grep -n "export const addStudentsBulk" -A 90 server/src/modules/groups/services/groups.service.js | head -120
+cat client/src/owner/features/expenseApprovals/components/ApprovalCheckbox.jsx 2>/dev/null | head -60; echo "=== import preview checkbox ==="; grep -n "checkbox…
+grep -n "LEAD_" client/src/shared/constants/modals.js; echo "=== keys leads ==="; grep -n "leads" -A 8 client/src/shared/lib/query/keys.js | head -20
+grep -n "GROUPS_\|USERS_CREATE" client/src/shared/constants/permissions.js | head; echo "===useModal==="; cat client/src/shared/hooks/useModal.js; echo "===Moda…
+sed -n '1,120p' client/src/shared/components/ui/input/InputField.jsx
+cat server/src/modules/groups/validators/list.validator.js; echo "=== GroupsListPage usage ==="; grep -n "useGroupsListQuery(" -A 12 client/src/owner/features/g…
+cat client/src/owner/features/leads/index.js; echo "=== clipboard ==="; grep -rn "navigator.clipboard" client/src --include=*.js --include=*.jsx | head -5; echo…
+grep -rn "navigator.clipboard" client/src | head -5
+sed -n '25,55p' client/src/owner/features/users/components/UserPasswordModal.jsx
+grep -n "^import" server/src/modules/groups/services/groups.service.js | head -30
+grep -n "branchId\|isDeleted\|name:\|startDate" server/src/models/group.model.js | head -20
+grep -n "replace(/\[" client/src/shared/utils/credentials.js | cat -A | head -5
+node -e " const s=require('fs').readFileSync('client/src/shared/utils/credentials.js','utf8'); const line=s.split('\n').find(l=>l.includes('normalize')===false&…
+# … yana 21 ta
+```
+
+**Natija**
+
+I'll explore the leads feature to understand the current implementation before planning.
+
+Now I have the full picture. Let me start with the server — including a real bug I found: lead conversion currently **always** fails with the 403 in your screenshot.
+
+Now the convert service rewrite:
+
+Now the validators, handler, and route:
+
+Now the client. First the credential generator utility:
+
+Now the API layer — endpoints, api, and mutation hook:
+
+Good — keys and `toast.warning` are both valid. Now the single-lead convert modal with credential generation and the group select:
+
+Now the bulk convert modal — the core of the "many leads at once" flow:
+
+Now the mobile card view and the `Phone` icon import:
+
+Now wire it up in `LeadsListPage` — selection state, the bulk action bar, and the modal mount:
+
+Now let me lint both sides:
+
+Good. Now the `maxLength` guard on the credential inputs:
+
+Two selection-lifecycle fixes — clear on successful conversion, and on page change:
+
+<sub>session `d1f63c3d` · branch `main` · 96 ta qadam</sub>
+
+---
+
+## 2026-08-04 05:31 — va admin uchun storageni manage qilishni ham topshiramiz shu sidebarda
+
+**So'rov**
+
+> va admin uchun storageni manage qilishni ham topshiramiz shu sidebardagi storageni ustiga bosganda sozlab qoysa ham bo'ladi misol full clean up qilib yuborish yoki har 1haftada eskirgan fayylarni ochirish yoki 6oyda bir yoki har oy da bir storageni clean up qilaolishi kerak va hsu orqali storageni boshqara olishi lozim
+
+**O'zgargan fayllar (15)**
+
+- `server/src/models/storageSettings.model.js` — yaratildi/qayta yozildi
+- `server/src/modules/storage/services/storageAdmin.service.js` — yaratildi/qayta yozildi
+- `server/src/models/assignment.model.js` — tahrirlandi
+- `server/src/modules/storage/validators/storage.validator.js` — yaratildi/qayta yozildi
+- `server/src/modules/storage/storage.routes.js` — yaratildi/qayta yozildi
+- `server/src/jobs/storageCleanup.job.js` — yaratildi/qayta yozildi
+- `server/src/jobs/index.js` — tahrirlandi
+- `client/src/owner/features/storage/hooks/useStorageAdmin.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/storage/components/CleanupPolicyCard.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/storage/components/modals/StorageCleanupModal.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/storage/components/StoredFilesTable.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/storage/components/modals/StoredFileDeleteModal.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/storage/pages/StorageAdminPage.jsx` — yaratildi/qayta yozildi
+- `server/src/modules/assignments/services/assignments.service.js` — tahrirlandi
+- `server/tests/assignmentStorage.test.js` — tahrirlandi
+
+**Buyruqlar (17)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && find src/modules/attendanceSettings -type f | head -20 && echo "=== MODEL ===" && cat src/models/attendanceSettin…
+cat src/modules/attendanceSettings/services/attendanceSettings.service.js | head -50; echo "=== ROUTES ==="; cat src/modules/attendanceSettings/attendanceSettin…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/constants/permissions.js") s = p.read_text() a = """ ASSIGNMENTS_READ: "assignments.read", ASSIGNMENTS_SEN…
+cat > src/modules/storage/handlers/getSettings.handler.js <<'EOF' import asyncHandler from "../../../middleware/asyncHandler.js"; import * as admin from "../ser…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/jobs/index.js") s = p.read_text() s = s.replace( 'import defineAssignmentDeliver from "./assignmentDeliver…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/seeds/permissions.seed.js") s = p.read_text() # Direktorga saqlagichni boshqarish BERILMAYDI - u markaznin…
+node -e "import('./src/routes/index.js').then(()=>{console.log('ROUTES OK');process.exit(0)}).catch(e=>{console.error(e.message);process.exit(1)})"; node -e "im…
+cd /Users/shukrullo/Desktop/lc-total/client && python3 - <<'PY' import pathlib p = pathlib.Path("src/shared/api/endpoints.js") s = p.read_text() a = """ storage…
+mkdir -p src/owner/features/storage/{api,hooks,components/modals,pages} && cat > src/owner/features/storage/api/storage.api.js <<'EOF' // API import http from "…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/owner/features/storage/pages/StorageAdminPage.jsx") s = p.read_text() s = s.replace('import { HardDrive, T…
+python3 - <<'PY' import pathlib # --- Owner routes --- p = pathlib.Path("src/owner/routes/index.jsx") s = p.read_text() a = """import { AssignmentsListPage, Ass…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/shared/components/layout/StorageQuota.jsx") s = p.read_text() s = s.replace('''// Icons import { HardDrive…
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "select: {" -A 12 src/modules/assignments/services/assignments.service.js | head -20
+cd /Users/shukrullo/Desktop/lc-total/client && python3 - <<'PY' import pathlib # 1) Ro'yxat jadvali p = pathlib.Path("src/owner/features/assignments/components/…
+cd /Users/shukrullo/Desktop/lc-total/server && node tests/assignmentStorage.test.js > /tmp/final2.log 2>&1; echo "EXIT: $?"; sed -n '/11. Admin tozalash/,$p' /t…
+node tests/assignmentStorage.test.js > /tmp/final3.log 2>&1; echo "EXIT: $?"; sed -n '/11. Admin tozalash/,$p' /tmp/final3.log | head -40
+cd /Users/shukrullo/Desktop/lc-total/client && npx eslint src/owner/features/storage src/owner/features/assignments src/student/features/assignments src/shared/…
+```
+
+**Natija**
+
+Yaxshi — storage'ni boshqarish paneli. Avval mavjud "settings" naqshini ko'ray:
+
+Endi tozalash servisi:
+
+Endi handlerlar, validator va router:
+
+Endi Agenda job:
+
+Server tayyor. Endi klient — boshqaruv sahifasi:
+
+Endi asosiy sahifa:
+
+Endi marshrut, sidebar va bosiladigan widget:
+
+Endi sidebar kvota widget'ini bosiladigan qilaman:
+
+Endi testni kengaytirib, hammasini tekshiraman:
+
+<sub>session `f6cd4171` · branch `main` · 38 ta qadam</sub>
+
+---

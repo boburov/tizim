@@ -50,12 +50,12 @@ const FinanceReportPage = () => {
         />
       </header>
 
-      {/* AI tahlili KPI kartalardan OLDIN: daromad bashorati, xarajat
+      {/* Tizim tahlili KPI kartalardan OLDIN: daromad bashorati, xarajat
           anomaliyasi va pul oqimi ogohlantirishi raqamlarni QANDAY
           o'qishni aytadi. Ularni sahifa oxiriga qo'yish "grafikdan keyin
           AI izohi" qoidasini rasman bajarardi, lekin owner pastgacha
           aylantirmasa hech qachon ko'rmasdi. */}
-      <AiDomainInsights domain="finance" title="Moliya bo'yicha AI tahlili" />
+      <AiDomainInsights domain="finance" title="Moliya bo'yicha tizim tahlili" />
 
       {/* KPI kartalar */}
       {summaryLoading ? (

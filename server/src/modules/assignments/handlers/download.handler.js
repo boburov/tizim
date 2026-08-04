@@ -1,4 +1,5 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
+import { actorOf } from "../../../helpers/actor.helper.js";
 import * as service from "../services/assignments.service.js";
 import * as storageService from "../../storage/services/storage.service.js";
 
@@ -13,7 +14,7 @@ const contentDisposition = (name) => {
 const download = asyncHandler(async (req, res) => {
   const file = await service.getDownloadable(
     req.params.id,
-    req.user,
+    actorOf(req),
     req.permissions,
   );
   const buffer = await storageService.readFile(file);

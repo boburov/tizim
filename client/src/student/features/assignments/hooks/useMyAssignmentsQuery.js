@@ -14,6 +14,22 @@ export const useMyAssignmentsQuery = (params, options = {}) =>
   });
 
 /**
+ * O'qilmagan vazifalar soni (sidebar nishoni).
+ *
+ * PLATFORMA kanali BOTDAN mustaqil: botni bloklagan o'quvchi vazifani
+ * faqat shu yerda ko'radi, shuning uchun nishon uni ilovaga qaytaradi.
+ * 60 soniyalik yangilanish yetarli - vazifa har soniyada kelmaydi.
+ */
+export const useMyAssignmentsUnreadCountQuery = (options = {}) =>
+  useQuery({
+    queryKey: qk.assignments.myUnreadCount(),
+    queryFn: () => assignmentsAPI.myUnreadCount().then((r) => r.data.data?.count ?? 0),
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000,
+    ...options,
+  });
+
+/**
  * Vazifa ochilganda "o'qildi" deb belgilash.
  *
  * Bu botdan MUSTAQIL: botni bloklagan o'quvchi vazifani faqat shu yerda

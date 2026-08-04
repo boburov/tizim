@@ -2,7 +2,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 
 // Icons
-import { Activity } from "lucide-react";
 
 // Components
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
@@ -46,19 +45,17 @@ const GroupsPage = () => {
           sahifaning yarmida osilib qolardi - qolgan yarmi bo'sh. Panel o'zi
           bo'sh holatda `null` qaytargani uchun ustun ham to'ldirilmasdi.
 
-          Sarlavhada "AI" YO'Q: bu paneldagi guruh/kurs xulosalari qoida va
-          statistikadan chiqadi (to'ldirilish foizi, bo'sh dars vaqtlari), til
-          modelidan emas. Ikonka ham shunga qarab neytral (Activity). */}
+          Sarlavha "tizim tahlili": xulosalar qoida va statistikadan chiqadi
+          (to'ldirilish foizi, bo'sh dars vaqtlari), til modelidan emas.
+          Bu endi BARCHA modullarda bir xil - AiDomainPanel'dagi standart. */}
       {isList && (
         <div className="grid gap-3">
           <AiDomainInsights
             domain="groups"
-            icon={Activity}
             title="Guruhlar bo'yicha tizim tahlili"
           />
           <AiDomainInsights
             domain="courses"
-            icon={Activity}
             title="Kurslar bo'yicha tizim tahlili"
           />
         </div>

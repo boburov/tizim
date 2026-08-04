@@ -41,5 +41,6 @@ export const assignmentsAPI = {
 
   // O'quvchi yuzasi
   my: (params) => http.get(ENDPOINTS.assignments.my, { params }),
+  myUnreadCount: () => http.get(ENDPOINTS.assignments.myUnreadCount),
   markRead: (id) => http.post(ENDPOINTS.assignments.markRead(id)),
 };

@@ -1,13 +1,17 @@
 import Lead from "../../../models/lead.model.js";
 import LeadOption from "../../../models/leadOption.model.js";
+import Group from "../../../models/group.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { normalizePhone } from "../../../utils/phone.js";
 import {
   branchFilter,
   resolveBranchForWrite,
+  getAllowedBranchIds,
+  canSeeAllBranches,
 } from "../../../helpers/branchContext.helper.js";
 import { LEAD_PIPELINE } from "../../../constants/leadStatus.js";
 import * as authService from "../../auth/services/auth.service.js";
+import * as groupsService from "../../groups/services/groups.service.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const POPULATE = [
@@ -172,26 +176,53 @@ export const remove = async (id) => {
   return { _id: id };
 };
 
-// Lidni o'quvchiga aylantirish: o'quvchi yaratiladi + lid bog'lanadi
-export const convert = async (id, body, currentUser) => {
-  // FILIAL: boshqa filial lidini aylantirib bo'lmaydi.
-  const lead = await Lead.findOne({ _id: id, ...branchFilter() });
-  if (!lead) throw new ApiError(404, "Lid topilmadi");
-  if (lead.studentId) {
-    throw new ApiError(409, "Bu lid allaqachon o'quvchiga aylantirilgan");
-  }
+// Lidni aylantirishda ochiladigan o'quvchi HAM shu so'rov ko'lamida
+// yaratiladi. Bu ko'lam berilmasa registerUser ichidagi
+// assertCanAssignBranch() hech qanday ruxsat etilgan filial ko'rmaydi va
+// aylantirish HAR DOIM 403 ("Bu filialga foydalanuvchi biriktira olmaysiz")
+// bilan tugardi.
+const registerScope = (currentUser) => ({
+  allowedBranchIds: getAllowedBranchIds(),
+  canSeeAllBranches: canSeeAllBranches(),
+  userId: currentUser?._id || null,
+});
 
+// Guruh mavjudmi va so'rov ko'lamidami. Aylantirishdan OLDIN tekshiriladi:
+// o'quvchi yaratilib bo'lgach xato chiqsa uni orqaga qaytarib bo'lmaydi.
+const ensureGroupInScope = async (groupId, leadBranchId) => {
+  if (!groupId) return null;
+  const group = await Group.findOne({
+    _id: groupId,
+    isDeleted: { $ne: true },
+    ...branchFilter(),
+  });
+  if (!group) throw new ApiError(404, "Guruh topilmadi");
+  if (leadBranchId && String(group.branchId) !== String(leadBranchId)) {
+    throw new ApiError(400, "Guruh lid filialiga tegishli emas");
+  }
+  return group;
+};
+
+// Bitta lidni o'quvchiga aylantirish + (ixtiyoriy) guruhga qo'shish.
+//
+// Guruhga qo'shish XATOSI aylantirishni bekor QILMAYDI: o'quvchi allaqachon
+// yaratilgan va tranzaksiya yo'q. Xato `groupError` sifatida qaytariladi -
+// klient ogohlantirish ko'rsatadi, operator guruhga qo'lda qo'shadi.
+const convertOne = async (lead, body, currentUser, groupId) => {
   // FILIAL: yaratilayotgan o'quvchi LID FILIALIGA biriktiriladi.
   //
   // Bu bo'lmasa o'quvchi filialsiz qolardi - va userBranchCondition()
   // qoidasi bo'yicha filialsiz foydalanuvchi FAQAT view_all egalariga
   // ko'rinadi, ya'ni lidni aylantirgan direktor o'zi yaratgan o'quvchini
   // ro'yxatda ko'rmay qolardi.
-  const student = await authService.registerUser({
-    ...body,
-    role: "student",
-    homeBranchId: lead.branchId,
-  });
+  const student = await authService.registerUser(
+    {
+      ...body,
+      role: "student",
+      homeBranchId: lead.branchId,
+    },
+    registerScope(currentUser),
+  );
 
   lead.studentId = student._id;
   if (lead.status !== "enrolled") {
@@ -203,7 +234,103 @@ export const convert = async (id, body, currentUser) => {
     });
   }
   await lead.save();
-  return { lead: await getById(lead._id), student };
+
+  let groupError = null;
+  if (groupId) {
+    try {
+      // `joinedAt` berilmaydi: addStudent guruh boshlangan sana bilan
+      // o'quvchi ro'yxatga olingan sanadan kechrog'ini oladi - yangi
+      // o'quvchida bu har doim to'g'ri va tekshiruvlardan o'tadi.
+      await groupsService.addStudent(groupId, student._id);
+    } catch (err) {
+      groupError = err?.message || "Guruhga qo'shib bo'lmadi";
+    }
+  }
+
+  return { student, groupError };
+};
+
+// Lidni o'quvchiga aylantirish: o'quvchi yaratiladi + lid bog'lanadi
+export const convert = async (id, body, currentUser) => {
+  // FILIAL: boshqa filial lidini aylantirib bo'lmaydi.
+  const lead = await Lead.findOne({ _id: id, ...branchFilter() });
+  if (!lead) throw new ApiError(404, "Lid topilmadi");
+  if (lead.studentId) {
+    throw new ApiError(409, "Bu lid allaqachon o'quvchiga aylantirilgan");
+  }
+
+  await ensureGroupInScope(body.groupId, lead.branchId);
+
+  const { student, groupError } = await convertOne(
+    lead,
+    body,
+    currentUser,
+    body.groupId,
+  );
+  return { lead: await getById(lead._id), student, groupError };
+};
+
+// KO'P LIDNI BIR MARTADA aylantirish (yangi sotuvlar oqimi).
+//
+// Har lid ALOHIDA ishlanadi: bittasi yiqilsa (login band, telefon
+// takrorlangan, ...) qolganlari baribir o'tadi. Natijada har lid uchun
+// javob qaytadi - operator kimga login berilganini ko'radi.
+export const convertBulk = async ({ leads = [], groupId }, currentUser) => {
+  if (!leads.length) throw new ApiError(400, "Lid tanlanmagan");
+
+  const ids = leads.map((l) => l.id);
+  if (new Set(ids.map(String)).size !== ids.length) {
+    throw new ApiError(400, "Ro'yxatda takrorlangan lid bor");
+  }
+  const usernames = leads.map((l) => String(l.username).toLowerCase().trim());
+  if (new Set(usernames).size !== usernames.length) {
+    throw new ApiError(400, "Ro'yxatda bir xil login ikki marta ishlatilgan");
+  }
+
+  const converted = [];
+  const failed = [];
+
+  for (const item of leads) {
+    const { id, ...body } = item;
+    try {
+      const lead = await Lead.findOne({ _id: id, ...branchFilter() });
+      if (!lead) throw new ApiError(404, "Lid topilmadi");
+      if (lead.studentId) {
+        throw new ApiError(409, "Bu lid allaqachon o'quvchiga aylantirilgan");
+      }
+
+      // Guruh HAR LID uchun tekshiriladi: tanlovga turli filial lidlari
+      // tushishi mumkin, va boshqa filial o'quvchisini bu guruhga qo'shib
+      // bo'lmaydi.
+      if (groupId) await ensureGroupInScope(groupId, lead.branchId);
+
+      const { student, groupError } = await convertOne(
+        lead,
+        body,
+        currentUser,
+        groupId,
+      );
+      converted.push({
+        leadId: String(lead._id),
+        studentId: String(student._id),
+        firstName: student.firstName,
+        lastName: student.lastName,
+        username: student.username,
+        // Parol operatorga qaytariladi - u o'quvchiga aytishi kerak.
+        password: body.password,
+        addedToGroup: Boolean(groupId) && !groupError,
+        groupError,
+      });
+    } catch (err) {
+      failed.push({
+        leadId: String(id),
+        name: `${item.firstName || ""} ${item.lastName || ""}`.trim(),
+        message: err?.message || "Aylantirib bo'lmadi",
+      });
+    }
+  }
+
+  return { converted, failed, groupId: groupId || null };
 };
 
 // Statistika: voronka, manba/yo'nalish samaradorligi, drop-off

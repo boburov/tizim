@@ -55,6 +55,12 @@ export const PERMISSIONS = Object.freeze({
   ASSIGNMENTS_READ: "assignments.read",
   ASSIGNMENTS_SEND: "assignments.send",
 
+  // Fayl saqlagichni BOSHQARISH: tozalash siyosati, qo'lda tozalash,
+  // begona faylni o'chirish. ASSIGNMENTS_* dan ATAYLAB ajratilgan -
+  // vazifa yuborish huquqi bor o'qituvchi butun markazning fayllarini
+  // o'chirib yuborish huquqini OLMASLIGI kerak.
+  STORAGE_MANAGE: "storage.manage",
+
   // Admin dashboard + audit (Bo'lak 9)
   ADMIN_DASHBOARD_READ: "admin_dashboard.read",
   ACTIVITY_LOGS_READ: "activity_logs.read",
@@ -203,6 +209,10 @@ export const PERMISSION_LABELS = {
     label: "Vazifa yuborish",
     group: "assignments",
   },
+  [PERMISSIONS.STORAGE_MANAGE]: {
+    label: "Fayl saqlagichni boshqarish",
+    group: "storage",
+  },
 
   [PERMISSIONS.ADMIN_DASHBOARD_READ]: {
     label: "Boshqaruv panelini ko'rish",
@@ -325,6 +335,7 @@ export const MODULE_META = {
   salary: { label: "Maoshlar", order: 130 },
   approvals: { label: "Tasdiqlar", order: 135 },
   assignments: { label: "Vazifalar", order: 138 },
+  storage: { label: "Fayl saqlagich", order: 139 },
   notifications: { label: "Bildirishnomalar", order: 140 },
   notification_templates: { label: "Bildirishnoma shablonlari", order: 150 },
   holidays: { label: "Bayramlar", order: 160 },

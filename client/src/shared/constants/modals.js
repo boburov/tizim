@@ -45,6 +45,7 @@ export const MODAL = Object.freeze({
   LEAD_EDIT: "lead:edit",
   LEAD_DELETE: "lead:delete",
   LEAD_CONVERT: "lead:convert",
+  LEAD_BULK_CONVERT: "lead:bulkConvert",
   LEAD_REMINDER: "lead:reminder",
   LEAD_OPTION_CREATE: "leadOption:create",
   LEAD_OPTION_EDIT: "leadOption:edit",
@@ -84,6 +85,10 @@ export const MODAL = Object.freeze({
   // Vazifalar (matn + fayl)
   ASSIGNMENT_SEND: "assignment:send",
   ASSIGNMENT_DELETE: "assignment:delete",
+
+  // Fayl saqlagich boshqaruvi
+  STORAGE_CLEANUP: "storage:cleanup",
+  STORAGE_FILE_DELETE: "storage:fileDelete",
 
   // Roles & access (custom rollar)
   ROLE_CREATE: "role:create",

@@ -32,12 +32,20 @@ const Row = ({ icon: Icon, tone, title, students }) => (
 /**
  * BOTNI BLOKLAGANLAR OGOHLANTIRISHI.
  *
- * Yuborishdan OLDIN ko'rsatiladi - keyin emas. Sabab: fayl bir marta
- * ketgach o'qituvchi kimga yetmaganini bilib olsa ham, qayta yuborishdan
- * boshqa chorasi qolmaydi. Oldindan bilsa, darsda aytib qo'yishi mumkin.
+ * Vazifa yuborish va bildirishnoma yuborish - ikkalasi ham SHU
+ * komponentdan foydalanadi: yuboruvchi uchun savol bir xil ("kimga
+ * yetmaydi?"), demak javob ham bir xil ko'rinishda bo'lishi kerak.
+ *
+ * Yuborishdan OLDIN ko'rsatiladi - keyin emas. Sabab: xabar bir marta
+ * ketgach yuboruvchi kimga yetmaganini bilib olsa ham, qayta yuborishdan
+ * boshqa chorasi qolmaydi. Oldindan bilsa, qo'ng'iroq qila oladi.
+ *
+ * `preview` - server javobi: { blocked, noBot, blockedStudents[], noBotStudents[] }.
+ * `channelActive=false` bo'lsa (Telegram kanali tanlanmagan) ogohlantirish
+ * chiqmaydi: bot holati o'sha holatda hech narsani o'zgartirmaydi.
  */
-const BlockedWarning = ({ preview, className = "" }) => {
-  if (!preview) return null;
+const BlockedWarning = ({ preview, channelActive = true, className = "" }) => {
+  if (!preview || !channelActive) return null;
 
   const { blocked = 0, noBot = 0, blockedStudents = [], noBotStudents = [] } =
     preview;
@@ -50,7 +58,7 @@ const BlockedWarning = ({ preview, className = "" }) => {
         <Row
           icon={Ban}
           tone="border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
-          title={`${blocked} ta o'quvchi botni bloklagan - ularga yetib bormaydi`}
+          title={`${blocked} ta foydalanuvchi botni bloklagan - ularga yetib bormaydi`}
           students={blockedStudents}
         />
       )}
@@ -58,7 +66,7 @@ const BlockedWarning = ({ preview, className = "" }) => {
         <Row
           icon={UserX}
           tone="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-          title={`${noBot} ta o'quvchi botga kirmagan - ularga yetib bormaydi`}
+          title={`${noBot} ta foydalanuvchi botga kirmagan - ularga yetib bormaydi`}
           students={noBotStudents}
         />
       )}

@@ -14,6 +14,12 @@
  *   5. Preview yuborishdan OLDIN bloklaganlar sonini to'g'ri qaytaradi.
  *   6. O'qituvchi O'ZGA guruhga vazifa yubora olmaydi (403).
  *   7. Vazifa o'chirilganda fayl diskdan ketadi va kvota BO'SHAYDI.
+ *   8. Bot holati profil va guruh ro'yxatida QAYTADI (o'qituvchi/admin
+ *      xabar yuborishdan oldin kimga yetmasligini ko'radi).
+ *   9. BILDIRISHNOMA preview'i ham xuddi shu taqsimotni qaytaradi -
+ *      ogohlantirish faqat vazifada emas, oddiy xabarda ham chiqadi.
+ *  10. Platforma kanali BOTDAN mustaqil: botni bloklagan o'quvchi ham
+ *      vazifani ilovadan ko'radi va o'qilmagan sanog'iga tushadi.
  *
  * O'Z bazasi va O'Z upload papkasida ishlaydi, oxirida ikkalasini ham
  * o'chiradi.
@@ -245,6 +251,84 @@ const run = async () => {
   else bad("Fayl diskda qoldi", `${filesOnDisk()} ta`);
 
   // ============================================================
+  head("2b. PARALLEL yuklashlar kvotadan oshira olmaydi (TOCTOU)");
+  //
+  // Eng muhim tekshiruv: kvota "o'qi -> qaror qil -> yoz" bo'lsa, bir
+  // vaqtda kelgan so'rovlarning HAMMASI "joy bor" javobini oladi va
+  // chegara oshib ketadi. Shuning uchun 5 ta 300 KB fayl BIR VAQTDA
+  // yuboriladi - 1 MB kvotaga faqat 3 tasi sig'ishi kerak.
+  const parallelResults = await Promise.allSettled(
+    Array.from({ length: 5 }, (_, i) =>
+      storage.saveBuffer({
+        buffer: Buffer.alloc(300 * 1024),
+        originalName: `parallel-${i}.bin`,
+        mimeType: "application/octet-stream",
+        userId: teacher._id,
+      }),
+    ),
+  );
+  const accepted = parallelResults.filter((r) => r.status === "fulfilled");
+  const rejected = parallelResults.filter((r) => r.status === "rejected");
+
+  if (accepted.length === 3) ok("Aynan 3 tasi qabul qilindi (3 x 300 KB)");
+  else bad("Qabul qilinganlar", `${accepted.length} ta, kutilgani 3`);
+  if (rejected.every((r) => r.reason?.code === "STORAGE_QUOTA_EXCEEDED"))
+    ok("Qolganlari 507 STORAGE_QUOTA_EXCEEDED bilan rad etildi");
+  else bad("Rad etish sababi", rejected.map((r) => r.reason?.code).join(", "));
+
+  usage = await storage.getUsage();
+  if (usage.usedBytes <= usage.quotaBytes)
+    ok("Kvota OSHMADI", `${usage.usedBytes} <= ${usage.quotaBytes}`);
+  else bad("Kvota oshib ketdi", `${usage.usedBytes} > ${usage.quotaBytes}`);
+
+  const onDisk = filesOnDisk();
+  if (onDisk === accepted.length)
+    ok("Diskda aynan qabul qilinganlar bor", `${onDisk} ta`);
+  else bad("Diskdagi fayl soni", `${onDisk}, kutilgani ${accepted.length}`);
+
+  // Hisoblagich HAQIQAT bilan mos - drift yo'q.
+  const rc = await storage.reconcile();
+  if (rc.drift === 0) ok("Hisoblagich diskdagi fayllar bilan mos (drift=0)");
+  else bad("Drift", `${rc.drift} bayt`);
+
+  for (const r of accepted) await storage.removeFile(r.value, teacher._id);
+  usage = await storage.getUsage();
+  if (usage.usedBytes === 0) ok("Hammasi o'chirilgach kvota nolga qaytdi");
+  else bad("Kvota", `${usage.usedBytes} bayt qoldi`);
+
+  // ============================================================
+  head("2bb. Yiqilishdan qolgan 'band' bayt tekislanadi (reconcile)");
+  // Jarayon joyni band qilib, faylni yozishdan oldin yiqilsa hisoblagichda
+  // egasiz bayt qoladi. Buni qo'lda taqlid qilamiz.
+  const StorageUsage = (await import("../src/models/storageUsage.model.js"))
+    .default;
+  await StorageUsage.updateOne({ key: "global" }, { $inc: { usedBytes: 700 * 1024 } });
+  const leaked = await storage.getUsage();
+  if (leaked.usedBytes === 700 * 1024) ok("Egasiz 700 KB hisoblagichda turibdi");
+  else bad("Taqlid", `${leaked.usedBytes} bayt`);
+
+  const healed = await storage.reconcile();
+  if (healed.drift === 700 * 1024) ok("Drift aniqlandi", `${healed.drift} bayt`);
+  else bad("Drift aniqlanmadi", `${healed.drift}`);
+  const afterHeal = await storage.getUsage();
+  if (afterHeal.usedBytes === 0) ok("Server ishga tushganda kvota tiklanadi");
+  else bad("Tekislashdan keyin", `${afterHeal.usedBytes} bayt`);
+
+  // ============================================================
+  head("2c. Ikki marta o'chirish joyni ikki marta bo'shatmaydi");
+  const dbl = await storage.saveBuffer({
+    buffer: Buffer.alloc(200 * 1024),
+    originalName: "double.bin",
+    mimeType: "application/octet-stream",
+    userId: teacher._id,
+  });
+  await storage.removeFile(dbl, teacher._id);
+  await storage.removeFile(dbl, teacher._id); // takroriy chaqiruv
+  usage = await storage.getUsage();
+  if (usage.usedBytes === 0) ok("Hisob buzilmadi (0 bayt)");
+  else bad("Takroriy o'chirish", `${usage.usedBytes} bayt`);
+
+  // ============================================================
   head("3. Yuborishdan oldingi ko'rib chiqish (preview)");
   const pv = await inCtx(() =>
     assignments.preview({ groupIds: [String(group._id)] }, teacher),
@@ -271,6 +355,30 @@ const run = async () => {
       ),
     { status: 403 },
   );
+
+  // CUSTOM ROL teshigi: rol NOMI "teacher" emas, lekin TIPI "teacher".
+  // Faqat nom bo'yicha tekshirilsa bunday foydalanuvchi cheklovga
+  // TUSHMASDI va istalgan guruhga yuboraverardi.
+  const customTeacher = {
+    _id: otherTeacher._id,
+    role: "katta_oqituvchi",
+    roleType: "teacher",
+  };
+  await expectApiError(
+    "Custom rol (roleType=teacher) ham cheklovga tushadi",
+    () =>
+      inCtx(() =>
+        assignments.preview({ groupIds: [String(group._id)] }, customTeacher),
+      ),
+    { status: 403 },
+  );
+  // O'z guruhi esa ochiq qolishi kerak - cheklov haddan tashqari qattiq
+  // bo'lib qolmasin.
+  const ownPreview = await inCtx(() =>
+    assignments.preview({ groupIds: [String(foreignGroup._id)] }, customTeacher),
+  );
+  if (ownPreview.total >= 0) ok("Custom rol O'Z guruhiga yubora oladi");
+  else bad("Custom rol o'z guruhi", "rad etildi");
 
   // ============================================================
   head("5. Vazifa yaratish");
@@ -402,6 +510,210 @@ const run = async () => {
   if (titles.includes("Faqat matnli vazifa"))
     ok("Faol vazifa o'quvchi ro'yxatida turibdi");
   else bad("O'quvchi ro'yxati", titles.join(", "));
+
+  // ============================================================
+  head("8. Bot holati profil va guruh ro'yxatida ko'rinadi");
+  const { buildUserProfile } = await import(
+    "../src/helpers/userProfile.helper.js"
+  );
+  const groupsService = await import(
+    "../src/modules/groups/services/groups.service.js"
+  );
+
+  const p1 = await buildUserProfile(s1._id);
+  const p2 = await buildUserProfile(s2._id);
+  const p3 = await buildUserProfile(s3._id);
+
+  if (p1.botStatus === "linked") ok("s1 profili -> linked");
+  else bad("s1 botStatus", p1.botStatus);
+  if (p2.botStatus === "blocked") ok("s2 profili -> blocked (BLOKLAGAN)");
+  else bad("s2 botStatus", p2.botStatus);
+  if (p3.botStatus === "not_linked") ok("s3 profili -> not_linked");
+  else bad("s3 botStatus", p3.botStatus);
+  if (p2.telegram?.isBlocked === true)
+    ok("Telegram kartasi uchun isBlocked qaytadi");
+  else bad("telegram.isBlocked", JSON.stringify(p2.telegram));
+
+  const groupDetail = await inCtx(() => groupsService.getById(group._id));
+  const byId = new Map(
+    (groupDetail.students || []).map((s) => [String(s._id), s]),
+  );
+  if (byId.get(String(s2._id))?.botStatus === "blocked")
+    ok("Guruh ro'yxatida ham bloklagan o'quvchi belgilanadi");
+  else bad("Guruh ro'yxati", byId.get(String(s2._id))?.botStatus);
+
+  // ============================================================
+  head("9. Bildirishnoma preview'i ham ogohlantiradi");
+  const notifications = await import(
+    "../src/modules/notifications/services/notifications.service.js"
+  );
+  const notifPreview = await inCtx(() =>
+    notifications.previewAudience(
+      { type: "groups", groupIds: [String(group._id)] },
+      teacher,
+    ),
+  );
+  if (notifPreview.count === 3) ok("count eski nom bilan qaytadi (3)");
+  else bad("count", `${notifPreview.count}`);
+  if (notifPreview.deliverable === 1) ok("Telegram orqali 1 tasiga yetadi");
+  else bad("deliverable", `${notifPreview.deliverable}`);
+  if (notifPreview.blocked === 1) ok("1 tasi botni bloklagan");
+  else bad("blocked", `${notifPreview.blocked}`);
+  if (notifPreview.noBot === 1) ok("1 tasi botga kirmagan");
+  else bad("noBot", `${notifPreview.noBot}`);
+  if (notifPreview.blockedStudents.length === 1)
+    ok("Bloklaganlarning ismi ro'yxati keladi");
+  else bad("blockedStudents", JSON.stringify(notifPreview.blockedStudents));
+
+  // ============================================================
+  head("10. Platforma kanali botdan mustaqil");
+  // s2 botni BLOKLAGAN - unga bot orqali yetmagan, lekin ilovada ko'rinishi
+  // va o'qilmagan sanog'iga tushishi SHART.
+  const blockedStudentInbox = await assignments.listForStudent(s2._id, {
+    page: 1,
+    limit: 20,
+    skip: 0,
+  });
+  const blockedTitles = blockedStudentInbox.items.map((i) => i.assignment.title);
+  if (blockedTitles.includes("Faqat matnli vazifa"))
+    ok("Botni bloklagan o'quvchi vazifani ILOVADA ko'radi");
+  else bad("Bloklagan o'quvchi inbox", blockedTitles.join(", ") || "bo'sh");
+
+  const unread = await assignments.unreadCountForStudent(s2._id);
+  if (unread.count === blockedTitles.length)
+    ok(`O'qilmagan sanog'i to'g'ri (${unread.count})`);
+  else bad("unreadCount", `${unread.count}, kutilgani ${blockedTitles.length}`);
+
+  const recipientRow = blockedStudentInbox.items[0];
+  await assignments.markRead(recipientRow._id, s2._id);
+  const unreadAfter = await assignments.unreadCountForStudent(s2._id);
+  if (unreadAfter.count === unread.count - 1)
+    ok("O'qilgandan keyin sanoq kamayadi");
+  else bad("unreadCount o'qilgandan keyin", `${unreadAfter.count}`);
+
+  // ============================================================
+  head("11. Admin tozalash boshqaruvi");
+  const admin = await import(
+    "../src/modules/storage/services/storageAdmin.service.js"
+  );
+
+  // Uch xil yoshdagi fayl: 400, 100 va 5 kunlik.
+  const mkAged = async (days, bytes, name) => {
+    const f = await storage.saveBuffer({
+      buffer: Buffer.alloc(bytes),
+      originalName: name,
+      mimeType: "application/octet-stream",
+      userId: teacher._id,
+    });
+    // createdAt'ni orqaga suramiz. XOM drayver ishlatiladi: Mongoose
+    // timestamps'dan kelgan `createdAt`ni IMMUTABLE qiladi va oddiy
+    // updateOne o'zgarishni jimgina tashlab yuboradi.
+    await StoredFile.collection.updateOne(
+      { _id: f._id },
+      { $set: { createdAt: new Date(Date.now() - days * 86400000) } },
+    );
+    return f;
+  };
+
+  const old400 = await mkAged(400, 100 * 1024, "eski-400.bin");
+  const old100 = await mkAged(100, 100 * 1024, "eski-100.bin");
+  const fresh = await mkAged(5, 100 * 1024, "yangi-5.bin");
+
+  const pv365 = await admin.previewCleanup({ olderThanDays: 365 });
+  if (pv365.files === 1 && pv365.bytes === 100 * 1024)
+    ok("Preview: 1 yildan eski - 1 ta fayl, 100 KB");
+  else bad("previewCleanup(365)", JSON.stringify(pv365));
+
+  const pv90 = await admin.previewCleanup({ olderThanDays: 90 });
+  if (pv90.files === 2) ok("Preview: 90 kundan eski - 2 ta fayl");
+  else bad("previewCleanup(90)", JSON.stringify(pv90));
+
+  const pvAll = await admin.previewCleanup({ all: true });
+  if (pvAll.files === 3) ok("Preview: hammasi - 3 ta fayl");
+  else bad("previewCleanup(all)", JSON.stringify(pvAll));
+
+  // Filtrsiz chaqiruv "hammasini o'chir"ga aylanib ketmasligi kerak.
+  await expectApiError(
+    "Filtrsiz tozalash rad etiladi",
+    () => admin.previewCleanup({}),
+    { status: 400 },
+  );
+
+  const usedBefore = (await storage.getUsage()).usedBytes;
+  const run365 = await admin.runCleanup({
+    olderThanDays: 365,
+    userId: teacher._id,
+  });
+  if (run365.deleted === 1 && run365.freedBytes === 100 * 1024)
+    ok("Tozalash: 1 ta fayl o'chdi, 100 KB bo'shadi");
+  else bad("runCleanup(365)", JSON.stringify(run365));
+
+  const usedAfter = (await storage.getUsage()).usedBytes;
+  if (usedBefore - usedAfter === 100 * 1024) ok("Kvota aynan shuncha bo'shadi");
+  else bad("Kvota", `${usedBefore} -> ${usedAfter}`);
+
+  const stillThere = await StoredFile.findById(fresh._id).lean();
+  if (!stillThere.isDeleted) ok("Yangi fayl TEGILMADI");
+  else bad("Yangi fayl", "o'chirilgan");
+
+  // Vazifa havolasi uzilishi - ishlamaydigan "Yuklab olish" qolmasin.
+  const asgWithFile = await inCtx(() =>
+    assignments.create({
+      body: {
+        title: "Tozalanadigan vazifa",
+        body: "",
+        groupIds: [String(group._id)],
+        dueDate: null,
+      },
+      file: {
+        buffer: Buffer.alloc(50 * 1024),
+        originalname: "tozalanadi.pdf",
+        mimetype: "application/pdf",
+      },
+      currentUser: teacher,
+    }),
+  );
+  await admin.runCleanup({ all: true, userId: teacher._id });
+  const afterClean = await Assignment.findById(asgWithFile._id).lean();
+  if (!afterClean.file && afterClean.fileRemovedAt)
+    ok("Vazifadagi fayl havolasi uzildi, izi qoldi (fileRemovedAt)");
+  else bad("Vazifa havolasi", JSON.stringify({ file: afterClean.file }));
+
+  const emptied = await storage.getUsage();
+  if (emptied.usedBytes === 0) ok("To'liq tozalashdan keyin kvota 0");
+  else bad("To'liq tozalash", `${emptied.usedBytes} bayt qoldi`);
+  if (filesOnDisk() === 0) ok("Disk ham bo'shadi");
+  else bad("Diskda qoldi", `${filesOnDisk()} ta`);
+
+  // ============================================================
+  head("12. Avto-tozalash faqat vaqti kelganda yuradi");
+  const s1st = await admin.updateSettings({
+    autoCleanupEnabled: true,
+    frequency: "weekly",
+    olderThanDays: 30,
+  });
+  if (s1st.autoCleanupEnabled && s1st.frequency === "weekly")
+    ok("Siyosat saqlandi (haftalik, 30 kun)");
+  else bad("updateSettings", JSON.stringify(s1st));
+
+  const first = await admin.runScheduledCleanup();
+  if (!first.skipped) ok("Birinchi yurish darhol bajarildi");
+  else bad("Birinchi yurish", "o'tkazib yuborildi");
+
+  const second = await admin.runScheduledCleanup();
+  if (second.skipped) ok("Ikkinchi yurish o'tkazib yuborildi (vaqti kelmagan)");
+  else bad("Ikkinchi yurish", "yana bajarildi");
+
+  await expectApiError(
+    "Noto'g'ri chastota rad etiladi",
+    () => admin.updateSettings({ frequency: "hourly" }),
+    { status: 400 },
+  );
+  await expectApiError(
+    "Chegaradan tashqari muddat rad etiladi",
+    () => admin.updateSettings({ olderThanDays: 0 }),
+    { status: 400 },
+  );
 
   // ============================================================
   await mongoose.connection.dropDatabase();

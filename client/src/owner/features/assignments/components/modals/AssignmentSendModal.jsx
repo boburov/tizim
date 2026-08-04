@@ -9,7 +9,7 @@ import Field from "@/shared/components/ui/field/Field";
 import Input from "@/shared/components/ui/input/Input";
 import Button from "@/shared/components/ui/button/Button";
 import { EntityCombobox } from "@/owner/features/notifications";
-import BlockedWarning from "../BlockedWarning";
+import BlockedWarning from "@/shared/components/communication/BlockedWarning";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
