@@ -73,6 +73,29 @@ const ROUTE_REGISTRY = {
     action: AUDIT_ACTIONS.DELETE,
     label: "Foydalanuvchi o'chirildi",
   },
+  // XODIMLAR bo'limining amallari. Hammasi allaqachon auditLog middleware
+  // orqali yozilyapti - bu yerda faqat o'zbekcha tavsifi qo'shiladi,
+  // aks holda audit ekranida "Foydalanuvchi tahrirlandi" bo'lib ko'rinardi.
+  "POST:/users/staff": {
+    action: AUDIT_ACTIONS.CREATE,
+    label: "Yangi xodim qo'shildi",
+  },
+  "PATCH:/users/:id/role": {
+    action: AUDIT_ACTIONS.UPDATE,
+    label: "Xodim roli o'zgartirildi",
+  },
+  "PATCH:/users/:id/branches": {
+    action: AUDIT_ACTIONS.UPDATE,
+    label: "Xodim filiali o'zgartirildi",
+  },
+  "PATCH:/users/:id/password": {
+    action: AUDIT_ACTIONS.UPDATE,
+    label: "Foydalanuvchi paroli o'zgartirildi",
+  },
+  "POST:/users/:id/restore": {
+    action: AUDIT_ACTIONS.UPDATE,
+    label: "Foydalanuvchi arxivdan tiklandi",
+  },
 
   // Guruhlar
   "POST:/groups": { action: AUDIT_ACTIONS.CREATE, label: "Yangi guruh ochildi" },

@@ -11,6 +11,9 @@ export const STATUS_LABELS = {
 const OPTIONS_BY_TAB = {
   students: ["all", "active", "frozen"],
   teachers: ["all", "active", "archived"],
+  // Xodim MUZLATILMAYDI - muzlatish o'quvchi tushunchasi. Noma'lum tab
+  // "all"ga tushib ketardi va ma'nosiz "Muzlatilgan" tugmasi chiqardi.
+  staff: ["all", "active", "archived"],
   all: ["all", "active", "frozen", "archived"],
 };
 

@@ -49,9 +49,13 @@ const UserDetailPage = () => {
   const isStudent = profile?.role === ROLES.STUDENT;
   const isTeacher = profile?.role === ROLES.TEACHER;
 
-  // Ro'yxat endi rol bo'yicha ikkiga bo'lingan - qaysi biridan kelgan bo'lsa
-  // o'shanga qaytaramiz.
-  const listUrl = isStudent ? "/owner/students" : "/owner/teachers";
+  // Ro'yxat rol bo'yicha bo'lingan - qaysi biridan kelgan bo'lsa o'shanga
+  // qaytaramiz. Xodim (direktor, buxgalter...) uchun - Xodimlar ro'yxati.
+  const listUrl = isStudent
+    ? "/owner/students"
+    : isTeacher
+      ? "/owner/teachers"
+      : "/owner/staff";
 
   const { data: historyData, isLoading: historyLoading } = useUserGroupHistoryQuery(
     isStudent ? id : null,
@@ -101,8 +105,17 @@ const UserDetailPage = () => {
           <h1 className="text-2xl font-semibold truncate">
             {profile.firstName} {profile.lastName}
           </h1>
-          <Badge variant={hasValidRole(profile.role) ? "secondary" : "destructive"}>
-            {getRoleLabel(profile.role)}
+          {/* Yorliq SERVERDAN keladi (roleLabel): custom rollar client'dagi
+              ROLE_LABELS ro'yxatida yo'q va "noma'lum rol" bo'lib, qizil
+              nishon bilan chiqardi. */}
+          <Badge
+            variant={
+              profile.roleLabel || hasValidRole(profile.role)
+                ? "secondary"
+                : "destructive"
+            }
+          >
+            {profile.roleLabel || getRoleLabel(profile.role)}
           </Badge>
           {isStudent && profile.isFrozen && (
             <Badge className="bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300">Muzlatilgan</Badge>

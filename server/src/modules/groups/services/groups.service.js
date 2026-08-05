@@ -382,6 +382,40 @@ export const create = async (body, currentUser) => {
   for (const teacherId of body.teachers || []) {
     try {
       await teacherGroupPeriodService.assignTeacher(group._id, teacherId, { startDate });
+    } catch (err) {
+      // O'QITUVCHISIZ GURUH QOLIB KETMASIN.
+      //
+      // Ilgari bu xato faqat logga tushardi: server 201 qaytarib "Guruh
+      // yaratildi" derdi, guruh esa o'qituvchisiz - davomat ham, maosh ham
+      // ishlamaydigan holatda qolardi. Foydalanuvchi ko'rgani esa eng yomon
+      // holat: xabar "yaratildi" deydi, amalda guruh yaroqsiz.
+      //
+      // Guruh yaratish - BITTA amal. Biriktirish yiqilsa endigina
+      // yaratilgan guruhni butunlay orqaga qaytaramiz (u hali hech qayerda
+      // ishlatilmagan: a'zolik ham, davomat ham yo'q) va xatoni AYNAN
+      // sababi bilan qaytaramiz - "ishga olingan sanasi guruh boshlanish
+      // sanasidan keyin" kabi xabarni operator o'qib, tuzata oladi.
+      try {
+        await hardDeleteGroupData(group._id);
+        await Group.deleteOne({ _id: group._id });
+      } catch (cleanupErr) {
+        // Tozalash yiqilsa ham ASL xatoni yashirmaymiz.
+        logger.error(
+          { err: cleanupErr, groupId: String(group._id) },
+          "Yiqilgan guruh yaratishni orqaga qaytarib bo'lmadi",
+        );
+      }
+      throw err instanceof ApiError
+        ? err
+        : new ApiError(
+            400,
+            err?.message || "O'qituvchini guruhga biriktirib bo'lmadi",
+          );
+    }
+
+    // Maosh yozuvi - IKKILAMCHI: yiqilsa ham guruh yaroqli qoladi, yozuv
+    // keyingi hisoblashda o'zi yaratiladi. Shuning uchun bu yerda faqat log.
+    try {
       await teacherSalaryService.ensureSalaryForTeacherGroup(
         teacherId,
         group._id,
@@ -389,7 +423,7 @@ export const create = async (body, currentUser) => {
         month,
       );
     } catch (err) {
-      logger.warn({ err }, "Guruh o'qituvchisi biriktirilmadi / maosh yaratilmadi");
+      logger.warn({ err }, "Guruh o'qituvchisi uchun maosh yozuvi yaratilmadi");
     }
   }
 

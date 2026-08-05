@@ -2,6 +2,7 @@ import User from "../models/user.model.js";
 import BotUser from "../models/botUser.model.js";
 import { ROLES } from "../constants/roles.js";
 import { botStatusOf, BOT_STATUS } from "./botStatus.helper.js";
+import { resolveRole } from "./permission.helper.js";
 import {
   list as listGroups,
   findAllActiveForStudent,
@@ -54,6 +55,17 @@ export const buildUserProfile = async (userInput) => {
   if (!user) return null;
 
   const base = sanitizeUser(user);
+
+  // ROL YORLIG'I. Client'da rol nomlari qattiq yozilgan ro'yxatdan olinadi
+  // (ROLE_LABELS), custom rollar esa u yerda HECH QACHON bo'lmaydi -
+  // "direktor" profil sarlavhasida xom qiymat bo'lib, qizil "noma'lum rol"
+  // nishoni bilan chiqardi. Yorliqni serverdan beramiz (resolveRole 5
+  // daqiqalik keshda - qo'shimcha so'rov amalda yo'q).
+  const roleMeta = await resolveRole(user.role);
+  base.roleLabel = roleMeta.label;
+  base.roleType = roleMeta.roleType;
+  base.roleIsFrozen = Boolean(roleMeta.isFrozen);
+
   const telegram = await fetchTelegram(user._id);
   // `telegram` null bo'lishi mumkin (bog'lanmagan), `botStatus` esa HAR
   // DOIM bor: UI "bog'lanmagan"ni ham holat sifatida ko'rsatishi kerak,

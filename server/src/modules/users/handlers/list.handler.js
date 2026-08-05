@@ -13,6 +13,7 @@ const list = asyncHandler(async (req, res) => {
   const { items, total } = await usersService.list({
     role: req.query.role,
     search: req.query.search,
+    staff: req.query.staff === "1" || req.query.staff === "true",
     status,
     sort: req.query.sort,
     order: req.query.order,

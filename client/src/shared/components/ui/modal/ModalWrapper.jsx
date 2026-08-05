@@ -26,6 +26,20 @@ const ModalWrapper = ({
   title = "Modal sarlavhasi",
 }) => {
   const { closeModal, isOpen, data } = useModal(name);
+
+  /**
+   * Yopilish animatsiyasi davomida OXIRGI ma'lumot saqlanadi.
+   *
+   * `close` reduceri `data` ni darhol bo'shatadi, lekin oyna yana ~200ms
+   * ekranda turadi (chiqish animatsiyasi). O'sha oraliqda bola komponent
+   * uzilmaydi - qayta render bo'ladi va propslari to'satdan `undefined`
+   * ga aylanadi. Effekt bog'liqliklari o'zgarib, yopilayotgan oynadan
+   * bo'sh so'rov ketishi (yoki matn "yo'qolib" ko'rinishi) shundan.
+   */
+  const [retainedData, setRetainedData] = useState(data);
+  if (isOpen && retainedData !== data) setRetainedData(data);
+  const activeData = isOpen ? data : retainedData;
+
   const [isLoading, setIsLoading] = useState(false);
   const isLoadingRef = useRef(isLoading);
   useEffect(() => {
@@ -45,7 +59,7 @@ const ModalWrapper = ({
     isLoading,
     setIsLoading: handleSetIsLoading,
     close: hanldeCloseModal,
-    ...(data || {}),
+    ...(activeData || {}),
   });
 
   if (isDesktop) {

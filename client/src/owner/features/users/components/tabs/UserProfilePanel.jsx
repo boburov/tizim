@@ -6,6 +6,7 @@ import {
   UserTelegramCard,
 } from "@/shared/components/userProfile";
 import UserPasswordCard from "../UserPasswordCard";
+import { StaffSalaryCard } from "@/owner/features/staffPayroll";
 import useModal from "@/shared/hooks/useModal";
 import { ROLES } from "@/shared/constants/roles";
 import { MODAL } from "@/shared/constants/modals";
@@ -31,6 +32,10 @@ const UserProfilePanel = () => {
         <UserProfileCard profile={profile} />
       </div>
       <div className="space-y-5">
+        {/* MAOSH - faqat xodimlarda (o'quvchida ma'nosiz). O'qituvchida
+            ham ko'rinadi: unga KPI shartnomasi ochilishi mumkin, asosiy
+            oyligi esa o'zining modulida qoladi. */}
+        {!isStudent && <StaffSalaryCard employee={profile} />}
         <UserPasswordCard user={profile} />
         <UserTelegramCard telegram={profile.telegram} />
         {isStudent && (

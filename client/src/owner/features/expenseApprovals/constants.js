@@ -44,6 +44,7 @@ export const KIND_OPTIONS = [
   { value: "discount_set", label: "O'quvchi chegirmasi" },
   { value: "group_fee_set", label: "Guruh oylik narxi" },
   { value: "staff_hire", label: "Ishga olish" },
+  { value: "staff_salary_payment", label: "Xodim maoshi" },
 ];
 
 export const SORT_OPTIONS = [
@@ -60,6 +61,7 @@ export const KIND_LABELS = {
   discount_set: "O'quvchi chegirmasi",
   group_fee_set: "Guruh oylik narxi",
   staff_hire: "Ishga olish",
+  staff_salary_payment: "Xodim maoshi",
 };
 
 // Tur -> ikonka va rang. Jadvalning birinchi ustunida, toast'da va
@@ -71,6 +73,7 @@ export const KIND_META = {
   discount_set: { icon: Percent, cls: "bg-teal-100 dark:bg-teal-500/15 text-teal-600 dark:text-teal-300" },
   group_fee_set: { icon: Tags, cls: "bg-cyan-100 dark:bg-cyan-500/15 text-cyan-600 dark:text-cyan-300" },
   staff_hire: { icon: UserPlus, cls: "bg-fuchsia-100 dark:bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300" },
+  staff_salary_payment: { icon: Wallet, cls: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" },
 };
 
 export const CATEGORY_LABELS = {

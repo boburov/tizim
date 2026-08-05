@@ -3,6 +3,7 @@ import StudentPayment from "../../../models/studentPayment.model.js";
 import PaymentTransaction from "../../../models/paymentTransaction.model.js";
 import TeacherSalary from "../../../models/teacherSalary.model.js";
 import SalaryTransaction from "../../../models/salaryTransaction.model.js";
+import StaffSalaryTransaction from "../../../models/staffSalaryTransaction.model.js";
 import Group from "../../../models/group.model.js";
 import DebtWriteOff from "../../../models/debtWriteOff.model.js";
 import Expense from "../../../models/expense.model.js";
@@ -176,6 +177,8 @@ export const getSummary = async ({ year, month } = {}) => {
     opexCash,
     opexCashPrev,
     opexAccrual,
+    staffSalaryCash,
+    staffSalaryCashPrev,
   ] = await Promise.all([
     sumTransactions(PaymentTransaction, start, end),
     sumTransactions(PaymentTransaction, prev.start, prev.end),
@@ -187,14 +190,20 @@ export const getSummary = async ({ year, month } = {}) => {
     sumExpensesCash(start, end),
     sumExpensesCash(prev.start, prev.end),
     sumExpensesAccrual(y, m),
+    // XODIMLAR MAOSHI - uchinchi chiqim manbasi. Qo'shilmasa "sof foyda"
+    // haqiqiydan yuqori chiqardi (aynan ijara/kommunal bilan bo'lgan xato).
+    sumTransactions(StaffSalaryTransaction, start, end),
+    sumTransactions(StaffSalaryTransaction, prev.start, prev.end),
   ]);
 
   // ── JAMI CHIQIM ──
   // Ilgari bu yerda FAQAT maosh bor edi (SalaryTransaction), ya'ni ijara,
   // kommunal, ta'mir va reklama foydaga umuman ta'sir qilmasdi va "sof foyda"
   // haqiqiydan doim YUQORI chiqardi. Endi ikkala manba qo'shiladi.
-  const expenseCashTotal = salaryCash.total + opexCash.total;
-  const expenseCashTotalPrev = salaryCashPrev.total + opexCashPrev.total;
+  const expenseCashTotal =
+    salaryCash.total + staffSalaryCash.total + opexCash.total;
+  const expenseCashTotalPrev =
+    salaryCashPrev.total + staffSalaryCashPrev.total + opexCashPrev.total;
 
   // ── KASSA FOYDASI (cash basis): "shu oy qancha pul qoldi?" ──
   const cashProfit = incomeCash.total - expenseCashTotal;
@@ -228,9 +237,12 @@ export const getSummary = async ({ year, month } = {}) => {
       // JAMI (maosh + umumiy chiqimlar) - dashboard shuni ko'rsatishi kerak.
       paid: expenseCashTotal,
       delta: delta(expenseCashTotal, expenseCashTotalPrev),
-      count: salaryCash.count + opexCash.count,
+      count: salaryCash.count + staffSalaryCash.count + opexCash.count,
       // Maosh qismi (eski maydonlar - orqaga moslik uchun saqlandi).
       salaryPaid: salaryCash.total,
+      // Xodimlar maoshi alohida ko'rsatiladi: "maosh" qatorida
+      // o'qituvchi va resepshin aralashib ketmasin.
+      staffSalaryPaid: staffSalaryCash.total,
       billed: teacherBilled.billed,
       outstanding: teacherBilled.outstanding,
       rate: pct(teacherBilled.paid, teacherBilled.billed),
@@ -264,13 +276,14 @@ export const getTrend = async ({ months = 12 } = {}) => {
     const { start, end } = monthRange(p.year, p.month);
     // Trend ham JAMI chiqimni ko'rsatishi kerak - aks holda grafik va KPI
     // kartochkasi bir-biriga zid raqam ko'rsatardi.
-    const [income, salary, studentBilled, opex] = await Promise.all([
+    const [income, salary, studentBilled, opex, staffSalary] = await Promise.all([
       sumTransactions(PaymentTransaction, start, end),
       sumTransactions(SalaryTransaction, start, end),
       billedAndOutstanding(StudentPayment, p.year, p.month),
       sumExpensesCash(start, end),
+      sumTransactions(StaffSalaryTransaction, start, end),
     ]);
-    const expenseTotal = salary.total + opex.total;
+    const expenseTotal = salary.total + staffSalary.total + opex.total;
     result.push({
       year: p.year,
       month: p.month,
@@ -279,6 +292,7 @@ export const getTrend = async ({ months = 12 } = {}) => {
       expense: expenseTotal,
       // Chiqimning tarkibi - stacked bar uchun.
       salaryExpense: salary.total,
+      staffSalaryExpense: staffSalary.total,
       operatingExpense: opex.total,
       net: income.total - expenseTotal,
       outstanding: studentBilled.outstanding,
@@ -405,7 +419,7 @@ export const getLedger = async ({ year, month, limit = 12 } = {}) => {
   const m = month ? Number(month) : now.getUTCMonth() + 1;
   const lim = Number(limit);
 
-  const [payments, salaries] = await Promise.all([
+  const [payments, salaries, staffSalaries] = await Promise.all([
     PaymentTransaction.find({ year: y, month: m, isDeleted: { $ne: true } })
       .sort({ paidAt: -1 })
       .limit(lim)
@@ -417,6 +431,13 @@ export const getLedger = async ({ year, month, limit = 12 } = {}) => {
       .limit(lim)
       .populate("teacher", "firstName lastName")
       .populate("group", "name")
+      .lean(),
+    // Xodimlar maoshi ham kassa harakati - ledger'da ko'rinmasa, egasi
+    // "pul qayerga ketdi?" degan savolga javob topa olmasdi.
+    StaffSalaryTransaction.find({ year: y, month: m, isDeleted: { $ne: true } })
+      .sort({ paidAt: -1 })
+      .limit(lim)
+      .populate("employee", "firstName lastName")
       .lean(),
   ]);
 
@@ -445,7 +466,18 @@ export const getLedger = async ({ year, month, limit = 12 } = {}) => {
     paidAt: r.paidAt,
   }));
 
-  return [...incomeItems, ...expenseItems]
+  const staffExpenseItems = staffSalaries.map((r) => ({
+    id: String(r._id),
+    type: "expense",
+    name: fullName(r.employee),
+    groupName: "-",
+    category: "Xodim maoshi",
+    method: r.method,
+    amount: r.amount,
+    paidAt: r.paidAt,
+  }));
+
+  return [...incomeItems, ...expenseItems, ...staffExpenseItems]
     .sort((a, b) => new Date(b.paidAt) - new Date(a.paidAt))
     .slice(0, lim);
 };

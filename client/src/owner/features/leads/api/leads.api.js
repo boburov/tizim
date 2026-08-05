@@ -10,5 +10,6 @@ export const leadsAPI = {
   convert: (id, body) => http.post(ENDPOINTS.leads.convert(id), body),
   convertBulk: (body) => http.post(ENDPOINTS.leads.convertBulk, body),
   setReminder: (id, body) => http.post(ENDPOINTS.leads.reminder(id), body),
+  setReminderBulk: (body) => http.post(ENDPOINTS.leads.reminderBulk, body),
   stats: (params) => http.get(ENDPOINTS.leads.stats, { params }),
 };

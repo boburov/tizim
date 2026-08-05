@@ -28,6 +28,7 @@ const KIND_LABELS = {
   discount_set: "O'quvchi chegirmasi",
   group_fee_set: "Guruh oylik narxi",
   staff_hire: "Ishga olish",
+  staff_salary_payment: "Xodim maoshi",
 };
 
 // Kategoriya -> qaror qabul qilish uchun kerakli ruxsat.

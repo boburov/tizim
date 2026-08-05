@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import User from "../../../models/user.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import TeacherGroupPeriod from "../../../models/teacherGroupPeriod.model.js";
@@ -10,7 +11,7 @@ import Group from "../../../models/group.model.js";
 import ArchiveReason from "../../../models/archiveReason.model.js";
 import RefreshToken from "../../../models/refreshToken.model.js";
 import ApiError from "../../../utils/ApiError.js";
-import { ROLES } from "../../../constants/roles.js";
+import { ROLES, ROLE_TYPES } from "../../../constants/roles.js";
 import { normalizePhone } from "../../../utils/phone.js";
 import { hashPassword } from "../../../helpers/password.helper.js";
 import {
@@ -39,6 +40,8 @@ import {
   assertNotSelfRoleChange,
   assertNotLastOwner,
   assertCanGrantRole,
+  loadRoleCatalog,
+  staffRoleFilter,
 } from "../../../helpers/roles.helper.js";
 import { logAction as logArchiveAction } from "../../archiveReasons/services/archiveReasons.service.js";
 import * as financePaymentService from "../../finance/services/studentPayment.service.js";
@@ -127,27 +130,106 @@ const enrichStudents = async (items) => {
   });
 };
 
+/**
+ * XODIMLAR ro'yxatini boyitadi: rol yorlig'i + sessiya holati.
+ *
+ * Rol NOMI (User.role) va rol YORLIG'I (Role.label) ikki xil joyda turadi -
+ * "direktor" degan qiymat foydalanuvchiga "Direktor" bo'lib ko'rinishi kerak.
+ * Yorliq client'da qattiq yozilgan ro'yxatdan olinmaydi: custom rollarni
+ * owner o'zi yaratadi, ular ROLE_LABELS'da HECH QACHON bo'lmaydi.
+ *
+ * Ikkala so'rov ham SAHIFA bo'yicha (har qator uchun emas) - N+1 yo'q.
+ */
+const enrichEmployees = async (rows, catalog) => {
+  if (rows.length === 0) return rows;
+
+  // $match aggregate ichida satrni ObjectId'ga O'ZI aylantirmaydi - qo'lda.
+  const ids = rows.map((u) => new mongoose.Types.ObjectId(String(u._id)));
+  const now = new Date();
+
+  const [sessions] = await Promise.all([
+    // Tirik sessiya: bekor qilinmagan va muddati o'tmagan refresh token.
+    // revokedAt'da default YO'Q - tirik qatorda maydon umuman bo'lmaydi,
+    // shuning uchun $ifNull shart.
+    RefreshToken.aggregate([
+      { $match: { user: { $in: ids } } },
+      {
+        $group: {
+          _id: "$user",
+          activeSessions: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: [{ $ifNull: ["$revokedAt", null] }, null] },
+                    { $gt: ["$expiresAt", now] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const sessionMap = new Map(sessions.map((s) => [String(s._id), s]));
+
+  return rows.map((u) => {
+    const roleDoc = catalog?.get(u.role);
+    return {
+      ...u,
+      // Rol hujjati topilmasa resolveRole bilan BIR XIL zaxira qiymat:
+      // yorliq = xom qiymat, tip = staff (owner esa har doim owner).
+      roleLabel: roleDoc?.label || u.role,
+      roleType:
+        roleDoc?.roleType ||
+        (u.role === ROLES.OWNER ? ROLE_TYPES.OWNER : ROLE_TYPES.STAFF),
+      roleIsFrozen: Boolean(roleDoc?.isFrozen),
+      activeSessions: sessionMap.get(String(u._id))?.activeSessions || 0,
+    };
+  });
+};
+
 export const list = async ({
   role,
   search,
+  staff = false,
   status = "active",
   page = 1,
   limit = 20,
   sort = "createdAt",
   order = "desc",
 }) => {
+  // "Muzlatilgan" - faqat O'QUVCHI tushunchasi (filter._id muzlatilgan
+  // o'quvchilar bilan cheklanadi). Xodimlar ro'yxatida u DOIM bo'sh natija
+  // berardi, shuning uchun "faol"ga tushiriladi.
+  const effectiveStatus = staff && status === "frozen" ? "active" : status;
+
   // status: "active" → faqat faol, "archived" → faqat arxiv,
   // "frozen" → hozir muzlatilgan (faol o'quvchilar ichida), "all" → hammasi.
   const filter = { isDeleted: { $ne: true } };
-  if (status === "active") filter.isActive = true;
-  else if (status === "archived") filter.isActive = false;
-  else if (status === "frozen") {
+  if (effectiveStatus === "active") filter.isActive = true;
+  else if (effectiveStatus === "archived") filter.isActive = false;
+  else if (effectiveStatus === "frozen") {
     filter.isActive = true;
     filter._id = { $in: await studentFreezeService.getActiveFrozenStudentIds() };
   }
-  // Rol berilsa - o'sha rol; berilmasa ("Hammasi") - faqat o'quvchi/o'qituvchi
-  // (owner Foydalanuvchilar ro'yxatida ko'rsatilmaydi).
-  filter.role = role || { $in: [ROLES.STUDENT, ROLES.TEACHER] };
+
+  // Rol berilsa - o'sha rol; `staff` bayrog'i bilan XODIMLAR (o'quvchi
+  // TIPIDAGI rollardan boshqa hamma: owner + o'qituvchi + custom rollar);
+  // aks holda ("Hammasi") faqat o'quvchi/o'qituvchi.
+  //
+  // Aniq `role` ustun turadi - kartochkadan "faqat direktorlar" filtri shu
+  // orqali ishlaydi, qo'shimcha kodsiz.
+  const catalog = staff ? await loadRoleCatalog() : null;
+  filter.role = role
+    ? role
+    : staff
+      ? staffRoleFilter(catalog)
+      : { $in: [ROLES.STUDENT, ROLES.TEACHER] };
 
   if (search && search.trim()) {
     const rx = new RegExp(escapeRegex(search.trim()), "i");
@@ -183,8 +265,127 @@ export const list = async ({
     User.countDocuments(filter),
   ]);
 
+  // enrichStudents ikkala yo'lda ham ODDIY obyekt qaytaradi, shuning uchun
+  // xodim boyitilishi uning ustidan ishlaydi - .toObject() ikki marta
+  // chaqirilmaydi.
   const enriched = await enrichStudents(items);
-  return { items: enriched, total, page, limit };
+  return {
+    items: staff ? await enrichEmployees(enriched, catalog) : enriched,
+    total,
+    page,
+    limit,
+  };
+};
+
+/**
+ * XODIMLAR STATISTIKASI - rol kesimida.
+ *
+ * Ro'yxat bilan BIR XIL predikat (staffRoleFilter) va BIR XIL filial sharti
+ * ishlatiladi. Aks holda kartochkadagi "Jami" ro'yxatdagi qatorlar soniga
+ * teng bo'lmasdi va bu buzuq ko'rinardi.
+ *
+ * Holat filtriga bog'liq EMAS: faol va arxiv alohida qaytariladi, shunda
+ * "Faol / Arxiv" almashtirilganda kartochkalar qayta yuklanmaydi.
+ */
+export const staffStats = async () => {
+  const catalog = await loadRoleCatalog();
+  const base = { isDeleted: { $ne: true }, role: staffRoleFilter(catalog) };
+
+  // Aggregate'da avtomatik filial filtri YO'Q (pre-find hooklar aggregate'da
+  // ishlamaydi) - shartni qo'lda $and ichiga qo'shamiz.
+  const branchCond = userBranchCondition();
+  const match = branchCond ? { ...base, $and: [branchCond] } : base;
+
+  const rows = await User.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: "$role",
+        total: { $sum: 1 },
+        active: { $sum: { $cond: [{ $eq: ["$isActive", true] }, 1, 0] } },
+      },
+    },
+  ]);
+
+  // Tartib: Ega -> xodimlar -> o'qituvchilar, ichida yorliq bo'yicha.
+  const ORDER = {
+    [ROLE_TYPES.OWNER]: 0,
+    [ROLE_TYPES.STAFF]: 1,
+    [ROLE_TYPES.TEACHER]: 2,
+  };
+
+  const byRole = rows
+    .map((r) => {
+      const meta = catalog.get(r._id);
+      const roleType =
+        meta?.roleType ||
+        (r._id === ROLES.OWNER ? ROLE_TYPES.OWNER : ROLE_TYPES.STAFF);
+      return {
+        role: r._id,
+        label: meta?.label || r._id,
+        roleType,
+        isFrozen: Boolean(meta?.isFrozen),
+        total: r.total,
+        active: r.active,
+        archived: r.total - r.active,
+      };
+    })
+    .sort(
+      (a, b) =>
+        (ORDER[a.roleType] ?? 9) - (ORDER[b.roleType] ?? 9) ||
+        a.label.localeCompare(b.label),
+    );
+
+  const total = byRole.reduce((s, r) => s + r.total, 0);
+  const active = byRole.reduce((s, r) => s + r.active, 0);
+  return { total, active, archived: total - active, byRole };
+};
+
+/**
+ * TELEFON / LOGIN band emasligini oldindan tekshiradi.
+ *
+ * Tekshiruv `auth.service.registerUser` bilan AYNAN bir xil qoidada
+ * bo'lishi shart, aks holda forma "bo'sh" deb ko'rsatib, saqlashda 409
+ * beradi - bu birinchi xatodan ham yomon.
+ *
+ * Shuning uchun bu yerda ham:
+ *   - telefon NORMALIZATSIYADAN keyin solishtiriladi ("+998 90 123 45 67"
+ *     va "998901234567" - bir xil raqam);
+ *   - qidiruv ARXIVLANGAN va o'chirilgan foydalanuvchilarni ham qamraydi
+ *     (raqam ular bilan ham band bo'lib turadi);
+ *   - filial ko'lami QO'LLANMAYDI: boshqa filialdagi odamning raqami ham
+ *     band, lekin uning kimligi oshkor qilinmaydi - faqat "band" bayrog'i.
+ */
+export const checkAvailability = async ({ phone, username, excludeId } = {}) => {
+  const result = {};
+  const notSelf = excludeId
+    ? { _id: { $ne: new mongoose.Types.ObjectId(String(excludeId)) } }
+    : {};
+
+  const raw = String(phone || "").trim();
+  if (raw) {
+    const normalized = normalizePhone(raw);
+    if (!normalized) {
+      // To'liq bo'lmagan raqam hali XATO emas - odam yozayotgan bo'lishi
+      // mumkin. "invalid" bayrog'i client uchun: u faqat raqam TUGAGANDA
+      // xato ko'rsatadi.
+      result.phone = { taken: false, invalid: true };
+    } else {
+      const exists = await User.findOne(
+        { phone: normalized, ...notSelf },
+        { _id: 1 },
+      ).lean();
+      result.phone = { taken: Boolean(exists), invalid: false };
+    }
+  }
+
+  const login = String(username || "").toLowerCase().trim();
+  if (login) {
+    const exists = await User.findOne({ username: login, ...notSelf }, { _id: 1 }).lean();
+    result.username = { taken: Boolean(exists) };
+  }
+
+  return result;
 };
 
 export const getById = async (id) => {

@@ -28,6 +28,7 @@ import searchRouter from "../modules/search/search.routes.js";
 import financeRouter from "../modules/finance/finance.routes.js";
 import depositsRouter from "../modules/deposits/deposits.routes.js";
 import teacherSalaryRouter from "../modules/teacherSalary/teacherSalary.routes.js";
+import staffPayrollRouter from "../modules/staffPayroll/staffPayroll.routes.js";
 import expensesRouter from "../modules/expenses/expenses.routes.js";
 import financeReportRouter from "../modules/financeReport/financeReport.routes.js";
 import expenseApprovalsRouter from "../modules/expenseApprovals/expenseApprovals.routes.js";
@@ -92,6 +93,9 @@ router.use("/admin-dashboard", adminDashboardRouter);
 router.use("/finance", financeRouter);
 router.use("/deposits", depositsRouter);
 router.use("/teacher-salary", teacherSalaryRouter);
+// XODIMLAR MAOSHI (o'qituvchi bo'lmaganlar + KPI). ALOHIDA modul:
+// o'qituvchi maoshi mantig'iga umuman tegmaydi.
+router.use("/staff-payroll", staffPayrollRouter);
 // Umumiy chiqimlar (ijara, kommunal, ta'mir, reklama...). Maosh bu yerda EMAS -
 // u /teacher-salary da qoladi; hisobot ikkalasini qo'shib ko'rsatadi.
 router.use("/expenses", expensesRouter);

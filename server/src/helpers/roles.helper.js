@@ -27,6 +27,34 @@ export const generateUniqueRoleValue = async (label) => {
   return value;
 };
 
+// ROL KATALOGI: value -> { value, label, roleType, isFrozen, isSystem }.
+//
+// Role kolleksiyasi kichik (odatda 20 dan kam hujjat), shuning uchun bitta
+// to'liq o'qish har qator uchun resolveRole() chaqirishdan (N+1) arzonroq.
+export const loadRoleCatalog = async () => {
+  const docs = await Role.find(
+    {},
+    { value: 1, label: 1, roleType: 1, isFrozen: 1, isSystem: 1 },
+  ).lean();
+  return new Map(docs.map((r) => [r.value, r]));
+};
+
+// XODIM = o'quvchi TIPIDAGI rollardan boshqa hamma (owner + staff + teacher).
+//
+// Rol NOMIGA emas TIPIGA qaraydi: "Katta o'qituvchi" nomli custom rol
+// roleType="teacher" bo'lsa xodim hisoblanadi, "Tinglovchi" nomlisi esa
+// roleType="student" bo'lsa - yo'q. Shu sababli qattiq ro'yxat yozilmaydi:
+// ertaga yaratilgan rol avtomatik to'g'ri tomonga tushadi.
+export const staffRoleFilter = (catalog) => {
+  const studentValues = [...catalog.values()]
+    .filter((r) => r.roleType === ROLE_TYPES.STUDENT)
+    .map((r) => r.value);
+  // Katalog bo'sh yoki student roli o'chirilgan bo'lsa ham built-in qiymat
+  // chetlab o'tilmasin.
+  if (!studentValues.includes(ROLES.STUDENT)) studentValues.push(ROLES.STUDENT);
+  return { $nin: studentValues };
+};
+
 // Rol mavjudmi va foydalanuvchiga biriktirsa bo'ladimi.
 // User.role'dan enum olib tashlangani uchun YAGONA himoya shu.
 export const assertRoleAssignable = async (value) => {

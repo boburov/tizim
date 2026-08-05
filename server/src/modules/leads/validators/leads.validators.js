@@ -8,6 +8,9 @@ export const listSchema = z.object({
     status: statusEnum.optional(),
     source: z.string().optional(),
     direction: z.string().optional(),
+    // MAS'UL bo'yicha filtr. "none" - mas'uli yo'q lidlar (eng xavflisi:
+    // ular bilan hech kim ishlamaydi).
+    assignedTo: z.string().optional(),
     // ALOQA holati bo'yicha filtr:
     //   no_contact - hech kim qo'lga olmagan (status "new", tarix bo'sh)
     //   stale      - aloqa qilingan, lekin 7+ kun tashlab qo'yilgan
@@ -42,6 +45,8 @@ const leadFields = {
   sourceId: z.string().nullable().optional(),
   directionId: z.string().nullable().optional(),
   rejectionReasonId: z.string().nullable().optional(),
+  // Lid bilan ishlaydigan xodim. Eslatma AYNAN shu odamga boradi.
+  assignedTo: z.string().nullable().optional(),
   status: statusEnum.optional(),
   trialDate: z.coerce.date().nullable().optional(),
   notes: z.string().max(2000).optional(),
@@ -115,6 +120,19 @@ export const reminderSchema = z.object({
   body: z.object({
     followUpAt: z.coerce.date().nullable().optional(),
     followUpNote: z.string().max(500).optional(),
+  }),
+});
+
+// KO'P LIDGA bir martada eslatma. Chegara 200 ta: bundan ko'pi bir
+// so'rovda ishlanmasin - ro'yxatni bo'lib yuborish kerak.
+export const reminderBulkSchema = z.object({
+  body: z.object({
+    ids: z.array(z.string().min(1)).min(1).max(200),
+    followUpAt: z.coerce.date().nullable().optional(),
+    followUpNote: z.string().max(500).optional(),
+    // Berilsa - tanlangan lidlarning MAS'ULI ham almashtiriladi
+    // ("bu 20 ta lid Aziza bilan ishlaydi").
+    assignedTo: z.string().nullable().optional(),
   }),
 });
 

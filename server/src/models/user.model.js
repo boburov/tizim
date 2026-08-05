@@ -63,12 +63,34 @@ const userSchema = new mongoose.Schema(
     // Arxivlangan (isActive=false qilingan) payt. Tiklanganda null bo'ladi.
     archivedAt: { type: Date, default: null },
 
+    // OXIRGI KIRISH - faqat haqiqiy login'da yoziladi (token yangilanishida
+    // EMAS). Xodimlar ro'yxati "kim tizimdan foydalanmoqda"ni shu maydondan
+    // ko'radi.
+    //
+    // DIQQAT: RefreshToken'dan chiqarib bo'lmaydi - u 7 kunlik TTL bilan
+    // o'chadi va har token rotatsiyasida yangi qator yaratiladi, ya'ni uning
+    // createdAt'i "oxirgi faollik"ka siljib ketadi. ActivityLog ham yaramaydi:
+    // /auth/login requireAuth'siz mount qilingan, shuning uchun login yozuvida
+    // `user: null` turadi.
+    lastLoginAt: { type: Date, default: null },
+
     // Profil ma'lumotlari (ixtiyoriy)
     birthDate: { type: Date, default: null },
     gender: { type: String, enum: ["male", "female"], default: null },
 
     // Faqat student rolidagi maydon
     enrolledAt: { type: Date, default: null },
+    // QAYSI LIDDAN kelgan (konversiyada yoziladi). Resepshin KPI zanjirining
+    // bo'g'ini: xodim -> lid -> o'quvchi -> davomat/to'lov -> mukofot.
+    //
+    // Lead.studentId teskari yo'nalishda ham bor, lekin KPI hisobi o'quvchidan
+    // boshlanadi ("shu o'quvchi 30 kun qatnadi - kimga mukofot?") va har safar
+    // lidlar kolleksiyasini skanerlash qimmat.
+    leadId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Lead",
+      default: null,
+    },
     // O'qishni yakunlagan sana (avtomatik yoki qo'lda). null = hali yakunlamagan.
     completedAt: { type: Date, default: null },
     // completedAt owner tomonidan qo'lda o'rnatilganmi - avto-recompute uni bosib o'tmaydi.
@@ -99,6 +121,9 @@ userSchema.pre("validate", function ensureRole(next) {
 // FILIAL bo'yicha ro'yxat so'rovlari uchun.
 // $or ikki shoxli: homeBranchId YOKI branchAssignments.branchId - MongoDB
 // har shox uchun alohida indeks ishlatadi, shuning uchun ikkalasi ham kerak.
+// Lid bo'yicha teskari qidiruv (KPI atributsiyasi).
+userSchema.index({ leadId: 1 }, { sparse: true });
+
 userSchema.index({ homeBranchId: 1, isDeleted: 1, isActive: 1 });
 userSchema.index({ "branchAssignments.branchId": 1, isDeleted: 1, isActive: 1 });
 

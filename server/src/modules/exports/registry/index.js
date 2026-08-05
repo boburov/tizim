@@ -1,5 +1,6 @@
 import studentPaymentsDataset from "./studentPayments.dataset.js";
 import teachersDataset from "./teachers.dataset.js";
+import staffDataset from "./staff.dataset.js";
 import { hasPermission } from "../../../helpers/permission.helper.js";
 
 // EKSPORT REYESTRI - ustunlarning YAGONA manbasi.
@@ -15,6 +16,7 @@ import { hasPermission } from "../../../helpers/permission.helper.js";
 const DATASETS = Object.freeze({
   [studentPaymentsDataset.key]: studentPaymentsDataset,
   [teachersDataset.key]: teachersDataset,
+  [staffDataset.key]: staffDataset,
 });
 
 export const getDataset = (key) => DATASETS[key] || null;

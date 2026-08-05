@@ -64,6 +64,10 @@ export const APPROVAL_KINDS = Object.freeze({
   // UMUMIY CHIQIM (ijara, ta'mir, reklama, jihoz). Pul hisobdan chiqadi →
   // financial, filial limitiga solishtiriladi.
   EXPENSE_CREATE: "expense_create", // (financial)
+  // XODIM MAOSHI (o'qituvchi bo'lmagan xodimlar: resepshin, buxgalter...).
+  // SALARY_PAYMENT dan ALOHIDA: u TeacherSalary qatoriga bog'langan va
+  // uning bajaruvchisi guruhni talab qiladi.
+  STAFF_SALARY_PAYMENT: "staff_salary_payment", // (financial)
 });
 
 export const ALL_APPROVAL_KINDS = Object.values(APPROVAL_KINDS);
@@ -81,6 +85,7 @@ export const KIND_CATEGORY = Object.freeze({
   // FINANCIAL: yaratiladigan qarz summasi limitga solishtiriladi.
   [APPROVAL_KINDS.MEMBERSHIP_BACKDATE]: APPROVAL_CATEGORIES.FINANCIAL,
   [APPROVAL_KINDS.EXPENSE_CREATE]: APPROVAL_CATEGORIES.FINANCIAL,
+  [APPROVAL_KINDS.STAFF_SALARY_PAYMENT]: APPROVAL_CATEGORIES.FINANCIAL,
 });
 
 export const resolveCategory = (kind) => {

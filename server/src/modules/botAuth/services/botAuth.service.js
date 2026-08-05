@@ -197,6 +197,11 @@ export const loginAndLink = async ({ login, password, initData, userAgent, ip })
     userAgent,
     ip,
   });
+
+  // Bot orqali kirish ham KIRISH: auth.service.login bilan bir xil yozuv
+  // (Xodimlar ro'yxatidagi "oxirgi kirish" ustuni shuni o'qiydi).
+  await User.updateOne({ _id: user._id }, { $set: { lastLoginAt: new Date() } });
+
   return {
     accessToken,
     refreshToken,

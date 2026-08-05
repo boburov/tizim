@@ -1,25 +1,31 @@
+import { cn } from "@/shared/utils/cn";
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
 import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import { LEAD_STATUS_OPTIONS } from "@/shared/constants/leadStatus";
 import { PERMISSIONS } from "@/shared/constants/permissions";
+import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
 import useLeadOptionsQuery from "../hooks/useLeadOptionsQuery";
 import LeadOptionCreateModal from "./LeadOptionCreateModal";
-
-// Server bilan bir xil bo'lishi SHART (leads.validators.js: MIN_NOTE).
-const MIN_CLOSING_NOTE = 10;
+import {
+  digitsOnly,
+  MIN_CLOSING_NOTE,
+} from "../utils/leadValidation";
 
 const withEmpty = (data, placeholder = "-") => [
   { value: "", label: placeholder },
   ...(data?.data || []).map((o) => ({ value: o._id, label: o.name })),
 ];
 
-// Ikki raqam bir xilligini tekshirish uchun: formatlash belgilarini
-// (probel, qavs, chiziqcha, +) tashlab faqat raqamlarni solishtiramiz.
-// "+998 90 123 45 67" va "998901234567" - bir xil raqam.
-const digitsOnly = (v) => String(v || "").replace(/\D/g, "");
+// Maydon ostidagi qizil izoh. Xato matni bo'lmasa - hech narsa chiqmaydi.
+const FieldError = ({ children }) =>
+  children ? (
+    <p className="mt-1 text-xs text-red-600 dark:text-red-300">{children}</p>
+  ) : null;
 
-const LeadFormFields = ({ obj, disabled = false }) => {
+// `errors` - { maydon: "xato matni" }. Faqat forma YUBORILGANDAN keyin
+// to'ldiriladi: hali yozayotgan odamga qizil bo'yash bosim beradi.
+const LeadFormFields = ({ obj, disabled = false, errors = {} }) => {
   // Ikkala maydon ham to'ldirilgan VA bir xil bo'lsa - xato.
   // Server ham shuni rad etadi, lekin foydalanuvchi buni YOZAYOTGANDA
   // ko'rishi kerak, saqlash tugmasini bosgandan keyin emas.
@@ -31,17 +37,33 @@ const LeadFormFields = ({ obj, disabled = false }) => {
   const directionQ = useLeadOptionsQuery({ kind: "direction" });
   const rejectionQ = useLeadOptionsQuery({ kind: "rejection" });
 
+  // MAS'UL uchun ro'yxat: o'quvchidan boshqa hamma (ega, o'qituvchi, custom
+  // rollar). `staff: 1` - server bayrog'i, ertaga yaratilgan rol ham
+  // avtomatik shu ro'yxatga tushadi.
+  const staffQ = useUsersListQuery({ staff: 1, limit: 200 });
+  const staffOptions = [
+    { value: "", label: "Mas'ul yo'q" },
+    ...(staffQ.data?.data || []).map((u) => ({
+      value: u._id,
+      label: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username,
+    })),
+  ];
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <InputField
-          name="firstName"
-          label="Ism"
-          value={obj.firstName}
-          onChange={(e) => obj.setField("firstName", e.target.value)}
-          required
-          disabled={disabled}
-        />
+        <div>
+          <InputField
+            name="firstName"
+            label="Ism"
+            value={obj.firstName}
+            onChange={(e) => obj.setField("firstName", e.target.value)}
+            required
+            error={!!errors.firstName}
+            disabled={disabled}
+          />
+          <FieldError>{errors.firstName}</FieldError>
+        </div>
         <InputField
           name="lastName"
           label="Familiya"
@@ -57,44 +79,54 @@ const LeadFormFields = ({ obj, disabled = false }) => {
           sotuvni to'g'ridan-to'g'ri yo'qotadi - ikkinchi raqam aynan shu
           xavfni kamaytiradi, shuning uchun u birinchisining YONIDA. */}
       <div className="grid grid-cols-2 gap-3">
-        <InputField
-          type="tel"
-          name="phone"
-          label="Telefon"
-          value={obj.phone}
-          onChange={(e) => obj.setField("phone", e.target.value)}
-          required
-          disabled={disabled}
-        />
+        <div>
+          <InputField
+            type="tel"
+            name="phone"
+            label="Telefon"
+            value={obj.phone}
+            onChange={(e) => obj.setField("phone", e.target.value)}
+            required
+            error={!!errors.phone}
+            disabled={disabled}
+          />
+          <FieldError>{errors.phone}</FieldError>
+        </div>
         <InputField
           type="tel"
           name="parentPhone"
           label="Qo'shimcha telefon"
           description="O'zining yoki ota-onasining (ixtiyoriy)"
           value={obj.parentPhone}
-          error={bothPhonesSame}
+          error={bothPhonesSame || !!errors.parentPhone}
           onChange={(e) => obj.setField("parentPhone", e.target.value)}
           disabled={disabled}
         />
       </div>
 
-      {bothPhonesSame && (
+      {bothPhonesSame ? (
         <p className="-mt-1 text-xs text-red-600 dark:text-red-300">
           Ikkala raqam bir xil. Qo&apos;shimcha raqam BOSHQA odamniki
           bo&apos;lishi kerak — aks holda undan foyda yo&apos;q.
         </p>
+      ) : (
+        <FieldError>{errors.parentPhone}</FieldError>
       )}
 
-      <InputField
-        type="number"
-        name="age"
-        label="Yoshi"
-        min="1"
-        max="120"
-        value={obj.age}
-        onChange={(e) => obj.setField("age", e.target.value)}
-        disabled={disabled}
-      />
+      <div>
+        <InputField
+          type="number"
+          name="age"
+          label="Yoshi"
+          min="1"
+          max="120"
+          value={obj.age}
+          onChange={(e) => obj.setField("age", e.target.value)}
+          error={!!errors.age}
+          disabled={disabled}
+        />
+        <FieldError>{errors.age}</FieldError>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <CreatableSelectField
@@ -125,6 +157,23 @@ const LeadFormFields = ({ obj, disabled = false }) => {
         />
       </div>
 
+      {/* MAS'UL. Eslatma aynan shu odamga boradi (platformada ham,
+          Telegramda ham) - shuning uchun u eslatma maydonlariga eng yaqin
+          joyda turadi. Bo'sh qoldirilsa eslatma egalarga tushadi. */}
+      <SelectField
+        searchable
+        label="Mas'ul xodim"
+        description="Qayta bog'lanish eslatmasi shu odamga yuboriladi"
+        value={obj.assignedTo || ""}
+        onChange={(v) => obj.setField("assignedTo", v)}
+        options={staffOptions}
+        isLoading={staffQ.isLoading}
+        placeholder="Mas'ul yo'q"
+        searchPlaceholder="Xodim qidirish..."
+        emptyText="Xodim topilmadi"
+        disabled={disabled}
+      />
+
       <div className="grid grid-cols-2 gap-3">
         <SelectField
           label="Status"
@@ -152,7 +201,7 @@ const LeadFormFields = ({ obj, disabled = false }) => {
             onChange={(v) => obj.setField("rejectionReasonId", v)}
             options={withEmpty(rejectionQ.data)}
             required
-            error={!obj.rejectionReasonId}
+            error={!obj.rejectionReasonId || !!errors.rejectionReasonId}
             disabled={disabled}
             createLabel="Yangi sabab"
             createTitle="Yangi rad etish sababi"
@@ -176,12 +225,16 @@ const LeadFormFields = ({ obj, disabled = false }) => {
             <textarea
               id="rejectionNote"
               rows={2}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className={cn(
+                "w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary",
+                errors.rejectionNote && "border-red-500",
+              )}
               placeholder="Narxi qimmat dedi, 400 mingga rozi edi"
               value={obj.rejectionNote || ""}
               onChange={(e) => obj.setField("rejectionNote", e.target.value)}
               disabled={disabled}
             />
+            <FieldError>{errors.rejectionNote}</FieldError>
             <p className="mt-1 text-xs text-muted-foreground">
               Kamida {MIN_CLOSING_NOTE} ta belgi. Bu matn &quot;nega mijozlar
               kelmayapti?&quot; tahlilining yagona manbai.

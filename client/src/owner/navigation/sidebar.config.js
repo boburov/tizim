@@ -103,6 +103,11 @@ const ownerSidebar = [
         url: "/owner/teachers",
         permission: "users.read",
       },
+      // XODIMLAR: ega, o'qituvchilar va custom rollar (direktor, buxgalter,
+      // resepshin) bitta ro'yxatda - o'quvchilardan tashqari hamma.
+      // Ruxsat GET /users bilan bir xil: aks holda menyuda ko'rinib,
+      // ro'yxatning o'zi 403 qaytarardi.
+      { title: "Xodimlar", url: "/owner/staff", permission: "users.read" },
       { title: "Guruhlar", url: "/owner/groups", permission: "groups.read" },
       // Davomat: umumiy/guruh hisoboti + belgilash - bitta sahifa, uch tab.
       { title: "Davomat", url: "/owner/attendance", permission: "attendance.read" },

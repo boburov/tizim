@@ -13,6 +13,7 @@ import {
   convertSchema,
   convertBulkSchema,
   reminderSchema,
+  reminderBulkSchema,
 } from "./validators/leads.validators.js";
 
 import list from "./handlers/list.handler.js";
@@ -23,6 +24,7 @@ import remove from "./handlers/remove.handler.js";
 import convert from "./handlers/convert.handler.js";
 import convertBulk from "./handlers/convertBulk.handler.js";
 import reminder from "./handlers/reminder.handler.js";
+import reminderBulk from "./handlers/reminderBulk.handler.js";
 import stats from "./handlers/stats.handler.js";
 
 const router = Router();
@@ -72,6 +74,15 @@ router.post(
   requirePermission(PERMISSIONS.LEADS_MANAGE),
   validate(convertSchema),
   convert,
+);
+// Ko'p lidga bir martada eslatma. "/:id/reminder" dan OLDIN turadi -
+// "reminder-bulk" hech qachon `:id` sifatida tutilmasin.
+router.post(
+  "/reminder-bulk",
+  requireAuth,
+  requirePermission(PERMISSIONS.LEADS_UPDATE),
+  validate(reminderBulkSchema),
+  reminderBulk,
 );
 router.post(
   "/:id/reminder",

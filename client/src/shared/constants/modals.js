@@ -27,6 +27,8 @@ export const MODAL = Object.freeze({
 
   // Xodim (direktor/administrator) qo'shish
   STAFF_CREATE: "staff:create",
+  // Xodimning rolini almashtirish (Xodimlar ro'yxatidan)
+  STAFF_ROLE: "staff:role",
   USER_BRANCH: "user:branch",
 
   // Filiallar
@@ -50,6 +52,7 @@ export const MODAL = Object.freeze({
   LEAD_CONVERT: "lead:convert",
   LEAD_BULK_CONVERT: "lead:bulkConvert",
   LEAD_REMINDER: "lead:reminder",
+  LEAD_BULK_REMINDER: "lead:bulkReminder",
   LEAD_OPTION_CREATE: "leadOption:create",
   LEAD_OPTION_EDIT: "leadOption:edit",
   LEAD_OPTION_DELETE: "leadOption:delete",
@@ -124,6 +127,13 @@ export const MODAL = Object.freeze({
   // Depozit (garov)
   DEPOSIT_ADD: "deposit:add",
   DEPOSIT_WITHDRAW: "deposit:withdraw",
+
+  // Xodimlar maoshi + KPI
+  STAFF_PAYROLL_DETAIL: "staffPayroll:detail",
+  STAFF_PAYOUT: "staffPayroll:payout",
+  STAFF_ADJUSTMENT: "staffPayroll:adjustment",
+  STAFF_COMPENSATION_SET: "staffPayroll:compensationSet",
+  KPI_RULE_FORM: "kpiRule:form",
 
   // Teacher salary (O'qituvchi maoshlari)
   SALARY_ADD_PAYOUT: "salary:addPayout",

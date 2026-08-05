@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, UserCheck, X } from "lucide-react";
+import { Plus, UserCheck, BellRing, X } from "lucide-react";
 import Button from "@/shared/components/ui/button/Button";
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
@@ -23,8 +23,10 @@ import LeadDeleteModal from "../components/LeadDeleteModal";
 import LeadConvertModal from "../components/LeadConvertModal";
 import LeadBulkConvertModal from "../components/LeadBulkConvertModal";
 import LeadReminderModal from "../components/LeadReminderModal";
+import LeadBulkReminderModal from "../components/LeadBulkReminderModal";
 import useLeadsQuery from "../hooks/useLeadsQuery";
 import useLeadOptionsQuery from "../hooks/useLeadOptionsQuery";
+import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
 
 const LIMIT = 20;
 
@@ -47,11 +49,15 @@ const LeadsListPage = () => {
   // qila olmaydi - u boshqa toifadagi qaror (joy, to'lov, jadval).
   const canCreate = has(PERMISSIONS.LEADS_CREATE);
   const canManage = has(PERMISSIONS.LEADS_MANAGE);
+  // Eslatma - TAHRIRLASH darajasidagi amal (guruhga qabul qilish emas).
+  // Resepshin ham o'z lidlariga qayta qo'ng'iroq qo'ya olishi kerak.
+  const canUpdate = has(PERMISSIONS.LEADS_UPDATE);
   const filters = useObjectState({
     search: "",
     status: "",
     source: "",
     direction: "",
+    assignedTo: "",
   });
 
   // ALOQA FILTRI - MANBA HAQIQATI URL'da, komponent state'ida EMAS.
@@ -85,12 +91,25 @@ const LeadsListPage = () => {
 
   const sourceQ = useLeadOptionsQuery({ kind: "source" });
   const directionQ = useLeadOptionsQuery({ kind: "direction" });
+  const staffQ = useUsersListQuery({ staff: 1, limit: 200 });
+
+  // "none" - mas'uli yo'q lidlar. Bu eng muhim ko'rinish: egasiz lid bilan
+  // hech kim ishlamaydi va u jimgina yo'qoladi.
+  const assigneeOptions = [
+    { value: "", label: "Barcha mas'ullar" },
+    { value: "none", label: "Mas'uli yo'q" },
+    ...(staffQ.data?.data || []).map((u) => ({
+      value: u._id,
+      label: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username,
+    })),
+  ];
 
   const { data, isLoading, isError, refetch } = useLeadsQuery({
     search: debouncedSearch || undefined,
     status: filters.status || undefined,
     source: filters.source || undefined,
     direction: filters.direction || undefined,
+    assignedTo: filters.assignedTo || undefined,
     engagement: engagement || undefined,
     page,
     limit: LIMIT,
@@ -139,7 +158,7 @@ const LeadsListPage = () => {
         )}
       </header>
 
-      <div className="grid grid-cols-1 gap-2 rounded-lg border bg-card p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-2 rounded-lg border bg-card p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <InputField
           name="search"
           type="search"
@@ -173,15 +192,24 @@ const LeadsListPage = () => {
           onChange={updateEngagement}
           options={ENGAGEMENT_OPTIONS}
         />
+        <SelectField
+          searchable
+          value={filters.assignedTo}
+          onChange={(v) => update("assignedTo", v)}
+          options={assigneeOptions}
+          searchPlaceholder="Xodim qidirish..."
+          emptyText="Xodim topilmadi"
+        />
       </div>
 
-      {/* Tanlov paneli - lid tanlanganda VA ommaviy qabul huquqi bo'lganda. */}
-      {canManage && selectedLeads.length > 0 && (
+      {/* Tanlov paneli. Har tugma O'Z huquqiga bog'langan: resepshin
+          eslatma qo'ya oladi, lekin guruhga qabul qila olmaydi. */}
+      {(canManage || canUpdate) && selectedLeads.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
           <p className="text-sm font-medium">
             {selectedLeads.length} ta lid tanlandi
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
@@ -190,18 +218,35 @@ const LeadsListPage = () => {
               <X className="size-4" />
               Bekor qilish
             </Button>
-            <Button
-              size="sm"
-              onClick={() =>
-                openModal(MODAL.LEAD_BULK_CONVERT, {
-                  leads: selectedLeads,
-                  onDone: () => setSelectedIds([]),
-                })
-              }
-            >
-              <UserCheck className="size-4" />
-              Guruhga qabul qilish
-            </Button>
+            {canUpdate && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  openModal(MODAL.LEAD_BULK_REMINDER, {
+                    leads: selectedLeads,
+                    onDone: () => setSelectedIds([]),
+                  })
+                }
+              >
+                <BellRing className="size-4" />
+                Eslatma o&apos;rnatish
+              </Button>
+            )}
+            {canManage && (
+              <Button
+                size="sm"
+                onClick={() =>
+                  openModal(MODAL.LEAD_BULK_CONVERT, {
+                    leads: selectedLeads,
+                    onDone: () => setSelectedIds([]),
+                  })
+                }
+              >
+                <UserCheck className="size-4" />
+                Guruhga qabul qilish
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -256,6 +301,13 @@ const LeadsListPage = () => {
       </ModalWrapper>
       <ModalWrapper name={MODAL.LEAD_REMINDER} title="Qayta bog'lanish eslatmasi">
         <LeadReminderModal />
+      </ModalWrapper>
+      <ModalWrapper
+        name={MODAL.LEAD_BULK_REMINDER}
+        title="Ommaviy eslatma"
+        className="max-w-lg"
+      >
+        <LeadBulkReminderModal />
       </ModalWrapper>
     </div>
   );

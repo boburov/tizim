@@ -27,6 +27,12 @@ export const qk = Object.freeze({
     list: (params) => ["users", "list", params],
     one: (id) => ["users", "detail", id],
     password: (id) => ["users", "password", id],
+    // "users" prefiksi ATAYLAB: har qanday foydalanuvchi mutatsiyasi
+    // qk.users.all() ni invalidatsiya qiladi va kartochkalar ham yangilanadi.
+    staffStats: () => ["users", "staff-stats"],
+    // Telefon/login bandligi. Kalitga parametrlar kiradi - har raqam
+    // uchun javob alohida keshlanadi va bir xil raqam qayta so'ralmaydi.
+    availability: (params) => ["users", "availability", params],
     groupHistory: (id, params) => ["users", id, "group-history", params],
   },
   roles: {
@@ -287,6 +293,19 @@ export const qk = Object.freeze({
     groupBreakdown: (params) => ["financeReport", "groupBreakdown", params],
     ledger: (params) => ["financeReport", "ledger", params],
     writeOffs: (params) => ["financeReport", "writeOffs", params],
+  },
+
+  // Xodimlar maoshi + KPI
+  staffPayroll: {
+    all: () => ["staffPayroll"],
+    list: (params) => ["staffPayroll", "list", params],
+    one: (id) => ["staffPayroll", "one", id],
+    byEmployee: (employeeId) => ["staffPayroll", "employee", employeeId],
+    compensations: (employeeId) => ["staffPayroll", "compensations", employeeId],
+    compensationsMissing: () => ["staffPayroll", "compensations", "missing"],
+    rules: (params) => ["staffPayroll", "rules", params],
+    triggers: () => ["staffPayroll", "triggers"],
+    assignments: (employeeId) => ["staffPayroll", "assignments", employeeId],
   },
 
   // Teacher salary (O'qituvchi maoshlari)

@@ -178,6 +178,10 @@ const seed = async () => {
     PERMISSIONS.FINANCE_MANAGE,
     PERMISSIONS.SALARY_READ,
     PERMISSIONS.SALARY_PAY,
+    // Xodimlar maoshini KO'RA oladi. PAYROLL_MANAGE/PAY ataylab
+    // berilmagan: KPI qoidasini o'zgartirish va pul chiqarish - egasining
+    // qarori.
+    PERMISSIONS.PAYROLL_READ,
     PERMISSIONS.NOTIFICATIONS_READ,
     PERMISSIONS.NOTIFICATIONS_SEND,
     // Vazifalarni KO'RA oladi (kvota kimning fayllari bilan to'layotganini

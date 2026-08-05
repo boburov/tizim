@@ -24,8 +24,11 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
  * branchAssignments - qo'shimcha filiallar, har birida O'Z roli bo'lishi
  *                     mumkin (A da direktor, B da o'qituvchi).
  */
-const UserBranchModal = ({ close, isLoading, setIsLoading, data }) => {
-  const user = data?.user || {};
+const UserBranchModal = ({ close, isLoading, setIsLoading, user: userProp, data }) => {
+  // ModalWrapper payload'ni TEKIS tarqatadi ({ user }), `data` obyekti
+  // sifatida EMAS - shuning uchun `data?.user` doim undefined bo'lib, forma
+  // bo'sh ochilardi. Eski chaqiruv uslubi ham ishlashda qolsin.
+  const user = userProp || data?.user || {};
 
   const obj = useObjectState({
     homeBranchId: String(user.homeBranchId?._id || user.homeBranchId || ""),

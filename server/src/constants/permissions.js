@@ -89,6 +89,18 @@ export const PERMISSIONS = Object.freeze({
   SALARY_READ: "salary.read",
   SALARY_PAY: "salary.pay",
 
+  // XODIMLAR MAOSHI (o'qituvchi bo'lmagan xodimlar + KPI).
+  //
+  // SALARY_* dan ATAYLAB ajratilgan: u allaqachon "faqat o'qituvchilarni
+  // ko'rsin" deb berilgan odamlarda bor. Xodim maoshi esa boshqa
+  // ma'lumot - direktor va resepshin oyligini ko'rish huquqi alohida
+  // qaror bo'lishi kerak.
+  PAYROLL_READ: "payroll.read",
+  // KPI qoidalari va maosh shartnomalari - "shartlarni belgilash".
+  PAYROLL_MANAGE: "payroll.manage",
+  // Pul chiqishi - eng kuchli huquq, alohida.
+  PAYROLL_PAY: "payroll.pay",
+
   // UMUMIY CHIQIMLAR (ijara, kommunal, ta'mir, reklama, jihoz, soliq).
   // SALARY_* dan ATAYLAB ajratilgan: maosh to'lash va ofis xarajatlarini
   // yozish odatda BOSHQA odamlarning ishi (kassir / xo'jalik mudiri).
@@ -252,6 +264,18 @@ export const PERMISSION_LABELS = {
 
   [PERMISSIONS.SALARY_READ]: { label: "Maoshlarni ko'rish", group: "finance" },
   [PERMISSIONS.SALARY_PAY]: { label: "Maosh to'lash", group: "finance" },
+  [PERMISSIONS.PAYROLL_READ]: {
+    label: "Xodimlar maoshini ko'rish",
+    group: "finance",
+  },
+  [PERMISSIONS.PAYROLL_MANAGE]: {
+    label: "KPI qoidalari va maosh shartnomalari",
+    group: "finance",
+  },
+  [PERMISSIONS.PAYROLL_PAY]: {
+    label: "Xodimga maosh to'lash",
+    group: "finance",
+  },
   [PERMISSIONS.EXPENSES_READ]: { label: "Chiqimlarni ko'rish", group: "finance" },
   [PERMISSIONS.EXPENSES_CREATE]: { label: "Chiqim qo'shish", group: "finance" },
   [PERMISSIONS.EXPENSES_MANAGE]: {

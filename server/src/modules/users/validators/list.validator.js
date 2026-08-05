@@ -6,6 +6,10 @@ export const listSchema = z.object({
     // filtrlash mumkin bo'lsin.
     role: z.string().min(1).optional(),
     search: z.string().optional(),
+    // XODIMLAR ro'yxati: o'quvchidan boshqa hamma (owner + o'qituvchi +
+    // custom rollar). Rol nomlari DINAMIK bo'lgani uchun ro'yxat emas,
+    // bayroq: ertaga yaratilgan rol ham avtomatik ko'rinadi.
+    staff: z.enum(["0", "1", "true", "false"]).optional(),
     archived: z.enum(["0", "1", "true", "false"]).optional(),
     // Holat filtri: active (faol) | archived (arxiv) | frozen (muzlatilgan) |
     // all (hammasi). Berilmasa - active.

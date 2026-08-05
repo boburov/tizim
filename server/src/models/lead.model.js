@@ -65,6 +65,22 @@ const leadSchema = new mongoose.Schema(
     trialDate: { type: Date, default: null },
     notes: { type: String, default: "" },
 
+    // MAS'UL xodim - lid bilan kim ishlaydi.
+    //
+    // NEGA KERAK: eslatma "hammaga" chiqsa u HECH KIMNIKI emas - besh
+    // kishilik jamoada har biri "boshqasi qo'ng'iroq qilar" deb o'ylaydi va
+    // lid jimgina o'ladi. Aynan bitta odamga manzillangan eslatma javobgarni
+    // belgilaydi: platformada ham, Telegramda ham xabar O'SHANGA boradi.
+    //
+    // Bo'sh bo'lishi mumkin (majburiy emas): mas'ul tayinlanmagan lidning
+    // eslatmasi egalarga (owner) tushadi - e'tiborsiz qolmasin.
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
+
     // Qayta bog'lanish eslatmasi - vaqti kelganda tizim bildirishnomasi chiqadi
     followUpAt: { type: Date, default: null },
     followUpNote: { type: String, default: "" },
@@ -76,6 +92,29 @@ const leadSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+
+    // KONVERSIYA ATRIBUTSIYASI - KPI mukofoti kimga tegishli.
+    //
+    // `assignedTo` dan ALOHIDA saqlanadi va keyin O'ZGARMAYDI: mas'ul xodim
+    // ertaga almashtirilishi mumkin, lekin o'sha oy uchun hisoblangan
+    // mukofot o'zgarmasligi kerak. Aks holda mas'ulni almashtirish o'tgan
+    // oylardagi maoshni qayta yozib yuborardi.
+    //
+    // creditedTo - mukofot KIMGA yoziladi (mas'ul xodim, u yo'q bo'lsa
+    // lidni yaratgan yoki aylantirgan odam).
+    // convertedBy - amalni KIM bajardi (audit uchun; creditedTo dan farq
+    // qilishi mumkin: direktor resepshin lidini aylantirsa).
+    creditedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    convertedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    convertedAt: { type: Date, default: null },
 
     statusHistory: { type: [statusHistorySchema], default: [] },
 
@@ -92,6 +131,13 @@ leadSchema.index({ status: 1, createdAt: -1 });
 leadSchema.index({ source: 1 });
 leadSchema.index({ direction: 1 });
 leadSchema.index({ followUpAt: 1, followUpNotifiedAt: 1 });
+// Kunlik yig'ma: "shu xodimning bugungi eslatmalari" so'rovi uchun.
+leadSchema.index({ assignedTo: 1, followUpAt: 1 });
+// KPI: "shu xodim shu oyda nechta lidni aylantirdi" - maosh hisobining
+// eng issiq so'rovi.
+leadSchema.index({ creditedTo: 1, convertedAt: -1 });
+// Teskari qidiruv (o'quvchidan lidga). Indekssiz bu kolleksiya skani edi.
+leadSchema.index({ studentId: 1 }, { sparse: true });
 
 leadSchema.set("toJSON", {
   transform: (_doc, ret) => {

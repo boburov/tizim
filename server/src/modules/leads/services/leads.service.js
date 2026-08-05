@@ -1,5 +1,6 @@
 import Lead from "../../../models/lead.model.js";
 import LeadOption from "../../../models/leadOption.model.js";
+import User from "../../../models/user.model.js";
 import Group from "../../../models/group.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { normalizePhone } from "../../../utils/phone.js";
@@ -18,12 +19,14 @@ const POPULATE = [
   { path: "source", select: { name: 1 } },
   { path: "direction", select: { name: 1 } },
   { path: "rejectionReason", select: { name: 1 } },
+  { path: "assignedTo", select: { firstName: 1, lastName: 1, role: 1 } },
 ];
 
 export const list = async ({
   status,
   source,
   direction,
+  assignedTo,
   engagement,
   search,
   from,
@@ -36,6 +39,10 @@ export const list = async ({
   if (status) filter.status = status;
   if (source) filter.source = source;
   if (direction) filter.direction = direction;
+  // "none" - mas'ul biriktirilmagan lidlar. Bu filtr aynan eng xavfli
+  // to'plamni ko'rsatadi: egasiz lid bilan hech kim ishlamaydi.
+  if (assignedTo === "none") filter.assignedTo = null;
+  else if (assignedTo) filter.assignedTo = assignedTo;
 
   // ALOQA FILTRI.
   //
@@ -153,6 +160,7 @@ export const create = async (body, currentUser) => {
     closedAt: status === "rejected" ? new Date() : null,
     trialDate: body.trialDate ? new Date(body.trialDate) : null,
     notes: body.notes || "",
+    assignedTo: body.assignedTo || null,
     createdBy: currentUser?._id || null,
     statusHistory: [
       { status, at: new Date(), by: currentUser?._id || null },
@@ -199,6 +207,7 @@ export const update = async (id, body, currentUser) => {
     lead.trialDate = body.trialDate ? new Date(body.trialDate) : null;
   }
   if (body.notes !== undefined) lead.notes = body.notes || "";
+  if (body.assignedTo !== undefined) lead.assignedTo = body.assignedTo || null;
   if (body.rejectionNote !== undefined) {
     lead.rejectionNote = (body.rejectionNote || "").trim();
   }
@@ -244,12 +253,74 @@ export const setReminder = async (id, { followUpAt, followUpNote }) => {
   return getById(lead._id);
 };
 
+// KO'P LIDGA BIR MARTADA eslatma.
+//
+// Amaliy holat: xodim ertalab ro'yxatdan 15 ta "javob bermadi" lidini
+// belgilab, hammasiga "ertaga 10:00 da qayta qo'ng'iroq" qo'yadi. Buni
+// bittalab qilish 15 marta oyna ochish demakdir - shuning uchun bitta amal.
+//
+// Har lid ALOHIDA ishlanadi: bittasi topilmasa (boshqa filial, o'chirilgan)
+// qolganlari baribir o'rnatiladi va natijada nima yiqilgani qaytariladi.
+export const setReminderBulk = async ({
+  ids = [],
+  followUpAt,
+  followUpNote,
+  assignedTo,
+}) => {
+  if (!ids.length) throw new ApiError(400, "Lid tanlanmagan");
+  if (new Set(ids.map(String)).size !== ids.length) {
+    throw new ApiError(400, "Ro'yxatda takrorlangan lid bor");
+  }
+
+  const updated = [];
+  const failed = [];
+
+  for (const id of ids) {
+    try {
+      // FILIAL: boshqa filial lidiga eslatma qo'yib bo'lmaydi.
+      const lead = await Lead.findOne({ _id: id, ...branchFilter() });
+      if (!lead) throw new ApiError(404, "Lid topilmadi");
+
+      lead.followUpAt = followUpAt ? new Date(followUpAt) : null;
+      lead.followUpNote = followUpNote || "";
+      // Yangi/yangilangan eslatma qayta yuborilishi uchun bayroq tozalanadi.
+      lead.followUpNotifiedAt = null;
+      // Mas'ul BERILGANDA almashtiriladi. Berilmasa lidning o'z mas'uli
+      // saqlanadi - ommaviy eslatma tayinlashni bekor qilmasligi kerak.
+      if (assignedTo !== undefined) lead.assignedTo = assignedTo || null;
+
+      await lead.save();
+      updated.push(String(lead._id));
+    } catch (err) {
+      failed.push({
+        leadId: String(id),
+        message: err?.message || "Eslatma o'rnatilmadi",
+      });
+    }
+  }
+
+  return { updated, failed };
+};
+
 // Vaqti kelgan, hali bildirishnoma yuborilmagan eslatmalar (job uchun)
 export const dueReminders = async (now = new Date()) =>
   Lead.find({
     followUpAt: { $ne: null, $lte: now },
     followUpNotifiedAt: null,
   }).lean();
+
+// Kunlik yig'ma uchun: berilgan oraliqda vaqti kelgan/o'tib ketgan, hali
+// yopilmagan lidlar. Yopilgan (rad etilgan/aylantirilgan) lid uchun
+// "bog'laning" deyish - operatorni bekorga chalg'itish.
+export const remindersUpTo = async (until = new Date()) =>
+  Lead.find({
+    followUpAt: { $ne: null, $lte: until },
+    status: { $nin: ["enrolled", "rejected"] },
+    studentId: null,
+  })
+    .select({ firstName: 1, lastName: 1, phone: 1, followUpAt: 1, followUpNote: 1, assignedTo: 1 })
+    .sort({ followUpAt: 1 })
+    .lean();
 
 export const markReminderNotified = async (id, at = new Date()) => {
   await Lead.updateOne({ _id: id }, { $set: { followUpNotifiedAt: at } });
@@ -310,6 +381,17 @@ const convertOne = async (lead, body, currentUser, groupId) => {
   );
 
   lead.studentId = student._id;
+
+  // ATRIBUTSIYA - KPI mukofoti kimga tegishli.
+  //
+  // Tartib: mas'ul xodim -> lidni yaratgan -> aylantirgan odam. Bir marta
+  // yoziladi va keyin O'ZGARMAYDI: mas'ulni ertaga almashtirish o'tgan
+  // oyning maoshini qayta yozib yuborishi mumkin emas.
+  lead.creditedTo =
+    lead.creditedTo || lead.assignedTo || lead.createdBy || currentUser?._id || null;
+  lead.convertedBy = lead.convertedBy || currentUser?._id || null;
+  lead.convertedAt = lead.convertedAt || new Date();
+
   if (lead.status !== "enrolled") {
     lead.status = "enrolled";
     lead.statusHistory.push({
@@ -319,6 +401,11 @@ const convertOne = async (lead, body, currentUser, groupId) => {
     });
   }
   await lead.save();
+
+  // O'QUVCHI -> LID havolasi. registerUser hujjatni QAT'IY oq ro'yxat
+  // bo'yicha quradi, shuning uchun `leadId` ni body orqali uzatib bo'lmaydi -
+  // u jimgina tushib qolardi. Alohida yozamiz (auth modulига tegmasdan).
+  await User.updateOne({ _id: student._id }, { $set: { leadId: lead._id } });
 
   let groupError = null;
   if (groupId) {

@@ -3,6 +3,7 @@ import useObjectState from "@/shared/hooks/useObjectState";
 import { useEffect } from "react";
 import useAuth from "@/shared/hooks/useAuth";
 import { useStaffCreateMutation } from "../hooks/useStaffMutations";
+import useAvailabilityQuery from "../hooks/useAvailabilityQuery";
 import { useRolesQuery } from "@/owner/features/roles";
 import { useBranchesQuery } from "@/owner/features/branches";
 
@@ -84,17 +85,24 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
   const usernameShort =
     obj.username.trim().length > 0 && obj.username.trim().length < 3;
 
+  // Telefon/login bandligi - saqlashdan OLDIN, maydonning o'zida.
+  const { phoneTaken, usernameTaken, isChecking, isStale } =
+    useAvailabilityQuery({ phone: obj.phone, username: obj.username });
+  const checkPending = isChecking || isStale;
+
   const isValid =
     obj.firstName.trim() &&
     obj.lastName.trim() &&
     obj.username.trim().length >= 3 &&
     obj.password.length >= 6 &&
     obj.role &&
-    obj.homeBranchId;
+    obj.homeBranchId &&
+    !phoneTaken &&
+    !usernameTaken;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!isValid) return;
+    if (!isValid || checkPending) return;
     setIsLoading(true);
     mutate({
       firstName: obj.firstName.trim(),
@@ -128,29 +136,44 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
         />
       </div>
 
-      <InputField
-        type="tel"
-        name="phone"
-        label="Telefon"
-        value={obj.phone}
-        onChange={(e) => obj.setField("phone", e.target.value)}
-        disabled={isLoading}
-      />
+      <div>
+        <InputField
+          type="tel"
+          name="phone"
+          label="Telefon"
+          value={obj.phone}
+          onChange={(e) => obj.setField("phone", e.target.value)}
+          error={phoneTaken}
+          disabled={isLoading}
+        />
+        {phoneTaken && (
+          <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+            Bu telefon raqam allaqachon ro&apos;yxatdan o&apos;tgan
+          </p>
+        )}
+      </div>
 
       <div className="pt-2 border-t">
         <p className="text-sm font-medium mb-2">Kirish ma'lumotlari</p>
         <div className="grid grid-cols-2 gap-3">
-          <InputField
-            name="username"
-            label="Login"
-            placeholder="masalan: aziz_dir"
-            value={obj.username}
-            onChange={(e) => obj.setField("username", e.target.value)}
-            error={usernameShort}
-            description={usernameShort ? "Kamida 3 ta belgi" : ""}
-            required
-            disabled={isLoading}
-          />
+          <div>
+            <InputField
+              name="username"
+              label="Login"
+              placeholder="masalan: aziz_dir"
+              value={obj.username}
+              onChange={(e) => obj.setField("username", e.target.value)}
+              error={usernameShort || usernameTaken}
+              description={usernameShort ? "Kamida 3 ta belgi" : ""}
+              required
+              disabled={isLoading}
+            />
+            {usernameTaken && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                Bu login allaqachon band
+              </p>
+            )}
+          </div>
           <InputField
             type="password"
             name="password"
@@ -213,8 +236,16 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
         >
           Bekor qilish
         </Button>
-        <Button type="submit" disabled={isLoading || !isValid} className="flex-1">
-          {isLoading ? "Qo'shilmoqda..." : "Qo'shish"}
+        <Button
+          type="submit"
+          disabled={isLoading || !isValid || checkPending}
+          className="flex-1"
+        >
+          {checkPending
+            ? "Tekshirilmoqda..."
+            : isLoading
+              ? "Qo'shilmoqda..."
+              : "Qo'shish"}
         </Button>
       </div>
     </form>

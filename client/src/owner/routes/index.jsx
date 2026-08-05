@@ -18,6 +18,8 @@ import {
 import {
   StudentsPage,
   TeachersPage,
+  StaffPage,
+  StaffListTab,
   UsersTab,
   UserDetailPage,
   UserProfilePanel,
@@ -27,6 +29,7 @@ import {
   UserHistoryPanel,
   UserArchivePanel,
 } from "@/owner/features/users";
+import { StaffPayrollTab, KpiRulesTab } from "@/owner/features/staffPayroll";
 import { ROLES } from "@/shared/constants/roles";
 import {
   ArchiveReasonsPage,
@@ -209,6 +212,36 @@ const OwnerRoutes = () => (
             fallback="/owner/teachers"
           >
             <TeacherAttendancePage />
+          </PermissionGuard>
+        }
+      />
+    </Route>
+
+    {/* XODIMLAR - ega, o'qituvchilar va custom rollar bitta ro'yxatda.
+        Tab yo'q: sahifa yakka ro'yxat, tafsilot esa umumiy
+        /owner/users/:id sahifasida ochiladi. */}
+    <Route
+      path="staff"
+      element={
+        <PermissionGuard required="users.read" fallback="/owner">
+          <StaffPage />
+        </PermissionGuard>
+      }
+    >
+      <Route index element={<StaffListTab />} />
+      <Route
+        path="maoshlar"
+        element={
+          <PermissionGuard required="payroll.read" fallback="/owner/staff">
+            <StaffPayrollTab />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="kpi"
+        element={
+          <PermissionGuard required="payroll.manage" fallback="/owner/staff">
+            <KpiRulesTab />
           </PermissionGuard>
         }
       />

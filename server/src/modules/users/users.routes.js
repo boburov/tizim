@@ -18,6 +18,7 @@ import {
   setBranchesSchema,
 } from "./validators/createStaff.validator.js";
 import { archiveActionSchema } from "./validators/archive.validator.js";
+import { checkAvailabilitySchema } from "./validators/checkAvailability.validator.js";
 import list from "./handlers/list.handler.js";
 import getById from "./handlers/getById.handler.js";
 import update from "./handlers/update.handler.js";
@@ -29,6 +30,8 @@ import getPassword from "./handlers/getPassword.handler.js";
 import setPassword from "./handlers/setPassword.handler.js";
 import setRole from "./handlers/setRole.handler.js";
 import createStaff from "./handlers/createStaff.handler.js";
+import staffStats from "./handlers/staffStats.handler.js";
+import checkAvailability from "./handlers/checkAvailability.handler.js";
 import setBranches from "./handlers/setBranches.handler.js";
 
 const router = Router();
@@ -61,6 +64,29 @@ router.get(
   requirePermission(PERMISSIONS.USERS_READ),
   validate(listSchema),
   list,
+);
+
+// XODIMLAR statistikasi (rol kesimida). "/:id" dan OLDIN - aks holda uni
+// "/:id" yutib yuboradi va 404 "Foydalanuvchi topilmadi" qaytadi.
+//
+// Ruxsat GET "/" bilan AYNAN bir xil: kartochkalar va ro'yxat bir vaqtda
+// ko'rinishi kerak, aks holda biri 403 bo'lib sahifa yarim bo'sh chiqardi.
+router.get(
+  "/staff-stats",
+  requireAuth,
+  requirePermission(PERMISSIONS.USERS_READ),
+  staffStats,
+);
+// Telefon/login bandligini OLDINDAN tekshirish. "/:id" dan OLDIN turishi
+// shart - aks holda "check-availability" `:id` sifatida tutilardi.
+// Ruxsat: odam yarata oladigan xodim (u allaqachon ro'yxatni ko'radi,
+// ya'ni yangi ma'lumot oshkor bo'lmaydi - javob faqat "band/bo'sh").
+router.get(
+  "/check-availability",
+  requireAuth,
+  requirePermission(PERMISSIONS.USERS_READ),
+  validate(checkAvailabilitySchema),
+  checkAvailability,
 );
 router.get(
   "/:id",

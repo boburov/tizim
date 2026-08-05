@@ -1,6 +1,7 @@
 import useObjectState from "@/shared/hooks/useObjectState";
 import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import useUserCreateMutation from "../hooks/useUserCreateMutation";
+import useAvailabilityQuery from "../hooks/useAvailabilityQuery";
 
 import InputField from "@/shared/components/ui/input/InputField";
 import SelectField from "@/shared/components/ui/select/SelectField";
@@ -100,6 +101,19 @@ const UserCreateModal = ({
   const usernameShort =
     obj.username.trim().length > 0 && obj.username.trim().length < 3;
 
+  // TELEFON/LOGIN BANDLIGI - yozayotgan paytda tekshiriladi.
+  //
+  // Ilgari bu faqat SO'NGGI qadamda, server 409 qaytarganda bilinardi:
+  // o'qituvchida bu ikkinchi qadam (maosh) ham to'ldirilgandan keyin
+  // degani edi va odam hammasini boshidan kiritishga majbur bo'lardi.
+  const { phoneTaken, usernameTaken, isChecking, isStale } =
+    useAvailabilityQuery({ phone: obj.phone, username: obj.username });
+
+  // Tekshiruv HALI TUGAMAGAN bo'lsa "band" deb ko'rsatmaymiz, lekin
+  // keyingi qadamga ham o'tkazmaymiz - aks holda javob kelguncha bosib
+  // ulgurgan odam eski muammoga qaytardi.
+  const checkPending = isChecking || isStale;
+
   // 1-qadam to'liqmi (maosh maydonlari bu yerda TEKSHIRILMAYDI - ular
   // ixtiyoriy va 2-qadamda "keyinroq" bilan butunlay o'tkazib yuborilishi
   // mumkin).
@@ -111,7 +125,9 @@ const UserCreateModal = ({
     obj.role &&
     (obj.role !== ROLES.TEACHER || obj.hiredAt) &&
     (obj.role !== ROLES.STUDENT || obj.enrolledAt) &&
-    (!needsBranch || obj.homeBranchId);
+    (!needsBranch || obj.homeBranchId) &&
+    !phoneTaken &&
+    !usernameTaken;
 
   // Kiritilgan maosh stavkasi yaroqlimi. Bo'sh bo'lishi ham MUMKIN
   // ("keyinroq belgilayman"), lekin yarim to'ldirilgan bo'lmasligi kerak.
@@ -164,6 +180,9 @@ const UserCreateModal = ({
     // ── 1-qadam ──
     if (!onSalaryStep) {
       if (!isStepOneValid()) return;
+      // Javob kelmagan bo'lsa kutamiz: band raqam bilan 2-qadamga o'tib,
+      // u yerda 409 olish - aynan tuzatilayotgan muammoning o'zi.
+      if (checkPending) return;
       if (obj.role !== ROLES.STUDENT && obj.role !== ROLES.TEACHER) return;
 
       // O'quvchida maosh qadami YO'Q - darhol yaratiladi.
@@ -229,24 +248,39 @@ const UserCreateModal = ({
               disabled={isLoading}
             />
           </div>
-          <InputField
-            name="username"
-            label="Login (username)"
-            placeholder="Kamida 3 ta belgi"
-            value={obj.username}
-            onChange={(e) => obj.setField("username", e.target.value)}
-            error={usernameShort}
-            required
-            disabled={isLoading}
-          />
-          <InputField
-            type="tel"
-            name="phone"
-            label="Telefon (ixtiyoriy)"
-            value={obj.phone}
-            onChange={(e) => obj.setField("phone", e.target.value)}
-            disabled={isLoading}
-          />
+          <div>
+            <InputField
+              name="username"
+              label="Login (username)"
+              placeholder="Kamida 3 ta belgi"
+              value={obj.username}
+              onChange={(e) => obj.setField("username", e.target.value)}
+              error={usernameShort || usernameTaken}
+              required
+              disabled={isLoading}
+            />
+            {usernameTaken && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                Bu login allaqachon band — boshqasini tanlang
+              </p>
+            )}
+          </div>
+          <div>
+            <InputField
+              type="tel"
+              name="phone"
+              label="Telefon (ixtiyoriy)"
+              value={obj.phone}
+              onChange={(e) => obj.setField("phone", e.target.value)}
+              error={phoneTaken}
+              disabled={isLoading}
+            />
+            {phoneTaken && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                Bu telefon raqam allaqachon ro&apos;yxatdan o&apos;tgan
+              </p>
+            )}
+          </div>
           <InputField
             type="password"
             name="password"
@@ -343,10 +377,16 @@ const UserCreateModal = ({
             </Button>
             <Button
               type="submit"
-              disabled={isLoading || !isStepOneValid()}
+              disabled={isLoading || !isStepOneValid() || checkPending}
               className="flex-1"
             >
-              {isTeacher ? "Keyingisi" : isLoading ? "Yaratilmoqda..." : "Yaratish"}
+              {checkPending
+                ? "Tekshirilmoqda..."
+                : isTeacher
+                  ? "Keyingisi"
+                  : isLoading
+                    ? "Yaratilmoqda..."
+                    : "Yaratish"}
             </Button>
           </div>
         </>

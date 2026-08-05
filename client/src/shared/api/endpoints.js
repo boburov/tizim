@@ -33,6 +33,10 @@ export const ENDPOINTS = Object.freeze({
     groupHistory: (id) => `/users/${id}/group-history`,
     role: (id) => `/users/${id}/role`,
     staff: "/users/staff",
+    // Xodimlar statistikasi (rol kesimida) - kartochkalar uchun.
+    staffStats: "/users/staff-stats",
+    // Telefon/login bandligini formani yuborishdan OLDIN tekshirish.
+    checkAvailability: "/users/check-availability",
     branches: (id) => `/users/${id}/branches`,
   },
   roles: {
@@ -62,6 +66,7 @@ export const ENDPOINTS = Object.freeze({
     convert: (id) => `/leads/${id}/convert`,
     convertBulk: "/leads/convert-bulk",
     reminder: (id) => `/leads/${id}/reminder`,
+    reminderBulk: "/leads/reminder-bulk",
     stats: "/leads/stats",
   },
   leadOptions: {
@@ -270,6 +275,37 @@ export const ENDPOINTS = Object.freeze({
   },
 
   // Teacher salary (O'qituvchi maoshlari)
+  // XODIMLAR MAOSHI (o'qituvchi bo'lmaganlar + KPI).
+  // teacherSalary'dan ATAYLAB alohida: ikki modul bir-biriga tegmaydi.
+  staffPayroll: {
+    base: "/staff-payroll",
+    byId: (id) => `/staff-payroll/${id}`,
+    byEmployee: (employeeId) => `/staff-payroll/by-employee/${employeeId}`,
+    generate: "/staff-payroll/generate",
+    recompute: (id) => `/staff-payroll/${id}/recompute`,
+    lifecycle: (id) => `/staff-payroll/${id}/lifecycle`,
+
+    compensations: "/staff-payroll/compensations",
+    compensationById: (id) => `/staff-payroll/compensations/${id}`,
+    compensationsByEmployee: (employeeId) =>
+      `/staff-payroll/compensations/by-employee/${employeeId}`,
+    compensationsMissing: "/staff-payroll/compensations/missing",
+
+    adjustments: "/staff-payroll/adjustments",
+    adjustmentById: (id) => `/staff-payroll/adjustments/${id}`,
+
+    transactions: "/staff-payroll/transactions",
+    transactionById: (id) => `/staff-payroll/transactions/${id}`,
+
+    kpiTriggers: "/staff-payroll/kpi/triggers",
+    kpiRules: "/staff-payroll/kpi/rules",
+    kpiRuleById: (id) => `/staff-payroll/kpi/rules/${id}`,
+    kpiAssignments: "/staff-payroll/kpi/assignments",
+    kpiAssignmentsByEmployee: (employeeId) =>
+      `/staff-payroll/kpi/assignments/${employeeId}`,
+    kpiAssignmentById: (id) => `/staff-payroll/kpi/assignments/${id}`,
+  },
+
   teacherSalary: {
     salaries: "/teacher-salary/salaries",
     salaryById: (id) => `/teacher-salary/salaries/${id}`,

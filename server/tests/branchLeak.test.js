@@ -235,6 +235,10 @@ const run = async () => {
 
   const CASES = [
     ["users.list", () => users.list({ status: "active", limit: 100 })],
+    // XODIMLAR ro'yxati va uning statistikasi - ikkalasi ham alohida
+    // predikat bilan ishlaydi, shuning uchun alohida tekshiriladi.
+    ["users.list(staff)", () => users.list({ staff: true, status: "active", limit: 100 })],
+    ["users.staffStats", () => users.staffStats()],
     ["groups.list", () => groups.list({ limit: 100 })],
     ["groups.getById(B)", () => groups.getById(gB._id)],
     ["groups.history(B)", () => groups.history(gB._id, {})],
@@ -369,6 +373,9 @@ const run = async () => {
   await checkZero("deposits.report", () => deposits.report({}));
   await checkZero("leads.stats", () => leads.stats({}));
   await checkZero("users.list", () => users.list({ status: "active", limit: 50 }));
+  await checkZero("users.list(staff)", () =>
+    users.list({ staff: true, status: "active", limit: 50 }),
+  );
   await checkZero("groups.list", () => groups.list({ limit: 50 }));
   await checkZero("salary.list", () => salary.list({ ...P, limit: 50 }));
   await checkZero("studentPayment.list", () => studentPayment.list({ ...P, limit: 50 }));

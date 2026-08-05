@@ -1,5 +1,6 @@
 import {
   Users,
+  UserCog,
   GraduationCap,
   CalendarCheck,
   Bell,
@@ -94,6 +95,16 @@ export const SEARCH_INDEX = [
       "users, foydalanuvchi, o'qituvchi, teacher, hisob, account, maosh, salary",
     url: "/owner/teachers",
     icon: Users,
+    category: "Asosiy",
+    permission: "users.read",
+  },
+  {
+    title: "Xodimlar",
+    description: "Barcha xodimlar: rol, filial, parol, faollik",
+    keywords:
+      "xodim, xodimlar, hodim, hodimlar, staff, employee, direktor, administrator, buxgalter, resepshin, rol, role, parol, password",
+    url: "/owner/staff",
+    icon: UserCog,
     category: "Asosiy",
     permission: "users.read",
   },

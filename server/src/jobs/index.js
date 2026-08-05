@@ -21,12 +21,18 @@ import defineStorageCleanup, {
 import defineLeadFollowupReminders, {
   JOB_NAME as LEAD_FOLLOWUP_JOB,
 } from "./leadFollowupReminders.job.js";
+import defineLeadDailyDigest, {
+  JOB_NAME as LEAD_DIGEST_JOB,
+} from "./leadDailyDigest.job.js";
 import defineGenerateMonthlyFinance, {
   JOB_NAME as MONTHLY_FINANCE_JOB,
 } from "./generateMonthlyFinance.job.js";
 import defineGenerateMonthlySalary, {
   JOB_NAME as MONTHLY_SALARY_JOB,
 } from "./generateMonthlySalary.job.js";
+import defineGenerateMonthlyStaffPayroll, {
+  JOB_NAME as MONTHLY_STAFF_PAYROLL_JOB,
+} from "./generateMonthlyStaffPayroll.job.js";
 import defineAutoEndGroups, {
   JOB_NAME as AUTO_END_GROUPS_JOB,
 } from "./autoEndGroups.job.js";
@@ -79,8 +85,10 @@ export const startJobs = async () => {
   defineAssignmentDeliver(agenda);
   defineStorageCleanup(agenda);
   defineLeadFollowupReminders(agenda);
+  defineLeadDailyDigest(agenda);
   defineGenerateMonthlyFinance(agenda);
   defineGenerateMonthlySalary(agenda);
+  defineGenerateMonthlyStaffPayroll(agenda);
   defineAutoEndGroups(agenda);
   defineDailyAccrueFinance(agenda);
   defineAiNightlyRecompute(agenda);
@@ -106,11 +114,18 @@ export const startJobs = async () => {
 
   // Lid qayta bog'lanish eslatmalari - har 5 daqiqada vaqti kelganlarni tekshiradi
   await every("*/5 * * * *", LEAD_FOLLOWUP_JOB);
+  // Lid kunlik yig'masi - har kuni 09:00 da ("bugun N ta lid bilan
+  // bog'lanishingiz kerak"). Ish kuni boshlanishidan oldin, ya'ni odam
+  // kunini shu ro'yxat bilan rejalashtiradi.
+  await every("0 9 * * *", LEAD_DIGEST_JOB);
 
   // Oylik moliya generatsiyasi - har oy 1-sanasi 00:05 da
   await every("5 0 1 * *", MONTHLY_FINANCE_JOB);
   // Oylik maosh generatsiyasi - har oy 1-sanasi 00:06 da (moliyadan keyin)
   await every("6 0 1 * *", MONTHLY_SALARY_JOB);
+  // Xodimlar maoshi - 00:07 da (o'qituvchi maoshidan keyin, DB'ni bir
+  // vaqtda qiynamasin).
+  await every("7 0 1 * *", MONTHLY_STAFF_PAYROLL_JOB);
 
   // Saqlagich avto-tozalash - har kuni 02:30 da. Job HAR KUNI yuradi,
   // lekin ishni sozlamadagi chastota (haftalik/oylik/yarim yillik)

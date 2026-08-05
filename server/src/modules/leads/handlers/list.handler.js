@@ -8,6 +8,8 @@ const list = asyncHandler(async (req, res) => {
     status: req.query.status,
     source: req.query.source,
     direction: req.query.direction,
+    // Mas'ul xodim bo'yicha filtr ("none" = mas'ulsiz lidlar).
+    assignedTo: req.query.assignedTo,
     engagement: req.query.engagement,
     search: req.query.search,
     from: req.query.from,

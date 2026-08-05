@@ -81,6 +81,12 @@ export const login = async ({ login, password, userAgent, ip }) => {
     ip,
   });
 
+  // OXIRGI KIRISH. ATAYLAB shu yerda, issueTokens ichida EMAS: issueTokens
+  // token yangilanganda ham chaqiriladi va maydon "oxirgi faollik"ka aylanib
+  // qolardi. updateOne ishlatiladi (user.save() emas) - hujjat +passwordHash
+  // bilan yuklangan, save() uni qayta validatsiya qilardi.
+  await User.updateOne({ _id: user._id }, { $set: { lastLoginAt: new Date() } });
+
   return {
     accessToken,
     refreshToken,

@@ -449,6 +449,12 @@ const EXECUTORS = {
     const svc = await import("../../expenses/services/expense.service.js");
     return svc.executeApprovedExpense(approval);
   },
+  [APPROVAL_KINDS.STAFF_SALARY_PAYMENT]: async (approval) => {
+    const svc = await import(
+      "../../staffPayroll/services/staffSalaryTransaction.service.js"
+    );
+    return svc.executeApproved(approval);
+  },
 };
 
 /**

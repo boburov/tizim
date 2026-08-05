@@ -81,6 +81,11 @@ export const PERMISSIONS = Object.freeze({
   SALARY_READ: "salary.read",
   SALARY_PAY: "salary.pay",
 
+  // Xodimlar maoshi + KPI (o'qituvchi maoshidan ALOHIDA).
+  PAYROLL_READ: "payroll.read",
+  PAYROLL_MANAGE: "payroll.manage",
+  PAYROLL_PAY: "payroll.pay",
+
   // Chiqim tasdig'i (limitdan oshgan to'lovlar)
   FINANCE_APPROVE: "finance.approve",
 

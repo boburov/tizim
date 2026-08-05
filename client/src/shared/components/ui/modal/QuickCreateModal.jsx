@@ -84,7 +84,20 @@ const QuickCreateModal = ({
         </DialogHeader>
 
         {/* Body */}
-        {body}
+        {/* ICHKI FORMA OTA FORMANI YUBORMASLIGI KERAK.
+            Radix DialogContent body'ga PORTAL qilinadi, ya'ni DOM'da ichma-ich
+            <form> yo'q. Lekin React hodisalari DOM daraxti emas, REACT daraxti
+            bo'ylab ko'tariladi. Bu oyna deyarli doim boshqa formaning ICHIDAGI
+            selectdan ochiladi ("Lid qo'shish" > "+ Yangi manba"), shuning uchun
+            bu yerdagi inputda Enter bosilganda ichki forma submit bo'lardi va
+            o'sha hodisa OTA formaning `onSubmit` iga yetib borib, lidni
+            so'ramasdan yaratib yuborardi. `preventDefault` yordam bermaydi -
+            u faqat brauzer amalini to'xtatadi, tarqalishni emas.
+            `contents` - div layoutda o'z qutisini yaratmasin (DialogContent
+            grid, bola forma to'g'ridan-to'g'ri element bo'lib qolaveradi). */}
+        <div className="contents" onSubmit={(e) => e.stopPropagation()}>
+          {body}
+        </div>
       </DialogContent>
     </Dialog>
   );

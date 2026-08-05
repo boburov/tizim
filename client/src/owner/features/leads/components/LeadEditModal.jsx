@@ -1,7 +1,9 @@
 import useObjectState from "@/shared/hooks/useObjectState";
 import Button from "@/shared/components/ui/button/Button";
+import { extractApiErrorMessage } from "@/shared/utils/apiError";
 import LeadFormFields from "./LeadFormFields";
 import { useLeadUpdateMutation } from "../hooks/useLeadMutations";
+import { validateLead, hasErrors } from "../utils/leadValidation";
 
 const toDateInput = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 
@@ -18,27 +20,32 @@ const LeadEditModal = ({ lead, close, isLoading, setIsLoading }) => {
     trialDate: toDateInput(lead?.trialDate),
     rejectionReasonId: lead?.rejectionReason?._id || "",
     rejectionNote: lead?.rejectionNote || "",
+    // Populate qilingan obyekt ham, xom ObjectId ham kelishi mumkin.
+    assignedTo: lead?.assignedTo?._id || lead?.assignedTo || "",
     notes: lead?.notes || "",
   });
+
+  // Forma holati ma'lumotdan alohida: xatolarni faqat "Saqlash" bosilgandan
+  // KEYIN ko'rsatamiz, server xatosi esa oynada turadi (toast o'chib ketadi).
+  const ui = useObjectState({ showErrors: false, errorMsg: "" });
 
   const { mutate } = useLeadUpdateMutation({
     onSuccess: () => {
       setIsLoading(false);
       close?.();
     },
-    onError: () => setIsLoading(false),
+    onError: (err) => {
+      setIsLoading(false);
+      ui.setField("errorMsg", extractApiErrorMessage(err));
+    },
   });
 
-  // Yopishda sabab va izoh MAJBURIY - server ham shuni talab qiladi.
-  // Tugmani oldindan o'chirib qo'yish 400 xatosidan yaxshiroq.
-  const closingIncomplete =
-    obj.status === "rejected" &&
-    (!obj.rejectionReasonId || (obj.rejectionNote || "").trim().length < 10);
+  const errors = ui.showErrors ? validateLead(obj) : {};
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!obj.firstName.trim() || !obj.phone) return;
-    if (closingIncomplete) return;
+    ui.setFields({ showErrors: true, errorMsg: "" });
+    if (hasErrors(validateLead(obj))) return;
     setIsLoading(true);
     mutate({
       id: lead._id,
@@ -56,14 +63,28 @@ const LeadEditModal = ({ lead, close, isLoading, setIsLoading }) => {
           obj.status === "rejected" ? obj.rejectionReasonId || null : null,
         rejectionNote:
           obj.status === "rejected" ? (obj.rejectionNote || "").trim() : "",
+        assignedTo: obj.assignedTo || null,
         notes: obj.notes || "",
       },
     });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <LeadFormFields obj={obj} disabled={isLoading} />
+    <form onSubmit={handleSubmit} noValidate className="space-y-3">
+      <LeadFormFields obj={obj} disabled={isLoading} errors={errors} />
+
+      {ui.errorMsg && (
+        <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+          {ui.errorMsg}
+        </p>
+      )}
+
+      {ui.showErrors && hasErrors(errors) && !ui.errorMsg && (
+        <p className="text-xs text-red-600 dark:text-red-300">
+          Majburiy maydonlarni to&apos;ldiring.
+        </p>
+      )}
+
       <div className="flex gap-2 pt-1">
         <Button
           type="button"
@@ -74,11 +95,7 @@ const LeadEditModal = ({ lead, close, isLoading, setIsLoading }) => {
         >
           Bekor qilish
         </Button>
-        <Button
-          type="submit"
-          disabled={isLoading || closingIncomplete}
-          className="flex-1"
-        >
+        <Button type="submit" disabled={isLoading} className="flex-1">
           {isLoading ? "Saqlanmoqda..." : "Saqlash"}
         </Button>
       </div>

@@ -63,6 +63,30 @@ export const useLeadReminderMutation = (options = {}) => {
   });
 };
 
+// KO'P LIDGA bir martada eslatma. Toast bu yerda chiqadi (natija paneli yo'q):
+// nechtasi o'rnatilgani va nechtasi yiqilgani serverdan kelgan xabarda bor.
+export const useLeadReminderBulkMutation = (options = {}) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      leadsAPI.setReminderBulk(body).then((r) => ({
+        ...r.data.data,
+        message: r.data.message,
+      })),
+    onSuccess: (data, vars, ctx) => {
+      qc.invalidateQueries({ queryKey: qk.leads.all() });
+      toast.success(data.message || "Eslatmalar o'rnatildi");
+      // Bir qismi yiqilgan bo'lsa - JIM YUTMAYMIZ. Operator qaysi lidlarga
+      // eslatma qo'yilmaganini bilmasa, ularni yo'qotgan bo'ladi.
+      if (data.failed?.length) {
+        toast.warning(`${data.failed.length} ta lidda xatolik: ${data.failed[0].message}`);
+      }
+      options.onSuccess?.(data, vars, ctx);
+    },
+    onError: onErr(options),
+  });
+};
+
 // Aylantirish keshni keng tozalaydi: o'quvchi paydo bo'ladi (users), guruhga
 // qo'shilgan bo'lsa guruh tarkibi va davomat ro'yxati ham o'zgaradi.
 const invalidateConverted = (qc) => {

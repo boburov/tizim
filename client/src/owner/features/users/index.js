@@ -1,5 +1,7 @@
 export { default as StudentsPage } from "./pages/StudentsPage";
 export { default as TeachersPage } from "./pages/TeachersPage";
+export { default as StaffPage } from "./pages/StaffPage";
+export { default as StaffListTab } from "./components/StaffListTab";
 export { default as UsersTab } from "./components/UsersTab";
 export { default as UserDetailPage } from "./pages/UserDetailPage";
 export { default as UserProfilePanel } from "./components/tabs/UserProfilePanel";

@@ -4,6 +4,9 @@ import { ENDPOINTS } from "@/shared/api/endpoints";
 
 export const usersAPI = {
   list: (params) => http.get(ENDPOINTS.users.base, { params }),
+  staffStats: () => http.get(ENDPOINTS.users.staffStats),
+  checkAvailability: (params) =>
+    http.get(ENDPOINTS.users.checkAvailability, { params }),
   byId: (id) => http.get(ENDPOINTS.users.byId(id)),
   // Yaratish faqat auth.register-user orqali (parol bilan birga)
   create: (body) => http.post(ENDPOINTS.auth.registerUser, body),

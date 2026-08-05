@@ -26,7 +26,12 @@ import {
  * bo'lmaydi.
  */
 const StorageCleanupModal = ({ all = false, olderThanDays, setIsLoading, close }) => {
-  const payload = all ? { all: true } : { olderThanDays: Number(olderThanDays) };
+  const days = Number(olderThanDays);
+  // Nishon aniq bo'lmasa (muddat ham, `all` ham yo'q) - so'rov yubormaymiz.
+  // Server bunday tanani 400 bilan rad etadi, foydalanuvchi esa o'zi
+  // qilmagan amal uchun xato ko'radi.
+  const hasTarget = all || Number.isFinite(days);
+  const payload = all ? { all: true } : { olderThanDays: days };
 
   const {
     mutate: preview,
@@ -40,6 +45,7 @@ const StorageCleanupModal = ({ all = false, olderThanDays, setIsLoading, close }
 
   // Oyna ochilganda darhol hisoblaymiz.
   useEffect(() => {
+    if (!hasTarget) return;
     preview(payload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, olderThanDays]);
@@ -108,7 +114,7 @@ const StorageCleanupModal = ({ all = false, olderThanDays, setIsLoading, close }
         <Button
           type="button"
           variant="destructive"
-          disabled={isPending || counting || nothingToDo}
+          disabled={isPending || counting || nothingToDo || !hasTarget}
           onClick={() => run(payload)}
         >
           <Trash2 className="size-4" />
