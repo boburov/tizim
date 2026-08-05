@@ -10,6 +10,7 @@ import { resolveRole, hasPermission } from "../../../helpers/permission.helper.j
 import {
   resolveAllowedBranchIds,
   assertCanAssignBranch,
+  ensureMainBranch,
 } from "../../../helpers/branchAccess.helper.js";
 import { getActiveBranchId } from "../../../helpers/branchContext.helper.js";
 import { buildUserProfile } from "../../../helpers/userProfile.helper.js";
@@ -174,16 +175,39 @@ export const me = async (user, ctx = {}) => {
   // DIQQAT: ro'yxat ASOSIY rol ruxsatlari bilan hisoblanadi - foydalanuvchi
   // qaysi filialda turganidan qat'i nazar, o'zi kira oladigan BARCHA
   // filiallarni tanlagichda ko'rishi kerak.
-  const allowedIds = await resolveAllowedBranchIds(user, baseRole.permissions);
-  const [branches, branchCount] = await Promise.all([
-    allowedIds.length
-      ? Branch.find({ _id: { $in: allowedIds }, isDeleted: false, isActive: true })
-          .select("_id name code isMain")
-          .sort({ isMain: -1, name: 1 })
-          .lean()
-      : [],
-    Branch.countDocuments({ isDeleted: false, isActive: true }),
-  ]);
+  const readBranchState = async () => {
+    const allowedIds = await resolveAllowedBranchIds(user, baseRole.permissions);
+    const [list, total] = await Promise.all([
+      allowedIds.length
+        ? Branch.find({ _id: { $in: allowedIds }, isDeleted: false, isActive: true })
+            .select("_id name code isMain")
+            .sort({ isMain: -1, name: 1 })
+            .lean()
+        : [],
+      Branch.countDocuments({ isDeleted: false, isActive: true }),
+    ]);
+    return { list, total };
+  };
+
+  let { list: branches, total: branchCount } = await readBranchState();
+
+  // FILIALSIZ BAZA - O'Z-O'ZINI TIKLASH.
+  //
+  // Markazda kamida bitta filial bo'lishi INVARIANT (ensureMainBranch),
+  // lekin u ilgari faqat server ko'tarilayotganda tekshirilardi. Baza
+  // ishlab turgan server ostida tozalansa (`npm run db:reset`) markaz
+  // filialsiz qolib, jarayon qayta ishga tushmaguncha TIQILIB turardi:
+  // client bo'sh ro'yxatdan "Barcha filiallar" rejimini yasab, formalarda
+  // TANLOVSIZ majburiy "Filial" maydonini ko'rsatardi - na lid, na guruh,
+  // na xodim yaratib bo'lardi va sabab hech qayerda ko'rinmasdi.
+  //
+  // Tekshiruv aynan shu yerda: /auth/me har sessiyada baribir chaqiriladi
+  // va filiallar soni ALLAQACHON o'qilyapti, ya'ni sog'lom holatda birorta
+  // ham qo'shimcha so'rov qo'shilmaydi.
+  if (branchCount === 0) {
+    await ensureMainBranch();
+    ({ list: branches, total: branchCount } = await readBranchState());
+  }
 
   return {
     user: sanitizeUser(user),

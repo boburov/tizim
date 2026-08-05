@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import mongoose from "mongoose";
+import { ensureMainBranch } from "./branchAccess.helper.js";
 
 // FILIAL KONTEKSTI (request-scoped).
 //
@@ -158,6 +159,12 @@ export const branchGroupFilter = async (field = "group") => {
  * Markazda FAQAT BITTA filial bormi - bo'lsa o'sha filial ID'si.
  *
  * `limit(2)`: aniq sonini bilish shart emas, "bittami yoki ko'pmi" yetarli.
+ *
+ * FILIALSIZ BAZA ham shu yerda hal qilinadi: markazda kamida bitta filial
+ * bo'lishi invariant, lekin baza server ostida tozalanishi mumkin
+ * (`npm run db:reset`). O'shanda yozishni "filial tanlanmagan" deb rad
+ * etish o'rniga invariantni TIKLAYMIZ - aks holda markaz server qayta
+ * ishga tushmaguncha hech narsa yarata olmasdi.
  */
 const resolveSoleBranchId = async () => {
   const Branch = mongoose.models.Branch;
@@ -166,6 +173,12 @@ const resolveSoleBranchId = async () => {
     .select("_id")
     .limit(2)
     .lean();
+
+  if (branches.length === 0) {
+    const main = await ensureMainBranch();
+    return main?._id || null;
+  }
+
   return branches.length === 1 ? branches[0]._id : null;
 };
 

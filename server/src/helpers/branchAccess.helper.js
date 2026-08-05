@@ -46,48 +46,59 @@ export const resolveMainBranchId = async () => {
   return mainBranchIdCache;
 };
 
+// Mavjud filiallardan "asosiysi" (asosiy bo'lmasa - eng eskisi).
+const findAnyBranch = () =>
+  Branch.findOne({ isDeleted: false })
+    .select("_id name isMain isActive")
+    .sort({ isMain: -1, createdAt: 1 })
+    .lean();
+
 /**
- * BOOTSTRAP: markazda KAMIDA BITTA filial bo'lishini kafolatlaydi.
+ * INVARIANT: markazda KAMIDA BITTA filial BO'LADI.
  *
  * NEGA KERAK: `branchId` Group/Lead/to'lov modellarida `required: true`,
  * ya'ni filialsiz bazada HAR QANDAY yozish amali yiqilardi - lid ham,
- * guruh ham, foydalanuvchi ham. Yangi o'rnatma esa qo'lda
- * `npm run migrate:branches` ishga tushirilmaguncha aynan shu holatda
- * turardi. Endi bunday holat umuman mavjud emas: server ko'tarilishi
- * bilan "Asosiy filial" paydo bo'ladi.
+ * guruh ham, foydalanuvchi ham.
  *
- * IDEMPOTENT: birorta filial bo'lsa (o'chirilganlaridan tashqari) hech
- * narsa qilmaydi, shuning uchun har ishga tushishda chaqirsa bo'ladi.
+ * NEGA FAQAT BOOT YETARLI EMAS: bu ilgari faqat `index.js` da, server
+ * ko'tarilayotganda chaqirilardi. Baza esa server ISHLAB TURGANDA
+ * tozalanadi (`npm run db:reset`, qo'lda drop, migratsiya) - o'shanda
+ * kafolat jimgina buzilib, markaz jarayon qayta ishga tushmaguncha
+ * filialsiz qolardi. Shuning uchun endi bu funksiya ARZON va HAR JOYDAN
+ * chaqirsa bo'ladigan qilingan: /auth/me va yozish yo'li uni o'zi
+ * chaqiradi (pastdagi chaqiruv joylariga qarang).
  *
- * @returns {Promise<object|null>} yaratilgan filial yoki null
+ * IDEMPOTENT: filial bo'lsa yaratmaydi, borini qaytaradi.
+ *
+ * @returns {Promise<object|null>} mavjud yoki yangi yaratilgan filial
  */
 export const ensureMainBranch = async () => {
-  const existing = await Branch.countDocuments({ isDeleted: false });
-  if (existing > 0) return null;
+  // Bitta so'rovda ham tekshiruv, ham NATIJA: chaqiruvchiga ko'pincha
+  // filial ID'sining o'zi kerak (yozish uchun), shuning uchun
+  // countDocuments emas - findOne.
+  const existing = await findAnyBranch();
+  if (existing) return existing;
 
-  let branch;
   try {
-    branch = await Branch.create({
+    const branch = await Branch.create({
       name: "Asosiy filial",
       code: "MAIN",
       isMain: true,
       isActive: true,
     });
+    // Kesh `undefined` bo'lmasligi mumkin (bu chaqiruvdan oldin kimdir
+    // resolveMainBranchId() qilgan bo'lsa u yerda `null` yozilib qolgan).
+    clearMainBranchCache();
+    logger.info({ branchId: String(branch._id) }, "Asosiy filial avtomatik yaratildi");
+    return branch.toObject();
   } catch (err) {
-    // POYGA: ikkita instans bir vaqtda ko'tarilsa, `isMain` unique partial
-    // indeksi ikkinchisini rad etadi. Bu xato EMAS - filial baribir bor.
-    if (err?.code === 11000) {
-      clearMainBranchCache();
-      return null;
-    }
-    throw err;
+    // POYGA: ikkita so'rov (yoki instans) bir vaqtda ulgursa, `isMain`
+    // unique partial indeksi ikkinchisini rad etadi. Bu xato EMAS -
+    // filial baribir bor, o'shani qaytaramiz.
+    if (err?.code !== 11000) throw err;
+    clearMainBranchCache();
+    return findAnyBranch();
   }
-
-  // Kesh `undefined` bo'lmasligi mumkin (bu chaqiruvdan oldin kimdir
-  // resolveMainBranchId() qilgan bo'lsa u yerda `null` yozilib qolgan).
-  clearMainBranchCache();
-  logger.info({ branchId: String(branch._id) }, "Asosiy filial avtomatik yaratildi");
-  return branch;
 };
 
 /**

@@ -23,8 +23,7 @@ import {
  * eski filial ma'lumoti qolib ketardi (kesh query key'da branchId yo'q).
  */
 const useActiveBranch = () => {
-  const { branches, canSeeAllBranches, homeBranchId, isLoading, multiBranch } =
-    useAuth();
+  const { branches, canSeeAllBranches, isLoading, multiBranch } = useAuth();
   const queryClient = useQueryClient();
 
   // TANLOV VARIANTLARI SONI.
@@ -57,7 +56,23 @@ const useActiveBranch = () => {
   // 403 bilan qaytardi.
   useEffect(() => {
     if (isLoading) return;
-    if (!branches.length && !canSeeAllBranches) return;
+
+    // RO'YXAT BO'SH: filial YO'Q (baza tozalangan) yoki foydalanuvchi
+    // birortasiga biriktirilmagan.
+    //
+    // "Barcha filiallar" ga TUSHIB BO'LMAYDI - bo'sh ro'yxatning "hammasi"
+    // yolg'on kontekst. Ilgari aynan shunday bo'lardi (canSeeAllBranches
+    // egada DOIM true) va natija tiqilish edi: isAllBranches=true bo'lgani
+    // uchun formalar majburiy "Filial" maydonini ochardi, tanlov ro'yxati
+    // esa o'sha bo'sh massiv - hech narsa yaratib bo'lmasdi.
+    //
+    // Endi kontekst OCHIQCHASIGA bo'sh qoladi: server yozishda filialni
+    // o'zi hal qiladi (yagona/asosiy filial), ekranda esa ogohlantirish
+    // chizig'i chiqadi.
+    if (!branches.length) {
+      if (branchId) setActiveBranchId(null);
+      return;
+    }
 
     const valid = isBranchIdValid(branchId, { branches, canSeeAllBranches });
     if (valid) return;
@@ -72,23 +87,11 @@ const useActiveBranch = () => {
     }
 
     // Yagona variant - tanlashning ma'nosi yo'q, darhol qo'yamiz.
-    // Bitta filial bo'lsa "barcha filiallar" emas, o'sha filialning o'zini
-    // qo'yamiz - ular ayni bir narsa, lekin aniq ID tushunarliroq.
-    const only =
-      branches.length === 1
-        ? branches[0]._id
-        : canSeeAllBranches
-          ? ALL_BRANCHES
-          : branches[0]?._id || homeBranchId;
-    if (only) setActiveBranchId(only);
-  }, [
-    branchId,
-    branches,
-    canSeeAllBranches,
-    homeBranchId,
-    isLoading,
-    optionCount,
-  ]);
+    // Bu yerga faqat optionCount === 1 bilan kelinadi, ya'ni ro'yxatda
+    // AYNAN BITTA filial bor: "barcha filiallar" emas, o'sha filialning
+    // o'zini qo'yamiz - ular ayni bir narsa, lekin aniq ID tushunarliroq.
+    setActiveBranchId(branches[0]._id);
+  }, [branchId, branches, canSeeAllBranches, isLoading, optionCount]);
 
   const changeBranch = useCallback(
     (next) => {
@@ -128,6 +131,11 @@ const useActiveBranch = () => {
     // faqat shovqin. `canSeeAllBranches` bu yerda YETARLI EMAS: egada u
     // doim true, shuning uchun filial soni bo'yicha qaraymiz.
     hasMultipleBranches: multiBranch && branches.length > 1,
+    // Foydalanuvchi uchun birorta ham filial yo'q. Bu NORMAL holat EMAS:
+    // yo baza tozalangan (server o'zi tiklaydi), yo xodim hech qaysi
+    // filialga biriktirilmagan. Ikkala holatda ham ekranda ogohlantirish
+    // chizig'i chiqadi - aks holda bo'sh ro'yxatlar sababsiz ko'rinardi.
+    hasNoBranches: !isLoading && branches.length === 0,
     changeBranch,
   };
 };

@@ -1,195 +1,460 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { Tenant } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SettingsService } from '../settings/settings.service.js';
+import { GithubService } from '../github/github.service.js';
+import {
+  renderDeployWorkflow,
+  renderGitignore,
+  renderReadme,
+  renderTenantMeta,
+} from './tenant-repo.templates.js';
 
-export interface ProvisionInput {
-  tenantId: string;
-  dbName: string;
-  domain: string;
-  pm2Name: string;
-  port: number;
-  name: string;
-  brandColor: string;
-  logoUrl?: string | null;
-  botToken?: string | null;
-  templateDir: string;
-  /** Tenant server heartbeat yuborish uchun ishlatadigan kalit. */
-  heartbeatSecret?: string | null;
-  /** Tenant server heartbeat yuboradigan admin API manzili. */
-  adminApiUrl?: string | null;
-}
+/** Qo'llash rejimi — reconfigure.sh shu qiymatga qarab ish tutadi. */
+export type ApplyKind = 'restart' | 'rebuild' | 'deploy';
 
-export interface DeprovisionInput {
-  tenantId: string;
-  dbName: string;
-  domain: string;
-  pm2Name: string;
-}
+const LOG_LIMIT = 60000;
 
-/**
- * VPS'da provision.sh skriptini ishga tushiradi. Skript har tenant uchun
- * client+server nusxalaydi, .env yozadi (noyob DB nomi), pm2 + nginx + certbot
- * sozlaydi. Bu asinxron ishlaydi — jarayon status'ni DB'da yangilaydi.
- */
 @Injectable()
 export class ProvisioningService {
   private readonly logger = new Logger(ProvisioningService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+    private readonly github: GithubService,
+  ) {}
 
-  /** Provisioning'ni fon rejimida boshlaydi (bloklamaydi). */
-  async provision(input: ProvisionInput): Promise<void> {
-    await this.prisma.tenant.update({
-      where: { id: input.tenantId },
-      data: { status: 'PROVISIONING', failureReason: null, provisionLog: '' },
-    });
+  // ────────────────────────────────────────────────────── yordamchilar
 
-    const scriptPath =
-      process.env.PROVISION_SCRIPT || '/root/admin/provision.sh';
+  /** Skriptga uzatiladigan fayl mazmuni — base64, shunda qochirish muammosi yo'q. */
+  private b64(text: string): string {
+    return Buffer.from(text, 'utf8').toString('base64');
+  }
 
-    // Skriptga argumentlarni ENV orqali beramiz (maxfiy tokenlar CLI'da ko'rinmasin).
-    const childEnv = {
-      ...process.env,
-      TENANT_DB_NAME: input.dbName,
-      TENANT_DOMAIN: input.domain,
-      TENANT_PM2_NAME: input.pm2Name,
-      TENANT_PORT: String(input.port),
-      TENANT_NAME: input.name,
-      TENANT_BRAND_COLOR: input.brandColor,
-      TENANT_LOGO_URL: input.logoUrl || '',
-      TENANT_BOT_TOKEN: input.botToken || '',
-      TENANT_TEMPLATE_DIR: input.templateDir,
-      // Heartbeat (usage yuborish) sozlamalari — tenant .env ga yoziladi
-      TENANT_ID: input.tenantId,
-      TENANT_HEARTBEAT_SECRET: input.heartbeatSecret || '',
-      TENANT_ADMIN_API_URL: input.adminApiUrl || '',
-    };
+  private tail(log: string): string {
+    return log.length > LOG_LIMIT ? log.slice(-LOG_LIMIT) : log;
+  }
 
-    this.logger.log(
-      `Provisioning boshlandi: ${input.domain} (db=${input.dbName}, port=${input.port})`,
-    );
-
-    const child = spawn('bash', [scriptPath], {
-      env: childEnv,
-      cwd: process.env.PROVISION_CWD || '/root/admin',
-    });
-
-    let log = '';
-    const append = (chunk: Buffer) => {
-      log += chunk.toString();
-      // Log juda kattalashib ketmasin — oxirgi 60k belgi yetadi
-      if (log.length > 60000) log = log.slice(-60000);
-    };
-    child.stdout.on('data', append);
-    child.stderr.on('data', append);
-
-    child.on('close', async (code) => {
-      const serverIp = process.env.SERVER_PUBLIC_IP || null;
-      if (code === 0) {
-        await this.prisma.tenant.update({
-          where: { id: input.tenantId },
-          data: { status: 'ACTIVE', provisionLog: log, serverIp },
-        });
-        this.logger.log(`Provisioning tugadi: ${input.domain} ✅`);
-      } else {
-        await this.prisma.tenant.update({
-          where: { id: input.tenantId },
-          data: {
-            status: 'FAILED',
-            provisionLog: log,
-            failureReason: `provision.sh xato kodi bilan tugadi: ${code}`,
-          },
-        });
-        this.logger.error(`Provisioning muvaffaqiyatsiz: ${input.domain} ❌`);
-      }
-    });
-
-    child.on('error', async (err) => {
-      await this.prisma.tenant.update({
-        where: { id: input.tenantId },
-        data: {
-          status: 'FAILED',
-          failureReason: `Skriptni ishga tushirib bo'lmadi: ${err.message}`,
-        },
+  /**
+   * Skriptni ishga tushiradi va butun chiqishini yig'ib qaytaradi.
+   * Bloklamaydi — chaqiruvchi natijani `.then()` bilan kutadi va DB'ni yangilaydi.
+   */
+  private runScript(
+    scriptPath: string,
+    env: Record<string, string>,
+  ): Promise<{ code: number | null; log: string }> {
+    return new Promise((resolve) => {
+      const child = spawn('bash', [scriptPath], {
+        env: { ...process.env, ...env },
+        cwd: process.env.PROVISION_CWD || '/root/admin',
       });
-      this.logger.error(`Skript xatosi: ${err.message}`);
+
+      let log = '';
+      const append = (chunk: Buffer) => {
+        log += chunk.toString();
+        if (log.length > LOG_LIMIT) log = log.slice(-LOG_LIMIT);
+      };
+
+      child.stdout.on('data', append);
+      child.stderr.on('data', append);
+
+      child.on('close', (code) => resolve({ code, log }));
+      child.on('error', (err) =>
+        resolve({ code: -1, log: `${log}\n❌ Skriptni ishga tushirib bo'lmadi: ${err.message}` }),
+      );
     });
   }
 
   /**
-   * Tenantni VPS'dan o'chiradi (deprovision.sh). Provisioning kabi fon
-   * rejimida ishlaydi. Skript tugagach tenant DELETED holatiga o'tadi.
-   *
-   * Skript qisman yiqilsa ham (exit != 0) tenant DELETED bo'ladi, chunki
-   * resurslarning bir qismi allaqachon o'chirilgan — FAILED qilib qo'ysak
-   * yozuv "tirik" ko'rinadi va qayta o'chirishga urinish chalkashlik beradi.
-   * Nima bajarilmagani deprovisionLog'da qoladi.
+   * Tenant fayllari va `.env` mazmunini skript ENV'iga yig'adi.
+   * provision.sh ham, reconfigure.sh ham bir xil to'plamni oladi —
+   * ikkalasi ham fayllarni bir xil yozishi uchun.
    */
-  async deprovision(input: DeprovisionInput): Promise<void> {
+  private async buildFileEnv(tenantId: string) {
+    const { tenant, config, serverEnv, clientEnv, envExample } =
+      await this.settings.renderEnvFiles(tenantId);
+
+    const template = await this.prisma.systemTemplate.findUnique({
+      where: { id: tenant.systemTemplateId },
+    });
+
+    const adminApiUrl = (process.env.ADMIN_API_PUBLIC_URL || '').replace(/\/+$/, '');
+
+    const fileEnv: Record<string, string> = {
+      TENANT_SERVER_ENV_B64: this.b64(serverEnv),
+      TENANT_CLIENT_ENV_B64: this.b64(clientEnv),
+      TENANT_ENV_EXAMPLE_B64: this.b64(envExample),
+      TENANT_GITIGNORE_B64: this.b64(renderGitignore()),
+      TENANT_META_B64: this.b64(renderTenantMeta(tenant, template?.key)),
+      TENANT_README_B64: this.b64(
+        renderReadme({
+          tenant,
+          templateName: template?.name,
+          adminPanelUrl: process.env.ADMIN_CLIENT_URL?.split(',')[0]?.trim(),
+        }),
+      ),
+      TENANT_WORKFLOW_B64: adminApiUrl
+        ? this.b64(renderDeployWorkflow({ adminApiUrl, domain: tenant.domain }))
+        : '',
+    };
+
+    return { tenant, config, template, fileEnv };
+  }
+
+  /** Tenant asosiy ma'lumotlari — skriptga har doim kerak. */
+  private baseEnv(tenant: Tenant, templateDir: string): Record<string, string> {
+    return {
+      TENANT_DB_NAME: tenant.dbName,
+      TENANT_DOMAIN: tenant.domain,
+      TENANT_PM2_NAME: tenant.pm2Name,
+      TENANT_PORT: String(tenant.port),
+      TENANT_NAME: tenant.name,
+      TENANT_TEMPLATE_DIR: templateDir,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────── GitHub
+
+  /**
+   * Tenant uchun GitHub repo tayyorlaydi: repo ochadi, deploy tokenini
+   * yaratib secret sifatida yozadi.
+   *
+   * XATO BO'LSA PROVISIONING TO'XTAMAYDI. Repo — qulaylik, sayt esa
+   * mijozning tirikchiligi: GitHub tarafidagi muammo tufayli o'quv markaz
+   * ishga tushmay qolishi mumkin emas. Xato `repoError` ga yoziladi va
+   * panelda "Repoga qayta urinish" tugmasi paydo bo'ladi.
+   */
+  private async ensureRepo(tenant: Tenant): Promise<{
+    remote: string;
+    token: string;
+    branch: string;
+  } | null> {
+    if (!this.github.isConfigured()) {
+      await this.prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { gitStatus: 'DISABLED', repoError: null },
+      });
+      return null;
+    }
+
+    try {
+      await this.prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { gitStatus: 'CREATING', repoError: null },
+      });
+
+      const repo = await this.github.createRepo({
+        dbName: tenant.dbName,
+        tenantName: tenant.name,
+        domain: tenant.domain,
+      });
+
+      // Deploy tokeni bir marta yaratiladi va qayta ishlatiladi — har
+      // provisioningda almashtirilsa, repodagi eski secret ishlamay qolardi.
+      const deployToken = tenant.deployToken || randomBytes(32).toString('hex');
+
+      await this.prisma.tenant.update({
+        where: { id: tenant.id },
+        data: {
+          repoFullName: repo.fullName,
+          repoUrl: repo.htmlUrl,
+          repoPrivate: repo.private,
+          deployToken,
+          gitStatus: 'PUSHING',
+        },
+      });
+
+      // Secret yozilmasa ham repo o'zi foydali — deploy workflow'i
+      // ishlamaydi, xolos. Shuning uchun bu qadam alohida ushlanadi.
+      try {
+        await this.github.setRepoSecret(repo.fullName, 'TENANT_DEPLOY_TOKEN', deployToken);
+      } catch (err: any) {
+        this.logger.error(`Repo secret yozilmadi (${repo.fullName}): ${err.message}`);
+        await this.prisma.tenant.update({
+          where: { id: tenant.id },
+          data: {
+            repoError: `Deploy secret yozilmadi: ${err.message}. Avto-deploy ishlamaydi.`,
+          },
+        });
+      }
+
+      return {
+        remote: `https://github.com/${repo.fullName}.git`,
+        token: this.github.token,
+        branch: repo.defaultBranch || 'main',
+      };
+    } catch (err: any) {
+      this.logger.error(`GitHub repo tayyorlanmadi (${tenant.domain}): ${err.message}`);
+      await this.prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { gitStatus: 'FAILED', repoError: err.message },
+      });
+      return null;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────── provisioning
+
+  /**
+   * Yangi tenantni to'liq ishga tushiradi (fon rejimida).
+   * Holat DB'da yangilanadi — panel uni 3 soniyada bir so'rab turadi.
+   */
+  async provision(tenantId: string): Promise<void> {
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        status: 'PROVISIONING',
+        failureReason: null,
+        provisionLog: '',
+        applyStatus: 'APPLYING',
+      },
+    });
+
+    const { tenant, config, template, fileEnv } = await this.buildFileEnv(tenantId);
+
+    if (!template) {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: { status: 'FAILED', failureReason: 'Tizim shabloni topilmadi' },
+      });
+      return;
+    }
+
+    const git = await this.ensureRepo(tenant);
+
+    const scriptPath = process.env.PROVISION_SCRIPT || '/root/admin/provision.sh';
+
+    this.logger.log(
+      `Provisioning boshlandi: ${tenant.domain} (db=${tenant.dbName}, port=${tenant.port})`,
+    );
+
+    const { code, log } = await this.runScript(scriptPath, {
+      ...this.baseEnv(tenant, template.templateDir),
+      ...fileEnv,
+      GIT_ENABLED: git ? 'true' : 'false',
+      GIT_REMOTE: git?.remote || '',
+      GIT_TOKEN: git?.token || '',
+      GIT_BRANCH: git?.branch || 'main',
+    });
+
+    const serverIp = process.env.SERVER_PUBLIC_IP || null;
+
+    if (code === 0) {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: { status: 'ACTIVE', provisionLog: this.tail(log), serverIp },
+      });
+      // Qo'llangan konfiguratsiya surati — endi farq hisoblanadigan nuqta shu
+      await this.settings.markApplied(tenantId, config);
+      await this.markGitResult(tenantId, log, git !== null);
+      this.logger.log(`Provisioning tugadi: ${tenant.domain} ✅`);
+    } else {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          status: 'FAILED',
+          provisionLog: this.tail(log),
+          failureReason: `provision.sh xato kodi bilan tugadi: ${code}`,
+          applyStatus: 'FAILED',
+          applyError: `Provisioning yiqildi (kod ${code})`,
+        },
+      });
+      this.logger.error(`Provisioning muvaffaqiyatsiz: ${tenant.domain} ❌`);
+    }
+  }
+
+  /**
+   * Skript chiqishidan push muvaffaqiyatli bo'lganini aniqlaydi.
+   * Skript maxsus belgi chiqaradi — chiqishni "taxminan" o'qishdan ko'ra
+   * ishonchli.
+   */
+  private async markGitResult(tenantId: string, log: string, gitEnabled: boolean) {
+    if (!gitEnabled) return;
+
+    const pushed = log.includes('GIT_PUSH_OK');
+    const failed = log.includes('GIT_PUSH_FAILED');
+
+    if (pushed) {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          gitStatus: 'SYNCED',
+          lastPushedAt: new Date(),
+          repoError: null,
+          gitLog: this.tail(log),
+        },
+      });
+    } else if (failed) {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          gitStatus: 'FAILED',
+          repoError: "Kod GitHub'ga yuborilmadi — logni tekshiring",
+          gitLog: this.tail(log),
+        },
+      });
+    }
+  }
+
+  // ───────────────────────────────────────────────── sozlamani qo'llash
+
+  /**
+   * Saqlangan sozlamalarni tenantga yetkazadi.
+   *
+   *   restart — server .env qayta yoziladi + pm2 restart
+   *   rebuild — yuqoridagi + client .env va qayta build
+   *   deploy  — repodan kod tortiladi, keyin to'liq rebuild
+   */
+  async applyConfig(tenantId: string, kind: ApplyKind): Promise<void> {
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { applyStatus: 'APPLYING', applyError: null, applyLog: '' },
+    });
+
+    const { tenant, config, template, fileEnv } = await this.buildFileEnv(tenantId);
+
+    const scriptPath = process.env.RECONFIGURE_SCRIPT || '/root/admin/reconfigure.sh';
+
+    this.logger.log(`Qo'llash boshlandi (${kind}): ${tenant.domain}`);
+
+    // `deploy` rejimida kod repodan tortiladi — remote va token kerak
+    const needsGit = kind === 'deploy';
+    const gitToken = needsGit && this.github.isConfigured() ? this.github.token : '';
+
+    const { code, log } = await this.runScript(scriptPath, {
+      ...this.baseEnv(tenant, template?.templateDir || ''),
+      ...fileEnv,
+      APPLY_MODE: kind,
+      GIT_ENABLED: tenant.repoFullName ? 'true' : 'false',
+      GIT_REMOTE: tenant.repoFullName
+        ? `https://github.com/${tenant.repoFullName}.git`
+        : '',
+      GIT_TOKEN: gitToken,
+      GIT_BRANCH: 'main',
+    });
+
+    if (code === 0) {
+      await this.settings.markApplied(tenantId, config, this.tail(log));
+      await this.markGitResult(tenantId, log, Boolean(tenant.repoFullName));
+      this.logger.log(`Qo'llash tugadi: ${tenant.domain} ✅`);
+    } else {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          applyStatus: 'FAILED',
+          applyLog: this.tail(log),
+          applyError: `reconfigure.sh xato kodi bilan tugadi: ${code}`,
+        },
+      });
+      this.logger.error(`Qo'llash muvaffaqiyatsiz: ${tenant.domain} ❌`);
+    }
+  }
+
+  /**
+   * Kodni GitHub'ga qayta yuboradi (sozlamaga tegmasdan).
+   * Repo keyinroq ulangan yoki push yiqilgan holatlar uchun.
+   */
+  async pushToRepo(tenantId: string): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) return;
+
+    const git = await this.ensureRepo(tenant);
+    if (!git) return;
+
+    const { template, fileEnv } = await this.buildFileEnv(tenantId);
+
+    const scriptPath = process.env.RECONFIGURE_SCRIPT || '/root/admin/reconfigure.sh';
+
+    const { code, log } = await this.runScript(scriptPath, {
+      ...this.baseEnv(tenant, template?.templateDir || ''),
+      ...fileEnv,
+      APPLY_MODE: 'push',
+      GIT_ENABLED: 'true',
+      GIT_REMOTE: git.remote,
+      GIT_TOKEN: git.token,
+      GIT_BRANCH: git.branch,
+    });
+
+    await this.markGitResult(tenantId, log, true);
+
+    if (code !== 0) {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          gitStatus: 'FAILED',
+          repoError: `Push skripti xato kodi bilan tugadi: ${code}`,
+          gitLog: this.tail(log),
+        },
+      });
+    }
+  }
+
+  // ──────────────────────────────────────────────────── deprovisioning
+
+  /**
+   * Tenantni VPS'dan o'chiradi. Skript qisman yiqilsa ham tenant DELETED
+   * bo'ladi: resurslarning bir qismi allaqachon o'chirilgan, FAILED qilib
+   * qo'ysak yozuv "tirik" ko'rinadi va qayta o'chirish chalkashlik beradi.
+   */
+  async deprovision(input: {
+    tenantId: string;
+    dbName: string;
+    domain: string;
+    pm2Name: string;
+    repoFullName?: string | null;
+  }): Promise<void> {
     await this.prisma.tenant.update({
       where: { id: input.tenantId },
       data: { status: 'DEPROVISIONING', failureReason: null, deprovisionLog: '' },
     });
 
-    const scriptPath =
-      process.env.DEPROVISION_SCRIPT || '/root/admin/deprovision.sh';
+    const scriptPath = process.env.DEPROVISION_SCRIPT || '/root/admin/deprovision.sh';
 
-    const childEnv = {
-      ...process.env,
+    this.logger.warn(`Deprovisioning boshlandi: ${input.domain} (db=${input.dbName})`);
+
+    const { code, log } = await this.runScript(scriptPath, {
       TENANT_DB_NAME: input.dbName,
       TENANT_DOMAIN: input.domain,
       TENANT_PM2_NAME: input.pm2Name,
-    };
-
-    this.logger.warn(
-      `Deprovisioning boshlandi: ${input.domain} (db=${input.dbName})`,
-    );
-
-    const child = spawn('bash', [scriptPath], {
-      env: childEnv,
-      cwd: process.env.PROVISION_CWD || '/root/admin',
     });
 
-    let log = '';
-    const append = (chunk: Buffer) => {
-      log += chunk.toString();
-      if (log.length > 60000) log = log.slice(-60000);
-    };
-    child.stdout.on('data', append);
-    child.stderr.on('data', append);
+    let repoNote = '';
 
-    child.on('close', async (code) => {
-      await this.prisma.tenant.update({
-        where: { id: input.tenantId },
-        data: {
-          status: 'DELETED',
-          deletedAt: new Date(),
-          deprovisionLog: log,
-          failureReason:
-            code === 0
-              ? null
-              : `deprovision.sh qisman bajarildi (kod ${code}) — logni tekshiring`,
-        },
-      });
-      if (code === 0) {
-        this.logger.warn(`Deprovisioning tugadi: ${input.domain} 🗑`);
-      } else {
-        this.logger.error(
-          `Deprovisioning qisman bajarildi: ${input.domain} (kod ${code})`,
-        );
+    // Repo ATAYLAB oxirida va alohida ushlanadi: mijoz kodi va tarixi
+    // VPS tozalanishi bilan birga yo'qolib ketmasligi kerak.
+    if (input.repoFullName && this.github.isConfigured()) {
+      try {
+        const action = await this.github.disposeRepo(input.repoFullName);
+        repoNote =
+          action === 'deleted'
+            ? `\n==> 🗑  GitHub repo o'chirildi: ${input.repoFullName}`
+            : `\n==> 📦 GitHub repo arxivlandi (saqlanib qoldi): ${input.repoFullName}`;
+      } catch (err: any) {
+        repoNote = `\n==> ⚠️  GitHub repoga tegib bo'lmadi (${input.repoFullName}): ${err.message}`;
       }
+    }
+
+    await this.prisma.tenant.update({
+      where: { id: input.tenantId },
+      data: {
+        status: 'DELETED',
+        deletedAt: new Date(),
+        deprovisionLog: this.tail(log + repoNote),
+        deployToken: null, // token endi ishlamasin
+        failureReason:
+          code === 0
+            ? null
+            : `deprovision.sh qisman bajarildi (kod ${code}) — logni tekshiring`,
+      },
     });
 
-    child.on('error', async (err) => {
-      await this.prisma.tenant.update({
-        where: { id: input.tenantId },
-        data: {
-          status: 'FAILED',
-          failureReason: `deprovision.sh ishga tushmadi: ${err.message}`,
-          deprovisionLog: log,
-        },
-      });
-      this.logger.error(`Deprovision skript xatosi: ${err.message}`);
-    });
+    if (code === 0) {
+      this.logger.warn(`Deprovisioning tugadi: ${input.domain} 🗑`);
+    } else {
+      this.logger.error(`Deprovisioning qisman bajarildi: ${input.domain} (kod ${code})`);
+    }
   }
 }

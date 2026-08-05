@@ -30,6 +30,24 @@ enum TenantStatus {
   DELETED // VPS resurslari o'chirilgan, yozuv arxiv sifatida qoldi
 }
 
+// Tenant kodining GitHub repodagi holati.
+enum GitStatus {
+  DISABLED // GitHub integratsiyasi o'chiq (token yo'q yoki tenant uchun o'chirilgan)
+  PENDING // repo hali yaratilmagan
+  CREATING // GitHub API'da repo ochilyapti
+  PUSHING // VPS'dan kod yuborilyapti
+  SYNCED // repo bor va oxirgi push muvaffaqiyatli
+  FAILED // repo yaratish yoki push xatosi
+}
+
+// Sozlama o'zgarishini tenantga yetkazish holati.
+enum ApplyStatus {
+  IDLE // kutilayotgan o'zgarish yo'q
+  PENDING // o'zgarish saqlangan, hali qo'llanmagan
+  APPLYING // reconfigure.sh ishlayapti
+  FAILED // qo'llashda xato
+}
+
 // "Tizim" turi — dinamik. Hozircha "oquv markaz", keyin boshqalar qo'shiladi.
 // Har template qaysi client/server shablonidan nusxa olinishini belgilaydi.
 model SystemTemplate {
@@ -50,12 +68,22 @@ model SystemTemplate {
 model Tenant {
   id String @id @default(cuid())
 
-  // Foydalanuvchi kiritadigan brend ma'lumotlari
+  // Foydalanuvchi kiritadigan brend ma'lumotlari.
+  //
+  // Ranglar HEX ko'rinishida saqlanadi (rang tanlagich shu formatda ishlaydi),
+  // client .env ga yozishdan oldin HSL kanallariga aylantiriladi — tenant
+  // client `parseHsl` faqat "33 33% 35%" formatini o'qiydi.
   name       String // markaz nomi (VITE_APP_NAME)
   domain     String  @unique // masalan markaz.example.uz
-  brandColor String  @default("#4f46e5") // VITE_APP_PRIMARY
+  brandColor String  @default("#4f46e5") // VITE_APP_PRIMARY (light)
   logoUrl    String? // VITE_APP_LOGO
-  botToken   String? // TELEGRAM_BOT_TOKEN
+  botToken   String? // TELEGRAM_BOT_TOKEN (shifrlangan holda saqlanadi)
+
+  // Qolgan brend ranglari — ixtiyoriy. Berilmasa tenant client ularni
+  // brandColor'dan avtomatik hosil qiladi (tus saqlanadi, kontrast ta'minlanadi).
+  brandBackground     String? // VITE_APP_BACKGROUND
+  brandColorDark      String? // VITE_APP_PRIMARY_DARK
+  brandBackgroundDark String? // VITE_APP_BACKGROUND_DARK
 
   // NOYOB DB nomi — hech qachon takrorlanmaydi (slug + qisqa cuid).
   // Bu tenant MongoDB bazasining nomi bo'ladi.
@@ -80,6 +108,33 @@ model Tenant {
   heartbeatSecret String?   @unique
   lastHeartbeatAt DateTime?
 
+  // --- GitHub: har tenant kodi o'z repositoriysida ---
+  gitStatus    GitStatus @default(PENDING)
+  repoFullName String?   @unique // "owner/tenant-bilim-a3f9c210"
+  repoUrl      String? // https://github.com/owner/repo
+  repoPrivate  Boolean   @default(true)
+  repoError    String?
+  gitLog       String?   @db.Text // oxirgi push chiqishi
+  lastPushedAt DateTime?
+
+  // Tenant repodagi GitHub Action shu token bilan admin serverga murojaat
+  // qiladi va o'zini qayta deploy qildiradi. VPS SSH kaliti repolarga
+  // TARQATILMAYDI — bitta repo sizib chiqsa ham faqat SHU tenant zarar ko'radi.
+  deployToken String? @unique
+
+  // --- Sozlamalar (.env) boshqaruvi ---
+  settings TenantSetting[]
+
+  // Oxirgi MUVAFFAQIYATLI qo'llangan konfiguratsiya surati.
+  // Kutilayotgan o'zgarish = hozirgi hisoblangan konfiguratsiya bilan farq.
+  // Maxfiy qiymatlar bu yerda ochiq emas — sha256 hash sifatida yoziladi,
+  // shunda "o'zgardimi" savoliga javob bor, sir esa ikki joyda yotmaydi.
+  appliedConfig Json?
+  applyStatus   ApplyStatus @default(IDLE)
+  applyLog      String?     @db.Text
+  applyError    String?
+  lastAppliedAt DateTime?
+
   systemTemplate   SystemTemplate @relation(fields: [systemTemplateId], references: [id])
   systemTemplateId String
 
@@ -97,6 +152,32 @@ model Tenant {
 
   @@index([status])
   @@index([customerId])
+}
+
+// Tenantning .env sozlamasi — FAQAT standartdan farq qiladigan qiymatlar.
+//
+// Sozlamalar ro'yxati (kalit, tur, standart qiymat, validatsiya, qo'llash
+// rejimi) admin_server kodidagi registrda turadi: `settings/settings.registry.ts`.
+// Bu yerda faqat mijoz o'zgartirgan qiymat saqlanadi — shunda registrda
+// standart qiymat yangilansa, uni o'zgartirmagan barcha tenantlar yangisini
+// avtomatik oladi.
+model TenantSetting {
+  id       String @id @default(cuid())
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  key      String // registrdagi kalit, masalan "GEMINI_API_KEY"
+
+  // Maxfiy sozlama (`secret` turi) shifrlangan holda yotadi: "v1:iv:tag:data".
+  // Ochiq sozlama shundayligicha. Farqni `isSecret` bildiradi.
+  value    String  @db.Text
+  isSecret Boolean @default(false)
+
+  updatedBy String? // qaysi admin o'zgartirdi (email)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
 }
 
 model AdminUser {

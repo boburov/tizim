@@ -118,8 +118,8 @@ const CompensationSetModal = ({
 
       <p className="text-xs text-muted-foreground">
         {isAmend
-          ? "Tuzatish amaldagi stavkani joyida o'zgartiradi - yangi tarix yozuvi ochilmaydi."
-          : "Eski stavka shu sanada yopiladi va tarixda qoladi. Allaqachon to'langan oylar qayta hisoblanmaydi."}
+          ? "Amaldagi stavka joyida o'zgaradi — yangi tarix yozuvi ochilmaydi."
+          : "Eski stavka yopilib tarixda qoladi. To'langan oylar qayta hisoblanmaydi."}
       </p>
 
       <div className="flex gap-2 pt-1">

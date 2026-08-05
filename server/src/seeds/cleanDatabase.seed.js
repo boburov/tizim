@@ -223,7 +223,7 @@ const clean = async () => {
     console.log("    npm run seed:permissions   # ruxsatlar va rollar");
     if (!OPTS.keepAuth) console.log("    npm run seed:owner         # owner hisobi");
     console.log("    npm run seed:communication # bayramlar va shablonlar");
-    console.log("  «Asosiy filial» server ishga tushganda o'zi yaratiladi.\n");
+    console.log("  «Asosiy filial» server o'zi tiklaydi - qayta ishga tushirish shart emas.\n");
   }
 
   await disconnectDB();

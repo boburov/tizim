@@ -81,10 +81,21 @@ fi
 echo "══════ 3/3  Tozalash ══════"
 node src/seeds/cleanDatabase.seed.js --no-hints --yes --db="$DB_NAME" ${CLEAN_ARGS+"${CLEAN_ARGS[@]}"}
 
+# RUXSAT/ROL SEED - MAJBURIY QADAM.
+#
+# Tozalashdan keyin `roles` va `permissions` kolleksiyalari BO'SH qoladi.
+# Owner buni sezmaydi (uning ruxsati kodda ["*"] bilan qattiq bog'langan),
+# lekin qolgan HAMMA rol yo'qoladi: direktor/administrator/o'qituvchi
+# yarata olmaysiz, mavjudlari esa ruxsatsiz qoladi. Ilgari bu qadam
+# qo'lda bajarilishi kerak edi va odatda unutilardi.
+echo "══════ Ruxsat va rollar ══════"
+node src/seeds/permissions.seed.js
+
 echo "══════ Owner seed ══════"
 node src/seeds/owner.seed.js
 
 echo ""
 echo "  Tayyor. Login: owner / ${OWNER_PASSWORD:-owner123}"
-echo "  «Asosiy filial» server ishga tushganda avtomatik yaraladi."
+echo "  «Asosiy filial» server o'zi tiklaydi (ishga tushganda yoki"
+echo "  birinchi /auth/me so'rovida) - serverni qayta ishga tushirish shart emas."
 echo ""

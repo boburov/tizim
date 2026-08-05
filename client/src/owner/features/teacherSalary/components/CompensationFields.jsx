@@ -11,7 +11,6 @@ import {
   PERCENT_BASE_OPTIONS,
   VARIABLE_UNIT,
   isPercentType,
-  money,
 } from "../utils/compensation";
 
 /**
@@ -60,10 +59,8 @@ const CompensationFields = ({ form, disabled = false, showEffectiveFrom = true }
 
       {showBase && (
         <p className="text-xs text-muted-foreground">
-          Bu summa <b>butun markaz</b> uchun. O'qituvchi 1 ta guruhda ishlasa
-          ham, 5 ta guruhda ishlasa ham {money(form.baseAmount) || 0} so'm
-          bo'lib qoladi. Ishga kirgan/bo'shagan oyda kunlar bo'yicha
-          taqsimlanadi.
+          <b>Butun markaz</b> uchun — guruh soni ta'sir qilmaydi. Chala oyda
+          kunlarga bo'linadi.
         </p>
       )}
 
@@ -109,24 +106,21 @@ const CompensationFields = ({ form, disabled = false, showEffectiveFrom = true }
           />
           <p className="text-xs text-muted-foreground">
             {form.percentBase === "collected"
-              ? "O'quvchi to'lamasa o'qituvchi ham olmaydi - risk bo'linadi."
-              : "O'quvchi to'lamasa ham o'qituvchi to'liq oladi - yo'qotish markazda qoladi."}
+              ? "To'lanmasa o'qituvchi ham olmaydi."
+              : "To'lanmasa ham o'qituvchi to'liq oladi."}
           </p>
         </>
       )}
 
       {showVariable && form.variableType === VARIABLE_TYPES.PER_STUDENT && (
         <p className="text-xs text-muted-foreground">
-          O'quvchi guruhda o'tkazgan kunlari ulushicha sanaladi: butun oy = 1,
-          yarim oy = 0.5. Oy oxirida qo'shilgan o'quvchi uchun to'liq summa
-          to'lanmaydi.
+          Guruhda turgan kunlari ulushicha: butun oy = 1, yarim oy = 0.5.
         </p>
       )}
 
       {showVariable && form.variableType === VARIABLE_TYPES.PER_LESSON_HOUR && (
         <p className="text-xs text-muted-foreground">
-          Dars soatlari guruh jadvalidan olinadi. Bayram kunlari va bekor
-          qilingan darslar hisobga kirmaydi.
+          Jadval bo'yicha; bayram va bekor qilingan darslar sanalmaydi.
         </p>
       )}
 
@@ -135,11 +129,11 @@ const CompensationFields = ({ form, disabled = false, showEffectiveFrom = true }
         <InputField
           name="effectiveFrom"
           type="date"
-          label="Qaysi sanadan amal qiladi"
+          label="Amal qilish sanasi"
           value={form.effectiveFrom}
           onChange={(e) => form.setField("effectiveFrom", e.target.value)}
           disabled={disabled}
-          description="Shu sanadan keyingi oylar qayta hisoblanadi. Allaqachon to'langan oylar o'zgarmaydi."
+          description="Shu sanadan qayta hisoblanadi. To'langanlar o'zgarmaydi."
         />
       )}
 

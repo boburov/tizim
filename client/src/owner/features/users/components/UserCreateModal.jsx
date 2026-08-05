@@ -396,8 +396,7 @@ const UserCreateModal = ({
             <b>
               {obj.firstName} {obj.lastName}
             </b>{" "}
-            uchun maosh. Keyinroq ham belgilash mumkin, lekin stavkasiz
-            o'qituvchining maoshi <b>0</b> bo'lib hisoblanadi.
+            uchun maosh. Stavkasiz maosh <b>0</b> hisoblanadi.
           </p>
 
           <CompensationFields form={obj} disabled={isLoading} />
@@ -411,8 +410,7 @@ const UserCreateModal = ({
 
           {salaryTouched && !salaryValid && (
             <p className="text-xs text-red-600 dark:text-red-300">
-              Stavka summasi kiritilmagan. To'ldiring yoki "Keyinroq
-              belgilayman" ni tanlang.
+              Stavka summasi kiritilmagan.
             </p>
           )}
 
