@@ -66,7 +66,6 @@ export function renderServerEnv(config: ResolvedConfig): string {
   ];
 
   const serverDefs = SETTINGS.filter((s) => s.scope === 'server');
-  const written = new Set<string>();
 
   // 1) Boshqariladigan (hosil qilingan) qiymatlar — registrda yo'q kalitlar
   const managedKeys = Object.keys(config.server).filter(
@@ -76,7 +75,6 @@ export function renderServerEnv(config: ResolvedConfig): string {
     out.push('# --- Tizim tomonidan boshqariladi (panelda o\'zgarmaydi) ---');
     for (const key of managedKeys) {
       out.push(envLine(key, config.server[key]));
-      written.add(key);
     }
     out.push('');
   }
@@ -93,7 +91,6 @@ export function renderServerEnv(config: ResolvedConfig): string {
     for (const def of defs) {
       if (def.help) out.push(...comment(def.help));
       out.push(envLine(def.key, config.server[def.key]));
-      written.add(def.key);
       out.push('');
     }
   }

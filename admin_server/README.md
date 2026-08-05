@@ -2,19 +2,22 @@
 
 Bu panel yangi loyihalarni (o'quv markazlar va keyinchalik boshqa tizimlar) yaratadi.
 Har yangi loyiha uchun `client` + `server` nusxalanadi, **noyob MongoDB bazasi** bilan
-alohida PM2 process, Nginx vhost va HTTPS sertifikati sozlanadi. Oxirida DNS uchun IP
-beriladi.
+alohida PM2 process, Nginx vhost va HTTPS sertifikati sozlanadi, kod **alohida GitHub
+repositoriyasiga** yuboriladi. Oxirida DNS uchun IP beriladi.
 
 ## Arxitektura
 
 ```
-admin_server (NestJS + Prisma + PostgreSQL)   ← provisioning metadata (tenant, template, admin userlar)
-     │  provision.sh chaqiradi (VPS'da)
+admin_server (NestJS + Prisma + PostgreSQL)   ← provisioning metadata (tenant, template,
+     │                                           sozlamalar, admin userlar)
+     │  provision.sh / reconfigure.sh chaqiradi (VPS'da)
      ▼
 /root/tenants/<dbName>/{server,client}         ← har tenant alohida nusxa
      ├─ server .env → MONGO_URL=.../<dbName>    ← NOYOB baza nomi
+     ├─ client .env → brend ranglari (HSL)
      ├─ pm2 start <dbName>-api  (alohida port)
-     └─ nginx vhost + certbot → https://<domain>
+     ├─ nginx vhost + certbot → https://<domain>
+     └─ git remote → github.com/<owner>/<repo>  ← har tenant o'z reposi
 
 admin_client (React + Tailwind)                ← super admin UI
 ```
@@ -22,6 +25,72 @@ admin_client (React + Tailwind)                ← super admin UI
 - **admin_server** — Node/NestJS emas, TypeScript. PostgreSQL faqat panel metadatasi uchun.
 - Har **tenant server** esa mavjud loyihadagidek MongoDB (mongoose) da ishlaydi.
 - **DB nomi hech qachon takrorlanmaydi**: `tenant_<slug>_<8-hex-random>`, DB'da unique tekshiriladi.
+
+## Uchta asosiy imkoniyat
+
+### 1) Sozlamalar admin paneldan (`.env` boshqaruvi)
+
+Tenant `.env` fayllari **skriptda yozilmaydi** — ularni admin server hosil qiladi va
+skriptga `base64` ko'rinishida uzatadi.
+
+Sozlamalar ro'yxati bitta joyda: [`src/settings/settings.registry.ts`](src/settings/settings.registry.ts).
+Har yozuvda kalit, turi, standart qiymati, validatsiyasi, UI matni va **qo'llash rejimi**
+(`restart` yoki `rebuild`) bor.
+
+**Yangi sozlama qo'shish** — 3 qadam, VPS'ga tegilmaydi:
+
+1. tenant ilovasida `process.env.X` ni o'qiydigan joyni yozing;
+2. registrga bitta yozuv qo'shing;
+3. tamom — panelda maydon o'zi paydo bo'ladi va `.env` ga o'zi tushadi.
+
+Maxfiy sozlamalar (bot token, Gemini kalit) bazada **AES-256-GCM** bilan shifrlanadi
+(`SETTINGS_ENCRYPTION_KEY`). Panelga hech qachon ochiq qaytarilmaydi — faqat `••••1234`.
+
+O'zgarish darrov qo'llanmaydi: avval saqlanadi, keyin **"Qo'llash"** tugmasi bir necha
+o'zgarishni birga yetkazadi. Shuning uchun brend rangini ketma-ket tahrirlash bir necha
+build'ni ishga tushirmaydi.
+
+> **JWT va cookie sirlari admin bazasida SAQLANMAYDI.** Ularni `provision.sh` bir marta
+> yaratadi va keyingi qayta sozlashlarda mavjudini saqlab qoladi — shuning uchun sozlama
+> o'zgartirilganda foydalanuvchilar tizimdan chiqib ketmaydi.
+
+### 2) Har tenant uchun alohida GitHub repo
+
+`GITHUB_TOKEN` + `GITHUB_OWNER` berilsa, har loyiha uchun **yopiq** repositoriy ochiladi
+va kod VPS'dan o'sha yerga yuboriladi. Repoda: `server/`, `client/`, `.env.example`,
+`tenant.json`, `README.md` va deploy workflow'i.
+
+Xavfsizlik jihatlari:
+
+- `.env` repoga **hech qachon** tushmaydi — `.gitignore` dan tashqari, `git-sync.sh`
+  push oldidan indeksni alohida tekshiradi va topilsa **push'ni to'xtatadi**;
+- GitHub tokeni `.git/config` ga ham, buyruq argumentiga ham yozilmaydi
+  (`GIT_ASKPASS` orqali beriladi) — ya'ni `ps aux` bilan o'qib bo'lmaydi;
+- tenant repolariga **VPS SSH kaliti tarqatilmaydi**. Workflow admin serverga bitta
+  HTTP so'rov yuboradi va faqat **shu** tenantni qayta deploy qildiradi.
+
+`main` ga push → GitHub Action → admin server → `reconfigure.sh` (kod tortiladi, server
+qayta ishga tushadi, client qayta quriladi). Boshqa mijozlarga ta'sir qilmaydi.
+
+Loyiha o'chirilganda repo standart holatda **arxivlanadi** (o'chirilmaydi) — mijoz kodi
+va tarixi saqlanib qoladi. `GITHUB_DELETE_REPO_ON_DEPROVISION=true` bilan o'zgartirsa bo'ladi.
+
+### 3) Brend preview
+
+Brend rangi tenant client'da shunchaki qo'llanmaydi: undan butun token to'plami
+(yuzalar, chegaralar, matn ranglari) hosil qilinadi va WCAG kontrasti majburlanadi.
+Shuning uchun admin paneldagi preview **aynan o'sha dvigateldan** o'tadi —
+`admin_client/src/lib/brand/` tenant client'dagi fayllarning nusxasi.
+
+Nusxa siljib ketmasligi uchun tekshiruv bor:
+
+```bash
+cd admin_client && npm run check:brand-sync
+```
+
+> **Muhim:** tenant client `.env` dan ranglarni **HSL kanallari** ko'rinishida kutadi
+> (`"243 75% 59%"`), HEX emas. O'girish admin serverda, `.env` yozilishidan oldin
+> bajariladi (`src/common/color/brand-color.util.ts`).
 
 ## 1) admin_server ishga tushirish (lokalda)
 
@@ -52,34 +121,95 @@ npm run dev                   # http://localhost:5174
 
 ## 3) VPS tayyorlash (provisioning ishlashi uchun)
 
-`provision.sh` VPS'da ishlaydi va quyidagilarni talab qiladi:
+Skriptlar VPS'da ishlaydi va quyidagilarni talab qiladi:
+
+- **Uchala skript bitta papkada** (`PROVISION_CWD`, odatda `/root/admin/`) — ular
+  bir-birini nom bo'yicha chaqiradi:
+
+  ```bash
+  scp admin_server/{provision.sh,reconfigure.sh,git-sync.sh} root@VPS:/root/admin/
+  ssh root@VPS 'chmod +x /root/admin/*.sh'
+  ```
+
+  | Skript | Vazifasi |
+  |--------|----------|
+  | `provision.sh` | noldan tenant yaratadi (papkani tozalaydi) |
+  | `reconfigure.sh` | ishlab turgan tenantni yangilaydi (tozalamaydi) |
+  | `git-sync.sh` | kodni GitHub'ga yuboradi (ikkalasi ham chaqiradi) |
 
 - **Template papka**: `/root/templates/study-center/{server,client}` — mavjud loyiha nusxasi
   (bu repodagi `server/` va `client/`). `admin_server` `SystemTemplate.templateDir` shu yerga ishora qiladi.
-- `node`, `npm`, `pm2`, `nginx`, `certbot`, `mongod`, `openssl` o'rnatilgan.
-- `admin_server` `.env` da global sozlamalar (`provision.sh` o'qiydi):
+- `node`, `npm`, `pm2`, `nginx`, `certbot`, `mongod`, `openssl`, **`git`** o'rnatilgan.
+- `admin_server` `.env` da global sozlamalar (skriptlar o'qiydi):
 
 ```bash
 SERVER_PUBLIC_IP=203.0.113.10      # DNS uchun beriladigan IP (bitta VPS — doim shu)
 PROVISION_SCRIPT=/root/admin/provision.sh
+RECONFIGURE_SCRIPT=/root/admin/reconfigure.sh
 PROVISION_CWD=/root/admin
 TENANT_PORT_MIN=5100
 TENANT_PORT_MAX=5999
-# provision.sh uchun (childEnv orqali uzatiladi yoki skript ichida):
-# MONGO_BASE_URL=mongodb://127.0.0.1:27017
+
+# Tenant .env ni admin server hosil qiladi — MONGO_URL shu asosdan quriladi
+MONGO_BASE_URL=mongodb://127.0.0.1:27017
+# Maxfiy sozlamalarni shifrlash (bo'lmasa bot token / API kalit saqlanmaydi)
+SETTINGS_ENCRYPTION_KEY=<64 hex belgi>
+# Heartbeat va tenant repo deploy hook'i shu manzilga murojaat qiladi
+ADMIN_API_PUBLIC_URL=https://admin.example.uz/api
+
+# GitHub (bo'sh bo'lsa integratsiya o'chiq)
+GITHUB_TOKEN=
+GITHUB_OWNER=
+GITHUB_OWNER_TYPE=user
+
+# skriptlar uchun (childEnv orqali uzatiladi yoki skript ichida standart):
 # TENANTS_ROOT=/root/tenants
 # WEB_ROOT_BASE=/var/www
 # WEB_USER=www-data
 # CERTBOT_EMAIL=admin@example.uz
 ```
 
+### Migratsiya (mavjud o'rnatmada)
+
+```bash
+cd admin_server
+npx prisma migrate deploy    # yangi jadval/ustunlar: TenantSetting, brend, GitHub
+npx prisma generate
+```
+
+Mavjud tenantlar buzilmaydi:
+
+- eski `Tenant.botToken` ustuni **o'qilaveradi** — birinchi marta panelda tahrirlanganda
+  shifrlangan sozlamaga ko'chadi va ustun bo'shatiladi;
+- JWT/cookie sirlari `reconfigure.sh` tomonidan **mavjud `.env` dan saqlab qolinadi**;
+- brend rangi endi HSL ga o'girilib yoziladi — **ilgari u umuman ishlamayotgan edi**
+  (client HEX ni o'qiy olmasdi), shuning uchun birinchi "Qo'llash" dan keyin sayt
+  brend rangida chiqadi.
+
 ## Oqim (foydalanuvchi nuqtai nazaridan)
 
+**Yaratish**
+
 1. Login (statik super admin `.env` orqali).
-2. **Yangi loyiha** → tizimni tanlash (select, dinamik) → nom, domen, brend rang, logo, bot token.
-3. **Yaratish** → server darrov `DRAFT` yozadi va fon rejimida `provision.sh` ishga tushadi (`PROVISIONING`).
-4. Loyiha sahifasida real vaqtda status va **provisioning log** ko'rinadi.
-5. Tugagach `ACTIVE` bo'ladi va **DNS uchun IP** ko'rsatiladi → Cloudflare'ga A record qo'shasiz.
+2. **Yangi loyiha** → tizimni tanlash (dinamik) → domen, brend (nom, ranglar, logo),
+   bot token, GitHub repo kerakmi.
+3. O'ngdagi **jonli preview** brend qanday chiqishini light va dark rejimda darrov ko'rsatadi.
+4. **Yaratish** → `DRAFT` yoziladi va fon rejimida `provision.sh` ishga tushadi (`PROVISIONING`).
+5. Loyiha sahifasida real vaqtda status va **provisioning log** ko'rinadi.
+6. Tugagach `ACTIVE` bo'ladi, **DNS uchun IP** ko'rsatiladi → Cloudflare'ga A record qo'shasiz,
+   kod esa GitHub repoga yuborilgan bo'ladi.
+
+**Keyinchalik o'zgartirish** — loyiha sahifasida 4 ta bo'lim:
+
+| Bo'lim | Nima qilinadi | Qo'llash |
+|--------|---------------|----------|
+| Umumiy | DNS, texnik ma'lumot, tarif, loglar, o'chirish | — |
+| Brend | nom, ranglar, logo + jonli preview | client rebuild |
+| Sozlamalar | barcha `.env` qiymatlari (registrdan) | pm2 restart yoki rebuild |
+| GitHub | repo holati, qayta yuborish, git log | — |
+
+O'zgarish saqlangach yuqorida **"N ta o'zgarish qo'llanmagan"** paneli chiqadi va
+qaysi amal bajarilishini (restart / rebuild) oldindan aytadi.
 
 ## 2-darajali admin userlar
 
@@ -98,4 +228,17 @@ orqali `ADMIN` yoki `VIEWER` rolli userlar qo'shiladi — ular ham panelga kira 
 | GET | `/api/tenants` | auth | Loyihalar ro'yxati |
 | POST | `/api/tenants` | SUPER_ADMIN, ADMIN | Yangi loyiha + provisioning |
 | POST | `/api/tenants/:id/retry` | SUPER_ADMIN, ADMIN | Qayta urinish |
+| PATCH | `/api/tenants/:id/brand` | SUPER_ADMIN, ADMIN | Nom, ranglar, logo |
+| GET | `/api/tenants/:id/settings` | auth | Sozlamalar + kutilayotgan farq |
+| PATCH | `/api/tenants/:id/settings` | SUPER_ADMIN, ADMIN | Sozlamalarni saqlash |
+| POST | `/api/tenants/:id/apply` | SUPER_ADMIN, ADMIN | O'zgarishni tenantga yetkazish |
+| GET | `/api/tenants/:id/repo` | auth | GitHub repo holati |
+| POST | `/api/tenants/:id/repo/sync` | SUPER_ADMIN, ADMIN | Repo yaratish / kodni yuborish |
+| GET | `/api/github/status` | auth | Integratsiya sozlanganmi |
+| POST | `/api/tenant-deploy/hook` | deploy token | Tenant repo Action'i chaqiradi |
 | GET/POST/PATCH/DELETE | `/api/users` | SUPER_ADMIN | 2-darajali userlar |
+
+> `/api/tenant-deploy/hook` — yagona **JWT'siz** yo'l. U `Authorization: Bearer <deployToken>`
+> bilan himoyalangan; token har tenantga alohida va faqat o'sha tenantni deploy qila oladi.
+> Shuning uchun u `tenants/*` prefiksidan tashqarida turadi — himoyalanmagan yo'lni
+> himoyalangan yo'llar orasiga qo'yish kelajakda oson xatoga olib keladi.

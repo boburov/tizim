@@ -6913,3 +6913,124 @@ Bitta nozik holat qoldi — o'quvchi oy ichida ketib qayta qo'shilsa (rejoin), o
 <sub>session `02f2a902` · branch `main` · 53 ta qadam</sub>
 
 ---
+
+## 2026-08-05 21:09 — siz senior fullsatck dasturchisiz , bizda oquv markaz tizimi bor har b
+
+**So'rov**
+
+> siz senior fullsatck dasturchisiz , bizda oquv markaz tizimi bor har bir mijoz uchun buil qil debpool qil muammosini olish maqsadida admin paenel orqali sozlanadigan qilgan edim hzoir endi har bir build qilinhgan loyihani alohida git hub repoga avto create qilib git ga ham qoyib qoyadigan qilmoqchiman va brend rangini kirgizgandagi preview qismin yana ham kuchaytrib qoymoqchiman va hozirda env qisimga kop narsalar qoshganmiz hammaisni settingdan admin paneldan loyiha settingsidan boshqara oaldigan qilmoqchiman
+
+**O'zgargan fayllar (37)**
+
+- `admin_server/prisma/schema.prisma` — tahrirlandi
+- `admin_server/src/common/crypto/secrets.util.ts` — yaratildi/qayta yozildi
+- `admin_server/src/common/color/brand-color.util.ts` — yaratildi/qayta yozildi
+- `admin_server/src/settings/settings.registry.ts` — yaratildi/qayta yozildi
+- `admin_server/src/settings/env-renderer.ts` — tahrirlandi, yaratildi/qayta yozildi
+- `admin_server/src/settings/settings.service.ts` — yaratildi/qayta yozildi
+- `admin_server/src/github/github.service.ts` — yaratildi/qayta yozildi
+- `admin_server/src/github/github.module.ts` — yaratildi/qayta yozildi
+- `admin_server/src/settings/settings.module.ts` — yaratildi/qayta yozildi
+- `admin_server/src/provisioning/tenant-repo.templates.ts` — tahrirlandi, yaratildi/qayta yozildi
+- `admin_server/src/provisioning/provisioning.service.ts` — yaratildi/qayta yozildi
+- `admin_server/src/provisioning/provisioning.module.ts` — yaratildi/qayta yozildi
+- `admin_server/src/tenants/dto/create-tenant.dto.ts` — tahrirlandi, yaratildi/qayta yozildi
+- `admin_server/src/tenants/dto/update-brand.dto.ts` — yaratildi/qayta yozildi
+- `admin_server/src/tenants/dto/update-settings.dto.ts` — yaratildi/qayta yozildi
+- `admin_server/src/tenants/tenants.service.ts` — tahrirlandi
+- `admin_server/src/tenants/tenants.controller.ts` — yaratildi/qayta yozildi
+- `admin_server/src/tenants/tenants.module.ts` — yaratildi/qayta yozildi
+- `admin_server/src/app.module.ts` — tahrirlandi
+- `admin_server/provision.sh` — yaratildi/qayta yozildi
+- `admin_server/git-sync.sh` — yaratildi/qayta yozildi
+- `admin_server/reconfigure.sh` — yaratildi/qayta yozildi
+- `admin_client/scripts/check-brand-sync.mjs` — yaratildi/qayta yozildi
+- `admin_client/src/lib/brand/index.js` — yaratildi/qayta yozildi
+- `admin_client/src/components/BrandPreview.jsx` — yaratildi/qayta yozildi
+- `admin_client/src/components/BrandFields.jsx` — yaratildi/qayta yozildi
+- `admin_client/src/pages/CreateTenantPage.jsx` — yaratildi/qayta yozildi
+- `admin_server/src/github/github.controller.ts` — yaratildi/qayta yozildi
+- `admin_client/src/components/PendingChanges.jsx` — yaratildi/qayta yozildi
+- `admin_client/src/components/TenantSettings.jsx` — yaratildi/qayta yozildi
+- `admin_client/src/components/TenantBrand.jsx` — yaratildi/qayta yozildi
+- `admin_client/src/components/TenantRepo.jsx` — yaratildi/qayta yozildi
+- `admin_client/src/pages/TenantDetailPage.jsx` — tahrirlandi
+- `admin_client/package.json` — tahrirlandi
+- `admin_server/.env.example` — tahrirlandi
+- `admin_server/README.md` — tahrirlandi
+- `admin_client/src/components/SitePreview.jsx` — tahrirlandi
+
+**Buyruqlar (84)**
+
+```sh
+ls -la && echo "--- ROOT PKG ---" && cat package.json 2>/dev/null | head -60
+git log --oneline -15 && echo "--- BRANCHES ---" && git branch -a
+cat deploy.sh && echo "=== PROMT.MD ===" && cat PROMT.MD
+echo "=== admin_server ===" && ls -la admin_server && echo "--- src ---" && ls -R admin_server/src 2>/dev/null | head -80
+cd /Users/shukrullo/Desktop/lc-total/admin_server && ls -R src/provisioning src/tenants src/templates && echo "=== provision.sh ===" && cat provision.sh
+cat prisma/schema.prisma | head -200
+wc -l src/tenants/*.ts src/tenants/dto/*.ts && cat .env.example
+cd /Users/shukrullo/Desktop/lc-total && echo "=== server/.env.example ===" && cat server/.env.example 2>/dev/null || echo "(yoq)"; echo "=== server/.env (keys o…
+grep -rn "VITE_APP_PRIMARY\|VITE_APP_BACKGROUND\|VITE_APP_LOGO\|VITE_APP_NAME" client/src client/index.html client/*.ts client/*.js 2>/dev/null | head -30
+ls admin_client/src && echo "--- pages ---" && find admin_client/src -type f -name "*.tsx" -o -name "*.ts" | head -60
+grep -rn "VITE_APP_PRIMARY\|VITE_APP_BACKGROUND\|VITE_APP_LOGO\|VITE_APP_NAME" client/src client/index.html 2>/dev/null | head -30
+find admin_client/src -type f \( -name "*.jsx" -o -name "*.js" \) | sort
+cat admin_server/src/tenants/dto/create-tenant.dto.ts && echo "=== parseHsl ===" && sed -n '1,80p' client/src/shared/utils/color.js
+cat admin_server/src/tenants/tenants.controller.ts && echo "=== workflows ===" && ls -R .github && cat .github/workflows/* 2>/dev/null | head -50
+grep -rn "process.env" server/src --include=*.js -h | grep -oE "process\.env\.[A-Z0-9_]+" | sort -u
+grep -rhoE "process\.env\.[A-Z0-9_]+" server/src | sort | uniq -c | sort -rn
+ls server/src && echo "--- config ---" && find server/src -name "*config*" -o -name "*env*" | head -20
+wc -l admin_client/src/pages/TenantDetailPage.jsx admin_client/src/pages/SettingsPage.jsx admin_client/src/components/SitePreview.jsx && sed -n '1,60p' admin_cl…
+sed -n '60,220p' admin_client/src/pages/TenantDetailPage.jsx
+echo "=== root .gitignore ===" && cat .gitignore && echo "=== admin_server/.gitignore ===" && cat admin_server/.gitignore && echo "=== templates.service ===" &&…
+grep -n "git\|repo" admin_server/prisma/schema.prisma | head; echo "--- deprovision head ---"; sed -n '1,60p' admin_server/deprovision.sh
+cd admin_server && cat package.json && echo "=== app.module.ts ===" && cat src/app.module.ts && echo "=== main.ts ===" && cat src/main.ts
+cd admin_client && cat package.json && echo "=== App.jsx ===" && cat src/App.jsx && echo "=== vite.config ===" && cat vite.config.js 2>/dev/null
+cd /Users/shukrullo/Desktop/lc-total/admin_client && cat package.json && echo "=== App.jsx ===" && cat src/App.jsx
+cat vite.config.js jsconfig.json 2>/dev/null; echo "=== tailwind ==="; cat tailwind.config.js 2>/dev/null | head -60
+# … yana 59 ta
+```
+
+**Natija**
+
+O'quv markaz tizimingizni ko'rib chiqaman — avval hozirgi build/deploy tuzilmasini o'rganay.
+
+Kodni to'liq o'rgandim. Rejaga o'tishdan oldin **muhim bir xatoni** topdim:
+
+`provision.sh` client `.env` ga `VITE_APP_PRIMARY=#4f46e5` (hex) yozadi, lekin [client/src/shared/utils/color.js](client/src/shared/utils/color.js) `parseHsl` faqat `"33 33% 35%"` formatini o'qiydi → hex kelganda `null` qaytadi → [app.js:77](client/src/shared/constants/app.js#L77) da `applyAppTheme` erta chiqib ketadi. Ya'ni **hozir provision qilingan barcha tenantlarda brend rang umuman qo'llanmayapti** — preview'da rang ko'rinadi, saytda esa yo'q. Bu 2-vazifaning asosiy qismi bo'ladi.
+
+Rejani aniqlashtirish uchun 3 ta savol:
+
+Uchala tavsiya qabul qilindi. Endi implementatsiyaga kirishaman — avval qolgan asosiy fayllarni ko'ray.
+
+Prisma schema'dan boshlayman.
+
+Migratsiya qo'llandi. Endi maxfiy qiymatlarni shifrlash qatlami — hozir `botToken` bazada ochiq yotibdi, yangi sozlamalarda Gemini kaliti ham bo'ladi.
+
+Sozlamalar registrini yozishdan oldin tenant serverdagi barcha env qiymatlarini aniq ko'ray.
+
+Endi sozlamalar registri — bu 3-vazifaning yuragi.
+
+Endi env render qatlami — `.env` fayllar shu yerdan chiqadi, skript ichida hardcode qolmaydi.
+
+GitHub integratsiyasi uchun yana bitta maydon kerak — tenant repo workflow'i VPS SSH kalitini emas, faqat o'ziga tegishli deploy tokenni ushlashi uchun.
+
+Endi GitHub servisi.
+
+Endi tenant repo ichiga qo'yiladigan fayllar (README, workflow, tenant.json, .gitignore) — ular admin serverda hosil bo'ladi.
+
+Endi tenants moduli — brend tahriri, sozlamalar API'si, qo'llash va deploy hook.
+
+Endi tenants servisini yangilayman.
+
+Endi `retry` va `remove` metodlarini yangi imzoga moslashtiraman.
+
+Endi TypeScript'ni tekshiraman.
+
+Endi skriptlar. Avval `provision.sh` — `.env
+
+…(qisqartirildi)
+
+<sub>session `2ed7465b` · branch `main` · 177 ta qadam</sub>
+
+---

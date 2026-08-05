@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "check:contrast": "node scripts/check-contrast.mjs",
+    "check:brand-sync": "node scripts/check-brand-sync.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

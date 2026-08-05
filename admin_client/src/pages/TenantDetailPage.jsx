@@ -208,7 +208,7 @@ export default function TenantDetailPage() {
         ))}
       </div>
 
-      {tab === 'brend' && <TenantBrand tenant={t} canEdit={isSuperAdmin || true} />}
+      {tab === 'brend' && <TenantBrand tenant={t} canEdit={t.status !== 'DELETED'} />}
 
       {tab === 'sozlamalar' && (
         <TenantSettings tenantId={t.id} canEdit={t.status !== 'DELETED'} />
@@ -254,7 +254,12 @@ export default function TenantDetailPage() {
         <Row icon={Server} label="PM2 process" value={t.pm2Name} mono copyable />
         <Row icon={Server} label="Port" value={t.port} mono />
         <Row label="Tizim" value={t.systemTemplate?.name} />
-        <Row label="Bot token" value={t.botToken ? '•••• (o\'rnatilgan)' : "Yo'q"} />
+        <Row
+          icon={Github}
+          label="GitHub repo"
+          value={t.repoFullName || (t.gitStatus === 'DISABLED' ? "O'chirilgan" : "Yo'q")}
+          mono={Boolean(t.repoFullName)}
+        />
         <Row label="Yaratgan" value={t.createdBy} />
       </div>
 
@@ -409,6 +414,9 @@ export default function TenantDetailPage() {
             </>
           )}
         </div>
+      )}
+
+      </>
       )}
 
       {/* O'chirishni tasdiqlash modali */}

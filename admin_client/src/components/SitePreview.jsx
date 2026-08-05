@@ -153,12 +153,18 @@ export default function SitePreview({ tenant }) {
             </div>
           )}
 
-          {/* Sayt hali yo'q — brend ko'rinishini mock bilan ko'rsatamiz */}
+          {/* Sayt hali yo'q — brend ko'rinishini mock bilan ko'rsatamiz.
+              Bu yerda `.env` qiymatlari ko'rsatilmaydi: bosh sahifada
+              texnik tafsilot ortiqcha, ular "Brend" bo'limida bor. */}
           <BrandPreview
             name={tenant.name}
             domain={tenant.domain}
             logoUrl={tenant.logoUrl}
             brandColor={tenant.brandColor}
+            brandBackground={tenant.brandBackground}
+            brandColorDark={tenant.brandColorDark}
+            brandBackgroundDark={tenant.brandBackgroundDark}
+            showChannels={false}
             className="mx-auto max-w-xl"
           />
         </>
