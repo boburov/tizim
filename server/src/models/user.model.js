@@ -96,8 +96,24 @@ const userSchema = new mongoose.Schema(
     // completedAt owner tomonidan qo'lda o'rnatilganmi - avto-recompute uni bosib o'tmaydi.
     completedAtManual: { type: Boolean, default: false },
 
-    // Faqat teacher rolidagi maydon
+    // Faqat teacher rolidagi maydon.
+    //
+    // DIQQAT: bu HR MA'LUMOTI. Uni o'zgartirish maosh yaratmaydi va
+    // maosh tarixini qayta hisoblamaydi - hisoblash HAR DOIM alohida,
+    // qo'lda boshlanadigan amal. Chegara `payrollStartFrom` bilan
+    // qo'yiladi (pastga qarang).
     hiredAt: { type: Date, default: null },
+
+    // TIZIM QAYSI SANADAN BOSHLAB maosh hisoblaydi.
+    //
+    // NEGA hiredAt YETMAYDI: markazlar boshqa CRM'dan ko'chib keladi va
+    // o'tgan oylarning maoshi ALLAQACHON to'langan bo'ladi. hiredAt esa
+    // haqiqiy (masalan 2 yil oldingi) sana bo'lishi kerak - HR shuni
+    // talab qiladi. Ikkisini bitta maydonga siqish "hiredAt ni to'g'rilash
+    // = 16 oylik maosh yaratish" degan xavfli bog'lanishni tug'diradi.
+    //
+    // null = chegara yo'q (yangi markaz, hamma narsa shu tizimda).
+    payrollStartFrom: { type: Date, default: null },
     // ISHDAN BO'SHAGAN sana (EXCLUSIVE - shu kundan boshlab ishlamaydi).
     // Maosh proratsiyasi shu chegaragacha hisoblanadi va ochiq
     // TeacherGroupPeriod/TeacherCompensation davrlari shu sanada yopiladi.

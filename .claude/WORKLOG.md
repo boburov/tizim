@@ -6331,3 +6331,325 @@ Xodim yaratish formasida ham xuddi shu kechikish bor — uni ham ulayman:
 <sub>session `0ce0b112` · branch `main` · 35 ta qadam</sub>
 
 ---
+
+## 2026-08-05 15:34 — # Feature Request: Employment Date & Payroll History Management ## Bac
+
+**So'rov**
+
+> # Feature Request: Employment Date & Payroll History Management
+>
+> ## Background
+>
+> The system already has:
+>
+> * Employee Management
+> * Teacher Payroll (working and production ready)
+> * Employee Roles
+> * Groups
+> * Student Payments
+> * Attendance
+> * Payroll History
+>
+> The payroll system already calculates salaries correctly.
+>
+> This task is **NOT** about changing salary calculations.
+>
+> The goal is to make employee history management safe when importing old education centers or editing employee information later.
+>
+> ---
+>
+> # Problem
+>
+> Education centers often migrate from another CRM.
+>
+> Example:
+>
+> Group A started:
+>
+> 01.02.2026
+>
+> Teacher was hired:
+>
+> 01.05.2026
+>
+> The owner imports the existing group and assigns the teacher.
+>
+> The teacher should receive salary only from the date they actually started working with that group.
+>
+> ---
+>
+> Another scenario:
+>
+> Teacher Employment Date:
+>
+> 01.05.2026
+>
+> Later the owner edits it to
+>
+> 01.01.2025
+>
+> because they realized the HR information was incorrect.
+>
+> The system must NOT suddenly generate 16 months of payroll or modify historical salaries automatically.
+>
+> ---
+>
+> # Business Rules
+>
+> ## Rule 1
+>
+> Employment Date is HR information.
+>
+> It is NOT a trigger for payroll generation.
+>
+> Changing Employme
+> …
+
+**O'zgargan fayllar (11)**
+
+- `server/src/models/teacherSalary.model.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/teacherSalary.service.js` — tahrirlandi
+- `server/src/models/user.model.js` — tahrirlandi
+- `server/src/modules/staffPayroll/services/payrollHistory.service.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/staffPayroll/validators/staffPayroll.validator.js` — tahrirlandi
+- `server/src/modules/staffPayroll/staffPayroll.routes.js` — tahrirlandi
+- `client/src/owner/features/staffPayroll/components/modals/EmploymentDateChangeModal.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/users/components/UserEditModal.jsx` — tahrirlandi
+- `server/src/modules/staffPayroll/services/staffPayroll.service.js` — tahrirlandi
+- `client/src/owner/features/staffPayroll/components/modals/CompensationModal.jsx` — tahrirlandi
+- `server/src/modules/staffPayroll/services/staffAdjustment.service.js` — tahrirlandi
+
+**Buyruqlar (14)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "hiredAt" src/modules/users/services/users.service.js | head -20 && echo "=== TEACHER_ONLY_FIELDS usage =…
+grep -n "paidAmount\|overpaidAmount\|status:" src/models/teacherSalary.model.js | head -8
+grep -rn "applyExpected(" src/modules/teacherSalary/services/teacherSalary.service.js | head
+python3 - <<'PY' p='src/modules/staffPayroll/staffPayroll.routes.js' s=open(p).read() s=s.replace('''import * as transactionService from "./services/staffSalary…
+cd ../client && python3 - <<'PY' p='src/shared/api/endpoints.js' s=open(p).read() s=s.replace(''' kpiAssignmentById: (id) => `/staff-payroll/kpi/assignments/${i…
+python3 - <<'PY' p='src/shared/constants/modals.js' s=open(p).read() s=s.replace(''' KPI_RULE_FORM: "kpiRule:form",''',''' KPI_RULE_FORM: "kpiRule:form", // Ish…
+python3 - <<'PY' # Modalni ikkala mount joyiga qo'shamiz: UserModals (ro'yxat) va UserDetailPage. p='src/owner/features/users/components/UserModals.jsx' s=open(…
+npx eslint src/owner/features/staffPayroll/ src/owner/features/users/ 2>&1 | tail -15; npm run build 2>&1 | tail -4
+cd ../server && python3 - <<'PY' p='src/modules/staffPayroll/services/payrollHistory.service.js' s=open(p).read() # _id kerak - projeksiyaga qo'shamiz s=s.repla…
+python3 - <<'PY' p='src/owner/features/staffPayroll/components/modals/EmploymentDateChangeModal.jsx' s=open(p).read() s=s.replace('import { Calculator, Lock, Re…
+cd /Users/shukrullo/Desktop/lc-total/client && python3 - <<'PY' p='src/owner/features/staffPayroll/components/modals/EmploymentDateChangeModal.jsx' s=open(p).re…
+npx eslint src/owner/features/staffPayroll/ src/owner/features/users/ 2>&1 | tail -10; npm run build 2>&1 | tail -3
+cd ../server && python3 - <<'PY' p='src/modules/staffPayroll/services/staffAdjustment.service.js' s=open(p).read() s=s.replace('''import StaffPayrollAdjustment …
+cd ../client && npm run build 2>&1 | tail -3 && cd ../server && git diff --stat | tail -5
+```
+
+**Natija**
+
+Yangi vazifa — moliyaviy yaxlitlik. Avval hozir `hiredAt` o'zgarganda nima sodir bo'lishini aniqlayman.
+
+`hiredAt` o'zgarishi hozir maoshni **darhol** qayta hisoblamaydi — bu yaxshi. Lekin qulf yo'q, ya'ni keyingi har qanday qayta hisob tarixni jimgina o'zgartiradi. Aniq joylarni ko'ray:
+
+Aniq. Endi qulf va HR/moliya chegarasini quraman:
+
+Endi HR o'zgarishining moliyaviy ta'sirini boshqaradigan servis:
+
+Server tayyor. Endi client — tasdiqlash oynasi va uch amal:
+
+Endi buni `hiredAt` tahririga ulayman:
+
+Uchta bo'shliqni to'ldiray. Avval eng muhimi — chegara **hisoblashning o'zida** ham hurmat qilinishi kerak:
+
+Endi qulf tugmasi va "oldingi maoshlar to'langan" savolini UI'ga qo'shaman:
+
+Endi "oldingi maoshlar allaqachon to'langan" savolini shartnoma oynasiga qo'shaman:
+
+Ikkita yaxlitlik teshigini yopay — qulflangan oyga bonus va qulfni chetlab o'tuvchi qayta hisob:
+
+<sub>session `a683a949` · branch `main` · 37 ta qadam</sub>
+
+---
+
+## 2026-08-05 15:49 — # Feature Enhancement: Enterprise Payroll Integrity & Audit Architectu
+
+**So'rov**
+
+> # Feature Enhancement: Enterprise Payroll Integrity & Audit Architecture
+>
+> ## Background
+>
+> The system already includes:
+>
+> * Employee Management
+> * Teacher Payroll (production ready)
+> * Employee Roles & Permissions
+> * Payroll Lock
+> * Payroll History
+> * Teacher Group Assignment History
+> * Attendance
+> * Student Payments
+> * HR Module
+>
+> Current architecture already separates:
+>
+> * HR Information
+> * Payroll Processing
+>
+> Specifically:
+>
+> * `hiredAt` is HR information only.
+> * `payrollStartFrom` defines when payroll starts.
+> * Changing `hiredAt` never generates payroll automatically.
+> * Payroll generation is a separate process.
+> * Payroll locking is already implemented.
+>
+> These behaviors **must remain unchanged**.
+>
+> ---
+>
+> # Objective
+>
+> Improve the payroll system so that it reaches enterprise ERP quality.
+>
+> The goal is not to change payroll calculation.
+>
+> The goal is to guarantee historical financial integrity, auditability, and safe payroll management.
+>
+> ---
+>
+> # 1. Payroll Activation Date
+>
+> Current implementation:
+>
+> Employee
+>
+> * hiredAt
+> * payrollStartFrom
+>
+> This separation is correct.
+>
+> However, rename the business meaning internally to:
+>
+> Payroll Activation Date
+>
+> This represents the first date from which the system is allow
+> …
+
+**O'zgargan fayllar (7)**
+
+- `server/src/models/payrollAuditLog.model.js` — yaratildi/qayta yozildi
+- `server/src/modules/staffPayroll/services/payrollAudit.service.js` — yaratildi/qayta yozildi
+- `server/src/models/staffPayroll.model.js` — tahrirlandi
+- `server/src/modules/staffPayroll/services/staffPayroll.service.js` — tahrirlandi
+- `server/src/modules/staffPayroll/services/kpiEngine.service.js` — tahrirlandi
+- `client/src/owner/features/staffPayroll/components/PayrollTimeline.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/staffPayroll/components/modals/PayrollPreviewModal.jsx` — yaratildi/qayta yozildi
+
+**Buyruqlar (14)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && python3 - <<'PY' p='src/modules/staffPayroll/services/staffPayroll.service.js' s=open(p).read() s=s.replace(''' /…
+python3 - <<'PY' p='src/modules/staffPayroll/services/staffPayroll.service.js' s=open(p).read() # setLifecycle - qulflash/ochish auditi + sabab s=s.replace('''e…
+python3 - <<'PY' # 1) TO'LOV auditi p='src/modules/staffPayroll/services/staffSalaryTransaction.service.js' s=open(p).read() s=s.replace('''import * as payrollS…
+python3 - <<'PY' p='src/modules/staffPayroll/services/payrollHistory.service.js' s=open(p).read() s=s.replace('''import * as payrollService from "./staffPayroll…
+python3 - <<'PY' # Validatorlar p='src/modules/staffPayroll/validators/staffPayroll.validator.js' s=open(p).read() s=s.replace('''export const payrollStartSchem…
+python3 - <<'PY' # lifecycle validator - sabab p='src/modules/staffPayroll/validators/staffPayroll.validator.js' s=open(p).read() s=s.replace('''export const li…
+cat src/modules/users/handlers/update.handler.js
+python3 - <<'PY' p='src/modules/users/services/users.service.js' s=open(p).read() s=s.replace('export const update = async (id, body) => {','export const update…
+cd ../client && python3 - <<'PY' p='src/shared/api/endpoints.js' s=open(p).read() s=s.replace(''' lock: "/staff-payroll/history/lock",''',''' lock: "/staff-payr…
+python3 - <<'PY' # Modal konstantasi p='src/shared/constants/modals.js' s=open(p).read() s=s.replace(''' EMPLOYMENT_DATE_CHANGE: "employment:dateChange",''','''…
+python3 - <<'PY' # 1) Aktivatsiya sanasi: faqat ATAYLAB o'zgartirilganda va sabab bilan yuboriladi. p='src/owner/features/staffPayroll/components/modals/Compens…
+python3 - <<'PY' p='src/owner/features/staffPayroll/components/modals/PayrollDetailModal.jsx' s=open(p).read() s=s.replace('''import StatusBadge from "@/shared/…
+python3 - <<'PY' p='src/owner/features/staffPayroll/components/modals/PayrollDetailModal.jsx' s=open(p).read() s=s.replace(''' // eslint-disable-next-line no-al…
+cd ../server && node -e " import('./src/routes/index.js').then(async ()=>{ const m = await import('./src/models/payrollAuditLog.model.js'); const p = await impo…
+```
+
+**Natija**
+
+Bu yirik ish. Tartib bilan boraman — avval audit poydevori, keyin o'zgarmaslik kafolati.
+
+Endi maosh qatoriga manba va snapshot qo'shaman:
+
+Endi hisoblash yadrosiga snapshot, manba, audit va o'zgarmaslik qo'riqchisini ulayman:
+
+Endi qolgan amallarga audit va qo'riqchini ulayman:
+
+Endi to'lov, shartnoma, aktivatsiya sanasi va HR o'zgarishlariga audit:
+
+Endi aktivatsiya sanasi himoyasi, quruq yugurish (dry run) va HR auditi:
+
+Endi HR sanasi o'zgarishini auditga yozaman va lifecycle validatoriga sababni qo'shaman:
+
+Server tayyor. Endi client — taymlayn, dry-run va manba ko'rsatkichi:
+
+Endi dry-run modali va UI ulanishlari:
+
+Endi tafsilot oynasiga taymlayn va qulf ochish sababini qo'shaman:
+
+<sub>session `a683a949` · branch `main` · 26 ta qadam</sub>
+
+---
+
+## 2026-08-05 15:47 — vazifa oqtuchi hisobida oquvchilarga vazifa + file yuborib koring men 
+
+**So'rov**
+
+> vazifa oqtuchi hisobida oquvchilarga vazifa + file yuborib koring men storage flow yaxhis ishlayotganini tekshirmoqchiman bu vpsga qoyiladi har hil vps attackdan himoya uchun hamma fileni ham yubora oaldigan qilmasligimiz kerak
+
+**O'zgargan fayllar (8)**
+
+- `server/src/helpers/userProfile.helper.js` — tahrirlandi
+- `server/src/middleware/uploadAttachment.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/assignments/handlers/download.handler.js` — tahrirlandi
+- `server/src/middleware/rateLimiter.js` — tahrirlandi
+- `server/src/modules/assignments/assignments.routes.js` — tahrirlandi
+- `server/tests/assignmentStorage.test.js` — tahrirlandi
+- `client/src/shared/constants/uploads.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/assignments/components/modals/AssignmentSendModal.jsx` — tahrirlandi
+
+**Buyruqlar (29)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server/src && ls modules/assignments modules/assignments/* 2>/dev/null | head -30 && echo "=== upload middleware ===" && gr…
+cat middleware/uploadAttachment.js
+cat modules/assignments/assignments.routes.js && echo "=== download handler ===" && cat modules/assignments/handlers/download.handler.js
+grep -n "export const" modules/storage/services/storage.service.js && echo "=== writeFile/readFile/paths ===" && grep -n "writeFile\|readFile\|randomUUID\|path.…
+sed -n 180,240p modules/storage/services/storage.service.js && echo "=== safeExtension ===" && grep -n "safeExtension" -B 5 -A 20 modules/storage/services/stora…
+grep -n "static\|UPLOAD_DIR\|helmet\|rateLimit\|limiter" app.js | head -20; echo "=== env upload ==="; grep -n "UPLOAD\|MAX_UPLOAD\|QUOTA" config/env.js; echo "…
+cd /Users/shukrullo/Desktop/lc-total/server && ls tests && grep -n '"scripts"' -A 10 package.json && head -25 tests/branchLeak.test.js
+cd /Users/shukrullo/Desktop/lc-total/server/src && grep -n "saveBuffer\|mimetype\|file" modules/assignments/services/assignments.service.js | head -25
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n 6,40p package.json && echo "=== assignmentStorage test (bosh qismi) ===" && sed -n 1,45p tests/assignmentS…
+grep -n "test:assignment" package.json; (nc -z 127.0.0.1 27017 && echo "MONGO: ochiq") || echo "MONGO: yopiq"
+npm run test:assignment 2>&1 | tail -40
+sed -n 40,80p src/helpers/userProfile.helper.js
+sed -n 505,535p tests/assignmentStorage.test.js
+cd /Users/shukrullo/Desktop/lc-total && git diff src/helpers/userProfile.helper.js server/src/helpers/userProfile.helper.js 2>/dev/null | head -40; echo "=== bs…
+cd /Users/shukrullo/Desktop/lc-total/server/src && grep -rn "buildUserProfile(" --include=*.js . | grep -v "helpers/userProfile.helper.js"
+grep -rn "buildUserProfile" . 2>/dev/null | grep -v node_modules | grep -v "userProfile.helper.js"
+sed -n 535,600p tests/assignmentStorage.test.js
+sed -n 600,700p tests/assignmentStorage.test.js
+grep -n "head(\"1[3-9]\|head(\`\|^ // ====\|finish\|summary\|results.fail" tests/assignmentStorage.test.js | tail -20; echo "---"; tail -30 tests/assignmentStor…
+npm run test:assignment 2>&1 | tail -60
+grep -n "leaked" tests/assignmentStorage.test.js
+npm run test:assignment 2>&1 | tail -45
+npm run test:assignment 2>&1 | sed -n 1,40p
+cd /Users/shukrullo/Desktop/lc-total/client/src && grep -rn "type=\"file\"\|accept=" owner/features/notifications owner/features/assignments 2>/dev/null | head …
+sed -n 190,250p owner/features/assignments/components/modals/AssignmentSendModal.jsx
+# … yana 4 ta
+```
+
+**Natija**
+
+Avval yuklash oqimini to'liq o'qiyman — multer sozlamasi, tekshiruvlar va faylni qaytarish.
+
+Mavjud to'liq test bor (`test:assignment`). Avval hozirgi holatni ishga tushirib ko'ray:
+
+Test 1–7 bosqichlarni o'tdi, 8-bosqichda yiqildi. Sababini ko'ray:
+
+Ildiz sabab: `_bsontype` qiymati `"ObjectId"`, kod esa `"ObjectID"` ni tekshiryapti — shuning uchun ID bilan chaqirilsa qulaydi. Avval shuni tuzatay:
+
+Endi asosiy ish — fayl turi filtrini qora ro'yxatdan **oq ro'yxatga** o'tkazaman:
+
+Endi yuklash uchun alohida tezlik chegarasi — VPS'da disk/CPU ni to'ldirishga qarshi:
+
+Endi testni fayl turlari bo'yicha kengaytiraman — himoya ishlayotgani isbotlansin:
+
+Test to'liq o'tdi (82 tekshiruv). Endi klientdagi fayl tanlagich ham shu ro'yxatga mos bo'lsin:
+
+<sub>session `0ce0b112` · branch `main` · 45 ta qadam</sub>
+
+---

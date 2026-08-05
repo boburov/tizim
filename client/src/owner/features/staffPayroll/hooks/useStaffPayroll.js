@@ -66,6 +66,30 @@ export const useKpiAssignmentsQuery = (employeeId, options = {}) =>
     ...options,
   });
 
+/**
+ * MAOSH TARIXI HOLATI - "ishga olingan sanani o'zgartirsam nima bo'ladi?".
+ *
+ * So'rov HECH NARSANI o'zgartirmaydi: u faqat mavjud oylarni, qulflangan
+ * va to'langanlarini sanaydi. Tasdiqlash oynasi shu javobga qarab
+ * ko'rsatiladi (tarix bo'sh bo'lsa - ortiqcha bosish qilmaymiz).
+ */
+export const usePayrollImpactQuery = (employeeId, options = {}) =>
+  useQuery({
+    queryKey: qk.staffPayroll.impact(employeeId),
+    queryFn: () => staffPayrollAPI.impact(employeeId).then((r) => r.data.data),
+    enabled: Boolean(employeeId),
+    ...options,
+  });
+
+/** Xodimning moliyaviy TAYMLAYNI - audit tarixi. */
+export const usePayrollTimelineQuery = (employeeId, options = {}) =>
+  useQuery({
+    queryKey: qk.staffPayroll.timeline(employeeId),
+    queryFn: () => staffPayrollAPI.timeline(employeeId).then((r) => r.data.data),
+    enabled: Boolean(employeeId),
+    ...options,
+  });
+
 // --- MUTATION'lar ---
 
 // Maosh o'zgarganda kesh butunlay yangilanadi: bitta bonus oy summasini,
@@ -157,6 +181,48 @@ export const useKpiAssignmentMutation = (options = {}) =>
   usePayrollMutation(
     (body) => staffPayrollAPI.setAssignment(body).then((r) => r.data.data),
     "Biriktiruv saqlandi",
+    options,
+  );
+
+export const useGenerateRangeMutation = (options = {}) =>
+  usePayrollMutation(
+    (body) => staffPayrollAPI.generateRange(body).then((r) => r.data),
+    null,
+    options,
+  );
+
+export const useRecalcUnlockedMutation = (options = {}) =>
+  usePayrollMutation(
+    (body) => staffPayrollAPI.recalculate(body).then((r) => r.data),
+    null,
+    options,
+  );
+
+/**
+ * QURUQ YUGURISH - DB'ga hech narsa yozilmaydi.
+ *
+ * Mutatsiya sifatida yozilgan (query emas): u foydalanuvchi tugmani
+ * bosganda ATAYLAB ishga tushadi va keshlanmasligi kerak.
+ */
+export const usePreviewMutation = (options = {}) =>
+  usePayrollMutation(
+    (body) => staffPayrollAPI.preview(body).then((r) => r.data.data),
+    null,
+    options,
+  );
+
+export const usePayrollStartMutation = (options = {}) =>
+  usePayrollMutation(
+    ({ employeeId, ...body }) =>
+      staffPayrollAPI.setPayrollStart(employeeId, body).then((r) => r.data.data),
+    "Maosh hisobining boshlanish sanasi saqlandi",
+    options,
+  );
+
+export const usePayrollLockMutation = (options = {}) =>
+  usePayrollMutation(
+    (body) => staffPayrollAPI.setLock(body).then((r) => r.data.data),
+    null,
     options,
   );
 

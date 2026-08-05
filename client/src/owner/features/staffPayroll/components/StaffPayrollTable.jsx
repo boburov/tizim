@@ -26,6 +26,15 @@ const STATUS_LABEL = {
   unpaid: "To'lanmagan",
 };
 
+// Qator qayerdan paydo bo'lgan - auditor uchun birinchi savol.
+const SOURCE_LABEL = {
+  auto: "Avtomatik",
+  generated: "Qo'lda yaratilgan",
+  manual: "Qo'lda tuzatilgan",
+  imported: "Import",
+  migrated: "Ko'chirilgan",
+};
+
 const fullName = (u) =>
   u ? `${u.firstName || ""} ${u.lastName || ""}`.trim() : "Noma'lum";
 
@@ -118,6 +127,11 @@ const StaffPayrollTable = ({ rows = [], isLoading = false, onRowClick }) => {
           </StatusBadge>
           {p.lifecycle === "finalized" && (
             <Badge className="bg-accent text-foreground">Yopilgan</Badge>
+          )}
+          {p.source && p.source !== "auto" && (
+            <Badge variant="secondary" className="font-normal">
+              {SOURCE_LABEL[p.source] || p.source}
+            </Badge>
           )}
         </div>
       ),

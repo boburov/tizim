@@ -1,5 +1,5 @@
 // Icons
-import { Pencil, Wallet } from "lucide-react";
+import { Calculator, Pencil, Wallet } from "lucide-react";
 
 // Components
 import Badge from "@/shared/components/ui/badge/Badge";
@@ -7,6 +7,8 @@ import Button from "@/shared/components/ui/button/Button";
 import Card from "@/shared/components/ui/card/Card";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import CompensationModal from "./modals/CompensationModal";
+import PayrollPreviewModal from "./modals/PayrollPreviewModal";
+import PayrollTimeline from "./PayrollTimeline";
 
 // Hooks
 import useModal from "@/shared/hooks/useModal";
@@ -62,16 +64,29 @@ const StaffSalaryCard = ({ employee }) => {
           <h3 className="font-semibold">Maosh</h3>
         </div>
         {canManage && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              openModal(MODAL.STAFF_COMPENSATION_SET, { employee, active })
-            }
-          >
-            <Pencil className="size-3.5" />
-            {active ? "O'zgartirish" : "Belgilash"}
-          </Button>
+          <div className="flex gap-1.5">
+            {active && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openModal(MODAL.PAYROLL_PREVIEW, { employee })}
+                title="Yetishmayotgan oylarni yaratish"
+              >
+                <Calculator className="size-3.5" />
+                Maosh yaratish
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                openModal(MODAL.STAFF_COMPENSATION_SET, { employee, active })
+              }
+            >
+              <Pencil className="size-3.5" />
+              {active ? "O'zgartirish" : "Belgilash"}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -115,12 +130,27 @@ const StaffSalaryCard = ({ employee }) => {
         </div>
       )}
 
+      {/* MOLIYAVIY TAYMLAYN - "hech narsa tarixdan yo'qolmaydi". */}
+      <div className="border-t pt-3">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Moliyaviy tarix
+        </p>
+        <PayrollTimeline employeeId={employeeId} limit={6} />
+      </div>
+
       <ModalWrapper
         name={MODAL.STAFF_COMPENSATION_SET}
         title="Maosh shartnomasi"
         className="max-w-lg"
       >
         <CompensationModal />
+      </ModalWrapper>
+      <ModalWrapper
+        name={MODAL.PAYROLL_PREVIEW}
+        title="Maosh yaratish - avval ko'rish"
+        className="max-w-lg"
+      >
+        <PayrollPreviewModal />
       </ModalWrapper>
     </Card>
   );

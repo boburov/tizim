@@ -17,6 +17,35 @@ import mongoose from "mongoose";
  */
 export const STAFF_PAYROLL_STATUSES = ["unpaid", "partial", "paid"];
 
+/**
+ * QATOR QAYERDAN PAYDO BO'LGAN.
+ *
+ * Auditor uchun eng birinchi savol: "bu raqamni kim qo'ydi?". Manbani
+ * saqlamasak, oylik job yaratgan qator bilan migratsiyada ko'chirilgan
+ * qator bir xil ko'rinardi.
+ *
+ *   auto      - oylik job (jadval bo'yicha)
+ *   generated - egasi "Hisoblash" tugmasini bosdi
+ *   manual    - qo'lda tuzatilgan/qayta hisoblangan
+ *   imported  - fayldan yuklangan
+ *   migrated  - boshqa tizimdan ko'chirilgan
+ */
+export const PAYROLL_SOURCES = [
+  "auto",
+  "generated",
+  "manual",
+  "imported",
+  "migrated",
+];
+
+export const PAYROLL_SOURCE_LABELS = {
+  auto: "Avtomatik",
+  generated: "Qo'lda yaratilgan",
+  manual: "Qo'lda tuzatilgan",
+  imported: "Import",
+  migrated: "Ko'chirilgan",
+};
+
 const staffPayrollSchema = new mongoose.Schema(
   {
     employee: {
@@ -62,6 +91,22 @@ const staffPayrollSchema = new mongoose.Schema(
     },
 
     computedAt: { type: Date, default: null },
+
+    source: { type: String, enum: PAYROLL_SOURCES, default: "auto", index: true },
+
+    /**
+     * MAOSH SNAPSHOT'I - hisob KUNIDAGI holat.
+     *
+     * Maosh qatori HECH QACHON joriy shartnomaga tayanmasligi kerak:
+     * mart oyida stavka oshirilsa, yanvar qatorini ochgan odam yanvarda
+     * amal qilgan stavkani ko'rishi shart. Aks holda "bu raqam qanday
+     * chiqqan?" degan savolga javob yo'qoladi va tarix qayta yozilgandek
+     * ko'rinadi.
+     *
+     * Ichida: shartnoma (tur, summa, sana), qo'llanilgan KPI qoidalari
+     * (nomi, triggeri, stavkasi) va hisob paytidagi kontekst.
+     */
+    snapshot: { type: mongoose.Schema.Types.Mixed, default: null },
 
     // OYNI YOPISH.
     //

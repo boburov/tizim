@@ -6,6 +6,7 @@ import { ROLES } from "../../../constants/roles.js";
 import { loadRoleCatalog } from "../../../helpers/roles.helper.js";
 import { toUtcMidnight, parseLocalDay } from "../../../helpers/attendance.helper.js";
 import * as payrollService from "./staffPayroll.service.js";
+import * as auditService from "./payrollAudit.service.js";
 
 /**
  * XODIM MAOSH SHARTNOMASI - hayot sikli.
@@ -103,6 +104,19 @@ export const setCompensation = async (body, currentUser) => {
     effectiveFrom,
     note: body.note || "",
     createdBy: currentUser?._id || null,
+  });
+
+  await auditService.record({
+    employee: user._id,
+    action: auditService.PAYROLL_AUDIT_ACTIONS.SALARY_CHANGED,
+    targetType: "compensation",
+    targetId: created._id,
+    oldValue: open
+      ? { salaryType: open.salaryType, baseAmount: open.baseAmount }
+      : null,
+    newValue: { salaryType, baseAmount: created.baseAmount, effectiveFrom },
+    reason: body.note || "",
+    actor: currentUser,
   });
 
   // Joriy oyni darhol qayta hisoblaymiz - egasi natijani ko'rsin.

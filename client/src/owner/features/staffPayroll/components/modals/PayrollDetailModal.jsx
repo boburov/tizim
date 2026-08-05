@@ -4,6 +4,7 @@ import { Lock, LockOpen, Minus, Plus, RefreshCw, Trash2, Wallet } from "lucide-r
 // Components
 import Button from "@/shared/components/ui/button/Button";
 import StatusBadge from "@/shared/components/ui/badge/StatusBadge";
+import PayrollTimeline from "../PayrollTimeline";
 
 // Hooks
 import useModal from "@/shared/hooks/useModal";
@@ -58,6 +59,10 @@ const PayrollDetailModal = ({ payrollId, close }) => {
 
   const finalized = data.lifecycle === "finalized";
   const remaining = Math.max(0, (data.finalAmount || 0) - (data.paidAmount || 0));
+  // O'ZGARMAS DAVR: yopilgan YOKI to'lov qilingan. Ikkinchisi ham
+  // muhim - pul chiqib bo'lgan oyning summasi keyin o'zgarsa, kassa
+  // bilan hisobot orasida farq qolardi.
+  const immutable = finalized || (data.paidAmount || 0) > 0;
 
   return (
     <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
@@ -87,6 +92,12 @@ const PayrollDetailModal = ({ payrollId, close }) => {
         </div>
         <Row label="To'langan" value={formatMoney(data.paidAmount)} />
         <Row label="Qoldiq" value={formatMoney(remaining)} />
+        {data.snapshot?.takenAt && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Hisob sanasi: {formatDateUzLong(data.snapshot.takenAt)} - raqamlar
+            o'sha kundagi shartnoma va qoidalar asosida muzlatilgan.
+          </p>
+        )}
         {data.totalDays > 0 && data.payableDays < data.totalDays && (
           <p className="mt-1 text-xs text-muted-foreground">
             {data.payableDays}/{data.totalDays} kun ishlagan - oylik shunga
@@ -160,7 +171,7 @@ const PayrollDetailModal = ({ payrollId, close }) => {
                       {isPenalty ? "-" : "+"}
                       {formatMoney(a.amount)}
                     </span>
-                    {canManage && !finalized && (
+                    {canManage && !immutable && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -196,6 +207,12 @@ const PayrollDetailModal = ({ payrollId, close }) => {
         </div>
       )}
 
+      {/* MOLIYAVIY TARIX - shu oy bo'yicha */}
+      <div>
+        <h3 className="mb-1.5 text-sm font-semibold">Shu oy tarixi</h3>
+        <PayrollTimeline employeeId={data.employee?._id} limit={8} />
+      </div>
+
       {/* Amallar */}
       <div className="flex flex-wrap gap-2 border-t pt-3">
         {canPay && remaining > 0 && (
@@ -207,7 +224,7 @@ const PayrollDetailModal = ({ payrollId, close }) => {
             To'lash
           </Button>
         )}
-        {canManage && !finalized && (
+        {canManage && !immutable && (
           <>
             <Button
               type="button"
@@ -254,12 +271,19 @@ const PayrollDetailModal = ({ payrollId, close }) => {
           <Button
             type="button"
             variant="outline"
-            onClick={() =>
-              setLifecycle({
-                id: data._id,
-                lifecycle: finalized ? "draft" : "finalized",
-              })
-            }
+            onClick={() => {
+              // QULFNI OCHISH - sabab MAJBURIY (server ham talab qiladi).
+              // Yopilgan moliyaviy davrni qayta ochish istisno hodisa.
+              if (finalized) {
+                const reason = window.prompt(
+                  "Qulfni ochish sababi (audit jurnaliga yoziladi):",
+                );
+                if (!reason?.trim()) return;
+                setLifecycle({ id: data._id, lifecycle: "draft", reason });
+                return;
+              }
+              setLifecycle({ id: data._id, lifecycle: "finalized" });
+            }}
           >
             {finalized ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
             {finalized ? "Qayta ochish" : "Oyni yopish"}

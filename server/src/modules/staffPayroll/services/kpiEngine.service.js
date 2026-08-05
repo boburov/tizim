@@ -87,6 +87,10 @@ const computeAmount = ({ rewardType, rewardValue, quantity, base }) => {
 export const rebuildAutoKpi = async ({ payroll, employee }) => {
   const applicable = await resolveRulesForEmployee(employee);
   const keptIds = [];
+  // Snapshot uchun: hisob paytida QAYSI qoidalar qanday stavka bilan
+  // qo'llangani. Qoida keyin o'zgartirilsa ham o'tgan oy o'z holicha
+  // tushuntirilib turadi.
+  const appliedRules = [];
   let total = 0;
 
   for (const { rule, rewardValue } of applicable) {
@@ -165,6 +169,16 @@ export const rebuildAutoKpi = async ({ payroll, employee }) => {
       keptIds.push(doc._id);
     }
     total += ruleTotal;
+    appliedRules.push({
+      rule: String(rule._id),
+      name: rule.name,
+      trigger: rule.trigger,
+      rewardType: rule.rewardType,
+      rewardValue,
+      monthlyCap: rule.monthlyCap || 0,
+      conditions: rule.conditions || {},
+      amount: ruleTotal,
+    });
   }
 
   // Endi tegishli bo'lmagan qatorlar (qoida o'chirilgan, shart o'zgargan,
@@ -174,5 +188,5 @@ export const rebuildAutoKpi = async ({ payroll, employee }) => {
     _id: { $nin: keptIds },
   });
 
-  return { total, count: keptIds.length };
+  return { total, count: keptIds.length, appliedRules };
 };

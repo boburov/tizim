@@ -8,6 +8,7 @@ import UserEditModal from "./UserEditModal";
 import UserPasswordModal from "./UserPasswordModal";
 import UserFreezeModal from "./UserFreezeModal";
 import UserUnfreezeModal from "./UserUnfreezeModal";
+import { EmploymentDateChangeModal } from "@/owner/features/staffPayroll";
 
 // Constants
 import { MODAL } from "@/shared/constants/modals";
@@ -43,6 +44,15 @@ const UserModals = () => (
     </ModalWrapper>
     <ModalWrapper name={MODAL.USER_UNFREEZE} title="Muzlatishdan chiqarish">
       <UserUnfreezeModal />
+    </ModalWrapper>
+    {/* Ishga olingan sana o'zgargandan KEYIN chiqadi: HR saqlangan,
+        moliyaviy qism esa egasining ataylab qilgan tanlovi. */}
+    <ModalWrapper
+      name={MODAL.EMPLOYMENT_DATE_CHANGE}
+      title="Maosh tarixi o'zgarmaydi"
+      className="max-w-lg"
+    >
+      <EmploymentDateChangeModal />
     </ModalWrapper>
   </>
 );

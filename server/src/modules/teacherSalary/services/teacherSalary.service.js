@@ -288,6 +288,18 @@ export const recalc = async (salaryId, { force = false, lockPaid = false } = {})
   const salary = await TeacherSalary.findById(salaryId);
   if (!salary) return null;
 
+  // ─── QULF: MUTLAQ TO'SIQ ───
+  //
+  // `force` ham buni ocha OLMAYDI - qulflangan oy avval ATAYLAB
+  // ochilishi kerak. Farqi shundaki, `lockPaid` "avtomatik tegmа" degan
+  // maslahat, qulf esa "bu davr yopilgan" degan qaror: markaz boshqa
+  // tizimdan ko'chib kelgan yoki hisobot topshirilgan oylar shu bilan
+  // himoyalanadi.
+  //
+  // Default false bo'lgani uchun mavjud ma'lumotlarda xatti-harakat
+  // AYNAN avvalgidek qoladi.
+  if (salary.isLocked) return salary;
+
   // FAQAT guruh qatorlari davrlardan qayta hisoblanadi.
   //  • base      - markaz fiksasi, recalcBaseForTeacherMonth() bilan yangilanadi
   //  • bonus/deduction - QO'LDA kiritilgan (KPI), avtomatik qayta hisob YO'Q.
@@ -405,6 +417,13 @@ export const recalcBaseForTeacherMonth = async (
     year,
     month,
   });
+
+  // QULFLANGAN OY - mutlaq to'siq (recalc() dagi bilan bir xil qoida).
+  // Ishga olingan sana tuzatilganda aynan shu yo'l orqali o'tgan oylar
+  // qayta yozilardi: hiredAt segmentlar chegarasini beradi (yuqorida
+  // `from: user?.hiredAt`), ya'ni sana 16 oy orqaga surilsa 16 oylik
+  // fiksa oylik qaytadan hisoblanib ketardi.
+  if (existing?.isLocked) return existing;
 
   // TO'LANGAN OY QULFI - recalc() dagi bilan bir xil shart: faqat STAVKA
   // o'zgarishida. Fiksa oylikda bu ayniqsa muhim, chunki effectiveFrom xato

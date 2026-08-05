@@ -9,6 +9,7 @@ import {
   createRequest,
 } from "../../expenseApprovals/services/expenseApproval.service.js";
 import * as payrollService from "./staffPayroll.service.js";
+import * as auditService from "./payrollAudit.service.js";
 
 /**
  * XODIMGA MAOSH TO'LASH.
@@ -65,7 +66,7 @@ const writeTransaction = async ({
   }
 
   try {
-    return await StaffSalaryTransaction.create({
+    const created = await StaffSalaryTransaction.create({
       branchId: payroll.branchId,
       payroll: payroll._id,
       employee: payroll.employee,
@@ -78,6 +79,21 @@ const writeTransaction = async ({
       createdBy: createdBy || null,
       expenseApprovalId,
     });
+
+    await auditService.record({
+      employee: payroll.employee,
+      year: payroll.year,
+      month: payroll.month,
+      action: auditService.PAYROLL_AUDIT_ACTIONS.PAID,
+      targetType: "staffSalaryTransaction",
+      targetId: created._id,
+      oldValue: { paidAmount: payroll.paidAmount || 0 },
+      newValue: { paidAmount: (payroll.paidAmount || 0) + amount, amount, method },
+      reason: note || "",
+      actor: createdBy ? { _id: createdBy } : null,
+    });
+
+    return created;
   } catch (err) {
     // Yozuv o'tmadi - band qilingan balansni qaytaramiz.
     await payrollService.applyPaidDelta(payroll._id, -amount);
@@ -178,6 +194,17 @@ export const remove = async (id, currentUser) => {
 
   await doc.softDelete(currentUser?._id);
   await payrollService.applyPaidDelta(doc.payroll, -doc.amount);
+
+  await auditService.record({
+    employee: doc.employee,
+    year: doc.year,
+    month: doc.month,
+    action: auditService.PAYROLL_AUDIT_ACTIONS.PAYMENT_REVERSED,
+    targetType: "staffSalaryTransaction",
+    targetId: doc._id,
+    oldValue: { amount: doc.amount, method: doc.method, paidAt: doc.paidAt },
+    actor: currentUser,
+  });
 
   return { id };
 };

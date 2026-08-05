@@ -17,6 +17,7 @@ import UserFreezeHistory from "../components/UserFreezeHistory";
 import { TeacherCompensationCard } from "@/owner/features/teacherSalary";
 import { BotStatusBadge } from "@/shared/components/userProfile";
 import UserBranchModal from "../components/UserBranchModal";
+import { EmploymentDateChangeModal } from "@/owner/features/staffPayroll";
 import {
   ExemptionCreateModal,
   ExemptionDeleteModal,
@@ -212,6 +213,13 @@ const UserDetailPage = () => {
       </ModalWrapper>
       <ModalWrapper name={MODAL.USER_PASSWORD} title="Foydalanuvchi paroli">
         <UserPasswordModal />
+      </ModalWrapper>
+      <ModalWrapper
+        name={MODAL.EMPLOYMENT_DATE_CHANGE}
+        title="Maosh tarixi o'zgarmaydi"
+        className="max-w-lg"
+      >
+        <EmploymentDateChangeModal />
       </ModalWrapper>
 
       {/* Muzlatish modallari (faqat o'quvchi) */}

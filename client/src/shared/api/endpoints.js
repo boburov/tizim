@@ -304,6 +304,17 @@ export const ENDPOINTS = Object.freeze({
     kpiAssignmentsByEmployee: (employeeId) =>
       `/staff-payroll/kpi/assignments/${employeeId}`,
     kpiAssignmentById: (id) => `/staff-payroll/kpi/assignments/${id}`,
+
+    // HR va moliya chegarasi: ishga olingan sana o'zgarganda nima
+    // bo'lishini KO'RSATADI, lekin hech narsani o'zi o'zgartirmaydi.
+    historyImpact: (employeeId) => `/staff-payroll/history/impact/${employeeId}`,
+    payrollStart: (employeeId) =>
+      `/staff-payroll/history/payroll-start/${employeeId}`,
+    generateRange: "/staff-payroll/history/generate-range",
+    recalculate: "/staff-payroll/history/recalculate",
+    lock: "/staff-payroll/history/lock",
+    preview: "/staff-payroll/history/preview",
+    timeline: (employeeId) => `/staff-payroll/history/timeline/${employeeId}`,
   },
 
   teacherSalary: {

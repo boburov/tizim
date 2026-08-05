@@ -134,6 +134,10 @@ export const MODAL = Object.freeze({
   STAFF_ADJUSTMENT: "staffPayroll:adjustment",
   STAFF_COMPENSATION_SET: "staffPayroll:compensationSet",
   KPI_RULE_FORM: "kpiRule:form",
+  // Ishga olingan sana o'zgarganda moliyaviy ta'sirni tasdiqlash.
+  EMPLOYMENT_DATE_CHANGE: "employment:dateChange",
+  // Maosh yaratishdan OLDIN ko'rish (dry run).
+  PAYROLL_PREVIEW: "payroll:preview",
 
   // Teacher salary (O'qituvchi maoshlari)
   SALARY_ADD_PAYOUT: "salary:addPayout",

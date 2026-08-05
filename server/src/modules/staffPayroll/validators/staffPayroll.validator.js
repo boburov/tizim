@@ -39,7 +39,11 @@ export const recomputeSchema = z.object({
 
 export const lifecycleSchema = z.object({
   params: z.object({ id }),
-  body: z.object({ lifecycle: z.enum(["draft", "finalized"]) }),
+  body: z.object({
+    lifecycle: z.enum(["draft", "finalized"]),
+    // Qulfni OCHISHDA majburiy (server tekshiradi).
+    reason: z.string().trim().max(500).optional(),
+  }),
 });
 
 // --- Shartnoma ---
@@ -113,6 +117,51 @@ export const assignmentSetSchema = z.object({
     rule: id,
     enabled: z.coerce.boolean().optional(),
     rewardValueOverride: z.union([money, z.literal(""), z.null()]).optional(),
+  }),
+});
+
+// --- HR / maosh tarixi ---
+export const generateRangeSchema = z.object({
+  body: z.object({
+    employeeId: id,
+    from: z.string().min(1),
+    to: z.string().min(1),
+  }),
+});
+
+export const recalcUnlockedSchema = z.object({
+  body: z.object({
+    employeeId: id,
+    from: z.string().optional(),
+    to: z.string().optional(),
+  }),
+});
+
+export const payrollStartSchema = z.object({
+  params: z.object({ employeeId: id }),
+  body: z.object({
+    payrollStartFrom: z.string().nullable().optional(),
+    // Tarix bo'lsa server ikkalasini ham TALAB qiladi.
+    confirm: z.coerce.boolean().optional(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+});
+
+export const previewSchema = z.object({
+  body: z.object({
+    employeeId: id,
+    from: z.string().min(1),
+    to: z.string().min(1),
+  }),
+});
+
+export const lockSchema = z.object({
+  body: z.object({
+    kind: z.enum(["teacher", "staff"]),
+    id,
+    locked: z.coerce.boolean(),
+    // Qulfni OCHISHDA majburiy (server tekshiradi).
+    reason: z.string().trim().max(500).optional(),
   }),
 });
 

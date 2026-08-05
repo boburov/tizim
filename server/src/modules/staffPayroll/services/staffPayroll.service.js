@@ -11,6 +11,7 @@ import { loadRoleCatalog, staffRoleFilter } from "../../../helpers/roles.helper.
 import { userBranchCondition } from "../../../helpers/branchContext.helper.js";
 import { daysInMonth, deriveStatus } from "../../finance/services/proration.helper.js";
 import { rebuildAutoKpi } from "./kpiEngine.service.js";
+import * as auditService from "./payrollAudit.service.js";
 import { monthRange } from "./kpiTriggers.js";
 
 /**
@@ -57,7 +58,7 @@ export const computePayroll = async (
   employeeId,
   year,
   month,
-  { save = true, force = false } = {},
+  { save = true, force = false, source = "auto", actor = null, reason = "" } = {},
 ) => {
   const employee = await User.findById(employeeId).lean();
   if (!employee) throw new ApiError(404, "Xodim topilmadi");
@@ -65,14 +66,49 @@ export const computePayroll = async (
     throw new ApiError(400, "O'quvchiga maosh hisoblanmaydi");
   }
 
-  // YOPILGAN OY tegilmaydi: egasi ko'rib qabul qilgan raqam keyin
-  // o'z-o'zidan o'zgarmasligi kerak. Faqat ataylab qayta ochish orqali.
-  if (save && !force) {
+  // ─── MOLIYAVIY CHEGARA ───
+  //
+  // `payrollStartFrom` - tizim qaysi sanadan boshlab maosh hisoblaydi.
+  // Markaz boshqa CRM'dan ko'chib kelgan bo'lsa, undan oldingi oylar
+  // ALLAQACHON to'langan va bu yerda qayta yaratilmasligi kerak.
+  //
+  // Tekshiruv aynan SHU YERDA turadi - hamma yo'l (oylik job, qo'lda
+  // hisoblash, shartnoma o'zgarishi, bonus qo'shish) shu funksiyadan
+  // o'tadi. Uni yuqoriroq qatlamga qo'yish bitta yo'lni ochiq qoldirardi.
+  if (employee.payrollStartFrom) {
+    const boundary = employee.payrollStartFrom;
+    const monthEnd = new Date(Date.UTC(year, month, 1));
+    if (monthEnd <= boundary) {
+      const existing = await StaffPayroll.findOne({
+        employee: employee._id,
+        year,
+        month,
+      });
+      // Mavjud qatorni O'CHIRMAYMIZ - u qo'lda kiritilgan bo'lishi mumkin.
+      return existing || null;
+    }
+  }
+
+  // ─── O'ZGARMAS DAVR ───
+  //
+  // Yopilgan YOKI to'lov qilingan oy qayta hisoblanmaydi. To'langanlik
+  // ham kiritilgan: pul chiqib bo'lgandan keyin summani o'zgartirish
+  // kassa bilan hisobot orasida farq qoldirardi.
+  //
+  // `force` bu to'siqni OCHMAYDI - u faqat "yopilganini bilaman, baribir
+  // hisobla" degan ichki chaqiruvlar uchun emas, balki qayta ochilgan
+  // oyni darhol hisoblash uchun ishlatiladi (setLifecycle).
+  if (save) {
     const existing = await StaffPayroll.findOne(
       { employee: employee._id, year, month },
-      { lifecycle: 1 },
+      { lifecycle: 1, paidAmount: 1, finalAmount: 1, employee: 1, year: 1, month: 1 },
     ).lean();
-    if (existing?.lifecycle === "finalized") {
+
+    const immutable =
+      existing &&
+      (existing.lifecycle === "finalized" || (existing.paidAmount || 0) > 0);
+
+    if (immutable && !force) {
       return StaffPayroll.findById(existing._id);
     }
   }
@@ -110,6 +146,12 @@ export const computePayroll = async (
     return { employee, salaryType, fixedAmount, payableDays, totalDays, branchId };
   }
 
+  // Yaratilishidan OLDINGI holat - audit uchun ("nima edi").
+  const before = await StaffPayroll.findOne(
+    { employee: employee._id, year, month },
+    { finalAmount: 1, fixedAmount: 1, autoKpiTotal: 1, manualBonusTotal: 1, penaltyTotal: 1 },
+  ).lean();
+
   // Qator (yo'q bo'lsa yaratiladi) - KPI qatorlari unga bog'lanadi.
   const payroll = await StaffPayroll.findOneAndUpdate(
     { employee: employee._id, year, month },
@@ -122,9 +164,11 @@ export const computePayroll = async (
 
   // AVTOMATIK KPI - shartnoma turi ruxsat bersagina.
   let autoKpiTotal = 0;
+  let appliedRules = [];
   if (salaryType === "fixed_plus_kpi" || salaryType === "kpi_only") {
     const res = await rebuildAutoKpi({ payroll, employee });
     autoKpiTotal = res.total;
+    appliedRules = res.appliedRules || [];
   } else {
     // Tur "fixed"ga o'zgartirilgan bo'lsa eski KPI qatorlari qolib
     // ketmasin.
@@ -156,6 +200,41 @@ export const computePayroll = async (
     fixedAmount + autoKpiTotal + manualBonusTotal - penaltyTotal,
   );
 
+  // ─── SNAPSHOT ───
+  //
+  // Qator hisob KUNIDAGI holatni o'zida saqlaydi. Ertaga stavka
+  // oshirilsa yoki KPI qoidasi o'zgartirilsa ham, bu oyni ochgan odam
+  // raqam QANDAY chiqqanini ko'radi. Aks holda tarix qayta yozilgandek
+  // ko'rinardi.
+  const snapshot = {
+    takenAt: new Date(),
+    compensation: lastComp
+      ? {
+          id: String(lastComp._id),
+          salaryType: lastComp.salaryType,
+          baseAmount: lastComp.baseAmount,
+          effectiveFrom: lastComp.effectiveFrom,
+          effectiveTo: lastComp.effectiveTo,
+        }
+      : null,
+    segments: segments.map((seg) => ({
+      from: seg.from,
+      toExcl: seg.toExcl,
+      days: seg.days,
+      salaryType: seg.comp.salaryType,
+      baseAmount: seg.comp.baseAmount,
+    })),
+    kpiRules: appliedRules,
+    proration: { payableDays, totalDays },
+    totals: {
+      fixedAmount,
+      autoKpiTotal,
+      manualBonusTotal,
+      penaltyTotal,
+      finalAmount,
+    },
+  };
+
   const updated = await StaffPayroll.findByIdAndUpdate(
     payroll._id,
     {
@@ -173,10 +252,35 @@ export const computePayroll = async (
         finalAmount,
         status: deriveStatus(payroll.paidAmount || 0, finalAmount),
         computedAt: new Date(),
+        source,
+        snapshot,
       },
     },
     { new: true },
   );
+
+  // AUDIT: yaratildimi yoki qayta hisoblandimi - ikkalasi ham yoziladi.
+  await auditService.record({
+    employee: employee._id,
+    year,
+    month,
+    action: before
+      ? auditService.PAYROLL_AUDIT_ACTIONS.RECALCULATED
+      : auditService.PAYROLL_AUDIT_ACTIONS.GENERATED,
+    targetType: "staffPayroll",
+    targetId: updated._id,
+    oldValue: before
+      ? {
+          finalAmount: before.finalAmount,
+          fixedAmount: before.fixedAmount,
+          autoKpiTotal: before.autoKpiTotal,
+        }
+      : null,
+    newValue: { finalAmount, fixedAmount, autoKpiTotal },
+    reason,
+    actor,
+    meta: { source },
+  });
 
   return updated;
 };
@@ -221,9 +325,18 @@ export const generateMonth = async (year, month) => {
  * Yopilgandan keyin avtomatik qayta hisoblash bu qatorga tegmaydi.
  * Qayta ochish - ataylab qilinadigan amal (egasi xato topgan bo'lsa).
  */
-export const setLifecycle = async (id, lifecycle, currentUser) => {
+export const setLifecycle = async (id, lifecycle, currentUser, { reason = "" } = {}) => {
   const payroll = await StaffPayroll.findById(id);
   if (!payroll) throw new ApiError(404, "Maosh qatori topilmadi");
+
+  // QULFNI OCHISH - sabab MAJBURIY. Yopilgan moliyaviy davrni qayta
+  // ochish istisno hodisa; auditda "nega" yozilmasa, keyin tushuntirib
+  // bo'lmaydi.
+  if (lifecycle !== "finalized" && payroll.lifecycle === "finalized" && !reason.trim()) {
+    throw new ApiError(400, "Qulfni ochish sababini ko'rsating");
+  }
+
+  const previous = payroll.lifecycle;
 
   if (lifecycle === "finalized") {
     payroll.lifecycle = "finalized";
@@ -236,10 +349,30 @@ export const setLifecycle = async (id, lifecycle, currentUser) => {
   }
   await payroll.save();
 
-  // Qayta ochilganda darhol yangi raqamni ko'rsatamiz.
+  await auditService.record({
+    employee: payroll.employee,
+    year: payroll.year,
+    month: payroll.month,
+    action:
+      lifecycle === "finalized"
+        ? auditService.PAYROLL_AUDIT_ACTIONS.LOCKED
+        : auditService.PAYROLL_AUDIT_ACTIONS.UNLOCKED,
+    targetType: "staffPayroll",
+    targetId: payroll._id,
+    oldValue: { lifecycle: previous },
+    newValue: { lifecycle },
+    reason,
+    actor: currentUser,
+  });
+
+  // Qayta ochilganda darhol yangi raqamni ko'rsatamiz. `force` shu yerda
+  // O'RINLI: qulf ataylab ochildi, ya'ni bu egasining qarori.
   if (lifecycle !== "finalized") {
     return computePayroll(payroll.employee, payroll.year, payroll.month, {
       force: true,
+      source: "manual",
+      actor: currentUser,
+      reason,
     });
   }
   return payroll;

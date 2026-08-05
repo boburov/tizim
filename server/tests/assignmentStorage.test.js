@@ -716,6 +716,64 @@ const run = async () => {
   );
 
   // ============================================================
+  head("13. Fayl turi filtri (VPS himoyasi)");
+  //
+  // Bu bo'lim yuklash MIDDLEWARE'ini tekshiradi - servis emas. Sabab:
+  // himoyaning butun ma'nosi zararli fayl servisga YETIB BORMASLIGIDA.
+  const {
+    contentMatchesExtension,
+    canonicalMimeOf,
+    allowedExtensions,
+  } = await import("../src/middleware/uploadAttachment.js");
+
+  const PDF = Buffer.from("%PDF-1.7\n...", "binary");
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const PHP = Buffer.from("<?php system($_GET['c']); ?>", "utf8");
+
+  const allowed = allowedExtensions();
+  const mustBeBlocked = [
+    ".php", ".phtml", ".cgi", ".pl", ".py", ".jsp", ".asp", ".aspx",
+    ".html", ".htm", ".svg", ".xhtml",
+    ".exe", ".bat", ".sh", ".ps1", ".jar", ".apk", ".hta", ".jse",
+    ".wsf", ".msc", ".cpl", ".reg", ".lnk", ".scf", ".url", ".iso",
+  ];
+  const slipped = mustBeBlocked.filter((e) => allowed.includes(e));
+  if (slipped.length === 0)
+    ok(`Xavfli kengaytmalar oq ro'yxatda yo'q (${mustBeBlocked.length} ta tekshirildi)`);
+  else bad("Oq ro'yxatga sizib kirgan", slipped.join(", "));
+
+  if (!allowed.includes("")) ok("Kengaytmasiz fayl o'tmaydi");
+  else bad("Kengaytmasiz fayl", "ruxsat etilgan");
+
+  // Mazmun tekshiruvi: nomni almashtirish yetarli emas.
+  if (!contentMatchesExtension(PHP, ".pdf"))
+    ok("`.pdf` deb nomlangan PHP skripti RAD etiladi (imzo mos emas)");
+  else bad("Imzo tekshiruvi", "PHP skript pdf sifatida o'tdi");
+
+  if (!contentMatchesExtension(PHP, ".png"))
+    ok("`.png` deb nomlangan skript RAD etiladi");
+  else bad("Imzo tekshiruvi", "skript png sifatida o'tdi");
+
+  if (contentMatchesExtension(PDF, ".pdf")) ok("Haqiqiy PDF o'tadi");
+  else bad("Imzo tekshiruvi", "haqiqiy PDF rad etildi");
+
+  if (contentMatchesExtension(PNG, ".png")) ok("Haqiqiy PNG o'tadi");
+  else bad("Imzo tekshiruvi", "haqiqiy PNG rad etildi");
+
+  if (!contentMatchesExtension(Buffer.alloc(0), ".pdf"))
+    ok("Bo'sh bufer imzo tekshiruvidan o'tmaydi");
+  else bad("Imzo tekshiruvi", "bo'sh bufer o'tdi");
+
+  // Yuklab olishda Content-Type SAQLANGAN qiymatdan olinmaydi.
+  if (canonicalMimeOf("dars.pdf") === "application/pdf")
+    ok("Yuklab olishda MIME kengaytmadan olinadi");
+  else bad("canonicalMimeOf", canonicalMimeOf("dars.pdf"));
+
+  if (canonicalMimeOf("eski.html") === "application/octet-stream")
+    ok("Notanish/xavfli kengaytma -> octet-stream (brauzer ochmaydi)");
+  else bad("canonicalMimeOf(html)", canonicalMimeOf("eski.html"));
+
+  // ============================================================
   await mongoose.connection.dropDatabase();
   await mongoose.disconnect();
   // Agenda O'Z mongo ulanishini ochadi (service yetkazishni navbatga

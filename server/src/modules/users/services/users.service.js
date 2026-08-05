@@ -399,7 +399,7 @@ export const getProfile = async (id) => {
   return buildUserProfile(user);
 };
 
-export const update = async (id, body) => {
+export const update = async (id, body, currentUser = null) => {
   const user = await getById(id);
   if (user.role === ROLES.OWNER) {
     throw new ApiError(403, "Owner foydalanuvchini tahrirlab bo'lmaydi");
@@ -509,6 +509,7 @@ export const update = async (id, body) => {
   }
 
   // Teacher-specific
+  let hiredAtAudit = null;
   if (user.role === ROLES.TEACHER) {
     if (body.hiredAt !== undefined) {
       // Ishga olingan sana o'qituvchi uchun MAJBURIY - bo'shatib bo'lmaydi.
@@ -522,11 +523,40 @@ export const update = async (id, body) => {
       if (isFutureLocalDay(d)) {
         throw new ApiError(400, "Ishga olingan sana kelajakda bo'lmasin");
       }
+
+      // HR SANASI - MOLIYAGA TA'SIR QILMAYDI, lekin IZI QOLADI.
+      //
+      // Bu yerda ATAYLAB hech qanday qayta hisob chaqirilmaydi: maosh
+      // yaratish/qayta hisoblash mustaqil, qo'lda boshlanadigan amal
+      // (staffPayroll/history/*). Lekin o'zgarishning o'zi auditga
+      // yoziladi - keyin "sana qachon va kim tomonidan surildi?" degan
+      // savolga javob bo'lishi kerak.
+      const previousHiredAt = user.hiredAt;
       user.hiredAt = d;
+      if (String(previousHiredAt || "") !== String(d || "")) {
+        hiredAtAudit = { from: previousHiredAt, to: d };
+      }
     }
   }
 
   await user.save();
+
+  if (hiredAtAudit) {
+    // Dinamik import - modullar orasida sikl bo'lmasin.
+    const audit = await import(
+      "../../staffPayroll/services/payrollAudit.service.js"
+    );
+    await audit.record({
+      employee: user._id,
+      action: audit.PAYROLL_AUDIT_ACTIONS.EMPLOYMENT_DATE_CHANGED,
+      targetType: "user",
+      targetId: user._id,
+      oldValue: { hiredAt: hiredAtAudit.from },
+      newValue: { hiredAt: hiredAtAudit.to },
+      actor: currentUser,
+    });
+  }
+
   // Override bo'shatilgan bo'lsa - avtomatik qiymatni qayta hisoblaymiz.
   if (recomputeCompletion) {
     await safeRecomputeStudentCompletion(user._id);

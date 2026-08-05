@@ -306,6 +306,8 @@ export const qk = Object.freeze({
     rules: (params) => ["staffPayroll", "rules", params],
     triggers: () => ["staffPayroll", "triggers"],
     assignments: (employeeId) => ["staffPayroll", "assignments", employeeId],
+    impact: (employeeId) => ["staffPayroll", "impact", employeeId],
+    timeline: (employeeId) => ["staffPayroll", "timeline", employeeId],
   },
 
   // Teacher salary (O'qituvchi maoshlari)

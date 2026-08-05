@@ -37,6 +37,16 @@ export const staffPayrollAPI = {
   assignments: (employeeId) => http.get(E.kpiAssignmentsByEmployee(employeeId)),
   setAssignment: (body) => http.post(E.kpiAssignments, body),
   removeAssignment: (id) => http.delete(E.kpiAssignmentById(id)),
+
+  // --- HR / maosh tarixi ---
+  impact: (employeeId) => http.get(E.historyImpact(employeeId)),
+  // body: { payrollStartFrom, confirm?, reason? }
+  setPayrollStart: (employeeId, body) => http.patch(E.payrollStart(employeeId), body),
+  generateRange: (body) => http.post(E.generateRange, body),
+  recalculate: (body) => http.post(E.recalculate, body),
+  setLock: (body) => http.post(E.lock, body),
+  preview: (body) => http.post(E.preview, body),
+  timeline: (employeeId, params) => http.get(E.timeline(employeeId), { params }),
 };
 
 export default staffPayrollAPI;

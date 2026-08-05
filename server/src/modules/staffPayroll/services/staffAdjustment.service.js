@@ -1,9 +1,11 @@
 import User from "../../../models/user.model.js";
 import StaffPayrollAdjustment from "../../../models/staffPayrollAdjustment.model.js";
+import StaffPayroll from "../../../models/staffPayroll.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
 import { parseLocalDay } from "../../../helpers/attendance.helper.js";
 import * as payrollService from "./staffPayroll.service.js";
+import * as auditService from "./payrollAudit.service.js";
 
 /**
  * QO'LDA KIRITILADIGAN BONUS va JARIMA.
@@ -28,6 +30,20 @@ export const create = async (body, currentUser) => {
   const reason = String(body.reason || "").trim();
   if (!reason) throw new ApiError(400, "Sabab ko'rsatilishi shart");
 
+  // O'ZGARMAS DAVR: yopilgan yoki to'langan oyga yozib bo'lmaydi -
+  // bonus ham oyning yakuniy summasini o'zgartiradi. Rad etilgan
+  // urinish auditga tushadi.
+  const target = await StaffPayroll.findOne({
+    employee: employee._id,
+    year: Number(body.year),
+    month: Number(body.month),
+  }).lean();
+  await auditService.assertMutable(target, {
+    action: body.kind === "penalty" ? "penalty.add" : "bonus.add",
+    actor: currentUser,
+    reason: body.reason,
+  });
+
   const doc = await StaffPayrollAdjustment.create({
     employee: employee._id,
     branchId: body.branchId || employee.homeBranchId || null,
@@ -40,11 +56,27 @@ export const create = async (body, currentUser) => {
     createdBy: currentUser?._id || null,
   });
 
-  // Oy summasi darhol yangilansin - egasi natijani ko'radi.
-  // Yopilgan oyga bonus kiritilsa uni ham hisobga olamiz (force):
-  // qo'lda kiritilgan yozuv - bu ataylab qilingan amal.
+  // Oy summasi darhol yangilansin - egasi natijani ko'radi. `force`
+  // BERILMAYDI: yopilgan oy yuqorida allaqachon rad etilgan, bu yerda
+  // uni chetlab o'tish uchun sabab yo'q.
   await payrollService.computePayroll(employee._id, doc.year, doc.month, {
-    force: true,
+    source: "manual",
+    actor: currentUser,
+  });
+
+  await auditService.record({
+    employee: employee._id,
+    year: doc.year,
+    month: doc.month,
+    action:
+      doc.kind === "penalty"
+        ? auditService.PAYROLL_AUDIT_ACTIONS.PENALTY_ADDED
+        : auditService.PAYROLL_AUDIT_ACTIONS.BONUS_ADDED,
+    targetType: "adjustment",
+    targetId: doc._id,
+    newValue: { amount: doc.amount, kind: doc.kind },
+    reason: doc.reason,
+    actor: currentUser,
   });
 
   return doc;
@@ -57,9 +89,34 @@ export const remove = async (id, currentUser) => {
   });
   if (!doc) throw new ApiError(404, "Yozuv topilmadi");
 
+  const target = await StaffPayroll.findOne({
+    employee: doc.employee,
+    year: doc.year,
+    month: doc.month,
+  }).lean();
+  await auditService.assertMutable(target, {
+    action: "adjustment.remove",
+    actor: currentUser,
+  });
+
   await doc.softDelete(currentUser?._id);
   await payrollService.computePayroll(doc.employee, doc.year, doc.month, {
-    force: true,
+    source: "manual",
+    actor: currentUser,
+  });
+
+  await auditService.record({
+    employee: doc.employee,
+    year: doc.year,
+    month: doc.month,
+    action:
+      doc.kind === "penalty"
+        ? auditService.PAYROLL_AUDIT_ACTIONS.PENALTY_REMOVED
+        : auditService.PAYROLL_AUDIT_ACTIONS.BONUS_REMOVED,
+    targetType: "adjustment",
+    targetId: doc._id,
+    oldValue: { amount: doc.amount, kind: doc.kind, reason: doc.reason },
+    actor: currentUser,
   });
 
   return { id };

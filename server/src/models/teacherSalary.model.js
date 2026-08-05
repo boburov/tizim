@@ -120,6 +120,28 @@ const teacherSalarySchema = new mongoose.Schema(
       default: "unpaid",
       index: true,
     },
+
+    // ─── QULF (yopilgan davr) ───
+    //
+    // Qulflangan qator HECH QANDAY avtomatik qayta hisobdan o'zgarmaydi:
+    // na stavka o'zgarishidan, na guruh narxidan, na ishga olingan sana
+    // tuzatilishidan. Uni o'zgartirish uchun avval ATAYLAB qulf ochiladi.
+    //
+    // NEGA KERAK: markaz boshqa tizimdan ko'chib kelganda yoki HR
+    // ma'lumoti keyin tuzatilganda o'tgan oylarning MOLIYAVIY yozuvi
+    // qayta yozilib ketardi - egasi buni sezmasdi ham. Mavjud `lockPaid`
+    // himoyasi faqat TO'LANGAN qatorlarga va faqat stavka o'zgarishiga
+    // tegishli edi.
+    //
+    // Default `false` - mavjud hujjatlar va hisob-kitob AYNAN avvalgidek
+    // ishlashda davom etadi.
+    isLocked: { type: Boolean, default: false, index: true },
+    lockedAt: { type: Date, default: null },
+    lockedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     source: { type: String, enum: ["auto", "manual"], default: "auto" },
     // bonus/deduction uchun: nima uchun berilgani (KPI izohi).
     reason: { type: String, trim: true, default: "" },

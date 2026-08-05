@@ -4,6 +4,7 @@ import requirePermission from "../../middleware/requirePermission.js";
 import requireRole from "../../middleware/requireRole.js";
 import validate from "../../middleware/validate.js";
 import uploadAttachment from "../../middleware/uploadAttachment.js";
+import { uploadLimiter } from "../../middleware/rateLimiter.js";
 import { PERMISSIONS } from "../../constants/permissions.js";
 import { ROLES } from "../../constants/roles.js";
 
@@ -71,12 +72,16 @@ router.post(
 // TARTIB MUHIM:
 //   requireAuth       - filial konteksti (ALS) shu yerda ochiladi;
 //   requirePermission - ruxsatsiz foydalanuvchining fayli UMUMAN o'qilmasin;
+//   uploadLimiter     - tekshiruvlardan KEYIN, lekin tanani o'qishdan
+//                       OLDIN: chegaraga yetgan so'rov 5 MB ni xotiraga
+//                       yutmasdan to'xtaydi;
 //   uploadAttachment  - multipart tanani o'qiydi (req.body shundan keyin
 //                       to'ladi, shuning uchun validate undan KEYIN turadi).
 router.post(
   "/",
   requireAuth,
   requirePermission(PERMISSIONS.ASSIGNMENTS_SEND),
+  uploadLimiter,
   uploadAttachment,
   validate(createSchema),
   create,

@@ -49,7 +49,16 @@ const fetchTelegram = async (userId) => {
 
 export const buildUserProfile = async (userInput) => {
   let user = userInput;
-  if (typeof user === "string" || (user && user._bsontype === "ObjectID")) {
+  // HUJJAT emasmi (satr yoki ObjectId) - bazadan olamiz.
+  //
+  // `_bsontype === "ObjectID"` ni SOLISHTIRMAYMIZ: bson 5 dan boshlab
+  // uning qiymati "ObjectId" (kichik "d"). Eski tekshiruv hech qachon
+  // to'g'ri kelmasdi, ObjectId hujjatga aylanmay o'tib ketardi va
+  // quyida `base.roleLabel = ...` da TypeError chiqardi.
+  //
+  // Endi shakl bo'yicha tekshiramiz: `role` maydoni bor narsa - hujjat.
+  // Bu bson versiyasiga umuman bog'liq emas.
+  if (!user || typeof user !== "object" || user.role === undefined) {
     user = await User.findById(user);
   }
   if (!user) return null;

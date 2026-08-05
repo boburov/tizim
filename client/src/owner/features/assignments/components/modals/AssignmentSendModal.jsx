@@ -22,6 +22,11 @@ import { useGroupsListQuery } from "@/owner/features/groups";
 
 // Constants
 import { ROLES } from "@/shared/constants/roles";
+import {
+  UPLOAD_ACCEPT,
+  UPLOAD_TYPES_HINT,
+  isAllowedUpload,
+} from "@/shared/constants/uploads";
 
 const INITIAL = {
   title: "",
@@ -92,6 +97,15 @@ const AssignmentSendModal = ({ setIsLoading, close }) => {
     const picked = e.target.files?.[0] || null;
     if (!picked) return setFields({ file: null, fileError: "" });
 
+    // TUR tekshiruvi o'lchamdan OLDIN: taqiqlangan turni yuklab, keyin
+    // serverdan 400 olishning ma'nosi yo'q. Server baribir qayta
+    // tekshiradi (fayl imzosi bilan) - bu faqat tez javob.
+    if (!isAllowedUpload(picked.name)) {
+      return setFields({
+        file: null,
+        fileError: `Bu turdagi faylni yuborib bo'lmaydi. Ruxsat etilgan: ${UPLOAD_TYPES_HINT}`,
+      });
+    }
     if (usage && picked.size > usage.maxUploadBytes) {
       return setFields({
         file: null,
@@ -211,6 +225,7 @@ const AssignmentSendModal = ({ setIsLoading, close }) => {
               <input
                 type="file"
                 ref={fileInputRef}
+                accept={UPLOAD_ACCEPT}
                 onChange={onFileChange}
                 disabled={isPending}
                 className="block w-full cursor-pointer rounded-md border border-input bg-card p-2 text-sm file:mr-3 file:cursor-pointer file:rounded-[2px] file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-medium"
@@ -243,8 +258,8 @@ const AssignmentSendModal = ({ setIsLoading, close }) => {
           {usage && !storageFull && (
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <HardDrive className="size-3.5 shrink-0" />
-              Bitta fayl {formatBytes(usage.maxUploadBytes)} gacha - bo'sh joy{" "}
-              {formatBytes(usage.freeBytes)}
+              Bitta fayl {formatBytes(usage.maxUploadBytes)} gacha - bo&apos;sh
+              joy {formatBytes(usage.freeBytes)}. {UPLOAD_TYPES_HINT}.
             </p>
           )}
         </div>

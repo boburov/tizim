@@ -11,6 +11,8 @@ import * as compensationService from "./services/staffCompensation.service.js";
 import * as adjustmentService from "./services/staffAdjustment.service.js";
 import * as ruleService from "./services/kpiRule.service.js";
 import * as transactionService from "./services/staffSalaryTransaction.service.js";
+import * as historyService from "./services/payrollHistory.service.js";
+import * as auditService from "./services/payrollAudit.service.js";
 
 import {
   listSchema,
@@ -27,6 +29,11 @@ import {
   ruleListSchema,
   assignmentSetSchema,
   transactionCreateSchema,
+  generateRangeSchema,
+  recalcUnlockedSchema,
+  payrollStartSchema,
+  previewSchema,
+  lockSchema,
 } from "./validators/staffPayroll.validator.js";
 
 const router = Router();
@@ -238,6 +245,107 @@ router.delete(
   }),
 );
 
+// ─── HR / MAOSH TARIXI ───
+//
+// Bu bo'limdagi hamma amal QO'LDA chaqiriladi. Ishga olingan sanani
+// o'zgartirish (PATCH /users/:id) bularning HECH BIRINI ishga
+// tushirmaydi - HR va moliya ataylab ajratilgan.
+router.get(
+  "/history/impact/:employeeId",
+  ...read,
+  validate(employeeParamSchema),
+  asyncHandler(async (req, res) => {
+    const data = await historyService.getImpact(req.params.employeeId);
+    res.json({ success: true, data });
+  }),
+);
+
+router.patch(
+  "/history/payroll-start/:employeeId",
+  ...manage,
+  validate(payrollStartSchema),
+  asyncHandler(async (req, res) => {
+    const data = await historyService.setPayrollStart(
+      req.params.employeeId,
+      req.body.payrollStartFrom,
+      {
+        currentUser: req.user,
+        reason: req.body.reason,
+        confirm: req.body.confirm,
+      },
+    );
+    res.json({
+      success: true,
+      data,
+      message: "Maosh hisobining boshlanish sanasi saqlandi",
+    });
+  }),
+);
+
+router.post(
+  "/history/generate-range",
+  ...manage,
+  validate(generateRangeSchema),
+  asyncHandler(async (req, res) => {
+    const data = await historyService.generateRange(req.body, req.user);
+    res.json({
+      success: true,
+      data,
+      message: `${data.created} ta oy yaratildi, ${data.skipped} tasi allaqachon mavjud`,
+    });
+  }),
+);
+
+router.post(
+  "/history/recalculate",
+  ...manage,
+  validate(recalcUnlockedSchema),
+  asyncHandler(async (req, res) => {
+    const data = await historyService.recalcUnlocked(req.body, req.user);
+    res.json({
+      success: true,
+      data,
+      message: `${data.recalculated} ta oy qayta hisoblandi, ${data.lockedSkipped} tasi qulflangani uchun tegilmadi`,
+    });
+  }),
+);
+
+// QURUQ YUGURISH - hech narsa yozilmaydi, faqat "nima bo'ladi".
+router.post(
+  "/history/preview",
+  ...manage,
+  validate(previewSchema),
+  asyncHandler(async (req, res) => {
+    const data = await historyService.previewGenerate(req.body);
+    res.json({ success: true, data });
+  }),
+);
+
+// XODIM TAYMLAYNI - moliyaviy audit tarixi.
+router.get(
+  "/history/timeline/:employeeId",
+  ...read,
+  validate(employeeParamSchema),
+  asyncHandler(async (req, res) => {
+    const data = await auditService.timeline(req.params.employeeId, req.query);
+    res.json({ success: true, data });
+  }),
+);
+
+router.post(
+  "/history/lock",
+  ...manage,
+  validate(lockSchema),
+  asyncHandler(async (req, res) => {
+    const data = await historyService.setLock(req.body, req.user);
+    res.json({
+      success: true,
+      data,
+      message: req.body.locked ? "Oy qulflandi" : "Qulf ochildi",
+    });
+  }),
+);
+
 // ─── MAOSH QATORLARI ───
 router.post(
   "/generate",
@@ -280,11 +388,18 @@ router.post(
   validate(recomputeSchema),
   asyncHandler(async (req, res) => {
     const current = await payrollService.getById(req.params.id);
+    // `force` YO'Q: qulflangan oy bu yerdan ham o'zgarmaydi. Uni
+    // o'zgartirish uchun avval ATAYLAB qulf ochiladi (lifecycle).
+    if (current.lifecycle === "finalized") {
+      return res.status(400).json({
+        success: false,
+        message: "Oy yopilgan. Avval qulfni oching.",
+      });
+    }
     const data = await payrollService.computePayroll(
       current.employee._id,
       current.year,
       current.month,
-      { force: true },
     );
     res.json({ success: true, data, message: "Qayta hisoblandi" });
   }),
@@ -299,6 +414,7 @@ router.patch(
       req.params.id,
       req.body.lifecycle,
       req.user,
+      { reason: req.body.reason },
     );
     res.json({
       success: true,
