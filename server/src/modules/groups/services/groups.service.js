@@ -351,6 +351,8 @@ export const create = async (body, currentUser) => {
     startDate: body.startDate ? toUtcMidnight(body.startDate) : null,
     endDate: body.endDate ? toUtcMidnight(body.endDate) : null,
     durationMonths: body.durationMonths ?? null,
+    // Berilmasa modeldagi standart ("prorated") qoladi.
+    ...(body.entryBilling ? { entryBilling: body.entryBilling } : {}),
   });
 
   const today = localTodayMidnight();
@@ -489,6 +491,14 @@ export const update = async (id, body) => {
   if (body.durationMonths !== undefined) {
     group.durationMonths = body.durationMonths ?? null;
   }
+  // Kirish siyosati o'zgardimi - joriy oy qarzlarini qayta hisoblash kerak
+  // (quyida, group.save() dan KEYIN). Aks holda o'zgarish keyingi biror
+  // recalc'gacha kuchga kirmay turardi.
+  const entryBillingChanged =
+    body.entryBilling !== undefined && body.entryBilling !== group.entryBilling;
+  if (body.entryBilling !== undefined) {
+    group.entryBilling = body.entryBilling;
+  }
   if (body.endDate !== undefined) {
     const newEnd = body.endDate ? toUtcMidnight(body.endDate) : null;
     if (newEnd && group.startDate && newEnd.getTime() < toUtcMidnight(group.startDate).getTime()) {
@@ -498,6 +508,24 @@ export const update = async (id, body) => {
   }
 
   await group.save();
+
+  // KIRISH SIYOSATI O'ZGARDI - joriy oy qarzlari darhol qayta hisoblanadi.
+  //
+  // ATAYLAB FAQAT JORIY OY: o'tgan oylar odatda to'langan va yopilgan,
+  // ularni qayta yozish tarixdagi hisob-kitobni buzardi. Kerak bo'lsa
+  // o'sha oyning narxini tahrirlash orqali qo'lda qayta hisoblanadi.
+  if (entryBillingChanged) {
+    const today = localTodayMidnight();
+    try {
+      await financePaymentService.recalcForGroupMonth(
+        group._id,
+        today.getUTCFullYear(),
+        today.getUTCMonth() + 1,
+      );
+    } catch (err) {
+      logger.warn({ err }, "Kirish siyosati o'zgarishida qarz qayta hisoblanmadi");
+    }
+  }
 
   // endDate berilgan bo'lsa hayot-tsiklni moslaymiz (arxiv / reactivate +
   // o'qituvchi davri va o'quvchi a'zoliklari avto yopiladi / ochiladi).

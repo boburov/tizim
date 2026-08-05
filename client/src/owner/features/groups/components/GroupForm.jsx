@@ -54,7 +54,14 @@ const buildInitial = (group) => ({
   endDate: group?.endDate ? toDateInput(group.endDate) : "",
   // Oylik narx - faqat yangi guruh yaratishda (joriy oy GroupFee summasi).
   monthlyPrice: "",
+  // Oy o'rtasida kirish siyosati. Standart "prorated" - serverdagi bilan bir xil.
+  entryBilling: group?.entryBilling || "prorated",
 });
+
+const ENTRY_BILLING_OPTIONS = [
+  { value: "prorated", label: "Faqat qolgan qismi" },
+  { value: "full", label: "To'liq oylik" },
+];
 
 const GroupForm = ({
   initial,
@@ -75,6 +82,7 @@ const GroupForm = ({
     startDate,
     endDate,
     monthlyPrice,
+    entryBilling,
     scheduleEffectiveFrom,
     setField,
   } = useObjectState(buildInitial(initial));
@@ -195,6 +203,7 @@ const GroupForm = ({
       schedule,
       startDate: startDate || null,
       endDate: endDate || null,
+      entryBilling,
     };
     // Jadval o'zgartirilgan bo'lsa - yangi versiya qaysi sanadan amal qilishini
     // yuboramiz (server eski versiyani tarix uchun saqlaydi).
@@ -263,6 +272,26 @@ const GroupForm = ({
           onChange={(e) => setField("endDate", e.target.value)}
           disabled={isLoading}
         />
+      </div>
+
+      {/* OY O'RTASIDA KIRISH SIYOSATI.
+          Guruh 1-sanadan boshlanmaganda ham, o'quvchi keyinroq qo'shilganda
+          ham SHU tanlov ishlaydi - kirish nuqtasi uchun yagona qoida. */}
+      <div>
+        <SelectField
+          name="entryBilling"
+          label="Oy o'rtasida kirganda"
+          value={entryBilling}
+          onChange={(v) => setField("entryBilling", v?.target?.value ?? v)}
+          options={ENTRY_BILLING_OPTIONS}
+          disabled={isLoading}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          {entryBilling === "full"
+            ? "Qachon kirsa ham butun oylik olinadi."
+            : "Kirgan kundan qolgan darslar ulushicha olinadi."}{" "}
+          Chiqish va muzlatish baribir ulushiga qarab hisoblanadi.
+        </p>
       </div>
 
       {/* O'qituvchi + oylik narx - faqat yangi guruh yaratishda */}

@@ -137,7 +137,7 @@ jobs:
 
           echo "==> ${input.domain} deploy so'rovi yuborilmoqda..."
           code=$(curl -sS -o response.json -w '%{http_code}' \\
-            -X POST '${input.adminApiUrl}/tenants/deploy-hook' \\
+            -X POST '${input.adminApiUrl}/tenant-deploy/hook' \\
             -H "Authorization: Bearer $DEPLOY_TOKEN" \\
             -H 'Content-Type: application/json' \\
             -d "{\\"ref\\":\\"\${{ github.sha }}\\"}")

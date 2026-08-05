@@ -1,30 +1,39 @@
 #!/usr/bin/env bash
 #
 # provision.sh — yangi tenant (o'quv markaz) ni ishga tushiradi.
-# admin_server bu skriptni ENV o'zgaruvchilari orqali chaqiradi. Har tenant uchun:
+#
+# Har tenant uchun:
 #   1) template client/server ni yangi papkaga nusxalaydi
-#   2) noyob DB nomi bilan .env yozadi (server + client)
-#   3) MongoDB bazasini tayyorlaydi (mongoose birinchi yozuvda avtomatik yaratadi)
-#   4) npm ci + client build
-#   5) pm2 start (tenant API)
-#   6) nginx vhost + certbot (HTTPS)
+#   2) admin server yuborgan .env fayllarini yozadi
+#   3) npm ci + client build
+#   4) pm2 start (tenant API)
+#   5) nginx vhost + certbot (HTTPS)
+#   6) kodni tenantning O'Z GitHub repositoriysiga yuboradi
+#
+# ────────────────────────────────────────────────────────────────────────
+# MUHIM: .env mazmuni endi SHU SKRIPTDA YOZILMAYDI.
+# Uni admin server hosil qiladi (sozlamalar registri + brend ranglari) va
+# base64 ko'rinishida uzatadi. Shuning uchun yangi sozlama qo'shish uchun
+# bu faylga TEGISH SHART EMAS — faqat admin serverdagi registrga bitta
+# yozuv qo'shiladi. Yagona istisno — kripto sirlari (pastda izohi bor).
+# ────────────────────────────────────────────────────────────────────────
 #
 # admin_server beradigan ENV:
 #   TENANT_DB_NAME, TENANT_DOMAIN, TENANT_PM2_NAME, TENANT_PORT,
-#   TENANT_NAME, TENANT_BRAND_COLOR, TENANT_LOGO_URL, TENANT_BOT_TOKEN,
-#   TENANT_TEMPLATE_DIR
+#   TENANT_NAME, TENANT_TEMPLATE_DIR
+#   TENANT_SERVER_ENV_B64, TENANT_CLIENT_ENV_B64            — .env fayllari
+#   TENANT_ENV_EXAMPLE_B64, TENANT_GITIGNORE_B64,
+#   TENANT_META_B64, TENANT_README_B64, TENANT_WORKFLOW_B64 — repo fayllari
+#   GIT_ENABLED, GIT_REMOTE, GIT_TOKEN, GIT_BRANCH          — GitHub
 #
-# Global sozlamalar (admin_server .env yoki bu yerda):
-#   MONGO_BASE_URL   — masalan mongodb://127.0.0.1:27017
-#   TENANTS_ROOT     — tenant ilovalar joylashadigan papka (masalan /root/tenants)
-#   WEB_ROOT_BASE    — client build joylashadigan papka (masalan /var/www)
-#   WEB_USER         — nginx foydalanuvchisi (www-data)
-#   CERTBOT_EMAIL    — Let's Encrypt uchun email
+# Global sozlamalar:
+#   TENANTS_ROOT   — tenant ilovalar papkasi (/root/tenants)
+#   WEB_ROOT_BASE  — client build papkasi (/var/www)
+#   WEB_USER       — nginx foydalanuvchisi (www-data)
+#   CERTBOT_EMAIL  — Let's Encrypt uchun email
 #
 set -euo pipefail
 
-# --- Global standart qiymatlar ---
-MONGO_BASE_URL="${MONGO_BASE_URL:-mongodb://127.0.0.1:27017}"
 TENANTS_ROOT="${TENANTS_ROOT:-/root/tenants}"
 WEB_ROOT_BASE="${WEB_ROOT_BASE:-/var/www}"
 WEB_USER="${WEB_USER:-www-data}"
@@ -32,7 +41,8 @@ CERTBOT_EMAIL="${CERTBOT_EMAIL:-admin@example.uz}"
 NGINX_SITES="${NGINX_SITES:-/etc/nginx/sites-available}"
 NGINX_ENABLED="${NGINX_ENABLED:-/etc/nginx/sites-enabled}"
 
-# --- Kerakli argumentlarni tekshirish ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 req() {
   if [ -z "${!1:-}" ]; then
     echo "❌ ENV yo'q: $1" >&2
@@ -44,8 +54,9 @@ req TENANT_DOMAIN
 req TENANT_PM2_NAME
 req TENANT_PORT
 req TENANT_NAME
-req TENANT_BRAND_COLOR
 req TENANT_TEMPLATE_DIR
+req TENANT_SERVER_ENV_B64
+req TENANT_CLIENT_ENV_B64
 
 echo "==> 🚀 Provisioning: ${TENANT_DOMAIN}"
 echo "    DB:   ${TENANT_DB_NAME}"
@@ -55,79 +66,116 @@ echo "    PM2:  ${TENANT_PM2_NAME}"
 APP_DIR="${TENANTS_ROOT}/${TENANT_DB_NAME}"
 WEB_ROOT="${WEB_ROOT_BASE}/${TENANT_DOMAIN}"
 
-# --- 0) Idempotentlik: papka bo'lsa avval tozalaymiz ---
+# base64 -> fayl (papkasi bilan birga)
+write_b64() {
+  local b64="$1" dest="$2"
+  [ -z "$b64" ] && return 0
+  mkdir -p "$(dirname "$dest")"
+  printf '%s' "$b64" | base64 -d > "$dest"
+}
+
+# ---------------------------------------------------------------------------
+# 0) KRIPTO SIRLARINI VA GIT TARIXINI SAQLAB QOLISH
+#
+# JWT va cookie sirlari admin bazasida SAQLANMAYDI — nazorat qatlami
+# tenantlarning sessiya kalitlarini tutmasligi kerak. Ular shu yerda bir
+# marta yaratiladi, keyingi provisioninglarda mavjudidan olinadi.
+#
+# Nega muhim: qayta urinish (retry) papkani tozalaydi. Sirlarni saqlab
+# qolmasak, har retry'da o'quv markazning HAMMA foydalanuvchisi tizimdan
+# chiqib ketardi.
+# ---------------------------------------------------------------------------
+OLD_ENV="$APP_DIR/server/.env"
+grab() {
+  if [ -f "$OLD_ENV" ]; then
+    sed -n "s/^$1=//p" "$OLD_ENV" | head -n1 | tr -d '"' || true
+  fi
+}
+
+JWT_ACCESS_SECRET="$(grab JWT_ACCESS_SECRET)"
+JWT_REFRESH_SECRET="$(grab JWT_REFRESH_SECRET)"
+COOKIE_SECRET="$(grab COOKIE_SECRET)"
+
+gen_secret() { openssl rand -hex 32; }
+[ -z "$JWT_ACCESS_SECRET" ] && JWT_ACCESS_SECRET="$(gen_secret)"
+[ -z "$JWT_REFRESH_SECRET" ] && JWT_REFRESH_SECRET="$(gen_secret)"
+[ -z "$COOKIE_SECRET" ] && COOKIE_SECRET="$(gen_secret)"
+
+# Git tarixi ham saqlanadi: papka tozalanganda tarix yo'qolsa, keyingi
+# push repodagi commitlar bilan to'qnashardi va "force" talab qilardi.
+GIT_BACKUP=""
+if [ -d "$APP_DIR/.git" ]; then
+  GIT_BACKUP="$(mktemp -d)"
+  echo "==> Git tarixi vaqtincha saqlanmoqda..."
+  cp -r "$APP_DIR/.git" "$GIT_BACKUP/.git"
+fi
+
 if [ -d "$APP_DIR" ]; then
   echo "==> Eski papka topildi, tozalanmoqda: $APP_DIR"
   pm2 delete "$TENANT_PM2_NAME" >/dev/null 2>&1 || true
   rm -rf "$APP_DIR"
 fi
 
-# --- 1) Template ni nusxalash ---
+# ---------------------------------------------------------------------------
+# 1) Template ni nusxalash
+# ---------------------------------------------------------------------------
 echo "==> Template nusxalanmoqda: $TENANT_TEMPLATE_DIR -> $APP_DIR"
 mkdir -p "$APP_DIR"
-# node_modules va build chiqishini nusxalamaymiz (tez va toza)
 cp -r "$TENANT_TEMPLATE_DIR/server" "$APP_DIR/server"
 cp -r "$TENANT_TEMPLATE_DIR/client" "$APP_DIR/client"
+
 rm -rf "$APP_DIR/server/node_modules" "$APP_DIR/client/node_modules" \
        "$APP_DIR/client/dist" 2>/dev/null || true
+# Shablondan .env kelib qolishi mumkin — bizniki ustidan yozadi, lekin
+# ehtiyot uchun oldindan olib tashlaymiz.
+rm -f "$APP_DIR/server/.env" "$APP_DIR/client/.env" 2>/dev/null || true
 
-# --- 2) Maxfiy secretlar generatsiyasi (har tenant o'ziniki) ---
-gen_secret() { openssl rand -hex 32; }
-JWT_ACCESS_SECRET="$(gen_secret)"
-JWT_REFRESH_SECRET="$(gen_secret)"
-COOKIE_SECRET="$(gen_secret)"
+if [ -n "$GIT_BACKUP" ]; then
+  echo "==> Git tarixi qaytarilmoqda..."
+  cp -r "$GIT_BACKUP/.git" "$APP_DIR/.git"
+  rm -rf "$GIT_BACKUP"
+fi
 
-MONGO_URL="${MONGO_BASE_URL}/${TENANT_DB_NAME}"
-CLIENT_URL="https://${TENANT_DOMAIN}"
-API_URL="https://${TENANT_DOMAIN}/api"
-
-# --- 3) server/.env yozish ---
+# ---------------------------------------------------------------------------
+# 2) .env fayllari (admin serverdan) + kripto sirlari
+# ---------------------------------------------------------------------------
 echo "==> server/.env yozilmoqda..."
-BOT_ENABLED="false"
-if [ -n "${TENANT_BOT_TOKEN:-}" ]; then BOT_ENABLED="true"; fi
+write_b64 "$TENANT_SERVER_ENV_B64" "$APP_DIR/server/.env"
 
-cat > "$APP_DIR/server/.env" <<EOF
-NODE_ENV=production
-PORT=${TENANT_PORT}
+cat >> "$APP_DIR/server/.env" <<EOF
 
-MONGO_URL=${MONGO_URL}
-
+# --- Kripto sirlari (shu serverda yaratilgan, admin bazasida yo'q) ---
 JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
 JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-JWT_ACCESS_TTL=15m
-JWT_REFRESH_TTL=7d
-
 COOKIE_SECRET=${COOKIE_SECRET}
-COOKIE_DOMAIN=${TENANT_DOMAIN}
-
-CLIENT_URL=${CLIENT_URL}
-
-TELEGRAM_BOT_TOKEN=${TENANT_BOT_TOKEN:-}
-TELEGRAM_BOT_ENABLED=${BOT_ENABLED}
-TELEGRAM_BOT_WEBAPP_URL=${CLIENT_URL}/bot-auth
-
-# --- Admin panel bilan aloqa (usage heartbeat + tarif limitlari) ---
-ADMIN_API_URL=${TENANT_ADMIN_API_URL:-}
-TENANT_ID=${TENANT_ID:-}
-HEARTBEAT_SECRET=${TENANT_HEARTBEAT_SECRET:-}
-ENFORCE_LIMITS=true
 EOF
 
-# --- 4) client/.env yozish (brend) ---
 echo "==> client/.env yozilmoqda..."
-cat > "$APP_DIR/client/.env" <<EOF
-VITE_API_URL=${API_URL}
-VITE_APP_NAME=${TENANT_NAME}
-VITE_APP_PRIMARY=${TENANT_BRAND_COLOR}
-VITE_APP_LOGO=${TENANT_LOGO_URL:-}
-EOF
+write_b64 "$TENANT_CLIENT_ENV_B64" "$APP_DIR/client/.env"
 
-# --- 5) Server bog'lamalari ---
+# .env fayllarini faqat egasi o'qiy olsin
+chmod 600 "$APP_DIR/server/.env" "$APP_DIR/client/.env"
+
+# ---------------------------------------------------------------------------
+# 3) Repo fayllari (GitHub uchun — ichida maxfiy qiymat yo'q)
+# ---------------------------------------------------------------------------
+echo "==> Repo fayllari yozilmoqda..."
+write_b64 "${TENANT_GITIGNORE_B64:-}"   "$APP_DIR/.gitignore"
+write_b64 "${TENANT_ENV_EXAMPLE_B64:-}" "$APP_DIR/.env.example"
+write_b64 "${TENANT_META_B64:-}"        "$APP_DIR/tenant.json"
+write_b64 "${TENANT_README_B64:-}"      "$APP_DIR/README.md"
+write_b64 "${TENANT_WORKFLOW_B64:-}"    "$APP_DIR/.github/workflows/deploy.yml"
+
+# ---------------------------------------------------------------------------
+# 4) Server bog'lamalari
+# ---------------------------------------------------------------------------
 echo "==> server: npm ci..."
 cd "$APP_DIR/server"
 npm ci --omit=dev 2>/dev/null || npm install --omit=dev
 
-# --- 6) Client build ---
+# ---------------------------------------------------------------------------
+# 5) Client build
+# ---------------------------------------------------------------------------
 echo "==> client: npm ci + build..."
 cd "$APP_DIR/client"
 npm ci 2>/dev/null || npm install
@@ -139,13 +187,17 @@ rm -rf "${WEB_ROOT:?}"/*
 cp -r dist/* "$WEB_ROOT"/
 chown -R "$WEB_USER":"$WEB_USER" "$WEB_ROOT"
 
-# --- 7) PM2 start (tenant API) ---
+# ---------------------------------------------------------------------------
+# 6) PM2 start (tenant API)
+# ---------------------------------------------------------------------------
 echo "==> pm2 start ${TENANT_PM2_NAME}..."
 cd "$APP_DIR/server"
 pm2 start src/index.js --name "$TENANT_PM2_NAME" --update-env
 pm2 save >/dev/null 2>&1 || true
 
-# --- 8) Nginx vhost ---
+# ---------------------------------------------------------------------------
+# 7) Nginx vhost
+# ---------------------------------------------------------------------------
 echo "==> nginx vhost yozilmoqda..."
 VHOST="${NGINX_SITES}/${TENANT_DOMAIN}"
 cat > "$VHOST" <<EOF
@@ -180,7 +232,9 @@ ln -sf "$VHOST" "${NGINX_ENABLED}/${TENANT_DOMAIN}"
 nginx -t
 systemctl reload nginx
 
-# --- 9) HTTPS (certbot) — domen DNS allaqachon shu IP ga ishora qilishi kerak ---
+# ---------------------------------------------------------------------------
+# 8) HTTPS (certbot) — DNS allaqachon shu IP ga ishora qilishi kerak
+# ---------------------------------------------------------------------------
 if command -v certbot >/dev/null 2>&1; then
   echo "==> certbot (HTTPS) urinilmoqda..."
   certbot --nginx -d "${TENANT_DOMAIN}" \
@@ -188,6 +242,25 @@ if command -v certbot >/dev/null 2>&1; then
     echo "⚠️  certbot muvaffaqiyatsiz — DNS hali ishlamayotgan bo'lishi mumkin. Keyin qayta urinib ko'ring."
 else
   echo "⚠️  certbot topilmadi — HTTPS o'rnatilmadi."
+fi
+
+# ---------------------------------------------------------------------------
+# 9) Kodni GitHub'ga yuborish
+#
+# ATAYLAB ENG OXIRIDA va xatosi yutiladi: GitHub tarafidagi muammo sababli
+# ISHLAB TURGAN sayt "muvaffaqiyatsiz" deb belgilanishi mumkin emas.
+# Natija maxsus belgi bilan bildiriladi — admin server logdan
+# GIT_PUSH_OK / GIT_PUSH_FAILED ni o'qiydi.
+# ---------------------------------------------------------------------------
+if [ "${GIT_ENABLED:-false}" = "true" ] && [ -n "${GIT_REMOTE:-}" ]; then
+  echo "==> 📦 Kod GitHub'ga yuborilmoqda..."
+  if bash "$SCRIPT_DIR/git-sync.sh" "$APP_DIR" "Provisioning: ${TENANT_DOMAIN}"; then
+    echo "GIT_PUSH_OK"
+  else
+    echo "GIT_PUSH_FAILED"
+  fi
+else
+  echo "==> GitHub integratsiyasi o'chiq — kod yuborilmadi."
 fi
 
 echo "==> ✅ Provisioning tugadi: https://${TENANT_DOMAIN}"

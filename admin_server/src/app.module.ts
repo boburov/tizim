@@ -11,6 +11,8 @@ import { UsageModule } from './usage/usage.module.js';
 import { PlansModule } from './plans/plans.module.js';
 import { CustomersModule } from './customers/customers.module.js';
 import { BillingModule } from './billing/billing.module.js';
+import { SettingsModule } from './settings/settings.module.js';
+import { GithubModule } from './github/github.module.js';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { BillingModule } from './billing/billing.module.js';
     PlansModule,
     CustomersModule,
     BillingModule,
+    SettingsModule,
+    GithubModule,
   ],
 })
 export class AppModule {}

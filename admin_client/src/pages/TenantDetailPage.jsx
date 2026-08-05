@@ -8,10 +8,14 @@ import {
   BarChart3,
   Copy,
   CreditCard,
+  Github,
   Globe,
+  LayoutDashboard,
   Loader2,
+  Palette,
   RefreshCw,
   Server,
+  Settings2,
   Database,
   Trash2,
   X,
@@ -25,6 +29,17 @@ import {
 } from '../lib/tenantStatus';
 import UsageLimits from '../components/UsageLimits';
 import SitePreview from '../components/SitePreview';
+import TenantBrand from '../components/TenantBrand';
+import TenantSettings from '../components/TenantSettings';
+import TenantRepo from '../components/TenantRepo';
+import PendingChanges from '../components/PendingChanges';
+
+const TABS = [
+  { key: 'umumiy', label: 'Umumiy', icon: LayoutDashboard },
+  { key: 'brend', label: 'Brend', icon: Palette },
+  { key: 'sozlamalar', label: 'Sozlamalar', icon: Settings2 },
+  { key: 'github', label: 'GitHub', icon: Github },
+];
 
 function copy(text) {
   navigator.clipboard.writeText(text);
@@ -59,12 +74,25 @@ export default function TenantDetailPage() {
   const [delOpen, setDelOpen] = useState(false);
   const [confirmDomain, setConfirmDomain] = useState('');
   const [planKey, setPlanKey] = useState('');
+  const [tab, setTab] = useState('umumiy');
 
   const { data: t, isLoading } = useQuery({
     queryKey: ['tenant', id],
     queryFn: () => api.get(`/tenants/${id}`).then((r) => r.data),
+    // Provisioning yoki sozlama qo'llash ketayotganda holat o'zi yangilanadi
     refetchInterval: (q) =>
-      BUSY_STATUSES.includes(q.state.data?.status) ? 3000 : false,
+      BUSY_STATUSES.includes(q.state.data?.status) ||
+      q.state.data?.applyStatus === 'APPLYING'
+        ? 3000
+        : false,
+  });
+
+  // Kutilayotgan o'zgarishlar soni — tab yonidagi belgi uchun
+  const { data: settingsInfo } = useQuery({
+    queryKey: ['tenant-settings', id],
+    queryFn: () => api.get(`/tenants/${id}/settings`).then((r) => r.data),
+    enabled: !!t && t.status !== 'DELETED',
+    refetchInterval: (q) => (q.state.data?.applyStatus === 'APPLYING' ? 3000 : false),
   });
 
   // Limitlar va foydalanish
@@ -130,8 +158,12 @@ export default function TenantDetailPage() {
       </div>
     );
 
+  // Brend va sozlamalar bo'limlarida preview yonma-yon turadi — kengroq joy kerak
+  const wide = tab === 'brend' || tab === 'sozlamalar';
+  const pendingCount = settingsInfo?.pending?.count ?? 0;
+
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className={wide ? 'mx-auto max-w-6xl' : 'mx-auto max-w-3xl'}>
       <Link
         to="/"
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -139,7 +171,7 @@ export default function TenantDetailPage() {
         <ArrowLeft size={15} /> Loyihalar
       </Link>
 
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-11 w-11 rounded-xl" style={{ background: t.brandColor }} />
           <div>
@@ -153,6 +185,51 @@ export default function TenantDetailPage() {
           {STATUS_LABEL[t.status] || t.status}
         </span>
       </div>
+
+      {/* Bo'limlar */}
+      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-border">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              tab === key
+                ? 'border-brand text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Icon size={15} /> {label}
+            {key === 'sozlamalar' && pendingCount > 0 && (
+              <span className="ml-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'brend' && <TenantBrand tenant={t} canEdit={isSuperAdmin || true} />}
+
+      {tab === 'sozlamalar' && (
+        <TenantSettings tenantId={t.id} canEdit={t.status !== 'DELETED'} />
+      )}
+
+      {tab === 'github' && <TenantRepo tenant={t} canEdit={t.status !== 'DELETED'} />}
+
+      {tab !== 'umumiy' ? null : (
+      <>
+      {/* Kutilayotgan o'zgarishlar — qaysi bo'limda bo'lishidan qat'i nazar
+          e'tibor talab qiladi, shuning uchun bosh sahifada ham ko'rinadi */}
+      {settingsInfo && pendingCount > 0 && (
+        <div className="mb-5">
+          <PendingChanges
+            tenantId={t.id}
+            pending={settingsInfo.pending}
+            applyStatus={settingsInfo.applyStatus}
+            applyError={settingsInfo.applyError}
+          />
+        </div>
+      )}
 
       {/* Sayt preview — tirik bo'lsa iframe, bo'lmasa brend mock */}
       <SitePreview tenant={t} />

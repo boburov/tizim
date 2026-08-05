@@ -36,6 +36,8 @@ export const createSchema = z.object({
     // Kurs tugash sanasi - YAGONA ixtiyoriy maydon (belgilansa kurs avto tugaydi).
     endDate: z.coerce.date().nullable().optional(),
     durationMonths: z.coerce.number().min(0).nullable().optional(),
+    // Oy o'rtasida kirish siyosati (group.model.js izohiga qarang).
+    entryBilling: z.enum(["prorated", "full"]).optional(),
     // Joriy oy uchun guruh oylik to'lovi (majburiy) - GroupFee shu summa bilan yaratiladi.
     monthlyPrice: z.preprocess(
       emptyToUndef,

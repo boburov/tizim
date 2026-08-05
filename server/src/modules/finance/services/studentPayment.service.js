@@ -131,13 +131,43 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
       isDeleted: { $ne: true },
       $or: [{ scope: "permanent" }, { scope: "monthly", year, month }],
     }),
-    Group.findById(group, { schedule: 1, startDate: 1, endDate: 1 }).lean(),
+    Group.findById(group, {
+      schedule: 1,
+      startDate: 1,
+      endDate: 1,
+      entryBilling: 1,
+    }).lean(),
     // Muzlatish o'quvchi darajasida (barcha guruhlarga taalluqli).
     loadFreezeWindows({ student }),
   ]);
 
   const baseFee = feeDoc ? feeDoc.amount : 0;
-  const effPeriods = periods === null ? [{ joinedAt, leftAt }] : periods;
+  const rawPeriods = periods === null ? [{ joinedAt, leftAt }] : periods;
+
+  // KIRISH SIYOSATI: "full" bo'lsa oy o'rtasida kirish narxni kamaytirmaydi.
+  //
+  // Amalga oshirish - a'zolik boshlanishini oy boshiga surish. Nega aynan
+  // shunday: chiqib ketish va muzlatish o'z kuchida qoladi, ya'ni 5-avgustda
+  // qo'shilib 20-avgustda ketgan o'quvchi baribir faqat 20-sanagacha to'laydi.
+  // "factor = 1" deb qo'yish esa uni butun oyga to'lattirardi - olinmagan
+  // xizmat uchun pul undirish siyosat emas, xato bo'lardi.
+  // FAQAT BIRINCHI (eng erta) davr suriladi. Bir oyda ketib qayta qo'shilgan
+  // (rejoin) o'quvchida keyingi davrlar tegilmaydi - oradagi bo'shliq
+  // to'lanmaydi. Hammasini sursak, o'sha bo'shliq ham hisoblanib ketardi.
+  const fullEntry = groupDoc?.entryBilling === "full";
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+
+  let effPeriods = rawPeriods;
+  if (fullEntry && rawPeriods.length) {
+    const msOf = (p) => (p.joinedAt ? toUtcMidnight(p.joinedAt).getTime() : -Infinity);
+    let firstIdx = 0;
+    for (let i = 1; i < rawPeriods.length; i += 1) {
+      if (msOf(rawPeriods[i]) < msOf(rawPeriods[firstIdx])) firstIdx = i;
+    }
+    effPeriods = rawPeriods.map((p, i) =>
+      i === firstIdx ? { ...p, joinedAt: monthStart } : p,
+    );
+  }
 
   const lessonDates = groupDoc
     ? await loadMonthLessonDates(groupDoc, year, month)
@@ -150,9 +180,9 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
       baseFee,
       year,
       month,
-      joinedAt,
+      joinedAt: fullEntry ? monthStart : joinedAt,
       leftAt,
-      periods,
+      periods: periods === null ? null : effPeriods,
       discounts,
       freezeWindows,
     });
@@ -161,12 +191,40 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
 
   const monthEnd = new Date(Date.UTC(year, month, 0));
 
+  // MAXRAJ - oyning TO'LIQ dars rejasi (guruh boshlanish sanasi bilan
+  // QIRQILMAGAN).
+  //
+  // `loadMonthLessonDates` darslarni `startDate` dan boshlab beradi, ya'ni
+  // guruh 5-sanada boshlansa birinchi oyda maxraj ham qisqarardi va nisbat
+  // har doim 1 chiqardi - guruh oy o'rtasida boshlansa ham HAR DOIM to'liq
+  // oylik olinardi, tanlovsiz. Endi "prorated" da narx oyning haqiqiy
+  // rejasiga nisbatan kamayadi (mas. 14 tadan 11 tasi → 11/14).
+  //
+  // `endDate` esa ataylab qirqilaveradi: kursning TUGASHI kirish siyosatiga
+  // aloqador emas, uni bu yerda o'zgartirish boshqa xatti-harakatni jimgina
+  // buzardi.
+  //
+  // Guruhning birinchi oyidan boshqa oylarda ikkala ro'yxat bir xil, ya'ni
+  // "prorated" avvalgidek ishlaydi - o'zgarish faqat birinchi oyga tegadi.
+  // Shuning uchun qo'shimcha so'rov ham FAQAT o'sha oyda bajariladi.
+  const gStart = groupDoc?.startDate ? toUtcMidnight(groupDoc.startDate) : null;
+  const startsMidMonth =
+    gStart &&
+    gStart.getUTCFullYear() === year &&
+    gStart.getUTCMonth() + 1 === month &&
+    gStart.getUTCDate() > 1;
+
+  const planDates =
+    !fullEntry && startsMidMonth
+      ? await loadMonthLessonDates({ ...groupDoc, startDate: null }, year, month)
+      : lessonDates;
+
   // TO'LIQ-OY billing: qarz oy boshidanoq to'liq oylik summaga teng - kunlik/dars
   // asosida o'smaydi. Shu oyda a'zolikka to'g'ri keladigan BARCHA darslar
   // (asOf = oy oxiri, muzlatilganlaridan tashqari) sanaladi. Oy o'rtasida
   // qo'shilgan o'quvchi faqat qolgan darslar uchun to'laydi; chiqib ketsa -
   // keyingi recalc qarzni haqiqiy a'zolik davriga qarab kamaytiradi.
-  const totalLessons = lessonDates.length;
+  const totalLessons = planDates.length;
   const elapsedLessons = countElapsedLessons(
     lessonDates,
     effPeriods,

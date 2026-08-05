@@ -354,6 +354,19 @@ export const getWriteOffs = async ({ year, month, groupId, limit = 100 } = {}) =
   return { items, total };
 };
 
+// GURUHGA BOG'LANMAGAN CHIQIM uchun sun'iy kalit.
+//
+// TeacherSalary'da `group` ATAYLAB null bo'lishi mumkin (model izohiga
+// qarang): kind="base" - markaz darajasidagi fiksa oylik, kind="bonus" -
+// KPI mukofoti. Ular hech qaysi guruhga tegishli emas.
+//
+// Ilgari shu qator BUTUN endpoint'ni yiqitardi: aggregate `_id: null`
+// qaytarardi, `String(null)` = "null" bo'lib `Group.find({_id: {$in:
+// [..., "null"]}})` ga tushardi va Mongoose CastError -> 400 «Noto'g'ri
+// ID». Ya'ni fiksa oylikdagi BITTA o'qituvchi butun "Guruhlar kesimi"
+// kartasini o'chirib qo'yardi.
+const UNASSIGNED = "unassigned";
+
 // === getGroupBreakdown: oy bo'yicha guruhlar kesimida kirim/chiqim/sof ===
 export const getGroupBreakdown = async ({ year, month, limit = 8 } = {}) => {
   const now = new Date();
@@ -379,17 +392,22 @@ export const getGroupBreakdown = async ({ year, month, limit = 8 } = {}) => {
     ]),
   ]);
 
+  // `_id` null bo'lishi MUMKIN (fiksa oylik / bonus) - o'shanda sun'iy
+  // kalitga tushamiz, aks holda "null" satri ObjectId deb o'qilardi.
+  const keyOf = (id) => (id ? String(id) : UNASSIGNED);
+
   const map = new Map();
   for (const r of studentRows) {
-    map.set(String(r._id), {
-      groupId: String(r._id),
+    const id = keyOf(r._id);
+    map.set(id, {
+      groupId: id,
       income: r.income || 0,
       billed: r.billed || 0,
       expense: 0,
     });
   }
   for (const r of teacherRows) {
-    const id = String(r._id);
+    const id = keyOf(r._id);
     const cur = map.get(id) || { groupId: id, income: 0, billed: 0, expense: 0 };
     cur.expense = r.expense || 0;
     map.set(id, cur);
@@ -400,16 +418,36 @@ export const getGroupBreakdown = async ({ year, month, limit = 8 } = {}) => {
     net: it.income - it.expense,
   }));
 
-  // Guruh nomlarini biriktirish
-  const ids = items.map((it) => it.groupId);
+  // Guruh nomlarini biriktirish (sun'iy kalit bazaga YUBORILMAYDI)
+  const ids = items.map((it) => it.groupId).filter((id) => id !== UNASSIGNED);
   const groups = await Group.find({ _id: { $in: ids } })
     .select("name")
     .lean();
   const nameById = new Map(groups.map((g) => [String(g._id), g.name]));
-  for (const it of items) it.groupName = nameById.get(it.groupId) || "Noma'lum";
+  for (const it of items) {
+    it.groupName =
+      it.groupId === UNASSIGNED
+        ? "Guruhsiz (fiksa va bonus)"
+        : nameById.get(it.groupId) || "Noma'lum";
+  }
 
-  items.sort((a, b) => b.income - a.income);
-  return items.slice(0, Number(limit));
+  // GURUHSIZ QATOR TOP RO'YXATDAN TASHQARIDA.
+  //
+  // Uning kirimi doim 0, ya'ni kirim bo'yicha saralashda oxirida qolardi
+  // va `limit` uni jimgina kesib tashlardi. O'shanda markaz darajasidagi
+  // maosh chiqimi hisobotdan butunlay yo'qolib, guruhlar yig'indisi
+  // umumiy chiqimga mos kelmay qolardi.
+  // Puli yo'q bo'lsa (maosh hali to'lanmagan) qator umuman qo'shilmaydi -
+  // nol qiymatli chiziq faqat shovqin bo'lardi.
+  const unassigned = items.find(
+    (it) => it.groupId === UNASSIGNED && (it.income || it.expense),
+  );
+  const top = items
+    .filter((it) => it.groupId !== UNASSIGNED)
+    .sort((a, b) => b.income - a.income)
+    .slice(0, Number(limit));
+
+  return unassigned ? [...top, unassigned] : top;
 };
 
 // === getLedger: oy ichidagi so'nggi tranzaksiyalar (kirim + chiqim) ===

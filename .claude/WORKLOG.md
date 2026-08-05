@@ -6784,3 +6784,132 @@ Endi `money` importi ishlatilmay qoldi — olib tashlayman, va modal matnini qis
 <sub>session `02f2a902` · branch `main` · 16 ta qadam</sub>
 
 ---
+
+## 2026-08-05 21:32 — Moliyaviy hisob kitoblas oynasida ushbu maumoga kozim tushdi [Error] F
+
+**So'rov**
+
+> Moliyaviy hisob kitoblas oynasida ushbu maumoga kozim tushdi  [Error] Failed to load resource: the server responded with a status of 400 (Bad Request) (group-breakdown, line 0) shunday error kelibdi
+
+**O'zgargan fayllar (1)**
+
+- `server/src/modules/financeReport/services/financeReport.service.js` — tahrirlandi
+
+**Buyruqlar (13)**
+
+```sh
+grep -rn "group-breakdown" server/src client/src | head -20
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n 1,60p src/modules/financeReport/financeReport.routes.js; echo "=== VALIDATORS ==="; ls src/modules/finance…
+grep -rn "Noto'g'ri ID" src | head -20; echo "=== handler ==="; cat src/modules/financeReport/handlers/groupBreakdown.handler.js
+grep -n "getGroupBreakdown" -A 80 src/modules/financeReport/services/financeReport.service.js | head -110
+cat > __dbg.mjs <<'EOF' import "dotenv/config"; import { connectDB, disconnectDB } from "./src/config/db.js"; import StudentPayment from "./src/models/studentPa…
+grep -n "group" src/models/teacherSalary.model.js | head -20; echo "=== o'xshash naqshlar ==="; grep -n '_id: "\$group"' -A 3 src/modules/financeReport/services…
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rln "groupBreakdown\|Guruhlar kesimi" src | head
+cd /Users/shukrullo/Desktop/lc-total/server && grep -rn '_id: "\$group"' src --include="*.js" | head -20
+grep -rn 'TeacherSalary.aggregate' -A 6 src --include="*.js" | grep -n '_id' | head -20
+grep -n "group:" -A 6 src/models/studentPayment.model.js | head -20
+cat > __gb.test.mjs <<'EOF' import "dotenv/config"; import { connectDB, disconnectDB } from "./src/config/db.js"; import { runWithBranchContext } from "./src/he…
+TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3 -c "impo…
+cat > __gb2.test.mjs <<'EOF' import "dotenv/config"; import mongoose from "mongoose"; import { connectDB, disconnectDB } from "./src/config/db.js"; import { run…
+```
+
+**Natija**
+
+Sabab topildi. Endi to'liq ko'rib chiqaman:
+
+Sabab aniq. Tuzataman:
+
+Endi haqiqiy ma'lumot ustida tekshiraman:
+
+400 yo'qoldi. Endi haqiqiy HTTP so'rov bilan tekshiraman:
+
+Bitta narsa qoldi — hozir "Guruhsiz" qatori butunlay nolga teng bo'lsa ham chiziladi. Bu shovqin:
+
+<sub>session `02f2a902` · branch `main` · 20 ta qadam</sub>
+
+---
+
+## 2026-08-05 21:40 — agar guruh oyning 1chisidan boshlanmasa ownerdan option talab qilishi 
+
+**So'rov**
+
+> agar guruh oyning 1chisidan boshlanmasa ownerdan option talab qilishi kerak yani to'liq pul olish yoki qolganini qoldirish bo'lishi kerak
+
+**O'zgargan fayllar (6)**
+
+- `server/src/models/group.model.js` — tahrirlandi
+- `server/src/modules/groups/validators/create.validator.js` — tahrirlandi
+- `server/src/modules/groups/validators/update.validator.js` — tahrirlandi
+- `server/src/modules/groups/services/groups.service.js` — tahrirlandi
+- `server/src/modules/finance/services/studentPayment.service.js` — tahrirlandi
+- `client/src/owner/features/groups/components/GroupForm.jsx` — tahrirlandi
+
+**Buyruqlar (31)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && grep -rln "expectedAmount" src --include="*.js" | head -20
+grep -rn "prorat\|proratsiya\|ulush" src --include="*.js" -il | head -20
+grep -rn "expectedAmount" src/modules/studentPayment* src/modules/payments* 2>/dev/null | head -20; echo "=== modules ==="; ls src/modules/ | head -40
+ls src/modules/finance/services/ && grep -rn "expectedAmount" src/modules/finance/services/*.js | head -30
+grep -rn "computePaymentSnapshot" src --include="*.js" | head -20
+cat > __d.mjs <<'EOF' import "dotenv/config"; import { connectDB, disconnectDB } from "./src/config/db.js"; import Group from "./src/models/group.model.js"; imp…
+sed -n 40,100p src/modules/finance/services/studentPayment.service.js
+grep -n "startDate\|billing\|schedule" src/models/group.model.js | head -30
+grep -rn "export const getClassDaysInRange" -A 45 src/helpers/*.js | head -60
+cat > __x.mjs <<'EOF' import "dotenv/config"; import { connectDB, disconnectDB } from "./src/config/db.js"; import Group from "./src/models/group.model.js"; imp…
+grep -rn "export const" src/modules/finance/services/studentPayment.service.js | head -30
+grep -rn "recalc\|ensureMonth\|generateMonth" src --include="*.js" | grep -v "studentPayment.service.js" | head -25
+sed -n 40,80p src/models/group.model.js; echo "=== VALIDATORS ==="; ls src/modules/groups/validators/ && grep -n "startDate\|endDate" src/modules/groups/validat…
+grep -n "startDate\|endDate" src/modules/groups/services/groups.service.js | head -20
+sed -n 20,60p src/modules/groups/validators/create.validator.js; echo "=== UPDATE ==="; sed -n 15,40p src/modules/groups/validators/update.validator.js
+sed -n 502,560p src/modules/groups/services/groups.service.js; echo "=== imports ==="; grep -n "studentPayment\|paymentService\|recalcForGroupMonth" src/modules…
+cd /Users/shukrullo/Desktop/lc-total/client && grep -n "startDate\|durationMonths\|monthlyPrice" src/owner/features/groups/components/GroupForm.jsx | head -20
+grep -n "^import\|SelectField" src/owner/features/groups/components/GroupForm.jsx | head -20
+cd /Users/shukrullo/Desktop/lc-total/server && cat > __eb.test.mjs <<'EOF' import "dotenv/config"; import { connectDB, disconnectDB } from "./src/config/db.js";…
+cat > __eb2.test.mjs <<'EOF' import "dotenv/config"; import { connectDB, disconnectDB } from "./src/config/db.js"; import Group from "./src/models/group.model.j…
+cd /Users/shukrullo/Desktop/lc-total/client && npx eslint src/owner/features/groups/components/GroupForm.jsx && echo "LINT OK" && npx vite build --logLevel erro…
+node --check src/models/group.model.js && node --check src/modules/finance/services/studentPayment.service.js && node --check src/modules/groups/services/groups…
+cd /Users/shukrullo/Desktop/lc-total/server && node --check src/models/group.model.js && node --check src/modules/finance/services/studentPayment.service.js && …
+TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3 -c "impo…
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/02f2a902-2616-4b80-8771-deecb9d5bb20/scratchpad/http.sh <<'SH' set -e API=http://localhost:5000/…
+# … yana 6 ta
+```
+
+**Natija**
+
+Avval hozirgi hisoblash mantiqini o'rganay.
+
+Kodni tekshirib, muhim narsa aniqladim — hozir bu **ikki holat teskari ishlaydi**:
+
+| Holat | Hozirgi xatti-harakat |
+|---|---|
+| Guruh oy o'rtasida boshlangan (5-mart) | **To'liq oylik** olinadi — 5-martdan oldingi darslar maxrajga kirmaydi (11/11 = 2 000 000) |
+| O'quvchi oy o'rtasida qo'shilgan (5-avgust) | **Proratsiya** qilinadi (11/13 = 1 692 308) — ekrandagi holat |
+
+Ikkalasida ham tanlov yo'q. Skrinshotdagi raqam ikkinchi holatdan kelyapti, matningiz esa birinchisini tasvirlaydi — shuning uchun aniqlashtirib olay:
+
+Yaxshi. Endi qayta hisoblash qachon ishga tushishini aniqlab olay — eski oylarga ta'sir qilmasligi kerak:
+
+Aniq. Endi qo'shaman. Avval tegishli fayllarni ko'ray:
+
+Endi model, validator, service va hisoblash mantiqini o'zgartiraman:
+
+Endi asosiy qism — hisoblash mantiqi:
+
+Bitta muammo bor — har bir hisobda ortiqcha DB so'rovi bo'lardi. Aniqlashtiraman:
+
+Endi client tomoni — guruh formasiga tanlov qo'shaman:
+
+Import bor. Endi to'liq test — ikkala rejim, ikkala holat:
+
+Test skripti xato qildi (unique indeks). Tuzatib qayta ishga tushiraman va holatni tiklayman:
+
+Barcha holatlar to'g'ri ishlayapti. Endi lint/build va HTTP orqali yakuniy tekshiruv:
+
+`moneyIsolation.test.js` haqiqiy bazani ishlatadi — alohida bazaga yo'naltirib ishga tushiraman:
+
+Bitta nozik holat qoldi — o'quvchi oy ichida ketib qayta qo'shilsa (rejoin), oradagi bo'shliq ham to'liq hisoblanardi. Tuzataman:
+
+<sub>session `02f2a902` · branch `main` · 53 ta qadam</sub>
+
+---

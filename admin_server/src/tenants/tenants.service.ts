@@ -4,11 +4,15 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProvisioningService } from '../provisioning/provisioning.service.js';
+import { SettingsService } from '../settings/settings.service.js';
+import { GithubService } from '../github/github.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
+import { UpdateBrandDto } from './dto/update-brand.dto.js';
 
 const PORT_MIN = Number(process.env.TENANT_PORT_MIN || 5100);
 const PORT_MAX = Number(process.env.TENANT_PORT_MAX || 5999);
@@ -20,6 +24,8 @@ export class TenantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly provisioning: ProvisioningService,
+    private readonly settings: SettingsService,
+    private readonly github: GithubService,
   ) {}
 
   /** Nomdan xavfsiz slug hosil qiladi (DB nomi/pm2 nomi uchun asos). */
@@ -87,13 +93,18 @@ export class TenantsService {
     // Tenant server usage yuborishda shu kalit bilan o'zini tanitadi
     const heartbeatSecret = randomBytes(32).toString('hex');
 
+    // GitHub integratsiyasi o'chiq bo'lsa yoki mijoz so'ramasa — repo yo'q.
+    const wantsRepo = dto.createRepo !== false && this.github.isConfigured();
+
     const tenant = await this.prisma.tenant.create({
       data: {
         name: dto.name,
         domain: dto.domain,
         brandColor: dto.brandColor,
+        brandBackground: dto.brandBackground || null,
+        brandColorDark: dto.brandColorDark || null,
+        brandBackgroundDark: dto.brandBackgroundDark || null,
         logoUrl: dto.logoUrl,
-        botToken: dto.botToken,
         dbName,
         pm2Name,
         port,
@@ -101,32 +112,231 @@ export class TenantsService {
         systemTemplateId: dto.systemTemplateId,
         customerId: customerId ?? null,
         status: 'DRAFT',
+        gitStatus: wantsRepo ? 'PENDING' : 'DISABLED',
         createdBy,
         serverIp: process.env.SERVER_PUBLIC_IP || null,
       },
     });
 
+    // Bot tokeni endi sozlama sifatida yashaydi (shifrlangan holda) —
+    // `Tenant.botToken` ustuni faqat eski yozuvlar uchun qoldirilgan.
+    if (dto.botToken) {
+      await this.settings.seedInitial(
+        tenant.id,
+        { TELEGRAM_BOT_TOKEN: dto.botToken, TELEGRAM_BOT_ENABLED: 'true' },
+        createdBy,
+      );
+    }
+
     // Provisioning'ni fon rejimida boshlaymiz — javob darrov qaytadi
     this.provisioning
-      .provision({
-        tenantId: tenant.id,
-        dbName: tenant.dbName,
-        domain: tenant.domain,
-        pm2Name: tenant.pm2Name,
-        port: tenant.port,
-        name: tenant.name,
-        brandColor: tenant.brandColor,
-        logoUrl: tenant.logoUrl,
-        botToken: tenant.botToken,
-        templateDir: template.templateDir,
-        heartbeatSecret: tenant.heartbeatSecret,
-        adminApiUrl: process.env.ADMIN_API_PUBLIC_URL || null,
-      })
+      .provision(tenant.id)
       .catch((err) =>
         this.logger.error(`Provisioning boshlashda xato: ${err.message}`),
       );
 
     return this.withDnsInfo(tenant);
+  }
+
+  /**
+   * Brend ma'lumotlarini yangilaydi.
+   *
+   * Ranglar client `.env` ga tushadi, ya'ni o'zgarish faqat client QAYTA
+   * QURILGANDA ko'rinadi. Shuning uchun bu yerda darrov qo'llanmaydi —
+   * "Qo'llash" tugmasi bosilishini kutadi va panel kutilayotgan
+   * o'zgarishlar ro'yxatida ko'rsatib turadi.
+   */
+  async updateBrand(id: string, dto: UpdateBrandDto) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!tenant) throw new NotFoundException('Tenant topilmadi');
+    if (tenant.status === 'DELETED') {
+      throw new ConflictException("O'chirilgan loyihani tahrirlab bo'lmaydi");
+    }
+
+    // Bo'sh satr — rangni olib tashlash (null), berilmagan maydon — tegilmaydi
+    const emptyToNull = (v?: string) => (v === undefined ? undefined : v || null);
+
+    const updated = await this.prisma.tenant.update({
+      where: { id },
+      data: {
+        name: dto.name ?? undefined,
+        brandColor: dto.brandColor ?? undefined,
+        brandBackground: emptyToNull(dto.brandBackground),
+        brandColorDark: emptyToNull(dto.brandColorDark),
+        brandBackgroundDark: emptyToNull(dto.brandBackgroundDark),
+        logoUrl: emptyToNull(dto.logoUrl),
+      },
+    });
+
+    const { config } = await this.settings.resolve(id);
+    const diff = this.settings.computeDiff(updated, config);
+
+    if (diff.length && updated.applyStatus !== 'APPLYING') {
+      await this.prisma.tenant.update({
+        where: { id },
+        data: { applyStatus: 'PENDING' },
+      });
+    }
+
+    return {
+      ok: true,
+      tenant: this.withDnsInfo(updated),
+      pending: {
+        count: diff.length,
+        applies: this.settings.applyModeFor(diff),
+        entries: diff,
+      },
+    };
+  }
+
+  // ─────────────────────────────────────────────── sozlamalar va qo'llash
+
+  /** Panel uchun sozlamalar ro'yxati + kutilayotgan o'zgarishlar. */
+  describeSettings(id: string) {
+    return this.settings.describe(id);
+  }
+
+  updateSettings(id: string, values: Record<string, unknown>, updatedBy?: string) {
+    return this.settings.update(id, values, updatedBy);
+  }
+
+  /**
+   * Kutilayotgan o'zgarishlarni tenantga yetkazadi.
+   * Kerakli amal (restart / rebuild) farqdan o'zi aniqlanadi.
+   */
+  async applyPending(id: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!tenant) throw new NotFoundException('Tenant topilmadi');
+
+    if (tenant.status === 'DELETED') {
+      throw new ConflictException("O'chirilgan loyihaga sozlama qo'llab bo'lmaydi");
+    }
+    if (tenant.status === 'PROVISIONING' || tenant.status === 'DEPROVISIONING') {
+      throw new ConflictException('Jarayon ketmoqda — tugashini kuting');
+    }
+    if (tenant.applyStatus === 'APPLYING') {
+      throw new ConflictException("Qo'llash allaqachon ketmoqda");
+    }
+
+    const { config } = await this.settings.resolve(id);
+    const diff = this.settings.computeDiff(tenant, config);
+
+    if (!diff.length) {
+      return { ok: true, applied: false, message: "Qo'llanmagan o'zgarish yo'q" };
+    }
+
+    const mode = this.settings.applyModeFor(diff);
+    if (mode === 'none') {
+      // Faqat ta'sirsiz maydonlar o'zgargan — skript chaqirmasdan suratni
+      // yangilaymiz, aks holda "kutilmoqda" belgisi abadiy osilib qolardi.
+      await this.settings.markApplied(id, config);
+      return { ok: true, applied: false, message: "O'zgarish qayta ishga tushirishni talab qilmaydi" };
+    }
+
+    this.provisioning
+      .applyConfig(id, mode)
+      .catch((err) => this.logger.error(`Qo'llashda xato: ${err.message}`));
+
+    return {
+      ok: true,
+      applied: true,
+      mode,
+      count: diff.length,
+      message:
+        mode === 'rebuild'
+          ? "Client qayta qurilmoqda — 1-2 daqiqa vaqt oladi"
+          : 'Server qayta ishga tushirilmoqda',
+    };
+  }
+
+  // ──────────────────────────────────────────────────────── GitHub repo
+
+  /** Repo holati va integratsiya sozlanganmi — panel uchun. */
+  async repoInfo(id: string) {
+    const t = await this.prisma.tenant.findUnique({
+      where: { id },
+      select: {
+        gitStatus: true,
+        repoFullName: true,
+        repoUrl: true,
+        repoPrivate: true,
+        repoError: true,
+        lastPushedAt: true,
+        gitLog: true,
+        deployToken: true,
+      },
+    });
+    if (!t) throw new NotFoundException('Tenant topilmadi');
+
+    return {
+      ...t,
+      // Deploy tokeni panelga ochiq ketmaydi — faqat "bormi" degan javob
+      deployToken: undefined,
+      hasDeployToken: Boolean(t.deployToken),
+      integrationReady: this.github.isConfigured(),
+      owner: this.github.owner || null,
+    };
+  }
+
+  /** Reponi yaratadi (yo'q bo'lsa) va kodni qayta yuboradi. */
+  async syncRepo(id: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!tenant) throw new NotFoundException('Tenant topilmadi');
+
+    if (!this.github.isConfigured()) {
+      throw new BadRequestException(
+        "GitHub integratsiyasi sozlanmagan — admin_server/.env da GITHUB_TOKEN va GITHUB_OWNER kerak",
+      );
+    }
+    if (tenant.status === 'DELETED') {
+      throw new ConflictException("O'chirilgan loyiha kodini yuborib bo'lmaydi");
+    }
+    if (tenant.status === 'PROVISIONING') {
+      throw new ConflictException('Provisioning ketmoqda — tugashini kuting');
+    }
+
+    this.provisioning
+      .pushToRepo(id)
+      .catch((err) => this.logger.error(`Repo sinxronlashda xato: ${err.message}`));
+
+    return { ok: true, status: 'PUSHING' };
+  }
+
+  /**
+   * Tenant repo workflow'i chaqiradigan deploy hook.
+   *
+   * Autentifikatsiya — faqat shu tenantga tegishli token. Token noto'g'ri
+   * bo'lsa qaysi tenant nazarda tutilgani ham aytilmaydi: hook ochiq
+   * internetda turadi, xato xabari orqali ma'lumot sizib chiqmasligi kerak.
+   */
+  async deployHook(token: string, ref?: string) {
+    if (!token || token.length < 32) {
+      throw new UnauthorizedException('Deploy tokeni yaroqsiz');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { deployToken: token },
+    });
+    if (!tenant) throw new UnauthorizedException('Deploy tokeni yaroqsiz');
+
+    if (tenant.status !== 'ACTIVE') {
+      throw new ConflictException(
+        `Loyiha holati "${tenant.status}" — deploy qilinmadi`,
+      );
+    }
+    if (tenant.applyStatus === 'APPLYING') {
+      throw new ConflictException('Oldingi deploy hali tugamagan');
+    }
+
+    this.logger.log(
+      `Deploy hook: ${tenant.domain}${ref ? ` (ref=${ref.slice(0, 12)})` : ''}`,
+    );
+
+    this.provisioning
+      .applyConfig(tenant.id, 'deploy')
+      .catch((err) => this.logger.error(`Deploy hook xatosi: ${err.message}`));
+
+    return { ok: true, tenant: tenant.domain, status: 'DEPLOYING' };
   }
 
   /** DNS uchun kerakli IP va yo'riqnomani javobga qo'shadi. */
@@ -270,20 +480,11 @@ export class TenantsService {
         "O'chirilgan tenantni qayta tiklab bo'lmaydi — yangisini yarating",
       );
     }
-    await this.provisioning.provision({
-      tenantId: t.id,
-      dbName: t.dbName,
-      domain: t.domain,
-      pm2Name: t.pm2Name,
-      port: t.port,
-      name: t.name,
-      brandColor: t.brandColor,
-      logoUrl: t.logoUrl,
-      botToken: t.botToken,
-      templateDir: t.systemTemplate.templateDir,
-      heartbeatSecret: t.heartbeatSecret,
-      adminApiUrl: process.env.ADMIN_API_PUBLIC_URL || null,
-    });
+    // Fon rejimida — javob darrov qaytadi, holat panelda kuzatiladi
+    this.provisioning
+      .provision(t.id)
+      .catch((err) => this.logger.error(`Qayta urinishda xato: ${err.message}`));
+
     return { ok: true, status: 'PROVISIONING' };
   }
 
@@ -322,12 +523,15 @@ export class TenantsService {
       data: { domain: freed, heartbeatSecret: null },
     });
 
-    await this.provisioning.deprovision({
-      tenantId: t.id,
-      dbName: t.dbName,
-      domain: t.domain, // skriptga ASL domen ketadi
-      pm2Name: t.pm2Name,
-    });
+    this.provisioning
+      .deprovision({
+        tenantId: t.id,
+        dbName: t.dbName,
+        domain: t.domain, // skriptga ASL domen ketadi
+        pm2Name: t.pm2Name,
+        repoFullName: t.repoFullName,
+      })
+      .catch((err) => this.logger.error(`Deprovisioningda xato: ${err.message}`));
 
     return { ok: true, status: 'DEPROVISIONING' };
   }

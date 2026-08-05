@@ -64,6 +64,25 @@ const groupSchema = new mongoose.Schema(
     endDate: { type: Date, default: null, index: true },
     // Kurs davomiyligi (oy) - ma'lumot uchun (mas. 10 oylik / 12 oylik).
     durationMonths: { type: Number, default: null, min: 0 },
+
+    // OY O'RTASIDA KIRISH SIYOSATI (billing).
+    //
+    // Guruh oyning 1-sanasidan boshlanmasa yoki o'quvchi oy o'rtasida
+    // qo'shilsa, o'sha KIRISH oyi uchun qancha olinadi:
+    //   "prorated" - faqat qolgan qism (oy rejasidagi darslar ulushicha)
+    //   "full"     - to'liq oylik summa, qachon kirganidan qat'i nazar
+    //
+    // FAQAT KIRISHGA taalluqli. Chiqib ketish va muzlatish ikkala rejimda
+    // ham proratsiya qilinaveradi - o'quvchidan olmagan xizmati uchun pul
+    // undirish siyosat emas, xato bo'lardi.
+    //
+    // Standart "prorated" - mavjud xatti-harakat (o'quvchi oy o'rtasida
+    // qo'shilganda ulushiga qarab to'laydi).
+    entryBilling: {
+      type: String,
+      enum: ["prorated", "full"],
+      default: "prorated",
+    },
     // endDate'dan keltirib chiqarilgan hosila kesh: kurs hali tugamaganmi.
     // Guard/filtr/joblar shunga tayanadi; reconcileGroupEnd yangilab turadi.
     isActive: { type: Boolean, default: true, index: true },

@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsHexColor,
   IsOptional,
   IsString,
@@ -18,8 +19,22 @@ export class CreateTenantDto {
   })
   domain!: string;
 
-  @IsHexColor({ message: 'Brend rang hex bo\'lishi kerak (masalan #4f46e5)' })
+  @IsHexColor({ message: "Brend rang hex bo'lishi kerak (masalan #4f46e5)" })
   brandColor!: string;
+
+  // Qolgan brend ranglari ixtiyoriy — berilmasa tenant client ularni
+  // brandColor'dan avtomatik hosil qiladi.
+  @IsOptional()
+  @IsHexColor({ message: "Fon rangi hex bo'lishi kerak" })
+  brandBackground?: string;
+
+  @IsOptional()
+  @IsHexColor({ message: "Dark rejim brend rangi hex bo'lishi kerak" })
+  brandColorDark?: string;
+
+  @IsOptional()
+  @IsHexColor({ message: "Dark rejim fon rangi hex bo'lishi kerak" })
+  brandBackgroundDark?: string;
 
   @IsOptional()
   @IsString()
@@ -31,4 +46,12 @@ export class CreateTenantDto {
 
   @IsString()
   systemTemplateId!: string;
+
+  /**
+   * GitHub repo ochilsinmi. Standart — ochilsin (integratsiya sozlangan
+   * bo'lsa). Mijoz kodini repoga qo'ymaslikni so'rasa false beriladi.
+   */
+  @IsOptional()
+  @IsBoolean()
+  createRepo?: boolean;
 }
