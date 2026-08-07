@@ -21,6 +21,7 @@ import {
   idParamSchema as compensationIdSchema,
   teacherIdParamSchema as compensationTeacherIdSchema,
   adjustmentCreateSchema,
+  adjustmentSettleSchema,
 } from "./validators/teacherCompensation.validator.js";
 
 import compensationList from "./handlers/compensation.list.handler.js";
@@ -28,6 +29,7 @@ import compensationSet from "./handlers/compensation.set.handler.js";
 import compensationAmend from "./handlers/compensation.amend.handler.js";
 import compensationRemove from "./handlers/compensation.remove.handler.js";
 import adjustmentCreate from "./handlers/adjustment.create.handler.js";
+import adjustmentSettle from "./handlers/adjustment.settle.handler.js";
 import adjustmentRemove from "./handlers/adjustment.remove.handler.js";
 import salaryList from "./handlers/salary.list.handler.js";
 import salaryGetById from "./handlers/salary.getById.handler.js";
@@ -119,6 +121,16 @@ router.post(
   requirePermission(PERMISSIONS.FINANCE_MANAGE),
   validate(adjustmentCreateSchema),
   adjustmentCreate,
+);
+// HISOB-KITOBNI YOPISH (ishdan bo'shatish). Qolgan qoldiqni bitta jarima
+// qatori bilan nolga tushiradi. FINANCE_MANAGE - bu stavka emas, chiqimni
+// bekor qilish qarori (jarima bilan bir xil vakolat).
+router.post(
+  "/adjustments/settle/:teacherId",
+  requireAuth,
+  requirePermission(PERMISSIONS.FINANCE_MANAGE),
+  validate(adjustmentSettleSchema),
+  adjustmentSettle,
 );
 router.delete(
   "/adjustments/:id",

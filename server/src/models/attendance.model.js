@@ -34,10 +34,15 @@ const attendanceSchema = new mongoose.Schema(
     slot: { type: String, default: "" },
     reason: { type: String, default: "" },
     lateMinutes: { type: Number, default: 0, min: 0 },
+    // "Kim belgiladi" - AUDIT havolasi, davomatning o'zi guruhga tegishli.
+    // null bo'lishi MUMKIN: belgilagan xodim tizimdan butunlay o'chirilsa
+    // havola uziladi (hardDeleteTeacherData), lekin davomat yozuvi JOYIDA
+    // qoladi - o'quvchining dars tarixi bir xodim ketgani uchun yo'qolmaydi.
+    // Oddiy yozuvda servis qatlami har doim qiymat beradi.
     recordedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      default: null,
     },
     recordedAt: { type: Date, default: Date.now },
     source: {

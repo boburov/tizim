@@ -49,13 +49,14 @@ const warnBranchModeMismatch = async () => {
   }
 };
 
-const start = async () => {
-  await connectDB();
-  // FILIAL KAFOLATI: bazada birorta filial bo'lmasa "Asosiy filial"
-  // yaratiladi. Shundan keyin markaz DOIM kamida bitta filialli bo'ladi,
-  // ya'ni "filial tanlanmagan" turkumidagi yozish xatolari tug'ilmaydi.
-  await ensureMainBranch();
-  await warnBranchModeMismatch();
+// Fon xizmatlari: joblar, saqlagich hisoblagichi va Telegram bot.
+//
+// HECH BIRI portni ochishni kutib turmaydi - pastdagi izohga qarang.
+// Har biri alohida catch bilan: bittasi yiqilsa qolganlari ishlayveradi.
+const startBackgroundServices = async () => {
+  await warnBranchModeMismatch().catch((err) =>
+    logger.warn({ err }, "Filial rejimini tekshirib bo'lmadi"),
+  );
 
   // SAQLASH HISOBLAGICHI: band hajm atomik hisoblagichda turadi, lekin
   // jarayon joyni band qilib, faylni yozishdan oldin yiqilsa unda "band"
@@ -66,11 +67,51 @@ const start = async () => {
     logger.warn({ err }, "Saqlash hisoblagichini tekislab bo'lmadi"),
   );
 
-  await startJobs();
+  await startJobs().catch((err) =>
+    logger.error({ err }, "Joblar ishga tushmadi"),
+  );
   await startBot().catch((err) => logger.error({ err }, "Bot ishga tushmadi"));
 
+  logger.info("Fon xizmatlari tayyor");
+};
+
+const start = async () => {
+  // FAQAT SHU IKKISI portni ochishdan OLDIN bo'lishi shart: baza ulanmasa
+  // yoki filial kafolati bajarilmasa har bir so'rov baribir xato qaytaradi.
+  await connectDB();
+  // FILIAL KAFOLATI: bazada birorta filial bo'lmasa "Asosiy filial"
+  // yaratiladi. Shundan keyin markaz DOIM kamida bitta filialli bo'ladi,
+  // ya'ni "filial tanlanmagan" turkumidagi yozish xatolari tug'ilmaydi.
+  await ensureMainBranch();
+
+  // PORT ENG BIRINCHI OCHILADI - joblar va botdan OLDIN.
+  //
+  // Aks holda ishga tushish shu ikkisining eng sekiniga bog'lanib qolardi:
+  // `bot.startPolling()` Telegram 409 Conflict'ga (boshqa instans polling
+  // qilyapti) urilganda ichki qayta urinishlar bilan bir necha o'nlab
+  // soniya osilib turadi. O'sha oynada port UMUMAN ochilmaydi, ya'ni
+  // frontend'dagi login "Network Error" beradi - server aslida tirik
+  // bo'lsa ham. Joblar ham xuddi shunday: boot catch-up hisoblari og'ir.
+  //
+  // Ikkalasi ham HTTP so'rovlariga kerak emas, shuning uchun ular fonda
+  // ko'tariladi va login birinchi soniyadanoq ishlaydi.
   const server = app.listen(env.PORT, () => {
     logger.info(`Server ${env.PORT}-portda ishga tushdi`);
+    startBackgroundServices();
+  });
+
+  // Port band bo'lsa Node "unhandled 'error' event" bilan tushunarsiz stack
+  // tashlaydi. Sababi deyarli har doim bitta - eski nusxa o'chmagan.
+  server.on("error", (err) => {
+    if (err?.code === "EADDRINUSE") {
+      logger.error(
+        `${env.PORT}-port band. Eski server nusxasi ishlab turibdi - uni ` +
+          `to'xtating (lsof -ti:${env.PORT} | xargs kill) yoki PORT ni o'zgartiring.`,
+      );
+    } else {
+      logger.error({ err }, "HTTP server xatosi");
+    }
+    process.exit(1);
   });
 
   const shutdown = async (signal) => {

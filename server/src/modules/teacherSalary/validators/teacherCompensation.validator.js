@@ -69,3 +69,15 @@ export const adjustmentCreateSchema = z.object({
     reason: z.string().trim().min(1).max(500),
   }),
 });
+
+// ── Hisob-kitobni yopish ──
+// Summa ATAYLAB so'ralmaydi: u serverda qoldiqdan hisoblanadi. Mijozdan
+// kelgan raqamga ishonilsa, eskirgan ekrandan yuborilgan qiymat qoldiqni
+// noto'g'ri yopib, balansni manfiyga tushirib qo'yardi.
+export const adjustmentSettleSchema = z.object({
+  params: z.object({ teacherId: objectId }),
+  body: z.object({
+    reason: z.string().trim().min(1).max(500),
+    branchId: objectId.optional(),
+  }),
+});

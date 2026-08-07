@@ -356,7 +356,26 @@ const loadScope = async (teacher, group, excludeId) => {
 };
 
 export const create = async (
-  { teacher, group, startDate, endDate = null, salaryType, fixedAmount, percentRate },
+  {
+    teacher,
+    group,
+    startDate,
+    endDate = null,
+    salaryType,
+    fixedAmount,
+    percentRate,
+    // STAVKANI MEROS QILISH: true bo'lsa davrga stavka YOZILMAYDI (barcha
+    // maydonlar null) va rateResolver o'qituvchining STANDART stavkasiga
+    // (TeacherCompensation) tushadi.
+    //
+    // NEGA ALOHIDA BAYROQ KERAK: normalizeRate() stavka berilmasa ham
+    // `salaryType:"fixed", fixedAmount:0` yozadi, rateResolver esa
+    // `salaryType != null` ni USTUNLIK deb biladi (hasOwnRate). Ya'ni
+    // stavkasiz yaratilgan davr o'qituvchini shu guruhda NOL maoshga
+    // qulflab qo'yardi. Guruh boshqa o'qituvchiga topshirilganda aynan shu
+    // kerak emas: yangi o'qituvchi O'Z shartnomasi bo'yicha olishi kerak.
+    inheritStandardRate = false,
+  },
   currentUser,
 ) => {
   const teacherDoc = await assertTeacher(teacher);
@@ -389,7 +408,9 @@ export const create = async (
     group,
     startDate: candidate.startDate,
     endDate: candidate.endDate,
-    ...normalizeRate(salaryType, fixedAmount, percentRate),
+    ...(inheritStandardRate
+      ? { salaryType: null, fixedAmount: null, percentRate: null }
+      : normalizeRate(salaryType, fixedAmount, percentRate)),
     createdBy: currentUser?._id || null,
     updatedBy: currentUser?._id || null,
   });
@@ -435,6 +456,195 @@ export const update = async (id, patch, currentUser) => {
   await recomputeForRange(doc.teacher, doc.group, oldStart, oldEnd);
   await recomputeForRange(doc.teacher, doc.group, next.startDate, next.endDate);
   return doc;
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// OMMAVIY TOPSHIRISH (ishdan bo'shatish oqimi)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Ketayotgan o'qituvchining guruhlarini BIR AMALDA bir nechta o'qituvchiga
+ * taqsimlaydi: "5 ta guruh Aziza'ga, 3 tasi Bekzod'ga, 20-avgustdan".
+ *
+ * MAOSH O'ZI TO'G'RI BO'LINADI - bu yerda hech qanday pul hisoblanmaydi.
+ * Eski davr `endDate = topshirish sanasi` (EKSKLYUZIV) bilan yopiladi, yangisi
+ * o'sha sanadan ochiladi. salaryCompute har davrni oy ichidagi KUNLARIGA
+ * proratsiya qilib qo'shgani uchun 20 kun ishlagan eski o'qituvchi 20 kunlik,
+ * qolgan 10 kunni olgan yangisi 10 kunlik haq oladi. `claimedUntil` kursori
+ * bir kunni ikki marta to'lashga yo'l qo'ymaydi.
+ *
+ * BARCHA TEKSHIRUVLAR YOZISHDAN OLDIN. Sabab: create/update sessiyani qabul
+ * qilmaydi, ya'ni haqiqiy tranzaksiya yo'q. Yarim bajarilgan topshirish esa
+ * eng yomon holat bo'lardi - guruh o'qituvchisiz qolib ketardi. Shuning uchun
+ * avval hammasi quruq tekshiriladi, keyingina yoziladi.
+ */
+export const handover = async (
+  { teacher, handoverDate, assignments = [] },
+  currentUser,
+) => {
+  const outgoing = await assertTeacher(teacher);
+  const cutoff = toUtcMidnight(handoverDate);
+  if (Number.isNaN(cutoff.getTime())) {
+    throw new ApiError(400, "Topshirish sanasi noto'g'ri");
+  }
+
+  // ── 1. Topshirish sanasida hali AMALDA bo'lgan davrlar ──
+  // Sanadan oldin yopilgan davrda topshiradigan narsa yo'q.
+  const cutTs = cutoff.getTime();
+  const allPeriods = await TeacherGroupPeriod.find({
+    teacher: outgoing._id,
+    isDeleted: { $ne: true },
+  }).lean();
+  const live = allPeriods.filter(
+    (p) => !p.endDate || new Date(p.endDate).getTime() > cutTs,
+  );
+
+  if (!live.length) {
+    throw new ApiError(
+      400,
+      "Bu o'qituvchida topshirish sanasida amaldagi guruh yo'q - topshiradigan narsa yo'q.",
+    );
+  }
+
+  // Kelajakda boshlanadigan davrni "yopib" bo'lmaydi (tugash sanasi
+  // boshlanishidan oldin bo'lib qolardi). Bunday davr butunlay ortiqcha -
+  // uni o'chirish kerak, topshirish emas.
+  const notStarted = live.filter(
+    (p) => new Date(p.startDate).getTime() >= cutTs,
+  );
+  if (notStarted.length) {
+    const names = await Group.find(
+      { _id: { $in: notStarted.map((p) => p.group) } },
+      { name: 1 },
+    ).lean();
+    throw new ApiError(
+      400,
+      `Quyidagi guruhlarda dars davri topshirish sanasidan keyin boshlanadi ` +
+        `(${names.map((g) => g.name).join(", ")}). Avval o'sha davrlarni o'chiring.`,
+    );
+  }
+
+  const liveGroupIds = [...new Set(live.map((p) => String(p.group)))];
+  const groups = await Group.find(
+    { _id: { $in: liveGroupIds }, isDeleted: { $ne: true } },
+    { name: 1, schedule: 1, startDate: 1, endDate: 1, isActive: 1 },
+  ).lean();
+  const groupById = new Map(groups.map((g) => [String(g._id), g]));
+
+  // ── 2. Taqsimotni tekshirish ──
+  const targetByGroup = new Map(); // groupId -> assignment
+  for (const a of assignments) {
+    if (!a?.toTeacher) throw new ApiError(400, "Qabul qiluvchi o'qituvchi ko'rsatilmagan");
+    if (String(a.toTeacher) === String(outgoing._id)) {
+      throw new ApiError(400, "Guruhni o'qituvchining o'ziga topshirib bo'lmaydi");
+    }
+    for (const g of a.groups || []) {
+      const key = String(g);
+      if (!groupById.has(key)) {
+        throw new ApiError(
+          400,
+          "Ro'yxatdagi guruhlardan biri bu o'qituvchining topshirish sanasidagi guruhi emas",
+        );
+      }
+      if (targetByGroup.has(key)) {
+        const g1 = groupById.get(key);
+        throw new ApiError(
+          400,
+          `"${g1.name}" guruhi bir necha o'qituvchiga berilgan - har guruh bitta qabul qiluvchiga tegishli bo'lishi kerak`,
+        );
+      }
+      targetByGroup.set(key, a);
+    }
+  }
+
+  // Qabul qiluvchilar haqiqiy va faol o'qituvchi bo'lsin.
+  const targetIds = [...new Set([...targetByGroup.values()].map((a) => String(a.toTeacher)))];
+  const targets = await User.find(
+    { _id: { $in: targetIds }, role: ROLES.TEACHER, isDeleted: { $ne: true } },
+    { firstName: 1, lastName: 1, isActive: 1 },
+  ).lean();
+  const targetById = new Map(targets.map((t) => [String(t._id), t]));
+  for (const id of targetIds) {
+    const t = targetById.get(id);
+    if (!t) throw new ApiError(400, "Qabul qiluvchi o'qituvchi topilmadi");
+    if (t.isActive === false) {
+      throw new ApiError(
+        400,
+        `${t.firstName} ${t.lastName} arxivlangan - unga guruh berib bo'lmaydi`,
+      );
+    }
+  }
+
+  // ── 3. ENG MUHIM QOIDA: guruh o'qituvchisiz qolmasin ──
+  // Taqsimotga kirmagan guruhda BOSHQA o'qituvchi qolyaptimi?
+  const orphans = [];
+  for (const gid of liveGroupIds) {
+    if (targetByGroup.has(gid)) continue;
+    const grp = groupById.get(gid);
+    if (!grp || grp.isActive === false) continue; // arxiv guruh - muhim emas
+    const activeIds = await activeTeacherIdsForGroup(gid, cutoff);
+    const others = activeIds.filter((id) => String(id) !== String(outgoing._id));
+    if (!others.length) orphans.push(grp.name);
+  }
+  if (orphans.length) {
+    throw new ApiError(
+      400,
+      `Quyidagi guruhlar o'qituvchisiz qolib ketadi: ${orphans.join(", ")}. ` +
+        `Ularni ham boshqa o'qituvchiga taqsimlang.`,
+    );
+  }
+
+  // ── 4. Yozishdan OLDIN quruq tekshiruv (yarim topshirish bo'lmasin) ──
+  for (const [gid, a] of targetByGroup) {
+    const grp = groupById.get(gid);
+    const candidate = { startDate: cutoff, endDate: null };
+    assertWithinGroupBounds(candidate, grp);
+    // Qabul qiluvchining shu guruhdagi mavjud davrlari bilan kesishmasin.
+    const existing = await loadScope(a.toTeacher, gid);
+    assertPeriodInvariants(candidate, existing, "date");
+    // Va boshqa guruhdagi darsi bilan jadval to'qnashuvi bo'lmasin.
+    await assertTeacherScheduleFree(a.toTeacher, grp.schedule, gid);
+  }
+
+  // ── 5. Yozish: eski davrni yopish, yangisini ochish ──
+  const closed = [];
+  const opened = [];
+  for (const p of live) {
+    const gid = String(p.group);
+    // Ochiq bo'lmagan, lekin cutoff'dan keyin tugaydigan davr ham cutoff'ga
+    // qisqartiriladi - o'qituvchi o'sha kundan keyin dars bermaydi.
+    await update(p._id, { endDate: cutoff }, currentUser);
+    closed.push({ group: gid, period: p._id });
+  }
+  for (const [gid, a] of targetByGroup) {
+    const doc = await create(
+      {
+        teacher: a.toTeacher,
+        group: gid,
+        startDate: cutoff,
+        endDate: null,
+        // Stavka berilmasa - qabul qiluvchining O'Z standart shartnomasi.
+        ...(a.salaryType
+          ? {
+              salaryType: a.salaryType,
+              fixedAmount: a.fixedAmount,
+              percentRate: a.percentRate,
+            }
+          : { inheritStandardRate: true }),
+      },
+      currentUser,
+    );
+    opened.push({ group: gid, teacher: String(a.toTeacher), period: doc._id });
+  }
+
+  return {
+    teacher: String(outgoing._id),
+    handoverDate: cutoff,
+    closed: closed.length,
+    opened: opened.length,
+    groups: liveGroupIds.length,
+    details: { closed, opened },
+  };
 };
 
 export const remove = async (id) => {

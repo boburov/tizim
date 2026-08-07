@@ -3,10 +3,10 @@ import User from "../../../models/user.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import TeacherGroupPeriod from "../../../models/teacherGroupPeriod.model.js";
 import TeacherSalary from "../../../models/teacherSalary.model.js";
-// Butunlay o'chirishdan oldin AUDIT IZI tekshiriladi - maosh to'lovi yoki
-// davomat yozuvi bo'lgan o'qituvchi o'chirilmaydi (tarix buzilmasin).
+// Butunlay o'chirishdan oldin MOLIYAVIY iz tekshiriladi - to'lov qilingan yoki
+// summasi noldan farqli maosh yozuvi bo'lgan o'qituvchi o'chirilmaydi
+// (o'tgan oylarning chiqimi va foyda hisoboti buzilmasin).
 import SalaryTransaction from "../../../models/salaryTransaction.model.js";
-import Attendance from "../../../models/attendance.model.js";
 import Group from "../../../models/group.model.js";
 import ArchiveReason from "../../../models/archiveReason.model.js";
 import RefreshToken from "../../../models/refreshToken.model.js";
@@ -849,25 +849,63 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
   if (isTeacher) {
     await assertTeacherHasNoActiveGroup(user, "o'chiring");
 
-    const [salaryCount, txnCount, periodCount, attendanceCount] = await Promise.all([
-      TeacherSalary.countDocuments({ teacher: user._id }),
+    // ─── MATERIALLIK: qator MAVJUDLIGI emas, undagi PUL tekshiriladi ───
+    //
+    // Eski shart qatorlarni shunchaki SANARDI. Lekin oylik cron
+    // (generateMonthlySalary) har oy HAR BIR o'qituvchiga `base`/`group`
+    // qatorini avtomatik ochadi - hech qachon dars bermagan, xato kiritilgan
+    // xodimda ham bir yildan keyin 12 ta BO'SH (0 hisoblangan, 0 to'langan)
+    // qator paydo bo'ladi. Natijada bunday hisobni o'chirishning ILOJI
+    // QOLMAYDI: qorovul hech qachon bo'shamaydigan shartga bog'langan edi.
+    //
+    // Endi faqat HAQIQIY moliyaviy iz to'sadi. Bo'sh qator o'chsa foyda
+    // hisoboti o'zgarmaydi (0 ni ayirish ham, qo'shish ham bir xil).
+    const moneyRow = {
+      $or: [{ expectedAmount: { $ne: 0 } }, { paidAmount: { $gt: 0 } }],
+    };
+    const [salaryRows, txnCount, periodCount] = await Promise.all([
+      TeacherSalary.find(
+        { teacher: user._id, ...moneyRow },
+        { expectedAmount: 1, paidAmount: 1 },
+      ).lean(),
       SalaryTransaction.countDocuments({ teacher: user._id }),
-      TeacherGroupPeriod.countDocuments({ teacher: user._id }),
-      Attendance.countDocuments({ recordedBy: user._id }),
+      // Haqiqiy dars tarixi = kamida bir kun davom etgan (yoki hali ochiq)
+      // davr. Ochilgan kuniyoq yopilgan davr (startDate === endDate) bir
+      // kunlik ham maosh hosil qilmaydi - xato kiritma, tarix emas.
+      TeacherGroupPeriod.countDocuments({
+        teacher: user._id,
+        isDeleted: { $ne: true },
+        $or: [{ endDate: null }, { $expr: { $gt: ["$endDate", "$startDate"] } }],
+      }),
     ]);
 
+    // DAVOMAT ATAYLAB SANALMAYDI. `Attendance.recordedBy` - "kim belgiladi"
+    // degan audit maydoni, moliyaviy iz emas; davomatning O'ZI guruhga
+    // tegishli va joyida qoladi. O'chirishda havola null'ga tushadi
+    // (hardDeleteTeacherData), ya'ni davomat tarixi buzilmaydi.
+
     const traces = [];
-    if (salaryCount) traces.push(`${salaryCount} ta maosh yozuvi`);
+    if (salaryRows.length) traces.push(`${salaryRows.length} ta maosh yozuvi`);
     if (txnCount) traces.push(`${txnCount} ta maosh to'lovi`);
     if (periodCount) traces.push(`${periodCount} ta dars berish davri`);
-    if (attendanceCount) traces.push(`${attendanceCount} ta davomat yozuvi`);
 
     if (traces.length) {
+      // To'lanmagan qoldiq - owner uchun ENG muhim raqam: "Hisobni yopish"
+      // aynan shuni nolga tushiradi.
+      const outstanding = salaryRows.reduce(
+        (sum, r) =>
+          sum + Math.max((r.expectedAmount || 0) - (r.paidAmount || 0), 0),
+        0,
+      );
+      const hint = outstanding
+        ? ` Hozircha ${outstanding.toLocaleString("ru-RU")} so'm to'lanmagan maosh turibdi - ` +
+          `avval "Hisobni yopish" orqali uni nolga tushiring, so'ng arxivlang.`
+        : "";
       throw new ApiError(
         400,
         `Bu o'qituvchida tarix bor (${traces.join(", ")}). Uni butunlay o'chirib bo'lmaydi - ` +
           `o'chirilsa o'tgan oylarning chiqimi yo'qolib, foyda hisoboti yolg'on bo'lardi. ` +
-          `Buning o'rniga ARXIVLANG: tarix saqlanadi, o'qituvchi ro'yxatlardan yo'qoladi.`,
+          `Buning o'rniga ARXIVLANG: tarix saqlanadi, o'qituvchi ro'yxatlardan yo'qoladi.${hint}`,
       );
     }
   }

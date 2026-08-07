@@ -9,6 +9,7 @@ import {
   resolveBranchFromGroup,
 } from "../../../helpers/branchContext.helper.js";
 import { deriveStatus } from "./salaryCompute.helper.js";
+import { localTodayMidnight } from "../../../helpers/attendance.helper.js";
 
 // KPI MUKOFOTI VA JARIMA (kind: "bonus" | "deduction").
 //
@@ -100,6 +101,71 @@ export const create = async (body, currentUser) => {
     createdBy: currentUser?._id || null,
   });
   return doc;
+};
+
+/**
+ * HISOB-KITOBNI YOPISH (ishdan bo'shatish oqimi).
+ *
+ * O'qituvchining BARCHA oylardagi to'lanmagan qoldig'ini bitta `deduction`
+ * qatori bilan nolga tushiradi: "bo'shatildi, hisob-kitob yopildi".
+ *
+ * NEGA JORIY OYGA YOZILADI (o'tgan oylar tahrirlanmaydi):
+ * o'tgan oylarda dars haqiqatan o'tilgan va chiqim o'sha oylarda TO'G'RI
+ * hisoblangan. Ularni orqadan o'chirish tarixni qalbakilashtirish bo'lardi.
+ * Voz kechish esa BUGUNGI qaror - shuning uchun u bugungi oyga manfiy
+ * chiqim (reversal) bo'lib tushadi. Yig'indida balans nol, har oyning
+ * foydasi esa o'z davrida rost qoladi.
+ *
+ * FILIAL FILTRI ATAYLAB YO'Q: maqsad - "yopdim" degandan keyin arxivlash va
+ * o'chirish qorovullari ham bo'shashi. O'sha qorovullar filialga qaramaydi,
+ * shuning uchun bu yerda filtr qo'yilsa, ikki filialda ishlagan xodimda
+ * qoldiq 0 ko'rinib, arxivlash baribir bloklanardi - boshi berk ko'cha.
+ */
+export const settleBalance = async (teacherId, body, currentUser) => {
+  const teacher = await assertTeacher(teacherId);
+
+  if (!body?.reason || !String(body.reason).trim()) {
+    throw new ApiError(400, "Sabab ko'rsatilishi shart");
+  }
+
+  const rows = await TeacherSalary.find(
+    { teacher: teacher._id, isDeleted: { $ne: true } },
+    { expectedAmount: 1, paidAmount: 1 },
+  ).lean();
+
+  // NET balans (har qator alohida emas): mavjud jarima/mukofotlar ham
+  // hisobga olinadi, aks holda ilgari yozilgan jarima ikki marta sanalardi.
+  const totalExpected = rows.reduce((s, r) => s + (r.expectedAmount || 0), 0);
+  const totalPaid = rows.reduce((s, r) => s + (r.paidAmount || 0), 0);
+  const balance = totalExpected - totalPaid;
+
+  if (balance <= 0) {
+    throw new ApiError(
+      400,
+      "Bu o'qituvchida to'lanmagan qoldiq yo'q - hisob allaqachon yopiq.",
+    );
+  }
+
+  // Joriy MAHALLIY oy (Asia/Tashkent). Server UTC bo'lsa ham oy chegarasida
+  // adashmasin - 1-sana 02:00 da UTC hali oldingi oyda turadi.
+  const today = localTodayMidnight();
+  const year = today.getUTCFullYear();
+  const month = today.getUTCMonth() + 1;
+
+  const doc = await create(
+    {
+      teacher: teacher._id,
+      kind: "deduction",
+      amount: balance,
+      year,
+      month,
+      reason: String(body.reason).trim(),
+      branchId: body.branchId ?? null,
+    },
+    currentUser,
+  );
+
+  return { settled: balance, year, month, adjustment: doc };
 };
 
 /**

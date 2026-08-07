@@ -152,6 +152,16 @@ export const hardDeleteTeacherData = async (teacherId, { session } = {}) => {
   await TeacherAbsence.deleteMany({ teacher: id }, opt);
   await Feedback.deleteMany({ author: id }, opt);
 
+  // O'QUVCHI DAVOMATI O'CHIRILMAYDI - u GURUHGA tegishli, o'qituvchiga emas.
+  // Faqat "kim belgiladi" audit havolasi uziladi, aks holda yozuv mavjud
+  // bo'lmagan foydalanuvchiga ishora qilib qolardi. O'quvchining dars tarixi
+  // bir xodim ishdan ketgani uchun yo'qolmasligi kerak.
+  await Attendance.updateMany(
+    { recordedBy: id },
+    { $set: { recordedBy: null } },
+    opt,
+  );
+
   // Group.teachers[] keshidan bu o'qituvchini atomik olib tashlaymiz (davrlar
   // o'chgani uchun kesh aynan qolgan aktiv o'qituvchilarni ko'rsatib turadi).
   await Group.updateMany({ teachers: id }, { $pull: { teachers: id } }, opt);
