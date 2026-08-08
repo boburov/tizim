@@ -75,6 +75,70 @@ export const useImportCommitMutation = ({ onProgress, onSuccess } = {}) =>
     },
   });
 
+// ─────────────────────── JADVAL OQIMI ───────────────────────
+
+/**
+ * 1-BOSQICH: fayldan tahrirlanadigan qoralama.
+ * Server bo'sh maydonlarni to'ldiradi (login, parol, sana, filial) va
+ * har qatorni tekshirib qaytaradi.
+ */
+export const useImportDraftMutation = ({ onProgress, onSuccess } = {}) =>
+  useMutation({
+    mutationFn: ({ importerKey, file }) =>
+      importAPI
+        .draft(importerKey, file, (e) => {
+          if (e.total) onProgress?.(Math.round((e.loaded / e.total) * 100));
+        })
+        .then((r) => r.data.data),
+    onSuccess,
+    onError: async (error) => {
+      toast.error(await readErrorMessage(error, "Faylni o'qib bo'lmadi"));
+    },
+  });
+
+/**
+ * 2-BOSQICH: tahrirlangan qatorlarni tekshirish.
+ *
+ * TOAST KO'RSATILMAYDI - bu jonli tekshiruv, foydalanuvchi yozayotganda
+ * chaqiriladi. Har harfda xato oynasi chiqsa ishlab bo'lmasdi; xatolar
+ * jadvalning O'ZIDA ko'rinadi.
+ */
+export const useImportValidateRowsMutation = ({ onSuccess } = {}) =>
+  useMutation({
+    mutationFn: ({ importerKey, rows }) =>
+      importAPI.validateRows(importerKey, rows).then((r) => r.data.data),
+    onSuccess,
+  });
+
+/** 3-BOSQICH: yaratish. Javob 202 bo'lsa - navbatga qo'yildi (jobId). */
+export const useImportCreateMutation = ({ onSuccess } = {}) =>
+  useMutation({
+    mutationFn: ({ importerKey, rows, fileName }) =>
+      importAPI.create(importerKey, rows, fileName).then((r) => r.data.data),
+    onSuccess,
+    onError: async (error) => {
+      toast.error(await readErrorMessage(error, "Yaratib bo'lmadi"));
+    },
+  });
+
+/**
+ * Fondagi importni kuzatadi.
+ *
+ * `enabled` faqat jobId bo'lganda. Interval ish TUGAGACH o'chadi -
+ * aks holda modal yopilmaguncha har soniyada so'rov ketaverardi.
+ */
+export const useImportJobQuery = (jobId, options = {}) =>
+  useQuery({
+    queryKey: qk.imports.job(jobId),
+    queryFn: () => importAPI.job(jobId).then((r) => r.data.data),
+    enabled: Boolean(jobId),
+    refetchInterval: (query) => {
+      const s = query.state.data?.status;
+      return s === "completed" || s === "failed" ? false : 1500;
+    },
+    ...options,
+  });
+
 /** O'tmagan qatorlarni Excel qilib yuklab olish. */
 export const useImportErrorReportMutation = () =>
   useMutation({

@@ -30,4 +30,17 @@ export const importAPI = {
 
   errorReport: (key, rows) =>
     http.post(ENDPOINTS.imports.errorReport(key), { rows }, { responseType: "blob" }),
+
+  // ── JADVAL OQIMI ──
+  // draft faylni yuboradi, qolgan ikkisi JSON qatorlarni.
+  draft: (key, file, onUploadProgress) =>
+    postFile(ENDPOINTS.imports.draft(key), file, onUploadProgress),
+
+  validateRows: (key, rows) =>
+    http.post(ENDPOINTS.imports.validateRows(key), { rows }),
+
+  create: (key, rows, fileName) =>
+    http.post(ENDPOINTS.imports.create(key), { rows, fileName }),
+
+  job: (jobId) => http.get(ENDPOINTS.imports.job(jobId)),
 };

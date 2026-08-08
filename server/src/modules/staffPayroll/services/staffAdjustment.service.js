@@ -1,5 +1,7 @@
 import User from "../../../models/user.model.js";
-import StaffPayrollAdjustment from "../../../models/staffPayrollAdjustment.model.js";
+import StaffPayrollAdjustment, {
+  STAFF_OPENING_KINDS,
+} from "../../../models/staffPayrollAdjustment.model.js";
 import StaffPayroll from "../../../models/staffPayroll.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -88,6 +90,20 @@ export const remove = async (id, currentUser) => {
     isDeleted: { $ne: true },
   });
   if (!doc) throw new ApiError(404, "Yozuv topilmadi");
+
+  // BOSHLANG'ICH QOLDIQ O'CHIRILMAYDI - u bir marta kiritiladi va
+  // o'zgartirilmaydi (qarang: models/openingBalance.model.js).
+  //
+  // Bu shunchaki qoida emas, IDEMPOTENTLIK sharti: o'chirish ruxsat
+  // etilsa, "o'chirib qayta import qilish" yo'li ochilardi va o'sha
+  // faylni ikkinchi marta yuklash pulni ikki baravar yozib qo'yardi.
+  // Xato bo'lsa - tuzatuvchi bonus/jarima qatori yoziladi, izi qoladi.
+  if (STAFF_OPENING_KINDS.includes(doc.kind)) {
+    throw new ApiError(
+      400,
+      "Boshlang'ich qoldiqni o'chirib bo'lmaydi. Tuzatish uchun bonus yoki jarima qatori qo'shing",
+    );
+  }
 
   const target = await StaffPayroll.findOne({
     employee: doc.employee,

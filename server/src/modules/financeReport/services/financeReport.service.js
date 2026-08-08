@@ -68,14 +68,26 @@ const sumByMethod = async (start, end) => {
 // va alohida badDebt sifatida jamlanadi (TeacherSalary'da writtenOff yo'q → 0).
 const billedAndOutstanding = async (Model, year, month) => {
   const isWrittenOff = { $eq: [{ $ifNull: ["$writtenOff", false] }, true] };
+  // BOSHLANG'ICH QOLDIQ (import orqali kiritilgan, tizimdan oldingi hisob).
+  //
+  // billed'dan CHIQARILADI: tizim bu summani hech qachon hisoblamagan,
+  //   uni "o'sha oy hisoblangan daromad" deb ko'rsatish hisobotni yolg'on
+  //   qilardi (o'sha oyda markaz bu tizimda umuman ishlamagan bo'lishi mumkin).
+  // outstanding'ga KIRADI: bu haqiqiy, undiriladigan qarz - qarzdorlar
+  //   ro'yxatidan tushib qolsa, hech kim uni undirmasdi.
+  // paid'dan ham chiqariladi: unga qarshi kelgan pul REAL to'lov sifatida
+  //   PaymentTransaction'da alohida sanaladi - ikki marta hisoblanmasin.
+  const isOpening = { $eq: [{ $ifNull: ["$isOpening", false] }, true] };
+  const excludeFromBilled = { $or: [isWrittenOff, isOpening] };
+
   const [row] = await Model.aggregate([
     ...branchMatchStage(),
     { $match: { year: Number(year), month: Number(month) } },
     {
       $group: {
         _id: null,
-        billed: { $sum: { $cond: [isWrittenOff, 0, "$expectedAmount"] } },
-        paid: { $sum: { $cond: [isWrittenOff, 0, "$paidAmount"] } },
+        billed: { $sum: { $cond: [excludeFromBilled, 0, "$expectedAmount"] } },
+        paid: { $sum: { $cond: [excludeFromBilled, 0, "$paidAmount"] } },
         outstanding: {
           $sum: {
             $cond: [
@@ -90,6 +102,17 @@ const billedAndOutstanding = async (Model, year, month) => {
             $cond: [isWrittenOff, { $ifNull: ["$writeOffAmount", 0] }, 0],
           },
         },
+        // Ochiq ko'rsatiladi: "qoldiqning qancha qismi eski (boshlang'ich)
+        // qarz?" - aks holda outstanding va billed farqi tushunarsiz bo'lardi.
+        openingOutstanding: {
+          $sum: {
+            $cond: [
+              { $and: [isOpening, { $not: isWrittenOff }] },
+              { $max: [{ $subtract: ["$expectedAmount", "$paidAmount"] }, 0] },
+              0,
+            ],
+          },
+        },
       },
     },
   ]);
@@ -98,6 +121,7 @@ const billedAndOutstanding = async (Model, year, month) => {
     paid: row?.paid || 0,
     outstanding: row?.outstanding || 0,
     badDebt: row?.badDebt || 0,
+    openingOutstanding: row?.openingOutstanding || 0,
   };
 };
 

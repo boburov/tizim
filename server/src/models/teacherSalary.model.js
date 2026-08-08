@@ -15,7 +15,15 @@ import {
 //               sabab u guruh qatoriga qo'shilmaydi (3 guruh → 3x2mln bo'lardi).
 //   bonus     - KPI/mukofot (qo'lda, tasdiqdan o'tadi). group = null yoki guruh.
 //   deduction - jarima/ushlab qolish. expectedAmount MANFIY bo'ladi.
-export const SALARY_KINDS = ["group", "base", "bonus", "deduction"];
+//   opening   - BOSHLANG'ICH QOLDIQ (tizimdan oldingi hisob-kitob). Import
+//               orqali bir marta yaratiladi, expectedAmount ISHORALI:
+//               musbat = biz qarzmiz, manfiy = o'qituvchi bizga qarz.
+//
+//               GURUH MAJBURIY - `deduction`dan farqli o'laroq. Sababi
+//               to'lov yo'li: salaryTransaction.create → validateSalaryPayment
+//               guruhni talab qiladi (assertGroupActive). Guruhsiz qator
+//               ekranda ko'rinardi-yu, uni HECH QACHON to'lab bo'lmasdi.
+export const SALARY_KINDS = ["group", "base", "bonus", "deduction", "opening"];
 
 const teacherSalarySchema = new mongoose.Schema(
   {
@@ -108,6 +116,18 @@ const teacherSalarySchema = new mongoose.Schema(
     // min: 0 QO'YILMAGAN.
     expectedAmount: { type: Number, required: true, default: 0 },
 
+    // BOSHLANG'ICH QOLDIQ - tizimdan OLDINGI hisob-kitob (import paytida
+    // OpeningBalance'dan yaratiladi). Har doim kind="opening", ishorasi
+    // expectedAmount'da:
+    //   expectedAmount > 0 → BIZ o'qituvchiga qarzmiz (to'lanadi)
+    //   expectedAmount < 0 → U bizga qarz (keyingi oylikdan ayriladi)
+    //
+    // recalc() bu qatorlarga TEGMAYDI (u kind!=="group" da darhol
+    // qaytadi) va qator isLocked=true bilan yaratiladi. Bayroq esa
+    // HISOBOT uchun: hisoblangan (billed) maoshdan chiqarilishi shart -
+    // bu o'tgan davr xarajati, joriy oyning emas.
+    isOpening: { type: Boolean, default: false, index: true },
+
     // To'langan (SalaryTransaction yig'indisidan keshlanadi)
     paidAmount: { type: Number, default: 0 },
     // expectedAmount keyinchalik (retro chegirma/fee o'zgarishi) kamayib,
@@ -162,6 +182,11 @@ const teacherSalarySchema = new mongoose.Schema(
 teacherSalarySchema.pre("validate", function (next) {
   if (this.kind === "group" && !this.group) {
     return next(new Error("Guruh qatori uchun guruh ko'rsatilishi shart"));
+  }
+  if (this.kind === "opening" && !this.group) {
+    return next(
+      new Error("Boshlang'ich qoldiq qatori uchun guruh ko'rsatilishi shart"),
+    );
   }
   if (this.kind === "base" && this.group) {
     return next(new Error("Fiksa (base) qatori guruhga bog'lanmaydi"));

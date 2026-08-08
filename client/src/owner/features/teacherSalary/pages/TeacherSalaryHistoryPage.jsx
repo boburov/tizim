@@ -6,6 +6,7 @@ import { formatMoney } from "@/shared/utils/formatMoney";
 import { formatDateUz } from "@/shared/utils/formatDate";
 import { MONTH_LABELS } from "@/shared/constants/calendar";
 import useTeacherSalaryHistoryQuery from "../hooks/useTeacherSalaryHistoryQuery";
+import TeacherSalaryBalanceCard from "../components/TeacherSalaryBalanceCard";
 import { statusMeta } from "../utils/status";
 
 const monthLabel = (m) => MONTH_LABELS[m - 1] || m;
@@ -31,6 +32,11 @@ const TeacherSalaryHistoryPage = () => {
         </div>
       </header>
 
+      {/* JORIY HOLAT - ro'yxatdan OLDIN va oylik yozuvlar bo'lmasa ham
+          ko'rinadi: yangi o'qituvchining birinchi oyi hali generatsiya
+          qilinmagan bo'lsa ham stavkasi va bugungacha ishlagani bor. */}
+      <TeacherSalaryBalanceCard teacherId={teacherId} />
+
       {isLoading ? (
         <div className="p-8 text-center text-muted-foreground">
           Yuklanmoqda...
@@ -42,23 +48,30 @@ const TeacherSalaryHistoryPage = () => {
         />
       ) : (
         <>
+          {/* UMUMIY TARIX - yuqoridagi kartochkadan FARQLI: u "hozir
+              qanday" ni, bu esa "boshidan beri qancha" ni ko'rsatadi. */}
           {summary && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <SummaryCard label="Oylar" value={`${summary.months} ta`} />
-              <SummaryCard
-                label="Kutilgan"
-                value={formatMoney(summary.totalExpected)}
-              />
-              <SummaryCard
-                label="To'langan"
-                value={formatMoney(summary.totalPaid)}
-                tone="emerald"
-              />
-              <SummaryCard
-                label="Qoldiq"
-                value={formatMoney(summary.totalRemaining)}
-                tone="rose"
-              />
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Umumiy tarix
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <SummaryCard label="Oylar" value={`${summary.months} ta`} />
+                <SummaryCard
+                  label="Kutilgan"
+                  value={formatMoney(summary.totalExpected)}
+                />
+                <SummaryCard
+                  label="To'langan"
+                  value={formatMoney(summary.totalPaid)}
+                  tone="emerald"
+                />
+                <SummaryCard
+                  label="Qoldiq"
+                  value={formatMoney(summary.totalRemaining)}
+                  tone="rose"
+                />
+              </div>
             </div>
           )}
 

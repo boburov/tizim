@@ -7,7 +7,20 @@ const userSchema = new mongoose.Schema(
     firstName: { type: String, trim: true, required: true },
     lastName: { type: String, trim: true, required: true },
     username: { type: String, trim: true, unique: true, required: true, lowercase: true },
-    phone: { type: String, trim: true, unique: true, sparse: true },
+    // TELEFON TAKRORLANISHI RUXSAT ETILADI (unique YO'Q - ataylab).
+    //
+    // Sabab lidlardagi bilan bir xil (qarang: leads.service.js create):
+    // bitta raqam - bitta odam EMAS. Ona bitta raqamdan ikki farzandini
+    // yozdiradi, aka-uka bitta telefondan foydalanadi, o'qituvchi o'z
+    // farzandini shu markazga beradi. Eski unique indeks bu holatlarda
+    // resepshinni BLOKLARDI va u odamni umuman kiritmasdan qo'yardi -
+    // ya'ni qoida ma'lumotni tozalash o'rniga yo'qotardi.
+    //
+    // Raqam bo'yicha qidiruv (bot bog'lanishi, qidiruv paneli) uchun oddiy
+    // indeks qoladi. Kirish LOGIN bo'yicha - telefon hech qachon
+    // autentifikatsiya kaliti bo'lmagan, shuning uchun takrorlanish
+    // xavfsizlikka ta'sir qilmaydi.
+    phone: { type: String, trim: true, index: true },
     // DIQQAT: loyiha talabiga ko'ra parol OCHIQ MATNDA saqlanadi (hash YO'Q).
     // Maydon nomi tarixiy sabablarga ko'ra passwordHash bo'lib qoldi, lekin
     // ichida ochiq parol turadi. select:false - oddiy so'rovlarda chiqmaydi,

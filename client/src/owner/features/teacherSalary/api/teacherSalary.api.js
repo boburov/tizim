@@ -8,6 +8,8 @@ export const teacherSalaryAPI = {
   salary: (id) => http.get(ENDPOINTS.teacherSalary.salaryById(id)),
   salaryHistory: (teacherId) =>
     http.get(ENDPOINTS.teacherSalary.salaryHistory(teacherId)),
+  salaryBalance: (teacherId) =>
+    http.get(ENDPOINTS.teacherSalary.salaryBalance(teacherId)),
   obligations: (params) => http.get(ENDPOINTS.teacherSalary.obligations, { params }),
 
   // To'lovlar (chiqim)

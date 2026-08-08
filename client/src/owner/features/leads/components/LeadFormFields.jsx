@@ -4,6 +4,7 @@ import SelectField from "@/shared/components/ui/select/SelectField";
 import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import { LEAD_STATUS_OPTIONS } from "@/shared/constants/leadStatus";
 import { PERMISSIONS } from "@/shared/constants/permissions";
+import { NO_AUTOFILL } from "@/shared/constants/form";
 import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
 import useLeadOptionsQuery from "../hooks/useLeadOptionsQuery";
 import LeadOptionCreateModal from "./LeadOptionCreateModal";
@@ -61,6 +62,7 @@ const LeadFormFields = ({ obj, disabled = false, errors = {} }) => {
             required
             error={!!errors.firstName}
             disabled={disabled}
+            {...NO_AUTOFILL}
           />
           <FieldError>{errors.firstName}</FieldError>
         </div>
@@ -70,6 +72,7 @@ const LeadFormFields = ({ obj, disabled = false, errors = {} }) => {
           value={obj.lastName}
           onChange={(e) => obj.setField("lastName", e.target.value)}
           disabled={disabled}
+          {...NO_AUTOFILL}
         />
       </div>
 
@@ -89,6 +92,7 @@ const LeadFormFields = ({ obj, disabled = false, errors = {} }) => {
             required
             error={!!errors.phone}
             disabled={disabled}
+            {...NO_AUTOFILL}
           />
           <FieldError>{errors.phone}</FieldError>
         </div>
@@ -101,6 +105,7 @@ const LeadFormFields = ({ obj, disabled = false, errors = {} }) => {
           error={bothPhonesSame || !!errors.parentPhone}
           onChange={(e) => obj.setField("parentPhone", e.target.value)}
           disabled={disabled}
+          {...NO_AUTOFILL}
         />
       </div>
 

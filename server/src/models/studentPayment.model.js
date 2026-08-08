@@ -58,13 +58,41 @@ const studentPaymentSchema = new mongoose.Schema(
     writeOffAmount: { type: Number, default: 0 },
     writeOffAt: { type: Date, default: null },
     recalculatedAt: { type: Date, default: null },
+
+    // BOSHLANG'ICH QARZ - tizim ishga tushishidan OLDINGI qarz (import
+    // paytida OpeningBalance'dan yaratiladi). Oddiy oylik plandan uch
+    // jihati bilan farq qiladi:
+    //
+    //  1) QAYTA HISOBLANMAYDI. expectedAmount qo'lda kiritilgan summa -
+    //     uni fee/proratsiya/chegirmadan keltirib chiqarib bo'lmaydi
+    //     (o'sha davrda tizim umuman yo'q edi). recalc() writtenOff bilan
+    //     bir qatorda buni ham chetlab o'tadi - aks holda kunlik accrual
+    //     job qarzni jimgina NOLGA tushirib yuborardi.
+    //
+    //  2) HISOBLANGAN (billed) DAROMADGA KIRMAYDI. Bu pulni tizim hech
+    //     qachon hisoblamagan, shuning uchun uni o'tgan oy daromadi deb
+    //     ko'rsatish hisobotni yolg'on qilardi. QOLDIQ (outstanding) ga
+    //     esa KIRADI - bu haqiqiy, undiriladigan qarz.
+    //     Qarang: financeReport.service.js -> billedAndOutstanding.
+    //
+    //  3) UNIQUE INDEKSDA QATNASHADI. Boshlang'ich qarz oddiy oylik plan
+    //     bilan BIR OYDA yonma-yon tura oladi (masalan o'quvchi may oyida
+    //     qo'shilgan, lekin aprelgacha bo'lgan qarzi ham bor).
+    isOpening: { type: Boolean, default: false, index: true },
   },
   { timestamps: true },
 );
 
-// O'quvchi + guruh + oy uchun bitta yozuv
+// O'quvchi + guruh + oy uchun bitta yozuv (boshlang'ich qarz alohida).
+//
+// DIQQAT: `isOpening` kalitga KIRITILGAN. Eski indeks (usiz) boot paytida
+// o'chiriladi - qarang config/db.js -> migrateStudentPaymentOpeningIndex.
+// Indeks almashtirilishidan OLDIN barcha eski hujjatlarga isOpening=false
+// yoziladi: aks holda `undefined` (null deb indekslanadi) va `false`
+// AYRIM kalit bo'lib, bir oyga IKKITA plan yozilib qolardi - ya'ni
+// o'quvchi ikki marta hisoblanardi.
 studentPaymentSchema.index(
-  { student: 1, group: 1, year: 1, month: 1 },
+  { student: 1, group: 1, year: 1, month: 1, isOpening: 1 },
   { unique: true },
 );
 // Hisobotlar uchun

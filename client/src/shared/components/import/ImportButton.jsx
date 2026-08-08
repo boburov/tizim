@@ -4,6 +4,7 @@ import { Upload } from "lucide-react";
 import Button from "@/shared/components/ui/button/Button";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import ImportModal from "./ImportModal";
+import ImportGridModal from "./ImportGridModal";
 
 // Hooks
 import useModal from "@/shared/hooks/useModal";
@@ -30,8 +31,13 @@ const ImportButton = ({
   const { openModal } = useModal(modalName);
   const { data: importers } = useImportersQuery();
 
-  const allowed = (importers || []).some((i) => i.key === importerKey);
-  if (!allowed) return null;
+  const importer = (importers || []).find((i) => i.key === importerKey);
+  if (!importer) return null;
+
+  // JADVAL REJIMI serverdan keladi (importer.gridEnabled), client'da
+  // qattiq yozilmaydi. Shunda yangi importer qo'shilganda bu faylga
+  // qaytib kelish shart emas - eksport/import reyestri naqshi bilan bir xil.
+  const grid = Boolean(importer.gridEnabled);
 
   return (
     <>
@@ -43,10 +49,14 @@ const ImportButton = ({
       <ModalWrapper
         name={modalName}
         title={title}
-        description="Ma'lumot avval tekshiriladi, keyin siz tasdiqlaganingizda saqlanadi"
-        className="max-w-5xl"
+        description={
+          grid
+            ? "Fayl yuklanadi, ma'lumotni jadvalda tahrirlaysiz, keyin yaratasiz"
+            : "Ma'lumot avval tekshiriladi, keyin siz tasdiqlaganingizda saqlanadi"
+        }
+        className={grid ? "max-w-[95vw]" : "max-w-5xl"}
       >
-        <ImportModal />
+        {grid ? <ImportGridModal /> : <ImportModal />}
       </ModalWrapper>
     </>
   );

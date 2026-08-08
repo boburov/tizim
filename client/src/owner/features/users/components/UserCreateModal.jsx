@@ -21,6 +21,7 @@ import {
 import { todayInput } from "@/shared/utils/formatDate";
 import { ROLES, ROLE_LABELS } from "@/shared/constants/roles";
 import { PERMISSIONS } from "@/shared/constants/permissions";
+import { NO_AUTOFILL, NO_AUTOFILL_FORM } from "@/shared/constants/form";
 
 const ROLE_OPTIONS = [
   { value: ROLES.STUDENT, label: ROLE_LABELS.student },
@@ -101,13 +102,17 @@ const UserCreateModal = ({
   const usernameShort =
     obj.username.trim().length > 0 && obj.username.trim().length < 3;
 
-  // TELEFON/LOGIN BANDLIGI - yozayotgan paytda tekshiriladi.
+  // LOGIN BANDLIGI - yozayotgan paytda tekshiriladi.
   //
   // Ilgari bu faqat SO'NGGI qadamda, server 409 qaytarganda bilinardi:
   // o'qituvchida bu ikkinchi qadam (maosh) ham to'ldirilgandan keyin
   // degani edi va odam hammasini boshidan kiritishga majbur bo'lardi.
-  const { phoneTaken, usernameTaken, isChecking, isStale } =
-    useAvailabilityQuery({ phone: obj.phone, username: obj.username });
+  //
+  // TELEFON tekshirilmaydi - bir raqamdan bir nechta odam foydalanishi
+  // mumkin (ona ikki farzandini yozdiradi), server ham bloklamaydi.
+  const { usernameTaken, isChecking, isStale } = useAvailabilityQuery({
+    username: obj.username,
+  });
 
   // Tekshiruv HALI TUGAMAGAN bo'lsa "band" deb ko'rsatmaymiz, lekin
   // keyingi qadamga ham o'tkazmaymiz - aks holda javob kelguncha bosib
@@ -126,7 +131,6 @@ const UserCreateModal = ({
     (obj.role !== ROLES.TEACHER || obj.hiredAt) &&
     (obj.role !== ROLES.STUDENT || obj.enrolledAt) &&
     (!needsBranch || obj.homeBranchId) &&
-    !phoneTaken &&
     !usernameTaken;
 
   // Kiritilgan maosh stavkasi yaroqlimi. Bo'sh bo'lishi ham MUMKIN
@@ -202,7 +206,7 @@ const UserCreateModal = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-3" {...NO_AUTOFILL_FORM}>
       {/* Qadam indikatori - faqat o'qituvchida (o'quvchida bitta qadam). */}
       {isTeacher && (
         <div className="flex items-center gap-2 text-xs">
@@ -238,6 +242,7 @@ const UserCreateModal = ({
               onChange={(e) => obj.setField("firstName", e.target.value)}
               required
               disabled={isLoading}
+              {...NO_AUTOFILL}
             />
             <InputField
               name="lastName"
@@ -246,6 +251,7 @@ const UserCreateModal = ({
               onChange={(e) => obj.setField("lastName", e.target.value)}
               required
               disabled={isLoading}
+              {...NO_AUTOFILL}
             />
           </div>
           <div>
@@ -258,6 +264,7 @@ const UserCreateModal = ({
               error={usernameShort || usernameTaken}
               required
               disabled={isLoading}
+              {...NO_AUTOFILL}
             />
             {usernameTaken && (
               <p className="mt-1 text-xs text-red-600 dark:text-red-300">
@@ -265,22 +272,17 @@ const UserCreateModal = ({
               </p>
             )}
           </div>
-          <div>
-            <InputField
-              type="tel"
-              name="phone"
-              label="Telefon (ixtiyoriy)"
-              value={obj.phone}
-              onChange={(e) => obj.setField("phone", e.target.value)}
-              error={phoneTaken}
-              disabled={isLoading}
-            />
-            {phoneTaken && (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-300">
-                Bu telefon raqam allaqachon ro&apos;yxatdan o&apos;tgan
-              </p>
-            )}
-          </div>
+          {/* TELEFON TAKRORLANISHI MUMKIN: bir oila bitta raqamdan
+              foydalanadi. "Band" tekshiruvi ataylab yo'q. */}
+          <InputField
+            type="tel"
+            name="phone"
+            label="Telefon (ixtiyoriy)"
+            value={obj.phone}
+            onChange={(e) => obj.setField("phone", e.target.value)}
+            disabled={isLoading}
+            {...NO_AUTOFILL}
+          />
           <InputField
             type="password"
             name="password"
@@ -289,6 +291,11 @@ const UserCreateModal = ({
             onChange={(e) => obj.setField("password", e.target.value)}
             required
             disabled={isLoading}
+            {...NO_AUTOFILL}
+            // Bu YANGI odamning paroli - brauzer bu yerga OPERATORNING
+            // saqlangan parolini tiqib qo'ymasligi kerak. "new-password"
+            // aynan shu holat uchun va "off" dan ko'ra ishonchli.
+            autoComplete="new-password"
           />
           <SelectField
             label="Rol"

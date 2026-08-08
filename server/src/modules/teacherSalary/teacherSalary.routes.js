@@ -34,6 +34,7 @@ import adjustmentRemove from "./handlers/adjustment.remove.handler.js";
 import salaryList from "./handlers/salary.list.handler.js";
 import salaryGetById from "./handlers/salary.getById.handler.js";
 import salaryHistoryByTeacher from "./handlers/salary.historyByTeacher.handler.js";
+import salaryBalanceByTeacher from "./handlers/salary.balanceByTeacher.handler.js";
 import salaryMyFinance from "./handlers/salary.myFinance.handler.js";
 import obligations from "./handlers/obligations.handler.js";
 import transactionCreate from "./handlers/transaction.create.handler.js";
@@ -61,6 +62,16 @@ router.get(
   requirePermission(PERMISSIONS.SALARY_READ),
   validate(salaryTeacherIdSchema),
   salaryHistoryByTeacher,
+);
+// Joriy holat (fiksa stavka, jami daromad, oy boshigacha va bu oygi qoldiq).
+// "/salaries/:id" dan OLDIN turishi shart emas (yo'l aniq boshqacha), lekin
+// by-teacher juftligi bilan yonma-yon tursin.
+router.get(
+  "/salaries/by-teacher/:teacherId/balance",
+  requireAuth,
+  requirePermission(PERMISSIONS.SALARY_READ),
+  validate(salaryTeacherIdSchema),
+  salaryBalanceByTeacher,
 );
 router.get(
   "/salaries/:id",

@@ -105,9 +105,8 @@ export const createWithDirector = async (body, currentUser) => {
   if (director.phone && !dirPhone) {
     throw new ApiError(400, "Direktor telefon raqami noto'g'ri");
   }
-  if (dirPhone && (await User.findOne({ phone: dirPhone }))) {
-    throw new ApiError(409, "Bu telefon raqam allaqachon ro'yxatdan o'tgan");
-  }
+  // Telefon bandligi TEKSHIRILMAYDI - takrorlanish ruxsat etilgan
+  // (qarang: user.model.js phone izohi).
 
   // Rol mavjud va biriktirsa bo'ladimi - bu ham oldindan.
   const roleValue = director.role || "director";

@@ -248,13 +248,10 @@ export const updateProfile = async (currentUser, body) => {
   const user = await User.findById(currentUser._id);
   if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
 
+  // Telefon takrorlanishi BLOKLANMAYDI (qarang: user.model.js phone izohi).
   if (body.phone !== undefined) {
     const phone = body.phone ? normalizePhone(body.phone) : null;
     if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
-    if (phone && phone !== user.phone) {
-      const taken = await User.findOne({ phone, _id: { $ne: user._id } });
-      if (taken) throw new ApiError(409, "Bu telefon raqam band");
-    }
     user.phone = phone || undefined;
   }
 
@@ -292,15 +289,8 @@ export const registerUser = async (body, scope = {}) => {
 
   const username = String(body.username).toLowerCase().trim();
 
-  // Telefon takrorlanmasligi kerak: shu raqam allaqachon biror
-  // foydalanuvchida bo'lsa (arxivlangan/o'chirilgan bo'lsa ham), rad etamiz.
-  if (phone) {
-    const phoneTaken = await User.findOne({ phone });
-    if (phoneTaken) {
-      throw new ApiError(409, "Bu telefon raqam allaqachon ro'yxatdan o'tgan");
-    }
-  }
-
+  // TELEFON TAKRORLANISHI RUXSAT ETILADI (qarang: user.model.js phone izohi).
+  // Login (username) esa hamon yagona - u autentifikatsiya kaliti.
   const usernameTaken = await User.findOne({ username });
   if (usernameTaken) {
     throw new ApiError(409, "Bunday login (username) allaqachon mavjud");

@@ -76,6 +76,20 @@ const staffPayrollSchema = new mongoose.Schema(
     autoKpiTotal: { type: Number, default: 0 },
     manualBonusTotal: { type: Number, default: 0 },
     penaltyTotal: { type: Number, default: 0 },
+
+    // --- BOSHLANG'ICH QOLDIQ (tizim ishga tushishidagi eski hisob-kitob) ---
+    //
+    // JARIMADAN FARQI: jarima oylikdan katta bo'lsa ortiqchasi YO'QOLADI
+    // (yuqoridagi qoida - ataylab). Boshlang'ich qarzda bunday qilib
+    // bo'lmaydi: u HAQIQIY pul va uni yo'qotish balansni buzadi.
+    // Shuning uchun bu yerda uch raqam alohida turadi va ushlab
+    // qolinmagan qismi keyingi oyga KO'CHIRILADI.
+    openingCreditTotal: { type: Number, default: 0 }, // biz qarzmiz → qo'shiladi
+    openingDebtTotal: { type: Number, default: 0 }, // xodim qarz → ayriladi
+    // Shu oyda HAQIQATDA ushlab qolingan qism. Ko'chirish aynan shundan
+    // hisoblanadi: qoldiq = openingDebtTotal - openingDebtApplied.
+    openingDebtApplied: { type: Number, default: 0 },
+
     // Manfiy chiqmaydi: jarima oylikdan katta bo'lsa 0 (qarz keyingi oyga
     // ko'chirilmaydi - bu ataylab, aks holda to'lov mantig'i murakkablashadi
     // va xodim "manfiy maosh" bilan qolardi).

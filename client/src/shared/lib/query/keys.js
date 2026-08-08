@@ -261,6 +261,8 @@ export const qk = Object.freeze({
     all: () => ["imports"],
     importers: () => ["imports", "importers"],
     history: (params) => ["imports", "history", params],
+    // Fondagi importning holati - jarayon tugagunicha so'rab turiladi.
+    job: (jobId) => ["imports", "job", jobId],
   },
 
   // Finance (Moliya)
@@ -316,6 +318,9 @@ export const qk = Object.freeze({
     salaries: (params) => ["teacherSalary", "salaries", params],
     salary: (id) => ["teacherSalary", "salary", id],
     teacherHistory: (teacherId) => ["teacherSalary", "teacherHistory", teacherId],
+    // Joriy maosh holati (fiksa, jami daromad, qoldiqlar). `teacherSalary`
+    // prefiksi ostida - to'lov/stavka mutatsiyasi buni ham yangilaydi.
+    teacherBalance: (teacherId) => ["teacherSalary", "teacherBalance", teacherId],
     myFinance: () => ["teacherSalary", "me", "finance"],
     obligations: (params) => ["teacherSalary", "obligations", params],
     report: (params) => ["teacherSalary", "report", params],

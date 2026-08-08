@@ -117,6 +117,32 @@ const env = Object.freeze({
     positiveNumber(process.env.MAX_UPLOAD_MB, 5) * 1024 * 1024,
   ),
 
+  // --- REDIS (ommaviy import navbati) ---
+  //
+  // Bo'sh bo'lsa navbat O'CHIQ bo'ladi va ommaviy import SINXRON
+  // bajariladi (qarang: config/redis.js). `need()` ATAYLAB
+  // ishlatilmagan: Redis'siz o'rnatmalar (lokal dev, kichik markaz)
+  // upgrade'dan keyin ishga tushmay qolmasligi kerak.
+  //
+  // Sinxron rejimda qatorlar soni QATTIQ cheklanadi (IMPORT_SYNC_MAX_ROWS):
+  // 500 qatorli import bitta HTTP so'rovda o'n minglab DB amali qiladi va
+  // proxy timeout'iga uriladi - foydalanuvchi esa import muvaffaqiyatsiz
+  // deb o'ylab, faylni QAYTA yuklaydi. Aynan shu ikkinchi urinish pulni
+  // ikki marta yozishga eng katta xavf edi.
+  REDIS_URL: process.env.REDIS_URL || "",
+  // Bir nechta markaz bitta Redis'ni bo'lishsa - kalitlar aralashmasligi uchun.
+  REDIS_PREFIX: process.env.REDIS_PREFIX || process.env.TENANT_ID || "lc",
+  // Navbatsiz (sinxron) rejimda bir faylda ruxsat etilgan maksimal qator.
+  IMPORT_SYNC_MAX_ROWS: Math.round(
+    positiveNumber(process.env.IMPORT_SYNC_MAX_ROWS, 50),
+  ),
+  // Bir vaqtda ishlaydigan import worker'lari. 1 - ataylab: importlar
+  // bir-biriga parallel ishlasa bir xil loginni ikki qatorga berish
+  // ehtimoli oshadi va DB yuki sakraydi.
+  IMPORT_QUEUE_CONCURRENCY: Math.round(
+    positiveNumber(process.env.IMPORT_QUEUE_CONCURRENCY, 1),
+  ),
+
   // Fayllar diskda shu papkada saqlanadi (jarayon ishlaydigan papkaga
   // nisbatan). Docker/deploy'da bu papka VOLUME bo'lishi kerak - aks holda
   // konteyner qayta qurilganda barcha biriktirmalar yo'qoladi.

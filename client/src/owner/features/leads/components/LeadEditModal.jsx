@@ -4,6 +4,7 @@ import { extractApiErrorMessage } from "@/shared/utils/apiError";
 import LeadFormFields from "./LeadFormFields";
 import { useLeadUpdateMutation } from "../hooks/useLeadMutations";
 import { validateLead, hasErrors } from "../utils/leadValidation";
+import { NO_AUTOFILL_FORM } from "@/shared/constants/form";
 
 const toDateInput = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 
@@ -70,7 +71,12 @@ const LeadEditModal = ({ lead, close, isLoading, setIsLoading }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-3">
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      className="space-y-3"
+      {...NO_AUTOFILL_FORM}
+    >
       <LeadFormFields obj={obj} disabled={isLoading} errors={errors} />
 
       {ui.errorMsg && (

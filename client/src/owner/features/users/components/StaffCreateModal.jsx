@@ -17,6 +17,7 @@ import BranchCreateModal from "@/owner/features/branches/components/modals/Branc
 // Constants
 import { ROLES } from "@/shared/constants/roles";
 import { PERMISSIONS } from "@/shared/constants/permissions";
+import { NO_AUTOFILL, NO_AUTOFILL_FORM } from "@/shared/constants/form";
 
 const initialState = (homeBranchId) => ({
   firstName: "",
@@ -85,9 +86,11 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
   const usernameShort =
     obj.username.trim().length > 0 && obj.username.trim().length < 3;
 
-  // Telefon/login bandligi - saqlashdan OLDIN, maydonning o'zida.
-  const { phoneTaken, usernameTaken, isChecking, isStale } =
-    useAvailabilityQuery({ phone: obj.phone, username: obj.username });
+  // Login bandligi - saqlashdan OLDIN, maydonning o'zida. Telefon
+  // tekshirilmaydi: takrorlanish ruxsat etilgan (server ham bloklamaydi).
+  const { usernameTaken, isChecking, isStale } = useAvailabilityQuery({
+    username: obj.username,
+  });
   const checkPending = isChecking || isStale;
 
   const isValid =
@@ -97,7 +100,6 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
     obj.password.length >= 6 &&
     obj.role &&
     obj.homeBranchId &&
-    !phoneTaken &&
     !usernameTaken;
 
   const handleSubmit = (e) => {
@@ -116,7 +118,7 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-3" {...NO_AUTOFILL_FORM}>
       <div className="grid grid-cols-2 gap-3">
         <InputField
           name="firstName"
@@ -125,6 +127,7 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
           onChange={(e) => obj.setField("firstName", e.target.value)}
           required
           disabled={isLoading}
+          {...NO_AUTOFILL}
         />
         <InputField
           name="lastName"
@@ -133,25 +136,21 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
           onChange={(e) => obj.setField("lastName", e.target.value)}
           required
           disabled={isLoading}
+          {...NO_AUTOFILL}
         />
       </div>
 
-      <div>
-        <InputField
-          type="tel"
-          name="phone"
-          label="Telefon"
-          value={obj.phone}
-          onChange={(e) => obj.setField("phone", e.target.value)}
-          error={phoneTaken}
-          disabled={isLoading}
-        />
-        {phoneTaken && (
-          <p className="mt-1 text-xs text-red-600 dark:text-red-300">
-            Bu telefon raqam allaqachon ro&apos;yxatdan o&apos;tgan
-          </p>
-        )}
-      </div>
+      {/* TELEFON TAKRORLANISHI MUMKIN: bir oila bitta raqamdan
+          foydalanadi. "Band" tekshiruvi ataylab yo'q. */}
+      <InputField
+        type="tel"
+        name="phone"
+        label="Telefon"
+        value={obj.phone}
+        onChange={(e) => obj.setField("phone", e.target.value)}
+        disabled={isLoading}
+        {...NO_AUTOFILL}
+      />
 
       <div className="pt-2 border-t">
         <p className="text-sm font-medium mb-2">Kirish ma'lumotlari</p>
@@ -167,6 +166,7 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
               description={usernameShort ? "Kamida 3 ta belgi" : ""}
               required
               disabled={isLoading}
+              {...NO_AUTOFILL}
             />
             {usernameTaken && (
               <p className="mt-1 text-xs text-red-600 dark:text-red-300">
@@ -183,6 +183,10 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
             description="Kamida 6 ta belgi"
             required
             disabled={isLoading}
+            {...NO_AUTOFILL}
+            // Yangi xodimning paroli - operatorning saqlangan paroli
+            // bu yerga tiqilib qolmasligi kerak.
+            autoComplete="new-password"
           />
         </div>
       </div>

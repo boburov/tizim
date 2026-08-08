@@ -310,6 +310,16 @@ export const recalc = async (paymentId, { session } = {}) => {
   // aks holda kunlik accrual recalc yopilgan qarzni qayta ochib yuborardi.
   if (payment.writtenOff) return payment;
 
+  // BOSHLANG'ICH QARZ ham MUZLATILGAN - shu funksiya YAGONA himoya nuqtasi.
+  //
+  // expectedAmount bu yerda qo'lda kiritilgan summa: u fee/proratsiya/
+  // chegirmadan hosil bo'lmagan, chunki o'sha davrda tizim yo'q edi.
+  // buildSnapshot() a'zolik davrlarini topa olmay 0 qaytarardi va qarz
+  // JIMGINA YO'QOLARDI. Bu funksiyaga recalcForGroupMonth, recalcForStudent,
+  // recalcForStudentScope va kunlik accrueMonth job'i - hammasi kelib
+  // taqaladi, shuning uchun to'siq aynan shu yerda turibdi.
+  if (payment.isOpening) return payment;
+
   // Shu oydagi BARCHA a'zolik davrlari (rejoin holatida bir nechta) bo'yicha
   // hisoblaymiz - bitta membership ref'iga tayanib qolmaymiz, aks holda
   // ketib-qaytgan o'quvchining ikkinchi davri billing'dan tushib qolardi.
@@ -545,11 +555,16 @@ export const writeOffDebtInGroup = async (
 // paytida PaymentTransaction bilan birga atomik bo'lsin).
 export const ensurePaymentForMembership = async (membership, year, month, { session } = {}) => {
   if (!membership) return null;
+  // isOpening:false - boshlang'ich qarz qatori shu oyda yonma-yon turgan
+  // bo'lishi mumkin. Uni "plan allaqachon bor" deb qabul qilsak, o'quvchining
+  // HAQIQIY oylik plani umuman yaratilmay qolardi (recalc uni muzlatilgan
+  // deb darhol qaytaradi) - ya'ni oy bepul bo'lib ketardi.
   const exists = await StudentPayment.findOne({
     student: membership.student,
     group: membership.group,
     year,
     month,
+    isOpening: false,
   }).session(session || null);
   if (exists) {
     // Rejoin: shu oyda to'lov allaqachon bor (eski a'zolikniki). Uni joriy
@@ -603,6 +618,7 @@ export const ensurePaymentForMembership = async (membership, year, month, { sess
         group: membership.group,
         year,
         month,
+        isOpening: false,
       }).session(session || null);
     }
     throw err;
@@ -629,11 +645,14 @@ export const generateMonth = async (year, month) => {
 
   let created = 0;
   for (const m of memberships) {
+    // isOpening:false - boshlang'ich qarz qatori oylik planning o'rnini
+    // BOSA OLMAYDI (ensurePaymentForMembership'dagi bilan bir xil sabab).
     const existed = await StudentPayment.findOne({
       student: m.student,
       group: m.group,
       year,
       month,
+      isOpening: false,
     });
     if (existed) continue;
     await ensurePaymentForMembership(m, year, month);

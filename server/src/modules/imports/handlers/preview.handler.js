@@ -9,6 +9,7 @@ const previewHandler = asyncHandler(async (req, res) => {
     importer: req.importer,
     buffer: req.file.buffer,
     fileName: req.file.originalname,
+    actor: { currentUser: req.user, permissions: req.permissions },
   });
 
   res.json({ success: true, data: result });

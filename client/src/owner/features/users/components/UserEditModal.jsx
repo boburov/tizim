@@ -10,6 +10,7 @@ import Button from "@/shared/components/ui/button/Button";
 
 import { ROLES } from "@/shared/constants/roles";
 import { toDateInput } from "@/shared/utils/formatDate";
+import { NO_AUTOFILL, NO_AUTOFILL_FORM } from "@/shared/constants/form";
 
 const GENDER_OPTIONS = [
   { value: "male", label: "Erkak" },
@@ -86,7 +87,11 @@ const UserEditModal = ({ user, close, isLoading, setIsLoading }) => {
   const today = toDateInput(new Date());
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-3 max-h-[70vh] overflow-y-auto pr-1"
+      {...NO_AUTOFILL_FORM}
+    >
       <div className="grid grid-cols-2 gap-3">
         <InputField
           name="firstName"
@@ -95,6 +100,7 @@ const UserEditModal = ({ user, close, isLoading, setIsLoading }) => {
           onChange={(e) => obj.setField("firstName", e.target.value)}
           required
           disabled={isLoading}
+          {...NO_AUTOFILL}
         />
         <InputField
           name="lastName"
@@ -103,6 +109,7 @@ const UserEditModal = ({ user, close, isLoading, setIsLoading }) => {
           onChange={(e) => obj.setField("lastName", e.target.value)}
           required
           disabled={isLoading}
+          {...NO_AUTOFILL}
         />
       </div>
 
@@ -113,6 +120,7 @@ const UserEditModal = ({ user, close, isLoading, setIsLoading }) => {
         value={obj.phone}
         onChange={(e) => obj.setField("phone", e.target.value)}
         disabled={isLoading}
+        {...NO_AUTOFILL}
       />
 
       {isStudent ? (

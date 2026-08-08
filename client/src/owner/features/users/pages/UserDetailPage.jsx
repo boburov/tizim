@@ -14,7 +14,10 @@ import UserPasswordModal from "../components/UserPasswordModal";
 import UserFreezeModal from "../components/UserFreezeModal";
 import UserUnfreezeModal from "../components/UserUnfreezeModal";
 import UserFreezeHistory from "../components/UserFreezeHistory";
-import { TeacherCompensationCard } from "@/owner/features/teacherSalary";
+import {
+  TeacherCompensationCard,
+  TeacherSalaryBalanceCard,
+} from "@/owner/features/teacherSalary";
 import { BotStatusBadge } from "@/shared/components/userProfile";
 import UserBranchModal from "../components/UserBranchModal";
 import { EmploymentDateChangeModal } from "@/owner/features/staffPayroll";
@@ -188,11 +191,19 @@ const UserDetailPage = () => {
 
       {isStudent && <UserFreezeHistory studentId={id} />}
 
-      {/* MAOSH STAVKASI - o'qituvchi profilining eng muhim moliyaviy bloki.
+      {/* MAOSH - o'qituvchi profilining eng muhim moliyaviy bloki.
           Tab ichida emas, ATAYLAB yuqorida: stavkasiz o'qituvchi maoshi 0
-          bo'lib hisoblanadi va bu darhol ko'zga tashlanishi kerak. */}
+          bo'lib hisoblanadi va bu darhol ko'zga tashlanishi kerak.
+
+          Tartib: avval JORIY HOLAT ("qancha qarzmiz?"), keyin stavka
+          ("qanday kelishilgan?"). Kundalik savol birinchisi - o'qituvchi
+          kirib "maoshim qanchа bo'ldi?" deb so'raganda javob yuqorida
+          turishi kerak, stavkani ko'rish esa kamdan-kam kerak bo'ladi. */}
       {isTeacher && (
-        <TeacherCompensationCard teacherId={id} hiredAt={profile.hiredAt} />
+        <>
+          <TeacherSalaryBalanceCard teacherId={id} />
+          <TeacherCompensationCard teacherId={id} hiredAt={profile.hiredAt} />
+        </>
       )}
 
       <TabsLinks items={tabs} />

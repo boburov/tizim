@@ -12,6 +12,7 @@ const commitHandler = asyncHandler(async (req, res) => {
     buffer: req.file.buffer,
     fileName: req.file.originalname,
     currentUser: req.user,
+    actor: { currentUser: req.user, permissions: req.permissions },
   });
 
   const durationMs = Date.now() - startedAt;

@@ -7533,3 +7533,367 @@ Legendani olib tashlab, hammasini voronka ichiga ko'chiraman.
 <sub>session `28b12a0d` · branch `main` · 2 ta qadam</sub>
 
 ---
+
+## 2026-08-08 17:50 — /llm-council Siz senior dastuchisiz va bizda oquv markaz tizmi mavjud 
+
+**So'rov**
+
+> /llm-council Siz senior dastuchisiz va bizda oquv markaz tizmi mavjud biz hozirda maoloiya qismi boyicha muhokama qilyapmiz bizga sayf da qancha pul bor bank hisobda qancha pul bor va kartada qancha pul borligini korib tura olishimiz kerak bo'lmoqda Tolov tushadigan joylar boladi (seyf(naqd), bank shot, karta (ikkalasida ham birdan ortiq bolsa hammasi raqami bilan kiritiladi) va tizim boshida boshlangich summa qancha borligi korsatiladi. Bu bir marta kiritiladi va uni hechkim ozgartira olmaydi
+>
+> Tolovlar aynan shularga tushadi va qayd qilinadi hulas bu narsa mana bunday ishladyi biz exel orqali teacherlar / oquvchilarni qoshish qilayotganimizda tizim ularga shablon beraid misol boshlangich summa ism familya tel raqam va guruh guruh qilib qoshish imkoniyati ham bo'lishi zarur va boshlangich summa +300k bo'lsa oquvchida bu oquvchi bizga 300k kop bergan bo'ladi agar -300k bo'lsa 300k qarzi bo'ladi bu teacherda ham shunday ishlaydi +300k bo'lsa u bizdan qrz bo'ladi -300k bo'lsa biz undan qarz bo'lamiz shunday ishlahsi kerak aval analiz qilib plan tuzib olamiz
+
+**O'zgargan fayllar (1)**
+
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/29a6469d-9752-421f-b4c2-d4d90cff0bad/scratchpad/council_prompt.txt` — yaratildi/qayta yozildi
+
+**Buyruqlar (31)**
+
+```sh
+ls -la /Users/shukrullo/Desktop/lc-total && cat /Users/shukrullo/Desktop/lc-total/package.json 2>/dev/null | head -60
+ls /Users/shukrullo/.claude/skills/llm-council/scripts/ && cat /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py | head -40
+cd /Users/shukrullo/Desktop/lc-total/server && ls -R --ignore=node_modules . 2>/dev/null | head -120 || find . -path ./node_modules -prune -o -type d -print | h…
+cd /Users/shukrullo/Desktop/lc-total && cat PROMT.MD
+cd /Users/shukrullo/Desktop/lc-total/server && find . -path ./node_modules -prune -o -type d -print | head -80
+cd /Users/shukrullo/Desktop/lc-total && ls server && cat server/package.json 2>/dev/null | head -50
+cd /Users/shukrullo/Desktop/lc-total/server/src/models && ls
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/finance && ls -R
+cd /Users/shukrullo/Desktop/lc-total/server/src && grep -rn "cashbox\|Cashbox\|kassa\|account\b\|Account" --include=*.js -l | head -20; echo "---"; grep -rn "en…
+grep -rn --include="*.js" "cashAccount\|CashAccount\|accountId\|Kassa\|kassa" . | head -20; echo "=== IMPORTS ==="; ls -R /Users/shukrullo/Desktop/lc-total/serv…
+ls modules/financeReport/services modules/deposits 2>/dev/null; echo "=== SALARY TXN ==="; sed -n 1,60p models/salaryTransaction.model.js
+sed -n 1,80p modules/imports/registry/studentPayments.importer.js; echo "=== REGISTRY INDEX ==="; cat modules/imports/registry/index.js
+sed -n 1,120p modules/finance/services/transaction.service.js
+cd /Users/shukrullo/Desktop/lc-total && ls -a | grep -i env; echo "--- keys present? ---"; grep -o "^[A-Z_]*" .env 2>/dev/null | head; echo "--- CLIs ---"; whic…
+cd /Users/shukrullo/Desktop/lc-total && ls server/.env client/.env 2>/dev/null; grep -l "OPENAI_API_KEY\|GEMINI_API_KEY" server/.env client/.env admin_server/.e…
+sed -n 40,200p /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py
+grep -oE "^(OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_MODEL|GEMINI_MODEL)" server/.env
+cd /Users/shukrullo/Desktop/lc-total/server && timeout 900 python3 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py "$(cat /private/tmp/claude-…
+cat /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/29a6469d-9752-421f-b4c2-d4d90cff0bad/scratchpad/council_err.txt; which python3 python; python3 -V …
+python3 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py "$(cat /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/29a6469d-9752-421f-b4…
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/29a6469d-9752-421f-b4c2-d4d90cff0bad/scratchpad && python3 -c " import json d=json.load(open('counc…
+gemini -p "Reply with exactly: OK" 2>&1 | head -20; echo "exit=$?"
+git log --oneline --all -- server/.env | head -5; echo "--- tracked? ---"; git ls-files --error-unmatch server/.env 2>&1 | head -2; echo "--- gitignore ---"; ca…
+cd /Users/shukrullo/Desktop/lc-total/server/src && sed -n 1,140p modules/financeReport/services/financeReport.service.js
+sed -n 1,120p modules/imports/services/importEngine.service.js
+# … yana 6 ta
+```
+
+**Natija**
+
+I'll consult the council on this. First let me understand your codebase structure.
+
+Let me explore the existing structure while preparing the council query.
+
+Good context. Now let me query the council.
+
+Only `GEMINI_API_KEY` exists (no OpenAI key), but the `gemini` CLI is available. Let me query the council.
+
+Both council calls failed. Let me try the `gemini` CLI directly and a different model name.
+
+The council is unavailable — I'll flag that and proceed with my own analysis. First let me finish reading the relevant code.
+
+<sub>session `29a6469d` · branch `main` · 36 ta qadam</sub>
+
+---
+
+## 2026-08-08 18:04 — hech qanday sayfe tuda suda narsalarni qilmaiz shunchaki student teach
+
+**So'rov**
+
+> hech qanday sayfe tuda suda narsalarni qilmaiz shunchaki student teacher yoki hodim yaratayotgdan boshlangich summalar kiritilinadi aytganimdek va shunga qarab qarz yoki balans yaratib qoyilinadi bo'ldi
+
+**Buyruqlar (5)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server/src && grep -n "type:\|enum\|required\|default" models/staffPayroll.model.js | head -40; echo "=== ITEM ==="; grep -…
+grep -n "type:\|enum\|required\|default" models/staffPayrollAdjustment.model.js | head -40; echo "=== STAFF SALARY TXN ==="; grep -n "type:\|enum\|required\|def…
+sed -n 1,25p models/staffPayrollAdjustment.model.js; echo "=== KINDS ==="; grep -rn "STAFF_ADJUSTMENT_KINDS" models/ modules/ | head -5
+grep -rn "manualBonusTotal\|penaltyTotal\|StaffPayrollAdjustment" modules/staffPayroll/services/*.js | head -20
+sed -n 176,205p modules/staffPayroll/services/staffPayroll.service.js
+```
+
+**Natija**
+
+Tushundim — kassa/seyf qismi butunlay tushib qoladi. Faqat **shaxs yaratilayotganda boshlang'ich summa**. Hodim (staff) qismini tekshirib olay.
+
+<sub>session `29a6469d` · branch `main` · 5 ta qadam</sub>
+
+---
+
+## 2026-08-08 18:11 — tushuning mana agar guruh 5-may 2026da yaratlingan bo'ldi deyaylik biz
+
+**So'rov**
+
+> tushuning mana agar guruh 5-may 2026da yaratlingan bo'ldi deyaylik biz oquvchi yuklayapmiz va uni 300k + da bo'lsa demak 300k banacega yozib shu paytgacha bo'lgan paymentlari yoplishi kerak va bu teacher va hodimlarda ham shunday va exel masalasiga kelsak exelni yuklayman va kopgina iputlarga shu malumotlar avtomatik filll bo'ladi va men uni edit qila olaman va username password ham ato generate bo'ladi bularni ham edit qila olaman va bular jadval bo'lib korinishi kerak va yaratishni bosganima yaratilinishi kerak boshlangich summani ham unutmagn hullas student yaratish uchun kerak hamma fieldlar talab qilisnin
+
+**Buyruqlar (10)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server/src && grep -n "export const" modules/finance/services/studentPayment.service.js | head -30; echo "=== PRORATION ===…
+cat modules/imports/handlers/commit.handler.js; echo "=== VALIDATOR ==="; cat modules/imports/validators/imports.validator.js
+sed -n 546,650p modules/finance/services/studentPayment.service.js
+cat helpers/password.helper.js; echo "=== JOBS ==="; ls jobs/; grep -rn "generateMonth\|accrueMonth" jobs/ modules/ | grep -v "studentPayment.service.js" | head
+grep -rn "ensurePaymentForMembership" --include="*.js" . | grep -v "studentPayment.service.js"; echo "=== CATCHUP ==="; cat jobs/catchUpMonthly.js
+sed -n 795,830p modules/groups/services/groups.service.js
+sed -n 1,60p models/user.model.js; echo "=== VALIDATORS ==="; ls modules/users/validators/
+cat modules/users/validators/*.js 2>/dev/null | head -120
+grep -n "export const" modules/deposits/services/deposit.service.js; echo "=== REGISTER ==="; grep -rn "enrolledAt" modules/auth/validators/*.js modules/*/valid…
+sed -n 1,135p modules/auth/validators/registerUser.validator.js
+```
+
+**Natija**
+
+Muhim ikkita nuqta. Kodni tekshiray — (a) guruhga qo'shilganda o'tgan oylar uchun to'lov qatorlari qanday yaratiladi, (b) import commit oqimi va parol generatsiyasi.
+
+Muhim topilma — sizning ssenariyingiz allaqachon qo'llab-quvvatlanadi. Yaratish maydonlarini aniqlab olay.
+
+<sub>session `29a6469d` · branch `main` · 10 ta qadam</sub>
+
+---
+
+## 2026-08-08 17:45 — siz senior dasturchisiz bizd aoquv markaz tizimi mavjud va user yarata
+
+**So'rov**
+
+> siz senior dasturchisiz bizd aoquv markaz tizimi mavjud va user yaratailinayotganda 1ta tel raqam ikki arta ishlatilinaversin va bu faqat lid uchun amal qilsin user uchun ham va auto complate ishlamasin oqtuvchining sahifasida shu rasmdagidek malumotlar korinishi kerak bo'ladi oylik maoshlari qismida
+
+**O'zgargan fayllar (34)**
+
+- `server/src/models/user.model.js` — tahrirlandi
+- `server/src/modules/auth/services/auth.service.js` — tahrirlandi
+- `server/src/modules/users/services/users.service.js` — tahrirlandi
+- `server/src/modules/users/handlers/checkAvailability.handler.js` — tahrirlandi
+- `server/src/modules/branches/services/branches.service.js` — tahrirlandi
+- `server/src/modules/users/validators/checkAvailability.validator.js` — tahrirlandi
+- `server/src/config/db.js` — tahrirlandi
+- `server/src/seeds/migrateUserPhoneIndex.seed.js` — yaratildi/qayta yozildi
+- `server/package.json` — tahrirlandi
+- `server/src/bot/services/botUser.service.js` — tahrirlandi
+- `server/src/bot/handlers/contact.handler.js` — tahrirlandi
+- `client/src/owner/features/users/hooks/useAvailabilityQuery.js` — yaratildi/qayta yozildi
+- `client/src/shared/constants/form.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/users/components/UserCreateModal.jsx` — tahrirlandi
+- `client/src/owner/features/users/components/StaffCreateModal.jsx` — tahrirlandi
+- `client/src/owner/features/leads/components/LeadFormFields.jsx` — tahrirlandi
+- `client/src/owner/features/leads/components/LeadCreateModal.jsx` — tahrirlandi
+- `client/src/owner/features/users/components/UserEditModal.jsx` — tahrirlandi
+- `client/src/owner/features/leads/components/LeadEditModal.jsx` — tahrirlandi
+- `server/src/modules/teacherSalary/services/teacherSalary.service.js` — tahrirlandi
+- `server/src/modules/teacherSalary/handlers/salary.balanceByTeacher.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/teacherSalary/teacherSalary.routes.js` — tahrirlandi
+- `client/src/shared/api/endpoints.js` — tahrirlandi
+- `client/src/shared/lib/query/keys.js` — tahrirlandi
+- `client/src/owner/features/teacherSalary/api/teacherSalary.api.js` — tahrirlandi
+- `client/src/owner/features/teacherSalary/hooks/useTeacherSalaryBalanceQuery.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/teacherSalary/components/TeacherSalaryBalanceCard.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/teacherSalary/index.js` — tahrirlandi
+- `client/src/owner/features/users/pages/UserDetailPage.jsx` — tahrirlandi
+- `client/src/owner/features/teacherSalary/pages/TeacherSalaryHistoryPage.jsx` — tahrirlandi
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/34c811b1-d868-4326-a766-62a338dcd7f3/scratchpad/checkBalanceMath.mjs` — tahrirlandi, yaratildi/qayta yozildi
+- `server/tests/teacherSalaryBalance.test.js` — yaratildi/qayta yozildi
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/34c811b1-d868-4326-a766-62a338dcd7f3/scratchpad/checkPhoneDup.mjs` — yaratildi/qayta yozildi
+- `server/CLAUDE.md` — tahrirlandi
+
+**Buyruqlar (67)**
+
+```sh
+ls -la && cat package.json 2>/dev/null | head -60
+ls server client && echo "--- CLAUDE.md ---" && cat CLAUDE.md 2>/dev/null; cat .claude/CLAUDE.md 2>/dev/null | head -50
+rg -l "phone" --type ts --type tsx -g '!node_modules' server/src 2>/dev/null | head -40; echo "=== schema ==="; find server -name "*.prisma" -not -path "*/node_…
+cat server/CLAUDE.md; echo "==================== CLIENT ===================="; cat client/CLAUDE.md
+ls server/src/modules && echo "=== models ===" && ls server/src/models
+ls client/src/owner/features client/src/teacher/features 2>/dev/null
+rg -n "phone" server/src/models/user.model.js server/src/models/lead.model.js
+ls -R server/src/modules/users server/src/modules/leads | head -60
+rg -rn "phone" server/src/modules/users/ | head -40
+rg -rn "phone" server/src/modules/leads/ | head -40
+rg -n "phone" server/src/modules/users/services/users.service.js | head -40
+rg -n "phone" server/src/modules/leads/services/leads.service.js | head -40
+rg -n "checkAvailability|availability" client/src --glob '!node_modules' -l | head -20
+rg -n "telefon raqam allaqachon|allaqachon ro'yxatdan|phone.*taken|Bu telefon" server/src --glob '!node_modules' | head -20; echo "=== auth register ==="; ls se…
+rg -n "autoComplete|autocomplete" client/src --glob '!node_modules' | head -30
+ls client/src/owner/features/users/components/ client/src/owner/features/users/components/modals 2>/dev/null; echo "=== leads ==="; ls client/src/owner/features…
+rg -rn --no-heading -i "jami daromad|oy boshigacha|kun ishladi|jami qoldiq|fix maosh|shu kungacha" client/src --glob '!node_modules' 2>/dev/null | head -30
+rg -n -i "Jami daromad|Oy boshigacha|kun ishladi|Jami qoldiq|Fix maosh|shu kungacha" client/src --glob '!node_modules' | head -30
+rg -n -i "qoldiq" client/src --glob '!node_modules' -l | head -20; echo "=== teacherSalary feature files ==="; find client/src/owner/features/teacherSalary clie…
+rg -n -i "Jami daromad|Oy boshigacha|kun ishladi|Jami qoldiq|Fix maosh|shu kungacha|Ishga kirgan" --glob '!node_modules' --glob '!dist' . | head -40
+find client/src/owner/features/users -type f | sort
+find server/src/modules/teacherSalary -type f | sort
+rg -n "export const" server/src/modules/teacherSalary/services/teacherSalary.service.js
+rg -n -i "fiks|fix maosh|jami daromad|daromad" client/src --glob '!node_modules' | head -30
+rg -n "teachers/maoshlar|TeacherSalaryHistoryPage|TeacherSalariesPanel|SalaryConfigsPage" client/src/owner/routes/index.jsx client/src/owner/features/teacherSal…
+# … yana 42 ta
+```
+
+**Natija**
+
+Avval loyihani o'rganib chiqaman.
+
+Loyihani o'rgandim. Uch talabning ikkitasi aniq, bittasida joylashuv noaniq — buni aniqlab olay:
+
+Endi implementatsiyaga o'taman. Avval server tomoni — telefon takrorlanishi:
+
+Endi validator va boot-time indeks tozalash:
+
+Endi eski `phone_1` unique indeksni o'chirish — boot-time tozalash + migratsiya:
+
+Endi bot: bir xil raqamli barcha foydalanuvchilarni bog'lash:
+
+Endi client tomonini yangilayman:
+
+Endi formalarni yangilayman — avval `UserCreateModal`:
+
+Endi `StaffCreateModal`:
+
+Endi lid formasi va foydalanuvchi tahrirlash formasi:
+
+Endi eng katta qism — o'qituvchi maosh balansi. Avval server servisi:
+
+Endi handler va route:
+
+Endi client tomonida API, query key va hook:
+
+Endi kartochka komponentini yozaman (rasmdagi layout: yuqorida 2 ta plitka, pastda 4 ta ustun):
+
+Endi komponentni ikkala sahifaga ulayman:
+
+Endi lint va tekshiruvlar:
+
+<sub>session `34c811b1` · branch `main` · 188 ta qadam</sub>
+
+---
+
+## 2026-08-08 18:17 — 7chi bosqichdagi xavf xatarni oldini olish maqsadida query yozing redi
+
+**So'rov**
+
+> 7chi bosqichdagi xavf xatarni oldini olish maqsadida query yozing redis orqali ishlashi kerak va taskni tasdqilayman shu aytilgan barvcha tasklarni xafsiz tarizda bajaring moliyga alohida qattiq etibor bering
+
+**O'zgargan fayllar (43)**
+
+- `server/src/models/openingBalance.model.js` — yaratildi/qayta yozildi
+- `server/src/models/studentPayment.model.js` — tahrirlandi
+- `server/src/models/teacherSalary.model.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/teacherSalary.service.js` — tahrirlandi
+- `server/src/modules/finance/services/studentPayment.service.js` — tahrirlandi
+- `server/src/config/db.js` — tahrirlandi
+- `server/src/models/staffPayrollAdjustment.model.js` — tahrirlandi
+- `server/src/modules/staffPayroll/services/staffAdjustment.service.js` — tahrirlandi
+- `server/src/models/staffPayroll.model.js` — tahrirlandi
+- `server/src/modules/staffPayroll/services/staffPayroll.service.js` — tahrirlandi
+- `server/src/modules/financeReport/services/financeReport.service.js` — tahrirlandi
+- `server/src/models/depositTransaction.model.js` — tahrirlandi
+- `server/src/modules/deposits/services/deposit.service.js` — tahrirlandi
+- `server/src/modules/openingBalance/services/openingBalance.service.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/config/env.js` — tahrirlandi
+- `server/src/config/redis.js` — yaratildi/qayta yozildi
+- `server/src/models/importJob.model.js` — tahrirlandi
+- `server/src/queues/importQueue.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/utils/credentials.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/services/importEngine.service.js` — tahrirlandi
+- `server/src/modules/imports/registry/userImportBase.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/imports/registry/students.importer.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/imports/registry/teachers.importer.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/imports/registry/staff.importer.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/imports/registry/index.js` — tahrirlandi
+- `server/src/middleware/requireImporterPermission.js` — tahrirlandi
+- `server/src/modules/imports/handlers/draft.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/handlers/validateRows.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/handlers/createRows.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/handlers/jobStatus.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/imports/validators/imports.validator.js` — tahrirlandi
+- `server/src/modules/imports/imports.routes.js` — tahrirlandi
+- `server/src/index.js` — tahrirlandi
+- `server/tests/openingBalance.test.js` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/shared/api/endpoints.js` — tahrirlandi
+- `client/src/shared/lib/query/keys.js` — tahrirlandi
+- `client/src/shared/api/import.api.js` — tahrirlandi
+- `client/src/shared/hooks/useImport.js` — tahrirlandi
+- `client/src/shared/components/import/ImportEditableGrid.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/components/import/ImportGridModal.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- … yana 3 ta
+
+**Buyruqlar (95)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && python3 -c " import json d=json.load(open('package.json')) print('DEPS:'); [print(' ',k,v) for k,v in sorted(d.ge…
+cat src/config/env.js
+cd /Users/shukrullo/Desktop/lc-total/client && ls src && echo "=== PAGES ===" && ls src/pages 2>/dev/null | head -40 && echo "=== IMPORT UI ===" && grep -rln "i…
+grep -rln "imports" src | head -20; echo "=== FEATURES ==="; ls src/features | head -40
+cat package.json | python3 -c "import json,sys; d=json.load(sys.stdin); [print(' ',k,v) for k,v in sorted(d.get('dependencies',{}).items())]"
+cat src/shared/api/import.api.js; echo "=== HOOK ==="; cat src/shared/hooks/useImport.js; echo "=== ENDPOINTS ==="; grep -n "import" src/shared/api/endpoints.js
+grep -rln "useImportPreviewMutation\|useImportersQuery" src | head; echo "=== OWNER TREE ==="; find src/owner -maxdepth 2 -type d | head -40
+sed -n 1,80p src/shared/components/import/ImportModal.jsx; echo "..."; wc -l src/shared/components/import/*.jsx
+cd /Users/shukrullo/Desktop/lc-total/server/src && echo "=== IMPORTJOB ==="; cat models/importJob.model.js; echo "=== ROUTES ==="; cat modules/imports/imports.r…
+sed -n 120,260p modules/imports/services/importEngine.service.js
+sed -n 60,140p modules/deposits/services/deposit.service.js; echo "=== AUTOAPPLY ==="; sed -n 260,350p modules/deposits/services/deposit.service.js
+cat config/agenda.js; echo "=== JOBS INDEX ==="; sed -n 1,60p jobs/index.js
+grep -n "export const registerUser" -A 100 modules/auth/services/auth.service.js 2>/dev/null | head -120 || ls modules/auth/services/
+cat index.js && echo "=== BRANCH CTX ===" && grep -n "export const" helpers/branchContext.helper.js
+sed -n 1,70p helpers/branchContext.helper.js; echo "=== MIDDLEWARE SETTING CTX ==="; grep -rn "runWithBranchContext" --include=*.js . | head
+grep -rn "runWithBranchContext" -A 30 middleware/auth.js | head -60
+cat config/db.js; echo "=== RECALC ==="; sed -n 300,340p modules/finance/services/studentPayment.service.js
+sed -n 375,460p modules/finance/services/studentPayment.service.js
+sed -n 178,215p models/teacherSalary.model.js
+grep -rn 'kind === "\|kind !== "\|SALARY_KINDS\|kind: "base"\|kind: "bonus"\|kind: "deduction"' modules/teacherSalary/ models/teacherSalary.model.js | head -40
+sed -n 925,960p modules/teacherSalary/services/teacherSalary.service.js
+grep -rn "expectedAmount" modules/teacherSalary/services/salaryTransaction.service.js | head -20; echo "=== PAY FLOW ==="; sed -n 1,70p modules/teacherSalary/se…
+cat helpers/group.helper.js; echo "=== callers of validateSalaryPayment / create ==="; grep -n "export const" modules/teacherSalary/services/salaryTransaction.s…
+grep -rn "SalaryTransaction.create\|new SalaryTransaction" modules/ | head; echo "=== ROUTES teacherSalary ==="; grep -n "router\.\(post\|put\|patch\)" modules/…
+sed -n 100,170p modules/teacherSalary/teacherSalary.routes.js
+# … yana 70 ta
+```
+
+**Natija**
+
+Boshlaymiz. Avval Redis holatini va mavjud infratuzilmani tekshiray.
+
+Barcha kerakli kod o'qildi. Endi implementatsiya. **1-qadam: modellar.**
+
+Endi mavjud modellarga `isOpening` bayrog'i.
+
+Endi `isOpening` bayrog'i va indeks. `recalc()` bitta markaziy himoya nuqtasi bo'ladi.
+
+Muhim topilma: o'qituvchi maoshiga to'lov **faqat guruhli qator** orqali yoziladi ([salaryTransaction.service.js:33](server/src/modules/teacherSalary/services/salaryTransaction.service.js#L33) `assertGroupActive`). Shuning uchun boshlang'ich qator guruhga bog'lanishi shart — aks holda uni hech qachon to'lab bo'lmaydi.
+
+Endi `recalc()` markaziy himoyasi va boot indeks migratsiyasi.
+
+Endi boot vaqtidagi indeks migratsiyasi — eng xavfli qadam, shuning uchun tartib qat'iy.
+
+Endi hodim (staff) qismi — pul yo'qolmasligi uchun qoldiq keyingi oyga ko'chiriladi.
+
+Endi payroll formulasi va qoldiqni keyingi oyga ko'chirish.
+
+Endi ko'chirish (carry-over) funksiyasi va uni `generateMonth` ga ulash.
+
+Endi `carryOverOpeningDebt` funksiyasining o'zi — bu pul yo'qolmasligining kafolati.
+
+Endi hisobot: boshlang'ich qatorlar `billed` dan chiqadi, `outstanding` da qoladi.
+
+Endi asosiy qism — materializatsiya servisi. Avval depozitga `isOpening` bayrog'i (yagona yozish yo'lini saqlab qolish uchun).
+
+Endi materializatsiya servisi.
+
+Endi Redis navbat (queue). Avval paketlar.
+
+Endi navbat modulining o'zi — worker filial kontekstini qayta tiklaydi.
+
+Endi login/parol generatori.
+
+Generator ishlaydi. Endi import dvigateli v2.
+
+Endi dvigatelga uchta yangi kirish nuqtasi qo'shaman.
+
+Endi uchta yangi kirish nuqtasi — dvigatel oxiriga.
+
+Endi importerlarning umumiy poydevori — eng katta qism.
+
+Endi ruxsatni dvigateldan importerga o'tkazish — pul yozadigan qatorlar uchun alohida tekshiruv.
+
+Endi o'qituvchi va hodim importerlari.
+
+
+…(qisqartirildi)
+
+<sub>session `29a6469d` · branch `main` · 206 ta qadam</sub>
+
+---

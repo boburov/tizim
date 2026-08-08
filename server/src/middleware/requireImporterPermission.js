@@ -21,6 +21,17 @@ const requireImporterPermission = () => (req, _res, next) => {
     return next(new ApiError(403, "Ruxsat etilmagan"));
   }
 
+  // Ba'zi importlar bir nechta huquqni birdan talab qiladi. Masalan
+  // xodim importi odam yaratadi VA rol biriktiradi - users.routes.js
+  // dagi POST /staff yo'lida ham AYNAN shu ikkitasi so'raladi. Import
+  // o'sha yo'lning ommaviy varianti bo'lgani uchun talab ham bir xil
+  // bo'lishi shart, aks holda import "yon eshik" bo'lib qolardi.
+  for (const extra of importer.extraPermissions || []) {
+    if (!hasPermission(req.permissions, extra)) {
+      return next(new ApiError(403, "Ruxsat etilmagan"));
+    }
+  }
+
   req.importer = importer;
   next();
 };

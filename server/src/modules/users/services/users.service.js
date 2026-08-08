@@ -342,42 +342,25 @@ export const staffStats = async () => {
 };
 
 /**
- * TELEFON / LOGIN band emasligini oldindan tekshiradi.
+ * LOGIN (username) band emasligini oldindan tekshiradi.
  *
  * Tekshiruv `auth.service.registerUser` bilan AYNAN bir xil qoidada
  * bo'lishi shart, aks holda forma "bo'sh" deb ko'rsatib, saqlashda 409
- * beradi - bu birinchi xatodan ham yomon.
- *
- * Shuning uchun bu yerda ham:
- *   - telefon NORMALIZATSIYADAN keyin solishtiriladi ("+998 90 123 45 67"
- *     va "998901234567" - bir xil raqam);
+ * beradi - bu birinchi xatodan ham yomon. Shuning uchun bu yerda ham:
  *   - qidiruv ARXIVLANGAN va o'chirilgan foydalanuvchilarni ham qamraydi
- *     (raqam ular bilan ham band bo'lib turadi);
- *   - filial ko'lami QO'LLANMAYDI: boshqa filialdagi odamning raqami ham
+ *     (login ular bilan ham band bo'lib turadi);
+ *   - filial ko'lami QO'LLANMAYDI: boshqa filialdagi odamning logini ham
  *     band, lekin uning kimligi oshkor qilinmaydi - faqat "band" bayrog'i.
+ *
+ * TELEFON BU YERDA TEKSHIRILMAYDI: takrorlanish endi ruxsat etilgan
+ * (qarang: user.model.js phone izohi). `phone` parametri hamon qabul
+ * qilinadi (eski clientlar yuboradi), lekin javobga qo'shilmaydi.
  */
-export const checkAvailability = async ({ phone, username, excludeId } = {}) => {
+export const checkAvailability = async ({ username, excludeId } = {}) => {
   const result = {};
   const notSelf = excludeId
     ? { _id: { $ne: new mongoose.Types.ObjectId(String(excludeId)) } }
     : {};
-
-  const raw = String(phone || "").trim();
-  if (raw) {
-    const normalized = normalizePhone(raw);
-    if (!normalized) {
-      // To'liq bo'lmagan raqam hali XATO emas - odam yozayotgan bo'lishi
-      // mumkin. "invalid" bayrog'i client uchun: u faqat raqam TUGAGANDA
-      // xato ko'rsatadi.
-      result.phone = { taken: false, invalid: true };
-    } else {
-      const exists = await User.findOne(
-        { phone: normalized, ...notSelf },
-        { _id: 1 },
-      ).lean();
-      result.phone = { taken: Boolean(exists), invalid: false };
-    }
-  }
 
   const login = String(username || "").toLowerCase().trim();
   if (login) {
@@ -1041,12 +1024,7 @@ export const createStaff = async (body, currentUser) => {
 
   const username = String(body.username).toLowerCase().trim();
 
-  if (phone) {
-    const phoneTaken = await User.findOne({ phone });
-    if (phoneTaken) {
-      throw new ApiError(409, "Bu telefon raqam allaqachon ro'yxatdan o'tgan");
-    }
-  }
+  // TELEFON TAKRORLANISHI RUXSAT ETILADI (qarang: user.model.js phone izohi).
   const usernameTaken = await User.findOne({ username });
   if (usernameTaken) {
     throw new ApiError(409, "Bunday login (username) allaqachon mavjud");
@@ -1233,7 +1211,7 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // --- ISHGA OLISH TASDIG'I (owner tasdig'i talab qilinganda) ---
 //
 // TASDIQLANMAGUNCHA User hujjati YARATILMAYDI. Bu ataylab:
-//   - username/phone unique indeks so'rov paytidayoq band bo'lib qolardi
+//   - username unique indeks so'rov paytidayoq band bo'lib qolardi
 //     (owner ko'rmasidan turib "bunday login mavjud" xatosi chiqardi);
 //   - "kutilmoqda" holatidagi odam ro'yxatlarga, davomatga va Telegram
 //     botiga tushib ketardi - ya'ni ishga olinmagan odam tizimda ishlardi.
@@ -1242,8 +1220,8 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /**
  * Ishga olishni TASDIQQA yuboradi (User yaratmaydi).
  *
- * Yengil tekshiruv: login/telefon bandligi (so'rovchiga darhol javob berish
- * uchun). Rol/filial huquqlari ATAYLAB bajarish paytida QAYTA tekshiriladi.
+ * Yengil tekshiruv: login bandligi (so'rovchiga darhol javob berish uchun).
+ * Rol/filial huquqlari ATAYLAB bajarish paytida QAYTA tekshiriladi.
  */
 export const requestHire = async (body, currentUser) => {
   const approvalService = await import(
@@ -1255,11 +1233,10 @@ export const requestHire = async (body, currentUser) => {
   const phone = body.phone ? normalizePhone(body.phone) : null;
   if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
 
+  // Telefon bandligi TEKSHIRILMAYDI - takrorlanish ruxsat etilgan
+  // (qarang: user.model.js phone izohi).
   if (await User.findOne({ username })) {
     throw new ApiError(409, "Bunday login (username) allaqachon mavjud");
-  }
-  if (phone && (await User.findOne({ phone }))) {
-    throw new ApiError(409, "Bu telefon raqam allaqachon ro'yxatdan o'tgan");
   }
   if (!body.homeBranchId) throw new ApiError(400, "Filial tanlanishi shart");
 

@@ -78,7 +78,9 @@ import User from "@/models/user.model.js";
 import ApiError from "@/utils/ApiError.js";
 
 export const create = async (body, currentUser) => {
-  const exists = await User.findOne({ phone: body.phone });
+  // DIQQAT: `phone` bo'yicha tekshirilmaydi - bitta raqamdan bir nechta
+  // odam foydalanadi (qarang: models/user.model.js). Yagona kalit - username.
+  const exists = await User.findOne({ username: body.username });
   if (exists) throw new ApiError(409, "Bunday foydalanuvchi mavjud");
   return User.create({ ...body, role: "student" });
 };

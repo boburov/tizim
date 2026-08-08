@@ -1,5 +1,8 @@
 import studentPaymentsImporter from "./studentPayments.importer.js";
 import teacherSalaryPaymentsImporter from "./teacherSalaryPayments.importer.js";
+import studentsImporter from "./students.importer.js";
+import teachersImporter from "./teachers.importer.js";
+import staffImporter from "./staff.importer.js";
 
 // IMPORT REYESTRI - eksport reyestri bilan bir xil mantiq.
 //
@@ -8,6 +11,9 @@ import teacherSalaryPaymentsImporter from "./teacherSalaryPayments.importer.js";
 // va shu yerga ulanadi. Dvigatel (importEngine), shablon generatori,
 // yuklash oynasi va xatolik hisoboti - hammasi umumiy, o'zgartirilmaydi.
 const IMPORTERS = Object.freeze({
+  [studentsImporter.key]: studentsImporter,
+  [teachersImporter.key]: teachersImporter,
+  [staffImporter.key]: staffImporter,
   [studentPaymentsImporter.key]: studentPaymentsImporter,
   [teacherSalaryPaymentsImporter.key]: teacherSalaryPaymentsImporter,
 });

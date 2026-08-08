@@ -22,6 +22,7 @@
     "migrate:membership-index": "node src/seeds/migrateMembershipIndex.seed.js",
     "migrate:backfill-user-role": "node src/seeds/backfillUserRole.seed.js",
     "migrate:botuser-index": "node src/seeds/migrateBotUserIndex.seed.js",
+    "migrate:user-phone-index": "node src/seeds/migrateUserPhoneIndex.seed.js",
     "migrate:finance-periods": "node src/seeds/migrateFinancePeriods.seed.js",
     "migrate:teacher-periods": "node src/seeds/migrateTeacherGroupPeriods.seed.js",
     "migrate:group-enddate": "node src/seeds/migrateGroupEndDate.seed.js",
@@ -48,11 +49,14 @@
     "test:import": "node tests/importEngine.test.js",
     "test:assignment": "node tests/assignmentStorage.test.js",
     "test:salary-rate": "node tests/salaryRate.test.js",
-    "migrate:teacher-compensation": "node src/seeds/migrateTeacherCompensation.seed.js"
+    "test:salary-balance": "node tests/teacherSalaryBalance.test.js",
+    "migrate:teacher-compensation": "node src/seeds/migrateTeacherCompensation.seed.js",
+    "test:opening": "node tests/openingBalance.test.js"
   },
   "dependencies": {
     "agenda": "^5.0.0",
     "bcrypt": "^5.1.1",
+    "bullmq": "^6.0.9",
     "compression": "^1.7.4",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -61,6 +65,7 @@
     "express": "^4.21.0",
     "express-rate-limit": "^7.4.0",
     "helmet": "^8.0.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.8.0",
     "morgan": "^1.10.0",

@@ -236,6 +236,13 @@ export const ENDPOINTS = Object.freeze({
     preview: (key) => `/imports/${key}/preview`,
     commit: (key) => `/imports/${key}/commit`,
     errorReport: (key) => `/imports/${key}/error-report`,
+    // JADVAL OQIMI: fayl → tahrirlanadigan jadval → yaratish.
+    // Eski preview/commit dan farqi - tasdiqda FAYL emas, tahrirlangan
+    // QATORLAR yuboriladi (server ularni baribir qayta tekshiradi).
+    draft: (key) => `/imports/${key}/draft`,
+    validateRows: (key) => `/imports/${key}/validate-rows`,
+    create: (key) => `/imports/${key}/create`,
+    job: (jobId) => `/imports/jobs/${jobId}`,
   },
 
   // Finance (Moliya)
@@ -322,6 +329,9 @@ export const ENDPOINTS = Object.freeze({
     salaryById: (id) => `/teacher-salary/salaries/${id}`,
     salaryHistory: (teacherId) =>
       `/teacher-salary/salaries/by-teacher/${teacherId}`,
+    // Joriy holat: fiksa stavka, bu oygi jami daromad, qoldiqlar.
+    salaryBalance: (teacherId) =>
+      `/teacher-salary/salaries/by-teacher/${teacherId}/balance`,
     myFinance: "/teacher-salary/me/finance",
     obligations: "/teacher-salary/obligations",
     transactions: "/teacher-salary/transactions",

@@ -4,6 +4,8 @@ import logger from "./config/logger.js";
 import { connectDB, disconnectDB } from "./config/db.js";
 import { startJobs, stopJobs } from "./jobs/index.js";
 import { startBot, stopBot } from "./bot/index.js";
+import { startImportWorker, stopImportWorker } from "./queues/importQueue.js";
+import { closeRedis } from "./config/redis.js";
 import Branch from "./models/branch.model.js";
 import { ensureMainBranch } from "./helpers/branchAccess.helper.js";
 import { reconcile as reconcileStorage } from "./modules/storage/services/storage.service.js";
@@ -70,6 +72,16 @@ const startBackgroundServices = async () => {
   await startJobs().catch((err) =>
     logger.error({ err }, "Joblar ishga tushmadi"),
   );
+
+  // OMMAVIY IMPORT WORKER'i (Redis). Agenda'ni ALMASHTIRMAYDI - rejali
+  // ishlar avvalgidek Mongo'da qoladi. Redis sozlanmagan bo'lsa bu
+  // funksiya hech narsa qilmaydi va import sinxron ishlaydi.
+  try {
+    startImportWorker();
+  } catch (err) {
+    logger.error({ err }, "Import worker ishga tushmadi");
+  }
+
   await startBot().catch((err) => logger.error({ err }, "Bot ishga tushmadi"));
 
   logger.info("Fon xizmatlari tayyor");
@@ -119,6 +131,11 @@ const start = async () => {
     server.close();
     await stopBot().catch(() => null);
     await stopJobs().catch(() => null);
+    // Worker OLDIN yopiladi, keyin Redis: teskari tartibda worker
+    // yopilayotganda ulanish yo'q bo'lib, ish "running" holatida
+    // osilib qolardi.
+    await stopImportWorker().catch(() => null);
+    await closeRedis().catch(() => null);
     await disconnectDB().catch(() => null);
     process.exit(0);
   };

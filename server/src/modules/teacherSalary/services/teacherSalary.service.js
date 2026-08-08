@@ -12,13 +12,19 @@ import {
   userBranchCondition,
   resolveBranchFromGroup,
 } from "../../../helpers/branchContext.helper.js";
-import { computePeriodsSnapshot, deriveStatus } from "./salaryCompute.helper.js";
+import {
+  computePeriodsSnapshot,
+  deriveStatus,
+  daysInMonth,
+} from "./salaryCompute.helper.js";
 import * as teacherGroupPeriodService from "../../groups/services/teacherGroupPeriod.service.js";
 import logger from "../../../config/logger.js";
+import { localTodayMidnight, toUtcMidnight } from "../../../helpers/attendance.helper.js";
 import {
   compensationsForRange,
   segmentPeriod,
   baseSegmentsForMonth,
+  segmentDays,
 } from "./rateResolver.helper.js";
 import {
   computeStudentUnits,
@@ -811,6 +817,189 @@ export const historyByTeacher = async (teacherId) => {
 // Faqat req.user._id bilan chaqiriladi - ruxsat tekshiruvi shart emas (o'z
 // ma'lumotini ko'radi).
 export const myFinance = async (teacherId) => historyByTeacher(teacherId);
+
+// ═══════════════════════════════════════════════════════════════════════
+// JORIY MAOSH HOLATI - "shu daqiqada bu o'qituvchiga qancha qarzmiz?"
+//
+// NEGA historyByTeacher YETMAYDI: u faqat YARATILGAN oylik qatorlarni
+// qaytaradi, joriy oy qatori esa oy BOSHIDA to'liq summa bilan yaratiladi
+// (generateMonthlySalary job). Ya'ni 8-avgustda ham 31 kunlik oylik
+// "kutilayotgan" bo'lib turadi va "bugungi kunga qancha ishlab qo'ydi?"
+// degan savolga javob yo'q. O'qituvchi oy o'rtasida hisob-kitob so'rasa
+// yoki ishdan bo'shasa - aynan shu raqam kerak bo'ladi.
+//
+// Shuning uchun joriy oy ALOHIDA, o'tgan kunlar ulushicha hisoblanadi:
+//   • base (markaz fiksasi) - stavka segmentlari bo'yicha (bugungacha
+//     bo'lgan kunlar / oydagi kunlar). recalcBaseForTeacherMonth bilan
+//     AYNAN bir xil matematika, faqat oy oxiri o'rniga BUGUN chegara.
+//   • group qatorlari - o'z ish oynasi (workStartDate..workEndDate)
+//     ichida o'tgan kunlar ulushicha. Oy o'rtasida boshlangan guruhda
+//     oddiy "elapsed/totalDays" nisbati summani oshirib yuborardi.
+//   • bonus/deduction - DISKRET hodisa (mukofot/jarima allaqachon
+//     "ishlab olingan"), proratsiya qilinmaydi.
+// ═══════════════════════════════════════════════════════════════════════
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const daysBetween = (fromMs, toMs) => Math.max(0, Math.round((toMs - fromMs) / DAY_MS));
+
+// `now` parametri TESTLAR uchun: soatni mocklamasdan istalgan lahzani
+// berish mumkin (isFutureLocalDay bilan bir xil naqsh).
+export const balanceByTeacher = async (teacherId, { now = new Date() } = {}) => {
+  const tid = toObjectId(teacherId);
+  // FILIAL: boshqa filial o'qituvchisining ismi/moliyasi ochilmasin.
+  const branchCond = userBranchCondition();
+  const teacher = await User.findOne(
+    branchCond ? { _id: tid, $and: [branchCond] } : { _id: tid },
+    { ...safeTeacherProjection, hiredAt: 1, terminatedAt: 1 },
+  ).lean();
+  if (!teacher) throw new ApiError(404, "O'qituvchi topilmadi");
+
+  // "Bugun" - mahalliy (Asia/Tashkent) kalendar kuni. Yarim tundan keyin
+  // UTC bo'yicha hisoblasak kun orqaga surilib, bir kunlik maosh yo'qolardi.
+  const today = localTodayMidnight(now);
+  const year = today.getUTCFullYear();
+  const month = today.getUTCMonth() + 1;
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEndExcl = new Date(Date.UTC(year, month, 1));
+  const totalDays = daysInMonth(year, month);
+  // BUGUNGI KUN SANALMAYDI: u hali tugamagan. 8-avgustda 7 kun ishlangan.
+  const elapsedDays = Math.min(totalDays, daysBetween(monthStart.getTime(), today.getTime()));
+
+  const rows = await TeacherSalary.find(
+    { teacher: tid, ...branchFilter(), isDeleted: { $ne: true } },
+    {
+      kind: 1,
+      year: 1,
+      month: 1,
+      expectedAmount: 1,
+      paidAmount: 1,
+      payableDays: 1,
+      workStartDate: 1,
+      workEndDate: 1,
+    },
+  ).lean();
+
+  // ── O'TGAN OYLAR QOLDIG'I ──
+  // Qator bo'yicha Math.max(0, ...) BILAN emas, SOF ayirma bilan: ortiqcha
+  // to'langan oy keyingi oylardan yechilishi kerak. Har qatorni nolga
+  // qisib qo'ysak, ortiqcha to'lov jimgina yo'qolib, markaz qarzdor bo'lib
+  // ko'rinardi.
+  // KELAJAK oylar (bo'lsa) hisobga KIRMAYDI - ular hali ishlanmagan.
+  const isPast = (r) => r.year < year || (r.year === year && r.month < month);
+  const previousRows = rows.filter(isPast);
+  const previousRemaining = previousRows.reduce(
+    (s, r) => s + (r.expectedAmount || 0) - (r.paidAmount || 0),
+    0,
+  );
+
+  // ── JORIY OY ──
+  const currentRows = rows.filter((r) => r.year === year && r.month === month);
+
+  // Fiksa (base) qismi - stavka segmentlaridan. Ikki marta: to'liq oy va
+  // bugungacha. Nisbati qator summasiga qo'llanadi, shunda qo'lda
+  // tuzatilgan/qulflangan qator ham to'g'ri ulushda bo'linadi.
+  const comps = await compensationsForRange(tid, monthStart, monthEndExcl);
+  const sumSegments = (segs) =>
+    segs.reduce((s, seg) => s + Math.round((seg.amount * segmentDays(seg)) / totalDays), 0);
+
+  const endOfWork = teacher.terminatedAt ? toUtcMidnight(teacher.terminatedAt) : null;
+  const toDateLimit =
+    endOfWork && endOfWork.getTime() < today.getTime() ? endOfWork : today;
+
+  const fixFull = sumSegments(
+    baseSegmentsForMonth(comps, year, month, {
+      from: teacher.hiredAt || null,
+      toExcl: endOfWork,
+    }),
+  );
+  const fixToDate = sumSegments(
+    baseSegmentsForMonth(comps, year, month, {
+      from: teacher.hiredAt || null,
+      toExcl: toDateLimit,
+    }),
+  );
+  const baseRatio = fixFull > 0 ? fixToDate / fixFull : 0;
+
+  // Guruh qatorining ish oynasi ichida bugungacha o'tgan kunlar ulushi.
+  const groupRatio = (row) => {
+    const payable = Number(row.payableDays) || 0;
+    if (payable <= 0) return 0;
+    const start = row.workStartDate
+      ? Math.max(monthStart.getTime(), toUtcMidnight(row.workStartDate).getTime())
+      : monthStart.getTime();
+    // workEndDate INKLYUZIV oxirgi kun → EKSKLYUZIV chegara +1 kun.
+    const rowEnd = row.workEndDate
+      ? toUtcMidnight(row.workEndDate).getTime() + DAY_MS
+      : monthEndExcl.getTime();
+    const endExcl = Math.min(today.getTime(), monthEndExcl.getTime(), rowEnd);
+    return Math.min(1, daysBetween(start, endExcl) / payable);
+  };
+
+  const ratioFor = (row) => {
+    // Boshlang'ich qoldiq O'TGAN davrga tegishli - u to'liq "ishlab
+    // bo'lingan". Pastdagi groupRatio'ga tushib ketsa payableDays=0
+    // bo'lgani uchun 0 qaytarardi va qoldiq kartochkada ko'rinmasdi.
+    if (row.kind === "opening") return 1;
+    if (row.kind === "bonus" || row.kind === "deduction") return 1;
+    if (row.kind === "base") return baseRatio;
+    return groupRatio(row);
+  };
+
+  // Joriy oy qatori HALI YARATILMAGAN bo'lishi mumkin (job oy boshida
+  // ishlaydi, o'qituvchi esa oy o'rtasida ishga olingan). O'shanda fiksa
+  // stavkadan JONLI hisoblanadi - aks holda yangi xodimning kartochkasi
+  // "0 so'm" ko'rsatib, stavka belgilanmagandek tuyulardi.
+  const hasBaseRow = currentRows.some((r) => r.kind === "base");
+  const virtualFixFull = hasBaseRow ? 0 : fixFull;
+  const virtualFixToDate = hasBaseRow ? 0 : fixToDate;
+
+  const monthlyTotal =
+    currentRows.reduce((s, r) => s + (r.expectedAmount || 0), 0) + virtualFixFull;
+  const currentAccrued =
+    currentRows.reduce((s, r) => s + Math.round((r.expectedAmount || 0) * ratioFor(r)), 0) +
+    virtualFixToDate;
+  const currentPaid = currentRows.reduce((s, r) => s + (r.paidAmount || 0), 0);
+
+  // ── STAVKA (FIKSA) - BUGUN amalda bo'lgani ──
+  const activeComp =
+    comps.find(
+      (c) =>
+        toUtcMidnight(c.effectiveFrom).getTime() <= today.getTime() &&
+        (!c.effectiveTo || toUtcMidnight(c.effectiveTo).getTime() > today.getTime()),
+    ) || null;
+  const fixedMonthly =
+    activeComp?.baseType === "fixed_monthly" ? Number(activeComp.baseAmount) || 0 : 0;
+
+  // Ishga kirgandan beri o'tgan kunlar (bo'shagan bo'lsa - o'sha kungacha).
+  const hiredAt = teacher.hiredAt ? toUtcMidnight(teacher.hiredAt) : null;
+  const daysWorked = hiredAt
+    ? daysBetween(hiredAt.getTime(), toDateLimit.getTime())
+    : null;
+
+  return {
+    teacher,
+    asOf: today,
+    year,
+    month,
+    totalDays,
+    elapsedDays,
+    hiredAt: teacher.hiredAt || null,
+    terminatedAt: teacher.terminatedAt || null,
+    daysWorked,
+    // Amaldagi fiksa stavka (oyiga). 0 = fiksa yo'q (faqat guruhdan foiz).
+    fixedMonthly,
+    // Joriy oyning TO'LIQ kutilayotgan summasi (fiksa + guruh + mukofot).
+    monthlyTotal,
+    // Oy boshigacha yig'ilgan qoldiq (to'lanmagan o'tgan oylar).
+    previousRemaining,
+    // Bu oy shu kungacha ishlab olingani.
+    currentAccrued,
+    // Bu oy uchun allaqachon to'langani (avans).
+    currentPaid,
+    // Jami qoldiq: o'tgan oylar + bu oy ishlangani - bu oy to'langani.
+    totalRemaining: previousRemaining + currentAccrued - currentPaid,
+  };
+};
 
 // Majburiyatlar: qoldig'i (expected - paid) > 0 bo'lgan maoshlar.
 // month berilmasa - tanlangan yilning BARCHA oylari bo'yicha (har oy alohida qator).

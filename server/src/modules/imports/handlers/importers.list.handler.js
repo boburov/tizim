@@ -7,10 +7,20 @@ import { listImporters } from "../registry/index.js";
 // client'da takrorlanmaydi (eksportdagi bilan bir xil yondashuv).
 const importersList = asyncHandler(async (req, res) => {
   const data = listImporters()
-    .filter((imp) => hasPermission(req.permissions, imp.permission))
+    .filter(
+      (imp) =>
+        hasPermission(req.permissions, imp.permission) &&
+        // Qo'shimcha huquqlar ham tekshiriladi (masalan xodim importi
+        // rol biriktirishni ham talab qiladi) - aks holda tugma
+        // ko'rinardi-yu, bosilganda 403 chiqardi.
+        (imp.extraPermissions || []).every((p) => hasPermission(req.permissions, p)),
+    )
     .map((imp) => ({
       key: imp.key,
       label: imp.label,
+      // Client shu bayroqqa qarab tahrirlanadigan jadval ustasini yoki
+      // eski (fayl → tasdiq) ustasini ochadi.
+      gridEnabled: Boolean(imp.gridEnabled),
       columns: imp.columns.map((c) => ({
         key: c.key,
         header: c.header,

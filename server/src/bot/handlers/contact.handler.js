@@ -16,9 +16,11 @@ const contactHandler = async (bot, msg) => {
     return;
   }
 
-  const user = await linkByPhone(msg.from.id, contact.phone_number);
+  // Bitta raqamga bir nechta profil bog'langan bo'lishi mumkin (ona ikki
+  // farzandini bitta raqamdan yozdirgan) - hammasi bog'lanadi.
+  const users = await linkByPhone(msg.from.id, contact.phone_number);
 
-  if (!user) {
+  if (users.length === 0) {
     await bot.sendMessage(
       chatId,
       "Bu telefon raqam ro'yxatda topilmadi. Iltimos, administrator bilan bog'laning.",
@@ -26,10 +28,20 @@ const contactHandler = async (bot, msg) => {
     return;
   }
 
+  // Menyu OXIRGI bog'langan profil bo'yicha - getLinkedUser() ham aynan
+  // shuni (eng yangi bog'lanishni) qaytaradi, ya'ni tugmalar bot keyin
+  // ishlatadigan profil bilan mos keladi.
+  const primary = users[users.length - 1];
+  const others = users.length > 1
+    ? `\nBu raqamga ${users.length} ta profil bog'landi: ${users
+        .map((u) => `${u.firstName} ${u.lastName}`.trim())
+        .join(", ")}.`
+    : "";
+
   await bot.sendMessage(
     chatId,
-    `Profilingiz bog'landi. Xush kelibsiz, ${user.firstName}!`,
-    mainMenuFor(user.role),
+    `Profilingiz bog'landi. Xush kelibsiz, ${primary.firstName}!${others}`,
+    mainMenuFor(primary.role),
   );
 };
 

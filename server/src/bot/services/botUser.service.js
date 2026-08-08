@@ -32,25 +32,35 @@ export const markBlocked = async (telegramId, isBlocked = true) =>
 // Telegram contact orqali yuborilgan telefonni User.phone bilan moslashtiradi.
 // KO'P-AKKAUNT: bog'lanish (telegramId, user) juftligi bo'yicha - bitta Telegram
 // bir nechta userga bog'lanaveradi, eski bog'lanishni UZMAYMIZ.
+//
+// BIR RAQAM - BIR NECHTA ODAM: telefon endi takrorlanishi mumkin
+// (qarang: user.model.js phone izohi). Ona ikki farzandini bitta raqamdan
+// yozdirgan bo'lsa, `findOne` ulardan FAQAT BITTASINI bog'lardi va ikkinchi
+// farzandning davomat/to'lov xabarlari hech qayerga bormasdi. Shuning uchun
+// raqamga mos KELGAN HAMMA faol foydalanuvchi bog'lanadi.
+//
+// Qaytariladi: bog'langan foydalanuvchilar ro'yxati (bo'sh bo'lishi mumkin).
 export const linkByPhone = async (telegramId, rawPhone) => {
   const phone = normalizePhone(rawPhone);
-  if (!phone) return null;
+  if (!phone) return [];
 
-  const user = await User.findOne({ phone, isActive: true });
-  if (!user) return null;
+  const users = await User.find({ phone, isActive: true });
+  if (users.length === 0) return [];
 
   // Shu chat (telegramId) uchun mavjud BotUser dan chatId ni olamiz (bo'lsa).
   const existing = await BotUser.findOne({ telegramId });
 
-  await BotUser.findOneAndUpdate(
-    { telegramId, user: user._id },
-    {
-      $set: { user: user._id },
-      $setOnInsert: { telegramId, chatId: existing?.chatId ?? telegramId },
-    },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
-  );
-  return user;
+  for (const user of users) {
+    await BotUser.findOneAndUpdate(
+      { telegramId, user: user._id },
+      {
+        $set: { user: user._id },
+        $setOnInsert: { telegramId, chatId: existing?.chatId ?? telegramId },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+  }
+  return users;
 };
 
 // Bitta Telegram bir nechta userga bog'langan bo'lishi mumkin - oxirgi (eng yangi)

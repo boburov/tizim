@@ -73,7 +73,15 @@ const applyBalanceDelta = async (depositId, delta, { session } = {}) => {
 
 // --- DEPOZIT QO'SHISH / YECHISH ---
 
-export const topup = async (studentId, { amount, method, paidAt, note }, currentUser) => {
+// isOpening - boshlang'ich qoldiq importi (qarang: openingBalance.service.js).
+// Yozish yo'li ATAYLAB shu yagona funksiya: balansni oshirish, ledger yozuvi
+// va autoApply bir joyda turibdi. Import uchun alohida nusxa yozilsa, ertaga
+// shu uch qadamdan biri o'zgarib, ikkinchi nusxa eskirib qolardi.
+export const topup = async (
+  studentId,
+  { amount, method, paidAt, note, isOpening = false },
+  currentUser,
+) => {
   // FILIAL: o'quvchining filiali (ensureStudent allaqachon hujjatni oladi).
   const student = await ensureStudent(studentId);
   const amt = Number(amount);
@@ -86,7 +94,7 @@ export const topup = async (studentId, { amount, method, paidAt, note }, current
 
   const deposit = await getOrCreate(studentId);
   const updated = await applyBalanceDelta(deposit._id, amt);
-  await DepositTransaction.create({
+  const txn = await DepositTransaction.create({
     branchId: student.homeBranchId || null,
     student: deposit.student,
     deposit: deposit._id,
@@ -95,13 +103,18 @@ export const topup = async (studentId, { amount, method, paidAt, note }, current
     method: method || "cash",
     balanceAfter: updated.balance,
     note: note || "",
+    isOpening: Boolean(isOpening),
     paidAt: day,
     createdBy: currentUser?._id || null,
   });
 
   // Pul qo'yilishi bilan mavjud qarzlarni darhol qoplaymiz (eng eskisidan).
   await autoApply(studentId);
-  return getOrCreate(studentId);
+  // txn - chaqiruvchi audit izini yozishi uchun (openingBalance.service.js
+  // materializedRefs). Depozit hujjati esa avvalgidek qaytadi.
+  const fresh = await getOrCreate(studentId);
+  fresh.$lastTransactionId = txn._id;
+  return fresh;
 };
 
 // Yechish uchun umumiy tekshiruvlar. To'g'ridan-to'g'ri yo'lda ham,

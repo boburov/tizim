@@ -188,17 +188,25 @@ export const computePayroll = async (
     },
     { $group: { _id: "$kind", total: { $sum: "$amount" } } },
   ]);
-  const manualBonusTotal =
-    adjustments.find((a) => a._id === "bonus")?.total || 0;
-  const penaltyTotal = adjustments.find((a) => a._id === "penalty")?.total || 0;
+  const totalOf = (kind) => adjustments.find((a) => a._id === kind)?.total || 0;
+  const manualBonusTotal = totalOf("bonus");
+  const penaltyTotal = totalOf("penalty");
+  const openingCreditTotal = totalOf("opening_credit");
+  const openingDebtTotal = totalOf("opening_debt");
 
   // YAKUNIY FORMULA.
-  // Manfiy chiqmaydi: jarima oylikdan katta bo'lsa 0 (qarz keyingi oyga
-  // ko'chirilmaydi - buni odam qo'lda hal qiladi).
-  const finalAmount = Math.max(
-    0,
-    fixedAmount + autoKpiTotal + manualBonusTotal - penaltyTotal,
-  );
+  //
+  // Jarima: manfiy chiqmaydi, ortiqchasi YO'QOLADI (eski qoida - buni
+  // odam qo'lda hal qiladi).
+  //
+  // Boshlang'ich qarz: BOSHQACHA. U haqiqiy pul, shuning uchun shu oyda
+  // ushlab qololmagan qismi yo'qolmaydi - `openingDebtApplied` bilan
+  // qayd etiladi va farqi keyingi oyga ko'chiriladi (carryOverOpeningDebt).
+  const gross =
+    fixedAmount + autoKpiTotal + manualBonusTotal + openingCreditTotal - penaltyTotal;
+  const availableForDebt = Math.max(0, gross);
+  const openingDebtApplied = Math.min(openingDebtTotal, availableForDebt);
+  const finalAmount = Math.max(0, gross - openingDebtApplied);
 
   // ─── SNAPSHOT ───
   //
@@ -231,6 +239,9 @@ export const computePayroll = async (
       autoKpiTotal,
       manualBonusTotal,
       penaltyTotal,
+      openingCreditTotal,
+      openingDebtTotal,
+      openingDebtApplied,
       finalAmount,
     },
   };
@@ -249,6 +260,9 @@ export const computePayroll = async (
         autoKpiTotal,
         manualBonusTotal,
         penaltyTotal,
+        openingCreditTotal,
+        openingDebtTotal,
+        openingDebtApplied,
         finalAmount,
         status: deriveStatus(payroll.paidAmount || 0, finalAmount),
         computedAt: new Date(),
@@ -286,6 +300,95 @@ export const computePayroll = async (
 };
 
 /**
+ * USHLAB QOLINMAGAN BOSHLANG'ICH QARZNI KEYINGI OYGA KO'CHIRADI.
+ *
+ * MUAMMO: xodimning boshlang'ich qarzi 3 mln, oylik maoshi 2 mln.
+ * finalAmount manfiy bo'la olmaydi, ya'ni o'sha oy 0 to'lanadi va
+ * qolgan 1 mln HECH QAYERDA QOLMAYDI - pul jimgina yo'qoladi.
+ * Jarima uchun bu qabul qilingan (odam qo'lda hal qiladi), boshlang'ich
+ * qarz uchun esa YO'Q: u tizimga import qilingan haqiqiy summa va
+ * balansdan yo'qolsa hisob-kitob abadiy noto'g'ri qoladi.
+ *
+ * YECHIM: o'tgan oyning `openingDebtTotal - openingDebtApplied` farqi
+ * shu oyga yangi `opening_debt` qatori bo'lib ko'chiriladi.
+ *
+ * IKKI BARAVAR USHLAB QOLISHDAN HIMOYA - bu yerda eng muhimi. Funksiya
+ * har oy boshida job orqali, server qayta yonganida catch-up orqali va
+ * qo'lda regenerate orqali ham chaqiriladi. Himoya ikki qavatli:
+ *   1) partial unique indeks {employee,year,month,kind} - DB darajasida
+ *      bitta oyga ikkinchi opening_debt qatori UMUMAN yozilmaydi;
+ *   2) E11000 jimgina yutiladi (qator allaqachon bor = ish bajarilgan).
+ *
+ * DIQQAT (ma'lum cheklov): ko'chirilgandan KEYIN o'tgan oy qayta
+ * hisoblansa va `openingDebtApplied` o'zgarsa, ko'chirilgan summa
+ * eskirib qoladi. Avtomatik tuzatilmaydi - ataylab: qarzni jimgina
+ * qayta yozish undan ham xavfliroq. Farq audit hisobotida ko'rinadi.
+ */
+export const carryOverOpeningDebt = async (year, month) => {
+  // O'tgan oy (yanvarda - o'tgan yilning dekabri).
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+
+  // XODIMLAR RO'YXATI BO'YICHA FILTRLANMAYDI - ataylab.
+  //
+  // generateMonth xodimlarni SHARTNOMA (StaffCompensation) bo'yicha
+  // sanaydi. Shartnomasi tugagan, lekin qarzi qolgan xodim o'sha
+  // ro'yxatga tushmaydi - va agar bu yerda ham filtrlasak, uning qarzi
+  // ko'chirilmay zanjir UZILARDI va pul yo'qolardi. Shuning uchun manba
+  // faqat "o'tgan oyda ushlanmagan qarzi bor" sharti.
+  const prevPayrolls = await StaffPayroll.find(
+    {
+      year: prevYear,
+      month: prevMonth,
+      $expr: { $gt: ["$openingDebtTotal", "$openingDebtApplied"] },
+    },
+    { employee: 1, branchId: 1, openingDebtTotal: 1, openingDebtApplied: 1 },
+  ).lean();
+
+  const carriedEmployeeIds = [];
+  let carried = 0;
+  for (const p of prevPayrolls) {
+    const remaining =
+      (p.openingDebtTotal || 0) - (p.openingDebtApplied || 0);
+    if (remaining <= 0) continue;
+
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await StaffPayrollAdjustment.create({
+        employee: p.employee,
+        branchId: p.branchId || null,
+        year,
+        month,
+        kind: "opening_debt",
+        amount: remaining,
+        reason: `Boshlang'ich qarz qoldig'i (${prevMonth}/${prevYear} oyidan ko'chirildi)`,
+        carriedFrom: { year: prevYear, month: prevMonth },
+      });
+      carried += 1;
+      carriedEmployeeIds.push(p.employee);
+    } catch (err) {
+      // E11000 = shu oyga allaqachon ko'chirilgan. Bu XATO EMAS, bu
+      // idempotentlik ishlagani. Lekin xodim baribir ro'yxatga tushadi:
+      // qator bor, ammo uning oylik hisobi hali qurilmagan bo'lishi
+      // mumkin (birinchi urinish yarim yo'lda uzilgan bo'lsa).
+      if (err?.code === 11000) {
+        carriedEmployeeIds.push(p.employee);
+        continue;
+      }
+      logger.warn(
+        { err: err?.message, employee: String(p.employee), year, month },
+        "Boshlang'ich qarz qoldig'ini ko'chirib bo'lmadi",
+      );
+    }
+  }
+
+  if (carried) {
+    logger.info({ year, month, carried }, "Boshlang'ich qarz qoldiqlari ko'chirildi");
+  }
+  return { carried, employeeIds: carriedEmployeeIds };
+};
+
+/**
  * Oylik generatsiya - barcha xodimlar uchun.
  *
  * Kimlar? Shu oyda amal qilgan shartnomasi bor xodimlar. O'qituvchi
@@ -301,8 +404,24 @@ export const generateMonth = async (year, month) => {
     $or: [{ effectiveTo: null }, { effectiveTo: { $gt: start } }],
   });
 
+  // KO'CHIRISH HISOBLASHDAN OLDIN: yangi oyning qatori yaratilishidan
+  // avval o'tgan oyda ushlab qololmagan boshlang'ich qarz shu oyga
+  // o'tkaziladi - aks holda birinchi computePayroll qarzsiz hisoblanib,
+  // keyin ikkinchi marta qayta hisoblash kerak bo'lardi.
+  const carryOver = await carryOverOpeningDebt(year, month);
+
+  // Qarzi ko'chirilgan xodim shartnoma ro'yxatida bo'lmasligi mumkin
+  // (shartnomasi tugagan, lekin qarzi qolgan). Uni qo'shmasak shu oyga
+  // payroll qatori yaratilmasdi va KEYINGI oy ko'chirish zanjiri
+  // uzilardi - qarz o'sha oyda muzlab qolardi.
+  const targetIds = [
+    ...new Map(
+      [...employeeIds, ...carryOver.employeeIds].map((id) => [String(id), id]),
+    ).values(),
+  ];
+
   let computed = 0;
-  for (const id of employeeIds) {
+  for (const id of targetIds) {
     try {
       // eslint-disable-next-line no-await-in-loop
       await computePayroll(id, year, month);
@@ -316,7 +435,7 @@ export const generateMonth = async (year, month) => {
     }
   }
 
-  return { employees: employeeIds.length, computed };
+  return { employees: targetIds.length, computed, carried: carryOver.carried };
 };
 
 /**

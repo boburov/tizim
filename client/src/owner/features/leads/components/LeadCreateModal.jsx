@@ -4,6 +4,7 @@ import Button from "@/shared/components/ui/button/Button";
 import SelectField from "@/shared/components/ui/select/SelectField";
 import ConfirmDialog from "@/shared/components/ui/modal/ConfirmDialog";
 import { extractApiErrorMessage } from "@/shared/utils/apiError";
+import { NO_AUTOFILL_FORM } from "@/shared/constants/form";
 import LeadFormFields from "./LeadFormFields";
 import { useLeadCreateMutation } from "../hooks/useLeadMutations";
 import { validateLead, hasErrors } from "../utils/leadValidation";
@@ -110,7 +111,12 @@ const LeadCreateModal = ({ close, isLoading, setIsLoading }) => {
 
   return (
     <>
-      <form onSubmit={handleSubmit} noValidate className="space-y-3">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="space-y-3"
+        {...NO_AUTOFILL_FORM}
+      >
         {needsBranch && (
           <div>
             <SelectField

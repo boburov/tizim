@@ -44,6 +44,16 @@ const depositTransactionSchema = new mongoose.Schema(
     // Amaldan keyingi balans (audit/ko'rsatish uchun snapshot).
     balanceAfter: { type: Number, default: 0 },
     note: { type: String, trim: true, default: "" },
+
+    // BOSHLANG'ICH QOLDIQ - tizim ishga tushishida import qilingan avans.
+    //
+    // Pul bu tizim mavjud bo'lishidan OLDIN kelgan, shuning uchun u
+    // "bugungi tushum" emas. paidAt allaqachon o'tgan sanaga qo'yiladi
+    // (hisobotlar sana bo'yicha filtrlaydi), lekin ochiq bayroq ham
+    // kerak: "bu depozit qayerdan paydo bo'ldi?" degan savolga sana
+    // emas, aynan shu maydon javob beradi.
+    isOpening: { type: Boolean, default: false, index: true },
+
     paidAt: { type: Date, required: true, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     // TASDIQ orqali yaratilgan bo'lsa - qaysi so'rovdan (aynan bir marta kafolati).
