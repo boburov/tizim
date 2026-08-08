@@ -135,9 +135,16 @@ export const create = async (body, currentUser) => {
   const parentPhone = normalizeOptionalPhone(body.parentPhone);
   assertDistinctPhones(phone, parentPhone);
 
-  const exists = await Lead.findOne({ phone });
-  if (exists) throw new ApiError(409, "Bu telefon raqamli lid allaqachon mavjud");
-
+  // TELEFON TAKRORLANISHI RUXSAT ETILADI (ataylab, uniq tekshiruv YO'Q).
+  //
+  // Sabab: bitta raqam - bitta lid EMAS. Bir odam kuzda ingliz tili uchun
+  // qo'ng'iroq qiladi, bahorda matematika uchun qayta murojaat qiladi; ona
+  // bitta raqamdan ikki farzandini yozdiradi. Eski 409 shu holatlarda
+  // resepshinni BLOKLARDI va u lidni umuman kiritmasdan qo'yardi - ya'ni
+  // qoida ma'lumotni tozalash o'rniga yo'qotardi.
+  //
+  // Raqamning O'ZI esa majburiy bo'lib qoladi (yuqoridagi tekshiruv):
+  // bog'lanib bo'lmaydigan lid - lid emas.
   const status = body.status || "new";
 
   // FILIAL: lid qaysi filialga kelgan. "Barcha filiallar" rejimida client
@@ -177,9 +184,12 @@ export const update = async (id, body, currentUser) => {
   if (body.lastName !== undefined) lead.lastName = String(body.lastName).trim();
   if (body.age !== undefined) lead.age = body.age ?? null;
   if (body.phone !== undefined) {
+    // Takroriy raqam BLOKLANMAYDI (qarang: create'dagi izoh), lekin raqamni
+    // BO'SHATIB ham bo'lmaydi. Tekshiruvsiz `lead.phone = null` bo'lib,
+    // xato mongoose ValidationError'ga aylanardi - foydalanuvchi tushunarsiz
+    // 500 ko'rardi.
     const phone = normalizeOptionalPhone(body.phone);
-    const exists = await Lead.findOne({ phone, _id: { $ne: lead._id } });
-    if (exists) throw new ApiError(409, "Bu telefon raqamli lid allaqachon mavjud");
+    if (!phone) throw new ApiError(400, "Telefon kerak");
     lead.phone = phone;
   }
   if (body.parentPhone !== undefined) {

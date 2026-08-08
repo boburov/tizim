@@ -38,3 +38,25 @@ export const updateSchema = z.object({
 export const removeSchema = z.object({
   params: z.object({ id: z.string().min(1), periodId: z.string().min(1) }),
 });
+
+// ── OMMAVIY TOPSHIRISH ──
+// Bir amalda: "5 ta guruh Aziza'ga, 3 tasi Bekzod'ga, 20-avgustdan".
+// Har bir taqsimotda stavka IXTIYORIY: berilmasa qabul qiluvchi o'zining
+// standart shartnomasi bo'yicha oladi (eng ko'p kerak bo'ladigan holat).
+export const handoverSchema = z.object({
+  params: z.object({ teacherId: z.string().min(1) }),
+  body: z.object({
+    handoverDate: z
+      .string()
+      .regex(DATE_RX, "Sana formati YYYY-MM-DD bo'lishi kerak"),
+    assignments: z
+      .array(
+        z.object({
+          toTeacher: z.string().min(1),
+          groups: z.array(z.string().min(1)).min(1, "Kamida bitta guruh tanlang"),
+          ...salaryRate,
+        }),
+      )
+      .min(1, "Kamida bitta taqsimot ko'rsating"),
+  }),
+});

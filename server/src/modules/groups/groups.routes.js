@@ -27,6 +27,7 @@ import {
   createSchema as teacherPeriodCreateSchema,
   updateSchema as teacherPeriodUpdateSchema,
   removeSchema as teacherPeriodRemoveSchema,
+  handoverSchema as teacherPeriodHandoverSchema,
 } from "./validators/teacherPeriod.validator.js";
 
 import list from "./handlers/list.handler.js";
@@ -52,6 +53,7 @@ import teacherPeriodList from "./handlers/teacherPeriod.list.handler.js";
 import teacherPeriodCreate from "./handlers/teacherPeriod.create.handler.js";
 import teacherPeriodUpdate from "./handlers/teacherPeriod.update.handler.js";
 import teacherPeriodRemove from "./handlers/teacherPeriod.remove.handler.js";
+import teacherPeriodHandover from "./handlers/teacherPeriod.handover.handler.js";
 
 const router = Router();
 
@@ -210,6 +212,17 @@ router.delete(
   requirePermission(PERMISSIONS.GROUPS_UPDATE),
   validate(teacherPeriodRemoveSchema),
   teacherPeriodRemove,
+);
+
+// ── OMMAVIY TOPSHIRISH (ishdan bo'shatish) ──
+// Guruhga emas, O'QITUVCHIGA tegishli amal: uning barcha guruhlarini bir
+// nechta o'qituvchiga taqsimlaydi. Shuning uchun yo'l "/:id" ostida emas.
+router.post(
+  "/teacher-handover/:teacherId",
+  requireAuth,
+  requirePermission(PERMISSIONS.GROUPS_UPDATE),
+  validate(teacherPeriodHandoverSchema),
+  teacherPeriodHandover,
 );
 
 export default router;

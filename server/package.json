@@ -36,6 +36,7 @@
     "test:localday": "node tests/localDayGuard.test.js",
     "test:approval": "node tests/approvalModel.test.js",
     "test:offboarding": "node tests/teacherOffboarding.test.js",
+    "test:handover": "node tests/teacherHandover.test.js",
     "test:config-approval": "node tests/configApprovals.test.js",
     "test:director": "node tests/directorRole.test.js",
     "test:ai": "node tests/aiAdvisor.test.js",

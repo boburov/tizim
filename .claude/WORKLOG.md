@@ -7208,3 +7208,328 @@ Bu hal qiluvchi fakt — taxminim qisman noto'g'ri edi. Endi asosiy savolni teks
 <sub>session `d7b8c3b5` · branch `main` · 30 ta qadam</sub>
 
 ---
+
+## 2026-08-07 22:45 — ishni boshlang tasdqilayman
+
+**So'rov**
+
+> ishni boshlang tasdqilayman
+
+**O'zgargan fayllar (14)**
+
+- `server/src/modules/users/services/users.service.js` — tahrirlandi
+- `server/src/models/attendance.model.js` — tahrirlandi
+- `server/src/helpers/userRelations.helper.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/salaryAdjustment.service.js` — tahrirlandi
+- `server/src/modules/teacherSalary/handlers/adjustment.settle.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/teacherSalary/validators/teacherCompensation.validator.js` — tahrirlandi
+- `server/src/modules/teacherSalary/teacherSalary.routes.js` — tahrirlandi
+- `server/tests/teacherOffboarding.test.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/package.json` — tahrirlandi
+- `server/src/modules/groups/services/teacherGroupPeriod.service.js` — tahrirlandi
+- `server/src/modules/groups/handlers/teacherPeriod.handover.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/groups/validators/teacherPeriod.validator.js` — tahrirlandi
+- `server/src/modules/groups/groups.routes.js` — tahrirlandi
+- `server/tests/teacherHandover.test.js` — yaratildi/qayta yozildi
+
+**Buyruqlar (39)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n -A 45 "export const hardDeleteTeacherData" src/helpers/userRelations.helper.js
+grep -rn "formatMoney\|toLocaleString\|formatSum" src/utils/ src/helpers/ 2>/dev/null | head -5; echo "=== teacherSalary.service umumiy API ==="; grep -nE "^exp…
+echo "=== Attendance ishlatilishi users.service.js da ===" && grep -n "Attendance\." src/modules/users/services/users.service.js; echo "=== userRelations.helper…
+grep -n -B2 -A 6 "recordedBy" src/models/attendance.model.js | head -25
+grep -rn "recordedBy" src/ --include=*.js | grep -v "models/attendance.model.js" | head -15
+grep -rn "recordedBy" src/ 2>/dev/null | grep -v "attendance.model.js" | head -20
+grep -n "Attendance" src/modules/users/services/users.service.js
+cat > _t1.mjs <<'EOF' import mongoose from "mongoose"; import "dotenv/config"; await mongoose.connect(process.env.MONGO_URL); const { default: TeacherSalary } =…
+ls tests/ && echo "=== namuna (bosh qismi) ===" && head -45 tests/approvalModel.test.js 2>/dev/null
+sed -n '752,815p' src/modules/teacherSalary/services/teacherSalary.service.js
+cat src/modules/teacherSalary/teacherSalary.routes.js 2>/dev/null | head -60
+sed -n '60,140p' src/modules/teacherSalary/teacherSalary.routes.js; echo "=== MOUNT ==="; grep -n "teacherSalary\|teacher-salary" src/routes/index.js
+grep -n -A 12 "export const localTodayMidnight" src/helpers/attendance.helper.js; echo "=== joriy oy aniqlash namunasi ==="; grep -rn "getMonth() + 1\|localNow\…
+cat src/modules/teacherSalary/handlers/adjustment.create.handler.js; echo "=== VALIDATOR ==="; grep -n -B3 -A 25 "adjustmentCreateSchema" src/modules/teacherSal…
+head -40 tests/moneyIsolation.test.js; echo "=== helpers ==="; ls tests/helpers/ && head -30 tests/helpers/*.js 2>/dev/null | head -40
+grep -nE "required: true" src/models/user.model.js | head -12; echo "=== TeacherSalary required ==="; grep -nE "required: true" src/models/teacherSalary.model.j…
+node tests/teacherOffboarding.test.js 2>&1 | tail -45
+grep -nE "required: true|enum:|^ [a-zA-Z]+:" src/models/salaryTransaction.model.js | head -25
+node tests/teacherOffboarding.test.js 2>&1 | tail -50
+grep -rn "export const DAYS" src/ | head -3; grep -rn "DAYS = \[" src/constants/*.js src/models/group.model.js 2>/dev/null | head -3
+grep -n '"test:approval"' package.json
+grep -n "teacherPeriod\|teacher-periods" src/modules/groups/groups.routes.js | head -10; echo "=== SERVIS FUNKSIYALARI ==="; grep -nE "^export const (createTeac…
+cat src/modules/groups/handlers/teacherPeriod.create.handler.js; echo "=== SERVIS ==="; ls src/modules/groups/services/
+grep -nE "^export const|^const [a-zA-Z]+ = " src/modules/groups/services/teacherGroupPeriod.service.js | head -25; echo "--- jami satr ---"; wc -l src/modules/g…
+sed -n '1,90p' src/modules/teacherSalary/services/rateResolver.helper.js
+# … yana 14 ta
+```
+
+**Natija**
+
+Boshlayman. Avval vazifalarni belgilab, kerakli fayllarni o'qiyman.
+
+Endi 1-bosqichni yozaman. Avval mavjud yordamchilarni tekshiraman:
+
+Endi `hardDeleteTeacherData` da davomat havolasini uzaman va ishlatilmay qolgan importni tekshiraman:
+
+`recordedBy` majburiy — o'chirilgan foydalanuvchiga osilib qolmasligi uchun uni tekshiraman:
+
+Endi 1-bosqichni haqiqiy baza ustida tekshiraman — bo'sh qatorli o'qituvchi o'chishi, Bobur esa haqli to'silishi kerak:
+
+Predikat ishlayapti (12→6, Bobur haqli to'silgan). Endi haqiqiy servis chaqiruvi bilan sinash uchun mavjud test uslubiga qarayman:
+
+Endi 2-bosqich. Avval qoldiq qanday hisoblanishini va tasdiq oqimini tekshiraman:
+
+Endi "Hisobni yopish" servisini yozaman:
+
+Endi handler, validator va route qo'shaman. Mavjud uslubga qarayman:
+
+Endi 1- va 2-bosqich uchun test yozaman. Mavjud DB testlari qanday izolyatsiya qilishini ko'raman:
+
+1 va 2-bo'lim to'liq o'tdi. `DAYS` enumini tekshiraman:
+
+17/17 o'tdi. `npm` skriptini qo'shib, 3-bosqichga o'taman:
+
+Endi 3-bosqich — ommaviy taqsimlash. Mavjud davr yaratish mantiqini o'rganaman:
+
+Muhim nuance: `normalizeRate` har doim `fixed 0` yozadi. Yangi o'qituvchi 0 maosh olib qolmasligi uchun `rateResolver` ni tekshiraman:
+
+Muhim tuzoq topildi: `create` har doim `salaryType: "fixed"` yozadi, ya'ni yangi o'qituvchi **0 maosh** olib qolardi. Avval shuni hal qilaman:
+
+Endi `handover` servisini yozaman:
+
+Barcha importlar mavjud. Endi handler, validator va route:
+
+Endi eng muhim test — proratsiya va guruh o'qituvchisiz qolmasligi. Avval kompensatsiya modelini ko'raman:
+
+Endi handover testini yozaman:
+
+18/18 o'tdi — proratsiya ham, stavka merosi ham ishlayapti. Skript qo'shib, mavjud testlarda regressiya yo'qligini tekshiraman:
+
+configApprovals ham aslida 49/0 o'tgan (oxirgi satr — ataylab qilingan salb
+
+…(qisqartirildi)
+
+<sub>session `d7b8c3b5` · branch `main` · 83 ta qadam</sub>
+
+---
+
+## 2026-08-07 23:03 — o'qtuvchining moliyaviy qismiyani maosh qismida nega maosh yarata olma
+
+**So'rov**
+
+> o'qtuvchining moliyaviy qismiyani maosh qismida nega maosh yarata olmayapman va nega ochira olmayapman sababini aniqlab bering
+
+**Buyruqlar (13)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "Maosh shartnomasi belgilanmagan\|maosh hisoblanmaydi" src/ | head -5
+grep -rn "Tarix bo'sh\|moliyaviy amal qilinmagan" src/ | head -5
+grep -rn "StaffSalaryCard\|PayrollTimeline" src/ --exclude-dir=node_modules | grep -v "staffPayroll/components/" | head -10
+cd /Users/shukrullo/Desktop/lc-total/server && grep -rn "ROLES.TEACHER\|role !==\|role ===" src/modules/staffPayroll/services/*.js | head -15
+cd /Users/shukrullo/Desktop/lc-total/client && sed -n '90,130p' src/owner/features/staffPayroll/components/StaffSalaryCard.jsx
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n '20,60p' src/modules/staffPayroll/services/staffCompensation.service.js
+cd /Users/shukrullo/Desktop/lc-total/client && ls src/owner/features/staffPayroll/components/ src/owner/features/staffPayroll/components/modals 2>/dev/null | he…
+grep -nE "kpi_only|salaryType|TYPE_OPTIONS|role|isTeacher|ROLES" src/owner/features/staffPayroll/components/modals/CompensationModal.jsx | head -25
+cd /Users/shukrullo/Desktop/lc-total/server && cat > _v.mjs <<'EOF' import mongoose from "mongoose"; import "dotenv/config"; const DB = (process.env.MONGO_URL).…
+grep -nE "^export const" src/modules/staffPayroll/services/staffCompensation.service.js
+cat > _v.mjs <<'EOF' import mongoose from "mongoose"; import "dotenv/config"; const DB = (process.env.MONGO_URL).replace(/(\/[^/?]+)(\?|$)/, "$1_diag_test$2"); …
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "Maosh stavkasi" src/ | head -3
+grep -rn "so'm/oy" src/ | head -5
+```
+
+**Natija**
+
+Ikkita ekranda ziddiyat bor: yuqorida **"3 000 000 so'm/oy"** stavka turibdi, o'ng tomonda esa **"Maosh shartnomasi belgilanmagan"** deyilyapti. Va "Tarix bo'sh" — vaholanki bazada 6 ta yozuv, 17.6 mln bor. Sababni aniqlayman.
+
+Tasdiqlandi — ikkala vidjet ham `staffPayroll` (**xodimlar** maoshi) modulidan. Ular o'qituvchi sahifasida qayerdan chiqayotganini topaman:
+
+Sabab aniqlandi. Endi "Belgilash" tugmasi nega ishlamasligini tekshiraman:
+
+Kodda sabab aniq. Taxminni tasdiqlash uchun servisni ajratilgan bazada sinab ko'raman:
+
+Ikkala sabab ham aniqlandi va takrorlab tasdiqlandi. Yuqoridagi kartani ham tekshiray:
+
+<sub>session `d7b8c3b5` · branch `main` · 15 ta qadam</sub>
+
+---
+
+## 2026-08-07 23:26 — agar bu oylik qismi teacher uchun bo'lmasa role teacherda bu qism kori
+
+**So'rov**
+
+> agar bu oylik qismi teacher uchun bo'lmasa role teacherda bu qism korinmasligi kerak
+
+**O'zgargan fayllar (1)**
+
+- `client/src/owner/features/users/components/tabs/UserProfilePanel.jsx` — tahrirlandi
+
+**Buyruqlar (6)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n -B3 -A 12 "^export const list" src/modules/staffPayroll/services/staffPayroll.service.js | head -40
+sed -n '208,225p' src/modules/staffPayroll/services/staffCompensation.service.js
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "STAFF_COMPENSATION_SET" src/ | head -10
+npx eslint src/owner/features/users/components/tabs/UserProfilePanel.jsx 2>&1 | tail -8; echo "eslint chiqish kodi: $?"
+npx vite build --logLevel error 2>&1 | tail -8; echo "build chiqish kodi: ${PIPESTATUS[0]}"
+npx vite build > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/d7b8c3b5-f2c9-4b63-ad8c-a0ee546c21e1/scratchpad/build.log 2>&1; echo "chiqish kodi: $…
+```
+
+**Natija**
+
+Tushunarli — o'qituvchida bu bo'lim umuman ko'rinmasin. Avval karta ichida nima renderlanishini aniqlayman:
+
+Butun karta — shartnoma, oylar ro'yxati, "Moliyaviy tarix" va modallar — bitta `StaffSalaryCard` ichida. Uni o'qituvchida yashiraman:
+
+Endi o'qituvchi boshqa staff-payroll ekranlarida ham xuddi shu tuzoqqa tushmasligini tekshiraman:
+
+<sub>session `d7b8c3b5` · branch `main` · 9 ta qadam</sub>
+
+---
+
+## 2026-08-07 23:38 — /llm-council bizda oquv markaz tizimi bor edi hammasi yaxshi ishlayapt
+
+**So'rov**
+
+> /llm-council bizda oquv markaz tizimi bor edi hammasi yaxshi ishlayapti shu molaya qismida muamolar mavjud bo'lmoqda yani misol uchun biz tizimni 2026 yıl 1-sentaberda bersak u odam 2025 3-iyuldagi malumotlarni qoshmoqchi bo'ladi bu anniq va biz safe , bank hsiob karta tizimini joriy sildik yani boshlang'ich summa kiritilinadi misol uchun teacher mendan 3mln haqqi bor edi demek boshlangich summa 3mln boladi 3mln qarzi bo'lsa boshlangich summa -3mln bo'aldi shu orqlai kopgina paymentlar yaratilinib ketishini oldini olmoqchi edim va meinig taklifimni muhokama qiling va buni tizimga qanday qilib ideal joylashtrib integeratsia qilsak bo'aldi ?
+
+**Buyruqlar (14)**
+
+```sh
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/d7b8c3b5-f2c9-4b63-ad8c-a0ee546c21e1/scratchpad/council && sed -i '' "s/^GEMINI_MODEL=.*/GEMINI_MOD…
+cd /Users/shukrullo/Desktop/lc-total/server && ls src/models/ | grep -iE "cash|account|safe|bank|kassa|balance|opening" ; echo "--- moliya modellari ---"; ls sr…
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/d7b8c3b5-f2c9-4b63-ad8c-a0ee546c21e1/scratchpad/council && env -u GEMINI_API_KEY -u GOOGLE_API_KEY …
+grep -rn 'enum: \["cash"' src/models/ | head; echo "--- kassa/safe qidiruv ---"; grep -rln "kassa\|Kassa\|cashbox\|safe" src/models/ src/modules/finance/ 2>/dev…
+cd server && grep -rn 'method' src/models/paymentTransaction.model.js src/models/expense.model.js 2>/dev/null | grep -iE "enum|type: String" | head -6; echo "==…
+cd server && grep -n "EXPENSE_METHODS" src/models/expense.model.js | head -3 && grep -n -B2 -A4 "EXPENSE_METHODS = " src/models/expense.model.js; echo "=== 'kas…
+cd /Users/shukrullo/Desktop/lc-total && grep -rlin "openingBalance\|boshlang'ich summa\|boshlangich\|initialBalance\|CashAccount\|cashAccount" server/src client…
+grep -rn "EXPENSE_METHODS = " server/src/models/expense.model.js; echo "=== client moliya bo'limlari ==="; ls client/src/owner/features/ | head -30
+grep -rn "payrollStartFrom" server/src --include=*.js 2>/dev/null | head -12
+grep -rn "payrollStartFrom" server/src/models/user.model.js -A 12 | head -20
+grep -rn "migratsiya\|MIGRATSIYA\|ko'chib kel\|boshqa CRM" server/src/models/ 2>/dev/null | head -10
+sed -n '1,45p' server/src/models/studentDeposit.model.js
+sed -n '125,145p' server/src/models/teacherSalary.model.js
+grep -n -A 18 "const sumByMethod" server/src/modules/financeReport/services/financeReport.service.js | head -24
+```
+
+**Natija**
+
+Avval council'ni sinab ko'raman (o'tgan safar Gemini kvotasi tugagan edi) va parallel ravishda kodda hozirgi holatni tekshiraman.
+
+Council yana ishlamayapti (Gemini 403, OpenAI kaliti yo'q). Kodni tekshirishni davom ettiraman:
+
+Council yopiq bo'lgani uchun tahlilni o'zim beraman — lekin avval loyihada allaqachon bor mexanizmlarni aniqlayman, chunki bitta muhim narsa topildi:
+
+Bu katta topilma. Yana ikki narsani tekshiray:
+
+<sub>session `d7b8c3b5` · branch `main` · 14 ta qadam</sub>
+
+---
+
+## 2026-08-07 23:55 — ok men aytmoqchiman tizim egasi biradiga 40+ teacher 400 oquvhci qoshm
+
+**So'rov**
+
+> ok men aytmoqchiman tizim egasi biradiga 40+ teacher 400 oquvhci qoshmoqchi bo'lsa unga jadval beramiz u shablon bo'adi misol username isim familya number va h.z va boshlangich summasi bo'ladi +300k -200k hammada har hil va shu asosida hisobladi misol +300k bo'lsa biz ulardan 300k qarzimiz bo'ladi -300k bo'lsa ular bizdna qarz hisoblanadi va userlar yaratilinishi ham kerak bo'aldi  yanni men aytmoqchimanki exel orqali hamma userlar avtomatik qoshilishi kerak va qoshilsihi bilanoq username + password ham avto generate boadi va osha sahifani yopish va modalni yopishni qiyinroq qilib qoyamiz va sahifani refresh qilib maulmmotlarni yoq qilib yubora olmasliglari kerak bo'ladi va asosiy qisim maliya bo'lib qolaveraid osha qisimni fix qilsihimiz va men aytganday sefy bank karta qisimlarini qilishimiz lozim bo'aldi va teach yaratyotganda yoki student yaratayoganda ushbu men aytgan boshlangich summa soralsin. (required bo'lishi shart emas)
+
+**Buyruqlar (13)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && ls -R src/modules/imports/ 2>/dev/null | head -40
+cd /Users/shukrullo/Desktop/lc-total && ls client/src/owner/features/ | grep -i import; ls client/src/owner/features/settings/ 2>/dev/null | head; grep -rln "im…
+cd /Users/shukrullo/Desktop/lc-total/server && cat src/modules/imports/registry/index.js
+head -70 src/modules/imports/registry/studentPayments.importer.js
+grep -n -A 30 " columns: \[" src/modules/imports/registry/studentPayments.importer.js | head -40
+grep -rn "generateUsername\|makeUsername\|randomPassword\|generatePassword\|uniqueUsername" src/ 2>/dev/null | head -8; echo "--- client import UI ---"; cd /Use…
+ls src/models/ | grep -i import; echo "--- import modeli ---"; sed -n '1,50p' src/models/importJob.model.js 2>/dev/null || sed -n '1,45p' src/models/import*.js …
+cd /Users/shukrullo/Desktop/lc-total/server && ls src/models/ | grep -i "import\|batch\|job"; echo "=== preview qayerda saqlanadi ==="; grep -n "Model\|save\|cr…
+sed -n '1,60p' src/models/importJob.model.js; echo "=== PREVIEW HANDLER ==="; cat src/modules/imports/handlers/preview.handler.js
+grep -rn "plainPassword\|passwordPlain\|revealPassword\|showPassword" src/models/user.model.js src/modules/users/services/users.service.js 2>/dev/null | head -8…
+grep -rn "usePassword\|password" client/src/owner/features/users/components/UserPasswordCard.jsx | grep -i "query\|api\|hook" | head -5; echo "=== backend parol…
+sed -n '100,120p' server/src/modules/users/users.routes.js; echo "=== GET handler ==="; grep -rn -A 15 "export const getPassword\|const getPassword" server/src/…
+sed -n '586,615p' server/src/modules/users/services/users.service.js; echo "=== hashPassword helper ==="; cat server/src/helpers/password.helper.js
+```
+
+**Natija**
+
+Talablar aniq. Avval loyihada nima borligini tekshiraman — `imports` moduli allaqachon mavjud ekan, uni qayta yozmaslik uchun:
+
+Bu juda muhim: to'liq **import dvigateli** allaqachon bor — shablon, preview, commit, xato hisoboti, tarix va **plagin registri**. Kontraktni o'rganaman:
+
+Endi parol masalasini aniqlayman — 400 ta o'quvchiga avto-parol berilsa, egasi ularni qanday oladi:
+
+<sub>session `d7b8c3b5` · branch `main` · 13 ta qadam</sub>
+
+---
+
+## 2026-08-07 23:58 — leadlarqismida telefon raqam takroriy bo'lsa ham bo'laveradi lekin maj
+
+**So'rov**
+
+> leadlarqismida telefon raqam takroriy bo'lsa ham bo'laveradi lekin majburiy bo'lihsi shart va lidlar statistikasida voryonkalik statistika qiloib bering Savdo Voryonka si qismini
+
+**O'zgargan fayllar (2)**
+
+- `server/src/modules/leads/services/leads.service.js` — tahrirlandi
+- `client/src/owner/features/leads/components/LeadFunnel.jsx` — yaratildi/qayta yozildi
+
+**Buyruqlar (19)**
+
+```sh
+find server/src/modules/leads server/src/models/lead.model.js -type f | sort
+find client/src/owner/features/leads -type f | sort
+grep -n "phone" server/src/modules/leads/services/leads.service.js | head -40
+grep -n "funnel\|stage\|leadToTrial\|trialToEnrolled\|export const stats" server/src/modules/leads/services/leads.service.js | head -30; echo "=== leadStatus ==…
+grep -n "recharts\|chart\|d3\|apexcharts" client/package.json; echo "=== deps ==="; node -e "const p=require('./client/package.json');console.log(Object.keys(p.…
+grep -rn "recharts" client/src --include="*.jsx" | head -10
+cat client/src/shared/constants/leadStatus.js; echo "=== Card ==="; cat client/src/shared/components/ui/card/Card.jsx
+grep -n "no-restricted-syntax" -A 30 client/eslint.config.js | head -45
+grep -n "NO_HARDCODED_COLORS" -B 2 -A 30 client/eslint.config.js | head -50
+grep -n "\-\-card\|--muted\|--border" client/src/index.css | head -10
+grep -n "phone\|required\|Telefon" client/src/owner/features/leads/components/LeadFormFields.jsx | head -25
+grep -rn -- "--card:" client/src/*.css client/src/**/*.css 2>/dev/null | head -5
+find client/src -name "*.css" | head; echo "---"; grep -rn -- "--card:" client/src | head -5
+cd /Users/shukrullo/Desktop/lc-total/client && npx eslint src/owner/features/leads/components/LeadFunnel.jsx 2>&1 | tail -20
+cd /Users/shukrullo/Desktop/lc-total/server && node --check src/modules/leads/services/leads.service.js && echo "syntax OK" && grep -rn "Bu telefon raqamli lid"…
+cd /Users/shukrullo/Desktop/lc-total && grep -rn "allaqachon mavjud" client/src/owner/features/leads server/src/modules/leads | head
+cd /Users/shukrullo/Desktop/lc-total/client && npm run build 2>&1 | tail -12
+cd /Users/shukrullo/Desktop/lc-total/server && ls tests/ && grep -rln "lead" tests/ | head
+grep -n "Lead\|lead" tests/branchLeak.test.js tests/aiAdvisor.test.js | grep -i "phone\|duplicate\|409" | head
+```
+
+**Natija**
+
+Leads modulini ko'rib chiqaman.
+
+Aniq. Ikkala ishni ham qilaman.
+
+## 1. Server — telefon takrorlanishi ruxsat, lekin majburiy
+
+## 2. Savdo voronkasi — haqiqiy voronka grafigi
+
+<sub>session `28b12a0d` · branch `main` · 31 ta qadam</sub>
+
+---
+
+## 2026-08-08 01:46 — voryonkani ichiga textlarni tiqib tushuntrib keting shuni ozi yetadi
+
+**So'rov**
+
+> voryonkani ichiga textlarni tiqib tushuntrib keting shuni ozi yetadi
+
+**O'zgargan fayllar (1)**
+
+- `client/src/owner/features/leads/components/LeadFunnel.jsx` — yaratildi/qayta yozildi
+
+**Buyruqlar (1)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && npx eslint src/owner/features/leads/components/LeadFunnel.jsx && npm run build 2>&1 | tail -5
+```
+
+**Natija**
+
+Legendani olib tashlab, hammasini voronka ichiga ko'chiraman.
+
+<sub>session `28b12a0d` · branch `main` · 2 ta qadam</sub>
+
+---

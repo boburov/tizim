@@ -15,6 +15,7 @@ const UserProfilePanel = () => {
   const { profile } = useOutletContext();
   const { openModal } = useModal();
   const isStudent = profile.role === ROLES.STUDENT;
+  const isTeacher = profile.role === ROLES.TEACHER;
 
   const openAddToGroup = () =>
     openModal(MODAL.STUDENT_ADD_TO_GROUP, {
@@ -32,10 +33,21 @@ const UserProfilePanel = () => {
         <UserProfileCard profile={profile} />
       </div>
       <div className="space-y-5">
-        {/* MAOSH - faqat xodimlarda (o'quvchida ma'nosiz). O'qituvchida
-            ham ko'rinadi: unga KPI shartnomasi ochilishi mumkin, asosiy
-            oyligi esa o'zining modulida qoladi. */}
-        {!isStudent && <StaffSalaryCard employee={profile} />}
+        {/* MAOSH - FAQAT XODIMLARDA (staff payroll moduli).
+            O'QUVCHIDA: ma'nosiz.
+            O'QITUVCHIDA: ATAYLAB YASHIRILGAN. Bu karta StaffCompensation'ni
+            o'qiydi, o'qituvchining oyligi esa BUTUNLAY boshqa modulda
+            (TeacherCompensation) va profil tepasida ko'rinib turadi. Ikkalasi
+            bir sahifada turganda karta "Maosh shartnomasi belgilanmagan - bu
+            xodimga maosh hisoblanmaydi" deb yozardi, holbuki o'qituvchiga
+            3 mln/oy hisoblanayotgan bo'lardi - ochiqdan-ochiq zid ma'lumot.
+            Ustiga-ustak "Belgilash" tugmasi ham boshi berk ko'cha edi:
+            forma standart `salaryType:"fixed"` yuboradi, server esa
+            o'qituvchiga faqat `kpi_only` ga ruxsat beradi (oylik ikki marta
+            hisoblanmasligi uchun) - ya'ni tugma har doim xato qaytarardi.
+            Backend allaqachon shu qarashda: employeesWithoutCompensation()
+            o'qituvchini ro'yxatdan chiqarib tashlaydi. */}
+        {!isStudent && !isTeacher && <StaffSalaryCard employee={profile} />}
         <UserPasswordCard user={profile} />
         <UserTelegramCard telegram={profile.telegram} />
         {isStudent && (
