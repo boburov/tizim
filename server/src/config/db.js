@@ -100,6 +100,53 @@ const migrateStudentPaymentOpeningIndex = async () => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────
+// TeacherSalary: eski {teacher,group,year,month} unique indeksi.
+//
+// Model uni ALLAQACHON ikkita PARTIAL indeksga bo'lgan (guruh qatorlari
+// alohida, markaz qatorlari alohida), lekin ESKISI bazada qolib ketgan -
+// mongoose autoIndex hech qachon indeks o'chirmaydi. Natijada
+// teacherSalary.model.js dagi izohda TUZATILDI deb yozilgan xato
+// amalda hamon kuchda:
+//
+//   `group: null` bo'lgan hujjatlar oddiy (partial bo'lmagan) unique
+//   indeksda BIR-BIRIGA to'qnashadi, chunki MongoDB null'ni oddiy
+//   qiymat deb sanaydi. Ya'ni bitta o'qituvchida bir oyda fiksa (base)
+//   qatori bilan mukofot (bonus) qatori BIRGA TURA OLMAYDI - ikkinchisi
+//   E11000 bilan rad etiladi va maosh JIMGINA kam hisoblanadi.
+//
+// Boshlang'ich qoldiqning guruhsiz qatori ham aynan shu to'siqqa uriladi.
+//
+// Backfill KERAK EMAS (StudentPayment migratsiyasidan farqi shu): yangi
+// indekslarning ikkalasi ham partial va `kind` bo'yicha ochiq filtrlangan,
+// ya'ni "yo'q maydon null bo'lib indekslanadi" teshigi bu yerda yo'q.
+const LEGACY_TS_INDEX = "teacher_1_group_1_year_1_month_1";
+
+const migrateTeacherSalaryIndex = async () => {
+  const exists = await mongoose.connection.db
+    .listCollections({ name: "teachersalaries" })
+    .hasNext();
+  if (!exists) return;
+
+  const coll = mongoose.connection.collection("teachersalaries");
+  const indexes = await coll.indexes();
+
+  // Nomi bo'yicha emas, SHAKLI bo'yicha ham tekshiramiz: yangi partial
+  // indeks nomi boshqacha (`..._kind_1`), shuning uchun adashib uni
+  // o'chirib yuborish xavfi yo'q - lekin `partialFilterExpression`
+  // yo'qligini ham talab qilamiz, bu ikkinchi qulf.
+  const legacy = indexes.find(
+    (i) => i.name === LEGACY_TS_INDEX && i.unique === true && !i.partialFilterExpression,
+  );
+  if (!legacy) return;
+
+  await coll.dropIndex(LEGACY_TS_INDEX);
+  logger.warn(
+    { index: LEGACY_TS_INDEX },
+    "TeacherSalary: eskirgan unique indeks o'chirildi (partial indekslar bilan almashtirildi)",
+  );
+};
+
 export const connectDB = async () => {
   await mongoose.connect(env.MONGO_URL);
   logger.info("MongoDB ulandi");
@@ -114,6 +161,7 @@ export const connectDB = async () => {
   // keyin topib, orqaga qaytarish deyarli imkonsiz - shuning uchun
   // server umuman ko'tarilmagani xavfsizroq.
   await migrateStudentPaymentOpeningIndex();
+  await migrateTeacherSalaryIndex();
 
   // 3) YANGI INDEKSNI YARATISH. Model schema'sidagi barcha indekslarni
   //    yaratadi (mavjudlariga tegmaydi). Ochiq chaqiriladi - autoIndex
@@ -123,6 +171,9 @@ export const connectDB = async () => {
     "../models/studentPayment.model.js"
   );
   await StudentPayment.createIndexes();
+
+  const { default: TeacherSalary } = await import("../models/teacherSalary.model.js");
+  await TeacherSalary.createIndexes();
 };
 
 export const disconnectDB = async () => {

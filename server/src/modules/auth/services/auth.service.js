@@ -383,5 +383,44 @@ export const registerUser = async (body, scope = {}) => {
     }
   }
 
-  return sanitizeUser(user);
+  // ─── BOSHLANG'ICH QOLDIQ ───
+  //
+  // Odam tizimga kirishidan OLDINGI qarzdorlik. Shu yerda yozilishi
+  // MUHIM: keyingi barcha hisob-kitob (oylik qarz, maosh, to'lov) shu
+  // nuqtadan boshlanadi.
+  //
+  // XATO ODAM YARATILISHINI BEKOR QILMAYDI: u allaqachon saqlangan va
+  // bu yerda tranzaksiya yo'q. Lekin PUL jimgina yo'qolmasligi kerak,
+  // shuning uchun xato javobga `openingBalanceError` bo'lib qaytadi va
+  // owner uni /api/opening-balance orqali qayta kiritadi.
+  const result = sanitizeUser(user);
+  if (body.openingBalance) {
+    try {
+      const openingBalanceService = await import(
+        "../../openingBalance/services/openingBalance.service.js"
+      );
+      await openingBalanceService.create(
+        {
+          user: user._id,
+          role: body.role,
+          amount: body.openingBalance,
+          branchId: homeBranchId,
+          // Guruh HALI YO'Q: o'quvchi qarzi guruhga qo'shilishni kutadi.
+          group: null,
+          joinedAt: doc.enrolledAt || null,
+          note: body.openingBalanceNote || "",
+        },
+        { currentUser: { _id: scope.userId || null } },
+      );
+    } catch (err) {
+      logger.error(
+        { err, userId: user._id, amount: body.openingBalance },
+        "Boshlang'ich qoldiq yozilmadi - qo'lda kiritish kerak",
+      );
+      result.openingBalanceError =
+        "Boshlang'ich qoldiq yozilmadi. Uni profil sahifasidan qayta kiriting.";
+    }
+  }
+
+  return result;
 };

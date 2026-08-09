@@ -278,6 +278,25 @@ export const qk = Object.freeze({
     report: (params) => ["finance", "report", params],
   },
 
+  // SHAXSIY MOLIYAVIY TARIX (ledger).
+  //
+  // Bu MANBA hujjatlardan qayta hisoblanadi (to'lov, maosh, depozit,
+  // boshlang'ich qoldiq), shuning uchun har qanday moliyaviy mutatsiya
+  // uni ham eskirtiradi. Prefiksi ATAYLAB alohida ("ledger") - u
+  // birdaniga bir necha modulga tegishli va ularning birortasining
+  // ostiga qo'yish "nega to'lov o'zgarganda maosh keshi tozalandi?"
+  // degan chalkashlik tug'dirardi.
+  ledger: {
+    all: () => ["ledger"],
+    statement: (userId) => ["ledger", "statement", userId],
+    my: () => ["ledger", "me"],
+  },
+
+  openingBalance: {
+    all: () => ["openingBalance"],
+    list: (params) => ["openingBalance", "list", params],
+  },
+
   // O'quvchi depoziti (garov)
   deposits: {
     all: () => ["deposits"],

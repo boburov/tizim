@@ -1,0 +1,54 @@
+import asyncHandler from "../../../middleware/asyncHandler.js";
+import ApiError from "../../../utils/ApiError.js";
+import User from "../../../models/user.model.js";
+import { ROLES } from "../../../constants/roles.js";
+import * as openingBalanceService from "../services/openingBalance.service.js";
+
+/**
+ * Boshlang'ich qoldiqni QO'LDA kiritish.
+ *
+ * Odam yaratish formasida qoldiq kiritilmagan (yoki o'sha yerda yozilmay
+ * qolgan) bo'lsa - yagona kirish nuqtasi shu. Ikkinchi marta yuborilsa
+ * `duplicate` qaytadi va PUL IKKI MARTA YOZILMAYDI (user bo'yicha unique
+ * indeks).
+ */
+const create = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.body.user, {
+    role: 1,
+    homeBranchId: 1,
+    enrolledAt: 1,
+  }).lean();
+  if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
+
+  // Rol uchta guruhga keltiriladi: o'quvchi / o'qituvchi / qolgan hammasi
+  // (direktor, administrator, buxgalter... - ular "staff" hisobida).
+  const role =
+    user.role === ROLES.STUDENT || user.role === ROLES.TEACHER
+      ? user.role
+      : "staff";
+
+  const result = await openingBalanceService.create(
+    {
+      user: user._id,
+      role,
+      amount: req.body.amount,
+      group: req.body.group || null,
+      branchId: user.homeBranchId || null,
+      joinedAt: user.enrolledAt || null,
+      note: req.body.note || "",
+    },
+    { currentUser: req.user },
+  );
+
+  if (result.status === "duplicate") {
+    throw new ApiError(409, "Bu odamga boshlang'ich qoldiq allaqachon kiritilgan");
+  }
+
+  res.status(201).json({
+    success: true,
+    data: result.opening,
+    message: "Boshlang'ich qoldiq kiritildi",
+  });
+});
+
+export default create;

@@ -183,11 +183,18 @@ teacherSalarySchema.pre("validate", function (next) {
   if (this.kind === "group" && !this.group) {
     return next(new Error("Guruh qatori uchun guruh ko'rsatilishi shart"));
   }
-  if (this.kind === "opening" && !this.group) {
-    return next(
-      new Error("Boshlang'ich qoldiq qatori uchun guruh ko'rsatilishi shart"),
-    );
-  }
+  // BOSHLANG'ICH QOLDIQ guruhsiz bo'lishi MUMKIN (va odatda shunday).
+  //
+  // "Markaz o'qituvchiga 3 mln qarzdor" degan fakt hech qaysi GURUHGA
+  // tegishli emas - u markaz darajasidagi majburiyat. Guruh majburiy
+  // bo'lganida o'qituvchi ishga olinayotgan paytda (guruhi hali yo'q)
+  // boshlang'ich qoldiqni umuman kiritib bo'lmasdi, importda esa
+  // operator tasodifiy guruh tanlashga majbur bo'lardi va qarz
+  // o'sha guruh xarajati bo'lib ko'rinardi.
+  //
+  // Unikallik xavfi yo'q: guruhsiz qatorlarga #2 indeks faqat
+  // kind="base" uchun qo'llanadi, boshlang'ich qoldiqning bittaligini
+  // esa OpeningBalance'ning user bo'yicha unique indeksi kafolatlaydi.
   if (this.kind === "base" && this.group) {
     return next(new Error("Fiksa (base) qatori guruhga bog'lanmaydi"));
   }

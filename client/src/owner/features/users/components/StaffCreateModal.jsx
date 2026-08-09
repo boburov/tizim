@@ -13,11 +13,16 @@ import SelectField from "@/shared/components/ui/select/SelectField";
 import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectField";
 import Button from "@/shared/components/ui/button/Button";
 import BranchCreateModal from "@/owner/features/branches/components/modals/BranchCreateModal";
+import OpeningBalanceField from "@/owner/features/ledger/components/OpeningBalanceField";
 
 // Constants
 import { ROLES } from "@/shared/constants/roles";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 import { NO_AUTOFILL, NO_AUTOFILL_FORM } from "@/shared/constants/form";
+import {
+  parseOpeningAmount,
+  isOpeningAmountValid,
+} from "@/owner/features/ledger/utils/ledger";
 
 const initialState = (homeBranchId) => ({
   firstName: "",
@@ -27,6 +32,11 @@ const initialState = (homeBranchId) => ({
   password: "",
   role: "",
   homeBranchId: homeBranchId || "",
+
+  // Boshlang'ich qoldiq - ishga olishdan OLDINGI hisob-kitob.
+  // Manfiy = xodim qarzdor, musbat = markaz qarzdor, 0 = qoldiq yo'q.
+  openingBalance: "",
+  openingNote: "",
 });
 
 /**
@@ -100,13 +110,16 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
     obj.password.length >= 6 &&
     obj.role &&
     obj.homeBranchId &&
+    // Nol/bo'sh - YAROQLI holat ("qoldiq yo'q").
+    isOpeningAmountValid(obj.openingBalance) &&
     !usernameTaken;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!isValid || checkPending) return;
     setIsLoading(true);
-    mutate({
+
+    const body = {
       firstName: obj.firstName.trim(),
       lastName: obj.lastName.trim(),
       username: obj.username.trim().toLowerCase(),
@@ -114,7 +127,17 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
       phone: obj.phone || undefined,
       role: obj.role,
       homeBranchId: obj.homeBranchId,
-    });
+    };
+
+    // Nol bo'lsa maydon UMUMAN yuborilmaydi: server "qoldiq yo'q"
+    // holatini yozuvning YO'QLIGI bilan ifodalaydi.
+    const opening = parseOpeningAmount(obj.openingBalance);
+    if (opening) {
+      body.openingBalance = opening;
+      if (obj.openingNote.trim()) body.openingBalanceNote = obj.openingNote.trim();
+    }
+
+    mutate(body);
   };
 
   return (
@@ -228,6 +251,14 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
         <p className="text-xs opacity-60 mt-1">
           Rol ruxsatlarini "Rollar va ruxsatlar" bo'limida sozlaysiz
         </p>
+      </div>
+
+      <div className="pt-2 border-t">
+        <OpeningBalanceField
+          form={obj}
+          disabled={isLoading}
+          personLabel="xodim"
+        />
       </div>
 
       <div className="flex gap-2 pt-2">

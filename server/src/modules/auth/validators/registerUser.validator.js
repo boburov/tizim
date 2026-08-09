@@ -6,6 +6,10 @@ import {
   COMP_VARIABLE_TYPES,
   COMP_PERCENT_BASES,
 } from "../../../models/teacherCompensation.model.js";
+import {
+  openingAmountSchema,
+  openingNoteSchema,
+} from "../../openingBalance/validators/openingBalance.validator.js";
 
 // gender faqat o'quvchi uchun - o'qituvchida jins so'ralmaydi.
 const STUDENT_FIELDS = ["enrolledAt", "gender"];
@@ -64,6 +68,17 @@ export const registerUserSchema = z.object({
       // maoshsiz yaratiladi va profil sahifasida "Maosh belgilanmagan"
       // ogohlantirishi ko'rinadi.
       compensation: compensationSchema.optional(),
+
+      // BOSHLANG'ICH QOLDIQ - odam tizimga KIRISHIDAN OLDINGI hisob-kitob.
+      //
+      // ISHORA (ikkala rol uchun bir xil):
+      //   +X = markaz shu odamga X qarzdor
+      //   -X = odam markazga X qarzdor
+      //
+      // Berilmasa yoki 0 bo'lsa - yozuv umuman yaratilmaydi ("qoldiq yo'q"
+      // holati hujjatning YO'QLIGI bilan ifodalanadi).
+      openingBalance: openingAmountSchema,
+      openingBalanceNote: openingNoteSchema,
 
       // FILIAL. Odatda aktiv filialdan (x-branch-id) olinadi, lekin
       // "Barcha filiallar" rejimida aktiv filial YO'Q - o'shanda client

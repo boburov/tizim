@@ -99,10 +99,11 @@ export const OPENING_COLUMN = col("openingBalance", "Boshlang'ich summa", {
   width: 22,
   example: "+300000",
   note:
-    "Ixtiyoriy. ISHORA MUHIM: (+) ortiqcha to'langan (avans), " +
-    "(-) kam to'langan (qarz). O'quvchi +300000 = bizga 300 000 ortiqcha " +
-    "bergan; -300000 = bizga 300 000 qarz. O'qituvchi/xodim +300000 = biz " +
-    "unga ortiqcha berganmiz (u bizga qarz); -300000 = biz unga qarzmiz.",
+    "Ixtiyoriy. ISHORA MUHIM va BARCHA rollar uchun BIR XIL: " +
+    "(+) markaz shu odamga qarzdor, (-) odam markazga qarzdor. " +
+    "Masalan o'quvchi -300000 = u markazga 300 000 qarz; +300000 = avans. " +
+    "O'qituvchi/xodim +300000 = markaz unga 300 000 qarzdor (to'lanadi); " +
+    "-300000 = u markazga qarz (oylikdan ushlanadi).",
 });
 
 export const NOTE_COLUMN = col("note", "Izoh", {

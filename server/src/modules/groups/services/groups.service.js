@@ -28,6 +28,7 @@ import * as financePaymentService from "../../finance/services/studentPayment.se
 import * as teacherSalaryService from "../../teacherSalary/services/teacherSalary.service.js";
 import * as teacherGroupPeriodService from "./teacherGroupPeriod.service.js";
 import * as depositService from "../../deposits/services/deposit.service.js";
+import * as openingBalanceService from "../../openingBalance/services/openingBalance.service.js";
 import * as systemNotificationsService from "../../systemNotifications/services/systemNotifications.service.js";
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { safeRecomputeStudentCompletion } from "../../../helpers/studentCompletion.helper.js";
@@ -1172,6 +1173,23 @@ export const addStudent = async (
 
   // joinedAt oyidan tugash oyigacha barcha oylar uchun qarz yoziladi.
   await ensureFinanceForMembershipRange(groupId, membership);
+
+  // BOSHLANG'ICH QARZNI YOZIB QO'YISH.
+  //
+  // O'quvchi guruhsiz yaratilgan bo'lsa, uning tizimga kirishidan
+  // oldingi qarzi "guruh kutmoqda" holatida turadi (StudentPayment
+  // qatori guruhsiz mavjud bo'lolmaydi). Guruh ANIQ bo'lgan birinchi
+  // daqiqa - aynan shu yer.
+  //
+  // ensureFinanceForMembershipRange'dan KEYIN: ichkarida depozitdan
+  // avto-qoplash chaqiriladi va u eng eski qarzdan boshlab yopadi.
+  // Oylik planlar allaqachon yozilgan bo'lsa, bitta o'tishda hammasi
+  // to'g'ri taqsimlanadi.
+  //
+  // IDEMPOTENT va BEST-EFFORT: ikkinchi guruhda qayta ishlamaydi
+  // (yozuv endi "kutmayapti"), xatosi esa guruhga qo'shishni bekor
+  // qilmaydi - qarang materializePendingForStudent izohi.
+  await openingBalanceService.materializePendingForStudent(studentId, groupId);
 
   await safeRecomputeStudentCompletion(studentId);
 

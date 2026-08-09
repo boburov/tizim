@@ -4,6 +4,10 @@ import {
   COMP_VARIABLE_TYPES,
   COMP_PERCENT_BASES,
 } from "../../../models/teacherCompensation.model.js";
+import {
+  openingAmountSchema,
+  openingNoteSchema,
+} from "../../openingBalance/validators/openingBalance.validator.js";
 
 // ISHGA OLISHDA MAOSH (ixtiyoriy). O'qituvchi uchun formaning o'zida
 // oylik belgilanadi - keyin alohida sahifaga o'tish shart emas.
@@ -52,6 +56,11 @@ export const createStaffSchema = z.object({
     hiredAt: z.coerce.date().optional().nullable(),
     // Faqat o'qituvchi uchun ma'noli - boshqa rollarda e'tiborsiz qoldiriladi.
     compensation: compensationSchema.optional(),
+    // BOSHLANG'ICH QOLDIQ - ishga olishdan OLDINGI hisob-kitob.
+    //   +X = markaz xodimga qarzdor (to'lanmagan eski oylik)
+    //   -X = xodim markazga qarzdor (ortiqcha olingan avans)
+    openingBalance: openingAmountSchema,
+    openingBalanceNote: openingNoteSchema,
     // Tasdiq talab qilinganda so'rovchi qoldiradigan izoh (owner ko'radi).
     requestNote: z.string().trim().max(500).optional(),
   }),

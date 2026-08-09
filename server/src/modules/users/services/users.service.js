@@ -1116,7 +1116,39 @@ export const createStaff = async (body, currentUser) => {
     }
   }
 
-  return buildUserProfile(user);
+  // ─── BOSHLANG'ICH QOLDIQ ───
+  // Maosh stavkasi bilan bir xil naqsh: xato XODIM YARATILISHINI bekor
+  // qilmaydi, lekin javobda ochiq ko'rinadi - pul jimgina yo'qolmasin.
+  const profile = await buildUserProfile(user);
+  if (body.openingBalance) {
+    try {
+      const openingBalanceService = await import(
+        "../../openingBalance/services/openingBalance.service.js"
+      );
+      await openingBalanceService.create(
+        {
+          user: user._id,
+          // O'qituvchi bo'lmagan HAR QANDAY rol (direktor, administrator,
+          // buxgalter, custom rol...) xodim hisobida yuritiladi.
+          role: body.role === ROLES.TEACHER ? ROLES.TEACHER : "staff",
+          amount: body.openingBalance,
+          branchId: homeBranchId,
+          group: null,
+          note: body.openingBalanceNote || "",
+        },
+        { currentUser },
+      );
+    } catch (err) {
+      logger.error(
+        { err, userId: user._id, amount: body.openingBalance },
+        "Boshlang'ich qoldiq yozilmadi - qo'lda kiritish kerak",
+      );
+      profile.openingBalanceError =
+        "Boshlang'ich qoldiq yozilmadi. Uni profil sahifasidan qayta kiriting.";
+    }
+  }
+
+  return profile;
 };
 
 /**

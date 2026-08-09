@@ -168,9 +168,9 @@ const staffImporter = {
     opening: data.openingBalance || 0,
     direction:
       (data.openingBalance || 0) > 0
-        ? "Xodim bizga qarz (oylikdan ushlanadi, qoldig'i keyingi oyga ko'chadi)"
+        ? "Biz xodimga qarzmiz (oylikka qo'shiladi)"
         : (data.openingBalance || 0) < 0
-          ? "Biz xodimga qarzmiz (oylikka qo'shiladi)"
+          ? "Xodim bizga qarz (oylikdan ushlanadi, qoldig'i keyingi oyga ko'chadi)"
           : "",
     warning:
       [data.duplicateNameWarning, data.openingWarning].filter(Boolean).join(". ") ||
@@ -249,8 +249,8 @@ const staffImporter = {
       } else {
         messages.push(
           data.openingBalance > 0
-            ? `Avans ${data.openingBalance.toLocaleString("ru-RU")} so'm - oylikdan ushlanadi`
-            : `Qoldiq ${Math.abs(data.openingBalance).toLocaleString("ru-RU")} so'm - to'lanishi kerak`,
+            ? `Qoldiq ${data.openingBalance.toLocaleString("ru-RU")} so'm - to'lanishi kerak`
+            : `Avans ${Math.abs(data.openingBalance).toLocaleString("ru-RU")} so'm - oylikdan ushlanadi`,
         );
       }
     }

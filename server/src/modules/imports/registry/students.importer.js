@@ -192,17 +192,23 @@ const studentsImporter = {
       }
     }
 
-    // ── Boshlang'ich QARZ uchun guruh majburiy ──
+    // ── Boshlang'ich QARZ guruhsiz: XATO EMAS, KUTISH ──
     //
-    // StudentPayment guruhsiz bo'lolmaydi (model talabi). Guruhsiz qarz
-    // yozib bo'lmaydi, shuning uchun xato ANIQ ko'rsatiladi - aks holda
-    // materializatsiya yozish paytida yiqilardi va odam "qoldig'i bor,
-    // lekin hech qayerda ko'rinmaydi" holatida qolardi.
+    // StudentPayment guruhsiz bo'lolmaydi, shuning uchun qarz darhol
+    // qator bo'lib yozilmaydi. Lekin u YO'QOLMAYDI: yozuv "guruh
+    // kutmoqda" holatida saqlanadi, balansda darhol ko'rinadi va
+    // o'quvchi birinchi guruhga qo'shilganda avtomatik yoziladi
+    // (openingBalance.service.js -> materializePendingForStudent).
+    //
+    // Ilgari bu XATO edi va butun qator rad etilardi - guruhi hali
+    // aniqlanmagan o'quvchilarni umuman import qilib bo'lmasdi.
     if ((data.openingBalance || 0) < 0 && !data.groupId) {
-      errors.push({
-        field: "groupName",
-        message: "Boshlang'ich qarz (-) uchun guruh tanlanishi shart",
-      });
+      data.openingWarning = [
+        data.openingWarning,
+        "Guruh tanlanmagan - qarz guruhga qo'shilgunga qadar kutib turadi",
+      ]
+        .filter(Boolean)
+        .join(". ");
     }
 
     return { errors, data };

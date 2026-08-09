@@ -260,6 +260,19 @@ export const ENDPOINTS = Object.freeze({
     discountById: (id) => `/finance/discounts/${id}`,
   },
 
+  // SHAXSIY MOLIYAVIY TARIX (ledger) - boshlang'ich qoldiq →
+  // tranzaksiyalar → joriy balans. Faqat o'qiydi.
+  ledger: {
+    statement: (userId) => `/ledger/${userId}`,
+    my: "/ledger/me",
+  },
+
+  // BOSHLANG'ICH QOLDIQ (tizimga o'tishdan oldingi hisob-kitob).
+  openingBalance: {
+    root: "/opening-balance",
+    repair: "/opening-balance/repair",
+  },
+
   // O'quvchi depoziti (garov)
   deposits: {
     studentSummary: (sid) => `/deposits/students/${sid}`,

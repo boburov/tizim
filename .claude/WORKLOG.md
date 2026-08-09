@@ -7897,3 +7897,193 @@ Endi o'qituvchi va hodim importerlari.
 <sub>session `29a6469d` · branch `main` · 206 ta qadam</sub>
 
 ---
+
+## 2026-08-09 13:06 — ## O‘quv Markaz Tizimi — Moliyaviy Hisob Tizimini To‘g‘rilash Siz seni
+
+**So'rov**
+
+> ## O‘quv Markaz Tizimi — Moliyaviy Hisob Tizimini To‘g‘rilash
+>
+> Siz senior full-stack developer va buxgalteriya/finance tizimlari bo‘yicha tajribali mutaxassis sifatida ushbu moliyaviy modulni loyihalang.
+>
+> Bizda o‘quv markazining moliyaviy tizimi mavjud. Tizimda **o‘quvchilar, o‘qituvchilar va boshqa xodimlar** mavjud. Har bir shaxsning markaz bilan o‘zaro moliyaviy balansi bo‘lishi kerak.
+>
+> ### 1. Boshlang‘ich balans (Opening Balance)
+>
+> O‘quvchi, o‘qituvchi yoki xodim yaratilayotgan vaqtda uning **boshlang‘ich balansi** kiritilishi kerak.
+>
+> Masalan:
+>
+> * `+3,000,000 UZS` → markaz ushbu shaxsga **3 mln so‘m qarzdor**. Ya'ni markaz kelajakda unga 3 mln so‘m berishi kerak.
+> * `-3,000,000 UZS` → ushbu shaxs markazga **3 mln so‘m qarzdor**. Ya'ni markaz undan 3 mln so‘m olishi kerak.
+> * `0 UZS` → hech qanday boshlang‘ich qarzdorlik mavjud emas.
+>
+> Bu qiymat shaxsni yaratish jarayonining o‘zida belgilanadi.
+>
+> ### 2. Nima uchun Opening Balance kerak?
+>
+> Tizimga yangi shaxs qo‘shilganda, uning markazga kirishidan OLDINGI moliyaviy holatini ham hisobga olishimiz kerak.
+>
+> Masalan:
+>
+> O‘qituvchi 2026-yil 1-mayda ishga qabul qilindi.
+>
+> Ammo markaz va o‘qituvchi o‘rtasida oldindan mavjud bo‘lgan qarzdorlik bor
+> …
+
+**O'zgargan fayllar (37)**
+
+- `server/src/models/openingBalance.model.js` — tahrirlandi
+- `server/src/modules/openingBalance/services/openingBalance.service.js` — tahrirlandi
+- `server/src/models/teacherSalary.model.js` — tahrirlandi
+- `server/src/modules/ledger/services/ledger.service.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/ledger/handlers/statement.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/ledger/validators/statement.validator.js` — yaratildi/qayta yozildi
+- `server/src/modules/ledger/ledger.routes.js` — yaratildi/qayta yozildi
+- `server/src/modules/ledger/handlers/myStatement.handler.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/routes/index.js` — tahrirlandi
+- `server/src/modules/openingBalance/validators/openingBalance.validator.js` — yaratildi/qayta yozildi
+- `server/src/modules/openingBalance/handlers/create.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/openingBalance/handlers/list.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/openingBalance/handlers/repair.handler.js` — yaratildi/qayta yozildi
+- `server/src/modules/openingBalance/openingBalance.routes.js` — yaratildi/qayta yozildi
+- `server/src/modules/auth/validators/registerUser.validator.js` — tahrirlandi
+- `server/src/modules/auth/services/auth.service.js` — tahrirlandi
+- `server/src/modules/users/validators/createStaff.validator.js` — tahrirlandi
+- `server/src/modules/users/services/users.service.js` — tahrirlandi
+- `server/src/modules/groups/services/groups.service.js` — tahrirlandi
+- `server/src/modules/imports/registry/userImportBase.js` — tahrirlandi
+- `server/src/modules/imports/registry/teachers.importer.js` — tahrirlandi
+- `server/src/modules/imports/registry/staff.importer.js` — tahrirlandi
+- `server/src/modules/imports/registry/students.importer.js` — tahrirlandi
+- `server/tests/ledger.test.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/package.json` — tahrirlandi
+- `server/src/config/db.js` — tahrirlandi
+- `server/src/modules/teacherSalary/services/salaryTransaction.service.js` — tahrirlandi
+- `client/src/shared/api/endpoints.js` — tahrirlandi
+- `client/src/shared/lib/query/keys.js` — tahrirlandi
+- `client/src/owner/features/ledger/api/ledger.api.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ledger/hooks/useLedgerQuery.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ledger/utils/ledger.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ledger/components/OpeningBalanceField.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/users/components/UserCreateModal.jsx` — tahrirlandi
+- `client/src/owner/features/ledger/components/LedgerPanel.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ledger/index.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/users/pages/UserDetailPage.jsx` — tahrirlandi
+
+**Buyruqlar (79)**
+
+```sh
+ls -la && cat package.json 2>/dev/null | head -60
+find . -path ./node_modules -prune -o -type d -print 2>/dev/null | head -80
+find server/src client/src -type d | head -60 && echo "---PROMT---" && cat PROMT.MD
+ls server && cat server/package.json | head -50
+cat server/CLAUDE.md
+ls server/src/models && echo "---MODULES---" && ls server/src/modules
+find server/src/modules/openingBalance -type f | head -40 && echo "=== FINANCE ===" && find server/src/modules/finance -type f | head -60
+grep -n "hiredAt\|joinedAt\|openingBalance\|balance" server/src/models/user.model.js
+grep -rn "openingBalance\|openingAmount" server/src --include=*.js | grep -v "models/openingBalance" | head -40
+grep -rn "openingBalance" server/src --include="*.js" | grep -v "models/openingBalance.model" | head -40
+grep -rln "balance\|Balance" client/src/owner/features | head -30 && echo "=== FEATURES ===" && ls client/src/owner/features
+ls server/src/modules/users/handlers server/src/modules/users/services server/src/modules/users/validators 2>/dev/null && echo "=== ROUTES ===" && cat server/sr…
+cat server/src/routes/index.js
+grep -rn "ROLES.TEACHER\|role: \"teacher\"\|role: ROLES" server/src/modules/users/services/users.service.js | head -20; echo "=== createStaff validator ==="; ca…
+find server/src/modules/teacherSalary -type f | head -40; echo "=== balance handler ==="; grep -rn "balance" server/src/modules/teacherSalary/teacherSalary.rout…
+grep -n "balanceByTeacher\|export const" server/src/modules/teacherSalary/services/salaryReport.service.js | head -30
+grep -rn "balanceByTeacher" server/src/modules/teacherSalary/services/*.js | head
+grep -rn "registerUser\|register" server/src/modules/auth/auth.routes.js | head; echo "=== auth handlers ==="; ls server/src/modules/auth/handlers server/src/mo…
+ls client/src/owner/features/users/components client/src/owner/features/users/pages 2>/dev/null
+grep -rn "opening" server/src/modules/imports/registry/teachers.importer.js | sed -n '1,40p'
+grep -n "export const registerUser" -A 120 server/src/modules/auth/services/auth.service.js | head -140
+sed -n '1,60p' server/src/models/studentDeposit.model.js; echo "=== DEPTX ==="; sed -n '1,60p' server/src/models/depositTransaction.model.js
+sed -n '1,80p' server/src/models/staffPayrollAdjustment.model.js; echo "=== STAFF SALARY TXN ==="; sed -n '1,70p' server/src/models/staffSalaryTransaction.model…
+grep -n "kind\|expectedAmount\|paidAmount\|isOpening\|status\|reason" server/src/models/teacherSalary.model.js | head -40
+grep -n "" server/src/models/staffPayroll.model.js | sed -n '1,140p'
+# … yana 54 ta
+```
+
+**Natija**
+
+Avvalo mavjud kodni ko'rib chiqaman.
+
+Mavjud finance modellari bor ekan. Ularni chuqurroq o'qiyman.
+
+Tizim allaqachon ancha yetuk. Aniq bo'shliqlarni topish uchun yana bir necha faylni o'qiyman.
+
+Kodni tekshirib chiqdim. Tizimda allaqachon `OpeningBalance` modeli, materializatsiya servisi va rolga xos moliya modullari bor — lekin spetsifikatsiyangizga nisbatan **3 ta jiddiy bo'shliq** topdim, va bittasi to'g'ridan-to'g'ri ziddiyat:
+
+**Ziddiyat:** hozirgi tizimda o'qituvchi/xodim uchun ishora **teskari**. [openingBalance.model.js:31](server/src/models/openingBalance.model.js#L31) va [userImportBase.js:98-106](server/src/modules/imports/registry/userImportBase.js#L98-L106) da: *"O'qituvchi +300000 = biz unga ortiqcha berganmiz (u bizga qarz)"*. Sizning §8 esa: *"Opening Balance: +3,000,000 → Markaz o'qituvchiga qarzdor"*. Bu Excel import shabloniga ham yozilgan.
+
+Ikkala qaror ham qabul qilindi. Endi qolgan modellarni tekshirib, implementatsiyaga o'taman.
+
+Endi implementatsiya. Avval o'zgartiriladigan fayllarni o'qiyman.
+
+Endi kod yozaman. Avval model:
+
+Endi servis — konvensiya, kutish holati va guruhga qo'shilganda materializatsiya:
+
+Endi servisning `create()` va materializatsiya qismini yangilayman:
+
+`year`/`month` maydonlari `immutable` — davrni qayta yozib bo'lmaydi. Buni tuzataman:
+
+Endi asosiy qism — birlashgan **ledger** (moliyaviy tarix) modulini yozaman.
+
+Endi handler va route:
+
+Endi routerni ulaymiz va yaratish oqimiga boshlang'ich balansni qo'shamiz:
+
+Boshlang'ich balans uchun to'liq API (yaratish/ro'yxat/tuzatish) qo'shaman:
+
+Endi yaratish formalariga ulaymiz:
+
+Backend tayyor. Import zanjiri va sintaksisni tekshiraman:
+
+24 ta mavjud test o'tdi. Endi spec misollarini tekshiradigan test yozaman:
+
+Muhim topilma: bazada **eski indeks** qolib ketgan. `config/db.js` 
+
+…(qisqartirildi)
+
+<sub>session `edbbde9f` · branch `main` · 186 ta qadam</sub>
+
+---
+
+## 2026-08-09 14:06 — hosh endi bitta inout orqali hal qiling miol 0 bo'lsa defaul -da bo'ls
+
+**So'rov**
+
+> hosh endi bitta inout orqali hal qiling miol 0 bo'lsa defaul -da bo'lsa qarz + bo'lsa haq hisoblasnishi kerak bo'ladi
+
+**O'zgargan fayllar (3)**
+
+- `client/src/owner/features/ledger/utils/ledger.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ledger/components/OpeningBalanceField.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/ledger/index.js` — tahrirlandi
+
+**Buyruqlar (9)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && node -p "require('./node_modules/imask/package.json').version" && grep -rn "signed\|min:" node_modules/imask/esm/…
+sed -n '1,60p' node_modules/imask/esm/masked/number.d.ts
+grep -n "DEFAULTS" -A 15 node_modules/imask/esm/masked/number.js | head -25
+cd /Users/shukrullo/Desktop/lc-total && python3 - <<'PY' import pathlib # ── UserCreateModal ── p = pathlib.Path("client/src/owner/features/users/components/Use…
+cd client && npm run lint 2>&1 | tail -3 && npm run build 2>&1 | tail -5
+npm run lint 2>&1 | tail -3 && npm run build 2>&1 | tail -5
+node --input-type=module -e " import IMask from 'imask'; const m = IMask.createMask({ mask: Number, scale: 0, thousandsSeparator: ' ', min: -500000000, max: 500…
+cd /Users/shukrullo/Desktop/lc-total && grep -rn "OPENING_DIRECTION\|toOpeningAmount\|openingAmount\b" client/src --include="*.js" --include="*.jsx" || echo "Es…
+sed -n '/const opening = parseOpeningAmount/,/^ }$/p' client/src/owner/features/users/components/UserCreateModal.jsx && echo "--- STAFF ---" && sed -n '/const o…
+```
+
+**Natija**
+
+Tushundim — yo'nalish tanlagichni olib tashlab, bitta ishorali input qilaman. Avval `InputMoney` manfiy qiymatni qabul qiladimi, tekshiraman:
+
+`min` sukut bo'yicha `MIN_SAFE_INTEGER` — demak `InputMoney` manfiy qiymatni allaqachon qabul qiladi. Bitta inputga o'tkazaman:
+
+Endi ikkala modalni yangilayman:
+
+Manfiy qiymat haqiqatan ishlashini IMask darajasida tekshiraman:
+
+<sub>session `edbbde9f` · branch `main` · 12 ta qadam</sub>
+
+---

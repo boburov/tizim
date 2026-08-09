@@ -23,10 +23,11 @@ import * as staffPayrollService from "../../staffPayroll/services/staffPayroll.s
  * ro'yxati - O'ZGARISHSIZ ishlaydi. Ikkinchi "balans" jadvali bo'lganida
  * to'lov kelganda bittasi kamayib, ikkinchisi eskirib qolardi.
  *
- * ─── ISHORA QOIDASI ───
- * Pulning tabiiy yo'nalishi: O'quvchi → Markaz → O'qituvchi/Xodim.
- *   +X = shu yo'nalishda X ORTIQCHA to'langan (avans)
- *   -X = shu yo'nalishda X KAM to'langan (qarz)
+ * ─── ISHORA QOIDASI (shaxs nuqtai nazaridan) ───
+ *   +X = MARKAZ shu shaxsga X qarzdor
+ *   -X = SHAXS markazga X qarzdor
+ * Barcha rollar uchun bir xil. Eski yozuvlar boshqa qoidada
+ * (signConvention: "flow") - o'qishda partyAmount() ishlatiladi.
  *
  * ─── XATOLIK YO'NALISHI (eng muhim qaror) ───
  * Langar hujjat (OpeningBalance) materializatsiyadan OLDIN yoziladi.
@@ -88,12 +89,35 @@ export const resolveOpeningPeriod = async ({ student, group, joinedAt }) => {
   return prevPeriod(anchor.year, anchor.month);
 };
 
-/** Rol + ishoradan materializatsiya turini aniqlaydi. */
+/**
+ * Rol + ishoradan materializatsiya turini aniqlaydi.
+ *
+ * Kirish summasi HAR DOIM "party" konvensiyasida (+ = markaz qarzdor),
+ * shuning uchun qoida rolga qarab o'zgarmaydi: musbat → credit (biz
+ * qarzmiz), manfiy → debt (u qarz).
+ */
 export const resolveKind = (role, amount) => {
   const positive = Number(amount) > 0;
   if (role === ROLES.STUDENT) return positive ? "student_credit" : "student_debt";
-  if (role === ROLES.TEACHER) return positive ? "teacher_debt" : "teacher_credit";
-  return positive ? "staff_debt" : "staff_credit";
+  if (role === ROLES.TEACHER) return positive ? "teacher_credit" : "teacher_debt";
+  return positive ? "staff_credit" : "staff_debt";
+};
+
+/**
+ * SAQLANGAN summani "party" konvensiyasiga keltiradi (+ = markaz qarzdor).
+ *
+ * Balansni O'QIYDIGAN har bir joy SHU funksiyadan o'tishi shart -
+ * `ob.amount` ni to'g'ridan-to'g'ri ishlatish eski (flow) yozuvlarda
+ * o'qituvchi/xodim ishorasini teskari ko'rsatadi.
+ */
+export const partyAmount = (ob) => {
+  const amt = Number(ob?.amount) || 0;
+  if (!amt) return 0;
+  // Yangi yozuvlar allaqachon shaxs nuqtai nazarida.
+  if (ob?.signConvention === "party") return amt;
+  // Eski (flow): o'quvchida ikkala qoida mos tushadi, o'qituvchi/xodimda
+  // teskari (u yerda +X "biz ortiqcha berdik" = u bizga qarz degani edi).
+  return ob?.role === ROLES.STUDENT ? amt : -amt;
 };
 
 /**
@@ -193,14 +217,16 @@ const materializeStudentDebt = async (ob) => {
 // ("markaz boshqa tizimdan ko'chib kelganda"): hech qanday avtomatik
 // qayta hisob bu qatorga tegmaydi.
 const materializeTeacher = async (ob) => {
-  if (!ob.group) {
-    throw new ApiError(
-      400,
-      "O'qituvchining boshlang'ich qoldig'i uchun guruh ko'rsatilishi shart",
-    );
+  // GURUH IXTIYORIY: qoldiq markaz darajasidagi majburiyat (qarang
+  // teacherSalary.model.js pre-validate izohi). Guruh berilmasa filial
+  // o'qituvchining o'z filialidan olinadi.
+  let branchId = ob.branchId;
+  if (!branchId && ob.group) branchId = await resolveBranchFromGroup(ob.group);
+  if (!branchId) {
+    const teacher = await User.findById(ob.user, { homeBranchId: 1 }).lean();
+    branchId = teacher?.homeBranchId || null;
   }
-  const branchId = ob.branchId || (await resolveBranchFromGroup(ob.group));
-  if (!branchId) throw new ApiError(400, "Guruh filiali aniqlanmadi");
+  if (!branchId) throw new ApiError(400, "O'qituvchining filiali aniqlanmadi");
 
   // credit → musbat (biz qarzmiz), debt → manfiy (u bizga qarz).
   const expectedAmount =
@@ -209,7 +235,7 @@ const materializeTeacher = async (ob) => {
   const doc = await TeacherSalary.create({
     branchId,
     teacher: ob.user,
-    group: ob.group,
+    group: ob.group || null,
     year: ob.year,
     month: ob.month,
     kind: "opening",
@@ -296,18 +322,16 @@ export const create = async (
 
   const kind = resolveKind(role, amt);
 
-  // Guruh MAJBURIY bo'lgan hollar - materializatsiyaga kirishdan OLDIN
-  // tekshiriladi. Aks holda langar yozilib, materializatsiya yiqilardi va
-  // odam "qoldig'i bor, lekin ko'rinmaydi" holatida qolardi.
-  if (kind === "student_debt" && !group) {
-    throw new ApiError(400, "O'quvchining boshlang'ich qarzi uchun guruh tanlanishi shart");
-  }
-  if ((kind === "teacher_credit" || kind === "teacher_debt") && !group) {
-    throw new ApiError(
-      400,
-      "O'qituvchining boshlang'ich qoldig'i uchun guruh tanlanishi shart",
-    );
-  }
+  // O'QUVCHI QARZI GURUHSIZ: yozuv yaratiladi, lekin MATERIALIZATSIYA
+  // KUTIB TURADI. StudentPayment guruhsiz mavjud bo'lolmaydi, o'quvchi
+  // esa guruhga qo'shilishidan oldin yaratiladi - va uning eski qarzi
+  // aynan shu daqiqada ma'lum bo'ladi.
+  //
+  // Xato QAYTARILMAYDI: qarz ledgerda darhol ko'rinadi (ledger
+  // OpeningBalance hujjatining O'ZIDAN o'qiydi, materializatsiya
+  // natijasidan emas), guruhga qo'shilganda esa qator avtomatik
+  // yoziladi - qarang materializePendingForStudent().
+  const awaitingGroup = kind === "student_debt" && !group;
 
   // DAVR. O'quvchida - eng eski oydan oldingi oy (to'lov taqsimoti shunga
   // tayanadi). Boshqalarda - o'tgan oy: xodimda ko'chirish zanjiri aynan
@@ -332,6 +356,9 @@ export const create = async (
       year: period.year,
       month: period.month,
       kind,
+      // Yangi yozuvlar HAR DOIM shaxs nuqtai nazarida (+ = markaz qarzdor).
+      signConvention: "party",
+      pendingReason: awaitingGroup ? "awaiting_group" : "",
       note,
       importJob,
       createdBy: currentUser?._id || null,
@@ -345,6 +372,10 @@ export const create = async (
   }
 
   // ── 2-QADAM: MATERIALIZATSIYA ──
+  // Guruh kutayotgan yozuv chetlab o'tiladi - "created" holatida qaytadi
+  // va guruhga qo'shilishda materializePendingForStudent() uni oladi.
+  if (awaitingGroup) return { status: "created", opening };
+
   try {
     const refs = await MATERIALIZERS[kind](opening, { currentUser });
     opening.materializedRefs = refs;
@@ -379,7 +410,14 @@ export const create = async (
  * yomoni, yarim tuzatilgan holatni ko'zdan yashirardi.
  */
 export const repairPending = async ({ limit = 200, currentUser = null } = {}) => {
-  const pending = await OpeningBalance.find({ materializedAt: null })
+  // `pendingReason` bo'sh bo'lganlar - ya'ni HAQIQATAN yiqilganlar.
+  // Guruh kutayotgan o'quvchilar bu yerga tushmaydi: ularda tuzatiladigan
+  // narsa yo'q va har urinishda bir xil xato bilan yiqilib, ro'yxatni
+  // shovqin bilan to'ldirardi.
+  const pending = await OpeningBalance.find({
+    materializedAt: null,
+    pendingReason: "",
+  })
     .limit(limit)
     .sort({ createdAt: 1 });
 
@@ -402,6 +440,66 @@ export const repairPending = async ({ limit = 200, currentUser = null } = {}) =>
   }
 
   return { total: pending.length, repaired, failed };
+};
+
+/**
+ * GURUH KUTAYOTGAN BOSHLANG'ICH QARZNI YOZIB QO'YISH.
+ *
+ * O'quvchi BIRINCHI guruhga qo'shilganda chaqiriladi. Shu daqiqada
+ * StudentPayment qatori uchun kerak bo'lgan yagona narsa - guruh -
+ * paydo bo'ladi.
+ *
+ * IDEMPOTENT: faqat `materializedAt: null` VA `pendingReason:
+ * "awaiting_group"` bo'lgan yozuv olinadi. Muvaffaqiyatdan keyin
+ * ikkala shart ham buziladi, ya'ni ikkinchi guruhga qo'shilish yana
+ * bir qarz qatori yaratmaydi.
+ *
+ * BEST-EFFORT: bu yerdagi xato guruhga qo'shishni BEKOR QILMAYDI.
+ * O'quvchi guruhsiz qolgandan ko'ra, qarzi materializatsiyasiz
+ * (lekin ledgerda ko'rinib turgan holda) qolgani yaxshiroq - yozuv
+ * `materializeError` bilan belgilanadi va repairPending() oladi.
+ */
+export const materializePendingForStudent = async (studentId, groupId) => {
+  if (!studentId || !groupId) return null;
+
+  const ob = await OpeningBalance.findOne({
+    user: studentId,
+    kind: "student_debt",
+    materializedAt: null,
+    pendingReason: "awaiting_group",
+  });
+  if (!ob) return null;
+
+  // DAVR QAYTA HISOBLANMAYDI (year/month `immutable`) - va SHART EMAS.
+  //
+  // Yaratilishda davr `enrolledAt` dan bir oy OLDIN qo'yilgan, a'zolik esa
+  // ro'yxatga olingan sanadan oldin boshlana olmaydi (groups.service.js ->
+  // applyMembershipDates buni rad etadi). Demak guruhning eng eski oylik
+  // plani HAR DOIM shu davrdan keyin turadi va to'lov taqsimoti eng eski
+  // qarzni - boshlang'ich qarzni - birinchi bo'lib yopadi.
+  ob.group = groupId;
+  if (!ob.branchId) ob.branchId = await resolveBranchFromGroup(groupId);
+
+  try {
+    const refs = await materializeStudentDebt(ob);
+    ob.materializedRefs = refs;
+    ob.materializedAt = new Date();
+    ob.materializeError = "";
+    ob.pendingReason = "";
+    await ob.save();
+    return ob;
+  } catch (err) {
+    // Kutish holatidan CHIQARILADI: sabab endi "guruh yo'q" emas, haqiqiy
+    // xato. Shu bilan yozuv repairPending() ko'rish maydoniga o'tadi.
+    ob.pendingReason = "";
+    ob.materializeError = String(err?.message || err).slice(0, 500);
+    await ob.save().catch(() => null);
+    logger.error(
+      { err, student: String(studentId), group: String(groupId) },
+      "Guruhga qo'shilgandan keyin boshlang'ich qarzni yozib bo'lmadi",
+    );
+    return null;
+  }
 };
 
 /** Bitta odamning boshlang'ich qoldig'i (profil kartochkasi uchun). */

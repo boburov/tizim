@@ -232,13 +232,11 @@ const teachersImporter = {
       }
     }
 
-    if (data.openingBalance && !data.groupId) {
-      errors.push({
-        field: "groupName",
-        message:
-          "Boshlang'ich qoldiq uchun guruh tanlanishi shart (maosh to'lovi guruhsiz ishlamaydi)",
-      });
-    }
+    // GURUH ENDI SHART EMAS: boshlang'ich qoldiq markaz darajasidagi
+    // majburiyat va guruhsiz maosh qatori sifatida yoziladi (qarang
+    // teacherSalary.model.js pre-validate izohi). Ilgari bu yerda
+    // majburiy edi va operator tasodifiy guruh tanlashga majbur
+    // bo'lardi - qarz o'sha guruhning xarajati bo'lib ko'rinardi.
 
     return { errors, data };
   },
@@ -251,9 +249,9 @@ const teachersImporter = {
     // importda qilinmaydi, ya'ni o'tgan oylar maoshi yaratilmaydi.
     direction:
       (data.openingBalance || 0) > 0
-        ? "O'qituvchi bizga qarz (keyingi oylikdan ushlanadi)"
+        ? "Biz o'qituvchiga qarzmiz (to'lanadi)"
         : (data.openingBalance || 0) < 0
-          ? "Biz o'qituvchiga qarzmiz (to'lanadi)"
+          ? "O'qituvchi bizga qarz (keyingi oylikdan ushlanadi)"
           : "",
     warning:
       [data.duplicateNameWarning, data.compensationWarning, data.openingWarning]
@@ -312,8 +310,8 @@ const teachersImporter = {
       } else {
         messages.push(
           data.openingBalance > 0
-            ? `Avans ${data.openingBalance.toLocaleString("ru-RU")} so'm - keyingi oylikdan ushlanadi`
-            : `Qoldiq ${Math.abs(data.openingBalance).toLocaleString("ru-RU")} so'm - to'lanishi kerak`,
+            ? `Qoldiq ${data.openingBalance.toLocaleString("ru-RU")} so'm - to'lanishi kerak`
+            : `Avans ${Math.abs(data.openingBalance).toLocaleString("ru-RU")} so'm - keyingi oylikdan ushlanadi`,
         );
       }
     }

@@ -9,6 +9,11 @@ import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectF
 import Button from "@/shared/components/ui/button/Button";
 import BranchCreateModal from "@/owner/features/branches/components/modals/BranchCreateModal";
 import CompensationFields from "@/owner/features/teacherSalary/components/CompensationFields";
+import OpeningBalanceField from "@/owner/features/ledger/components/OpeningBalanceField";
+import {
+  parseOpeningAmount,
+  isOpeningAmountValid,
+} from "@/owner/features/ledger/utils/ledger";
 
 import {
   BASE_TYPES,
@@ -54,6 +59,12 @@ const initialState = (defaultRole) => ({
   // teacher
   birthDate: "",
   hiredAt: "",
+
+  // ── boshlang'ich qoldiq (ikkala rol uchun ham) ──
+  // Ishorali summa: manfiy = odam qarzdor, musbat = markaz qarzdor,
+  // 0/bo'sh = qoldiq yo'q.
+  openingBalance: "",
+  openingNote: "",
 
   // ── 2-qadam: maosh stavkasi ──
   baseType: BASE_TYPES.FIXED_MONTHLY,
@@ -131,6 +142,9 @@ const UserCreateModal = ({
     (obj.role !== ROLES.TEACHER || obj.hiredAt) &&
     (obj.role !== ROLES.STUDENT || obj.enrolledAt) &&
     (!needsBranch || obj.homeBranchId) &&
+    // Nol/bo'sh - YAROQLI holat ("qoldiq yo'q"). Faqat chegaradan
+    // oshgan summa yaratishni bloklaydi.
+    isOpeningAmountValid(obj.openingBalance) &&
     !usernameTaken;
 
   // Kiritilgan maosh stavkasi yaroqlimi. Bo'sh bo'lishi ham MUMKIN
@@ -155,6 +169,15 @@ const UserCreateModal = ({
     if (needsBranch && obj.homeBranchId) body.homeBranchId = obj.homeBranchId;
     if (obj.phone.trim()) body.phone = obj.phone.trim();
     if (obj.gender) body.gender = obj.gender;
+
+    // BOSHLANG'ICH QOLDIQ. Nol bo'lsa maydon UMUMAN yuborilmaydi -
+    // server "qoldiq yo'q" holatini yozuvning YO'QLIGI bilan ifodalaydi
+    // (nol summali yozuv rad etiladi).
+    const opening = parseOpeningAmount(obj.openingBalance);
+    if (opening) {
+      body.openingBalance = opening;
+      if (obj.openingNote.trim()) body.openingBalanceNote = obj.openingNote.trim();
+    }
 
     if (isStudent) {
       body.enrolledAt = obj.enrolledAt;
@@ -371,6 +394,12 @@ const UserCreateModal = ({
               />
             </div>
           )}
+
+          <OpeningBalanceField
+            form={obj}
+            disabled={isLoading}
+            personLabel={isStudent ? "o'quvchi" : "o'qituvchi"}
+          />
 
           <div className="flex gap-2 pt-1">
             <Button

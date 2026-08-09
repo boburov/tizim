@@ -18,6 +18,7 @@ import {
   TeacherCompensationCard,
   TeacherSalaryBalanceCard,
 } from "@/owner/features/teacherSalary";
+import { LedgerPanel } from "@/owner/features/ledger";
 import { BotStatusBadge } from "@/shared/components/userProfile";
 import UserBranchModal from "../components/UserBranchModal";
 import { EmploymentDateChangeModal } from "@/owner/features/staffPayroll";
@@ -205,6 +206,18 @@ const UserDetailPage = () => {
           <TeacherCompensationCard teacherId={id} hiredAt={profile.hiredAt} />
         </>
       )}
+
+      {/* MOLIYAVIY TARIX - har uch rol uchun bir xil.
+          "Balans qancha?" degan savolga javob HAMMA yerda bitta joyda
+          bo'lishi kerak: ilgari o'quvchi to'lovi, o'qituvchi maoshi va
+          xodim oyligi uch xil ekranda, uch xil ishora bilan turardi va
+          ularni birga qo'yib "kimga qancha qarzmiz?" degan savolga
+          javob berib bo'lmasdi.
+
+          Ruxsat tekshirilmaydi - server FINANCE_READ yoki SALARY_READ
+          talab qiladi va ruxsatsiz so'rov 403 bilan qaytadi; panel esa
+          "ochib bo'lmadi" holatini o'zi ko'rsatadi. */}
+      <LedgerPanel userId={id} />
 
       <TabsLinks items={tabs} />
       <Outlet context={{ profile, historyData, historyLoading, noActiveGroup }} />

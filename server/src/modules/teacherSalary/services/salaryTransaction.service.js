@@ -27,17 +27,32 @@ const validateSalaryPayment = async ({ salaryId, paidAt }) => {
   const salary = await TeacherSalary.findById(salaryId);
   if (!salary) throw new ApiError(404, "Maosh topilmadi");
 
-  // Arxivlangan guruh maoshiga to'lov yozilmaydi (avval arxivdan chiqarish kerak).
-  // branchId ham shu yerdan olinadi - qo'shimcha so'rov shart emas.
-  const group = await Group.findById(salary.group, {
-    isActive: 1,
-    isDeleted: 1,
-    branchId: 1,
-  });
-  assertGroupActive(group);
-  // FILIAL: guruhdan meros. Foydalanuvchi kontekstidan OLINMAYDI - owner
-  // "barcha filiallar" rejimida to'lasa noto'g'ri filial yozilardi.
-  if (!group?.branchId) throw new ApiError(400, "Guruhning filiali aniqlanmadi");
+  // GURUHSIZ QATORLAR (markaz darajasi): fiksa oylik (kind:"base"),
+  // KPI mukofoti, ushlanma va boshlang'ich qoldiq guruhga BOG'LANMAYDI -
+  // shuni SalaryTransaction modeli ham ochiq yozgan (`group` default null).
+  //
+  // Ilgari bu yerda guruh SHARTSIZ talab qilinardi va natijada markaz
+  // darajasidagi HAR QANDAY qatorga to'lov "Guruh topilmadi" (404) bilan
+  // rad etilardi - ya'ni fiksa oylikni tizim orqali to'lab bo'lmasdi.
+  //
+  // Guruh BOR bo'lsa tekshiruv avvalgidek qat'iy qoladi (arxivlangan
+  // guruhga to'lov yozilmaydi).
+  let group = null;
+  if (salary.group) {
+    group = await Group.findById(salary.group, {
+      isActive: 1,
+      isDeleted: 1,
+      branchId: 1,
+    });
+    assertGroupActive(group);
+  }
+
+  // FILIAL: guruh bo'lsa undan meros, bo'lmasa maosh qatorining O'ZIDAN
+  // (TeacherSalary.branchId majburiy maydon). Foydalanuvchi kontekstidan
+  // OLINMAYDI - owner "barcha filiallar" rejimida to'lasa noto'g'ri
+  // filial yozilardi.
+  const branchId = group ? group.branchId : salary.branchId;
+  if (!branchId) throw new ApiError(400, "Maoshning filiali aniqlanmadi");
 
   const day = paidAt ? parseLocalDay(paidAt) : localTodayMidnight();
   if (!day) throw new ApiError(400, "Noto'g'ri to'lov sanasi");
@@ -46,13 +61,13 @@ const validateSalaryPayment = async ({ salaryId, paidAt }) => {
     throw new ApiError(400, "To'lov sanasi kelajakda bo'lishi mumkin emas");
   }
 
-  return { salary, group, day };
+  return { salary, group, branchId, day };
 };
 
 // Balansni oshirib, tranzaksiyani yozadi. Ikkala yo'l ham shuni ishlatadi.
 const writeSalaryTransaction = async ({
   salary,
-  group,
+  branchId,
   day,
   amount,
   method,
@@ -74,7 +89,7 @@ const writeSalaryTransaction = async ({
 
   try {
     return await SalaryTransaction.create({
-      branchId: group.branchId,
+      branchId,
       salary: salary._id,
       teacher: salary.teacher,
       group: salary.group,
@@ -95,7 +110,7 @@ const writeSalaryTransaction = async ({
 };
 
 export const create = async ({ salaryId, amount, method, paidAt, note }, currentUser) => {
-  const { salary, group, day } = await validateSalaryPayment({ salaryId, paidAt });
+  const { salary, branchId, day } = await validateSalaryPayment({ salaryId, paidAt });
 
   // FILIAL: boshqa filial o'qituvchisiga to'lab bo'lmaydi.
   //
@@ -107,14 +122,14 @@ export const create = async ({ salaryId, amount, method, paidAt, note }, current
   // Ahamiyati faqat ko'rinish emas: har filialning O'Z chiqim limiti bor,
   // shuning uchun begona filialga to'lash o'sha filial limitini ham
   // aylanib o'tardi.
-  if (!isBranchAllowed(group.branchId)) {
+  if (!isBranchAllowed(branchId)) {
     throw new ApiError(404, "Maosh topilmadi");
   }
 
   // CHIQIM LIMITI: summa filial limitidan oshsa - pul HOZIR chiqmaydi,
   // "tasdiq kutilmoqda" so'rovi yaratiladi. Balansga TEGILMAYDI.
   const { needsApproval, threshold } = await checkExpenseLimit({
-    branchId: group.branchId,
+    branchId,
     amount,
     permissions: currentUser?.permissions,
   });
@@ -124,7 +139,7 @@ export const create = async ({ salaryId, amount, method, paidAt, note }, current
       .select("firstName lastName")
       .lean();
     const approval = await createRequest({
-      branchId: group.branchId,
+      branchId,
       kind: EXPENSE_KINDS.SALARY_PAYMENT,
       amount,
       threshold,
@@ -141,7 +156,7 @@ export const create = async ({ salaryId, amount, method, paidAt, note }, current
 
   return writeSalaryTransaction({
     salary,
-    group,
+    branchId,
     day,
     amount,
     method,
@@ -168,18 +183,18 @@ export const executeApproved = async (approval) => {
 
   // QAYTA VALIDATSIYA: so'rov va tasdiq orasida holat o'zgargan bo'lishi
   // mumkin (guruh arxivlangan, qoldiq kamaygan). Payload'ga ishonmaymiz.
-  const { salary, group, day } = await validateSalaryPayment({
+  const { salary, branchId, day } = await validateSalaryPayment({
     salaryId,
     paidAt,
   });
 
-  if (String(group.branchId) !== String(approval.branchId)) {
-    throw new ApiError(400, "Guruhning filiali o'zgargan");
+  if (String(branchId) !== String(approval.branchId)) {
+    throw new ApiError(400, "Maoshning filiali o'zgargan");
   }
 
   return writeSalaryTransaction({
     salary,
-    group,
+    branchId,
     day,
     amount: approval.amount,
     method,

@@ -31,6 +31,8 @@ import teacherSalaryRouter from "../modules/teacherSalary/teacherSalary.routes.j
 import staffPayrollRouter from "../modules/staffPayroll/staffPayroll.routes.js";
 import expensesRouter from "../modules/expenses/expenses.routes.js";
 import financeReportRouter from "../modules/financeReport/financeReport.routes.js";
+import ledgerRouter from "../modules/ledger/ledger.routes.js";
+import openingBalanceRouter from "../modules/openingBalance/openingBalance.routes.js";
 import expenseApprovalsRouter from "../modules/expenseApprovals/expenseApprovals.routes.js";
 import aiRouter from "../modules/ai/ai.routes.js";
 import exportsRouter from "../modules/exports/exports.routes.js";
@@ -100,6 +102,14 @@ router.use("/staff-payroll", staffPayrollRouter);
 // u /teacher-salary da qoladi; hisobot ikkalasini qo'shib ko'rsatadi.
 router.use("/expenses", expensesRouter);
 router.use("/finance-report", financeReportRouter);
+// SHAXSIY MOLIYAVIY TARIX. Rolga qarab ajratilgan modullardan (o'quvchi
+// to'lovi / o'qituvchi maoshi / xodim oyligi) BIRLASHGAN ko'rinish
+// quradi: boshlang'ich qoldiq → tranzaksiyalar → joriy balans.
+// Faqat O'QIYDI - hech qanday yozuv qilmaydi.
+router.use("/ledger", ledgerRouter);
+// BOSHLANG'ICH QOLDIQ. Odam yaratish formasi buni o'z ichida yozadi;
+// bu manzil qo'lda kiritish va yiqilganlarni tuzatish uchun.
+router.use("/opening-balance", openingBalanceRouter);
 // Tasdiqlar. "/expense-approvals" - eski (frontend shu manzilni biladi),
 // "/approvals" - yangi umumiy nom: ro'yxatda endi chiqim ham, sozlama
 // o'zgarishi ham bor. Ikkalasi bir xil routerga boradi.

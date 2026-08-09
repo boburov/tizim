@@ -51,7 +51,8 @@
     "test:salary-rate": "node tests/salaryRate.test.js",
     "test:salary-balance": "node tests/teacherSalaryBalance.test.js",
     "migrate:teacher-compensation": "node src/seeds/migrateTeacherCompensation.seed.js",
-    "test:opening": "node tests/openingBalance.test.js"
+    "test:opening": "node tests/openingBalance.test.js",
+    "test:ledger": "node tests/ledger.test.js"
   },
   "dependencies": {
     "agenda": "^5.0.0",
