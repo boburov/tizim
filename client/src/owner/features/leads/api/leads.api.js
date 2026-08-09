@@ -12,4 +12,6 @@ export const leadsAPI = {
   setReminder: (id, body) => http.post(ENDPOINTS.leads.reminder(id), body),
   setReminderBulk: (body) => http.post(ENDPOINTS.leads.reminderBulk, body),
   stats: (params) => http.get(ENDPOINTS.leads.stats, { params }),
+  // Mas'ul tanlagichi uchun xodimlar - `leads.read` bilan ochiladi.
+  assignees: () => http.get(ENDPOINTS.leads.assignees),
 };

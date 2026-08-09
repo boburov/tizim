@@ -7,6 +7,7 @@ import {
   Settings,
   CreditCard,
   BarChart3,
+  Plug,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
@@ -51,6 +52,9 @@ export default function DashboardLayout() {
           </NavLink>
           <NavLink to="/plans" className={linkClass}>
             <CreditCard size={18} /> Tariflar
+          </NavLink>
+          <NavLink to="/api-services" className={linkClass}>
+            <Plug size={18} /> API xizmatlar
           </NavLink>
           {user?.role === 'SUPER_ADMIN' && (
             <NavLink to="/settings" className={linkClass}>

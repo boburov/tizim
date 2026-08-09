@@ -68,6 +68,9 @@ export const ENDPOINTS = Object.freeze({
     reminder: (id) => `/leads/${id}/reminder`,
     reminderBulk: "/leads/reminder-bulk",
     stats: "/leads/stats",
+    // Lidga biriktiriladigan xodimlar. /users EMAS: u `users.read`
+    // talab qiladi va resepshinda bu ruxsat yo'q.
+    assignees: "/leads/assignees",
   },
   leadOptions: {
     base: "/lead-options",

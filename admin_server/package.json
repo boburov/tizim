@@ -12,6 +12,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "seed:templates": "node prisma/seed.js",
     "seed:plans": "node prisma/seedPlans.js",
+    "seed:api": "node prisma/seedApiServices.js",
     "lint": "eslint \"src/**/*.ts\""
   },
   "dependencies": {

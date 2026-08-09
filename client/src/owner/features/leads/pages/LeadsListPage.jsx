@@ -26,7 +26,7 @@ import LeadReminderModal from "../components/LeadReminderModal";
 import LeadBulkReminderModal from "../components/LeadBulkReminderModal";
 import useLeadsQuery from "../hooks/useLeadsQuery";
 import useLeadOptionsQuery from "../hooks/useLeadOptionsQuery";
-import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
+import useLeadAssigneesQuery from "../hooks/useLeadAssigneesQuery";
 
 const LIMIT = 20;
 
@@ -91,16 +91,16 @@ const LeadsListPage = () => {
 
   const sourceQ = useLeadOptionsQuery({ kind: "source" });
   const directionQ = useLeadOptionsQuery({ kind: "direction" });
-  const staffQ = useUsersListQuery({ staff: 1, limit: 200 });
+  const staffQ = useLeadAssigneesQuery();
 
   // "none" - mas'uli yo'q lidlar. Bu eng muhim ko'rinish: egasiz lid bilan
   // hech kim ishlamaydi va u jimgina yo'qoladi.
   const assigneeOptions = [
     { value: "", label: "Barcha mas'ullar" },
     { value: "none", label: "Mas'uli yo'q" },
-    ...(staffQ.data?.data || []).map((u) => ({
+    ...(staffQ.data || []).map((u) => ({
       value: u._id,
-      label: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username,
+      label: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.roleLabel,
     })),
   ];
 

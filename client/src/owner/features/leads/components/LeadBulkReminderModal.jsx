@@ -1,6 +1,6 @@
 // Hooks
 import useObjectState from "@/shared/hooks/useObjectState";
-import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
+import useLeadAssigneesQuery from "../hooks/useLeadAssigneesQuery";
 import { useLeadReminderBulkMutation } from "../hooks/useLeadMutations";
 
 // Components
@@ -42,13 +42,13 @@ const LeadBulkReminderModal = ({
     showError: false,
   });
 
-  const staffQ = useUsersListQuery({ staff: 1, limit: 200 });
+  const staffQ = useLeadAssigneesQuery();
   const staffOptions = [
     { value: "", label: "O'zgartirilmasin" },
     { value: "none", label: "Mas'ulni olib tashlash" },
-    ...(staffQ.data?.data || []).map((u) => ({
+    ...(staffQ.data || []).map((u) => ({
       value: u._id,
-      label: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username,
+      label: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.roleLabel,
     })),
   ];
 

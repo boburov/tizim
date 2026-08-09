@@ -5,7 +5,7 @@ import CreatableSelectField from "@/shared/components/ui/select/CreatableSelectF
 import { LEAD_STATUS_OPTIONS } from "@/shared/constants/leadStatus";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 import { NO_AUTOFILL } from "@/shared/constants/form";
-import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
+import useLeadAssigneesQuery from "../hooks/useLeadAssigneesQuery";
 import useLeadOptionsQuery from "../hooks/useLeadOptionsQuery";
 import LeadOptionCreateModal from "./LeadOptionCreateModal";
 import {
@@ -39,14 +39,14 @@ const LeadFormFields = ({ obj, disabled = false, errors = {} }) => {
   const rejectionQ = useLeadOptionsQuery({ kind: "rejection" });
 
   // MAS'UL uchun ro'yxat: o'quvchidan boshqa hamma (ega, o'qituvchi, custom
-  // rollar). `staff: 1` - server bayrog'i, ertaga yaratilgan rol ham
-  // avtomatik shu ro'yxatga tushadi.
-  const staffQ = useUsersListQuery({ staff: 1, limit: 200 });
+  // rollar). Server rol TIPIGA qarab ajratadi, ya'ni ertaga yaratilgan rol
+  // ham avtomatik shu ro'yxatga tushadi.
+  const staffQ = useLeadAssigneesQuery();
   const staffOptions = [
     { value: "", label: "Mas'ul yo'q" },
-    ...(staffQ.data?.data || []).map((u) => ({
+    ...(staffQ.data || []).map((u) => ({
       value: u._id,
-      label: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username,
+      label: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.roleLabel,
     })),
   ];
 

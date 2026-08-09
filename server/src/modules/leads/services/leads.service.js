@@ -9,7 +9,12 @@ import {
   resolveBranchForWrite,
   getAllowedBranchIds,
   canSeeAllBranches,
+  userBranchCondition,
 } from "../../../helpers/branchContext.helper.js";
+import {
+  loadRoleCatalog,
+  staffRoleFilter,
+} from "../../../helpers/roles.helper.js";
 import { LEAD_PIPELINE } from "../../../constants/leadStatus.js";
 import * as authService from "../../auth/services/auth.service.js";
 import * as groupsService from "../../groups/services/groups.service.js";
@@ -21,6 +26,61 @@ const POPULATE = [
   { path: "rejectionReason", select: { name: 1 } },
   { path: "assignedTo", select: { firstName: 1, lastName: 1, role: 1 } },
 ];
+
+/**
+ * LIDGA BIRIKTIRISH MUMKIN BO'LGAN XODIMLAR.
+ *
+ * ─── NEGA ALOHIDA, /api/users O'RNIGA ───
+ * Lid formasidagi "Mas'ul" tanlagichi va ro'yxatdagi "Barcha mas'ullar"
+ * filtri ilgari umumiy foydalanuvchilar ro'yxatidan (`/api/users?staff=1`)
+ * oziqlanardi. U esa `users.read` talab qiladi va resepshin rolida bu
+ * ruxsat YO'Q - natijada lidlar sahifasi ochilishi bilan 403 chiqardi,
+ * garchi odamning lidlarga to'liq huquqi bo'lsa ham.
+ *
+ * Ruxsatni kengaytirish (resepshinga `users.read` berish) noto'g'ri
+ * yechim bo'lardi: u butun foydalanuvchilar bazasini - o'quvchilar,
+ * telefonlar, loginlar - ochib yuborardi. Bu yerda esa kerak bo'lgani
+ * FAQAT ism va rol yorlig'i.
+ *
+ * Shu sababli javob ATAYLAB juda tor: `_id`, ism, familiya va rol.
+ * Telefon, login, filial - hech biri qaytmaydi.
+ *
+ * ─── KO'LAM ───
+ * Filial sharti umumiy ro'yxat bilan AYNAN bir xil (userBranchCondition):
+ * boshqa filial xodimi bu ro'yxatda ko'rinmaydi va unga lid biriktirib
+ * bo'lmaydi.
+ */
+export const assignableStaff = async () => {
+  const catalog = await loadRoleCatalog();
+
+  const filter = {
+    isDeleted: { $ne: true },
+    isActive: true,
+    // XODIM = o'quvchi TIPIDAGI rollardan boshqa hamma. Rol NOMIGA emas
+    // TIPIGA qaraydi, ya'ni ertaga yaratilgan custom rol ham avtomatik
+    // to'g'ri tomonga tushadi.
+    role: staffRoleFilter(catalog),
+  };
+
+  const branchCond = userBranchCondition();
+  if (branchCond) filter.$and = [branchCond];
+
+  const rows = await User.find(filter, {
+    firstName: 1,
+    lastName: 1,
+    role: 1,
+  })
+    .sort({ firstName: 1, lastName: 1 })
+    .lean();
+
+  return rows.map((u) => ({
+    ...u,
+    // Rol yorlig'i serverdan keladi: custom rollar ("Buxgalter") client
+    // tomonidagi qattiq ro'yxatda yo'q va u yerda "noma'lum rol" bo'lib
+    // chiqardi.
+    roleLabel: catalog.get(u.role)?.label || u.role,
+  }));
+};
 
 export const list = async ({
   status,

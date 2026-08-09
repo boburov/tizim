@@ -13,6 +13,7 @@ import { CustomersModule } from './customers/customers.module.js';
 import { BillingModule } from './billing/billing.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { GithubModule } from './github/github.module.js';
+import { ApiServicesModule } from './api-services/api-services.module.js';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { GithubModule } from './github/github.module.js';
     BillingModule,
     SettingsModule,
     GithubModule,
+    ApiServicesModule,
   ],
 })
 export class AppModule {}

@@ -26,6 +26,7 @@ import convertBulk from "./handlers/convertBulk.handler.js";
 import reminder from "./handlers/reminder.handler.js";
 import reminderBulk from "./handlers/reminderBulk.handler.js";
 import stats from "./handlers/stats.handler.js";
+import assignees from "./handlers/assignees.handler.js";
 
 const router = Router();
 
@@ -43,6 +44,21 @@ router.get(
   validate(statsSchema),
   stats,
 );
+// LIDGA BIRIKTIRILADIGAN XODIMLAR (tanlagich uchun).
+//
+// "/:id" dan OLDIN turishi SHART - aks holda "assignees" `:id` sifatida
+// tutilib, ObjectId validatsiyasida yiqilardi.
+//
+// Ruxsat LEADS_READ: bu ro'yxat lid ish oqimining bir qismi, alohida
+// "foydalanuvchilarni ko'rish" huquqi talab qilinmaydi - qarang
+// leads.service.js -> assignableStaff izohi.
+router.get(
+  "/assignees",
+  requireAuth,
+  requirePermission(PERMISSIONS.LEADS_READ),
+  assignees,
+);
+
 router.get(
   "/:id",
   requireAuth,

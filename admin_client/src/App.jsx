@@ -8,6 +8,8 @@ import TenantDetailPage from './pages/TenantDetailPage';
 import SettingsPage from './pages/SettingsPage';
 import PlansPage from './pages/PlansPage';
 import UsagePage from './pages/UsagePage';
+import ApiServicesPage from './pages/ApiServicesPage';
+import ApiServiceDetailPage from './pages/ApiServiceDetailPage';
 
 // Mijoz kabineti
 import PortalSignupPage from './portal/pages/PortalSignupPage';
@@ -95,6 +97,8 @@ export default function App() {
         <Route path="tenants/new" element={<CreateTenantPage />} />
         <Route path="tenants/:id" element={<TenantDetailPage />} />
         <Route path="plans" element={<PlansPage />} />
+        <Route path="api-services" element={<ApiServicesPage />} />
+        <Route path="api-services/:id" element={<ApiServiceDetailPage />} />
         <Route path="usage" element={<UsagePage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

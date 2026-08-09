@@ -145,6 +145,7 @@ model Tenant {
   subscription   Subscription?
   usageSnapshots UsageSnapshot[]
   addons         TenantAddon[]
+  apiConsumers   ApiConsumer[]
 
   createdBy String? // qaysi admin yaratdi (email)
   createdAt DateTime @default(now())
@@ -222,6 +223,7 @@ model Customer {
   tenants       Tenant[]
   subscriptions Subscription[]
   transactions  Transaction[]
+  apiConsumers  ApiConsumer[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -420,4 +422,172 @@ model UsageSnapshot {
   recordedAt DateTime @default(now())
 
   @@index([tenantId, metricKey, recordedAt])
+}
+
+// ============================================================================
+// API XIZMATLAR (edu.pronauns va h.k.) — kalit bilan sotiladigan mahsulotlar
+//
+// Bu yuqoridagi Plan/Subscription'dan ATAYLAB alohida. U yerda mijoz = tenant
+// (o'quv markaz), bu yerda mijoz = API kaliti bilan murojaat qiladigan ilova.
+// Limitlar ham boshqacha: u yerda "nechta o'quvchi", bu yerda "sekundiga
+// nechta so'rov".
+//
+// admin_server = CONTROL PLANE (tarif, muddat, kalit, hisob).
+// Xizmatning o'zi (python) = DATA PLANE: kalitni shu yerdan so'rab oladi,
+// keshlaydi va limitni O'ZI majburlaydi — shunda har so'rovda tarmoqqa
+// chiqilmaydi va admin server o'chsa ham xizmat darrov to'xtamaydi.
+// ============================================================================
+
+enum ApiSubscriptionStatus {
+  ACTIVE // ishlaydi
+  SUSPENDED // admin qo'lda to'xtatdi (to'lov yo'q, suiiste'mol)
+  EXPIRED // muddati o'tdi (avtomatik qo'yiladi)
+  CANCELED // mijoz voz kechdi
+}
+
+// Sotiladigan API xizmat. Birinchisi — "edu-pronauns" (talaffuz baholash).
+model ApiService {
+  id          String  @id @default(cuid())
+  key         String  @unique // "edu-pronauns"
+  name        String
+  description String?
+  baseUrl     String? // https://speech.sevenedu.org
+  docsUrl     String?
+  isActive    Boolean @default(true)
+
+  tiers         ApiTier[]
+  subscriptions ApiSubscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Tarif pog'onasi. Bu yerdagi raqamlarni data plane AYNAN o'sha holicha
+// majburlaydi — shuning uchun tarifni o'zgartirish = xizmat tezligini
+// o'zgartirish, kod tegilmaydi.
+//
+// NEGA "tezlik" = slot + rpm + ustuvorlik: inference narxi qat'iy (bitta
+// so'rov ~100 ms CPU'da), bir xil temirda bitta so'rovni tezlashtirib
+// bo'lmaydi. Yuqori tarif ko'proq parallel slot va navbatda oldinlik oladi —
+// yuklama ostida u haqiqatan 2x/4x ko'p ish bajaradi.
+model ApiTier {
+  id        String     @id @default(cuid())
+  service   ApiService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  serviceId String
+  key       String // "basic", "pro", "max"
+  name      String
+
+  price    Decimal      @default(0) @db.Decimal(12, 2)
+  currency String       @default("USD")
+  interval BillingCycle @default(MONTHLY)
+
+  // --- majburlanadigan qiymatlar ---
+  concurrency  Int @default(1) // bir vaqtda nechta so'rov ishlaydi
+  rateLimitRpm Int @default(60) // daqiqasiga nechta so'rov
+  priority     Int @default(3) // navbatdagi o'rin, 1 = eng oldin
+  monthlyQuota Int @default(-1) // oyiga nechta so'rov, -1 = cheksiz
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  subscriptions ApiSubscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([serviceId, key])
+}
+
+// API mijozi. Mustaqil yozuv — Customer yoki Tenant'ga bog'lash IXTIYORIY,
+// shunda o'z kompaniyamizga ham, tashqi mijozga ham bir xil kalit beriladi.
+model ApiConsumer {
+  id    String  @id @default(cuid())
+  label String // "SevenEdu (o'zimiz)"
+  email String?
+  note  String?
+
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  customerId String?
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
+  tenantId   String?
+
+  isActive Boolean @default(true)
+
+  subscriptions ApiSubscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([tenantId])
+}
+
+// Bitta mijozning bitta xizmatga obunasi = tarif + muddat.
+model ApiSubscription {
+  id         String      @id @default(cuid())
+  consumer   ApiConsumer @relation(fields: [consumerId], references: [id], onDelete: Cascade)
+  consumerId String
+  service    ApiService  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  serviceId  String
+  tier       ApiTier     @relation(fields: [tierId], references: [id])
+  tierId     String
+
+  status     ApiSubscriptionStatus @default(ACTIVE)
+  startedAt  DateTime              @default(now())
+  // null = muddatsiz. O'tgan sana = xizmat to'xtaydi (grace period yo'q).
+  expiresAt  DateTime?
+  canceledAt DateTime?
+
+  keys  ApiKey[]
+  usage ApiUsageDaily[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([consumerId, serviceId])
+  @@index([status])
+}
+
+// API kaliti. To'liq kalit BAZADA SAQLANMAYDI — faqat prefiksi (qidiruv uchun)
+// va sha256 hash'i. Baza dumpi sizib chiqsa ham kalitlar bilan xizmatga
+// kirib bo'lmaydi.
+//
+// Format: "pk_<8 belgi>.<43 belgi sir>" — nuqtagacha bo'lgan qism prefix.
+model ApiKey {
+  id             String          @id @default(cuid())
+  subscription   ApiSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscriptionId String
+
+  prefix String  @unique // "pk_a1b2c3d4" — UI da ko'rsatiladi, lookup indeksi
+  hash   String // sha256(prefix + "." + secret)
+  label  String?
+
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdBy  String? // qaysi admin yaratdi (email)
+
+  createdAt DateTime @default(now())
+
+  @@index([subscriptionId])
+}
+
+// So'rovlarning kunlik yig'indisi. Har so'rov alohida qator bo'lsa jadval
+// tez shishadi — data plane lokalda sanaydi va har 15 soniyada shu yerga
+// qo'shib yuboradi.
+model ApiUsageDaily {
+  id             String          @id @default(cuid())
+  subscription   ApiSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  day            DateTime        @db.Date
+  endpoint       String          @default("assess")
+
+  ok       Int @default(0) // muvaffaqiyatli
+  rejected Int @default(0) // limit/muddat sababli rad etilgan (402/403/429)
+  failed   Int @default(0) // xizmat xatosi (5xx)
+  // Umumiy ishlov vaqti — o'rtacha latency shundan hisoblanadi.
+  // Kuniga chegara ~1.9M so'rov x 200 ms = 380M, Int (2.1 mlrd) yetadi.
+  totalMs  Int @default(0)
+
+  @@unique([subscriptionId, day, endpoint])
+  @@index([subscriptionId, day])
 }
