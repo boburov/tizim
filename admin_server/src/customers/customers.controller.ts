@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  Logger,
   Param,
   Patch,
   Post,
@@ -61,6 +62,8 @@ const clientUrl = () =>
 /** Ochiq marshrutlar — ro'yxatdan o'tish va kirish. */
 @Controller('customer/auth')
 export class CustomerAuthController {
+  private readonly logger = new Logger(CustomerAuthController.name);
+
   constructor(private readonly auth: CustomerAuthService) {}
 
   @Post('signup')
@@ -149,14 +152,26 @@ export class CustomerAuthController {
       throw new ServiceUnavailableException('Google orqali kirish sozlanmagan');
     }
 
+    // Javob FAQAT bir marta yuborilishi kerak. Passport oqimida callback
+    // ba'zan qayta ishga tushadi (yoki xato bilan success ketma-ket keladi) -
+    // himoyasiz res.redirect ikkinchi marta chaqirilsa ERR_HTTP_HEADERS_SENT
+    // bo'lib butun oqim yiqilardi. Shuning uchun headersSent bo'lsa jim chiqamiz.
+    const redirect = (path: string) => {
+      if (res.headersSent) return;
+      res.redirect(`${clientUrl()}${path}`);
+    };
+
     return passport.authenticate(
       GOOGLE_STRATEGY,
       { session: false },
       async (err: unknown, profile: GoogleProfile | false) => {
-        const redirect = (path: string) =>
-          res.redirect(`${clientUrl()}${path}`);
-
-        if (err || !profile) return redirect('/login?error=google');
+        if (err || !profile) {
+          this.logger.warn(
+            { err: err instanceof Error ? err.message : err },
+            'Google auth: profil olinmadi',
+          );
+          return redirect('/login?error=google');
+        }
 
         try {
           const customer = await this.auth.loginWithGoogle(profile);
@@ -171,11 +186,18 @@ export class CustomerAuthController {
             ...cookieBase,
             maxAge: 7 * 24 * 60 * 60 * 1000,
           });
-          return redirect('/');
+          // To'g'ridan-to'g'ri mijoz kabinetiga - '/' admin ildizi bo'lib,
+          // u yerdan yana /portal ga sakrash sessiya hali o'qilmasdan turib
+          // login sahifasini ko'rsatib yuborishi mumkin edi.
+          return redirect('/portal');
         } catch (e) {
           // Hisob bloklangan yoki email tasdiqlanmagan - sababni ko'rsatamiz.
           const message =
             e instanceof UnauthorizedException ? e.message : 'google';
+          this.logger.error(
+            { err: e instanceof Error ? e.message : e },
+            'Google auth: login yakunlanmadi',
+          );
           return redirect(`/login?error=${encodeURIComponent(message)}`);
         }
       },

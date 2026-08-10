@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, type Profile, type VerifyCallback } from 'passport-google-oauth20';
+import { Strategy, type Profile } from 'passport-google-oauth20';
 
 export const GOOGLE_STRATEGY = 'customer-google';
 
@@ -41,15 +41,20 @@ export class GoogleStrategy extends PassportStrategy(Strategy, GOOGLE_STRATEGY) 
     });
   }
 
+  // MUHIM: @nestjs/passport `validate` QAYTARGAN qiymatni olib, passport'ning
+  // `done`'ini o'zi chaqiradi. Shu bois bu yerda `done`'ni QO'LDA chaqirmaymiz —
+  // aks holda `done` ikki marta ishlaydi (bir marta biz, bir marta wrapper):
+  // avval success(user), keyin success qaytargan undefined bilan fail(). Natijada
+  // callback ikki marta chaqirilib, Google login "headers already sent" bilan
+  // yiqilardi. To'g'ri usul — faqat qiymat qaytarish yoki xato tashlash.
   validate(
     _accessToken: string,
     _refreshToken: string,
     profile: Profile,
-    done: VerifyCallback,
-  ) {
+  ): GoogleProfile {
     const email = profile.emails?.[0]?.value;
     if (!email) {
-      return done(new Error('Google hisobida email topilmadi'), undefined);
+      throw new UnauthorizedException('Google hisobida email topilmadi');
     }
 
     // passport-google-oauth20 `verified` ni string yoki boolean qaytarishi
@@ -57,14 +62,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, GOOGLE_STRATEGY) 
     const rawVerified = profile.emails?.[0]?.verified as unknown;
     const emailVerified = rawVerified === true || rawVerified === 'true';
 
-    const user: GoogleProfile = {
+    return {
       googleId: profile.id,
       email: email.toLowerCase().trim(),
       fullName: profile.displayName || undefined,
       avatarUrl: profile.photos?.[0]?.value,
       emailVerified,
     };
-
-    return done(null, user);
   }
 }
