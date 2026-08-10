@@ -13,6 +13,7 @@
     "seed:templates": "node prisma/seed.js",
     "seed:plans": "node prisma/seedPlans.js",
     "seed:api": "node prisma/seedApiServices.js",
+    "seed:bots": "node prisma/seedBotTemplates.js",
     "lint": "eslint \"src/**/*.ts\""
   },
   "dependencies": {

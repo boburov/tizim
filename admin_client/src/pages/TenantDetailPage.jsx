@@ -8,7 +8,6 @@ import {
   BarChart3,
   Copy,
   CreditCard,
-  Github,
   Globe,
   LayoutDashboard,
   Loader2,
@@ -20,6 +19,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+// lucide v1 brend ikonkalarini olib tashladi — GitHub belgisi lokal.
+import Github from '../components/GithubIcon';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import {

@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { Tenant } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -11,11 +10,10 @@ import {
   renderReadme,
   renderTenantMeta,
 } from './tenant-repo.templates.js';
+import { b64, runScript, tailLog } from './script-runner.js';
 
 /** Qo'llash rejimi — reconfigure.sh shu qiymatga qarab ish tutadi. */
 export type ApplyKind = 'restart' | 'rebuild' | 'deploy';
-
-const LOG_LIMIT = 60000;
 
 @Injectable()
 export class ProvisioningService {
@@ -29,44 +27,12 @@ export class ProvisioningService {
 
   // ────────────────────────────────────────────────────── yordamchilar
 
-  /** Skriptga uzatiladigan fayl mazmuni — base64, shunda qochirish muammosi yo'q. */
-  private b64(text: string): string {
-    return Buffer.from(text, 'utf8').toString('base64');
-  }
-
-  private tail(log: string): string {
-    return log.length > LOG_LIMIT ? log.slice(-LOG_LIMIT) : log;
-  }
-
-  /**
-   * Skriptni ishga tushiradi va butun chiqishini yig'ib qaytaradi.
-   * Bloklamaydi — chaqiruvchi natijani `.then()` bilan kutadi va DB'ni yangilaydi.
-   */
-  private runScript(
-    scriptPath: string,
-    env: Record<string, string>,
-  ): Promise<{ code: number | null; log: string }> {
-    return new Promise((resolve) => {
-      const child = spawn('bash', [scriptPath], {
-        env: { ...process.env, ...env },
-        cwd: process.env.PROVISION_CWD || '/root/admin',
-      });
-
-      let log = '';
-      const append = (chunk: Buffer) => {
-        log += chunk.toString();
-        if (log.length > LOG_LIMIT) log = log.slice(-LOG_LIMIT);
-      };
-
-      child.stdout.on('data', append);
-      child.stderr.on('data', append);
-
-      child.on('close', (code) => resolve({ code, log }));
-      child.on('error', (err) =>
-        resolve({ code: -1, log: `${log}\n❌ Skriptni ishga tushirib bo'lmadi: ${err.message}` }),
-      );
-    });
-  }
+  // b64 / tail / runScript endi `script-runner.ts` da — bot deploy'i ham
+  // aynan shularni ishlatadi, nusxa ko'chirilsa tuzatish ikkinchisiga
+  // yetib bormasdi.
+  private b64 = b64;
+  private tail = tailLog;
+  private runScript = runScript;
 
   /**
    * Tenant fayllari va `.env` mazmunini skript ENV'iga yig'adi.

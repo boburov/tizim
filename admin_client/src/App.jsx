@@ -10,6 +10,9 @@ import PlansPage from './pages/PlansPage';
 import UsagePage from './pages/UsagePage';
 import ApiServicesPage from './pages/ApiServicesPage';
 import ApiServiceDetailPage from './pages/ApiServiceDetailPage';
+import BotsPage from './pages/BotsPage';
+import CreateBotPage from './pages/CreateBotPage';
+import BotDetailPage from './pages/BotDetailPage';
 
 // Mijoz kabineti
 import PortalSignupPage from './portal/pages/PortalSignupPage';
@@ -99,6 +102,9 @@ export default function App() {
         <Route path="plans" element={<PlansPage />} />
         <Route path="api-services" element={<ApiServicesPage />} />
         <Route path="api-services/:id" element={<ApiServiceDetailPage />} />
+        <Route path="bots" element={<BotsPage />} />
+        <Route path="bots/new" element={<CreateBotPage />} />
+        <Route path="bots/:id" element={<BotDetailPage />} />
         <Route path="usage" element={<UsagePage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

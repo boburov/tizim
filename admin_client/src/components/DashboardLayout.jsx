@@ -3,14 +3,15 @@ import {
   LayoutGrid,
   Plus,
   LogOut,
-  ShieldCheck,
   Settings,
   CreditCard,
   BarChart3,
   Plug,
+  Bot,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
+import NesterLogo from './NesterLogo';
 import { cn } from '../lib/utils';
 
 export default function DashboardLayout() {
@@ -33,11 +34,14 @@ export default function DashboardLayout() {
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-60 flex-col border-r border-border bg-card p-4">
-        <div className="mb-6 flex items-center gap-2 px-1">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-primary-foreground">
-            <ShieldCheck size={20} />
+        {/* Logo brend rangli plitka ICHIDA emas: belgining o'zi binafsha
+            gradient, indigo fon ustida u yo'qolib ketardi. */}
+        <div className="mb-6 flex items-center gap-2.5 px-1">
+          <NesterLogo size={34} className="shrink-0" />
+          <div className="min-w-0 leading-tight">
+            <div className="font-semibold">Nester</div>
+            <div className="text-xs text-muted-foreground">Admin panel</div>
           </div>
-          <span className="font-semibold">Admin Panel</span>
         </div>
 
         <nav className="flex-1 space-y-1">
@@ -55,6 +59,9 @@ export default function DashboardLayout() {
           </NavLink>
           <NavLink to="/api-services" className={linkClass}>
             <Plug size={18} /> API xizmatlar
+          </NavLink>
+          <NavLink to="/bots" className={linkClass}>
+            <Bot size={18} /> Telegram botlar
           </NavLink>
           {user?.role === 'SUPER_ADMIN' && (
             <NavLink to="/settings" className={linkClass}>

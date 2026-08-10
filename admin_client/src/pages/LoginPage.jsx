@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ShieldCheck, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import NesterLogo from '../components/NesterLogo';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
 import GoogleButton from '../portal/components/GoogleButton';
@@ -50,9 +51,7 @@ export default function LoginPage() {
 
       <div className="w-full max-w-sm rounded-2xl bg-card p-8 shadow-xl ring-1 ring-border">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand text-primary-foreground">
-            <ShieldCheck size={26} />
-          </div>
+          <NesterLogo size={52} />
           <h1 className="text-xl font-semibold">Tizimga kirish</h1>
           <p className="text-sm text-muted-foreground">Hisobingiz bilan davom eting</p>
         </div>

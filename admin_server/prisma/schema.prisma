@@ -146,6 +146,7 @@ model Tenant {
   usageSnapshots UsageSnapshot[]
   addons         TenantAddon[]
   apiConsumers   ApiConsumer[]
+  bots           Bot[]
 
   createdBy String? // qaysi admin yaratdi (email)
   createdAt DateTime @default(now())
@@ -224,6 +225,7 @@ model Customer {
   subscriptions Subscription[]
   transactions  Transaction[]
   apiConsumers  ApiConsumer[]
+  bots          Bot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -590,4 +592,142 @@ model ApiUsageDaily {
 
   @@unique([subscriptionId, day, endpoint])
   @@index([subscriptionId, day])
+}
+
+// ============================================================================
+// TELEGRAM BOTLAR — paneldan VPS'ga chiqariladigan botlar
+//
+// Bu tenant provisioningining ko'zgusi: skript ENV orqali chaqiriladi, holat
+// shu yerda yangilanadi, panel uni so'rab turadi. Farqi — bot yengilroq:
+// baza yo'q, client build yo'q, ko'pincha domen ham kerak emas.
+// ============================================================================
+
+enum BotRuntime {
+  NODEJS
+  PHP
+}
+
+// Botning Telegram bilan gaplashish usuli.
+//
+// Bu foydalanuvchidan SO'RALMAYDI, runtime'dan kelib chiqadi:
+//   NODEJS -> POLLING  (domen, nginx, sertifikat kerak emas — eng sodda)
+//   PHP    -> WEBHOOK  (PHP uzluksiz jarayon sifatida getUpdates qila olmaydi)
+// Noto'g'ri juftlikni tanlash imkoni bo'lmasligi kerak.
+enum BotMode {
+  POLLING
+  WEBHOOK
+}
+
+enum BotSource {
+  REPO // GitHub repodan clone qilinadi
+  TEMPLATE // VPS'dagi tayyor shablondan nusxalanadi
+}
+
+enum BotStatus {
+  DRAFT // yozuv yaratildi, hali deploy qilinmagan
+  PROVISIONING // bot-provision.sh ishlayapti
+  ACTIVE // ishlab turibdi
+  FAILED // deploy xatosi
+  STOPPED // qo'lda to'xtatilgan (pm2 stop / webhook olib tashlangan)
+  DEPROVISIONING // bot-deprovision.sh ishlayapti
+  DELETED // VPS'dan o'chirilgan, yozuv arxiv sifatida qoldi
+}
+
+// VPS'da oldindan tayyor turgan bot shabloni — SystemTemplate bilan bir xil
+// g'oya. Papkaning o'zi VPS'da, bu yerda faqat unga ishora.
+model BotTemplate {
+  id          String     @id @default(cuid())
+  key         String     @unique // "qabul-bot"
+  name        String
+  description String?
+  runtime     BotRuntime
+  templateDir String // /root/bot-templates/qabul-bot
+  // Node uchun kirish fayli ("bot.js"). PHP'da kirish nuqtasi nginx
+  // konfiguratsiyasi orqali belgilanadi, shuning uchun null bo'lishi mumkin.
+  entryFile   String?
+  isActive    Boolean    @default(true)
+
+  bots Bot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Bot {
+  id   String @id @default(cuid())
+  name String
+  // Bitta qiymat uch joyda ishlatiladi: subdomen, pm2 nomi va papka nomi.
+  // Shuning uchun u qat'iy shaklda va noyob bo'lishi shart.
+  slug String @unique
+
+  runtime BotRuntime
+  mode    BotMode
+  source  BotSource
+
+  // source = REPO
+  repoUrl    String?
+  repoBranch String  @default("main")
+
+  // source = TEMPLATE
+  template   BotTemplate? @relation(fields: [templateId], references: [id])
+  templateId String?
+
+  // Telegram tokeni SHIFRLANGAN holda: "v1:iv:tag:data"
+  // (common/crypto/secrets.util.ts). Javoblarda hech qachon ochiq qaytmaydi.
+  tokenEnc String
+  // getMe javobidan — panelda "@bot_username" ko'rsatish uchun
+  botUsername String?
+
+  // Node bot pm2 ostida ishlaydi. PHP botda pm2 process yo'q, lekin nom
+  // baribir ajratiladi — nginx vhost va papka nomi shundan yasaladi.
+  pm2Name String @unique
+  // Faqat Node+webhook uchun kerak bo'ladi. Hozircha Node polling'da
+  // ishlagani uchun bo'sh qoladi, lekin diapazon oldindan ajratilgan.
+  port    Int?   @unique
+
+  webhookUrl    String?
+  // Telegram `secret_token` — webhook'ga kelgan so'rov haqiqatan Telegram'dan
+  // ekanini tekshiradi (X-Telegram-Bot-Api-Secret-Token sarlavhasi).
+  webhookSecret String?
+
+  status         BotStatus @default(DRAFT)
+  deployLog      String?   @db.Text
+  failureReason  String?
+  lastDeployedAt DateTime?
+
+  // Ixtiyoriy bog'lanish — bot mustaqil ham yashay oladi
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
+  tenantId   String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  customerId String?
+
+  env BotEnvVar[]
+
+  createdBy String? // qaysi admin yaratdi (email)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([tenantId])
+  @@index([customerId])
+}
+
+// Botning qo'shimcha .env qiymatlari (ADMIN_CHAT_ID, API_URL va h.k.).
+// BOT_TOKEN bu yerda SAQLANMAYDI — u Bot.tokenEnc da.
+model BotEnvVar {
+  id    String @id @default(cuid())
+  bot   Bot    @relation(fields: [botId], references: [id], onDelete: Cascade)
+  botId String
+  key   String
+
+  // isSecret bo'lsa shifrlangan, aks holda ochiq — TenantSetting bilan
+  // bir xil qoida.
+  value    String  @db.Text
+  isSecret Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([botId, key])
+  @@index([botId])
 }

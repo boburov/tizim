@@ -5,13 +5,14 @@ import { toast } from 'sonner';
 import {
   AlertTriangle,
   Check,
-  Github,
   GraduationCap,
   Layers,
   Loader2,
   Lock,
   Rocket,
 } from 'lucide-react';
+// lucide v1 brend ikonkalarini olib tashladi — GitHub belgisi lokal.
+import Github from '../components/GithubIcon';
 import { api } from '../api/client';
 import { cn } from '../lib/utils';
 import BrandPreview from '../components/BrandPreview';

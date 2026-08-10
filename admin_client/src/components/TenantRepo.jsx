@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ExternalLink,
-  Github,
   Loader2,
   Lock,
   RefreshCw,
@@ -19,6 +18,8 @@ import {
   Unlock,
   UploadCloud,
 } from 'lucide-react';
+// lucide v1 brend ikonkalarini olib tashladi — GitHub belgisi lokal.
+import Github from './GithubIcon';
 import { api } from '../api/client';
 import { cn } from '../lib/utils';
 
