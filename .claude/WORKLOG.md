@@ -9079,3 +9079,43 @@ Sabab uchtasi bor, uchalasi ham hozirgi skrinshotda ko'rinib turibdi. Avval kodg
 <sub>session `d7f3133d` · branch `main` · 8 ta qadam</sub>
 
 ---
+
+## 2026-08-11 15:16 — fuck i'm so annyoed this fucking web app problem analize it MF
+
+**So'rov**
+
+> fuck i'm so annyoed this fucking web app problem analize it MF
+
+**O'zgargan fayllar (2)**
+
+- `client/src/shared/components/ErrorBoundary.jsx` — yaratildi/qayta yozildi
+- `client/vite.config.js` — tahrirlandi
+
+**Buyruqlar (12)**
+
+```sh
+sed -n '1,60p' index.html
+grep -rn "localStorage" src/ --include="*.js" --include="*.jsx" | grep -v "^src/shared/hooks/useAuth\|AuthGuard" | head -20; echo "=== THEME PROVIDER"; cat src/…
+cd /Users/shukrullo/Desktop/lc-total/client && sed -n '30,60p' index.html; echo "=== LS USAGES"; grep -rn "localStorage" src --include="*.js" --include="*.jsx" …
+cat -n src/shared/components/ui/feedback/ErrorState.jsx
+npx eslint src/shared/components/ErrorBoundary.jsx && npx vite build --logLevel error 2>&1 | tail -5 && echo "BUILD OK"
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/d7f3133d-3740-4afe-ae59-91a7cbeda6eb/scratchpad && curl -s https://tizim.nester.uz/ | grep -o '/ass…
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/d7f3133d-3740-4afe-ae59-91a7cbeda6eb/scratchpad && curl -s https://tizim.nester.uz/assets/index-CHr…
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "Texnik ma'lumot" src --include="*.jsx" | head
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/d7f3133d-3740-4afe-ae59-91a7cbeda6eb/scratchpad && python3 -c " s=open('dep.js',encoding='utf-8',er…
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "React.lazy\|lazy(" src --include="*.jsx" --include="*.js" | head; echo "=== CHUNKS"; ls dist/assets 2>/…
+curl -s -o /dev/null -w "map: %{http_code} %{content_type}\n" https://tizim.nester.uz/assets/index-CHrT2IqV.js.map; curl -s https://tizim.nester.uz/bot-auth | h…
+npx vite build --logLevel error 2>&1 | tail -3 && ls dist/assets && echo "--- with sourcemap ---" && SOURCEMAP=true npx vite build --logLevel error 2>&1 | tail …
+```
+
+**Natija**
+
+Bu tarmoq muammosi emas — bu **ErrorBoundary**, ya'ni JS xatosi ilovani yiqityapti. Boshqa yo'nalish. Ko'ramiz:
+
+Ekrandagi narsa [ErrorBoundary.jsx](client/src/shared/components/ErrorBoundary.jsx) — ya'ni **JS xatosi** ilovani render paytida yiqityapti, tarmoq emas. Muammo shundaki, u xatoni `console.error` ga tashlaydi-yu, Telegram WebView'da konsol yo'q — sabab ko'rinmaydi. Avval shuni ko'rsataman:
+
+Deploy'da qaysi versiya turganini tekshiray — bu mening o'zgarishim sabab bo'lganini darhol ko'rsatadi:
+
+<sub>session `d7f3133d` · branch `main` · 19 ta qadam</sub>
+
+---
