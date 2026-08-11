@@ -8989,3 +8989,65 @@ Endi Telegram mini ilovaga ham brend:
 <sub>session `d7f3133d` · branch `main` · 45 ta qadam</sub>
 
 ---
+
+## 2026-08-11 14:50 — so telegram bot web app url is "https://tizim.nester.uz/" right ?
+
+**So'rov**
+
+> so telegram bot web app url is "https://tizim.nester.uz/" right ?
+
+**Buyruqlar (2)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "TELEGRAM\|CLIENT_URL" .env
+cd /Users/shukrullo/Desktop/lc-total && grep -rn "bot-auth" client/src/app --include="*.jsx" --include="*.js" | head; grep -rn "nester" --include="*.js" --inclu…
+```
+
+<sub>session `d7f3133d` · branch `main` · 2 ta qadam</sub>
+
+---
+
+## 2026-08-11 14:57 — if i try to telegram web app login returting me something wrogn TF is 
+
+**So'rov**
+
+> if i try to telegram web app login returting me something wrogn TF is working finw in browser
+
+**O'zgargan fayllar (2)**
+
+- `client/src/shared/hooks/useAuth.js` — tahrirlandi
+- `client/src/shared/components/guards/AuthGuard.jsx` — yaratildi/qayta yozildi
+
+**Buyruqlar (13)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && cat -n src/bot/utils/initData.js
+ls src/modules/botAuth src/modules/botAuth/* 2>/dev/null | head -30
+cat -n src/modules/botAuth/services/botAuth.service.js
+cat -n src/modules/botAuth/handlers/login.handler.js; echo "=== ROUTES"; cat -n src/modules/botAuth/botAuth.routes.js; echo "=== CLIENT API"; cat -n /Users/shuk…
+cat -n src/helpers/cookie.helper.js
+cat -n /Users/shukrullo/Desktop/lc-total/client/src/shared/api/http.js | head -60; echo "=== CLIENT ENV"; grep -n "VITE_API_URL" /Users/shukrullo/Desktop/lc-tot…
+cd /Users/shukrullo/Desktop/lc-total/client && cat -n src/features/auth/hooks/useBotAuthLoginMutation.js; echo "=== INPUTFIELD"; grep -n "autoCapitalize\|autoCo…
+cat -n src/app/routes.jsx | head -70; echo "=== AuthGuard"; cat -n src/shared/components/guards/AuthGuard.jsx; echo "=== useMeQuery"; cat -n src/features/auth/h…
+cat -n src/shared/hooks/useAuth.js; echo "=== ACTIVE BRANCH"; sed -n '1,60p' src/shared/hooks/useActiveBranch.js
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n '200,245p' src/modules/auth/services/auth.service.js
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "Router" src/main.jsx src/app/*.jsx | head; echo "=== catch-all routes"; sed -n '70,110p' src/app/routes…
+sed -n '1,30p' src/shared/utils/apiError.js && grep -rn "isError" src/shared/components/guards/*.jsx src/app/routes.jsx | head
+grep -n "export const extractApiErrorMessage" src/shared/utils/apiError.js; npx eslint src/shared/components/guards/AuthGuard.jsx src/shared/hooks/useAuth.js &&…
+```
+
+**Natija**
+
+Xatoni aniqlash uchun bot-auth oqimini o'qiyman.
+
+Aniq sababni ayta olishim uchun qaysi xato chiqayotganini bilishim kerak — yo'llar butunlay boshqacha:
+
+Sabab zanjiri aniq. Kodda ko'rinib turibdi:
+
+`/auth/me` so'rovi **har qanday** sababdan yiqilsa — tarmoq uzilishi ham, 500 ham — [AuthGuard.jsx:27-31](client/src/shared/components/guards/AuthGuard.jsx#L27-L31) tokenni o'chirib `/login` ga uloqtiradi, [useAuth.js:24](client/src/shared/hooks/useAuth.js#L24) da esa `retry: false`. Ya'ni **bitta muvaffaqiyatsiz so'rov = darhol logout**, sababi esa hech qayerda ko'rinmaydi. Telegram WebView'da birinchi so'rov brauzerga qaraganda ancha ko'p yiqiladi (webview sovuq, tarmoq almashadi, cookie siyosati boshqacha) — shuning uchun brauzerda sezilmaydi.
+
+Avval shu "jim logout"ni tuzataman, shunda haqiqiy xato ekranda ko'rinadi:
+
+<sub>session `d7f3133d` · branch `main` · 17 ta qadam</sub>
+
+---
