@@ -16,13 +16,64 @@ import BrandMark from "@/shared/components/brand/BrandMark";
 import { APP_NAME } from "@/shared/constants/app";
 import { resolveHomePath } from "@/shared/constants/roles";
 
+/**
+ * Mini ilova sahifasi.
+ *
+ * BALANDLIK: `min-h-screen` (100vh) Telegram'da NOTO'G'RI - mini ilova varag'i
+ * ekrandan past turadi va klaviatura ochilganda o'lchami o'zgaradi. Natijada
+ * kontent 100vh ning o'rtasiga markazlashib, tepada katta bo'sh joy qolardi.
+ * Telegram `--tg-viewport-stable-height` o'zgaruvchisini o'zi yozadi
+ * (telegram-web-app.js), brauzerda esa 100svh fallback ishlaydi.
+ *
+ * FON: ilgari `bg-gradient-to-b from-muted to-blue-50` edi. `blue-50` dark
+ * rejimda ham oq bo'lib qolardi - ekranning pastki qismidagi oq yorug'lik
+ * aynan shundan edi. Endi fon `bg-background` tokeni: ikkala rejimda to'g'ri.
+ *
+ * KARTA YO'Q: mini ilovaning o'zi allaqachon varaq (sheet). Uning ustiga
+ * yana ramka + soya qo'yilsa ikki qavat karta hosil bo'ladi.
+ */
 const Container = ({ children }) => (
-  <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-b from-muted to-blue-50">
-    <div className="max-w-md w-full bg-card border rounded-2xl shadow-sm p-6 space-y-4 text-center">
-      {children}
-    </div>
+  <div
+    className="flex items-start justify-center bg-background px-5 pt-10 pb-6"
+    style={{ minHeight: "var(--tg-viewport-stable-height, 100svh)" }}
+  >
+    <div className="w-full max-w-md space-y-4 text-center">{children}</div>
   </div>
 );
+
+// "rgb(9, 9, 11)" -> "#09090b". Telegram faqat hex qabul qiladi.
+const rgbToHex = (value) => {
+  const nums = String(value).match(/\d+/g);
+  if (!nums || nums.length < 3) return null;
+  return `#${nums
+    .slice(0, 3)
+    .map((n) => Number(n).toString(16).padStart(2, "0"))
+    .join("")}`;
+};
+
+/**
+ * Telegram'ning tepa paneli va varaq fonini ilova foniga moslaydi.
+ *
+ * Busiz mini ilova chat temasidan ajralib turadi: tepada Telegram'ning
+ * o'z rangi, pastda ilovaning foni - "sayt ichiga solingan sayt" hissi
+ * aynan shundan.
+ */
+const syncTelegramTheme = (tg) => {
+  const hex = rgbToHex(getComputedStyle(document.body).backgroundColor);
+  if (!hex) return;
+  // Eski Telegram versiyalari ixtiyoriy hex qabul qilmaydi (setHeaderColor
+  // uchun 7.10 kerak) - qo'llab-quvvatlanmasa jimgina o'tkazib yuboramiz.
+  try {
+    tg.setBackgroundColor?.(hex);
+  } catch {
+    /* eski versiya */
+  }
+  try {
+    tg.setHeaderColor?.(hex);
+  } catch {
+    /* eski versiya */
+  }
+};
 
 const Spinner = () => (
   <div className="inline-block size-8 border-4 border-blue-200 dark:border-blue-500/30 border-t-blue-600 rounded-full animate-spin" />
@@ -105,6 +156,7 @@ const BotAuthPage = () => {
     try {
       tg.ready();
       tg.expand();
+      syncTelegramTheme(tg);
     } catch {
       /* noop */
     }

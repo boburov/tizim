@@ -9051,3 +9051,31 @@ Avval shu "jim logout"ni tuzataman, shunda haqiqiy xato ekranda ko'rinadi:
 <sub>session `d7f3133d` · branch `main` · 17 ta qadam</sub>
 
 ---
+
+## 2026-08-11 15:06 — why my cleint login page looks like this
+
+**So'rov**
+
+> why my cleint login page looks like this
+
+**O'zgargan fayllar (1)**
+
+- `client/src/features/auth/pages/BotAuthPage.jsx` — tahrirlandi
+
+**Buyruqlar (5)**
+
+```sh
+grep -n "telegram\|tg-" index.html; echo "=== BODY BG"; grep -rn "body" src/index.css | head -10
+cd /Users/shukrullo/Desktop/lc-total/client && grep -n "telegram" index.html; echo "=== CSS"; ls src/*.css && grep -n "body\s*{" -A6 src/index.css | head -20
+cd /Users/shukrullo/Desktop/lc-total/client && find src -name "*.css" | head && grep -rn "@apply bg-background\|body" $(find src -name "*.css" | head -3) | head…
+npx eslint src/features/auth/pages/BotAuthPage.jsx && npx vite build --logLevel error 2>&1 | tail -5 && echo "BUILD OK"
+for f in logo.svg logo.jpg logo.png; do printf "%-10s " "$f"; curl -s -o /dev/null -w "%{http_code} %{content_type}\n" "https://tizim.nester.uz/$f"; done
+```
+
+**Natija**
+
+Sabab uchtasi bor, uchalasi ham hozirgi skrinshotda ko'rinib turibdi. Avval kodga tegishlisini tuzatay:
+
+<sub>session `d7f3133d` · branch `main` · 8 ta qadam</sub>
+
+---
