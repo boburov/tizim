@@ -44,6 +44,11 @@ const REQUIRED = [
   [PERMISSIONS.TEACHERS_CREATE, "ishga olish so'rash"],
   [PERMISSIONS.ROLES_UPDATE, "ishga olish route'i talab qiladi"],
   [PERMISSIONS.FINANCE_READ, "tasdiqlar ro'yxatini ko'rish"],
+  // Davomat/baho JUFTLIGI. Direktor o'qituvchi kelmagan darsni yopadi -
+  // buning uchun ikkalasi ham kerak. Ilgari GRADES_RECORD tushib qolgan
+  // edi: davomat belgilanardi, baho esa 403 berardi.
+  [PERMISSIONS.ATTENDANCE_RECORD, "davomat belgilash"],
+  [PERMISSIONS.GRADES_RECORD, "baho qo'yish"],
 ];
 
 console.log("\n\x1b[1mDIREKTOR ROLI\x1b[0m");

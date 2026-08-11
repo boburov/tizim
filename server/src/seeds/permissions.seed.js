@@ -167,6 +167,13 @@ const seed = async () => {
     PERMISSIONS.ATTENDANCE_RECORD,
     PERMISSIONS.ATTENDANCE_MANAGE,
     PERMISSIONS.GRADES_READ,
+    // ASIMMETRIYANI TUZATISH: direktorda ATTENDANCE_RECORD bor edi,
+    // GRADES_RECORD esa yo'q - ya'ni davomatni belgilay olardi, lekin
+    // baho qo'ya olmasdi. Bu ataylab emas, e'tibordan chetda qolgan:
+    // ikkalasi ham bir xil ish (o'qituvchi kelmaganda darsni yopish).
+    // GRADES_MANAGE ataylab BERILMAGAN - u boshqalarning bahosini
+    // o'chirish/tahrirlash demak.
+    PERMISSIONS.GRADES_RECORD,
     PERMISSIONS.RATING_READ,
     PERMISSIONS.LEADS_READ,
     PERMISSIONS.LEADS_MANAGE,
