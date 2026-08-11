@@ -5,6 +5,10 @@ import { Routes as RoutesWrapper, Route, Navigate } from "react-router-dom";
 import AuthGuard from "@/shared/components/guards/AuthGuard";
 import GuestGuard from "@/shared/components/guards/GuestGuard";
 import RoleGuard from "@/shared/components/guards/RoleGuard";
+import AccessDenied from "@/shared/components/guards/AccessDenied";
+
+// Components
+import NotFoundPage from "@/shared/components/ui/feedback/NotFoundPage";
 
 // Layouts
 import AuthLayout from "@/features/auth/layouts/AuthLayout";
@@ -28,7 +32,14 @@ const RoleHomeRedirect = () => {
   const { role, roleType, homePath, isLoading } = useAuth();
   if (isLoading) return null;
   if (!role) return <Navigate to="/login" replace />;
-  return <Navigate to={resolveHomePath({ defaultPath: homePath, role, roleType })} replace />;
+
+  const target = resolveHomePath({ defaultPath: homePath, role, roleType });
+  // Landing sahifa "/" ning o'zi bo'lsa - bu sahifa o'zini o'zi cheksiz
+  // qayta chaqirardi ("*" -> "/" -> "/" -> ...). WebKit bunday halqani
+  // SecurityError bilan uzadi va ilova qulaydi.
+  if (target === "/") return <AccessDenied />;
+
+  return <Navigate to={target} replace />;
 };
 
 const Routes = () => (
@@ -79,8 +90,16 @@ const Routes = () => (
       </Route>
     </Route>
 
-    {/* 404 */}
-    <Route path="*" element={<Navigate to="/" replace />} />
+    {/* 404.
+        DIQQAT: bu yerda `<Navigate to="/">` BO'LMASIN. Rolning landing
+        sahifasi (`roleMeta.defaultPath`) hech qaysi route'ga to'g'ri
+        kelmasa - masalan "/dashboard" deb yozilgan bo'lsa - halqa yopilardi:
+          "/" -> RoleHomeRedirect -> "/dashboard" -> "*" -> "/" -> ...
+        Har qadam `history.replaceState()`, WebKit esa 10 soniyada 100 tadan
+        keyin SecurityError otib butun ilovani yiqitadi (Telegram mini ilova
+        aynan shundan qulagan; Chrome xuddi shu halqani jimgina aylantiradi).
+        404 sahifasi halqani uzadi va yo'l noto'g'ri ekanini ochiq aytadi. */}
+    <Route path="*" element={<NotFoundPage />} />
   </RoutesWrapper>
 );
 

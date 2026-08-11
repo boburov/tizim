@@ -1,13 +1,17 @@
 // Router
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
+
+// Components
+import AccessDenied from "./AccessDenied";
 
 // Constants
 import { ROLE_HOME } from "@/shared/constants/roles";
 
 const RoleGuard = ({ roles, children }) => {
+  const { pathname } = useLocation();
   const { role, roleType, homePath, isLoading } = useAuth();
 
   if (isLoading) return null;
@@ -33,7 +37,24 @@ const RoleGuard = ({ roles, children }) => {
 
   if (!isAllowed) {
     // Landing sahifa serverdagi rol sozlamasidan (defaultPath) keladi.
-    return <Navigate to={homePath || ROLE_HOME[roleType] || "/login"} replace />;
+    const target = homePath || ROLE_HOME[roleType] || ROLE_HOME[role] || null;
+
+    // HALQA HIMOYASI. Ikki holat cheksiz redirectga olib kelardi:
+    //   1) nishon yo'q -> `/login` -> GuestGuard kirgan foydalanuvchini
+    //      darhol panelga qaytaradi -> yana shu yerga -> ...
+    //   2) nishon shu bo'limning O'ZI (masalan "/owner", biz esa
+    //      "/owner/..." damiz) -> guard o'zini o'zi qayta chaqiradi.
+    //
+    // Halqa "bezarar sekinlik" emas: har qadam `history.replaceState()`
+    // chaqiradi va WebKit 10 soniyada 100 tadan keyin SecurityError otib,
+    // butun ilovani yiqitadi (Telegram mini ilova aynan shundan qulagan).
+    // Shuning uchun bu yerda TO'XTAYMIZ - sabab ko'rsatilgan ekran bilan.
+    const wouldLoop =
+      !target || pathname === target || pathname.startsWith(`${target}/`);
+
+    if (wouldLoop) return <AccessDenied />;
+
+    return <Navigate to={target} replace />;
   }
 
   return children || <Outlet />;

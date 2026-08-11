@@ -9119,3 +9119,48 @@ Deploy'da qaysi versiya turganini tekshiray — bu mening o'zgarishim sabab bo'l
 <sub>session `d7f3133d` · branch `main` · 19 ta qadam</sub>
 
 ---
+
+## 2026-08-11 15:29 — SecurityError: Attempt to use history.replaceState() more than 100 tim
+
+**So'rov**
+
+> SecurityError: Attempt to use history.replaceState() more than 100 times per 10 seconds
+> v@https://tizim.nester.uz/assets/index-C75Xfptl.js:6:50975
+> @https://tizim.nester.uz/assets/index-C75Xfptl.js:6:61449
+> @https://tizim.nester.uz/assets/index-C75Xfptl.js:8:7749
+> it@https://tizim.nester.uz/assets/index-C75Xfptl.js:8:7265
+> cG@https://tizim.nester.uz/assets/index-C75Xfptl.js:16:101685
+> PL@https://tizim.nester.uz/assets/index-C75Xfptl.js:8:4281 this error showed up ?
+
+**O'zgargan fayllar (4)**
+
+- `client/src/shared/components/guards/AccessDenied.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/components/guards/RoleGuard.jsx` — tahrirlandi
+- `client/src/shared/components/guards/GuestGuard.jsx` — tahrirlandi
+- `client/src/app/routes.jsx` — tahrirlandi
+
+**Buyruqlar (9)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && cat -n src/shared/constants/roles.js
+for f in src/owner/routes/index.jsx src/student/routes/index.jsx; do echo "===== $f"; head -60 "$f" | grep -n "Route\|index\|path" | head -20; done
+cat -n src/shared/components/guards/GuestGuard.jsx src/shared/components/guards/RoleGuard.jsx
+cat -n src/features/auth/hooks/useLogout.js | head -35; ls src/shared/components/ui/feedback/
+npx eslint src/app/routes.jsx src/shared/components/guards/ && npx vite build --logLevel error 2>&1 | tail -3 && echo "BUILD OK"
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "defaultPath" src/helpers/permission.helper.js src/models/role.model.js | head -20
+grep -rn "DEFAULT_ROLE_PATH" src/ | head; echo "=== resolveRole 20-50"; sed -n '20,50p' src/helpers/permission.helper.js
+cd /Users/shukrullo/Desktop/lc-total/client && cat -n src/shared/components/ui/feedback/NotFoundPage.jsx
+npx eslint src/app/routes.jsx src/shared/components/guards/ && npx vite build --logLevel error 2>&1 | tail -3 && echo "BUILD OK" && grep -n "Navigate" src/app/r…
+```
+
+**Natija**
+
+Mana bu — endi sabab aniq. **Redirect loop**: `history.replaceState()` 10 soniyada 100 martadan ko'p chaqirilyapti, WebKit esa buni `SecurityError` bilan to'xtatadi. Marshrutlarni ko'ray:
+
+Topildi. Bu **cheksiz redirect halqasi** — Chrome uni jimgina yutadi, WebKit (Telegram Desktop WebView, Safari) esa 100 ta `replaceState` dan keyin `SecurityError` otadi va ilova yiqiladi. Halqa aynan shu yerda:
+
+Chuqurroq qarasam, halqaning aniq shakli boshqa — server `defaultPath` ni doim to'ldiradi (`"/owner"` standart), demak halqa **mavjud bo'lmagan yo'l** orqali yopilyapti:
+
+<sub>session `d7f3133d` · branch `main` · 17 ta qadam</sub>
+
+---
