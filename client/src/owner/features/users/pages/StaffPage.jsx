@@ -6,6 +6,7 @@ import { Outlet, useLocation } from "react-router-dom";
 
 // Components
 import Button from "@/shared/components/ui/button/Button";
+import ImportButton from "@/shared/components/import/ImportButton";
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 
 // Hooks
@@ -57,10 +58,19 @@ const StaffPage = () => {
           </p>
         </div>
         {isList && canCreateStaff && (
-          <Button onClick={() => openModal(MODAL.STAFF_CREATE)}>
-            <UserCog className="size-4" />
-            Xodim qo'shish
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Ommaviy yaratish. Tugma ruxsat bo'lmasa o'zini o'zi
+                yashiradi (importerlar ro'yxati serverda filtrlanadi). */}
+            <ImportButton
+              size="default"
+              importerKey="staff"
+              title="Xodimlarni Excel'dan yuklash"
+            />
+            <Button onClick={() => openModal(MODAL.STAFF_CREATE)}>
+              <UserCog className="size-4" />
+              Xodim qo'shish
+            </Button>
+          </div>
         )}
       </header>
 

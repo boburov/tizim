@@ -53,21 +53,48 @@ import { asText, asNumber, asDate, isBlank } from "../services/coerce.service.js
 
 const col = (key, header, extra = {}) => ({ key, header, width: 18, ...extra });
 
+// USTUN DARAJALARI (jadval ko'rinishi uchun).
+//
+// `primary: true` - jadvalda DOIM ko'rinadi. Qolganlari "Barcha ustunlar"
+// tugmasi bosilgunicha yashirin turadi.
+//
+// NEGA KERAK: o'quvchi importida 14 ta ustun bor. Hammasi bir vaqtda
+// ko'rsatilganda jadval ekranga sig'may, foydalanuvchi gorizontal
+// aylantirib ism bilan guruhni bir vaqtda ko'ra olmasdi. Yashirilgan
+// ustunlar YO'QOLMAYDI - qiymatlari fayldan o'qilgan holicha qoladi va
+// import qilinadi, ular shunchaki ko'zdan olib qo'yiladi.
+//
+// `optionsKey` - katak matn emas, TANLOV (select) ekanini bildiradi.
+// Variantlar ro'yxati /imports/:key/options dan olinadi. Guruh nomini
+// qo'lda yozish eng ko'p xato beradigan joy edi: bitta harf farq qilsa
+// "guruh topilmadi" chiqardi.
+
+// `slot` - jadvaldagi VIZUAL o'rni. Slotli ustunlar alohida katak
+// bo'lmaydi: ular bitta "Mijoz" blokiga yig'iladi (avatar + ism-familiya
+// + @login). Shu tufayli jadval 14 ta tor ustun emas, o'qiladigan
+// kartochkaga o'xshaydi va odam qatorni bir qarashda taniydi.
+//   "name" - qalin sarlavha (bir nechta bo'lishi mumkin, yonma-yon)
+//   "sub"  - sarlavha ostidagi ikkinchi darajali qator
 export const IDENTITY_COLUMNS = [
   col("firstName", "Ism", {
     width: 16,
     required: true,
+    primary: true,
+    slot: "name",
     example: "Ali",
     note: "Majburiy.",
   }),
   col("lastName", "Familiya", {
     width: 18,
     required: true,
+    primary: true,
+    slot: "name",
     example: "Valiyev",
     note: "Majburiy.",
   }),
   col("phone", "Telefon", {
     width: 16,
+    primary: true,
     example: "998901234567",
     note:
       "Ixtiyoriy. Takrorlanishi MUMKIN - bitta raqamdan aka-uka yoki " +
@@ -75,11 +102,14 @@ export const IDENTITY_COLUMNS = [
   }),
   col("username", "Login", {
     width: 20,
+    primary: true,
+    slot: "sub",
     example: "ali.valiyev",
     note: "Bo'sh qoldiring - tizim ism-familyadan avtomatik yasaydi. Tahrirlash mumkin.",
   }),
   col("password", "Parol", {
     width: 14,
+    primary: true,
     example: "kfa2846",
     note: "Bo'sh qoldiring - tizim avtomatik yasaydi. Kamida 6 belgi.",
   }),
@@ -90,6 +120,7 @@ export const IDENTITY_COLUMNS = [
   }),
   col("branchName", "Filial", {
     width: 18,
+    optionsKey: "branches",
     example: "Asosiy filial",
     note: "Bo'sh qoldirilsa joriy tanlangan filial ishlatiladi.",
   }),
@@ -97,6 +128,7 @@ export const IDENTITY_COLUMNS = [
 
 export const OPENING_COLUMN = col("openingBalance", "Boshlang'ich summa", {
   width: 22,
+  primary: true,
   example: "+300000",
   note:
     "Ixtiyoriy. ISHORA MUHIM va BARCHA rollar uchun BIR XIL: " +
@@ -288,6 +320,26 @@ export const draftUserRow = (raw, ctx, { role }) => {
 
   if (isBlank(out.branchName) && ctx.defaultBranch) {
     out.branchName = ctx.defaultBranch.name;
+  }
+
+  // TIZIMDA YO'Q GURUH NOMI TASHLAB YUBORILADI.
+  //
+  // Jadvalda guruh TANLOVDAN olinadi, ya'ni u yerda faqat mavjud guruh
+  // paydo bo'la oladi. Fayldan kelgan nom esa har qanday bo'lishi mumkin
+  // (shablondagi "IELTS-A1" namunasi, eski eksport, imlo xatosi).
+  //
+  // Ilgari bunday nom qatorda qolib, har tekshiruvda "guruh topilmadi"
+  // xatosini berardi - foydalanuvchi hech qachon tanlamagan qiymat
+  // uchun. Uni tanlab ham bo'lmasdi (ro'yxatda yo'q), o'chirishdan
+  // boshqa chora qolmasdi. Shuning uchun qoralama bosqichidayoq
+  // bo'shatamiz: katak bo'sh turadi, foydalanuvchi ro'yxatdan tanlaydi
+  // yoki o'sha yerdan yangi guruh yaratadi.
+  //
+  // DIQQAT: bu FAQAT fayl o'qilayotganda. Foydalanuvchi keyin o'zi
+  // yaroqsiz qiymat qo'ysa, validateRow uni odatdagidek xato deb
+  // belgilaydi - u ataylab qilingan amal.
+  if (!isBlank(out.groupName) && !ctx.groupByName.has(norm(out.groupName))) {
+    out.groupName = "";
   }
 
   // Guruh berilgan bo'lsa - a'zolik sanasi guruh boshlanishidan.

@@ -50,6 +50,7 @@
     "test:race": "node tests/paymentRace.test.js",
     "test:export": "node tests/exportScope.test.js",
     "test:import": "node tests/importEngine.test.js",
+    "test:draft-group": "node tests/importDraftGroup.test.js",
     "test:assignment": "node tests/assignmentStorage.test.js",
     "test:salary-rate": "node tests/salaryRate.test.js",
     "test:salary-balance": "node tests/teacherSalaryBalance.test.js",

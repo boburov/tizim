@@ -9,6 +9,7 @@ import { Plus } from "lucide-react";
 
 // Components
 import Button from "@/shared/components/ui/button/Button";
+import ImportButton from "@/shared/components/import/ImportButton";
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import UserStatusFilter from "../components/UserStatusFilter";
 import UserModals from "../components/UserModals";
@@ -71,14 +72,23 @@ const StudentsPage = () => {
       <header className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">O'quvchilar</h1>
         {isList && effectiveStatus !== "archived" && (
-          <Button
-            onClick={() =>
-              openModal(MODAL.USER_CREATE, { defaultRole: ROLES.STUDENT })
-            }
-          >
-            <Plus className="size-4" />
-            Yangi o'quvchi
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Ommaviy yaratish. Tugma ruxsat bo'lmasa o'zini o'zi
+                yashiradi (importerlar ro'yxati serverda filtrlanadi). */}
+            <ImportButton
+              size="default"
+              importerKey="students"
+              title="O'quvchilarni Excel'dan yuklash"
+            />
+            <Button
+              onClick={() =>
+                openModal(MODAL.USER_CREATE, { defaultRole: ROLES.STUDENT })
+              }
+            >
+              <Plus className="size-4" />
+              Yangi o'quvchi
+            </Button>
+          </div>
         )}
       </header>
 

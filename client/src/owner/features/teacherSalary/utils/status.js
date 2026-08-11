@@ -12,3 +12,19 @@ export const SALARY_TYPE_LABEL = {
   percent: "Foiz",
   mixed: "Aralash",
 };
+
+// Qator TURI (kind) - "bu summa qayerdan keldi?" degan savolga javob.
+// group/base - hisoblangan maosh, bonus/deduction - qo'lda yozilgan qator,
+// opening - tizimdan oldingi qoldiq.
+export const SALARY_KIND_LABEL = {
+  group: "Guruh maoshi",
+  base: "Fiksa oylik",
+  bonus: "Mukofot",
+  deduction: "Jarima",
+  opening: "Boshlang'ich qoldiq",
+};
+
+// Qo'lda yozilgan (mukofot/jarima) qatorlarni ajratish - ular boshqacha
+// ko'rsatiladi va boshqa amallarga ega (to'lov emas, o'chirish).
+export const isAdjustmentKind = (kind) =>
+  kind === "bonus" || kind === "deduction";

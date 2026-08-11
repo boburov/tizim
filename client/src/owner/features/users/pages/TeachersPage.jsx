@@ -10,6 +10,7 @@ import { Plus, UserCog } from "lucide-react";
 // Components
 import Button from "@/shared/components/ui/button/Button";
 import ExportButton from "@/shared/components/export/ExportButton";
+import ImportButton from "@/shared/components/import/ImportButton";
 import TabsLinks from "@/shared/components/ui/tabs/TabsLinks";
 import UserStatusFilter from "../components/UserStatusFilter";
 import UserModals from "../components/UserModals";
@@ -77,6 +78,13 @@ const TeachersPage = () => {
             />
             {effectiveStatus !== "archived" && (
               <>
+                {/* Ommaviy yaratish. Tugma ruxsat bo'lmasa o'zini o'zi
+                    yashiradi (importerlar ro'yxati serverda filtrlanadi). */}
+                <ImportButton
+                  size="default"
+                  importerKey="teachers"
+                  title="O'qituvchilarni Excel'dan yuklash"
+                />
                 {/* Xodim - direktor/administrator (custom rol + filial) */}
                 {has(PERMISSIONS.ROLES_UPDATE) && (
                   <Button

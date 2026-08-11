@@ -35,3 +35,16 @@ export const useRemoveSalaryPayoutMutation = makeMutation(
   (id) => teacherSalaryAPI.removeTransaction(id).then((r) => r.data.data),
   "To'lov bekor qilindi",
 );
+
+// ── MUKOFOT / JARIMA ──
+// To'lovdan farqi: bu PUL HARAKATI EMAS, oylik REJASIGA yangi qator qo'shadi.
+// Server `amount` ni HAR DOIM musbat kutadi - ishorani `kind` hal qiladi.
+// Muvaffaqiyat matni chaqiruvchida beriladi (jarima/bonus so'zi farq qiladi).
+export const useAddSalaryAdjustmentMutation = makeMutation((body) =>
+  teacherSalaryAPI.addAdjustment(body).then((r) => r.data.data),
+);
+
+export const useRemoveSalaryAdjustmentMutation = makeMutation(
+  (id) => teacherSalaryAPI.removeAdjustment(id).then((r) => r.data.data),
+  "O'chirildi",
+);

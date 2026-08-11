@@ -22,6 +22,8 @@ export const importAPI = {
   template: (key) =>
     http.get(ENDPOINTS.imports.template(key), { responseType: "blob" }),
 
+  options: (key) => http.get(ENDPOINTS.imports.options(key)),
+
   preview: (key, file, onUploadProgress) =>
     postFile(ENDPOINTS.imports.preview(key), file, onUploadProgress),
 

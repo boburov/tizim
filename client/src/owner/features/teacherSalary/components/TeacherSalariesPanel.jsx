@@ -12,6 +12,7 @@ import { MODAL } from "@/shared/constants/modals";
 import { MONTH_OPTIONS } from "@/shared/constants/calendar";
 import TeacherSalariesTable from "./TeacherSalariesTable";
 import AddSalaryPayoutModal from "./modals/AddSalaryPayoutModal";
+import SalaryAdjustmentModal from "./modals/SalaryAdjustmentModal";
 import useTeacherSalariesQuery from "../hooks/useTeacherSalariesQuery";
 
 const now = new Date();
@@ -103,6 +104,10 @@ const TeacherSalariesPanel = () => {
 
       <ModalWrapper name={MODAL.SALARY_ADD_PAYOUT} title="Maosh to'lovi">
         <AddSalaryPayoutModal />
+      </ModalWrapper>
+
+      <ModalWrapper name={MODAL.SALARY_ADJUSTMENT} title="Jarima">
+        <SalaryAdjustmentModal />
       </ModalWrapper>
     </div>
   );

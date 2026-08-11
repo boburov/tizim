@@ -25,6 +25,13 @@ const importersList = asyncHandler(async (req, res) => {
         key: c.key,
         header: c.header,
         required: Boolean(c.required),
+        // Jadvalda darhol ko'rinadimi yoki "Barcha ustunlar" ortidami.
+        primary: Boolean(c.primary),
+        // Vizual o'rni: "name" / "sub" bo'lsa alohida ustun emas,
+        // "Mijoz" blokining ichida chiziladi.
+        slot: c.slot || "",
+        // Bo'sh bo'lmasa - katak matn emas, tanlov (select).
+        optionsKey: c.optionsKey || "",
         note: c.note || "",
         example: c.example ?? "",
       })),

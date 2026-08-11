@@ -14,6 +14,7 @@ import {
 import importersList from "./handlers/importers.list.handler.js";
 import historyList from "./handlers/history.list.handler.js";
 import templateHandler from "./handlers/template.handler.js";
+import optionsHandler from "./handlers/options.handler.js";
 import previewHandler from "./handlers/preview.handler.js";
 import commitHandler from "./handlers/commit.handler.js";
 import errorReportHandler from "./handlers/errorReport.handler.js";
@@ -42,6 +43,15 @@ router.get(
   requireImporterPermission(),
   validate(importerKeySchema),
   templateHandler,
+);
+
+// Tanlov (select) ustunlari uchun variantlar: guruhlar, filiallar, rollar.
+router.get(
+  "/:importerKey/options",
+  requireAuth,
+  requireImporterPermission(),
+  validate(importerKeySchema),
+  optionsHandler,
 );
 
 // KO'RIB CHIQISH - hech narsa yozilmaydi.

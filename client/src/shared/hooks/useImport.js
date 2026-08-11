@@ -16,6 +16,21 @@ export const useImportersQuery = (options = {}) =>
     ...options,
   });
 
+/**
+ * Tanlov ustunlari uchun variantlar (guruh, filial, rol).
+ *
+ * Faqat jadval oynasi ochilganda chaqiriladi. Guruhlar ro'yxati import
+ * davomida o'zgarmaydi, shuning uchun staleTime uzun.
+ */
+export const useImportOptionsQuery = (importerKey, options = {}) =>
+  useQuery({
+    queryKey: qk.imports.options(importerKey),
+    queryFn: () => importAPI.options(importerKey).then((r) => r.data.data),
+    enabled: Boolean(importerKey),
+    staleTime: 10 * 60 * 1000,
+    ...options,
+  });
+
 /** Import tarixi (kim, qachon, nechta qator). */
 export const useImportHistoryQuery = (params = {}, options = {}) =>
   useQuery({

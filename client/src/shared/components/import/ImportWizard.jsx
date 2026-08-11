@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Download,
   Loader2,
@@ -17,6 +18,7 @@ import ImportEditableGrid from "./ImportEditableGrid";
 // Hooks
 import {
   useImportersQuery,
+  useImportOptionsQuery,
   useImportTemplateMutation,
   useImportDraftMutation,
   useImportValidateRowsMutation,
@@ -26,25 +28,54 @@ import {
 
 // Utils
 import { cn } from "@/shared/utils/cn";
+import { qk } from "@/shared/lib/query/keys";
 
 const STEP = { UPLOAD: "upload", GRID: "grid", RUNNING: "running", DONE: "done" };
 
 const money = (n) => new Intl.NumberFormat("uz-UZ").format(Math.round(Number(n) || 0));
 
-const StatCard = ({ label, value, tone = "muted", hint }) => {
+/**
+ * Server javobini AVVALGI qatorlar bilan birlashtiradi.
+ *
+ * NEGA: bitta katak tahrirlansa ham server BARCHA qatorlarni qayta
+ * tekshirib qaytaradi (fayl ichidagi login to'qnashuvini topish uchun
+ * unga to'liq ro'yxat kerak). Javobni to'g'ridan-to'g'ri holatga yozsak,
+ * 300 ta qatorning 300 tasi ham yangi obyekt bo'lib, qator memo'si
+ * ishlamay qolardi va butun ro'yxat qayta chizilardi.
+ *
+ * Bu yerda mazmuni o'zgarmagan qator ESKI havolasini saqlaydi - demak
+ * faqat haqiqatan o'zgargan qator qayta chiziladi. Solishtirish O(n)
+ * qator bo'yicha, lekin bitta qatorni qayta chizishdan ancha arzon.
+ */
+const mergeRows = (prev, next) => {
+  if (!prev.length) return next;
+  const byNumber = new Map(prev.map((r) => [r.rowNumber, r]));
+  return next.map((r) => {
+    const old = byNumber.get(r.rowNumber);
+    return old && JSON.stringify(old) === JSON.stringify(r) ? old : r;
+  });
+};
+
+// Ixcham ko'rsatkich: qiymat qalin, izoh yonida kichik. Karta emas -
+// beshta karta jadvalga qoladigan balandlikni yeb qo'yardi.
+const Chip = ({ value, label, tone = "muted" }) => {
   const tones = {
-    muted: "bg-muted text-foreground",
+    muted: "bg-card text-foreground",
     good: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
     bad: "bg-destructive/10 text-destructive",
     warn: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
     info: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
   };
   return (
-    <div className={cn("rounded-lg px-3 py-2", tones[tone])}>
-      <p className="text-lg font-semibold tabular-nums">{value}</p>
-      <p className="text-xs opacity-80">{label}</p>
-      {hint && <p className="text-[11px] opacity-70">{hint}</p>}
-    </div>
+    <span
+      className={cn(
+        "inline-flex items-baseline gap-1 rounded-lg px-2.5 py-1 text-sm",
+        tones[tone],
+      )}
+    >
+      <strong className="font-semibold tabular-nums">{value}</strong>
+      <span className="text-xs opacity-70">{label}</span>
+    </span>
   );
 };
 
@@ -68,8 +99,18 @@ const ProgressBar = ({ value }) => (
  * MUHIM: server tahrirlangan qatorlarni yozishdan OLDIN to'liq qayta
  * tekshiradi. Bu yerdagi tekshiruv faqat qulaylik uchun - unga
  * xavfsizlik jihatidan tayanilmaydi.
+ *
+ * ─── NEGA OYNA EMAS, SAHIFA ───
+ * Bu usta modal ichida yashardi va o'sha yerda 200 qatorli jadvalga
+ * ekranning yarmi ham tegmasdi: modal balandligi cheklangan, atrofi
+ * qorong'i, yon tomonda esa bekor turgan joy. Import - bir zumlik
+ * tasdiq emas, o'nlab qatorni ko'zdan kechirib, guruh biriktirib,
+ * xatolarni tuzatadigan ISH. Shuning uchun u endi to'liq sahifa.
+ *
+ * `close` - ish tugagach qayerga qaytish (sahifada "ortga", oynada
+ * "yopish"). Komponent buni bilmaydi - chaqiruvchi hal qiladi.
  */
-const ImportGridModal = ({ importerKey, close }) => {
+const ImportWizard = ({ importerKey, close, creatable = null }) => {
   const { data: importers, isLoading, isError, refetch } = useImportersQuery();
 
   const [step, setStep] = useState(STEP.UPLOAD);
@@ -94,6 +135,24 @@ const ImportGridModal = ({ importerKey, close }) => {
     [importers, importerKey],
   );
 
+  // Tanlov ustunlari uchun variantlar (guruh, filial, rol).
+  //
+  // `optionsReady` MUHIM: "hali kelmadi" bilan "keldi, lekin bo'sh" ni
+  // ajratadi. Ikkalasini bir xil ko'rsak, markazda hali guruh
+  // yaratilmagan holatda katak jimgina matn maydoniga aylanardi -
+  // foydalanuvchi guruh nomini qo'lda yozib, "guruh topilmadi" xatosini
+  // olardi va nega select yo'qligini tushunmasdi.
+  const { data: options, isSuccess: optionsReady } =
+    useImportOptionsQuery(importerKey);
+
+  // Jadvaldan yangi guruh/rol yaratilganda variantlar ro'yxati eskiradi.
+  // Jadval yaratilgan qiymatni o'zi vaqtincha ko'rsatib turadi, bu esa
+  // ro'yxatni haqiqiy manbadan yangilaydi.
+  const queryClient = useQueryClient();
+  const refreshOptions = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: qk.imports.options(importerKey) });
+  }, [queryClient, importerKey]);
+
   const templateMut = useImportTemplateMutation();
 
   const draftMut = useImportDraftMutation({
@@ -108,8 +167,9 @@ const ImportGridModal = ({ importerKey, close }) => {
 
   const validateMut = useImportValidateRowsMutation({
     onSuccess: (data) => {
-      rowsRef.current = data.rows || [];
-      setRows(data.rows || []);
+      const merged = mergeRows(rowsRef.current, data.rows || []);
+      rowsRef.current = merged;
+      setRows(merged);
       setSummary(data.summary);
     },
   });
@@ -156,6 +216,27 @@ const ImportGridModal = ({ importerKey, close }) => {
   // "natija", aks holda foydalanuvchi turgan bosqich.
   const view = queuedFinished ? STEP.DONE : step;
 
+  // KESHNI TOZALASH - import yozib bo'lgach.
+  //
+  // NEGA KENG: bitta import odam yaratadi, guruhga a'zo qiladi, o'tgan
+  // oylar uchun to'lov qatorlarini quradi, depozit va qarzdorlikni
+  // o'zgartiradi. Ya'ni ro'yxat, moliya, guruh va statistika - hammasi
+  // eskiradi. Ularni bittalab sanab chiqish "qaysidir birini unutish"
+  // demak: import kamdan-kam bajariladi, shuning uchun hammasini
+  // bekor qilish arzonroq va ishonchliroq.
+  //
+  // Effekt SONGA bog'lanadi, `result` obyektiga emas: navbat yo'lida
+  // `result` har render'da qayta hisoblanadi va obyektga bog'lansa
+  // effekt bekorga qayta ishga tushardi. Ref esa ketma-ket ikkinchi
+  // marta chaqirilishdan saqlaydi; `reset()` uni qaytaradi.
+  const invalidatedRef = useRef(false);
+  const importedCount = result?.summary?.imported || 0;
+  useEffect(() => {
+    if (!importedCount || invalidatedRef.current) return;
+    invalidatedRef.current = true;
+    queryClient.invalidateQueries();
+  }, [importedCount, queryClient]);
+
   // Katak tahrirlanganda: mahalliy holatni yangilab, tekshiruvni
   // kechiktirib yuboramiz.
   //
@@ -181,10 +262,35 @@ const ImportGridModal = ({ importerKey, close }) => {
     [importerKey, validateMut],
   );
 
+  // OMMAVIY BELGILASH: tanlangan qatorlarga bitta qiymat (masalan guruh).
+  //
+  // Bitta-bitta `handleEdit` chaqirilmaydi: har chaqiruv `rowsRef` ustiga
+  // yozib, o'z taymerini qo'yardi va 50 ta qator uchun 50 ta tekshiruv
+  // so'rovi ketardi. Bu yerda o'zgarish BIR marta qo'llanadi va BITTA
+  // tekshiruv yuboriladi.
+  const handleBulkEdit = useCallback(
+    (rowNumbers, key, value) => {
+      const target = new Set(rowNumbers);
+      const next = rowsRef.current.map((r) =>
+        target.has(r.rowNumber) ? { ...r, raw: { ...r.raw, [key]: value } } : r,
+      );
+      rowsRef.current = next;
+      setRows(next);
+
+      clearTimeout(validateTimer.current);
+      validateMut.mutate({
+        importerKey,
+        rows: next.map((r) => ({ rowNumber: r.rowNumber, raw: r.raw })),
+      });
+    },
+    [importerKey, validateMut],
+  );
+
   useEffect(() => () => clearTimeout(validateTimer.current), []);
 
   const reset = () => {
     setFile(null);
+    invalidatedRef.current = false;
     rowsRef.current = [];
     setRows([]);
     setSummary(null);
@@ -197,8 +303,25 @@ const ImportGridModal = ({ importerKey, close }) => {
   // Login/parollarni CSV qilib saqlash. Parollar bazada ochiq saqlanadi
   // va profil sahifasidan ham olinadi, lekin 200 ta odamni bittalab
   // ochib chiqish real emas - shuning uchun bitta fayl.
+  //
+  // MANBA IKKITA, va ikkalasi ham kerak:
+  //   result.rows - YOZISH natijasi (kim haqiqatan yaratildi);
+  //   rows        - client nusxasi (parol shu yerda - server jarayon
+  //                 holatida uni qaytarmaydi).
+  // Faqat `rows` ga qarab bo'lmaydi: navbat (Redis) yo'lida undagi
+  // status yozishdan OLDINGI "ok" bo'lib qoladi, ya'ni yozishda
+  // yiqilgan qator ham ro'yxatga tushardi va resepshin mavjud bo'lmagan
+  // akkaunt uchun login/parol tarqatardi.
   const downloadCredentials = () => {
-    const done = rows.filter((r) => r.status === "imported" || r.status === "ok");
+    const outcome = new Map(
+      (result?.rows || []).map((r) => [r.rowNumber, r.status]),
+    );
+    const done = rows.filter((r) => {
+      const status = outcome.get(r.rowNumber) ?? r.status;
+      return status === "imported";
+    });
+    if (!done.length) return;
+
     const head = "Ism,Familiya,Login,Parol,Telefon\n";
     const body = done
       .map((r) =>
@@ -241,7 +364,7 @@ const ImportGridModal = ({ importerKey, close }) => {
   // ─────────────── 1-BOSQICH: fayl ───────────────
   if (view === STEP.UPLOAD) {
     return (
-      <div className="space-y-4">
+      <div className="min-w-0 max-w-2xl space-y-4">
         <div className="rounded-lg border bg-muted/40 p-3">
           <p className="text-sm font-medium">1. Shablonni yuklab oling</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -329,36 +452,38 @@ const ImportGridModal = ({ importerKey, close }) => {
     }
 
     return (
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <StatCard label="Jami qator" value={s.total || 0} />
-          <StatCard label="Tayyor" value={ready} tone={ready ? "good" : "muted"} />
-          <StatCard label="Xato" value={s.error || 0} tone={s.error ? "bad" : "muted"} />
-          <StatCard
-            label="Jami avans (+)"
-            value={money(credit)}
-            tone={credit ? "info" : "muted"}
-          />
-          <StatCard
-            label="Jami qarz (−)"
-            value={money(debt)}
-            tone={debt ? "warn" : "muted"}
-          />
-        </div>
-
-        <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-200">
-          <AlertTriangle className="size-4 shrink-0" />
-          <span>
-            Yuqoridagi ikki summani o'z hisobingiz bilan solishtiring.
-            Boshlang'ich qoldiq <strong>bir marta</strong> yoziladi va keyin
-            o'zgartirib bo'lmaydi.
+      <div className="flex min-w-0 flex-col gap-3">
+        {/* Ilgari bu yerda 5 ta katta karta va uch qatorli ogohlantirish
+            bor edi - ular jadvalga qoladigan balandlikni yeb qo'yardi.
+            Endi bitta ixcham qator: son + qoldiq yig'indisi. Avans va
+            qarz ATAYLAB alohida - qo'shib yuborilsa bir-birini yeb,
+            nazorat ma'nosini yo'qotardi. */}
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2.5">
+          <Chip value={s.total || 0} label="qator" />
+          <Chip value={ready} label="tayyor" tone={ready ? "good" : "muted"} />
+          {(s.error || 0) > 0 && <Chip value={s.error} label="xato" tone="bad" />}
+          {credit > 0 && (
+            <Chip value={`+${money(credit)}`} label="avans" tone="info" />
+          )}
+          {debt > 0 && <Chip value={`−${money(debt)}`} label="qarz" tone="warn" />}
+          <span
+            className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground"
+            title="Boshlang'ich qoldiq bir marta yoziladi va keyin o'zgartirib bo'lmaydi. Summalarni o'z hisobingiz bilan solishtiring."
+          >
+            <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+            <span className="hidden sm:inline">Qoldiq bir marta yoziladi</span>
           </span>
         </div>
 
         <ImportEditableGrid
           rows={rows}
           columns={importer.columns}
+          options={options}
+          optionsReady={optionsReady}
+          creatable={creatable}
+          onOptionCreated={refreshOptions}
           onEdit={handleEdit}
+          onBulkEdit={handleBulkEdit}
           disabled={createMut.isPending}
         />
 
@@ -399,7 +524,7 @@ const ImportGridModal = ({ importerKey, close }) => {
     const pct = Math.round((processed / total) * 100);
 
     return (
-      <div className="space-y-4 py-4">
+      <div className="mx-auto min-w-0 max-w-xl space-y-4 py-6">
         <div className="flex flex-col items-center gap-2 text-center">
           <Loader2 className="size-8 animate-spin text-primary" />
           <p className="text-lg font-semibold">Yaratilmoqda...</p>
@@ -429,7 +554,7 @@ const ImportGridModal = ({ importerKey, close }) => {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div className="flex flex-col items-center gap-2 py-2 text-center">
         {result?.error ? (
           <AlertTriangle className="size-10 text-destructive" />
@@ -444,17 +569,17 @@ const ImportGridModal = ({ importerKey, close }) => {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatCard label="Jami qator" value={s.total || 0} />
-        <StatCard label="Yaratildi" value={s.imported || 0} tone="good" />
-        <StatCard
-          label="Yozilmadi"
+      <div className="flex flex-wrap justify-center gap-2 rounded-xl border bg-muted/40 px-3 py-2.5">
+        <Chip value={s.total || 0} label="jami qator" />
+        <Chip value={s.imported || 0} label="yaratildi" tone="good" />
+        <Chip
           value={s.failed || 0}
+          label="yozilmadi"
           tone={s.failed ? "bad" : "muted"}
         />
-        <StatCard
-          label="Takror"
+        <Chip
           value={s.duplicate || 0}
+          label="takror"
           tone={s.duplicate ? "warn" : "muted"}
         />
       </div>
@@ -462,7 +587,13 @@ const ImportGridModal = ({ importerKey, close }) => {
       {failedRows.length > 0 && (
         <>
           <p className="text-sm font-medium">O'tmagan qatorlar</p>
-          <ImportEditableGrid rows={failedRows} columns={importer.columns} disabled />
+          <ImportEditableGrid
+            rows={failedRows}
+            columns={importer.columns}
+            options={options}
+            optionsReady={optionsReady}
+            disabled
+          />
         </>
       )}
 
@@ -482,4 +613,4 @@ const ImportGridModal = ({ importerKey, close }) => {
   );
 };
 
-export default ImportGridModal;
+export default ImportWizard;

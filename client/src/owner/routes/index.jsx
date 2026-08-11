@@ -67,6 +67,7 @@ import {
   AssignmentDetailPage,
 } from "@/owner/features/assignments";
 import { StorageAdminPage } from "@/owner/features/storage";
+import { ImportPage } from "@/owner/features/imports";
 import { NotificationTemplatesListPage } from "@/owner/features/notificationTemplates";
 import { HolidaysListPage } from "@/owner/features/holidays";
 import { RolesPage, RoleFormPage } from "@/owner/features/roles";
@@ -320,6 +321,13 @@ const OwnerRoutes = () => (
         </PermissionGuard>
       }
     />
+
+    {/* OMMAVIY IMPORT - o'quvchi/o'qituvchi/xodim uchun bitta sahifa.
+        Sidebar'da yo'q: ro'yxat sahifalaridagi "Excel'dan yuklash"
+        tugmasi olib keladi. Ruxsat shu yerda tekshirilmaydi - importerlar
+        ro'yxati serverda filtrlanadi va yozish yo'li ham qayta
+        qo'riqlanadi (requireImporterPermission). */}
+    <Route path="import/:importerKey" element={<ImportPage />} />
 
     {/* Fayl saqlagich boshqaruvi - sidebar'dagi kvota ko'rsatkichi
         shu sahifaga olib keladi. */}

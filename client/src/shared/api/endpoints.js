@@ -236,6 +236,8 @@ export const ENDPOINTS = Object.freeze({
     importers: "/imports/importers",
     history: "/imports/history",
     template: (key) => `/imports/${key}/template`,
+    // Tanlov (select) ustunlari uchun variantlar: guruh, filial, rol.
+    options: (key) => `/imports/${key}/options`,
     preview: (key) => `/imports/${key}/preview`,
     commit: (key) => `/imports/${key}/commit`,
     errorReport: (key) => `/imports/${key}/error-report`,

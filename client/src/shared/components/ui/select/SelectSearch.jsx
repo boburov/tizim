@@ -77,7 +77,13 @@ const SelectSearch = ({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]">
+      {/* Kenglik triggerga TENGLASHTIRILADI, lekin `min-w` bilan pol
+          qo'yiladi. Sababi: bu select endi jadval katagida ham ishlaydi,
+          u yerda trigger 130px atrofida bo'ladi va ro'yxat shunga
+          qisqarib, "Yangi guruh" kabi matn ikki qatorga sinib ketardi.
+          Keng formalarda hech narsa o'zgarmaydi - u yerda trigger
+          allaqachon shu poldan keng. */}
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-60 p-0">
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
@@ -110,9 +116,9 @@ const SelectSearch = ({
               <button
                 type="button"
                 onClick={handleAddNew}
-                className="flex w-full items-center gap-1.5 rounded-sm px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
+                className="flex w-full items-center gap-1.5 whitespace-nowrap rounded-sm px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
               >
-                <Plus className="size-4" />
+                <Plus className="size-4 shrink-0" />
                 {addNewLabel}
               </button>
             </div>

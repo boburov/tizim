@@ -25,6 +25,11 @@ const SelectComponent = ({ ...props }) => {
 //      ochilganda ma'lum bo'ladi, demak tugma o'sha yerda turishi kerak.
 //   2) yorliq qatorining o'ng chetida - ro'yxatni ochmasdan ham ko'rinadi.
 //
+// `addNewInHeader={false}` ikkinchisini o'chiradi. JADVAL uchun kerak:
+// u yerda select yorliqsiz, har QATORDA takrorlanadi va tepadagi tugma
+// yuzlab marta ko'chirilib, ustunni bekorga cho'zib yuborardi. Dropdown
+// ichidagisi joyida qoladi, ya'ni imkoniyat yo'qolmaydi.
+//
 // Tugmalarning o'zi hech narsa ochmaydi: modalni CreatableSelectField
 // boshqaradi.
 const SelectField = ({
@@ -37,11 +42,14 @@ const SelectField = ({
   error = false,
   onAddNew,
   addNewLabel = "Yangi",
+  addNewInHeader = true,
   ...props
 }) => {
+  const headerAddNew = onAddNew && addNewInHeader;
+
   return (
     <Field data-disabled={props.disabled} className={className}>
-      {(label || onAddNew) && (
+      {(label || headerAddNew) && (
         <div className="flex items-center justify-between gap-2">
           {label ? (
             <FieldLabel
@@ -66,7 +74,7 @@ const SelectField = ({
             <span />
           )}
 
-          {onAddNew && (
+          {headerAddNew && (
             <button
               type="button"
               onClick={onAddNew}

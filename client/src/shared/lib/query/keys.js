@@ -261,6 +261,7 @@ export const qk = Object.freeze({
   imports: {
     all: () => ["imports"],
     importers: () => ["imports", "importers"],
+    options: (key) => ["imports", "options", key],
     history: (params) => ["imports", "history", params],
     // Fondagi importning holati - jarayon tugagunicha so'rab turiladi.
     job: (jobId) => ["imports", "job", jobId],

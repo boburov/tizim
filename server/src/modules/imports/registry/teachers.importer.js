@@ -88,6 +88,7 @@ const teachersImporter = {
       key: "hiredAt",
       header: "Ishga olingan sana",
       width: 20,
+      primary: true,
       example: "2026-05-05",
       note: "MAJBURIY. Maosh davri shu sanadan boshlanadi. Kelajakda bo'lmasin.",
     },
@@ -130,6 +131,7 @@ const teachersImporter = {
       key: "groupName",
       header: "Guruh (qoldiq uchun)",
       width: 22,
+      optionsKey: "groups",
       example: "IELTS-A1",
       note:
         "Faqat boshlang'ich qoldiq kiritilganda majburiy. O'qituvchi bu " +

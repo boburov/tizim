@@ -83,10 +83,12 @@ const studentsImporter = {
       key: "groupName",
       header: "Guruh",
       width: 22,
+      primary: true,
+      optionsKey: "groups",
       example: "IELTS-A1",
       note:
-        "Guruh nomi AYNAN tizimdagidek bo'lsin. Yangi guruh AVTOMATIK " +
-        "YARATILMAYDI. Boshlang'ich qarz (-) kiritilsa guruh MAJBURIY.",
+        "Ro'yxatdan tanlanadi. Yangi guruh AVTOMATIK YARATILMAYDI. " +
+        "Boshlang'ich qarz (-) kiritilsa guruh MAJBURIY.",
     },
     {
       key: "joinedAt",

@@ -141,6 +141,10 @@ export const MODAL = Object.freeze({
 
   // Teacher salary (O'qituvchi maoshlari)
   SALARY_ADD_PAYOUT: "salary:addPayout",
+  // Mukofot / jarima - ALOHIDA maosh qatori (kind: "bonus" | "deduction").
+  // SALARY_ADD_PAYOUT'dan farqi: u mavjud qatorga PUL to'laydi, bu esa
+  // yangi qator ochadi va oylik yig'indini o'zgartiradi.
+  SALARY_ADJUSTMENT: "salary:adjustment",
   // O'qituvchining MARKAZ darajasidagi standart maosh stavkasi.
   // SALARY_PERIOD_* dan farqi: u bitta GURUH uchun kelishuv, bu esa
   // o'qituvchining barcha guruhlariga meros bo'ladigan standart.

@@ -7,7 +7,7 @@ import { formatDateUz } from "@/shared/utils/formatDate";
 import { MONTH_LABELS } from "@/shared/constants/calendar";
 import useTeacherSalaryHistoryQuery from "../hooks/useTeacherSalaryHistoryQuery";
 import TeacherSalaryBalanceCard from "../components/TeacherSalaryBalanceCard";
-import { statusMeta } from "../utils/status";
+import { statusMeta, SALARY_KIND_LABEL, isAdjustmentKind } from "../utils/status";
 
 const monthLabel = (m) => MONTH_LABELS[m - 1] || m;
 const methodLabel = (m) => (m === "cash" ? "Naqd" : "Karta");
@@ -107,15 +107,26 @@ const SalaryMonthCard = ({ salary }) => {
   const paid = salary.paidAmount || 0;
   const remaining = Math.max(0, expected - paid);
   const txs = salary.transactions || [];
+  // Qo'lda yozilgan qator (mukofot/jarima): guruh o'rniga SABAB ko'rsatiladi.
+  // Jarimada guruh odatda yo'q, ya'ni bu joy bo'sh qolib "nima uchun bu
+  // qator paydo bo'ldi?" degan savolni javobsiz qoldirardi.
+  const adjustment = isAdjustmentKind(salary.kind);
 
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
+        <div className="min-w-0">
           <p className="font-semibold">
             {monthLabel(salary.month)} {salary.year}
+            {adjustment && (
+              <span className="ml-2 text-xs font-medium text-muted-foreground">
+                {SALARY_KIND_LABEL[salary.kind]}
+              </span>
+            )}
           </p>
-          <p className="text-xs text-muted-foreground">{salary.group?.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {adjustment ? salary.reason || "-" : salary.group?.name}
+          </p>
         </div>
         <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
       </div>
@@ -123,7 +134,18 @@ const SalaryMonthCard = ({ salary }) => {
       <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
         <div>
           <p className="text-xs text-muted-foreground">Kutilgan</p>
-          <p className="font-medium">{formatMoney(expected)}</p>
+          {/* Jarima MANFIY - ishorasi ko'rinmasa mukofotdan farq qilmasdi. */}
+          <p
+            className={
+              expected < 0
+                ? "font-medium text-rose-600 dark:text-rose-300"
+                : "font-medium"
+            }
+          >
+            {expected < 0
+              ? `−${formatMoney(Math.abs(expected))}`
+              : formatMoney(expected)}
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">To'langan</p>
