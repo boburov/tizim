@@ -9848,3 +9848,72 @@ Endi jadvalning o'zini minimallashtiraman — maydonlar quti bo'lib turmasin.
 <sub>session `0b90f140` · branch `main` · 10 ta qadam</sub>
 
 ---
+
+## 2026-08-11 20:39 — oquvchi panelda shunday muammo bo'lmoqda Failed to load resource: the 
+
+**So'rov**
+
+> oquvchi panelda shunday muammo bo'lmoqda  Failed to load resource: the server responded with a status of 400 (Bad Request)
+
+**O'zgargan fayllar (5)**
+
+- `client/src/owner/features/rating/hooks/useLeaderboardQuery.js` — tahrirlandi
+- `client/src/student/features/rating/pages/MyRatingPage.jsx` — tahrirlandi
+- `server/src/jobs/lessonReminders.job.js` — yaratildi/qayta yozildi
+- `server/src/helpers/studentFreeze.helper.js` — tahrirlandi
+- `server/tests/lessonReminders.test.js` — yaratildi/qayta yozildi
+
+**Buyruqlar (38)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "leaderboardSchema" -A 25 src/modules/grades/validators/grades.validator.js
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "leaderboard" src/student/ src/shared/ 2>/dev/null | head -20
+grep -rn "leaderboard\|rating" src/student/ --include="*.js" --include="*.jsx" | head -20
+grep -rln "leaderboard" src/ | head
+cat src/owner/features/rating/hooks/useLeaderboardQuery.js; echo "=== studentRank ==="; cat src/owner/features/rating/hooks/useStudentRankQuery.js
+npx eslint src/student/features/rating/ src/owner/features/rating/hooks/ 2>&1 | tail -8; npm run build 2>&1 | tail -2; echo "--- boshqa limit:0 bormi ---"; grep…
+cd /Users/shukrullo/Desktop/lc-total/server && ls src/jobs/ && echo "=== jobs index ===" && cat src/jobs/index.js | head -60
+ls src/modules/notifications/ src/modules/notifications/services/ 2>/dev/null; echo "=== bot services ==="; ls src/bot/services/
+cat src/jobs/attendanceReminders.job.js
+grep -n "schedule\|TZ\|timezone\|every\|cron" src/config/agenda.js src/jobs/index.js | head -30
+grep -n "schedule" -A 12 src/models/group.model.js | sed -n 1,25p; echo "=== listForGroupOnDate qaytarishi ==="; grep -n "export const listForGroupOnDate" -A 40…
+grep -n "telegram\|bot\|chatId" src/jobs/notificationDeliver.job.js | head -10; echo "=== deliver service ==="; head -40 src/bot/services/notificationDeliver.se…
+grep -n "category" -A 20 src/models/notification.model.js | head -30
+sed -n 80,130p src/modules/attendance/services/attendance.service.js
+grep -n "NOTIFICATION_CATEGORIES" -A 20 src/constants/notifications.js 2>/dev/null || grep -rn "NOTIFICATION_CATEGORIES =" -A 20 src/constants/ | head -25
+grep -n "lessonCancellation\|cancel" src/modules/attendance/services/attendance.service.js | head -10; echo "=== helper ==="; grep -n "export" src/helpers/lesso…
+grep -rn "NOTIFICATION_CATEGORIES" src/ | head -3; echo "---"; grep -rn "class_cancel" src/constants/*.js src/models/notification.model.js | head -5
+sed -n 19,60p src/helpers/lessonCancellation.helper.js
+grep -n "^export const" src/helpers/attendance.helper.js | head -25
+grep -n "^export const\|freeze" src/helpers/studentFreeze.helper.js | head -15
+sed -n 137,175p src/helpers/attendance.helper.js; echo "=== holidayKeySetForRange ==="; grep -rn "export const holidayKeySetForRange" src/
+sed -n 36,60p src/helpers/studentFreeze.helper.js; echo "=== sendNotification imzosi ==="; grep -n "export const send = " -A 30 src/modules/notifications/servic…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/jobs/lessonReminders.job.js") s = p.read_text() s = s.replace("""import { loadFreezeWindows, isFrozenOn, }…
+sed -n 105,115p src/jobs/index.js
+python3 - <<'PY' import pathlib p = pathlib.Path("src/jobs/index.js") s = p.read_text() s = s.replace("""import defineAttendanceReminders, { JOB_NAME as ATTENDA…
+# … yana 13 ta
+```
+
+**Natija**
+
+Student paneldagi reyting so'rovi. Validator va chaqiruvni tekshiraman.
+
+Topildi. Sabab [MyRatingPage.jsx:29](client/src/student/features/rating/pages/MyRatingPage.jsx#L29) — guruh hali ma'lum bo'lmaganda `limit: 0` yuborilyapti. Hook'ni tekshiraman.
+
+Yangi so'rovni ko'rdim — avval shu bug'ni yopay, keyin unga o'taman.
+
+Bug tuzatildi (faqat izohlarda qoldi, kodda `limit: 0` yo'q). Endi yangi so'rovingizga o'taman — avval mavjud infratuzilmani ko'ray.
+
+Bug hal bo'ldi. Endi eslatma tizimiga o'tdim — mavjud naqshlarni o'rganyapman.
+
+Hammasi tayyor. Endi eslatma job'ini yozaman.
+
+`loadFreezeWindows` o'quvchi ID'sini qaytarmas ekan — xatoni tuzatay.
+
+Endi job'ni ro'yxatga olib, 06:00 ga rejalashtiraman.
+
+Job'ni testlanadigan qilaman — kodbazada shunday naqsh bor (`dailyAccrueFinance` → `accrueToday`).
+
+<sub>session `0b90f140` · branch `main` · 46 ta qadam</sub>
+
+---
