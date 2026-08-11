@@ -104,6 +104,14 @@ model Tenant {
   deprovisionLog String?   @db.Text
   deletedAt      DateTime?
 
+  // --- To'xtatish (suspend) kuzatuvi ---
+  // Obuna tugaganda pm2 process to'xtatiladi va status SUSPENDED bo'ladi.
+  // Papka, baza va yuklangan fayllar TEGILMAYDI — to'lov kelishi bilan
+  // `resume` bir soniyada hammasini qaytaradi.
+  suspendedAt     DateTime?
+  suspendReason   String?
+  suspendLog      String?   @db.Text
+
   // Tenant server bilan aloqa (heartbeat) — noyob sirli kalit
   heartbeatSecret String?   @unique
   lastHeartbeatAt DateTime?
@@ -363,6 +371,16 @@ model Subscription {
   currentPeriodEnd DateTime?
   canceledAt       DateTime?
 
+  // --- Bepul sinov ---
+  //
+  // Sinovni FAQAT admin beradi (self-service oqimida berilmaydi), shuning
+  // uchun "kim berdi" yozib qo'yiladi: keyinchalik "bu markaz nega bepul
+  // ishlayapti?" degan savolga javob shu yerda turadi.
+  trialDays      Int? // nechta kunga berilgan (7-30)
+  trialGrantedBy String? // admin email
+  trialGrantedAt DateTime?
+  trialNote      String?
+
   transactions Transaction[]
 
   createdAt DateTime @default(now())
@@ -370,6 +388,7 @@ model Subscription {
 
   @@index([status])
   @@index([planId])
+  @@index([currentPeriodEnd])
 }
 
 enum PaymentProvider {
@@ -539,6 +558,11 @@ model ApiSubscription {
   // null = muddatsiz. O'tgan sana = xizmat to'xtaydi (grace period yo'q).
   expiresAt  DateTime?
   canceledAt DateTime?
+
+  // Oxirgi HISOBLANGAN so'rov vaqti (kalit tekshiruvi emas — haqiqiy so'rov).
+  // Panelda "hisob tirikmi" savoliga shu javob beradi: raqamlar o'smayotgan
+  // bo'lsa, xizmat usage yubormayotganini darrov ko'rasiz.
+  lastRequestAt DateTime?
 
   keys  ApiKey[]
   usage ApiUsageDaily[]

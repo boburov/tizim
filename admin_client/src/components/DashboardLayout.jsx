@@ -6,8 +6,9 @@ import {
   Settings,
   CreditCard,
   BarChart3,
-  Plug,
+  Server,
   Bot,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
@@ -51,6 +52,9 @@ export default function DashboardLayout() {
           <NavLink to="/tenants/new" className={linkClass}>
             <Plus size={18} /> Yangi loyiha
           </NavLink>
+          <NavLink to="/users" className={linkClass}>
+            <Users size={18} /> Foydalanuvchilar
+          </NavLink>
           <NavLink to="/usage" className={linkClass}>
             <BarChart3 size={18} /> Foydalanish
           </NavLink>
@@ -58,7 +62,7 @@ export default function DashboardLayout() {
             <CreditCard size={18} /> Tariflar
           </NavLink>
           <NavLink to="/api-services" className={linkClass}>
-            <Plug size={18} /> API xizmatlar
+            <Server size={18} /> API xizmatlar
           </NavLink>
           <NavLink to="/bots" className={linkClass}>
             <Bot size={18} /> Telegram botlar

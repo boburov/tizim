@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { IngestUsageDto } from './dto/api-gateway.dto.js';
+import { IngestUsageDto, MeterRequestDto } from './dto/api-gateway.dto.js';
 import { hashApiKey, parseApiKey, safeCompare } from './api-key.util.js';
 import { addMonths } from './api-services.service.js';
 
@@ -142,8 +142,8 @@ export class ApiGatewayService {
     }
 
     // Har qator alohida upsert — 500 tagacha, bitta tranzaksiyada.
-    await this.prisma.$transaction(
-      valid.map((i) => {
+    await this.prisma.$transaction([
+      ...valid.map((i) => {
         const day = new Date(`${i.day}T00:00:00.000Z`);
         const endpoint = i.endpoint || 'assess';
         return this.prisma.apiUsageDaily.upsert({
@@ -171,9 +171,86 @@ export class ApiGatewayService {
           },
         });
       }),
-    );
+      // "Hisob tirikmi?" savoliga javob. Faqat HAQIQIY so'rov bo'lgan
+      // obunalar belgilanadi — bo'sh batch (hammasi nol) vaqtni yangilamaydi,
+      // aks holda hech kim ishlatmayotgan xizmat ham "tirik" ko'rinardi.
+      ...(() => {
+        const touched = valid
+          .filter((i) => i.ok + i.rejected + i.failed > 0)
+          .map((i) => i.subscriptionId);
+        if (touched.length === 0) return [];
+        return [
+          this.prisma.apiSubscription.updateMany({
+            where: { id: { in: [...new Set(touched)] } },
+            data: { lastRequestAt: new Date() },
+          }),
+        ];
+      })(),
+    ]);
 
     return { accepted: valid.length, skipped };
+  }
+
+  /**
+   * BITTA so'rovni hisoblaydi.
+   *
+   * `ingestUsage` bilan bir xil jadvalga yozadi — farqi shundaki, bu yerda
+   * xizmat hech narsa yig'ib turmaydi: har so'rovdan keyin bitta chaqiruv.
+   * Yuqori yuklamada batch afzal (bitta so'rov = bitta DB yozuvi qimmat),
+   * lekin integratsiyani boshlash uchun eng sodda yo'l shu.
+   *
+   * Noma'lum obuna 404 emas, `{accepted:false}` bilan qaytadi: xizmat
+   * hisobni yubora olmagani uchun MIJOZGA xato qaytarmasligi kerak.
+   */
+  async meter(dto: MeterRequestDto) {
+    const sub = await this.prisma.apiSubscription.findUnique({
+      where: { id: dto.subscriptionId },
+      select: { id: true },
+    });
+    if (!sub) {
+      this.logger.warn(`Meter: noma'lum obuna ${dto.subscriptionId}`);
+      return { accepted: false, reason: 'unknown_subscription' };
+    }
+
+    const day = dto.day
+      ? new Date(`${dto.day}T00:00:00.000Z`)
+      : startOfUtcDay(new Date());
+    const endpoint = dto.endpoint || 'assess';
+    const ms = dto.ms ?? 0;
+
+    const delta = {
+      ok: dto.outcome === 'ok' ? 1 : 0,
+      rejected: dto.outcome === 'rejected' ? 1 : 0,
+      failed: dto.outcome === 'failed' ? 1 : 0,
+      // Rad etilgan so'rov ishlov vaqtini yemaydi — o'rtacha latencyni
+      // buzmasligi uchun faqat bajarilgan so'rov vaqti qo'shiladi.
+      totalMs: dto.outcome === 'ok' ? ms : 0,
+    };
+
+    await this.prisma.$transaction([
+      this.prisma.apiUsageDaily.upsert({
+        where: {
+          subscriptionId_day_endpoint: {
+            subscriptionId: sub.id,
+            day,
+            endpoint,
+          },
+        },
+        create: { subscriptionId: sub.id, day, endpoint, ...delta },
+        update: {
+          ok: { increment: delta.ok },
+          rejected: { increment: delta.rejected },
+          failed: { increment: delta.failed },
+          totalMs: { increment: delta.totalMs },
+        },
+      }),
+      this.prisma.apiSubscription.update({
+        where: { id: sub.id },
+        data: { lastRequestAt: new Date() },
+      }),
+    ]);
+
+    return { accepted: true };
   }
 
   // ===================== YORDAMCHILAR =====================
@@ -198,8 +275,7 @@ export class ApiGatewayService {
 
   private async quotaUsed(subscriptionId: string, since: Date): Promise<number> {
     // `day` DATE turida, shuning uchun davr boshini kun aniqligiga keltiramiz.
-    const dayStart = new Date(since);
-    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayStart = startOfUtcDay(since);
 
     const agg = await this.prisma.apiUsageDaily.aggregate({
       where: { subscriptionId, day: { gte: dayStart } },
@@ -215,6 +291,13 @@ export class ApiGatewayService {
       .update({ where: { id }, data: { lastUsedAt: new Date() } })
       .catch(() => undefined);
   }
+}
+
+/** Kun boshi (UTC) — `ApiUsageDaily.day` ustuni DATE turida. */
+function startOfUtcDay(d: Date): Date {
+  const out = new Date(d);
+  out.setUTCHours(0, 0, 0, 0);
+  return out;
 }
 
 /**

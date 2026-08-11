@@ -8,12 +8,14 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   Res,
   ServiceUnavailableException,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { IsBoolean } from 'class-validator';
 import type { Request, Response } from 'express';
 import passport from 'passport';
 import { CustomerAuthService } from './customer-auth.service.js';
@@ -38,6 +40,13 @@ import {
   CustomerRequest,
   currentCustomer,
 } from '../common/guards/customer-jwt.guard.js';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
+
+class SetActiveDto {
+  @IsBoolean() isActive!: boolean;
+}
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -220,6 +229,42 @@ export class CustomerAuthController {
   @HttpCode(200)
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.auth.resetPassword(dto);
+  }
+}
+
+/**
+ * Admin paneli — barcha mijozlar (foydalanuvchilar) ro'yxati.
+ *
+ * `customer/*` marshrutlaridan ATAYLAB alohida: u yerda guard mijozning
+ * o'z tokeni, bu yerda esa admin JWT. Bitta controller ichida ikki xil
+ * guard turishi kelajakda oson xatoga olib kelardi.
+ */
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller('admin/customers')
+export class AdminCustomersController {
+  constructor(private readonly customers: CustomersService) {}
+
+  @Get()
+  list(@Query('q') q?: string) {
+    return this.customers.adminList(q);
+  }
+
+  /** Super admin o'zi yaratgan, mijozga biriktirilmagan loyihalar. */
+  @Get('unassigned-tenants')
+  unassigned() {
+    return this.customers.adminUnassignedTenants();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.customers.adminFindOne(id);
+  }
+
+  /** Kabinetga kirishni bloklash / ochish. */
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch(':id/active')
+  setActive(@Param('id') id: string, @Body() dto: SetActiveDto) {
+    return this.customers.adminSetActive(id, dto.isActive);
   }
 }
 

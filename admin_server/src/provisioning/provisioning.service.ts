@@ -358,6 +358,102 @@ export class ProvisioningService {
     }
   }
 
+  // ────────────────────────────────────────── to'xtatish / qayta yoqish
+
+  /**
+   * Tenantni to'xtatadi — pm2 jarayoni o'chadi (obuna tugagan holat).
+   *
+   * O'CHIRISH EMAS: papka, MongoDB bazasi, yuklangan fayllar, nginx vhost va
+   * sertifikat joyida qoladi. Shuning uchun to'lov kelgach `resume` bir
+   * soniyada hammasini qaytaradi va mijoz hech narsa yo'qotmaydi.
+   *
+   * Skript yiqilsa status O'ZGARTIRILMAYDI: pm2 to'xtamagan bo'lsa server
+   * hali ishlayapti, uni "SUSPENDED" deb belgilash panelda yolg'on holat
+   * ko'rsatardi. Xato logga yoziladi va keyingi tekshiruvda qayta uriniladi.
+   */
+  async suspend(tenantId: string, reason: string): Promise<boolean> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+    if (!tenant) return false;
+
+    const scriptPath = process.env.RECONFIGURE_SCRIPT || '/root/admin/reconfigure.sh';
+
+    this.logger.warn(`To'xtatilmoqda: ${tenant.domain} — ${reason}`);
+
+    const { code, log } = await this.runScript(scriptPath, {
+      ...this.baseEnv(tenant, ''),
+      APPLY_MODE: 'suspend',
+      SUSPEND_REASON: reason,
+    });
+
+    if (code === 0) {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          status: 'SUSPENDED',
+          suspendedAt: new Date(),
+          suspendReason: reason,
+          suspendLog: this.tail(log),
+        },
+      });
+      this.logger.warn(`To'xtatildi: ${tenant.domain} ⏸`);
+      return true;
+    }
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        suspendLog: this.tail(log),
+        failureReason: `To'xtatib bo'lmadi (kod ${code}) — pm2 hali ishlayotgan bo'lishi mumkin`,
+      },
+    });
+    this.logger.error(`To'xtatish muvaffaqiyatsiz: ${tenant.domain} (kod ${code})`);
+    return false;
+  }
+
+  /** To'xtatilgan tenantni qaytaradi (to'lov keldi yoki sinov berildi). */
+  async resume(tenantId: string): Promise<boolean> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+    if (!tenant) return false;
+
+    const scriptPath = process.env.RECONFIGURE_SCRIPT || '/root/admin/reconfigure.sh';
+
+    this.logger.log(`Qayta yoqilmoqda: ${tenant.domain}`);
+
+    const { code, log } = await this.runScript(scriptPath, {
+      ...this.baseEnv(tenant, ''),
+      APPLY_MODE: 'resume',
+    });
+
+    if (code === 0) {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          status: 'ACTIVE',
+          suspendedAt: null,
+          suspendReason: null,
+          suspendLog: this.tail(log),
+          failureReason: null,
+        },
+      });
+      this.logger.log(`Qayta yoqildi: ${tenant.domain} ▶️`);
+      return true;
+    }
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        suspendLog: this.tail(log),
+        failureReason: `Qayta yoqib bo'lmadi (kod ${code}) — logni tekshiring`,
+      },
+    });
+    this.logger.error(`Qayta yoqish muvaffaqiyatsiz: ${tenant.domain} (kod ${code})`);
+    return false;
+  }
+
   // ──────────────────────────────────────────────────── deprovisioning
 
   /**

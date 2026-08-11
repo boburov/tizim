@@ -1,6 +1,10 @@
 import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { ApiGatewayService } from './api-gateway.service.js';
-import { AuthorizeDto, IngestUsageDto } from './dto/api-gateway.dto.js';
+import {
+  AuthorizeDto,
+  IngestUsageDto,
+  MeterRequestDto,
+} from './dto/api-gateway.dto.js';
 import { GatewaySecretGuard } from './gateway-secret.guard.js';
 
 /**
@@ -34,5 +38,17 @@ export class ApiGatewayController {
   @HttpCode(200)
   usage(@Body() dto: IngestUsageDto) {
     return this.gateway.ingestUsage(dto);
+  }
+
+  /**
+   * Bitta so'rovni hisoblaydi — batch yig'a olmaydigan xizmatlar uchun.
+   *
+   * Xizmat buni javob qaytargandan KEYIN, kutmasdan chaqirishi kerak:
+   * hisob mijoz so'rovini sekinlashtirmasligi lozim.
+   */
+  @Post('meter')
+  @HttpCode(200)
+  meter(@Body() dto: MeterRequestDto) {
+    return this.gateway.meter(dto);
   }
 }

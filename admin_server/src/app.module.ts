@@ -15,6 +15,7 @@ import { SettingsModule } from './settings/settings.module.js';
 import { GithubModule } from './github/github.module.js';
 import { ApiServicesModule } from './api-services/api-services.module.js';
 import { BotsModule } from './bots/bots.module.js';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { BotsModule } from './bots/bots.module.js';
     GithubModule,
     ApiServicesModule,
     BotsModule,
+    SubscriptionsModule,
   ],
 })
 export class AppModule {}

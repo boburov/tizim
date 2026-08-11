@@ -8670,3 +8670,120 @@ Quvur to'liq ishladi — shablon nusxalandi, `.env` yozi
 <sub>session `053b2512` · branch `main` · 83 ta qadam</sub>
 
 ---
+
+## 2026-08-11 05:01 — hozirda admin panelda foydalanuvchilar korinishi kerak bo'ladi va biz 
+
+**So'rov**
+
+> hozirda admin panelda foydalanuvchilar korinishi kerak bo'ladi va biz hohlagan foydalanuvchilarimiz uchun 7-30 kunlik bepul sinovni ham bera olishimiz kerak sharti faqat biz buni bera olishimiz kerak va obunasi tugashi bilan server ochishi kerak va sidebardagi api hizmatlar bo'limida localdagi api hizmatlarni serverga ham qoshmochiman qanday qilaman real hisoblashi kerak har bir requestni va iconi server icnga ozgartring
+
+**O'zgargan fayllar (27)**
+
+- `admin_server/prisma/schema.prisma` — tahrirlandi
+- `admin_server/prisma/migrations/20260811090000_trial_suspend_usage_liveness/migration.sql` — yaratildi/qayta yozildi
+- `admin_server/reconfigure.sh` — tahrirlandi
+- `admin_server/src/provisioning/provisioning.service.ts` — tahrirlandi
+- `admin_server/src/subscriptions/dto/subscription.dto.ts` — yaratildi/qayta yozildi
+- `admin_server/src/subscriptions/subscriptions.service.ts` — tahrirlandi, yaratildi/qayta yozildi
+- `admin_server/src/subscriptions/subscription-scheduler.service.ts` — yaratildi/qayta yozildi
+- `admin_server/src/subscriptions/subscriptions.controller.ts` — yaratildi/qayta yozildi
+- `admin_server/src/subscriptions/subscriptions.module.ts` — yaratildi/qayta yozildi
+- `admin_server/src/customers/customers.service.ts` — tahrirlandi
+- `admin_server/src/customers/customers.controller.ts` — tahrirlandi
+- `admin_server/src/customers/customers.module.ts` — tahrirlandi
+- `admin_server/src/app.module.ts` — tahrirlandi
+- `admin_server/src/plans/plans.service.ts` — tahrirlandi
+- `admin_server/src/billing/billing.service.ts` — tahrirlandi
+- `admin_server/src/billing/billing.module.ts` — tahrirlandi
+- `admin_server/src/api-services/dto/api-gateway.dto.ts` — tahrirlandi
+- `admin_server/src/api-services/api-gateway.service.ts` — tahrirlandi
+- `admin_server/src/api-services/api-gateway.controller.ts` — tahrirlandi
+- `admin_server/src/api-services/api-services.service.ts` — tahrirlandi
+- `admin_client/src/pages/UsersPage.jsx` — yaratildi/qayta yozildi
+- `admin_client/src/components/DashboardLayout.jsx` — tahrirlandi
+- `admin_client/src/App.jsx` — tahrirlandi
+- `admin_client/src/pages/ApiServicesPage.jsx` — yaratildi/qayta yozildi
+- `admin_client/src/pages/ApiServiceDetailPage.jsx` — tahrirlandi
+- `admin_server/docs/api-xizmatlar.md` — yaratildi/qayta yozildi
+- `admin_server/README.md` — tahrirlandi
+
+**Buyruqlar (29)**
+
+```sh
+ls -la && cat package.json 2>/dev/null | head -50
+cat CLAUDE.md 2>/dev/null | head -100
+echo "=== admin_client ===" && ls admin_client && echo "=== admin_server ===" && ls admin_server && echo "=== server ===" && ls server && echo "=== client ===" …
+cd /Users/shukrullo/Desktop/lc-total/admin_server && ls -R src | head -120 && echo "=== PRISMA ===" && ls prisma && wc -l prisma/schema.prisma
+cd /Users/shukrullo/Desktop/lc-total/admin_client && ls -R src | head -150
+cd /Users/shukrullo/Desktop/lc-total/admin_server/src && wc -l customers/*.ts billing/*.ts entitlements/*.ts api-services/*.ts api-services/dto/*.ts plans/*.ts …
+cd /Users/shukrullo/Desktop/lc-total/admin_server && grep -rn "Cron\|setInterval\|ScheduleModule\|@nestjs/schedule" src/ package.json | head -30 && echo "=== AP…
+ls src/provisioning && wc -l src/provisioning/*.ts && grep -n "pm2\|execFile\|spawn\|sudo" src/provisioning/provisioning.service.ts | head -40
+cat package.json && echo "=== script-runner ===" && cat src/provisioning/script-runner.ts
+grep -n "APPLY_MODE\|^case\|^ *\(restart\|rebuild\|deploy\|push\)\|pm2 " reconfigure.sh | head -40 && echo "--- total lines:" && wc -l reconfigure.sh provision.…
+cd /Users/shukrullo/Desktop/lc-total && grep -rn "heartbeat\|ADMIN_API\|subscriptionActive" server/src --include=*.js -l | head && echo "=== README head ===" &&…
+cd /Users/shukrullo/Desktop/lc-total/server && grep -rln "heartbeat" src/ | head && echo "---" && grep -rn "ADMIN_API_URL\|HEARTBEAT" src/ | head -20
+cd /Users/shukrullo/Desktop/lc-total/admin_server && ls prisma/migrations && echo "--- last migration ---" && ls prisma/migrations/$(ls prisma/migrations | grep…
+npx prisma generate 2>&1 | tail -5
+grep -n "pm2" provision.sh
+cat src/provisioning/provisioning.module.ts src/plans/plans.module.ts src/customers/customers.module.ts src/common/guards/roles.guard.ts src/common/decorators/c…
+npm run build 2>&1 | tail -20
+cd /Users/shukrullo/Desktop/lc-total/admin_client && sed -n '1,60p' src/pages/TenantsPage.jsx
+npm run build 2>&1 | tail -15
+grep -n "^#\|^##\|^###" README.md | tail -30 && echo "--- ENV section ---" && grep -n "SUBSCRIPTION\|GATEWAY_SECRET\|SERVER_PUBLIC_IP" README.md | head
+cd /Users/shukrullo/Desktop/lc-total/admin_server && grep -n "^#\{1,3\} " README.md | tail -25 && echo "=== env mentions ===" && grep -n "GATEWAY_SECRET\|\.env"…
+sed -n '239,300p' README.md
+npm run build 2>&1 | tail -5 && npm run lint 2>&1 | tail -20
+cd /Users/shukrullo/Desktop/lc-total/admin_client && npx eslint src/pages/UsersPage.jsx src/pages/ApiServicesPage.jsx src/pages/ApiServiceDetailPage.jsx src/com…
+cd /Users/shukrullo/Desktop/lc-total/admin_server && grep -n "ValidationPipe\|setGlobalPrefix\|whitelist" src/main.ts
+# … yana 4 ta
+```
+
+**Natija**
+
+Loyihani ko'rib chiqaman.
+
+Kod bazasini to'liq ko'rib chiqdim. Ishni boshlashdan oldin 4 ta muhim qarorni aniqlab olay — javoblaringiz nima yozilishini jiddiy o'zgartiradi.
+
+Barcha tavsiyalar tasdiqlandi. Endi qolgan detallarni ko'rib, ishga kirishaman.
+
+Avval ma'lumotlar bazasi sxemasidan boshlayman.
+
+Endi migration faylini yozaman.
+
+Endi obuna hayot sikli moduli — sinov berish, to'xtatish va muddat kuzatuvi.
+
+Endi admin uchun controller qo'shaman.
+
+Endi app.module'ga yangi modulni ulab, avtomatik sinovni o'chiraman (sinov faqat admin orqali).
+
+To'lov tasdiqlanganda ham server avtomatik qaytishi kerak — buni ulayman.
+
+Endi gateway servisiga real hisoblagichni qo'shaman.
+
+Backend qismini kompilyatsiya qilib tekshiraman.
+
+Endi sidebar va route'larni yangilayman (ikonka ham `Server` ga o'zgaradi).
+
+Endi xizmat sahifasiga tarif qo'shish va jonli hisob ko'rsatkichini qo'shaman.
+
+Endi obuna qatoriga bugungi/jonli hisobni qo'shaman.
+
+Bitta muhim kamchilikni tuzatay: to'xtatish xato bersa, obuna allaqachon `EXPIRED` bo'lgani uchun keyingi tekshiruvda qayta urinilmasdi.
+
+Hammasi tayyor. Ikkala loyiha ham muvaffaqiyatli build bo'ldi.
+
+## Nima qilindi
+
+**1. Foydalanuvchilar sahifasi** — [UsersPage.jsx](admin_client/src/pages/UsersPage.jsx), sidebarda yangi bo'lim.
+Har mijoz: email, ism, kompaniya, Google/blok/email holati, ro'yxatdan o'tgan sana. Ostida uning loyihalari — holat, obuna, qolgan kun. Qidiruv bor. Pastda **"Egasiz loyihalar"** guruhi — o'zingiz yaratganlari (ularga ham sinov beriladi).
+Backend: `GET /api/admin/customers`, `/unassigned-tenants`, `PATCH /:id/active`.
+
+**2. Bepul sinov (1-30 kun), faqat admin**
+Har loyiha yonida "Sinov berish": 7/14/30 tugmalari yoki qo'lda kun, tarif tanlash, izoh. Modal darrov "qaysi sanada tugaydi"ni ko'rsatadi.
+- `POST /api/subscrip
+
+…(qisqartirildi)
+
+<sub>session `079a86b3` · branch `main` · 128 ta qadam</sub>
+
+---

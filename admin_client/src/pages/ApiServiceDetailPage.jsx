@@ -63,6 +63,7 @@ export default function ApiServiceDetailPage() {
   const [newKey, setNewKey] = useState(null); // ochiq matndagi kalit (bir marta)
   const [expanded, setExpanded] = useState(null); // ochilgan obuna id
   const [editingTier, setEditingTier] = useState(null);
+  const [newTier, setNewTier] = useState(null);
   const [newSub, setNewSub] = useState(false);
 
   const { data: service, isLoading } = useQuery({
@@ -151,6 +152,26 @@ export default function ApiServiceDetailPage() {
     onError: fail,
   });
 
+  const createTier = useMutation({
+    mutationFn: (t) =>
+      api.post(`/api-services/${id}/tiers`, {
+        key: t.key.trim(),
+        name: t.name.trim(),
+        price: Number(t.price),
+        concurrency: Number(t.concurrency),
+        rateLimitRpm: Number(t.rateLimitRpm),
+        priority: Number(t.priority),
+        monthlyQuota: Number(t.monthlyQuota),
+        sortOrder: Number(t.sortOrder || 0),
+      }),
+    onSuccess: () => {
+      refresh();
+      setNewTier(null);
+      toast.success("Tarif qo'shildi");
+    },
+    onError: fail,
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -186,9 +207,28 @@ export default function ApiServiceDetailPage() {
       </div>
 
       {/* ---------- Tariflar ---------- */}
-      <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-        Tariflar
-      </h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-medium text-muted-foreground">Tariflar</h2>
+        {isSuperAdmin && (
+          <button
+            onClick={() =>
+              setNewTier({
+                key: '',
+                name: '',
+                price: 0,
+                concurrency: 1,
+                rateLimitRpm: 60,
+                priority: 3,
+                monthlyQuota: -1,
+                sortOrder: service.tiers.length + 1,
+              })
+            }
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:border-brand hover:text-brand"
+          >
+            <Plus size={15} /> Yangi tarif
+          </button>
+        )}
+      </div>
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {service.tiers.map((t) => (
           <div
@@ -281,6 +321,20 @@ export default function ApiServiceDetailPage() {
                         {num(sub.usage30d.ok)} so'rov / 30 kun
                         {sub.usage30d.avgMs != null &&
                           ` · ${sub.usage30d.avgMs} ms`}
+                      </div>
+                      {/* Bugungi hisob va oxirgi so'rov — hisoblash haqiqatan
+                          ishlayotganini shu ikki raqam ko'rsatadi. */}
+                      <div className="truncate text-xs text-muted-foreground">
+                        Bugun:{' '}
+                        <b className="text-foreground">
+                          {num(sub.usageToday?.ok)}
+                        </b>
+                        {sub.usageToday?.rejected > 0 &&
+                          ` · ${num(sub.usageToday.rejected)} rad etilgan`}
+                        {' · oxirgi so\'rov: '}
+                        {sub.lastRequestAt
+                          ? new Date(sub.lastRequestAt).toLocaleString('uz-UZ')
+                          : 'hali yo\'q'}
                       </div>
                     </div>
                   </button>
@@ -423,6 +477,17 @@ export default function ApiServiceDetailPage() {
         />
       )}
 
+      {newTier && (
+        <TierModal
+          isNew
+          tier={newTier}
+          onChange={setNewTier}
+          onSave={() => createTier.mutate(newTier)}
+          saving={createTier.isPending}
+          onClose={() => setNewTier(null)}
+        />
+      )}
+
       {newSub && (
         <NewSubscriptionModal
           service={service}
@@ -495,12 +560,33 @@ function ExtendMenu({ onPick, disabled }) {
   );
 }
 
-function TierModal({ tier, onChange, onSave, onClose, saving }) {
+function TierModal({ tier, onChange, onSave, onClose, saving, isNew }) {
   const set = (k) => (e) => onChange({ ...tier, [k]: e.target.value });
 
+  // Key faqat yaratishda kiritiladi: u obunalar bilan bog'langan
+  // identifikator, keyin o'zgartirilsa integratsiyalar uzilardi.
+  const keyOk = /^[a-z][a-z0-9-]{1,48}$/.test((tier.key || '').trim());
+  const valid = isNew ? keyOk && (tier.name || '').trim().length >= 2 : true;
+
   return (
-    <Modal title={`Tarif: ${tier.name}`} onClose={onClose}>
+    <Modal
+      title={isNew ? 'Yangi tarif' : `Tarif: ${tier.name}`}
+      onClose={onClose}
+    >
       <div className="space-y-3">
+        {isNew && (
+          <Field label="Key (o'zgarmas identifikator)">
+            <input
+              value={tier.key}
+              onChange={(e) =>
+                onChange({ ...tier, key: e.target.value.toLowerCase() })
+              }
+              placeholder="basic"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm"
+            />
+          </Field>
+        )}
+
         <Field label="Nom">
           <input
             value={tier.name}
@@ -567,10 +653,10 @@ function TierModal({ tier, onChange, onSave, onClose, saving }) {
         <div className="flex gap-2 pt-1">
           <button
             onClick={onSave}
-            disabled={saving}
+            disabled={saving || !valid}
             className="flex-1 rounded-lg bg-brand py-2 text-sm font-medium text-primary-foreground hover:bg-brand-dark disabled:opacity-50"
           >
-            {saving ? 'Saqlanmoqda…' : 'Saqlash'}
+            {saving ? 'Saqlanmoqda…' : isNew ? "Qo'shish" : 'Saqlash'}
           </button>
           <button
             onClick={onClose}

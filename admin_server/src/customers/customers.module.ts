@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { CustomerAuthService } from './customer-auth.service.js';
 import { CustomersService } from './customers.service.js';
 import {
+  AdminCustomersController,
   CustomerAuthController,
   CustomerPortalController,
 } from './customers.controller.js';
@@ -19,7 +20,11 @@ import { EntitlementsModule } from '../entitlements/entitlements.module.js';
     PlansModule,
     EntitlementsModule,
   ],
-  controllers: [CustomerAuthController, CustomerPortalController],
+  controllers: [
+    CustomerAuthController,
+    CustomerPortalController,
+    AdminCustomersController,
+  ],
   providers: [
     CustomerAuthService,
     CustomersService,

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlansService } from '../plans/plans.service.js';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 
 /**
  * To'lov tizimi (Payme / Click) uchun asos.
@@ -26,6 +27,7 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly plans: PlansService,
+    private readonly subscriptions: SubscriptionsService,
   ) {}
 
   /** Tarif uchun to'lov yaratadi (PENDING holatda). */
@@ -108,6 +110,7 @@ export class BillingService {
     // Obunani uzaytiramiz
     if (txn.subscription) {
       const plan = txn.subscription.plan;
+      const tenantId = txn.subscription.tenantId;
       const base =
         txn.subscription.currentPeriodEnd &&
         txn.subscription.currentPeriodEnd > new Date()
@@ -125,6 +128,18 @@ export class BillingService {
           currentPeriodEnd: plan.interval === 'LIFETIME' ? null : end,
         },
       });
+
+      // Muddat tugagani uchun to'xtatilgan bo'lsa — to'lov uni qaytaradi.
+      // Xato bo'lsa to'lov BEKOR QILINMAYDI: pul o'tgan, obuna uzaygan;
+      // serverni qaytarish alohida amal va uni paneldan qayta urinish
+      // mumkin. Shuning uchun bu yerda faqat logga yozamiz.
+      await this.subscriptions
+        .resumeIfAutoSuspended(tenantId)
+        .catch((err) =>
+          this.logger.error(
+            `To'lovdan keyin server qaytarilmadi (${tenantId}): ${err.message}`,
+          ),
+        );
     }
 
     this.logger.log(`To'lov tasdiqlandi: ${transactionId} (${txn.provider})`);

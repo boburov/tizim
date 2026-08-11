@@ -8,6 +8,7 @@ import TenantDetailPage from './pages/TenantDetailPage';
 import SettingsPage from './pages/SettingsPage';
 import PlansPage from './pages/PlansPage';
 import UsagePage from './pages/UsagePage';
+import UsersPage from './pages/UsersPage';
 import ApiServicesPage from './pages/ApiServicesPage';
 import ApiServiceDetailPage from './pages/ApiServiceDetailPage';
 import BotsPage from './pages/BotsPage';
@@ -99,6 +100,7 @@ export default function App() {
         <Route index element={<TenantsPage />} />
         <Route path="tenants/new" element={<CreateTenantPage />} />
         <Route path="tenants/:id" element={<TenantDetailPage />} />
+        <Route path="users" element={<UsersPage />} />
         <Route path="plans" element={<PlansPage />} />
         <Route path="api-services" element={<ApiServicesPage />} />
         <Route path="api-services/:id" element={<ApiServiceDetailPage />} />

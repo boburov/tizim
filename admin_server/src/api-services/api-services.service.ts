@@ -39,7 +39,14 @@ export class ApiServicesService {
     const services = await this.prisma.apiService.findMany({
       include: {
         tiers: { orderBy: [{ sortOrder: 'asc' }, { price: 'asc' }] },
-        subscriptions: { select: { id: true, status: true, expiresAt: true } },
+        subscriptions: {
+          select: {
+            id: true,
+            status: true,
+            expiresAt: true,
+            lastRequestAt: true,
+          },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -52,22 +59,44 @@ export class ApiServicesService {
     });
     const bySub = new Map(totals.map((t) => [t.subscriptionId, t._sum]));
 
+    // Bugungi hisob alohida: "raqamlar hozir o'syaptimi?" degan savolga
+    // 30 kunlik yig'indi javob bera olmaydi.
+    const todayRows = await this.prisma.apiUsageDaily.groupBy({
+      by: ['subscriptionId'],
+      where: { day: { gte: daysAgo(0) } },
+      _sum: { ok: true, rejected: true, failed: true },
+    });
+    const todayBySub = new Map(todayRows.map((t) => [t.subscriptionId, t._sum]));
+
     return services.map((s) => {
       let ok = 0;
       let rejected = 0;
+      let todayOk = 0;
       let active = 0;
+      let lastRequestAt: Date | null = null;
+
       for (const sub of s.subscriptions) {
         const sum = bySub.get(sub.id);
         ok += sum?.ok ?? 0;
         rejected += sum?.rejected ?? 0;
+        todayOk += todayBySub.get(sub.id)?.ok ?? 0;
         if (effectiveStatus(sub) === 'ACTIVE') active += 1;
+        if (
+          sub.lastRequestAt &&
+          (!lastRequestAt || sub.lastRequestAt > lastRequestAt)
+        ) {
+          lastRequestAt = sub.lastRequestAt;
+        }
       }
+
       const { subscriptions, ...rest } = s;
       return {
         ...rest,
         subscriptionCount: subscriptions.length,
         activeSubscriptions: active,
         usage30d: { ok, rejected },
+        usageToday: { ok: todayOk },
+        lastRequestAt,
       };
     });
   }
@@ -101,10 +130,21 @@ export class ApiServicesService {
     });
     const bySub = new Map(totals.map((t) => [t.subscriptionId, t._sum]));
 
+    const todayRows = await this.prisma.apiUsageDaily.groupBy({
+      by: ['subscriptionId'],
+      where: {
+        day: { gte: daysAgo(0) },
+        subscriptionId: { in: service.subscriptions.map((s) => s.id) },
+      },
+      _sum: { ok: true, rejected: true, failed: true },
+    });
+    const todayBySub = new Map(todayRows.map((t) => [t.subscriptionId, t._sum]));
+
     return {
       ...service,
       subscriptions: service.subscriptions.map((sub) => {
         const sum = bySub.get(sub.id);
+        const today = todayBySub.get(sub.id);
         const ok = sum?.ok ?? 0;
         return {
           ...sub,
@@ -124,6 +164,11 @@ export class ApiServicesService {
             rejected: sum?.rejected ?? 0,
             failed: sum?.failed ?? 0,
             avgMs: ok > 0 ? Math.round((sum?.totalMs ?? 0) / ok) : null,
+          },
+          usageToday: {
+            ok: today?.ok ?? 0,
+            rejected: today?.rejected ?? 0,
+            failed: today?.failed ?? 0,
           },
         };
       }),

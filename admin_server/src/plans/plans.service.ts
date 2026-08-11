@@ -196,7 +196,11 @@ export class PlansService {
         tenantId,
         planId: plan.id,
         customerId: tenant.customerId,
-        status: plan.trialDays > 0 ? 'TRIALING' : 'ACTIVE',
+        // Tarif biriktirish SINOV BERMAYDI — hatto tarifda `trialDays`
+        // ko'rsatilgan bo'lsa ham. Sinovni faqat admin, alohida amal bilan
+        // beradi (`POST /subscriptions/tenants/:id/trial`), shunda "kim,
+        // qancha muddatga, nega berdi" har doim yozib qolinadi.
+        status: 'ACTIVE',
         currentPeriodEnd: periodEnd,
       },
       update: {

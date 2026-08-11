@@ -92,6 +92,40 @@ cd admin_client && npm run check:brand-sync
 > (`"243 75% 59%"`), HEX emas. O'girish admin serverda, `.env` yozilishidan oldin
 > bajariladi (`src/common/color/brand-color.util.ts`).
 
+### 4) Foydalanuvchilar, bepul sinov va obuna muddati
+
+**Foydalanuvchilar** sahifasida ro'yxatdan o'tgan mijozlar, ularning loyihalari
+va har loyihaning obuna holati bir joyda ko'rinadi. Shu yerdan uchta amal
+bajariladi: sinov berish, to'xtatish, qaytarish.
+
+**Bepul sinov (1-30 kun)** — faqat admin beradi. Mijoz oqimida (`customer/*`)
+bunday endpoint umuman yo'q, `assignPlan` esa tarifda `trialDays` bo'lsa ham
+sinov bermaydi. Sinov berilganda kim bergani, qachon va qancha muddatga —
+hammasi `Subscription` yozuvida qoladi.
+
+**Muddat tugashi**: ichki kuzatuvchi har 15 daqiqada tugagan obunalarni topadi,
+holatini `EXPIRED` qiladi va tenant serverini **to'xtatadi** —
+`reconfigure.sh` `suspend` rejimida `pm2 stop` bajaradi.
+
+- baza, yuklangan fayllar, nginx vhost va sertifikat **tegilmaydi**;
+- to'lov kelganda (`markPaid`) yoki sinov berilganda server **avtomatik
+  qaytadi** — lekin faqat AVTOMATIK to'xtatilgan bo'lsa. Admin qo'lda
+  to'xtatgan bo'lsa, qaytarish ham qo'lda bo'ladi;
+- `SUBSCRIPTION_AUTOSUSPEND=false` butun mexanizmni bir zumda o'chiradi.
+
+Ro'yxat sahifasidagi panel kuzatuvchi holatini ko'rsatadi: yoqilganmi, oxirgi
+tekshiruv qachon bo'lgan, qo'shimcha muhlat bormi.
+
+### 5) API xizmatlar va so'rovlar hisobi
+
+Kalit bilan sotiladigan API mahsulotlari (`edu-pronauns` va h.k.) — xizmat,
+tarif, mijoz, obuna, kalit va **har bir so'rov hisobi**.
+
+Xizmat va tariflarni endi **paneldan** yaratish mumkin (SSH shart emas).
+Serverdagi bazaga xizmat qo'shish yo'llari va data plane integratsiyasi
+(`authorize` / `usage` / `meter`) alohida hujjatda:
+[`docs/api-xizmatlar.md`](docs/api-xizmatlar.md).
+
 ## 1) admin_server ishga tushirish (lokalda)
 
 ```bash
@@ -161,6 +195,14 @@ ADMIN_API_PUBLIC_URL=https://admin.example.uz/api
 GITHUB_TOKEN=
 GITHUB_OWNER=
 GITHUB_OWNER_TYPE=user
+
+# Obuna muddati kuzatuvi (standart qiymatlar ko'rsatilgan)
+SUBSCRIPTION_CHECK_INTERVAL_MIN=15   # necha daqiqada bir tekshiriladi
+SUBSCRIPTION_AUTOSUSPEND=true        # false = tugagan obuna serverni o'chirmaydi
+SUBSCRIPTION_GRACE_HOURS=0           # muddatdan keyin beriladigan qo'shimcha muhlat
+
+# API xizmatlar (data plane shu sir bilan murojaat qiladi)
+GATEWAY_SECRET=<uzun tasodifiy satr>
 
 # skriptlar uchun (childEnv orqali uzatiladi yoki skript ichida standart):
 # TENANTS_ROOT=/root/tenants
@@ -237,6 +279,18 @@ orqali `ADMIN` yoki `VIEWER` rolli userlar qo'shiladi — ular ham panelga kira 
 | GET | `/api/github/status` | auth | Integratsiya sozlanganmi |
 | POST | `/api/tenant-deploy/hook` | deploy token | Tenant repo Action'i chaqiradi |
 | GET/POST/PATCH/DELETE | `/api/users` | SUPER_ADMIN | 2-darajali userlar |
+| GET | `/api/admin/customers` | auth | Foydalanuvchilar + loyihalari + obunasi |
+| GET | `/api/admin/customers/unassigned-tenants` | auth | Egasiz (o'zimiz yaratgan) loyihalar |
+| PATCH | `/api/admin/customers/:id/active` | SUPER_ADMIN, ADMIN | Hisobni bloklash / ochish |
+| POST | `/api/subscriptions/tenants/:id/trial` | SUPER_ADMIN, ADMIN | **Bepul sinov berish (1-30 kun)** |
+| POST | `/api/subscriptions/tenants/:id/suspend` | SUPER_ADMIN, ADMIN | Serverni to'xtatish (pm2 stop) |
+| POST | `/api/subscriptions/tenants/:id/resume` | SUPER_ADMIN, ADMIN | Serverni qaytarish (pm2 start) |
+| GET | `/api/subscriptions/expiring` | auth | Yaqinda tugaydigan obunalar |
+| GET | `/api/subscriptions/checker` | auth | Muddat kuzatuvchisining holati |
+| POST | `/api/subscriptions/checker/run` | SUPER_ADMIN, ADMIN | Muddatni hozir tekshirish |
+| POST | `/api/api-gateway/authorize` | gateway secret | Kalitni tekshirish (data plane) |
+| POST | `/api/api-gateway/usage` | gateway secret | So'rovlar batch hisobi |
+| POST | `/api/api-gateway/meter` | gateway secret | Bitta so'rov hisobi |
 
 > `/api/tenant-deploy/hook` — yagona **JWT'siz** yo'l. U `Authorization: Bearer <deployToken>`
 > bilan himoyalangan; token har tenantga alohida va faqat o'sha tenantni deploy qila oladi.

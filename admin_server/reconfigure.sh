@@ -11,6 +11,8 @@
 #   rebuild — yuqoridagi + client/.env va client build        (1-2 daqiqa)
 #   deploy  — kod GitHub repodan tortiladi, so'ng to'liq rebuild
 #   push    — hech narsa qayta qurilmaydi, faqat kod GitHub'ga yuboriladi
+#   suspend — obuna tugadi: pm2 jarayoni to'xtatiladi                (bir soniya)
+#   resume  — to'lov keldi: pm2 jarayoni qaytariladi                 (bir soniya)
 #
 # admin_server beradigan ENV — provision.sh bilan bir xil to'plam,
 # ustiga APPLY_MODE.
@@ -44,6 +46,44 @@ if [ ! -d "$APP_DIR" ]; then
 fi
 
 echo "==> ⚙️  Qo'llash (${APPLY_MODE}): ${TENANT_DOMAIN}"
+
+# ---------------------------------------------------------------------------
+# 0) To'xtatish / qayta yoqish
+#
+# Bu ikki rejim fayllarga UMUMAN TEGMAYDI: `.env` qayta yozilmaydi, client
+# qayta qurilmaydi, kod tortilmaydi. Faqat pm2 jarayoni to'xtaydi yoki
+# qaytadi — shuning uchun bir soniyada bajariladi va baza, yuklangan
+# fayllar, sertifikat joyida qoladi. To'lov kelishi bilan mijoz hech narsa
+# yo'qotmagan holda ishlashda davom etadi.
+#
+# Sayt (statik client) o'chirilmaydi — nginx uni ko'rsatishda davom etadi,
+# faqat API 502 qaytaradi. Bu ataylab: mijoz "sayt yo'qoldi" emas, "tizim
+# to'xtatilgan" holatini ko'rishi kerak.
+# ---------------------------------------------------------------------------
+if [ "$APPLY_MODE" = "suspend" ]; then
+  echo "==> ⏸  pm2 stop ${TENANT_PM2_NAME} — sabab: ${SUSPEND_REASON:-obuna tugadi}"
+  # Jarayon allaqachon to'xtagan yoki ro'yxatda yo'q bo'lishi mumkin —
+  # bu xato emas, natija baribir bir xil.
+  pm2 stop "$TENANT_PM2_NAME" || true
+  pm2 save >/dev/null 2>&1 || true
+  echo "==> ✅ To'xtatildi: ${TENANT_DOMAIN}"
+  exit 0
+fi
+
+if [ "$APPLY_MODE" = "resume" ]; then
+  echo "==> ▶️  pm2 start ${TENANT_PM2_NAME}"
+  # `pm2 start <nom>` faqat ro'yxatda turgan jarayonni qaytaradi. VPS qayta
+  # yuklangan va `pm2 resurrect` bo'lmagan bo'lsa ro'yxat bo'sh bo'ladi —
+  # o'shanda jarayonni papkadan qaytadan ko'taramiz.
+  if ! pm2 start "$TENANT_PM2_NAME" --update-env 2>/dev/null; then
+    echo "    (ro'yxatda yo'q — papkadan qayta ishga tushirilmoqda)"
+    cd "$APP_DIR/server"
+    pm2 start src/index.js --name "$TENANT_PM2_NAME" --update-env
+  fi
+  pm2 save >/dev/null 2>&1 || true
+  echo "==> ✅ Qayta yoqildi: ${TENANT_DOMAIN}"
+  exit 0
+fi
 
 write_b64() {
   local b64="$1" dest="$2"
