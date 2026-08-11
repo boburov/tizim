@@ -25,8 +25,16 @@ const MyRatingPage = () => {
     scope: "all",
     limit: 100,
   });
+  // GURUH REYTINGI - faqat guruh ma'lum bo'lganda so'raladi.
+  //
+  // Ilgari bu yerda `limit: 0` yuborilardi ("hech narsa so'ramaslik"
+  // niyatida), lekin so'rov baribir ketardi va server uni rad etardi:
+  // limit musbat bo'lishi shart. Natijada o'quvchi reyting sahifasiga
+  // kirishi bilan qizil "limit: Number must be greater than 0" xatosini
+  // ko'rardi - o'zi hech narsa qilmasa ham.
   const { data: groupLb, isLoading: loadingGroup } = useLeaderboardQuery(
-    groupId ? { scope: groupId, limit: 100 } : { scope: "all", limit: 0 },
+    { scope: groupId, limit: 100 },
+    { enabled: Boolean(groupId) },
   );
 
   const overallItems = overall?.items || [];

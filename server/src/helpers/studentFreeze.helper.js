@@ -52,3 +52,34 @@ export const loadFreezeWindows = async (studentMatch) => {
 // Berilgan sana biror muzlatish oynasiga tushadimi (start <= d < end).
 export const isFrozenOn = (windows, dateMs) =>
   windows.some((w) => dateMs >= w.start && dateMs < w.end);
+
+/**
+ * Muzlatish oynalari O'QUVCHI BO'YICHA: Map<studentId, [{start, end}]>.
+ *
+ * `loadFreezeWindows` oynalarni bitta ro'yxatga qo'shib yuboradi - u
+ * BITTA o'quvchi uchun mo'ljallangan (to'lov hisobi). Ko'p o'quvchini
+ * birdan tekshirganda (kunlik joblar) oynalar kimniki ekani kerak,
+ * aks holda bir o'quvchining muzlatishi boshqasiga ham qo'llanardi.
+ *
+ * Bittada bitta so'rov: har o'quvchi uchun alohida chaqirilsa 500
+ * o'quvchida 500 ta so'rov ketardi.
+ */
+export const loadFreezeWindowsByStudent = async (studentMatch) => {
+  const rows = await StudentFreeze.find({
+    ...studentMatch,
+    isDeleted: { $ne: true },
+  })
+    .select("student startDate endDate")
+    .lean();
+
+  const map = new Map();
+  for (const r of rows) {
+    const key = String(r.student);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push({
+      start: toUtcMidnight(r.startDate).getTime(),
+      end: r.endDate ? toUtcMidnight(r.endDate).getTime() : Infinity,
+    });
+  }
+  return map;
+};

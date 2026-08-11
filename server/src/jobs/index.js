@@ -9,6 +9,9 @@ import defineHolidayGreetings, {
 import defineAttendanceReminders, {
   JOB_NAME as ATTENDANCE_UNMARKED_JOB,
 } from "./attendanceReminders.job.js";
+import defineLessonReminders, {
+  JOB_NAME as LESSON_REMINDER_JOB,
+} from "./lessonReminders.job.js";
 import defineLowAttendanceDigest, {
   JOB_NAME as LOW_ATTENDANCE_JOB,
 } from "./lowAttendanceDigest.job.js";
@@ -79,6 +82,7 @@ export const startJobs = async () => {
   defineCleanupExpiredTokens(agenda);
   defineHolidayGreetings(agenda);
   defineAttendanceReminders(agenda);
+  defineLessonReminders(agenda);
   defineLowAttendanceDigest(agenda);
   defineNotificationDeliver(agenda);
   defineNotificationSchedule(agenda);
@@ -106,6 +110,11 @@ export const startJobs = async () => {
 
   // Bayram tabriklari - har kuni 08:30 da (past davomat bilan to'qnashmasin)
   await every("30 8 * * *", HOLIDAY_JOB);
+
+  // O'quvchiga ertalabki dars eslatmasi - har kuni 06:00 da.
+  // Boshqa kunlik joblardan OLDIN: bu o'quvchiga tegishli yagona
+  // ertalabki xabar va u dars boshlanishidan ancha avval yetishi kerak.
+  await every("0 6 * * *", LESSON_REMINDER_JOB);
 
   // Belgilanmagan davomat eslatmasi - har kuni 20:00 da
   await every("0 20 * * *", ATTENDANCE_UNMARKED_JOB);
