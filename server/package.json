@@ -43,6 +43,7 @@
     "test:ai": "node tests/aiAdvisor.test.js",
     "test:scope": "node tests/branchScopeExploit.test.js",
     "test:priv": "MULTI_BRANCH=true node tests/privEscalation.test.js",
+    "test:lead-kpi": "node tests/leadCreatedKpi.test.js",
     "test:money-prop": "node tests/moneyProperty.test.js",
     "test:race": "node tests/paymentRace.test.js",
     "test:export": "node tests/exportScope.test.js",

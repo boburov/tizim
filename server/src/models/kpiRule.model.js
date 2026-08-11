@@ -19,6 +19,8 @@ import softDeletePlugin from "./plugins/softDelete.plugin.js";
 // Trigger qiymatlari kodda ro'yxatdan o'tadi (kpiTriggers.js), lekin enum
 // SHU YERDA - noto'g'ri qiymatli qoida saqlanib qolmasin.
 export const KPI_TRIGGERS = [
+  // Lid kiritildi (mukofot lidni YARATGAN xodimga - sotuvchi/call-center)
+  "lead_created",
   // Lid o'quvchiga aylandi (mukofot lidga mas'ul xodimga)
   "lead_converted",
   // Lid o'quvchisi BIRINCHI to'lovni qildi

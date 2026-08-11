@@ -1,8 +1,6 @@
+import env from "../../../config/env.js";
 import User from "../../../models/user.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
-
-// O'quv markazi nomi (brend). Hozircha statik - kelajakda config'dan olinishi mumkin.
-const CENTER_NAME = "Bayyina";
 
 // Xabar matnidagi o'zgaruvchilar (placeholder). Frontend MESSAGE_VARIABLES bilan mos.
 // Eslatma: {qarz} uchun real to'lov ma'lumoti tizimda yo'q - bo'sh qoldiriladi.
@@ -23,7 +21,9 @@ const applyValues = (text, { firstName, lastName, groupName }) => {
   out = replaceAll(out, "{familiya}", lastName);
   out = replaceAll(out, "{guruh}", groupName);
   out = replaceAll(out, "{qarz}", ""); // to'lov tizimi yo'q
-  out = replaceAll(out, "{markaz}", CENTER_NAME);
+  // Brend nomi APP_NAME env'idan - shablon bazada qolgani holda markaz nomi
+  // o'zgarsa, xabar YUBORISH paytida yangi nom bilan chiqadi.
+  out = replaceAll(out, "{markaz}", env.APP_NAME);
   return out;
 };
 

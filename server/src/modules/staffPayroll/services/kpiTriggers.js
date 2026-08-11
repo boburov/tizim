@@ -38,6 +38,157 @@ export const monthRange = (year, month) => ({
 });
 
 /**
+ * LID KIRITILDI - sotuvchi / call-center uchun.
+ *
+ * ATRIBUTSIYA: `Lead.createdBy` (lidni KIM kiritgan), `creditedTo` emas.
+ * Ikkalasi ATAYLAB boshqa-boshqa: bitta lid uchun sotuvchi topgani uchun,
+ * resepshin aylantirgani uchun mukofot oladi va bu ikki qoida bir-biriga
+ * xalaqit bermaydi.
+ *
+ * NEGA IKKI HIMOYA SHARTDA TURADI:
+ * Bu triggerda mukofot xodim FORMANI TO'LDIRGANI uchun to'lanadi, yozish
+ * esa tekin - qolgan triggerlardan farqli o'laroq bu yerda soxta ma'lumot
+ * to'g'ridan-to'g'ri pulga aylanadi. Shuning uchun:
+ *   • minStatus  - lid kamida shu bosqichga YETGAN bo'lsin. "new" da qolgan
+ *     yozuv - hech kim ko'tarmagan raqam, u pul emas;
+ *   • dedupeDays - bitta raqam shu oraliqda BIR MARTA to'lanadi (bir
+ *     raqamni uch marta kiritish = bitta mukofot).
+ *
+ * NEGA dedupe "kun oralig'i", oddiy "bir raqam - bir marta" emas:
+ * takroriy telefon bu bazada QONUNIY (qarang: leads.service.create izohi -
+ * kuzda ingliz tili, bahorda matematika; ona ikki farzandini bitta
+ * raqamdan yozdiradi). Umrbod dedupe o'sha halol lidlarni ham to'lamay
+ * qo'yardi. Oraliq esa aynan firibni - bir hafta ichida takrorlangan
+ * yozuvni - kesadi. Standart 90 kun; 0 = butunlay o'chirilgan.
+ *
+ * DIQQAT (pull-model oqibati): Yanvar 30 da kiritilgan lid Fevral 2 da
+ * "info_given" ga o'tsa, 1-fevralda hisoblangan yanvar maoshiga TUSHMAYDI -
+ * oy qayta hisoblangandagina qo'shiladi. Oy yopilgan bo'lsa mukofot
+ * yo'qoladi. Shuning uchun minStatus ni voronkaning boshiga yaqin
+ * (info_given) qo'yish tavsiya etiladi.
+ */
+
+// Bosqich DARAJASI - "kamida shu yergacha yetdi" ni o'lchash uchun.
+// `rejected` ataylab YO'Q: u daraja bermaydi. Aks holda "kiritdim va darhol
+// rad etdim" eng oson firib yo'li bo'lib qolardi. Lid rad etilishidan oldin
+// haqiqatan info_given bo'lgan bo'lsa - o'sha yozuv tarixda qoladi va
+// daraja o'sha yerdan olinadi.
+const LEAD_STAGE_RANK = {
+  new: 0,
+  info_given: 1,
+  recontacted: 1,
+  trial: 2,
+  trial_attended: 3,
+  enrolled: 4,
+};
+
+// Lid TARIXDA yetgan eng yuqori bosqich. Joriy status bo'yicha emas:
+// lid orqaga qaytarilishi mumkin (enrolled -> recontacted), lekin bir marta
+// bajarilgan ish bajarilganicha qoladi.
+const reachedRank = (lead) => {
+  let rank = LEAD_STAGE_RANK[lead.status] ?? 0;
+  for (const h of lead.statusHistory || []) {
+    const r = LEAD_STAGE_RANK[h.status];
+    if (r != null && r > rank) rank = r;
+  }
+  return rank;
+};
+
+const DEFAULT_DEDUPE_DAYS = 90;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const leadCreated = {
+  key: "lead_created",
+  label: "Lid kiritildi (sotuvchi)",
+  sourceType: "lead",
+  conditionKeys: ["minStatus", "dedupeDays", "sourceIds", "directionIds"],
+  async evaluate({ employeeId, year, month, conditions }) {
+    const { start, endExcl } = monthRange(year, month);
+    const filter = {
+      createdBy: toId(employeeId),
+      createdAt: { $gte: start, $lt: endExcl },
+    };
+    // Ixtiyoriy shartlar: faqat ma'lum manba/yo'nalish uchun mukofot.
+    if (conditions?.sourceIds?.length) {
+      filter.source = { $in: conditions.sourceIds.map(toId) };
+    }
+    if (conditions?.directionIds?.length) {
+      filter.direction = { $in: conditions.directionIds.map(toId) };
+    }
+
+    const leads = await Lead.find(filter, {
+      firstName: 1,
+      lastName: 1,
+      phone: 1,
+      status: 1,
+      statusHistory: 1,
+      createdAt: 1,
+    }).lean();
+    if (!leads.length) return [];
+
+    // 1) SIFAT DARVOZASI
+    const minRank = LEAD_STAGE_RANK[conditions?.minStatus] ?? 0;
+    const qualified =
+      minRank > 0 ? leads.filter((l) => reachedRank(l) >= minRank) : leads;
+    if (!qualified.length) return [];
+
+    // 2) TAKRORIY RAQAM
+    const dedupeDays =
+      conditions?.dedupeDays == null
+        ? DEFAULT_DEDUPE_DAYS
+        : Number(conditions.dedupeDays);
+    if (!(dedupeDays > 0)) return qualified.map(rowOfLead);
+
+    const windowMs = dedupeDays * DAY_MS;
+    const phones = [...new Set(qualified.map((l) => l.phone).filter(Boolean))];
+
+    // BARCHA yaratuvchilar bo'ylab qidiramiz, faqat shu xodim bo'yicha emas:
+    // aks holda ikki sotuvchi bitta raqamni kiritib, IKKALASI ham pul olardi.
+    const sameNumber = await Lead.find(
+      { phone: { $in: phones }, createdAt: { $lt: endExcl } },
+      { phone: 1, createdAt: 1 },
+    ).lean();
+
+    const byPhone = new Map();
+    for (const row of sameNumber) {
+      const list = byPhone.get(row.phone);
+      if (list) list.push(row);
+      else byPhone.set(row.phone, [row]);
+    }
+
+    return qualified
+      .filter((lead) => {
+        const siblings = byPhone.get(lead.phone) || [];
+        // Oraliq ichida O'ZIDAN OLDIN kelgan yozuv bormi?
+        return !siblings.some((s) => {
+          if (String(s._id) === String(lead._id)) return false;
+          const gap = new Date(lead.createdAt) - new Date(s.createdAt);
+          // Bir xil soniyada yaratilgan ikki yozuvdan qaysi biri "oldin"
+          // ekani sanadan chiqmaydi - kichik _id yutadi. Bu shart BARQAROR
+          // bo'lishi kerak, aks holda oy har qayta hisoblanganda boshqa
+          // qator to'lanardi.
+          if (gap === 0) return String(s._id) < String(lead._id);
+          return gap > 0 && gap <= windowMs;
+        });
+      })
+      .map(rowOfLead);
+  },
+};
+
+const rowOfLead = (l) => ({
+  sourceType: "lead",
+  sourceId: l._id,
+  quantity: 1,
+  base: 0,
+  meta: {
+    leadName: [l.firstName, l.lastName].filter(Boolean).join(" "),
+    phone: l.phone || "",
+    status: l.status,
+    createdAt: l.createdAt,
+  },
+});
+
+/**
  * LID -> O'QUVCHI KONVERSIYASI.
  *
  * Mukofot lidga MAS'UL xodimga tegadi (Lead.creditedTo) - u konversiya
@@ -340,6 +491,7 @@ const employeeAttendance = {
 };
 
 const TRIGGERS = [
+  leadCreated,
   leadConverted,
   studentFirstPayment,
   studentRetained,

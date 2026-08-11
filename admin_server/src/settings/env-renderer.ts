@@ -139,6 +139,8 @@ export function renderEnvExample(): string {
     "# Bu qiymatlarni admin panel hosil qiladi — qo'lda to'ldirmang.",
     'NODE_ENV=production',
     'PORT=<tenant porti>',
+    "# Brend nomi - client/.env dagi VITE_APP_NAME bilan bir xil qiymat.",
+    'APP_NAME=<markaz nomi>',
     'MONGO_URL=mongodb://127.0.0.1:27017/<tenant bazasi>',
     'JWT_ACCESS_SECRET=<provision.sh generatsiya qiladi>',
     'JWT_REFRESH_SECRET=<provision.sh generatsiya qiladi>',

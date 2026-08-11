@@ -33,6 +33,17 @@ const env = Object.freeze({
   NODE_ENV: process.env.NODE_ENV || "development",
   PORT: Number(process.env.PORT || 5000),
 
+  // BREND NOMI - server tomonidagi YAGONA manba.
+  //
+  // Bot matnlari, bildirishnomadagi {markaz} tokeni va Excel fayllarining
+  // muallif maydoni shu qiymatdan oladi. Client tomonda ayni shu nom
+  // VITE_APP_NAME'da turadi; admin panel tenant provisioning paytida
+  // ikkalasini ham `tenant.name` dan yozadi (admin_server settings.service).
+  //
+  // Standart "Bayyina" - eski o'rnatmalar upgrade'dan keyin nomini
+  // yo'qotmasligi uchun (client/shared/constants/app.js bilan bir xil).
+  APP_NAME: (process.env.APP_NAME || "").trim() || "Bayyina",
+
   MONGO_URL: need("MONGO_URL"),
 
   JWT_ACCESS_SECRET: need("JWT_ACCESS_SECRET"),

@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import env from "../../../config/env.js";
 
 const REQUIRED_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
 const OPTIONAL_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
@@ -29,7 +30,7 @@ const styleHeader = (row, columns) => {
  */
 export const buildTemplate = async (importer) => {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Bayyina";
+  workbook.creator = env.APP_NAME;
   workbook.created = new Date();
 
   const ws = workbook.addWorksheet(importer.sheetName || "Ma'lumot", {
@@ -98,7 +99,7 @@ export const buildTemplate = async (importer) => {
  */
 export const buildErrorReport = async (importer, failedRows) => {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Bayyina";
+  workbook.creator = env.APP_NAME;
   workbook.created = new Date();
 
   const ws = workbook.addWorksheet("Xatolar", {

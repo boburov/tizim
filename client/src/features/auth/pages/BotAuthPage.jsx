@@ -10,8 +10,10 @@ import useBotAuthLoginMutation from "../hooks/useBotAuthLoginMutation";
 // Components
 import InputField from "@/shared/components/ui/input/InputField";
 import Button from "@/shared/components/ui/button/Button";
+import BrandMark from "@/shared/components/brand/BrandMark";
 
 // Constants
+import { APP_NAME } from "@/shared/constants/app";
 import { resolveHomePath } from "@/shared/constants/roles";
 
 const Container = ({ children }) => (
@@ -129,8 +131,10 @@ const BotAuthPage = () => {
   if (ui.needLogin) {
     return (
       <Container>
-        <div className="text-3xl">🔐</div>
-        <h1 className="text-lg font-semibold">Tizimga kirish</h1>
+        <BrandMark className="mx-auto size-12" />
+        <h1 className="text-lg font-semibold">
+          {APP_NAME} tizimiga kirish
+        </h1>
         <p className="text-sm text-muted-foreground">
           Hisobingizni Telegram'ga bog'lash uchun login va parolingizni kiriting.
         </p>

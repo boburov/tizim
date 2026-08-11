@@ -1,3 +1,4 @@
+import env from "../../../config/env.js";
 import Holiday, { HOLIDAY_AUDIENCES } from "../../../models/holiday.model.js";
 import User from "../../../models/user.model.js";
 import ApiError from "../../../utils/ApiError.js";
@@ -253,7 +254,7 @@ const DEFAULT_BIRTHDAY_TITLE = "Tug'ilgan kun muborak!";
 const defaultBirthdayBody = (name) =>
   `Hurmatli ${name}, tug'ilgan kuningiz muborak bo'lsin! ` +
   `Sizga mustahkam salomatlik, tinimsiz muvaffaqiyat va baxt tilaymiz. ` +
-  `Bayyina jamoasi.`;
+  `${env.APP_NAME} jamoasi.`;
 
 // Bitta o'qituvchiga tabrik (tug'ilgan kun) bildirishnomasini yuboradi.
 // channels: ["telegram"] (tg orqali), ["inapp"] (platforma) yoki ikkalasi.

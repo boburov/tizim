@@ -12,6 +12,7 @@ import { useKpiRuleMutation, useKpiTriggersQuery } from "../../hooks/useStaffPay
 
 // Constants
 import { ROLE_TYPES } from "@/shared/constants/roles";
+import { LEAD_STATUS_OPTIONS } from "@/shared/constants/leadStatus";
 
 const REWARD_TYPE_OPTIONS = [
   { value: "fixed", label: "Qat'iy summa (har hodisa uchun)" },
@@ -29,6 +30,20 @@ const CONDITION_FIELDS = {
     hint: "Masalan: 80. Belgilanmagan davomat 0% deb hisoblanmaydi.",
   },
   minAmount: { label: "Minimal summa (so'm)", type: "number", hint: "" },
+  // lead_created uchun - firibga qarshi ikki darvoza. Ikkalasi ham SHART
+  // (kod emas): "lid kiritildi" mukofoti forma to'ldirgani uchun to'lanadi
+  // va yozish tekin, shuning uchun ular bo'sh qoldirilmasligi kerak.
+  minStatus: {
+    label: "Lid kamida shu bosqichga yetsin",
+    type: "select",
+    options: LEAD_STATUS_OPTIONS,
+    hint: "Bo'sh = kiritilgani yetarli. Tavsiya: \"Ma'lumot berildi\" - \"Yangi\" da qolgan lid hech kim ko'tarmagan raqam.",
+  },
+  dedupeDays: {
+    label: "Takroriy raqam oralig'i (kun)",
+    type: "number",
+    hint: "Bitta telefon shu oraliqda faqat BIR marta to'lanadi. Bo'sh = 90 kun, 0 = tekshiruv o'chirilgan.",
+  },
 };
 
 /**
@@ -64,6 +79,16 @@ const KpiRuleModal = ({ rule, close, isLoading, setIsLoading }) => {
 
   const selectedTrigger = triggers.find((t) => t.key === obj.trigger);
   const conditionKeys = selectedTrigger?.conditionKeys || [];
+
+  // Bo'sh qiymat SHARTNI O'CHIRADI - `undefined` yozilsa server uni umuman
+  // ko'rmaydi va trigger o'z standartini qo'llaydi. `""` yoki `null`
+  // yuborilsa shart "berilgan, lekin bo'sh" bo'lib qolardi.
+  const setCondition = (key, value) => {
+    const next = { ...obj.conditions };
+    if (value === undefined || value === "") delete next[key];
+    else next[key] = value;
+    obj.setField("conditions", next);
+  };
 
   const roleOptions = roles
     .filter((r) => r.roleType !== ROLE_TYPES.STUDENT)
@@ -119,22 +144,43 @@ const KpiRuleModal = ({ rule, close, isLoading, setIsLoading }) => {
       {/* Shartlar - tanlangan triggerga qarab */}
       {conditionKeys
         .filter((k) => CONDITION_FIELDS[k])
-        .map((k) => (
-          <InputField
-            key={k}
-            type="number"
-            name={k}
-            label={CONDITION_FIELDS[k].label}
-            value={obj.conditions[k] ?? ""}
-            onChange={(e) =>
-              obj.setField("conditions", {
-                ...obj.conditions,
-                [k]: e.target.value === "" ? undefined : Number(e.target.value),
-              })
-            }
-            disabled={isLoading}
-          />
-        ))}
+        .map((k) => {
+          const field = CONDITION_FIELDS[k];
+          return (
+            <div key={k}>
+              {field.type === "select" ? (
+                <SelectField
+                  name={k}
+                  label={field.label}
+                  placeholder="Bo'sh qoldirish mumkin"
+                  options={field.options}
+                  value={obj.conditions[k] ?? ""}
+                  onChange={(v) =>
+                    setCondition(k, v?.target?.value ?? v ?? undefined)
+                  }
+                  disabled={isLoading}
+                />
+              ) : (
+                <InputField
+                  type="number"
+                  name={k}
+                  label={field.label}
+                  value={obj.conditions[k] ?? ""}
+                  onChange={(e) =>
+                    setCondition(
+                      k,
+                      e.target.value === "" ? undefined : Number(e.target.value),
+                    )
+                  }
+                  disabled={isLoading}
+                />
+              )}
+              {field.hint ? (
+                <p className="mt-1 text-xs text-muted-foreground">{field.hint}</p>
+              ) : null}
+            </div>
+          );
+        })}
 
       <SelectField
         name="rewardType"

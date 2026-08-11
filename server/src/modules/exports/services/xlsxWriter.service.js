@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import env from "../../../config/env.js";
 
 // Excel raqam formatlari.
 //
@@ -72,7 +73,7 @@ const addInfoSheet = (workbook, meta) => {
  */
 export const buildWorkbook = async ({ dataset, columns, rows, meta }) => {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Bayyina";
+  workbook.creator = env.APP_NAME;
   workbook.created = new Date();
 
   const ws = workbook.addWorksheet(dataset.sheetName, {

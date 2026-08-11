@@ -9,7 +9,7 @@ const startHandler = async (bot, msg) => {
     [
       `Assalomu alaykum, ${name}!`,
       "",
-      '"Bayyina" o\'quv markazi tizimiga xush kelibsiz.',
+      `"${env.APP_NAME}" o'quv markazi tizimiga xush kelibsiz.`,
       "Davom etish uchun pastdagi tugmani bosing.",
     ].join("\n"),
     {

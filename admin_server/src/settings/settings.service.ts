@@ -74,6 +74,11 @@ export class SettingsService {
     const server: Record<string, string> = {
       NODE_ENV: 'production',
       PORT: String(tenant.port),
+      // Brend nomi YAGONA manbadan - `tenant.name`. Server (bot matnlari,
+      // {markaz} tokeni, Excel muallifi) va client (VITE_APP_NAME) ayni shu
+      // qiymatni oladi, shuning uchun panelda nomni o'zgartirish ikkala
+      // tomonni birdan yangilaydi.
+      APP_NAME: tenant.name,
       MONGO_URL: `${mongoBase}/${tenant.dbName}`,
       COOKIE_DOMAIN: tenant.domain,
       CLIENT_URL: clientUrl,

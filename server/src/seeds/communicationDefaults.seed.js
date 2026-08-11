@@ -5,10 +5,14 @@ import FeedbackType from "../models/feedbackType.model.js";
 import Holiday from "../models/holiday.model.js";
 import logger from "../config/logger.js";
 
+// Markaz nomi matnga QATTIQ yozilmaydi - `{markaz}` tokeni ishlatiladi.
+// Token xabar YUBORISH paytida env.APP_NAME bilan almashtiriladi
+// (notifications/services/personalizeBody.helper.js), shuning uchun brend
+// nomi o'zgarsa bazadagi eski shablonlar ham yangi nom bilan chiqadi.
 const TEMPLATES = [
   {
     name: "Bayram tabrigi",
-    body: "Hurmatli mijoz, sizni bayram bilan qutlaymiz! Bayyina jamoasi.",
+    body: "Hurmatli mijoz, sizni bayram bilan qutlaymiz! {markaz} jamoasi.",
     category: "holiday",
   },
   {
@@ -18,7 +22,7 @@ const TEMPLATES = [
   },
   {
     name: "Yangi e'lon",
-    body: "Bayyina ta'lim markazidan e'lon: ...",
+    body: "{markaz} ta'lim markazidan e'lon: ...",
     category: "announcement",
   },
   {
@@ -33,7 +37,7 @@ const TEMPLATES = [
   },
   {
     name: "Tabrik",
-    body: "Sizni Bayyina jamoasi tabriklaydi!",
+    body: "Sizni {markaz} jamoasi tabriklaydi!",
     category: "custom",
   },
 ];
@@ -57,7 +61,7 @@ const HOLIDAYS = [
     day: 1,
     audience: "all",
     message:
-      "Yangi yilingiz muborak bo'lsin! Sog'lik, baxt va omad tilaymiz! Bayyina jamoasi.",
+      "Yangi yilingiz muborak bo'lsin! Sog'lik, baxt va omad tilaymiz! {markaz} jamoasi.",
   },
   {
     name: "Xotin-qizlar bayrami",
@@ -66,7 +70,7 @@ const HOLIDAYS = [
     day: 8,
     audience: "all",
     message:
-      "8-mart - Xalqaro xotin-qizlar kuni muborak bo'lsin! Bayyina jamoasi.",
+      "8-mart - Xalqaro xotin-qizlar kuni muborak bo'lsin! {markaz} jamoasi.",
   },
   {
     name: "Navro'z",
@@ -74,7 +78,7 @@ const HOLIDAYS = [
     month: 3,
     day: 21,
     audience: "all",
-    message: "Navro'z bayrami muborak bo'lsin! Bayyina jamoasi.",
+    message: "Navro'z bayrami muborak bo'lsin! {markaz} jamoasi.",
   },
   {
     name: "Xotira va qadrlash kuni",
@@ -83,7 +87,7 @@ const HOLIDAYS = [
     day: 9,
     audience: "all",
     message:
-      "9-may - Xotira va qadrlash kuni muborak. Bayyina jamoasi.",
+      "9-may - Xotira va qadrlash kuni muborak. {markaz} jamoasi.",
   },
   {
     name: "Mustaqillik kuni",
@@ -92,7 +96,7 @@ const HOLIDAYS = [
     day: 1,
     audience: "all",
     message:
-      "Mustaqillik bayrami muborak bo'lsin! Bayyina jamoasi.",
+      "Mustaqillik bayrami muborak bo'lsin! {markaz} jamoasi.",
   },
   {
     name: "O'qituvchilar va murabbiylar kuni",
@@ -101,7 +105,7 @@ const HOLIDAYS = [
     day: 1,
     audience: "teachers",
     message:
-      "Hurmatli o'qituvchimiz, kasb bayramingiz muborak! Bayyina jamoasi.",
+      "Hurmatli o'qituvchimiz, kasb bayramingiz muborak! {markaz} jamoasi.",
   },
 ];
 

@@ -138,6 +138,11 @@ leadSchema.index({ assignedTo: 1, followUpAt: 1 });
 leadSchema.index({ creditedTo: 1, convertedAt: -1 });
 // Teskari qidiruv (o'quvchidan lidga). Indekssiz bu kolleksiya skani edi.
 leadSchema.index({ studentId: 1 }, { sparse: true });
+// KPI: "shu xodim shu oyda nechta lid kiritdi" (lead_created triggeri).
+leadSchema.index({ createdBy: 1, createdAt: -1 });
+// Takroriy raqamni aniqlash (lead_created dedupe) va telefon bo'yicha
+// qidiruv. Indekssiz har maosh hisobi butun kolleksiyani skanerlardi.
+leadSchema.index({ phone: 1, createdAt: 1 });
 
 leadSchema.set("toJSON", {
   transform: (_doc, ret) => {
