@@ -5,6 +5,10 @@ import { useMemo } from "react";
 import useObjectState from "@/shared/hooks/useObjectState";
 import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import useUsersListQuery from "@/owner/features/users/hooks/useUsersListQuery";
+import {
+  useCoursesQuery,
+  useRoomsQuery,
+} from "@/owner/features/catalog/hooks/useCatalogQueries";
 
 // Sonner
 import { toast } from "sonner";
@@ -56,6 +60,23 @@ const buildInitial = (group) => ({
   monthlyPrice: "",
   // Oy o'rtasida kirish siyosati. Standart "prorated" - serverdagi bilan bir xil.
   entryBilling: group?.entryBilling || "prorated",
+
+  // KURS - global katalogdan. Bo'sh = biriktirilmagan (ruxsat etilgan:
+  // eski va aralash dasturli guruhlar). Kurs biriktirilsa narx MEROSI
+  // ishlaydi: guruhga qo'lda narx qo'yilmasa, kurs narxi qo'llanadi.
+  courseId: (() => {
+    const c = group?.courseId;
+    if (!c) return "";
+    return typeof c === "string" ? c : c._id;
+  })(),
+
+  // XONA - filial resursi. Bandlik hisobi (utilization) shunga tayanadi:
+  // xona biriktirilmagan guruh jadvalda band joy egallamaydi.
+  roomId: (() => {
+    const r = group?.roomId;
+    if (!r) return "";
+    return typeof r === "string" ? r : r._id;
+  })(),
 });
 
 const ENTRY_BILLING_OPTIONS = [
@@ -84,6 +105,8 @@ const GroupForm = ({
     monthlyPrice,
     entryBilling,
     scheduleEffectiveFrom,
+    courseId,
+    roomId,
     setField,
   } = useObjectState(buildInitial(initial));
 
@@ -110,6 +133,34 @@ const GroupForm = ({
         label: `${t.firstName} ${t.lastName || ""}`.trim(),
       })),
     [teachersData],
+  );
+
+  // KURS ro'yxati - global katalog, faqat FAOL kurslar.
+  const { data: coursesData } = useCoursesQuery({ limit: 200 });
+  const courseOptions = useMemo(
+    () =>
+      (coursesData?.data || [])
+        .filter((c) => c.isActive)
+        .map((c) => ({
+          value: c._id,
+          label: c.level ? `${c.title} (${c.level})` : c.title,
+        })),
+    [coursesData],
+  );
+
+  // XONA ro'yxati - JORIY FILIALNIKI (server branchFilter bilan kesadi).
+  //
+  // "Barcha filiallar" rejimida ro'yxatda bir nechta filialning xonasi
+  // bo'ladi; server guruh yaratilganda xona filialga mos kelishini
+  // baribir tekshiradi va mos kelmasa tushunarli xato beradi.
+  const { data: roomsData } = useRoomsQuery({ limit: 200 });
+  const roomOptions = useMemo(
+    () =>
+      (roomsData?.data || []).map((r) => ({
+        value: r._id,
+        label: r.capacity ? `${r.name} (${r.capacity} joy)` : r.name,
+      })),
+    [roomsData],
   );
 
   // Tahrirlashda jadval HOZIRGI versiyadan o'zgartirilganmi - shunda "amal qilish
@@ -204,6 +255,10 @@ const GroupForm = ({
       startDate: startDate || null,
       endDate: endDate || null,
       entryBilling,
+      // Bo'sh tanlov null bo'lib ketadi - "biriktirilmagan" degani.
+      // Bo'sh string yuborilsa server uni ObjectId deb o'qib xato berardi.
+      courseId: courseId || null,
+      roomId: roomId || null,
     };
     // Jadval o'zgartirilgan bo'lsa - yangi versiya qaysi sanadan amal qilishini
     // yuboramiz (server eski versiyani tarix uchun saqlaydi).
@@ -292,6 +347,43 @@ const GroupForm = ({
             : "Kirgan kundan qolgan darslar ulushicha olinadi."}{" "}
           Chiqish va muzlatish baribir ulushiga qarab hisoblanadi.
         </p>
+      </div>
+
+      {/* KURS va XONA.
+          Ikkalasi ham IXTIYORIY va tahrirlashda ham o'zgartiriladi -
+          eski guruhlarga keyinchalik kurs biriktirish kerak bo'ladi
+          (usiz "qaysi kurs foydali" hisoboti ishlamaydi). */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <SelectField
+            name="courseId"
+            label="Kurs"
+            placeholder="Biriktirilmagan"
+            value={courseId}
+            onChange={(v) => setField("courseId", v?.target?.value ?? v)}
+            options={courseOptions}
+            disabled={isLoading}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Kurs biriktirilsa narxi meros bo'ladi — guruhga qo'lda narx
+            qo'yilmagan oylarda kurs narxi ishlaydi.
+          </p>
+        </div>
+        <div>
+          <SelectField
+            name="roomId"
+            label="Xona"
+            placeholder="Biriktirilmagan"
+            value={roomId}
+            onChange={(v) => setField("roomId", v?.target?.value ?? v)}
+            options={roomOptions}
+            disabled={isLoading}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Bandlik hisobi shunga tayanadi. Xona guruh bilan bir filialda
+            bo'lishi shart.
+          </p>
+        </div>
       </div>
 
       {/* O'qituvchi + oylik narx - faqat yangi guruh yaratishda */}

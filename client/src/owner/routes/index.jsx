@@ -39,6 +39,8 @@ import {
 import {
   LeadsPage,
   LeadsListPage,
+  LeadsKanbanPage,
+  LeadRoutingTab,
   LeadsStatsPage,
   LeadsSettingsPage,
   LeadOptionsTab,
@@ -77,6 +79,9 @@ import {
   BranchStatsPage,
   BranchLimitsPage,
 } from "@/owner/features/branches";
+import { CashDeskPage } from "@/owner/features/journal";
+import { CatalogPage } from "@/owner/features/catalog";
+import { BranchPnlPage } from "@/owner/features/branchAnalytics";
 import { ExpenseApprovalsPage } from "@/owner/features/expenseApprovals";
 import {
   ActionCenterPage,
@@ -261,6 +266,11 @@ const OwnerRoutes = () => (
     {/* LIDLAR - ro'yxat + statistika. Sozlamalari /owner/settings/lidlar da. */}
     <Route path="leads" element={<LeadsPage />}>
       <Route index element={<LeadsListPage />} />
+      {/* KANBAN - voronka bosqichlari bo'yicha doska.
+          Ruxsat ro'yxat bilan bir xil: doska boshqa ko'rinish, boshqa
+          ma'lumot emas. Status o'zgartirish serverda `leads.update`
+          bilan himoyalangan. */}
+      <Route path="doska" element={<LeadsKanbanPage />} />
       <Route path="statistika" element={<LeadsStatsPage />} />
     </Route>
 
@@ -415,6 +425,39 @@ const OwnerRoutes = () => (
       element={
         <PermissionGuard required="ai.read" fallback="/owner">
           <AiReportDetailPage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* KASSA - qo'sh yozuv jurnali (qoldiq, smena, inkassatsiya).
+        `finance.read` yetarli: filial direktori o'z kassasini ko'rishi
+        va yuritishi kerak. Amal tugmalari serverda `finance.pay` bilan
+        himoyalangan. */}
+    <Route
+      path="cash-desk"
+      element={
+        <PermissionGuard required="finance.read" fallback="/owner">
+          <CashDeskPage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* KATALOG - kurslar (global), xonalar (filial), narx matritsasi. */}
+    <Route
+      path="catalog"
+      element={
+        <PermissionGuard required="courses.read" fallback="/owner">
+          <CatalogPage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* FILIAL TAHLILI - P&L, normalizatsiya, anomaliyalar. */}
+    <Route
+      path="branch-analytics"
+      element={
+        <PermissionGuard required="finance.read" fallback="/owner">
+          <BranchPnlPage />
         </PermissionGuard>
       }
     />
@@ -583,6 +626,10 @@ const OwnerRoutes = () => (
           path="rad-etish"
           element={<LeadOptionsTab kind="rejection" addLabel="Yangi sabab" />}
         />
+        {/* YO'NALTIRISH - qaysi manbadan kelgan lid qaysi filialga.
+            Qoida butun markazga ta'sir qiladi, shuning uchun serverda
+            `leads.manage` bilan himoyalangan (ota-route ham shu). */}
+        <Route path="yonaltirish" element={<LeadRoutingTab />} />
       </Route>
       <Route
         path="shablonlar"

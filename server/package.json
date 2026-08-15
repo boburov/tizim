@@ -50,6 +50,8 @@
     "test:courses": "node tests/coursesRoomsPricing.test.js",
     "test:journal": "node tests/journalTreasury.test.js",
     "test:journal-wiring": "node tests/journalWiring.test.js",
+    "test:analytics": "node tests/branchAnalytics.test.js",
+    "test:lead-routing": "node tests/leadRouting.test.js",
     "test:ai": "node tests/aiAdvisor.test.js",
     "test:scope": "node tests/branchScopeExploit.test.js",
     "test:scope-mw": "node tests/attendanceScope.test.js",

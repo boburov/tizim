@@ -23,12 +23,50 @@ const prevMonthAmount = async (group, year, month) => {
   return prev ? prev.amount : 0;
 };
 
+/**
+ * KURS NARXIDAN MEROS (Faza 3).
+ *
+ * Guruhda o'tgan oy tarifi bo'lmasa (yangi guruh yoki birinchi oy),
+ * KURS narxiga tushamiz: bazaviy narx yoki filial istisnosi
+ * (coursePrice.service.js dagi yechim tartibi).
+ *
+ * NEGA KERAK: narx matritsasi qurilgan edi, lekin uni HECH KIM
+ * chaqirmasdi - ya'ni kurs narxi hech qachon hisob-kitobga
+ * ta'sir qilmasdi va matritsa bezak bo'lib qolgan edi.
+ *
+ * XATO YUTILADI: narx topilmasa 0 qaytadi va guruh avvalgidek
+ * "tarifi belgilanmagan" holatda qoladi. Kurs narxi tufayli
+ * GroupFee yaratilmay qolishi ancha yomonroq bo'lardi.
+ */
+const inheritedCourseAmount = async (group, year, month) => {
+  try {
+    const { resolveGroupPrice, PRICE_SOURCES } = await import(
+      "../../courses/services/coursePrice.service.js"
+    );
+    const resolved = await resolveGroupPrice(group, { year, month });
+    // GROUP_FEE manbasini QAYTA ishlatmaymiz - biz aynan shu yozuvni
+    // yaratmoqchimiz, ya'ni u hali yo'q. Faqat KATALOG narxi kerak.
+    if (resolved?.amount && resolved.source !== PRICE_SOURCES.GROUP_FEE) {
+      return resolved.amount;
+    }
+  } catch (err) {
+    logger.warn({ err, group }, "Kurs narxini meros qilib bo'lmadi");
+  }
+  return 0;
+};
+
 // Guruh+oy uchun to'lov yozuvi mavjudligini ta'minlaydi (carry-forward bilan).
 // session berilsa, ochiq MongoDB tranzaksiyasi ichida o'qib-yozadi.
 export const ensureGroupFee = async (group, year, month, { session } = {}) => {
   const existing = await GroupFee.findOne({ group, year, month }).session(session || null);
   if (existing) return existing;
-  const amount = await prevMonthAmount(group, year, month);
+
+  // MEROS TARTIBI: o'tgan oy tarifi -> KURS narxi -> 0.
+  //
+  // O'tgan oy USTUN: guruhga qo'lda qo'yilgan narx katalog narxidan
+  // muhimroq (u aniq bu guruh uchun qabul qilingan qaror).
+  let amount = await prevMonthAmount(group, year, month);
+  if (!amount) amount = await inheritedCourseAmount(group, year, month);
   try {
     return await GroupFee.findOneAndUpdate(
       { group, year, month },

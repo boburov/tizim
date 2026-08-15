@@ -18,6 +18,45 @@ export const ENDPOINTS = Object.freeze({
     // `auto` yo'q) va client bilan ajralib ketmasligi kerak.
     delegationOptions: "/branches/delegation-options",
   },
+
+  // KURS KATALOGI (global) + filial narx matritsasi.
+  courses: {
+    base: "/courses",
+    byId: (id) => `/courses/${id}`,
+    prices: (id) => `/courses/${id}/prices`,
+    clearPrice: (id, branchId) => `/courses/${id}/prices/${branchId}`,
+    resolve: (groupId) => `/courses/resolve/${groupId}`,
+  },
+
+  // XONALAR - filialning fizik resursi.
+  rooms: {
+    base: "/rooms",
+    byId: (id) => `/rooms/${id}`,
+  },
+
+  // KASSA - qo'sh yozuv jurnali. DIQQAT: /ledger dan BOSHQA narsa
+  // (u shaxsiy hisobvaraq).
+  journal: {
+    balances: "/journal/balances",
+    reconcile: "/journal/reconcile",
+    shifts: "/journal/shifts",
+    shiftClose: (id) => `/journal/shifts/${id}/close`,
+    transfers: "/journal/transfers",
+    transferReceive: (id) => `/journal/transfers/${id}/receive`,
+    transferCancel: (id) => `/journal/transfers/${id}/cancel`,
+  },
+
+  // FILIAL TAHLILI - P&L, normalizatsiya, bandlik, churn, alertlar.
+  branchAnalytics: {
+    pnl: "/branch-analytics/pnl",
+    elimination: "/branch-analytics/elimination",
+    utilization: "/branch-analytics/utilization",
+    churn: "/branch-analytics/churn",
+    normalized: "/branch-analytics/normalized",
+    alerts: "/branch-analytics/alerts",
+    transferPreview: (id) => `/branch-analytics/students/${id}/transfer-preview`,
+    transfer: (id) => `/branch-analytics/students/${id}/transfer`,
+  },
   expenseApprovals: {
     base: "/expense-approvals",
     byId: (id) => `/expense-approvals/${id}`,
@@ -75,6 +114,11 @@ export const ENDPOINTS = Object.freeze({
     // Lidga biriktiriladigan xodimlar. /users EMAS: u `users.read`
     // talab qiladi va resepshinda bu ruxsat yo'q.
     assignees: "/leads/assignees",
+    // Konversiya taqqoslash: filial va xodim kesimida.
+    conversion: "/leads/conversion",
+    // Yo'naltirish qoidalari - qaysi manbadan kelgan lid qaysi filialga.
+    routing: "/leads/routing",
+    routingById: (id) => `/leads/routing/${id}`,
   },
   leadOptions: {
     base: "/lead-options",

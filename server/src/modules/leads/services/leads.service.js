@@ -18,6 +18,7 @@ import {
 import { LEAD_PIPELINE } from "../../../constants/leadStatus.js";
 import * as authService from "../../auth/services/auth.service.js";
 import * as groupsService from "../../groups/services/groups.service.js";
+import * as leadRouting from "./leadRouting.service.js";
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const POPULATE = [
@@ -207,9 +208,30 @@ export const create = async (body, currentUser) => {
   // bog'lanib bo'lmaydigan lid - lid emas.
   const status = body.status || "new";
 
-  // FILIAL: lid qaysi filialga kelgan. "Barcha filiallar" rejimida client
-  // formada aniq filialni so'raydi va uni `branchId` bilan yuboradi.
-  const branchId = await resolveBranchForWrite(currentUser, body.branchId);
+  // FILIAL: lid qaysi filialga kelgan.
+  //
+  // IKKI YO'L:
+  //
+  //  (a) OPERATOR kiritdi - "Barcha filiallar" rejimida client formada
+  //      aniq filialni so'raydi va uni `branchId` bilan yuboradi.
+  //      Bu yo'l O'ZGARMAYDI: odam tanlagan filial har doim ustun.
+  //
+  //  (b) AVTOMATIK (bot, webhook, integratsiya) - kontekst ham,
+  //      foydalanuvchi ham yo'q. Bunday chaqiruvda ilgari xato
+  //      qaytardi ("filial tanlanmagan") va lid UMUMAN yaratilmasdi.
+  //      Endi MANBA bo'yicha yo'naltiriladi
+  //      (leadRouting.service.js: telegram boti -> o'z filiali).
+  //
+  // Zaxira zanjiri routing ichida: manba qoidasi -> zaxira qoida ->
+  // asosiy filial. Ya'ni lid HECH QACHON yo'qolmaydi.
+  let branchId;
+  let routing = null;
+  if (!currentUser && !body.branchId) {
+    routing = await leadRouting.route({ source: body.sourceId || body.source });
+    branchId = routing.branchId;
+  } else {
+    branchId = await resolveBranchForWrite(currentUser, body.branchId);
+  }
 
   const lead = await Lead.create({
     branchId,
@@ -227,7 +249,9 @@ export const create = async (body, currentUser) => {
     closedAt: status === "rejected" ? new Date() : null,
     trialDate: body.trialDate ? new Date(body.trialDate) : null,
     notes: body.notes || "",
-    assignedTo: body.assignedTo || null,
+    // Yo'naltirish qoidasi xodim ko'rsatgan bo'lsa - lid darhol unga
+    // biriktiriladi. Aks holda filialga tushadi va admin o'zi oladi.
+    assignedTo: body.assignedTo || routing?.assigneeId || null,
     createdBy: currentUser?._id || null,
     statusHistory: [
       { status, at: new Date(), by: currentUser?._id || null },

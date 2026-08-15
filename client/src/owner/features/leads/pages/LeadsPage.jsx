@@ -14,6 +14,7 @@ const LeadsPage = () => {
 
   const items = [
     { to: BASE, label: "Ro'yxat", exact: true },
+    { to: `${BASE}/doska`, label: "Doska" },
     { to: `${BASE}/statistika`, label: "Statistika" },
   ];
 

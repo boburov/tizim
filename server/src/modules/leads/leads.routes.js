@@ -28,7 +28,66 @@ import reminderBulk from "./handlers/reminderBulk.handler.js";
 import stats from "./handlers/stats.handler.js";
 import assignees from "./handlers/assignees.handler.js";
 
+import {
+  routingCreateSchema,
+  routingUpdateSchema,
+  routingIdSchema,
+} from "./validators/routing.validator.js";
+import conversion from "./handlers/conversion.handler.js";
+import routingList from "./handlers/routingList.handler.js";
+import routingCreate from "./handlers/routingCreate.handler.js";
+import routingUpdate from "./handlers/routingUpdate.handler.js";
+import routingRemove from "./handlers/routingRemove.handler.js";
+
 const router = Router();
+
+// KONVERSIYA TAQQOSLASH. "/:id" dan OLDIN.
+//
+// `leads.read` yetarli - filial rahbari o'z xodimlarining ish sifatini
+// ko'rishi kerak. Ko'lam servisda (branchFilter): owner "barcha
+// filiallar" rejimida hammasini yonma-yon oladi.
+router.get(
+  "/conversion",
+  requireAuth,
+  requirePermission(PERMISSIONS.LEADS_READ),
+  conversion,
+);
+
+// ── YO'NALTIRISH QOIDALARI ──
+//
+// "/:id" DAN OLDIN turishi SHART - aks holda "routing" lid ID deb
+// o'qilardi.
+//
+// RUXSAT: `leads.manage` - qoida butun markazga ta'sir qiladi (qaysi
+// filial qaysi manbadan lid oladi), shuning uchun oddiy `leads.create`
+// yetarli emas.
+router.get(
+  "/routing",
+  requireAuth,
+  requirePermission(PERMISSIONS.LEADS_MANAGE),
+  routingList,
+);
+router.post(
+  "/routing",
+  requireAuth,
+  requirePermission(PERMISSIONS.LEADS_MANAGE),
+  validate(routingCreateSchema),
+  routingCreate,
+);
+router.patch(
+  "/routing/:id",
+  requireAuth,
+  requirePermission(PERMISSIONS.LEADS_MANAGE),
+  validate(routingUpdateSchema),
+  routingUpdate,
+);
+router.delete(
+  "/routing/:id",
+  requireAuth,
+  requirePermission(PERMISSIONS.LEADS_MANAGE),
+  validate(routingIdSchema),
+  routingRemove,
+);
 
 router.get(
   "/",

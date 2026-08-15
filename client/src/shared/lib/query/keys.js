@@ -14,6 +14,32 @@ export const qk = Object.freeze({
     compare: () => ["branches", "compare"],
     delegationOptions: () => ["branches", "delegationOptions"],
   },
+  courses: {
+    all: () => ["courses"],
+    list: (params) => ["courses", "list", params],
+    one: (id) => ["courses", "detail", id],
+    prices: (id) => ["courses", "prices", id],
+  },
+  rooms: {
+    all: () => ["rooms"],
+    list: (params) => ["rooms", "list", params],
+    one: (id) => ["rooms", "detail", id],
+  },
+  journal: {
+    all: () => ["journal"],
+    balances: (params) => ["journal", "balances", params],
+    reconcile: () => ["journal", "reconcile"],
+    shifts: (params) => ["journal", "shifts", params],
+    transfers: (params) => ["journal", "transfers", params],
+  },
+  branchAnalytics: {
+    all: () => ["branchAnalytics"],
+    pnl: (params) => ["branchAnalytics", "pnl", params],
+    normalized: (params) => ["branchAnalytics", "normalized", params],
+    utilization: () => ["branchAnalytics", "utilization"],
+    churn: (params) => ["branchAnalytics", "churn", params],
+    alerts: () => ["branchAnalytics", "alerts"],
+  },
   expenseApprovals: {
     all: () => ["expenseApprovals"],
     list: (params) => ["expenseApprovals", "list", params],
@@ -62,6 +88,8 @@ export const qk = Object.freeze({
     one: (id) => ["leads", "detail", id],
     stats: (params) => ["leads", "stats", params],
     assignees: () => ["leads", "assignees"],
+    conversion: (params) => ["leads", "conversion", params],
+    routing: () => ["leads", "routing"],
   },
   leadOptions: {
     all: () => ["leadOptions"],

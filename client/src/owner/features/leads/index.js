@@ -5,3 +5,6 @@ export { default as LeadsSettingsPage } from "./pages/LeadsSettingsPage";
 export { default as LeadOptionsTab } from "./components/LeadOptionsTab";
 export { leadsAPI } from "./api/leads.api";
 export { default as useLeadsQuery } from "./hooks/useLeadsQuery";
+
+export { default as LeadsKanbanPage } from "./pages/LeadsKanbanPage";
+export { default as LeadRoutingTab } from "./components/LeadRoutingTab";

@@ -409,6 +409,54 @@ const run = async () => {
     "u yagona zaxira - o'chirilsa narx umuman topilmasdi",
   );
 
+  // ─────────────────────────────────────────────────────────
+  console.log("\n\x1b[1m6) NARX MEROSI HISOB-KITOBGA TA'SIR QILADIMI\x1b[0m");
+  // ─────────────────────────────────────────────────────────
+  //
+  // Eng muhim tekshiruv: matritsa qurilgan-u, uni hech kim
+  // CHAQIRMASA, kurs narxi hech qachon hisob-kitobga ta'sir
+  // qilmasdi va butun Faza 3 bezak bo'lib qolardi.
+
+  const feeService = await import(
+    "../src/modules/finance/services/groupFee.service.js"
+  );
+
+  // Bazaviy narx hozir 600 000 (yuqorida qo'yilgan, 2026-11 dan).
+  // Kelajak oy uchun GroupFee yaratsak - u kurs narxini MEROS olishi kerak.
+  const freshGroup = await mkGroup(B._id, { courseId: ielts._id, n: 9 });
+  const fee = await feeService.ensureGroupFee(freshGroup._id, 2026, 12);
+
+  check(
+    "Yangi guruh tarifi KURS narxidan meros oldi",
+    fee.amount === 600000,
+    `tarif: ${fee.amount} — matritsa hisob-kitobga ulanmagan bo'lardi`,
+  );
+
+  // Kursi YO'Q guruhda meros ham yo'q - avvalgidek 0.
+  const noCourseGroup = await mkGroup(B._id, { n: 10 });
+  const fee0 = await feeService.ensureGroupFee(noCourseGroup._id, 2026, 12);
+  check(
+    "Kursi yo'q guruhda tarif 0 (avvalgidek)",
+    fee0.amount === 0,
+    `tarif: ${fee0.amount}`,
+  );
+
+  // O'TGAN OY tarifi KURS narxidan USTUN.
+  const GroupFeeModel = (await import("../src/models/groupFee.model.js")).default;
+  await GroupFeeModel.create({
+    group: freshGroup._id,
+    year: 2027,
+    month: 1,
+    amount: 111111,
+    source: "manual",
+  });
+  const feeNext = await feeService.ensureGroupFee(freshGroup._id, 2027, 2);
+  check(
+    "O'tgan oy tarifi kurs narxidan USTUN",
+    feeNext.amount === 111111,
+    `tarif: ${feeNext.amount} — guruhga qo'lda qo'yilgan qaror muhimroq`,
+  );
+
   // ── Yakun ──
   await mongoose.connection.dropDatabase();
   await mongoose.disconnect();

@@ -67,6 +67,21 @@ const branchSchema = new mongoose.Schema(
       default: undefined,
     },
 
+    // ── NORMALIZATSIYA UCHUN KIRISH MA'LUMOTLARI (Faza 5) ──
+    //
+    // Filiallarni ABSOLYUT raqamda solishtirish chalg'ituvchi: katta
+    // filial ko'proq daromad qilishi tabiiy. Haqiqiy savol
+    // SAMARADORLIKDA - "1 kv.m maydondan qancha tushum".
+    //
+    // null = kiritilmagan. Bu holda tegishli ko'rsatkich hisoblanmaydi
+    // (nolga bo'lish o'rniga null qaytadi) - aks holda hisobot
+    // "Infinity" yoki 0 ko'rsatib, filialni noto'g'ri baholardi.
+    areaM2: { type: Number, min: 0, default: null },
+
+    // Filial ochilgan sana - "yosh" filialni "eski" bilan solishtirish
+    // adolatsiz, shuning uchun hisobotda yosh ham ko'rsatiladi.
+    openedAt: { type: Date, default: null },
+
     isActive: { type: Boolean, default: true },
     // Arxivlangan (isActive=false qilingan) payt.
     archivedAt: { type: Date, default: null },

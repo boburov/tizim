@@ -14,6 +14,7 @@ const LeadsSettingsPage = () => {
     { to: BASE, label: "Manba", exact: true },
     { to: `${BASE}/yonalish`, label: "Yo'nalish" },
     { to: `${BASE}/rad-etish`, label: "Rad etish sabablari" },
+    { to: `${BASE}/yonaltirish`, label: "Yo'naltirish" },
   ];
 
   return (

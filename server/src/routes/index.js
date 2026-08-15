@@ -10,6 +10,8 @@ import leadOptionsRouter from "../modules/leadOptions/leadOptions.routes.js";
 import groupsRouter from "../modules/groups/groups.routes.js";
 import coursesRouter from "../modules/courses/courses.routes.js";
 import roomsRouter from "../modules/rooms/rooms.routes.js";
+import journalRouter from "../modules/journal/journal.routes.js";
+import branchAnalyticsRouter from "../modules/branchAnalytics/branchAnalytics.routes.js";
 import attendanceRouter from "../modules/attendance/attendance.routes.js";
 import teacherAttendanceRouter from "../modules/teacherAttendance/teacherAttendance.routes.js";
 import attendanceExemptionsRouter from "../modules/attendanceExemptions/attendanceExemptions.routes.js";
@@ -62,6 +64,13 @@ router.use("/groups", groupsRouter);
 // Ikkalasi ham modeli bor-u route'i yo'q holatda turgan edi.
 router.use("/courses", coursesRouter);
 router.use("/rooms", roomsRouter);
+// KASSA - qo'sh yozuv jurnali: qoldiqlar, smena, inkassatsiya.
+// DIQQAT: bu /ledger DAN BOSHQA narsa. U yerdagi "ledger" - o'quvchi
+// va xodimning SHAXSIY hisobvarag'i (o'qish modeli).
+router.use("/journal", journalRouter);
+// FILIAL TAHLILI - P&L (elimination bilan), normalizatsiya, bandlik,
+// churn va o'quvchini filiallararo ko'chirish.
+router.use("/branch-analytics", branchAnalyticsRouter);
 
 // Attendance subsystem
 router.use("/attendance", attendanceRouter);

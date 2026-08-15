@@ -9,6 +9,7 @@ import {
   Settings,
   Target,
   Wallet,
+  BookMarked,
 } from "lucide-react";
 
 // MENYU TUZILISHI
@@ -137,6 +138,25 @@ const ownerSidebar = [
   // Yakka o'quv markazida (MULTI_BRANCH=false) bu bo'lim UMUMAN ko'rinmaydi -
   // filial ro'yxati, taqqoslash va filiallar kesimidagi statistika bir filial
   // uchun ma'nosiz. Yagona filialning ma'lumoti Sozlamalar > Markaz'da.
+  // KASSA - qo'sh yozuv jurnali. Moliya bo'limidan ALOHIDA: u
+  // "qancha hisoblangan" ni ko'rsatadi, bu esa "qancha PUL BOR" ni.
+  {
+    title: "Kassa",
+    icon: Wallet,
+    items: [
+      { title: "Qoldiq va smena", url: "/owner/cash-desk", permission: "finance.read" },
+    ],
+  },
+
+  // KATALOG - kurs (global), xona (filial), narx matritsasi.
+  {
+    title: "Katalog",
+    icon: BookMarked,
+    items: [
+      { title: "Kurslar va xonalar", url: "/owner/catalog", permission: "courses.read" },
+    ],
+  },
+
   {
     title: "Filiallar",
     icon: Building2,
@@ -151,6 +171,13 @@ const ownerSidebar = [
         // (filialni o'zi bilan taqqoslash), shuning uchun faqat
         // "Barcha filiallar" rejimida chiqadi.
         allBranchesOnly: true,
+      },
+      {
+        title: "Tahlil (P&L)",
+        url: "/owner/branch-analytics",
+        permission: "finance.read",
+        // Bitta filialda ham ma'noli: o'z foydasini va anomaliyalarni
+        // ko'rsatadi. Shuning uchun allBranchesOnly YO'Q.
       },
       {
         title: "Statistika",

@@ -17,6 +17,7 @@ import LeadSourcePerformance from "../components/LeadSourcePerformance";
 import LeadDirectionDemand from "../components/LeadDirectionDemand";
 import LeadDropOff from "../components/LeadDropOff";
 import LeadRejectionReasons from "../components/LeadRejectionReasons";
+import LeadConversionTable from "../components/LeadConversionTable";
 import LeadEngagement from "../components/LeadEngagement";
 import useLeadStatsQuery from "../hooks/useLeadStatsQuery";
 
@@ -87,6 +88,11 @@ const LeadsStatsPage = () => {
             <LeadSourcePerformance rows={data?.bySource || []} />
             <LeadDirectionDemand rows={data?.byDirection || []} />
           </div>
+
+          {/* KONVERSIYA TAQQOSLASH - filial va xodim kesimida.
+              Yuqoridagi voronka "qaysi bosqichda yo'qotyapmiz" ga javob
+              beradi, bu esa "KIM yaxshiroq ishlayapti" ga. */}
+          <LeadConversionTable from={period.from} to={period.to} />
         </>
       )}
     </div>

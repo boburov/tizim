@@ -58,6 +58,12 @@ export const RESOURCE_SCOPE = Object.freeze({
   insight: SCOPE.BRANCH,
   kpiRule: SCOPE.BRANCH,
   lead: SCOPE.BRANCH,
+  // YO'NALTIRISH QOIDASI: qaysi manbadan kelgan lid qaysi filialga
+  // tushadi. `branchId` bor va u NISHON filial - shuning uchun
+  // qoidalar ro'yxati KESILMAYDI: owner butun xaritani ko'rishi
+  // kerak, aks holda "nega lid bizga kelmayapti" savoli javobsiz
+  // qolardi. Route `leads.manage` bilan himoyalangan.
+  leadRoutingRule: SCOPE.BRANCH,
   openingBalance: SCOPE.BRANCH,
   // XONA - filialning FIZIK resursi (Faza 3). Kursdan farqli ravishda
   // filialga bog'langan: "3-xona" har filialda boshqa xona.
