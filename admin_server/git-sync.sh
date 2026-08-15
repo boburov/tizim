@@ -23,7 +23,7 @@
 #
 # 3) PUSH OLDIDAN `.env` KUZATILAYOTGANI TEKSHIRILADI. Bu oxirgi to'siq:
 #    `.gitignore` noto'g'ri bo'lsa yoki kimdir `git add -f` qilgan bo'lsa,
-#    mijozning MongoDB manzili, JWT sirlari va Telegram tokeni GitHub'ga
+#    mijozning PostgreSQL manzili, JWT sirlari va Telegram tokeni GitHub'ga
 #    chiqib ketardi. Bunday holatda push BAJARILMAYDI.
 #
 set -euo pipefail

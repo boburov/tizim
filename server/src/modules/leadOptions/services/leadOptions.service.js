@@ -1,22 +1,27 @@
-import LeadOption from "../../../models/leadOption.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { LEAD_OPTION_KINDS } from "../../../constants/leadStatus.js";
+import { withLegacyIds, withLegacyId } from "../../../utils/serialize.js";
 
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// escapeRegex KERAK EMAS: Prisma `contains` matnni SQL parametri sifatida
+// uzatadi, ya'ni "(" kabi belgi so'rovni yiqita olmaydi.
 
 export const list = async ({ kind, search, includeInactive = false }) => {
-  const filter = {};
-  if (kind) filter.kind = kind;
-  if (!includeInactive) filter.isActive = true;
+  const where = {};
+  if (kind) where.kind = kind;
+  if (!includeInactive) where.isActive = true;
   if (search && search.trim()) {
-    filter.name = { $regex: escapeRegex(search.trim()), $options: "i" };
+    where.name = { contains: search.trim(), mode: "insensitive" };
   }
-  const items = await LeadOption.find(filter).sort({ createdAt: -1 });
-  return { items, total: items.length };
+  const items = await prisma.leadOption.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+  });
+  return { items: withLegacyIds(items), total: items.length };
 };
 
 export const getById = async (id) => {
-  const doc = await LeadOption.findById(id);
+  const doc = await prisma.leadOption.findUnique({ where: { id } });
   if (!doc) throw new ApiError(404, "Sozlama topilmadi");
   return doc;
 };
@@ -27,28 +32,34 @@ export const create = async (body, currentUser) => {
   }
   const name = String(body.name || "").trim();
   if (!name) throw new ApiError(400, "Nom kerak");
-  return LeadOption.create({
-    kind: body.kind,
-    name,
-    createdBy: currentUser?._id || null,
+  const doc = await prisma.leadOption.create({
+    data: {
+      kind: body.kind,
+      name,
+      createdById: currentUser?.id || currentUser?._id || null,
+    },
   });
+  return withLegacyId(doc);
 };
 
 export const update = async (id, body) => {
-  const doc = await getById(id);
+  await getById(id);
+  const data = {};
   if (body.name !== undefined) {
     const name = String(body.name).trim();
     if (!name) throw new ApiError(400, "Nom kerak");
-    doc.name = name;
+    data.name = name;
   }
-  if (body.isActive !== undefined) doc.isActive = !!body.isActive;
-  await doc.save();
-  return doc;
+  if (body.isActive !== undefined) data.isActive = !!body.isActive;
+  const doc = await prisma.leadOption.update({ where: { id }, data });
+  return withLegacyId(doc);
 };
 
 export const softRemove = async (id) => {
-  const doc = await getById(id);
-  doc.isActive = false;
-  await doc.save();
-  return doc;
+  await getById(id);
+  const doc = await prisma.leadOption.update({
+    where: { id },
+    data: { isActive: false },
+  });
+  return withLegacyId(doc);
 };

@@ -1,19 +1,22 @@
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import Attendance from "../../../models/attendance.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import SalaryTransaction from "../../../models/salaryTransaction.model.js";
-import Expense from "../../../models/expense.model.js";
-import Lead from "../../../models/lead.model.js";
+import prisma from "../../../config/prisma.js";
 import { ROLES } from "../../../constants/roles.js";
 import {
   branchFilter,
-  branchMatchStage,
   branchGroupFilter,
-  branchGroupMatchStage,
   userBranchCondition,
 } from "../../../helpers/branchContext.helper.js";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DIQQAT — MAYDON NOMLARI O'ZGARDI.
+//
+// Mongo'da bog'lanish maydoni `group` / `student` edi, Prisma'da esa
+// `groupId` / `studentId`. Shuning uchun ko'lam helperlariga maydon nomi
+// OCHIQ uzatiladi: `branchGroupFilter("groupId")`.
+//
+// Standart qiymatga tayanib qolish xavfli: `group` nomli ustun yo'q, ya'ni
+// Prisma xato beradi - lekin ba'zi joyda filtr JIMGINA tushib qolishi
+// mumkin edi va dashboard butun tashkilot raqamlarini ko'rsatardi.
+// ═══════════════════════════════════════════════════════════════════════════
 
 // === Sana yordamchilari (UTC) ===
 const monthRange = (year, month) => {
@@ -30,15 +33,7 @@ const todayRange = () => {
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0),
   );
   const end = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      23,
-      59,
-      59,
-      999,
-    ),
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999),
   );
   return { start, end };
 };
@@ -56,18 +51,27 @@ const previousMonths = (count) => {
 // === Bugungi davomat taqsimoti (gauge uchun) ===
 const computeAttendanceGauge = async () => {
   const { start, end } = todayRange();
-  const result = await Attendance.aggregate([
-    // FILIAL: Attendance'da branchId yo'q - guruh orqali bog'lanadi.
-    ...(await branchGroupMatchStage()),
-    { $match: { date: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
-    { $group: { _id: "$status", count: { $sum: 1 } } },
-  ]);
+
+  // Mongo: aggregate([$match, $group by status]).
+  // Prisma: groupBy - bitta so'rov, bazada hisoblanadi.
+  const rows = await prisma.attendance.groupBy({
+    by: ["status"],
+    where: {
+      // FILIAL: Attendance'da branchId yo'q - guruh orqali bog'lanadi.
+      ...(await branchGroupFilter("groupId")),
+      date: { gte: start, lte: end },
+      isDeleted: false,
+    },
+    _count: { _all: true },
+  });
+
   const counts = { present: 0, late: 0, excused: 0, absent: 0, exempt: 0 };
-  for (const r of result) counts[r._id] = r.count || 0;
+  for (const r of rows) counts[r.status] = r._count._all || 0;
 
   // Yagona ta'rif: maxraj = present + absent + late (exempt va excused tashqarida)
   const denom = counts.present + counts.late + counts.absent;
-  const rate = denom === 0 ? null : Math.round(((counts.present + counts.late) / denom) * 100);
+  const rate =
+    denom === 0 ? null : Math.round(((counts.present + counts.late) / denom) * 100);
   return {
     rate,
     present: counts.present,
@@ -83,25 +87,28 @@ const DAY_LABELS = ["Yak", "Du", "Se", "Ch", "Pa", "Ju", "Sh"];
 const computeWeekdayActivity = async () => {
   const now = new Date();
   const start = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate() - 30,
-      0,
-      0,
-      0,
-      0,
-    ),
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 30, 0, 0, 0, 0),
   );
 
-  const result = await Attendance.aggregate([
-    ...(await branchGroupMatchStage()),
-    { $match: { date: { $gte: start }, isDeleted: { $ne: true } } },
-    { $group: { _id: { $dayOfWeek: "$date" }, count: { $sum: 1 } } },
-  ]);
+  // Mongo'da bu `$group: { _id: { $dayOfWeek: "$date" } }` edi.
+  //
+  // XOM SQL ISHLATILMADI (`EXTRACT(DOW ...)` bo'lardi): u holda filial
+  // ko'lami sharti ham QO'LDA SQL'ga ko'chirilishi kerak edi, ya'ni
+  // xavfsizlik qoidasi ikki joyda ikki xil yozilardi. Bu yerda faqat
+  // `date` ustuni o'qiladi (30 kunlik yozuvlar) va guruhlash JS'da -
+  // ko'lam mantig'i yagona manbada (`branchGroupFilter`) qoladi.
+  const rows = await prisma.attendance.findMany({
+    where: {
+      ...(await branchGroupFilter("groupId")),
+      date: { gte: start },
+      isDeleted: false,
+    },
+    select: { date: true },
+  });
 
   const counts = new Array(7).fill(0);
-  for (const r of result) counts[(r._id - 1) % 7] = r.count;
+  for (const r of rows) counts[new Date(r.date).getUTCDay()] += 1;
+
   // Du-Yak tartibida qaytaramiz
   const order = [1, 2, 3, 4, 5, 6, 0];
   return order.map((idx) => ({ day: DAY_LABELS[idx], lessonsCount: counts[idx] }));
@@ -109,28 +116,32 @@ const computeWeekdayActivity = async () => {
 
 // Oylik kirim (to'lov tranzaksiyalari yig'indisi)
 const computeRevenue = async (start, end) => {
-  const [row] = await PaymentTransaction.aggregate([
-    // FILIAL: PaymentTransaction'da branchId bor (denormalizatsiya).
-    ...branchMatchStage(),
-    { $match: { paidAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
-    { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
-  ]);
-  return { total: row?.total || 0, count: row?.count || 0 };
+  const row = await prisma.paymentTransaction.aggregate({
+    where: {
+      // FILIAL: PaymentTransaction'da branchId bor (denormalizatsiya).
+      ...branchFilter(),
+      paidAt: { gte: start, lte: end },
+      isDeleted: false,
+    },
+    _sum: { amount: true },
+    _count: { _all: true },
+  });
+  return { total: row._sum.amount || 0, count: row._count._all || 0 };
 };
 
-// So'nggi to'lovlar ro'yxati (reference: "Project" ro'yxati)
+// So'nggi to'lovlar ro'yxati
 const computeRecentPayments = async () => {
-  const rows = await PaymentTransaction.find({
-    ...branchFilter(),
-    isDeleted: { $ne: true },
-  })
-    .sort({ paidAt: -1 })
-    .limit(5)
-    .populate("student", "firstName lastName")
-    .populate("group", "name")
-    .lean();
+  const rows = await prisma.paymentTransaction.findMany({
+    where: { ...branchFilter(), isDeleted: false },
+    orderBy: { paidAt: "desc" },
+    take: 5,
+    include: {
+      student: { select: { firstName: true, lastName: true } },
+      group: { select: { name: true } },
+    },
+  });
   return rows.map((r) => ({
-    id: String(r._id),
+    id: String(r.id),
     studentName: r.student
       ? `${r.student.firstName} ${r.student.lastName || ""}`.trim()
       : "Noma'lum",
@@ -141,59 +152,48 @@ const computeRecentPayments = async () => {
   }));
 };
 
-// Eng faol o'qituvchilar - faol guruhlardagi o'quvchilar soni bo'yicha (reference: "Team Collaboration")
+// Eng faol o'qituvchilar - faol guruhlardagi o'quvchilar soni bo'yicha.
 const computeTopTeachers = async () => {
-  const rows = await Group.aggregate([
-    // FILIAL: Group'da branchId bor.
-    ...branchMatchStage(),
-    { $match: { isActive: true, isDeleted: { $ne: true } } },
-    { $unwind: "$teachers" },
-    {
-      $lookup: {
-        from: "groupmemberships",
-        let: { gid: "$_id" },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ["$group", "$$gid"] },
-              leftAt: null,
-              isDeleted: { $ne: true },
-            },
-          },
-          { $count: "n" },
-        ],
-        as: "members",
+  // Mongo'da bu $unwind + ikkita $lookup + $group edi. Prisma'da
+  // relation'lar bilan bitta so'rov: guruhlar, ularning o'qituvchilari va
+  // FAOL a'zolar soni birga keladi.
+  //
+  // Guruhlar soni kichik (yuzlab), shuning uchun yig'ish JS'da - bu
+  // $lookup quvurini takrorlashdan ancha o'qiladigan va xatoga
+  // kamroq moyil.
+  const groups = await prisma.group.findMany({
+    where: { ...branchFilter(), isActive: true, isDeleted: false },
+    select: {
+      teachers: { select: { id: true, firstName: true, lastName: true } },
+      _count: {
+        select: {
+          memberships: { where: { leftAt: null, isDeleted: false } },
+        },
       },
     },
-    {
-      $group: {
-        _id: "$teachers",
-        groupsCount: { $sum: 1 },
-        studentsCount: { $sum: { $ifNull: [{ $arrayElemAt: ["$members.n", 0] }, 0] } },
-      },
-    },
-    { $sort: { studentsCount: -1, groupsCount: -1 } },
-    { $limit: 4 },
-    {
-      $lookup: {
-        from: "users",
-        localField: "_id",
-        foreignField: "_id",
-        as: "teacher",
-      },
-    },
-    { $unwind: "$teacher" },
-    {
-      $project: {
-        _id: 0,
-        id: { $toString: "$_id" },
-        name: { $trim: { input: { $concat: ["$teacher.firstName", " ", { $ifNull: ["$teacher.lastName", ""] }] } } },
-        groupsCount: 1,
-        studentsCount: 1,
-      },
-    },
-  ]);
-  return rows;
+  });
+
+  const byTeacher = new Map();
+  for (const g of groups) {
+    const students = g._count.memberships || 0;
+    for (const t of g.teachers) {
+      const cur = byTeacher.get(t.id) || {
+        id: String(t.id),
+        name: `${t.firstName} ${t.lastName || ""}`.trim(),
+        groupsCount: 0,
+        studentsCount: 0,
+      };
+      cur.groupsCount += 1;
+      cur.studentsCount += students;
+      byTeacher.set(t.id, cur);
+    }
+  }
+
+  return [...byTeacher.values()]
+    .sort(
+      (a, b) => b.studentsCount - a.studentsCount || b.groupsCount - a.groupsCount,
+    )
+    .slice(0, 4);
 };
 
 // === Asosiy: getOverview ===
@@ -204,14 +204,14 @@ export const getOverview = async ({ year, month } = {}) => {
   const { start, end } = monthRange(y, m);
   const prev = monthRange(m === 1 ? y - 1 : y, m === 1 ? 12 : m - 1);
 
-  // Foydalanuvchi filtri: userBranchCondition() $or beradi, shuning uchun
-  // uni $and ichiga qo'yamiz (boshqa $or bilan to'qnashmasin).
+  // Foydalanuvchi filtri: userBranchCondition() OR beradi, shuning uchun
+  // uni AND ichiga qo'yamiz (boshqa OR bilan to'qnashmasin).
   const userScoped = (base) => {
     const cond = userBranchCondition();
-    return cond ? { ...base, $and: [cond] } : base;
+    return cond ? { ...base, AND: [cond] } : base;
   };
   // A'zoliklar guruh orqali filialga bog'lanadi (branchId maydoni yo'q).
-  const memberScope = await branchGroupFilter();
+  const memberScope = await branchGroupFilter("groupId");
 
   const [
     studentsCount,
@@ -229,16 +229,29 @@ export const getOverview = async ({ year, month } = {}) => {
     topTeachers,
   ] = await Promise.all([
     // FILIAL: bu hisoblagichlarda filtr YO'Q edi - dashboard tanlangan
-    // filialda turib BUTUN tashkilot sonlarini ko'rsatardi. Sizish sonlarda
-    // bo'lgani uchun ID-qidiruvchi test uni tutmagan.
-    User.countDocuments(userScoped({ role: ROLES.STUDENT, isActive: true, isDeleted: { $ne: true } })),
-    User.countDocuments(userScoped({ role: ROLES.TEACHER, isActive: true, isDeleted: { $ne: true } })),
-    Group.countDocuments({ ...branchFilter(), isActive: true, isDeleted: { $ne: true } }),
+    // filialda turib BUTUN tashkilot sonlarini ko'rsatardi.
+    prisma.user.count({
+      where: userScoped({ role: ROLES.STUDENT, isActive: true, isDeleted: false }),
+    }),
+    prisma.user.count({
+      where: userScoped({ role: ROLES.TEACHER, isActive: true, isDeleted: false }),
+    }),
+    prisma.group.count({
+      where: { ...branchFilter(), isActive: true, isDeleted: false },
+    }),
     // GroupMembership'da branchId yo'q - guruh orqali.
-    GroupMembership.countDocuments({ ...memberScope, joinedAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
-    GroupMembership.countDocuments({ ...memberScope, leftAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
-    Lead.countDocuments({ ...branchFilter(), createdAt: { $gte: start, $lte: end } }),
-    Lead.countDocuments({ ...branchFilter(), status: { $in: ["new", "info_given", "trial"] } }),
+    prisma.groupMembership.count({
+      where: { ...memberScope, joinedAt: { gte: start, lte: end }, isDeleted: false },
+    }),
+    prisma.groupMembership.count({
+      where: { ...memberScope, leftAt: { gte: start, lte: end }, isDeleted: false },
+    }),
+    prisma.lead.count({
+      where: { ...branchFilter(), createdAt: { gte: start, lte: end } },
+    }),
+    prisma.lead.count({
+      where: { ...branchFilter(), status: { in: ["new", "info_given", "trial"] } },
+    }),
     computeRevenue(start, end),
     computeRevenue(prev.start, prev.end),
     computeAttendanceGauge(),
@@ -250,7 +263,11 @@ export const getOverview = async ({ year, month } = {}) => {
   // O'zgarish foizi (o'tgan oyga nisbatan kirim)
   const revenueDelta =
     revenueLastMonth.total > 0
-      ? Math.round(((revenueThisMonth.total - revenueLastMonth.total) / revenueLastMonth.total) * 100)
+      ? Math.round(
+          ((revenueThisMonth.total - revenueLastMonth.total) /
+            revenueLastMonth.total) *
+            100,
+        )
       : null;
 
   return {
@@ -280,13 +297,17 @@ export const getStudentFlow = async ({ months = 6 } = {}) => {
   const periods = previousMonths(months);
   // FILIAL: a'zoliklar guruh orqali (GroupMembership'da branchId yo'q).
   // Bir marta hisoblab, sikl ichida qayta ishlatamiz.
-  const flowScope = await branchGroupFilter();
+  const flowScope = await branchGroupFilter("groupId");
   const result = [];
   for (const p of periods) {
     const { start, end } = monthRange(p.year, p.month);
     const [joined, left] = await Promise.all([
-      GroupMembership.countDocuments({ ...flowScope, joinedAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
-      GroupMembership.countDocuments({ ...flowScope, leftAt: { $gte: start, $lte: end }, isDeleted: { $ne: true } }),
+      prisma.groupMembership.count({
+        where: { ...flowScope, joinedAt: { gte: start, lte: end }, isDeleted: false },
+      }),
+      prisma.groupMembership.count({
+        where: { ...flowScope, leftAt: { gte: start, lte: end }, isDeleted: false },
+      }),
     ]);
     result.push({ year: p.year, month: p.month, joined, left, netGrowth: joined - left });
   }
@@ -302,42 +323,40 @@ export const getStudentFlow = async ({ months = 6 } = {}) => {
 // MUHIM: ilgari chiqim FAQAT maoshdan iborat edi - grafik markazning haqiqiy
 // xarajatini ko'rsatmasdi va foyda doim yuqori ko'rinardi.
 //
-// Sana maydoni modelga qarab farq qiladi (paidAt / spentAt), shuning uchun
-// u parametr sifatida uzatiladi.
-const sumByDay = async (Model, start, end, dateField = "paidAt") => {
-  const rows = await Model.aggregate([
-    // FILIAL: PaymentTransaction/SalaryTransaction/Expense'da branchId bor.
-    ...branchMatchStage(),
-    { $match: { [dateField]: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
-    {
-      $group: {
-        _id: {
-          $dateToString: { format: "%Y-%m-%d", date: `$${dateField}`, timezone: "UTC" },
-        },
-        total: { $sum: "$amount" },
-      },
+// Sana maydoni modelga qarab farq qiladi (paidAt / spentAt).
+
+// Mongo'da bu `$dateToString` / `$month` bilan bazada guruhlanardi.
+// Prisma'da sana bo'yicha guruhlash yo'q, XOM SQL esa filial shartini
+// ikkinchi marta (SQL'da) yozishni talab qilardi - ya'ni ko'lam qoidasi
+// ikki joyda bo'lib qolardi. Shuning uchun faqat KERAKLI ikki ustun
+// o'qiladi (sana + summa) va bucket JS'da yig'iladi.
+const sumBuckets = async (delegate, start, end, dateField, keyOf) => {
+  const rows = await delegate.findMany({
+    where: {
+      // FILIAL: PaymentTransaction/SalaryTransaction/Expense'da branchId bor.
+      ...branchFilter(),
+      [dateField]: { gte: start, lte: end },
+      isDeleted: false,
     },
-  ]);
+    select: { [dateField]: true, amount: true },
+  });
+
   const map = new Map();
-  for (const r of rows) map.set(r._id, r.total);
+  for (const r of rows) {
+    const k = keyOf(new Date(r[dateField]));
+    map.set(k, (map.get(k) || 0) + (r.amount || 0));
+  }
   return map;
 };
 
-const sumByMonth = async (Model, start, end, dateField = "paidAt") => {
-  const rows = await Model.aggregate([
-    ...branchMatchStage(),
-    { $match: { [dateField]: { $gte: start, $lte: end }, isDeleted: { $ne: true } } },
-    {
-      $group: {
-        _id: { $month: { date: `$${dateField}`, timezone: "UTC" } },
-        total: { $sum: "$amount" },
-      },
-    },
-  ]);
-  const map = new Map();
-  for (const r of rows) map.set(r._id, r.total);
-  return map;
-};
+const dayKey = (d) => d.toISOString().slice(0, 10);
+const monthKey = (d) => d.getUTCMonth() + 1;
+
+const sumByDay = (delegate, start, end, dateField = "paidAt") =>
+  sumBuckets(delegate, start, end, dateField, dayKey);
+
+const sumByMonth = (delegate, start, end, dateField = "paidAt") =>
+  sumBuckets(delegate, start, end, dateField, monthKey);
 
 // Ikki bucket xaritasini qo'shadi (maosh + umumiy chiqim bitta "chiqim" ustuni).
 const mergeSums = (a, b) => {
@@ -347,7 +366,10 @@ const mergeSums = (a, b) => {
 };
 
 const DAY_SHORT = ["Yak", "Du", "Se", "Ch", "Pa", "Ju", "Sh"];
-const MONTH_SHORT = ["Yan", "Fev", "Mar", "Apr", "May", "Iyn", "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek"];
+const MONTH_SHORT = [
+  "Yan", "Fev", "Mar", "Apr", "May", "Iyn",
+  "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek",
+];
 
 export const getCashflow = async ({ range = "month" } = {}) => {
   const now = new Date();
@@ -357,9 +379,9 @@ export const getCashflow = async ({ range = "month" } = {}) => {
     const start = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
     const end = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
     const [income, salaryExpense, opexExpense] = await Promise.all([
-      sumByMonth(PaymentTransaction, start, end),
-      sumByMonth(SalaryTransaction, start, end),
-      sumByMonth(Expense, start, end, "spentAt"),
+      sumByMonth(prisma.paymentTransaction, start, end),
+      sumByMonth(prisma.salaryTransaction, start, end),
+      sumByMonth(prisma.expense, start, end, "spentAt"),
     ]);
     const expense = mergeSums(salaryExpense, opexExpense);
     const buckets = [];
@@ -380,7 +402,9 @@ export const getCashflow = async ({ range = "month" } = {}) => {
     // Joriy hafta (Dushanba -> Yakshanba)
     const dow = now.getUTCDay() || 7; // Yak=7
     start = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate() - (dow - 1), 0, 0, 0, 0));
-    end = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate() - (dow - 1) + 6, 23, 59, 59, 999));
+    end = new Date(
+      Date.UTC(y, now.getUTCMonth(), now.getUTCDate() - (dow - 1) + 6, 23, 59, 59, 999),
+    );
   } else {
     // Joriy oy
     start = new Date(Date.UTC(y, now.getUTCMonth(), 1, 0, 0, 0, 0));
@@ -388,20 +412,18 @@ export const getCashflow = async ({ range = "month" } = {}) => {
   }
 
   const [income, salaryExpense, opexExpense] = await Promise.all([
-    sumByDay(PaymentTransaction, start, end),
-    sumByDay(SalaryTransaction, start, end),
-    sumByDay(Expense, start, end, "spentAt"),
+    sumByDay(prisma.paymentTransaction, start, end),
+    sumByDay(prisma.salaryTransaction, start, end),
+    sumByDay(prisma.expense, start, end, "spentAt"),
   ]);
   const expense = mergeSums(salaryExpense, opexExpense);
 
   const buckets = [];
   const cursor = new Date(start);
   while (cursor <= end) {
-    const key = cursor.toISOString().slice(0, 10);
+    const key = dayKey(cursor);
     const label =
-      range === "week"
-        ? DAY_SHORT[cursor.getUTCDay()]
-        : String(cursor.getUTCDate());
+      range === "week" ? DAY_SHORT[cursor.getUTCDay()] : String(cursor.getUTCDate());
     buckets.push({
       label,
       income: income.get(key) || 0,

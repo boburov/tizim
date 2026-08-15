@@ -4,18 +4,19 @@
 #
 #   npm run db:reset                  # so'raydi, keyin tozalaydi va owner yaratadi
 #   npm run db:reset -- -y            # so'ramaydi (CI uchun)
-#   npm run db:reset -- --drop        # kolleksiyalarni butunlay drop qiladi
-#   npm run db:reset -- --keep-auth   # ruxsat/rol/owner saqlanadi
-#   npm run db:reset -- --force-remote   # masofaviy bazaga ham ruxsat
+#
+# DIQQAT: PostgreSQL'ga o'tgandan keyin bu skript BUTUN schema'ni qayta
+# quradi (`prisma migrate reset`). Eski `--drop` / `--keep-auth` bayroqlari
+# endi QO'LLANMAYDI - Mongo kolleksiyalarini tanlab tozalash mantig'i
+# jadval va tashqi kalit (FK) bog'lanishlariga to'g'ri kelmaydi.
 #
 # NEGA SHELL, npm script EMAS: `npm run x -- --db=nom` argumentni zanjirdagi
 # OXIRGI buyruqqa qo'shadi, ya'ni tasdiq bayrog'i tozalash script'iga emas,
 # owner seed'ga tushib ketardi. Bu yerda esa baza nomi .env dan O'QILADI va
 # tozalash script'iga aniq uzatiladi.
 #
-# XAVFSIZLIK: baza nomi bu yerda faqat TAKLIF qilinadi - haqiqiy to'siq
-# cleanDatabase.seed.js ichida. U ulangan bazaning nomi bilan solishtiradi
-# va mos kelmasa hech narsaga tegmaydi.
+# XAVFSIZLIK: foydalanuvchi baza nomini QO'LDA yozib tasdiqlaydi (pastda),
+# shundan keyingina tozalash boshlanadi.
 
 set -euo pipefail
 
@@ -34,28 +35,29 @@ for arg in "$@"; do
 done
 
 # --- Baza nomini aniqlash ---
-# Muhitdagi MONGO_URL ustun (masalan: MONGO_URL=... npm run db:reset).
-if [ -z "${MONGO_URL:-}" ] && [ -f .env ]; then
-  MONGO_URL=$(grep -E '^[[:space:]]*MONGO_URL=' .env | head -1 | cut -d '=' -f2- | tr -d '"'\''\r' | xargs)
+# Muhitdagi DATABASE_URL ustun (masalan: DATABASE_URL=... npm run db:reset).
+if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
+  DATABASE_URL=$(grep -E '^[[:space:]]*DATABASE_URL=' .env | head -1 | cut -d '=' -f2- | tr -d '"'\''\r' | xargs)
 fi
 
-if [ -z "${MONGO_URL:-}" ]; then
-  echo "XATO: MONGO_URL topilmadi (.env da ham, muhitda ham)." >&2
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo "XATO: DATABASE_URL topilmadi (.env da ham, muhitda ham)." >&2
   exit 1
 fi
 
-DB_NAME="${MONGO_URL##*/}"   # oxirgi "/" dan keyingi qism
-DB_NAME="${DB_NAME%%\?*}"    # "?" dan oldingi qism (query parametrlarsiz)
+DB_NAME="${DATABASE_URL##*/}"   # oxirgi "/" dan keyingi qism
+DB_NAME="${DB_NAME%%\?*}"       # "?schema=public" kabi parametrlarsiz
 
 if [ -z "$DB_NAME" ]; then
-  echo "XATO: MONGO_URL ichida baza nomi ko'rsatilmagan." >&2
+  echo "XATO: DATABASE_URL ichida baza nomi ko'rsatilmagan." >&2
   exit 1
 fi
 
 # --- 1-qadam: nima o'chishini ko'rsatish (hech narsa o'chmaydi) ---
 echo ""
 echo "══════ 1/3  Hisobot ══════"
-node src/seeds/cleanDatabase.seed.js --no-hints ${CLEAN_ARGS+"${CLEAN_ARGS[@]}"}
+echo "  Baza:  ${DB_NAME}"
+echo "  Amal:  schema butunlay qayta quriladi (barcha jadvallar bo'shaydi)"
 
 # --- 2-qadam: tasdiq ---
 if [ "$SKIP_PROMPT" -eq 0 ]; then
@@ -78,8 +80,12 @@ if [ "$SKIP_PROMPT" -eq 0 ]; then
 fi
 
 # --- 3-qadam: tozalash + owner ---
+# PostgreSQL'da tozalash `prisma migrate reset` bilan: u schema'ni butunlay
+# qayta quradi va BARCHA migratsiyalarni qaytadan qo'llaydi. Ya'ni
+# `gen_object_id()` funksiyasi va 35 ta qisman unique indeks ham tiklanadi -
+# ularni qo'lda yaratish shart emas (unutib qo'yish xavfi yo'q).
 echo "══════ 3/3  Tozalash ══════"
-node src/seeds/cleanDatabase.seed.js --no-hints --yes --db="$DB_NAME" ${CLEAN_ARGS+"${CLEAN_ARGS[@]}"}
+npx prisma migrate reset --force --skip-seed --skip-generate
 
 # RUXSAT/ROL SEED - MAJBURIY QADAM.
 #

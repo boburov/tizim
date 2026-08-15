@@ -7,7 +7,7 @@
 #   TENANT_DB_NAME, TENANT_DOMAIN, TENANT_PM2_NAME
 #
 # Global sozlamalar (provision.sh bilan bir xil bo'lishi SHART):
-#   MONGO_BASE_URL, TENANTS_ROOT, WEB_ROOT_BASE, NGINX_SITES, NGINX_ENABLED
+#   POSTGRES_BASE_URL, TENANTS_ROOT, WEB_ROOT_BASE, NGINX_SITES, NGINX_ENABLED
 #
 # MUHIM: bu skript `set -e` ISHLATMAYDI. Sabab — o'chirishda ba'zi resurslar
 # allaqachon yo'q bo'lishi mumkin (masalan certbot sertifikat olinmagan bo'lsa).
@@ -16,7 +16,8 @@
 
 set -uo pipefail
 
-MONGO_BASE_URL="${MONGO_BASE_URL:-mongodb://127.0.0.1:27017}"
+PG_BASE_URL="${POSTGRES_BASE_URL:-postgresql://postgres:postgres@127.0.0.1:5432}"
+PG_ADMIN_DB="${POSTGRES_ADMIN_DB:-postgres}"
 TENANTS_ROOT="${TENANTS_ROOT:-/root/tenants}"
 WEB_ROOT_BASE="${WEB_ROOT_BASE:-/var/www}"
 NGINX_SITES="${NGINX_SITES:-/etc/nginx/sites-available}"
@@ -62,27 +63,30 @@ else
   echo "    ℹ️  pm2 process topilmadi (allaqachon o'chirilgan bo'lishi mumkin)"
 fi
 
-# --- 2) MongoDB bazasini drop qilish ---
-# Avval mongosh, bo'lmasa eski mongo klientini sinaymiz.
-echo "==> [2/6] MongoDB drop: ${TENANT_DB_NAME}..."
-MONGO_TARGET="${MONGO_BASE_URL}/${TENANT_DB_NAME}"
-if command -v mongosh >/dev/null 2>&1; then
-  if mongosh "$MONGO_TARGET" --quiet --eval 'db.dropDatabase()' >/dev/null 2>&1; then
-    echo "    ✅ baza drop qilindi (mongosh)"
+# --- 2) PostgreSQL bazasini drop qilish ---
+#
+# DIQQAT: bu QAYTARIB BO'LMAYDIGAN amal - tenantning BARCHA ma'lumoti
+# o'chadi. Shuning uchun avval faol ulanishlar uziladi (aks holda
+# DROP DATABASE "database is being accessed by other users" bilan
+# yiqiladi va baza yarim holatda qolib ketardi).
+echo "==> [2/6] PostgreSQL drop: ${TENANT_DB_NAME}..."
+if command -v psql >/dev/null 2>&1; then
+  # Faol ulanishlarni uzamiz (pm2 process allaqachon 1-qadamda to'xtatilgan,
+  # lekin osilib qolgan ulanish bo'lishi mumkin).
+  psql "${PG_BASE_URL}/${PG_ADMIN_DB}" -q -c \
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+      WHERE datname='${TENANT_DB_NAME}' AND pid <> pg_backend_pid()" >/dev/null 2>&1 || true
+
+  if psql "${PG_BASE_URL}/${PG_ADMIN_DB}" -q -c \
+       "DROP DATABASE IF EXISTS \"${TENANT_DB_NAME}\"" >/dev/null 2>&1; then
+    echo "    ✅ baza drop qilindi"
   else
-    echo "    ❌ mongosh bilan drop qilib bo'lmadi"
-    step_failed "MongoDB drop (${TENANT_DB_NAME})"
-  fi
-elif command -v mongo >/dev/null 2>&1; then
-  if mongo "$MONGO_TARGET" --quiet --eval 'db.dropDatabase()' >/dev/null 2>&1; then
-    echo "    ✅ baza drop qilindi (mongo)"
-  else
-    echo "    ❌ mongo bilan drop qilib bo'lmadi"
-    step_failed "MongoDB drop (${TENANT_DB_NAME})"
+    echo "    ❌ bazani drop qilib bo'lmadi"
+    step_failed "PostgreSQL drop (${TENANT_DB_NAME})"
   fi
 else
-  echo "    ❌ mongosh/mongo topilmadi — bazani QO'LDA o'chiring: ${TENANT_DB_NAME}"
-  step_failed "MongoDB klienti yo'q (${TENANT_DB_NAME} qo'lda o'chirilsin)"
+  echo "    ❌ psql topilmadi — bazani QO'LDA o'chiring: ${TENANT_DB_NAME}"
+  step_failed "psql yo'q (${TENANT_DB_NAME} qo'lda o'chirilsin)"
 fi
 
 # --- 3) Nginx vhost o'chirish (symlink + config) ---

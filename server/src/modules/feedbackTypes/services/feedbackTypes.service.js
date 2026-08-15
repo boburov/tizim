@@ -1,7 +1,6 @@
-import FeedbackType from "../../../models/feedbackType.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
-
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+import { withLegacyIds, withLegacyId } from "../../../utils/serialize.js";
 
 export const list = async ({
   search,
@@ -9,58 +8,69 @@ export const list = async ({
   page = 1,
   limit = 50,
 }) => {
-  const filter = {};
-  if (!includeInactive) filter.isActive = true;
+  const where = {};
+  if (!includeInactive) where.isActive = true;
   if (search && search.trim()) {
-    filter.name = { $regex: escapeRegex(search.trim()), $options: "i" };
+    where.name = { contains: search.trim(), mode: "insensitive" };
   }
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    FeedbackType.find(filter).sort({ name: 1 }).skip(skip).limit(limit),
-    FeedbackType.countDocuments(filter),
+    prisma.feedbackType.findMany({
+      where,
+      orderBy: { name: "asc" },
+      skip,
+      take: limit,
+    }),
+    prisma.feedbackType.count({ where }),
   ]);
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 export const getById = async (id) => {
-  const doc = await FeedbackType.findById(id);
+  const doc = await prisma.feedbackType.findUnique({ where: { id } });
   if (!doc) throw new ApiError(404, "Feedback turi topilmadi");
   return doc;
 };
 
 export const create = async ({ name }) => {
   const trimmed = String(name).trim();
-  const exists = await FeedbackType.findOne({ name: trimmed, isActive: true });
+  // DIQQAT: bazada ham qisman unique indeks bor (name WHERE isActive) -
+  // bu tekshiruv faqat chiroyli xato xabari uchun, kafolat bazada.
+  const exists = await prisma.feedbackType.findFirst({
+    where: { name: trimmed, isActive: true },
+  });
   if (exists) throw new ApiError(409, "Bunday tur mavjud");
-  return FeedbackType.create({ name: trimmed });
+  const doc = await prisma.feedbackType.create({ data: { name: trimmed } });
+  return withLegacyId(doc);
 };
 
 export const update = async (id, body) => {
   const doc = await getById(id);
+  const data = {};
 
   if (body.name !== undefined) {
     const trimmed = String(body.name).trim();
     if (!trimmed) throw new ApiError(400, "Nom bo'sh bo'lmasligi kerak");
     if (trimmed !== doc.name) {
-      const conflict = await FeedbackType.findOne({
-        _id: { $ne: doc._id },
-        name: trimmed,
-        isActive: true,
+      const conflict = await prisma.feedbackType.findFirst({
+        where: { id: { not: doc.id }, name: trimmed, isActive: true },
       });
       if (conflict) throw new ApiError(409, "Bunday tur mavjud");
     }
-    doc.name = trimmed;
+    data.name = trimmed;
   }
-  if (body.isActive !== undefined) doc.isActive = !!body.isActive;
+  if (body.isActive !== undefined) data.isActive = !!body.isActive;
 
-  await doc.save();
-  return doc;
+  const updated = await prisma.feedbackType.update({ where: { id }, data });
+  return withLegacyId(updated);
 };
 
 export const softRemove = async (id) => {
-  const doc = await getById(id);
-  doc.isActive = false;
-  await doc.save();
-  return doc;
+  await getById(id);
+  const doc = await prisma.feedbackType.update({
+    where: { id },
+    data: { isActive: false },
+  });
+  return withLegacyId(doc);
 };

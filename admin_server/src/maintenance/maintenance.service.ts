@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
  * tenantlar va 2-darajali admin userlar. SystemTemplate'lar saqlanadi, aks holda
  * tozalashdan keyin yangi loyiha yaratib bo'lmaydi.
  *
- * MUHIM: bu VPS'dagi tenant MongoDB bazalari, PM2 processlari va nginx
+ * MUHIM: bu VPS'dagi tenant PostgreSQL bazalari, PM2 processlari va nginx
  * configlariga tegmaydi — ular yetim (orphan) bo'lib qoladi va kerak bo'lsa
  * qo'lda tozalanadi.
  */
@@ -46,7 +46,7 @@ export class MaintenanceService {
       ok: true,
       deleted: { tenants: tenants.count, adminUsers: adminUsers.count },
       note:
-        "Tenantlarning MongoDB bazalari, PM2 processlari va nginx configlari " +
+        "Tenantlarning PostgreSQL bazalari, PM2 processlari va nginx configlari " +
         "VPS'da saqlanib qoldi — kerak bo'lsa qo'lda tozalang.",
     };
   }

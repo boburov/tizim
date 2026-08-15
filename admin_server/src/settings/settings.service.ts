@@ -68,7 +68,10 @@ export class SettingsService {
    * butunlay ishdan chiqaradi, to'g'ri qiymat esa allaqachon yozuvda bor.
    */
   private buildManagedValues(tenant: Tenant): ResolvedConfig {
-    const mongoBase = process.env.MONGO_BASE_URL || 'mongodb://127.0.0.1:27017';
+    // Tenant bazasi endi PostgreSQL (Prisma). Har tenantga ALOHIDA baza
+    // ochiladi - nomi `tenant.dbName`, ya'ni izolyatsiya avvalgidek qat'iy.
+    const pgBase =
+      process.env.POSTGRES_BASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432';
     const clientUrl = `https://${tenant.domain}`;
 
     const server: Record<string, string> = {
@@ -79,7 +82,7 @@ export class SettingsService {
       // qiymatni oladi, shuning uchun panelda nomni o'zgartirish ikkala
       // tomonni birdan yangilaydi.
       APP_NAME: tenant.name,
-      MONGO_URL: `${mongoBase}/${tenant.dbName}`,
+      DATABASE_URL: `${pgBase}/${tenant.dbName}?schema=public`,
       COOKIE_DOMAIN: tenant.domain,
       CLIENT_URL: clientUrl,
       ADMIN_API_URL: process.env.ADMIN_API_PUBLIC_URL || '',
@@ -294,7 +297,7 @@ export class SettingsService {
       // Boshqariladigan qiymatlar — faqat ko'rish uchun
       managed: {
         PORT: String(tenant.port),
-        MONGO_URL: `…/${tenant.dbName}`,
+        DATABASE_URL: `…/${tenant.dbName}?schema=public`,
         CLIENT_URL: `https://${tenant.domain}`,
         TENANT_ID: tenant.id,
       },

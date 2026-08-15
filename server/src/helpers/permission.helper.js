@@ -1,4 +1,4 @@
-import Role from "../models/role.model.js";
+import prisma from "../config/prisma.js";
 import { ROLES, ROLE_TYPES, DEFAULT_ROLE_PATH } from "../constants/roles.js";
 
 // Rol -> {permissions, isFrozen, roleType, ...} in-memory cache.
@@ -18,7 +18,12 @@ export const resolveRole = async (value) => {
   const cached = roleCache.get(value);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
 
-  const doc = await Role.findOne({ value }).populate("permissions").lean();
+  // Mongo: Role.findOne({ value }).populate("permissions").lean()
+  // Prisma: `include` populate'ning o'rnini bosadi va bitta JOIN qiladi.
+  const doc = await prisma.role.findUnique({
+    where: { value },
+    include: { permissions: { select: { key: true } } },
+  });
 
   // Owner ["*"] bypass SAQLANADI: DB buzilsa yoki owner o'z ruxsatini
   // yo'qotsa ham tizimga kira olishi kerak (lockout'dan himoya).

@@ -1,12 +1,11 @@
 import app from "./app.js";
 import env from "./config/env.js";
 import logger from "./config/logger.js";
-import { connectDB, disconnectDB } from "./config/db.js";
+import prisma, { connectDB, disconnectDB } from "./config/prisma.js";
 import { startJobs, stopJobs } from "./jobs/index.js";
 import { startBot, stopBot } from "./bot/index.js";
 import { startImportWorker, stopImportWorker } from "./queues/importQueue.js";
 import { closeRedis } from "./config/redis.js";
-import Branch from "./models/branch.model.js";
 import { ensureMainBranch } from "./helpers/branchAccess.helper.js";
 import { reconcile as reconcileStorage } from "./modules/storage/services/storage.service.js";
 
@@ -20,9 +19,10 @@ import { reconcile as reconcileStorage } from "./modules/storage/services/storag
 const warnBranchModeMismatch = async () => {
   if (env.MULTI_BRANCH) return;
 
-  const branches = await Branch.find({ isDeleted: false, isActive: true })
-    .select("name isMain")
-    .lean();
+  const branches = await prisma.branch.findMany({
+    where: { isDeleted: false, isActive: true },
+    select: { name: true, isMain: true },
+  });
 
   if (!branches.length) return;
 

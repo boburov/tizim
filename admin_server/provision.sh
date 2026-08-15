@@ -174,6 +174,34 @@ cd "$APP_DIR/server"
 npm ci --omit=dev 2>/dev/null || npm install --omit=dev
 
 # ---------------------------------------------------------------------------
+# 4b) PostgreSQL bazasi + Prisma migratsiyalari
+#
+# Har tenant O'Z bazasida ishlaydi (izolyatsiya avvalgi Mongo modeli bilan
+# bir xil). Baza YO'Q bo'lsa yaratiladi - `createdb` allaqachon bor bazada
+# xato beradi, shuning uchun oldindan tekshiramiz (skript qayta ishga
+# tushirilsa ham xavfsiz bo'lishi kerak).
+#
+# MIGRATSIYA `migrate deploy` bilan: u faqat TAYYOR migratsiyalarni
+# qo'llaydi va hech qachon schema'ni o'zgartirmaydi yoki ma'lumot
+# o'chirmaydi (`migrate dev` dan farqi shu - u prod'da ISHLATILMAYDI).
+# ---------------------------------------------------------------------------
+PG_BASE_URL="${POSTGRES_BASE_URL:-postgresql://postgres:postgres@127.0.0.1:5432}"
+PG_ADMIN_DB="${POSTGRES_ADMIN_DB:-postgres}"
+
+echo "==> PostgreSQL bazasi: ${TENANT_DB_NAME}"
+if psql "${PG_BASE_URL}/${PG_ADMIN_DB}" -tAc \
+     "SELECT 1 FROM pg_database WHERE datname='${TENANT_DB_NAME}'" | grep -q 1; then
+  echo "    ℹ️  baza allaqachon mavjud"
+else
+  psql "${PG_BASE_URL}/${PG_ADMIN_DB}" -c "CREATE DATABASE \"${TENANT_DB_NAME}\"" >/dev/null
+  echo "    ✅ baza yaratildi"
+fi
+
+echo "==> Prisma migratsiyalari..."
+npx prisma migrate deploy
+npx prisma generate
+
+# ---------------------------------------------------------------------------
 # 5) Client build
 # ---------------------------------------------------------------------------
 echo "==> client: npm ci + build..."

@@ -5,7 +5,8 @@ import Approval, {
   EXPENSE_KINDS,
   resolveCategory,
 } from "../../../models/approval.model.js";
-import Branch from "../../../models/branch.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
@@ -61,7 +62,10 @@ export const checkExpenseLimit = async ({ branchId, amount, permissions }) => {
   }
   if (!branchId) return { needsApproval: false, threshold: null };
 
-  const branch = await Branch.findById(branchId).select("expenseApprovalThreshold").lean();
+  const branch = await prisma.branch.findUnique({
+    where: { id: String(branchId) },
+    select: { expenseApprovalThreshold: true },
+  });
   const threshold = branch?.expenseApprovalThreshold;
 
   // null / 0 / manfiy => limit yo'q
@@ -163,7 +167,10 @@ export const checkConfigApproval = async ({
     return { needsApproval: true, mode: FALLBACK_DELEGATION_MODE };
   }
 
-  const branch = await Branch.findById(activeBranchId).select("delegation").lean();
+  const branch = await prisma.branch.findUnique({
+    where: { id: String(activeBranchId) },
+    select: { delegation: true },
+  });
   const rule = resolveRule(branch?.delegation, kind);
 
   switch (rule.mode) {
@@ -274,8 +281,8 @@ const categoryCondition = (permissions, userId) => {
     .map(([category]) => category);
 
   if (cats.length === Object.keys(READ_PERMISSION).length) return {};
-  if (cats.length === 0) return { requestedBy: userId };
-  return { $or: [{ category: { $in: cats } }, { requestedBy: userId }] };
+  if (cats.length === 0) return { requestedById: userId };
+  return { OR: [{ category: { in: cats } }, { requestedById: userId }] };
 };
 
 // Regexp uchun foydalanuvchi matnini zararsizlantirish.
@@ -300,44 +307,62 @@ const buildListFilter = ({
 }) => {
   const filter = {
     ...branchFilter(),
-    ...categoryCondition(permissions, currentUser?._id),
+    ...categoryCondition(permissions, currentUser?.id || currentUser?._id),
   };
   if (status) filter.status = status;
   if (kind) filter.kind = kind;
   if (category) filter.category = category;
-  if (requestedBy) filter.requestedBy = requestedBy;
+  if (requestedBy) filter.requestedById = requestedBy;
 
   if (dateFrom || dateTo) {
     filter.createdAt = {};
-    if (dateFrom) filter.createdAt.$gte = dateFrom;
+    if (dateFrom) filter.createdAt.gte = dateFrom;
     // `dateTo` KUN OXIRIGACHA: foydalanuvchi "31-dekabrgacha" deganda
     // o'sha kunning o'zi ham kirishini kutadi, 00:00 ni emas.
     if (dateTo) {
       const end = new Date(dateTo);
       end.setHours(23, 59, 59, 999);
-      filter.createdAt.$lte = end;
+      filter.createdAt.lte = end;
     }
   }
 
   if (search) {
-    const rx = new RegExp(escapeRegex(search), "i");
+    // Mongo RegExp o'rniga Prisma `contains` + `insensitive`.
+    // Qo'shimcha yutuq: foydalanuvchi matnini regexp'dan qochirish
+    // (escapeRegex) endi umuman kerak emas - SQL parametri sifatida
+    // uzatiladi, ya'ni "(" kabi belgi so'rovni yiqita olmaydi.
+    const q = { contains: search, mode: "insensitive" };
     const searchOr = [
-      { subjectName: rx },
-      { contextName: rx },
-      { requestNote: rx },
+      { subjectName: q },
+      { contextName: q },
+      { requestNote: q },
     ];
-    // DIQQAT: categoryCondition ham $or ishlatishi mumkin. Ikkinchi $or uni
+    // DIQQAT: categoryCondition ham OR ishlatishi mumkin. Ikkinchi OR uni
     // jimgina yozib yuborardi va foydalanuvchi ko'rmasligi kerak bo'lgan
-    // kategoriyani ham qidiruv orqali ochib berardi. Shuning uchun $and.
-    if (filter.$or) {
-      filter.$and = [{ $or: filter.$or }, { $or: searchOr }];
-      delete filter.$or;
+    // kategoriyani ham qidiruv orqali ochib berardi. Shuning uchun AND.
+    if (filter.OR) {
+      filter.AND = [{ OR: filter.OR }, { OR: searchOr }];
+      delete filter.OR;
     } else {
-      filter.$or = searchOr;
+      filter.OR = searchOr;
     }
   }
 
   return filter;
+};
+
+// SORT_OPTIONS validatorda Mongo shaklida ({createdAt: -1}). Prisma
+// `"desc"/"asc"` kutadi - shu yerda o'giramiz (validator o'zgarmaydi,
+// u klient shartnomasining bir qismi).
+const toOrderBy = (mongoSort) =>
+  Object.entries(mongoSort).map(([field, dir]) => ({
+    [field]: dir === -1 ? "desc" : "asc",
+  }));
+
+const LIST_INCLUDE = {
+  requestedBy: { select: { id: true, firstName: true, lastName: true, username: true } },
+  decidedBy: { select: { id: true, firstName: true, lastName: true, username: true } },
+  branch: { select: { id: true, name: true, code: true } },
 };
 
 export const list = async ({
@@ -368,17 +393,16 @@ export const list = async ({
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Approval.find(filter)
-      .sort(SORT_OPTIONS[sort] || SORT_OPTIONS["-createdAt"])
-      .skip(skip)
-      .limit(limit)
-      .populate("requestedBy", { firstName: 1, lastName: 1, username: 1 })
-      .populate("decidedBy", { firstName: 1, lastName: 1, username: 1 })
-      .populate("branchId", { name: 1, code: 1 })
-      .lean(),
-    Approval.countDocuments(filter),
+    prisma.approval.findMany({
+      where: filter,
+      orderBy: toOrderBy(SORT_OPTIONS[sort] || SORT_OPTIONS["-createdAt"]),
+      skip,
+      take: limit,
+      include: LIST_INCLUDE,
+    }),
+    prisma.approval.count({ where: filter }),
   ]);
-  return { items: items.map(stripSensitive), total, page, limit };
+  return { items: items.map((i) => stripSensitive(withLegacyId(i))), total, page, limit };
 };
 
 /**
@@ -392,65 +416,64 @@ export const list = async ({
 export const stats = async ({ permissions, currentUser }) => {
   const base = buildListFilter({ permissions, currentUser });
 
-  const [row] = await Approval.aggregate([
-    { $match: base },
-    {
-      $group: {
-        _id: null,
-        pending: {
-          $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] },
-        },
-        pendingAmount: {
-          $sum: {
-            $cond: [
-              {
-                $and: [
-                  { $eq: ["$status", "pending"] },
-                  { $eq: ["$category", "financial"] },
-                ],
-              },
-              { $ifNull: ["$amount", 0] },
-              0,
-            ],
-          },
-        },
-        failed: {
-          $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] },
-        },
+  // Mongo'da bu bitta `$group` + shartli `$sum` edi. Prisma'da shartli
+  // yig'indi yo'q, shuning uchun uch mustaqil so'rov - ular PARALLEL
+  // ketadi va har biri indeksdan foydalanadi, ya'ni bitta to'liq
+  // skanerdan qimmat emas.
+  const [pending, failed, amountAgg] = await Promise.all([
+    prisma.approval.count({
+      where: { ...base, status: APPROVAL_STATUSES.PENDING },
+    }),
+    prisma.approval.count({
+      where: { ...base, status: APPROVAL_STATUSES.FAILED },
+    }),
+    // `pendingAmount` FAQAT `financial` - sozlama so'rovlarida `amount`
+    // null va ular "kutilayotgan chiqim"ga qo'shilsa hisobot yolg'on
+    // ko'rsatardi.
+    prisma.approval.aggregate({
+      where: {
+        ...base,
+        status: APPROVAL_STATUSES.PENDING,
+        category: APPROVAL_CATEGORIES.FINANCIAL,
       },
-    },
+      _sum: { amount: true },
+    }),
   ]);
 
   return {
-    pending: row?.pending || 0,
-    pendingAmount: row?.pendingAmount || 0,
-    failed: row?.failed || 0,
+    pending,
+    pendingAmount: amountAgg._sum.amount || 0,
+    failed,
   };
 };
 
 export const getById = async (id, { permissions, currentUser } = {}) => {
-  const doc = await Approval.findById(id)
-    .populate("requestedBy", { firstName: 1, lastName: 1, username: 1 })
-    .populate("decidedBy", { firstName: 1, lastName: 1, username: 1 })
-    .populate("branchId", { name: 1, code: 1 });
+  const doc = await prisma.approval.findUnique({
+    where: { id },
+    include: LIST_INCLUDE,
+  });
   if (!doc) throw new ApiError(404, "So'rov topilmadi");
 
   // Kategoriya ko'lami: moliya so'rovini faqat moliyani ko'ra oladigan,
   // sozlama so'rovini faqat sozlamani tasdiqlay oladigan (yoki so'rovchining
   // o'zi) ko'radi.
   const canRead = hasPermission(permissions, READ_PERMISSION[doc.category]);
-  const isOwnRequest = String(doc.requestedBy?._id || doc.requestedBy) === String(currentUser?._id);
+  const isOwnRequest =
+    String(doc.requestedBy?.id || doc.requestedById) ===
+    String(currentUser?.id || currentUser?._id);
   if (!canRead && !isOwnRequest) throw new ApiError(403, "Ruxsat etilmagan");
 
-  return stripSensitive(doc);
+  return stripSensitive(withLegacyId(doc));
 };
 
 /** Kutilayotgan so'rovlar soni - sidebar belgisi uchun. */
 export const pendingCount = async ({ permissions, currentUser } = {}) =>
-  Approval.countDocuments({
-    ...branchFilter(),
-    ...categoryCondition(permissions, currentUser?._id),
-    status: APPROVAL_STATUSES.PENDING,
+  prisma.approval.count({
+    where: {
+      ...branchFilter(),
+      ...categoryCondition(permissions, currentUser?.id || currentUser?._id),
+      status: APPROVAL_STATUSES.PENDING,
+    },
   });
 
 // ============================================================

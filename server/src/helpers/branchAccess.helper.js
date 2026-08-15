@@ -1,4 +1,4 @@
-import Branch from "../models/branch.model.js";
+import prisma from "../config/prisma.js";
 import ApiError from "../utils/ApiError.js";
 import { PERMISSIONS } from "../constants/permissions.js";
 import { hasPermission } from "./permission.helper.js";
@@ -33,25 +33,28 @@ export const resolveMainBranchId = async () => {
   if (mainBranchIdCache !== undefined) return mainBranchIdCache;
 
   const main =
-    (await Branch.findOne({ isMain: true, isDeleted: false })
-      .select("_id")
-      .sort({ createdAt: 1 })
-      .lean()) ||
-    (await Branch.findOne({ isDeleted: false })
-      .select("_id")
-      .sort({ createdAt: 1 })
-      .lean());
+    (await prisma.branch.findFirst({
+      where: { isMain: true, isDeleted: false },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+    })) ||
+    (await prisma.branch.findFirst({
+      where: { isDeleted: false },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+    }));
 
-  mainBranchIdCache = main ? String(main._id) : null;
+  mainBranchIdCache = main ? String(main.id) : null;
   return mainBranchIdCache;
 };
 
 // Mavjud filiallardan "asosiysi" (asosiy bo'lmasa - eng eskisi).
 const findAnyBranch = () =>
-  Branch.findOne({ isDeleted: false })
-    .select("_id name isMain isActive")
-    .sort({ isMain: -1, createdAt: 1 })
-    .lean();
+  prisma.branch.findFirst({
+    where: { isDeleted: false },
+    select: { id: true, name: true, isMain: true, isActive: true },
+    orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
+  });
 
 /**
  * INVARIANT: markazda KAMIDA BITTA filial BO'LADI.
@@ -80,22 +83,25 @@ export const ensureMainBranch = async () => {
   if (existing) return existing;
 
   try {
-    const branch = await Branch.create({
-      name: "Asosiy filial",
-      code: "MAIN",
-      isMain: true,
-      isActive: true,
+    const branch = await prisma.branch.create({
+      data: {
+        name: "Asosiy filial",
+        code: "MAIN",
+        isMain: true,
+        isActive: true,
+      },
     });
     // Kesh `undefined` bo'lmasligi mumkin (bu chaqiruvdan oldin kimdir
     // resolveMainBranchId() qilgan bo'lsa u yerda `null` yozilib qolgan).
     clearMainBranchCache();
-    logger.info({ branchId: String(branch._id) }, "Asosiy filial avtomatik yaratildi");
-    return branch.toObject();
+    logger.info({ branchId: String(branch.id) }, "Asosiy filial avtomatik yaratildi");
+    return branch;
   } catch (err) {
     // POYGA: ikkita so'rov (yoki instans) bir vaqtda ulgursa, `isMain`
     // unique partial indeksi ikkinchisini rad etadi. Bu xato EMAS -
     // filial baribir bor, o'shani qaytaramiz.
-    if (err?.code !== 11000) throw err;
+    // Mongo'da bu `11000` edi, Prisma'da unique buzilishi - `P2002`.
+    if (err?.code !== "P2002") throw err;
     clearMainBranchCache();
     return findAnyBranch();
   }
@@ -108,8 +114,11 @@ export const ensureMainBranch = async () => {
 export const resolveAllowedBranchIds = async (user, permissions) => {
   // Owner ["*"] yoki aniq view_all ruxsati - hamma filial.
   if (hasPermission(permissions, PERMISSIONS.BRANCHES_VIEW_ALL)) {
-    const all = await Branch.find({ isDeleted: false }).select("_id").lean();
-    return all.map((b) => String(b._id));
+    const all = await prisma.branch.findMany({
+      where: { isDeleted: false },
+      select: { id: true },
+    });
+    return all.map((b) => String(b.id));
   }
 
   const ids = new Set();

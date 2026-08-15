@@ -1,7 +1,7 @@
 # Super Admin Panel — Provisioning tizimi
 
 Bu panel yangi loyihalarni (o'quv markazlar va keyinchalik boshqa tizimlar) yaratadi.
-Har yangi loyiha uchun `client` + `server` nusxalanadi, **noyob MongoDB bazasi** bilan
+Har yangi loyiha uchun `client` + `server` nusxalanadi, **noyob PostgreSQL bazasi** bilan
 alohida PM2 process, Nginx vhost va HTTPS sertifikati sozlanadi, kod **alohida GitHub
 repositoriyasiga** yuboriladi. Oxirida DNS uchun IP beriladi.
 
@@ -13,7 +13,7 @@ admin_server (NestJS + Prisma + PostgreSQL)   ← provisioning metadata (tenant,
      │  provision.sh / reconfigure.sh chaqiradi (VPS'da)
      ▼
 /root/tenants/<dbName>/{server,client}         ← har tenant alohida nusxa
-     ├─ server .env → MONGO_URL=.../<dbName>    ← NOYOB baza nomi
+     ├─ server .env → DATABASE_URL=.../<dbName>  ← NOYOB baza nomi
      ├─ client .env → brend ranglari (HSL)
      ├─ pm2 start <dbName>-api  (alohida port)
      ├─ nginx vhost + certbot → https://<domain>
@@ -23,7 +23,8 @@ admin_client (React + Tailwind)                ← super admin UI
 ```
 
 - **admin_server** — Node/NestJS emas, TypeScript. PostgreSQL faqat panel metadatasi uchun.
-- Har **tenant server** esa mavjud loyihadagidek MongoDB (mongoose) da ishlaydi.
+- Har **tenant server** esa PostgreSQL (Prisma) da ishlaydi — admin bazasi bilan
+  bir xil texnologiya, lekin **alohida baza** (izolyatsiya qat'iy qoladi).
 - **DB nomi hech qachon takrorlanmaydi**: `tenant_<slug>_<8-hex-random>`, DB'da unique tekshiriladi.
 
 ## Uchta asosiy imkoniyat
@@ -173,7 +174,8 @@ Skriptlar VPS'da ishlaydi va quyidagilarni talab qiladi:
 
 - **Template papka**: `/root/templates/study-center/{server,client}` — mavjud loyiha nusxasi
   (bu repodagi `server/` va `client/`). `admin_server` `SystemTemplate.templateDir` shu yerga ishora qiladi.
-- `node`, `npm`, `pm2`, `nginx`, `certbot`, `mongod`, `openssl`, **`git`** o'rnatilgan.
+- `node`, `npm`, `pm2`, `nginx`, `certbot`, `postgresql` (`psql` + `createdb`),
+  `openssl`, **`git`** o'rnatilgan.
 - `admin_server` `.env` da global sozlamalar (skriptlar o'qiydi):
 
 ```bash
@@ -184,8 +186,10 @@ PROVISION_CWD=/root/admin
 TENANT_PORT_MIN=5100
 TENANT_PORT_MAX=5999
 
-# Tenant .env ni admin server hosil qiladi — MONGO_URL shu asosdan quriladi
-MONGO_BASE_URL=mongodb://127.0.0.1:27017
+# Tenant .env ni admin server hosil qiladi — DATABASE_URL shu asosdan quriladi
+POSTGRES_BASE_URL=postgresql://postgres:postgres@127.0.0.1:5432
+# Baza yaratish/o'chirish uchun boshqaruv bazasi
+POSTGRES_ADMIN_DB=postgres
 # Maxfiy sozlamalarni shifrlash (bo'lmasa bot token / API kalit saqlanmaydi)
 SETTINGS_ENCRYPTION_KEY=<64 hex belgi>
 # Heartbeat va tenant repo deploy hook'i shu manzilga murojaat qiladi

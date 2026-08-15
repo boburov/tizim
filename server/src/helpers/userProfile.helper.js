@@ -1,5 +1,5 @@
-import User from "../models/user.model.js";
-import BotUser from "../models/botUser.model.js";
+import prisma from "../config/prisma.js";
+import { withLegacyId } from "../utils/serialize.js";
 import { ROLES } from "../constants/roles.js";
 import { botStatusOf, BOT_STATUS } from "./botStatus.helper.js";
 import { resolveRole } from "./permission.helper.js";
@@ -24,19 +24,21 @@ const calcYears = (date) => {
 };
 
 const sanitizeUser = (user) => {
-  const obj = user.toJSON ? user.toJSON() : user;
-  delete obj.passwordHash;
-  return obj;
+  if (!user) return user;
+  const { passwordHash, ...rest } = user;
+  return withLegacyId(rest);
 };
 
 // Bog'lanish MA'LUMOTI (kim) va bog'lanish HOLATI (yetadimi) - ikki xil
 // savol. Ilgari faqat birinchisi qaytardi, shuning uchun profil sahifasi
 // "Telegram: @user" deb turaverardi, xabar esa aslida yetmasdi.
 const fetchTelegram = async (userId) => {
-  const bot = await BotUser.findOne({ user: userId }).lean();
+  const bot = await prisma.botUser.findFirst({ where: { userId } });
   if (!bot) return null;
   return {
-    telegramId: bot.telegramId,
+    // telegramId BigInt (Postgres) - JSON.stringify uni seriyalay olmaydi
+    // va javob 500 bilan yiqilardi. Klient uni raqam sifatida kutadi.
+    telegramId: Number(bot.telegramId),
     username: bot.username,
     firstName: bot.firstName,
     lastName: bot.lastName,
@@ -59,7 +61,7 @@ export const buildUserProfile = async (userInput) => {
   // Endi shakl bo'yicha tekshiramiz: `role` maydoni bor narsa - hujjat.
   // Bu bson versiyasiga umuman bog'liq emas.
   if (!user || typeof user !== "object" || user.role === undefined) {
-    user = await User.findById(user);
+    user = await prisma.user.findUnique({ where: { id: String(user) } });
   }
   if (!user) return null;
 
@@ -75,7 +77,7 @@ export const buildUserProfile = async (userInput) => {
   base.roleType = roleMeta.roleType;
   base.roleIsFrozen = Boolean(roleMeta.isFrozen);
 
-  const telegram = await fetchTelegram(user._id);
+  const telegram = await fetchTelegram(user.id);
   // `telegram` null bo'lishi mumkin (bog'lanmagan), `botStatus` esa HAR
   // DOIM bor: UI "bog'lanmagan"ni ham holat sifatida ko'rsatishi kerak,
   // shuning uchun uni har safar `telegram?.x` bilan chiqarish o'rniga
@@ -83,10 +85,10 @@ export const buildUserProfile = async (userInput) => {
   const botStatus = telegram?.status || BOT_STATUS.NOT_LINKED;
 
   if (user.role === ROLES.STUDENT) {
-    const activeGroups = await findAllActiveForStudent(user._id);
+    const activeGroups = await findAllActiveForStudent(user.id);
 
     // Guruhdan chiqarilgan bo'lsa - login qilganda bir marta xabar (modal) uchun.
-    const removalNotice = await findPendingRemovalNotice(user._id);
+    const removalNotice = await findPendingRemovalNotice(user.id);
 
     // Davomat summary (joriy oy) - lazy import (circular dependency oldini olish)
     const { getStudentSummary: getAttSummary } = await import(
@@ -99,7 +101,7 @@ export const buildUserProfile = async (userInput) => {
     const monthEnd = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999),
     );
-    const attendanceSummary = await getAttSummary(user._id, {
+    const attendanceSummary = await getAttSummary(user.id, {
       fromDate: monthStart,
       toDate: monthEnd,
     });
@@ -108,7 +110,7 @@ export const buildUserProfile = async (userInput) => {
     const { getActiveFreeze } = await import(
       "../modules/studentFreeze/services/studentFreeze.service.js"
     );
-    const activeFreeze = await getActiveFreeze(user._id);
+    const activeFreeze = await getActiveFreeze(user.id);
 
     return {
       ...base,
@@ -124,7 +126,7 @@ export const buildUserProfile = async (userInput) => {
 
   if (user.role === ROLES.TEACHER) {
     const { items } = await listGroups({
-      teacherId: user._id,
+      teacherId: user.id,
       page: 1,
       limit: 100,
     });

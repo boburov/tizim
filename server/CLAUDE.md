@@ -1,18 +1,23 @@
 # Backend - Bayyina (server/)
 
-Node.js + Express + MongoDB (Mongoose) + Agenda + JWT (access + refresh).
+Node.js + Express + **PostgreSQL (Prisma)** + pg-boss + JWT (access + refresh).
+
+> **Migratsiya davom etmoqda: MongoDB → PostgreSQL.**
+> Poydevor (schema, migratsiyalar, klient, rejalashtiruvchi) tayyor va
+> tekshirilgan; modullar ketma-ket ko'chirilmoqda. Joriy holat, qolgan
+> ish ro'yxati va ko'chirish qoidalari: [`MIGRATION.md`](./MIGRATION.md).
 
 ## Folder structure
 
 ```
 server/src/
-├─ index.js                       # entrypoint: connect -> agenda -> listen
+├─ index.js                       # entrypoint: connect -> scheduler -> listen
 ├─ app.js                         # Express app + middleware + routes
 ├─ config/
 │  ├─ env.js                      # process.env validation
-│  ├─ db.js                       # mongoose.connect
+│  ├─ prisma.js                   # PrismaClient (yagona nusxa) + connectDB
 │  ├─ logger.js                   # pino logger
-│  └─ agenda.js                   # Agenda instance
+│  └─ scheduler.js                # pg-boss (Agenda API'sini takrorlaydi)
 ├─ middleware/
 │  ├─ asyncHandler.js
 │  ├─ errorHandler.js
@@ -31,11 +36,9 @@ server/src/
 │  ├─ cookie.helper.js
 │  ├─ password.helper.js
 │  └─ permission.helper.js
-├─ models/
-│  ├─ user.model.js
-│  ├─ role.model.js
-│  ├─ permission.model.js
-│  └─ refreshToken.model.js
+├─ models/                        # ESKIRGAN - Mongoose modellari.
+│  └─ ...                         # Modul ko'chirilgach fayli o'chiriladi.
+│                                 # Yagona haqiqat manbai: prisma/schema.prisma
 ├─ modules/                       # feature-based segmentation
 │  └─ <name>/
 │     ├─ handlers/                # one file per endpoint
@@ -49,8 +52,16 @@ server/src/
 │     └─ <name>.routes.js         # router assembly
 ├─ jobs/
 │  ├─ index.js                    # define + start
+│  ├─ ttlCleanup.job.js           # Mongo TTL indekslari o'rniga
 │  └─ <name>.job.js
 └─ routes/index.js                # mounts all modules under /api
+
+prisma/
+├─ schema.prisma                  # 78 model - BAZANING YAGONA MANBAI
+└─ migrations/
+   ├─ ..._object_id_function/     # gen_object_id() - 24-hex kalitlar
+   ├─ ..._init/                   # jadvallar, FK, enumlar
+   └─ ..._partial_unique_indexes/ # 35 ta qisman unique indeks (pul xavfsizligi)
 ```
 
 ## Module creation rules
@@ -74,15 +85,18 @@ The service handles business logic and **may access the DB directly**:
 
 ```js
 // modules/students/services/students.service.js
-import User from "@/models/user.model.js";
+import prisma from "@/config/prisma.js";
 import ApiError from "@/utils/ApiError.js";
 
 export const create = async (body, currentUser) => {
   // DIQQAT: `phone` bo'yicha tekshirilmaydi - bitta raqamdan bir nechta
-  // odam foydalanadi (qarang: models/user.model.js). Yagona kalit - username.
-  const exists = await User.findOne({ username: body.username });
+  // odam foydalanadi (qarang: prisma/schema.prisma, User.phone). Yagona
+  // kalit - username.
+  const exists = await prisma.user.findUnique({
+    where: { username: body.username },
+  });
   if (exists) throw new ApiError(409, "Bunday foydalanuvchi mavjud");
-  return User.create({ ...body, role: "student" });
+  return prisma.user.create({ data: { ...body, role: "student" } });
 };
 ```
 
@@ -123,25 +137,52 @@ Error (emitted by the central `errorHandler`):
 
 ## Role and permission
 
-- `User.role: "owner" | "teacher" | "student"` (static enum).
+- `User.role` - satr (dinamik rol; `Role.value` ga ishora qiladi, FK EMAS).
 - Owner - always has every permission (hard rule in the code base).
-- `Permission` collection: `{ key, label, group }`.
-- Permissions are attached to a role via `Role.permissions: ObjectId[]`.
+- `Permission` jadvali: `{ key, label, group, module, action }`.
+- Rol va ruxsat **ko'p-ko'pga** bog'langan (`_RolePermissions` join jadvali);
+  Prisma'da `include: { permissions: true }` bilan o'qiladi.
 - Middleware: `requireAuth -> (requireRole("owner") | requirePermission("students.create"))`.
 
-## Agenda
+## Rejalashtiruvchi (joblar)
 
-- `config/agenda.js` - instance.
-- `jobs/index.js` - `agenda.define("job-name", handler)` + `await agenda.start()`.
-- Graceful shutdown: in `app.js`, on SIGTERM/SIGINT call `await agenda.stop()`.
+Agenda **faqat MongoDB** bilan ishlagani uchun u **pg-boss** bilan
+almashtirildi (ishlar endi o'sha PostgreSQL bazasida turadi).
+
+- `config/scheduler.js` - pg-boss nusxasi. U **ataylab Agenda API'sini
+  takrorlaydi** (`define / every / now / schedule / start / stop / cancel`),
+  shuning uchun 23 ta job fayli va chaqiruvchi servislar o'zgarmadi.
+- Handler avvalgidek `job.attrs.data` oladi - moslashtiruvchi qatlam
+  pg-boss'ning `job.data` sini shu shaklga o'giradi.
+- `jobs/index.js` - `define(...)` + `await start()`.
+
+### TTL: MUHIM FARQ
+
+MongoDB `expireAfterSeconds` bilan eskirgan hujjatni **o'zi** o'chirardi.
+PostgreSQL'da bunday mexanizm **yo'q**, shuning uchun `jobs/ttlCleanup.job.js`
+har kuni 03:15 da tozalaydi: `caches`, `refresh_tokens`, `ai_runs` (90 kun),
+`ai_usage_logs` (400 kun). **Bu job o'chirilsa jadvallar cheksiz o'sadi.**
 
 ## Commands
 
 ```bash
-npm run dev      # nodemon
-npm start        # production
+npm run dev              # nodemon
+npm start                # production
 npm run lint
+
+# ── Prisma ──
+npm run prisma:generate  # klientni qayta yaratish (postinstall'da avtomatik)
+npm run prisma:migrate   # yangi migratsiya (development)
+npm run prisma:deploy    # tayyor migratsiyalarni qo'llash (production)
+npm run prisma:studio    # bazani brauzerda ko'rish
+npm run db:reset         # schema'ni qayta qurish + owner seed
+
+# ── Testlar ──
+npm run test:auth-prisma # ko'chirilgan auth oqimi (haqiqiy Postgres ustida)
 ```
+
+Schema o'zgargach `npm run prisma:generate` **shart** - aks holda klient
+eski tuzilmani biladi va yangi maydon `undefined` bo'lib qoladi.
 
 ## Language rules
 

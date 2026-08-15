@@ -141,7 +141,7 @@ export function renderEnvExample(): string {
     'PORT=<tenant porti>',
     "# Brend nomi - client/.env dagi VITE_APP_NAME bilan bir xil qiymat.",
     'APP_NAME=<markaz nomi>',
-    'MONGO_URL=mongodb://127.0.0.1:27017/<tenant bazasi>',
+    'DATABASE_URL=postgresql://user:pass@127.0.0.1:5432/<tenant bazasi>?schema=public',
     'JWT_ACCESS_SECRET=<provision.sh generatsiya qiladi>',
     'JWT_REFRESH_SECRET=<provision.sh generatsiya qiladi>',
     'COOKIE_SECRET=<provision.sh generatsiya qiladi>',

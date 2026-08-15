@@ -1,0 +1,2941 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// Bayyina tenant bazasi — PostgreSQL (Prisma).
+//
+// Bu schema MongoDB/Mongoose'dagi 74 ta modeldan ko'chirildi. Ko'chirishda
+// qabul qilingan QAT'IY qarorlar (ularni o'zgartirmasdan oldin o'qing):
+//
+// 1) ID FORMATI. Har bir jadval kaliti — 24 belgili hex satr, ya'ni eski
+//    ObjectId formati. Sabab: klient va 14 ta zod validator ID'ni
+//    /^[0-9a-fA-F]{24}$/ bo'yicha tekshiradi. cuid()/uuid() ga o'tish
+//    o'sha tekshiruvlarni va frontend'dagi marshrutlarni buzardi.
+//    Qiymatni `gen_object_id()` SQL funksiyasi beradi (migrations ichida).
+//
+// 2) PUL MAYDONLARI — Float (double precision). Mongo'da ular float64 edi;
+//    Decimal'ga o'tish 54k qator arifmetikani Decimal.js obyektlariga
+//    ko'chirishni talab qiladi va bu ALOHIDA o'zgarish sifatida qilinishi
+//    kerak. Hozircha xulq-atvor 1:1 saqlangan.
+//    KEYINGI QADAM sifatida tavsiya etiladi: Decimal(14,2).
+//
+// 3) QISMAN UNIQUE INDEKSLAR (partialFilterExpression). Prisma ularni
+//    deklarativ qo'llab-quvvatlamaydi. Ular MIGRATSIYADA xom SQL bilan
+//    yaratiladi (`CREATE UNIQUE INDEX ... WHERE ...`). Bu indekslar
+//    pul xavfsizligini ta'minlaydi (ikki marta hisoblashning oldini oladi) —
+//    ularni tushirib qoldirish JIMGINA ikki baravar hisob degani.
+//    To'liq ro'yxat: migrations/.../partial_indexes.sql
+//
+// 4) TTL INDEKSLAR. Mongo'dagi `expireAfterSeconds` PostgreSQL'da yo'q.
+//    Eskirgan yozuvlarni tozalash `jobs/ttlCleanup.job.js` ga ko'chirildi.
+//    Ta'sirlanganlar: AiRun (90 kun), AiUsageLog (400 kun), Cache, RefreshToken.
+//
+// 5) SOFT DELETE. Mongoose plugin'i 28 ta modelga isDeleted/deletedAt/
+//    deletedBy qo'shardi. Bu yerda ular ochiq yozilgan. `deletedBy` —
+//    oddiy ustun (FK emas): u hech qachon populate qilinmaydi va
+//    foydalanuvchi o'chirilsa ham audit izi qolishi kerak.
+// ═══════════════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── ENUMLAR ───────────────────────────
+
+enum AccountKind {
+  cash
+  terminal
+  click
+  payme
+  bank
+  transit
+  due_from
+  due_to
+  deposit
+  equity
+  revenue
+  expense
+  shortage
+}
+
+enum EntryKind {
+  payment
+  deposit_in
+  deposit_out
+  deposit_apply
+  expense
+  salary
+  opening
+  shift_close
+  transfer_send
+  transfer_receive
+  inter_branch
+  adjustment
+}
+
+enum HttpMethod {
+  GET
+  POST
+  PATCH
+  PUT
+  DELETE
+}
+
+enum RankingType {
+  payment_delay
+  absence
+  teacher
+}
+
+enum RankingSeverity {
+  high
+  medium
+  low
+}
+
+enum AiReportPeriod {
+  daily
+  weekly
+  monthly
+}
+
+enum AiRunTrigger {
+  nightly
+  intraday
+  manual
+}
+
+enum AiRunScope {
+  fast
+  full
+}
+
+enum AiRunStatus {
+  running
+  ok
+  failed
+}
+
+enum AiUsageKind {
+  narration
+  digest
+  report
+  assistant
+}
+
+enum AiUsageProvider {
+  gemini
+  openai
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  executed
+  rejected
+  canceled
+  failed
+}
+
+enum ApprovalCategory {
+  financial
+  configuration
+}
+
+enum ApprovalKind {
+  salary_payment
+  deposit_withdraw
+  salary_terms
+  discount_set
+  group_fee_set
+  staff_hire
+  teacher_compensation_set
+  membership_backdate
+  expense_create
+  staff_salary_payment
+}
+
+enum ArchiveAction {
+  archive
+  restore
+}
+
+enum DeliveryStatus {
+  pending
+  delivered
+  blocked
+  no_bot
+  failed
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  excused
+  exempt
+}
+
+enum AttendanceSource {
+  teacher
+  admin
+  auto_exempt @map("auto-exempt")
+}
+
+enum WeekDay {
+  mon
+  tue
+  wed
+  thu
+  fri
+  sat
+  sun
+}
+
+enum DelegationMode {
+  auto
+  threshold
+  approval
+  forbidden
+}
+
+enum TransferStatus {
+  in_transit
+  received
+  disputed
+  canceled
+}
+
+enum DepositTxType {
+  topup
+  withdraw
+  refund
+}
+
+enum PaymentMethod {
+  cash
+  card
+}
+
+enum DiscountType {
+  fixed
+  percent
+}
+
+enum DiscountScope {
+  permanent
+  monthly
+}
+
+enum ExpenseAllocation {
+  none
+  revenue
+  students
+  equal
+}
+
+enum ExpenseMethod {
+  cash
+  card
+  bank
+  transfer
+}
+
+enum ExpenseCurrency {
+  UZS
+  USD
+}
+
+enum ExpenseCategoryKind {
+  operating
+  payroll
+  tax
+  capital
+}
+
+enum FeedbackStatus {
+  new
+  in_review
+  resolved
+  rejected
+}
+
+enum GradeSource {
+  teacher
+  admin
+}
+
+enum EntryBilling {
+  prorated
+  full
+}
+
+enum FeeSource {
+  auto
+  manual
+}
+
+enum LeftReason {
+  transferred
+  removed
+  graduated
+}
+
+enum HolidayAudience {
+  all
+  students
+  teachers
+}
+
+enum ImportMode {
+  file
+  rows
+}
+
+enum ImportStatus {
+  queued
+  running
+  completed
+  failed
+}
+
+enum InsightSubjectType {
+  student
+  teacher
+  group
+  lead
+  course
+  branch
+}
+
+enum InsightDomain {
+  students
+  attendance
+  finance
+  teachers
+  leads
+  groups
+  courses
+}
+
+enum InsightStance {
+  risk
+  watch
+  opportunity
+}
+
+enum InsightKind {
+  student_churn_risk
+  student_improving
+  attendance_anomaly
+  payment_risk
+  overdue_payments
+  revenue_forecast_drop
+  expense_anomaly
+  cashflow_warning
+  teacher_attendance_issue
+  teacher_low_load
+  teacher_top_performer
+  lead_hot
+  lead_stale
+  lead_conversion_drop
+  group_underfilled
+  group_complaints
+  slot_opportunity
+  course_attendance_drop
+  course_demand
+  course_marketing
+}
+
+enum InsightSeverity {
+  high
+  medium
+  low
+}
+
+enum InsightStatus {
+  open
+  acked
+  done
+  dismissed
+  expired
+}
+
+enum InsightOutcome {
+  pending
+  prevented
+  occurred
+  unknown
+}
+
+enum KpiTrigger {
+  lead_created
+  lead_converted
+  student_first_payment
+  student_retained
+  payments_collected
+  employee_attendance
+}
+
+enum KpiRewardType {
+  fixed
+  per_unit
+  percent
+}
+
+enum LeadStatus {
+  new
+  info_given
+  trial
+  trial_attended
+  enrolled
+  recontacted
+  rejected
+}
+
+enum LeadOptionKind {
+  source
+  direction
+  rejection
+}
+
+enum CancellationReason {
+  teacher_absent
+  facility
+  weather
+  other
+}
+
+enum NotificationCategory {
+  payment_reminder
+  debt_warning
+  class_cancel
+  announcement
+  admin_personal
+  teacher_message
+  feedback_status
+  holiday
+  attendance
+  template_based
+  other
+}
+
+enum AudienceType {
+  all_students
+  all_teachers
+  groups
+  users
+  individual
+  feedback_author
+  auto_system
+}
+
+enum SenderRole {
+  owner
+  teacher
+  system
+}
+
+enum NotificationChannel {
+  inapp
+  telegram
+}
+
+enum NotificationStatus {
+  sent
+  scheduled
+  canceled
+}
+
+enum TemplateCategory {
+  payment
+  debt
+  class_cancel
+  announcement
+  holiday
+  personal
+  feedback_status
+  custom
+}
+
+enum OpeningRole {
+  student
+  teacher
+  staff
+}
+
+enum OpeningSignConvention {
+  flow
+  party
+}
+
+enum OpeningKind {
+  student_credit
+  student_debt
+  teacher_credit
+  teacher_debt
+  staff_credit
+  staff_debt
+}
+
+enum OpeningPendingReason {
+  none        @map("")
+  awaiting_group
+}
+
+enum PaymentSource {
+  direct
+  deposit
+}
+
+enum PayStatus {
+  unpaid
+  partial
+  paid
+}
+
+enum RoleType {
+  owner
+  staff
+  teacher
+  student
+}
+
+enum ShiftStatus {
+  open
+  closed
+}
+
+enum StaffSalaryType {
+  fixed
+  fixed_plus_kpi
+  kpi_only
+}
+
+enum StaffAdjustmentKind {
+  bonus
+  penalty
+  opening_credit
+  opening_debt
+}
+
+enum PayrollSource {
+  auto
+  generated
+  manual
+  imported
+  migrated
+}
+
+enum PayrollLifecycle {
+  draft
+  finalized
+}
+
+enum CleanupFrequency {
+  weekly
+  monthly
+  semiannual
+}
+
+enum FilePurpose {
+  assignment
+}
+
+enum TeacherAttendanceStatus {
+  present
+  absent
+  excused
+}
+
+enum CompBaseType {
+  none
+  fixed_monthly
+}
+
+enum CompVariableType {
+  none
+  percent
+  per_student
+  per_lesson_hour
+  per_group
+}
+
+enum CompPercentBase {
+  billed
+  collected
+}
+
+enum SalaryKind {
+  group
+  base
+  bonus
+  deduction
+  opening
+}
+
+enum SalaryRateType {
+  fixed
+  percent
+  mixed
+}
+
+enum SalarySource {
+  auto
+  manual
+}
+
+enum Gender {
+  male
+  female
+}
+
+// ─────────────────────── FOYDALANUVCHI VA HUQUQ ───────────────────────
+
+model User {
+  id         String    @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  firstName  String
+  lastName   String
+  // Autentifikatsiya kaliti — YAGONA unique maydon.
+  username   String    @unique
+  // DIQQAT: telefon UNIQUE EMAS — bitta raqamdan bir nechta odam (aka-uka,
+  // ota-ona) foydalanadi. Mongo'dagi eski `phone_1` unique indeksi ataylab
+  // ko'chirilmadi.
+  phone      String?
+  passwordHash String
+  // Dinamik rol: Role.value ga ishora qiladi, lekin FK EMAS — tizim
+  // rollari (owner/teacher/student) Role jadvalisiz ham ishlaydi.
+  role       String    @default("student")
+
+  homeBranchId String? @db.VarChar(24)
+  homeBranch   Branch? @relation("UserHomeBranch", fields: [homeBranchId], references: [id])
+
+  isActive    Boolean   @default(true)
+  archivedAt  DateTime?
+  lastLoginAt DateTime?
+  birthDate   DateTime?
+  gender      Gender?
+  enrolledAt  DateTime?
+
+  leadId String? @db.VarChar(24)
+  lead   Lead?   @relation("UserFromLead", fields: [leadId], references: [id])
+
+  completedAt       DateTime?
+  completedAtManual Boolean   @default(false)
+  hiredAt           DateTime?
+  payrollStartFrom  DateTime?
+  terminatedAt      DateTime?
+  terminationReason String    @default("")
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branchAssignments UserBranchAssignment[]
+
+  // ── teskari bog'lanishlar ──
+  activityLogs            ActivityLog[]            @relation("ActivityLogUser")
+  aiConfigsUpdated        AiConfig[]               @relation("AiConfigUpdatedBy")
+  approvalsRequested      Approval[]               @relation("ApprovalRequestedBy")
+  approvalsDecided        Approval[]               @relation("ApprovalDecidedBy")
+  archiveLogs             ArchiveLog[]             @relation("ArchiveLogUser")
+  archiveLogsPerformed    ArchiveLog[]             @relation("ArchiveLogPerformedBy")
+  archiveReasonsCreated   ArchiveReason[]          @relation("ArchiveReasonCreatedBy")
+  assignmentsSent         Assignment[]             @relation("AssignmentSender")
+  assignmentRecipients    AssignmentRecipient[]    @relation("AssignmentRecipientStudent")
+  attendances             Attendance[]             @relation("AttendanceStudent")
+  attendancesRecorded     Attendance[]             @relation("AttendanceRecordedBy")
+  exemptions              AttendanceExemption[]    @relation("ExemptionStudent")
+  exemptionsCreated       AttendanceExemption[]    @relation("ExemptionCreatedBy")
+  botUsers                BotUser[]                @relation("BotUserUser")
+  cashTransfersSent       CashTransfer[]           @relation("CashTransferSentBy")
+  cashTransfersReceived   CashTransfer[]           @relation("CashTransferReceivedBy")
+  coursesCreated          Course[]                 @relation("CourseCreatedBy")
+  coursePricesCreated     CoursePrice[]            @relation("CoursePriceCreatedBy")
+  debtWriteOffs           DebtWriteOff[]           @relation("DebtWriteOffStudent")
+  debtWriteOffsCreated    DebtWriteOff[]           @relation("DebtWriteOffCreatedBy")
+  depositTransactions     DepositTransaction[]     @relation("DepositTxStudent")
+  depositTxCreated        DepositTransaction[]     @relation("DepositTxCreatedBy")
+  discounts               Discount[]               @relation("DiscountStudent")
+  discountsCreated        Discount[]               @relation("DiscountCreatedBy")
+  expensesCreated         Expense[]                @relation("ExpenseCreatedBy")
+  expenseCategoriesCreated ExpenseCategory[]       @relation("ExpenseCategoryCreatedBy")
+  feedbacksAuthored       Feedback[]               @relation("FeedbackAuthor")
+  feedbacksReplied        Feedback[]               @relation("FeedbackRepliedBy")
+  feedbacksReviewed       Feedback[]               @relation("FeedbackReviewedBy")
+  feedbacksResolved       Feedback[]               @relation("FeedbackResolvedBy")
+  grades                  Grade[]                  @relation("GradeStudent")
+  gradesRecorded          Grade[]                  @relation("GradeRecordedBy")
+  teachingGroups          Group[]                  @relation("GroupTeachers")
+  groupFeesCreated        GroupFee[]               @relation("GroupFeeCreatedBy")
+  groupFeesUpdated        GroupFee[]               @relation("GroupFeeUpdatedBy")
+  memberships             GroupMembership[]        @relation("MembershipStudent")
+  holidaysCreated         Holiday[]                @relation("HolidayCreatedBy")
+  importJobs              ImportJob[]              @relation("ImportJobUser")
+  insightsAcknowledged    Insight[]                @relation("InsightAcknowledgedBy")
+  journalEntriesCreated   JournalEntry[]           @relation("JournalEntryCreatedBy")
+  kpiRulesCreated         KpiRule[]                @relation("KpiRuleCreatedBy")
+  kpiRulesUpdated         KpiRule[]                @relation("KpiRuleUpdatedBy")
+  leadsAssigned           Lead[]                   @relation("LeadAssignedTo")
+  leadsAsStudent          Lead[]                   @relation("LeadStudent")
+  leadsCredited           Lead[]                   @relation("LeadCreditedTo")
+  leadsConverted          Lead[]                   @relation("LeadConvertedBy")
+  leadsCreated            Lead[]                   @relation("LeadCreatedBy")
+  leadOptionsCreated      LeadOption[]             @relation("LeadOptionCreatedBy")
+  leadRoutingRules        LeadRoutingRule[]        @relation("LeadRoutingAssignee")
+  cancellationsCreated    LessonCancellation[]     @relation("CancellationCreatedBy")
+  notificationsSent       Notification[]           @relation("NotificationSender")
+  notificationAudience    Notification[]           @relation("NotificationAudienceUsers")
+  notificationRecipients  NotificationRecipient[]  @relation("NotificationRecipientUser")
+  openingBalance          OpeningBalance?          @relation("OpeningBalanceUser")
+  openingBalancesCreated  OpeningBalance[]         @relation("OpeningBalanceCreatedBy")
+  paymentTransactions     PaymentTransaction[]     @relation("PaymentTxStudent")
+  paymentTxCreated        PaymentTransaction[]     @relation("PaymentTxCreatedBy")
+  payrollAuditLogs        PayrollAuditLog[]        @relation("PayrollAuditEmployee")
+  payrollAuditActions     PayrollAuditLog[]        @relation("PayrollAuditActor")
+  refreshTokens           RefreshToken[]           @relation("RefreshTokenUser")
+  rolesFrozen             Role[]                   @relation("RoleFrozenBy")
+  salaryTransactions      SalaryTransaction[]      @relation("SalaryTxTeacher")
+  salaryTxCreated         SalaryTransaction[]      @relation("SalaryTxCreatedBy")
+  shiftsAsCashier         Shift[]                  @relation("ShiftCashier")
+  shiftsOpened            Shift[]                  @relation("ShiftOpenedBy")
+  shiftsClosed            Shift[]                  @relation("ShiftClosedBy")
+  staffCompensations      StaffCompensation[]      @relation("StaffCompEmployee")
+  staffCompCreated        StaffCompensation[]      @relation("StaffCompCreatedBy")
+  staffCompUpdated        StaffCompensation[]      @relation("StaffCompUpdatedBy")
+  kpiAssignments          StaffKpiAssignment[]     @relation("KpiAssignmentEmployee")
+  kpiAssignmentsCreated   StaffKpiAssignment[]     @relation("KpiAssignmentCreatedBy")
+  staffPayrolls           StaffPayroll[]           @relation("StaffPayrollEmployee")
+  staffPayrollsFinalized  StaffPayroll[]           @relation("StaffPayrollFinalizedBy")
+  payrollAdjustments      StaffPayrollAdjustment[] @relation("AdjustmentEmployee")
+  payrollAdjCreated       StaffPayrollAdjustment[] @relation("AdjustmentCreatedBy")
+  payrollItems            StaffPayrollItem[]       @relation("PayrollItemEmployee")
+  staffSalaryTransactions StaffSalaryTransaction[] @relation("StaffSalaryTxEmployee")
+  staffSalaryTxCreated    StaffSalaryTransaction[] @relation("StaffSalaryTxCreatedBy")
+  filesUploaded           StoredFile[]             @relation("StoredFileUploadedBy")
+  deposit                 StudentDeposit?          @relation("StudentDepositStudent")
+  freezes                 StudentFreeze[]          @relation("FreezeStudent")
+  freezesCreated          StudentFreeze[]          @relation("FreezeCreatedBy")
+  freezesEnded            StudentFreeze[]          @relation("FreezeEndedBy")
+  studentPayments         StudentPayment[]         @relation("StudentPaymentStudent")
+  teacherAbsences         TeacherAbsence[]         @relation("TeacherAbsenceTeacher")
+  teacherAbsencesRecorded TeacherAbsence[]         @relation("TeacherAbsenceRecordedBy")
+  teacherAttendances      TeacherAttendance[]      @relation("TeacherAttendanceTeacher")
+  teacherAttRecorded      TeacherAttendance[]      @relation("TeacherAttendanceRecordedBy")
+  teacherCompensations    TeacherCompensation[]    @relation("TeacherCompTeacher")
+  teacherCompCreated      TeacherCompensation[]    @relation("TeacherCompCreatedBy")
+  teacherCompUpdated      TeacherCompensation[]    @relation("TeacherCompUpdatedBy")
+  groupPeriods            TeacherGroupPeriod[]     @relation("GroupPeriodTeacher")
+  groupPeriodsCreated     TeacherGroupPeriod[]     @relation("GroupPeriodCreatedBy")
+  groupPeriodsUpdated     TeacherGroupPeriod[]     @relation("GroupPeriodUpdatedBy")
+  teacherSalaries         TeacherSalary[]          @relation("TeacherSalaryTeacher")
+  teacherSalariesLocked   TeacherSalary[]          @relation("TeacherSalaryLockedBy")
+  teacherSalariesCreated  TeacherSalary[]          @relation("TeacherSalaryCreatedBy")
+
+  @@index([phone])
+  @@index([leadId])
+  @@index([homeBranchId, isDeleted, isActive])
+  @@map("users")
+}
+
+// Mongo'da bu User ichidagi massiv edi (`branchAssignments`). Postgres'da
+// alohida jadval — `branchAssignments.branchId` bo'yicha qidiruv kodda
+// 8+ joyda ishlatiladi (branchContext.helper.js, branches.service.js).
+model UserBranchAssignment {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  userId   String  @db.VarChar(24)
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId String  @db.VarChar(24)
+  branch   Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  role     String?
+
+  @@unique([userId, branchId])
+  @@index([branchId])
+  @@map("user_branch_assignments")
+}
+
+model Role {
+  id           String   @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  value        String   @unique
+  label        String
+  description  String   @default("")
+  permissions  Permission[] @relation("RolePermissions")
+  isSystem     Boolean  @default(false)
+  roleType     RoleType @default(staff)
+  defaultPath  String   @default("/owner")
+  isFrozen     Boolean  @default(false)
+  frozenAt     DateTime?
+  frozenById   String?  @db.VarChar(24)
+  frozenBy     User?    @relation("RoleFrozenBy", fields: [frozenById], references: [id])
+  frozenReason String   @default("")
+  permissionsVersion Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  key         String  @unique
+  label       String
+  group       String  @default("general")
+  module      String
+  action      String
+  moduleLabel String?
+  moduleOrder Int     @default(100)
+  roles       Role[]  @relation("RolePermissions")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([module, action])
+  @@index([module])
+  @@map("permissions")
+}
+
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  userId    String    @db.VarChar(24)
+  user      User      @relation("RefreshTokenUser", fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  userAgent String?
+  ip        String?
+  // Mongo'da TTL indeks edi. Endi ttlCleanup.job.js tozalaydi.
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────── FILIAL ───────────────────────────
+
+model Branch {
+  id                      String    @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  name                    String
+  code                    String?
+  address                 String?
+  phone                   String?
+  isMain                  Boolean   @default(false)
+  expenseApprovalThreshold Float?
+  // Mongo'da Map<kind, {mode,maxAmount,minAmount,maxPercent}> edi.
+  // Tuzilma constants/delegation.js dagi validateDelegation() bilan
+  // tekshiriladi — u yagona haqiqat manbai bo'lib qoladi.
+  delegation              Json?
+  areaM2                  Float?
+  openedAt                DateTime?
+  isActive                Boolean   @default(true)
+  archivedAt              DateTime?
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeUsers            User[]                   @relation("UserHomeBranch")
+  assignments          UserBranchAssignment[]
+  accounts             Account[]                @relation("AccountBranch")
+  counterpartyAccounts Account[]                @relation("AccountCounterparty")
+  aiConfig             AiConfig?                @relation("AiConfigBranch")
+  aiRankings           AiRanking[]              @relation("AiRankingBranch")
+  aiReports            AiReport[]               @relation("AiReportBranch")
+  aiRuns               AiRun[]                  @relation("AiRunBranch")
+  aiUsageLogs          AiUsageLog[]             @relation("AiUsageBranch")
+  approvals            Approval[]               @relation("ApprovalBranch")
+  assignmentPosts      Assignment[]             @relation("AssignmentBranch")
+  cashTransfersFrom    CashTransfer[]           @relation("TransferFrom")
+  cashTransfersTo      CashTransfer[]           @relation("TransferTo")
+  coursePrices         CoursePrice[]            @relation("CoursePriceBranch")
+  depositTransactions  DepositTransaction[]     @relation("DepositTxBranch")
+  expenses             Expense[]                @relation("ExpenseBranch")
+  expenseCategories    ExpenseCategory[]        @relation("ExpenseCategoryBranch")
+  groups               Group[]                  @relation("GroupBranch")
+  importJobs           ImportJob[]              @relation("ImportJobBranch")
+  insights             Insight[]                @relation("InsightBranch")
+  journalEntries       JournalEntry[]           @relation("JournalBranch")
+  journalCounterparty  JournalEntry[]           @relation("JournalCounterparty")
+  kpiRules             KpiRule[]                @relation("KpiRuleBranch")
+  leads                Lead[]                   @relation("LeadBranch")
+  leadRoutingRules     LeadRoutingRule[]        @relation("LeadRoutingBranch")
+  openingBalances      OpeningBalance[]         @relation("OpeningBalanceBranch")
+  paymentTransactions  PaymentTransaction[]     @relation("PaymentTxBranch")
+  rooms                Room[]                   @relation("RoomBranch")
+  salaryTransactions   SalaryTransaction[]      @relation("SalaryTxBranch")
+  shifts               Shift[]                  @relation("ShiftBranch")
+  staffCompensations   StaffCompensation[]      @relation("StaffCompBranch")
+  staffPayrolls        StaffPayroll[]           @relation("StaffPayrollBranch")
+  payrollAdjustments   StaffPayrollAdjustment[] @relation("AdjustmentBranch")
+  staffSalaryTx        StaffSalaryTransaction[] @relation("StaffSalaryTxBranch")
+  studentPayments      StudentPayment[]         @relation("StudentPaymentBranch")
+  teacherCompensations TeacherCompensation[]    @relation("TeacherCompBranch")
+  teacherSalaries      TeacherSalary[]          @relation("TeacherSalaryBranch")
+
+  @@map("branches")
+}
+
+// ─────────────────────── O'QUV TUZILMASI ───────────────────────
+
+model Course {
+  id                    String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  title                 String
+  code                  String  @unique
+  level                 String  @default("")
+  defaultDurationMonths Int?
+  leadDirectionId       String? @db.VarChar(24)
+  leadDirection         LeadOption? @relation("CourseLeadDirection", fields: [leadDirectionId], references: [id])
+  isActive              Boolean @default(true)
+  createdById           String? @db.VarChar(24)
+  createdBy             User?   @relation("CourseCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groups Group[]       @relation("GroupCourse")
+  prices CoursePrice[] @relation("CoursePriceCourse")
+
+  @@index([leadDirectionId])
+  @@index([isActive, title])
+  @@map("courses")
+}
+
+model CoursePrice {
+  id        String    @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  courseId  String    @db.VarChar(24)
+  course    Course    @relation("CoursePriceCourse", fields: [courseId], references: [id])
+  branchId  String?   @db.VarChar(24)
+  branch    Branch?   @relation("CoursePriceBranch", fields: [branchId], references: [id])
+  amount    Float
+  validFrom DateTime
+  validTo   DateTime?
+  note      String    @default("")
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("CoursePriceCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (courseId, branchId) WHERE validTo IS NULL AND isDeleted = false
+  // → migrations/partial_indexes.sql
+  @@index([courseId, branchId, validTo])
+  @@map("course_prices")
+}
+
+model Room {
+  id       String   @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String   @db.VarChar(24)
+  branch   Branch   @relation("RoomBranch", fields: [branchId], references: [id])
+  name     String
+  capacity Int?
+  areaM2   Float?
+  equipment String[] @default([])
+  note     String   @default("")
+  isActive Boolean  @default(true)
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groups Group[] @relation("GroupRoom")
+
+  // QISMAN UNIQUE: (branchId, name) WHERE isDeleted = false
+  @@index([branchId])
+  @@index([isActive])
+  @@map("rooms")
+}
+
+model Group {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String  @db.VarChar(24)
+  branch   Branch  @relation("GroupBranch", fields: [branchId], references: [id])
+  name     String
+  courseId String? @db.VarChar(24)
+  course   Course? @relation("GroupCourse", fields: [courseId], references: [id])
+  roomId   String? @db.VarChar(24)
+  room     Room?   @relation("GroupRoom", fields: [roomId], references: [id])
+
+  teachers User[] @relation("GroupTeachers")
+
+  startDate       DateTime?
+  endDate         DateTime?
+  durationMonths  Int?
+  entryBilling    EntryBilling @default(prorated)
+  isActive        Boolean      @default(true)
+
+  // Arxiv suratlari — faqat ID ro'yxati sifatida saqlanadi (join qilinmaydi).
+  archivedClosedPeriods     String[] @default([])
+  archivedClosedMemberships String[] @default([])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  schedule             GroupScheduleItem[]      @relation("ScheduleGroup")
+  attendances          Attendance[]             @relation("AttendanceGroup")
+  assignmentRecipients AssignmentRecipient[]    @relation("AssignmentRecipientGroup")
+  assignments          Assignment[]             @relation("AssignmentGroups")
+  debtWriteOffs        DebtWriteOff[]           @relation("DebtWriteOffGroup")
+  discounts            Discount[]               @relation("DiscountGroup")
+  feedbacks            Feedback[]               @relation("FeedbackGroup")
+  grades               Grade[]                  @relation("GradeGroup")
+  fees                 GroupFee[]               @relation("GroupFeeGroup")
+  memberships          GroupMembership[]        @relation("MembershipGroup")
+  transfersIn          GroupMembership[]        @relation("MembershipTransferredTo")
+  cancellations        LessonCancellation[]     @relation("CancellationGroup")
+  notificationAudience Notification[]           @relation("NotificationAudienceGroups")
+  openingBalances      OpeningBalance[]         @relation("OpeningBalanceGroup")
+  paymentTransactions  PaymentTransaction[]     @relation("PaymentTxGroup")
+  salaryTransactions   SalaryTransaction[]      @relation("SalaryTxGroup")
+  studentPayments      StudentPayment[]         @relation("StudentPaymentGroup")
+  teacherAbsences      TeacherAbsence[]         @relation("TeacherAbsenceGroup")
+  teacherPeriods       TeacherGroupPeriod[]     @relation("GroupPeriodGroup")
+  teacherSalaries      TeacherSalary[]          @relation("TeacherSalaryGroup")
+
+  @@index([branchId])
+  @@index([courseId])
+  @@index([roomId])
+  @@index([endDate])
+  @@index([isActive])
+  @@index([name])
+  @@map("groups")
+}
+
+// Mongo'da Group ichidagi massiv edi. Alohida jadval — chunki
+// `schedule.day` bo'yicha qidiruv joblarda ishlatiladi
+// (attendanceReminders.job.js, lessonReminders.job.js).
+model GroupScheduleItem {
+  id            String    @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  groupId       String    @db.VarChar(24)
+  group         Group     @relation("ScheduleGroup", fields: [groupId], references: [id], onDelete: Cascade)
+  day           WeekDay
+  startTime     String    @db.VarChar(5)
+  endTime       String    @db.VarChar(5)
+  effectiveFrom DateTime?
+
+  @@unique([groupId, day, startTime, effectiveFrom])
+  @@index([day])
+  @@map("group_schedule_items")
+}
+
+model GroupMembership {
+  id        String    @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  groupId   String    @db.VarChar(24)
+  group     Group     @relation("MembershipGroup", fields: [groupId], references: [id])
+  studentId String    @db.VarChar(24)
+  student   User      @relation("MembershipStudent", fields: [studentId], references: [id])
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+  leftReason LeftReason?
+  leftReasonDetailId String? @db.VarChar(24)
+  leftReasonDetail   ArchiveReason? @relation("MembershipLeftReason", fields: [leftReasonDetailId], references: [id])
+  leftReasonTitle    String  @default("")
+  removalNoticeSeenAt DateTime?
+  transferredToId String? @db.VarChar(24)
+  transferredTo   Group?  @relation("MembershipTransferredTo", fields: [transferredToId], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studentPayments StudentPayment[] @relation("StudentPaymentMembership")
+  debtWriteOffs   DebtWriteOff[]   @relation("DebtWriteOffMembership")
+
+  // QISMAN UNIQUE: (groupId, studentId) WHERE leftAt IS NULL AND isDeleted = false
+  @@index([groupId])
+  @@index([studentId])
+  @@index([leftReasonDetailId])
+  @@map("group_memberships")
+}
+
+// ─────────────────────── DAVOMAT VA BAHO ───────────────────────
+
+model Attendance {
+  id        String   @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  groupId   String   @db.VarChar(24)
+  group     Group    @relation("AttendanceGroup", fields: [groupId], references: [id])
+  studentId String   @db.VarChar(24)
+  student   User     @relation("AttendanceStudent", fields: [studentId], references: [id])
+  date      DateTime
+  dateKey   String   @db.VarChar(10)
+  status    AttendanceStatus
+  slot      String   @default("")
+  reason    String   @default("")
+  lateMinutes Int    @default(0)
+  recordedById String? @db.VarChar(24)
+  recordedBy   User?   @relation("AttendanceRecordedBy", fields: [recordedById], references: [id])
+  recordedAt DateTime @default(now())
+  source    AttendanceSource @default(teacher)
+  // [{ at, by, from, to, source }] — faqat ko'rsatish uchun, join qilinmaydi.
+  history   Json     @default("[]")
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (groupId, studentId, dateKey, slot) WHERE isDeleted = false
+  @@index([studentId, date])
+  @@index([groupId, date])
+  @@index([studentId, dateKey])
+  @@map("attendances")
+}
+
+model AttendanceExemption {
+  id        String    @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  studentId String    @db.VarChar(24)
+  student   User      @relation("ExemptionStudent", fields: [studentId], references: [id])
+  startDate DateTime
+  endDate   DateTime?
+  daysOfWeek WeekDay[] @default([])
+  reason    String    @default("")
+  isActive  Boolean   @default(true)
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("ExemptionCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, isActive, startDate])
+  @@map("attendance_exemptions")
+}
+
+// Yagona qatorli sozlama (Mongo'da _id: "default").
+model AttendanceSettings {
+  id                       String @id @default("default")
+  lowAttendanceThreshold   Int    @default(60)
+  consecutiveAbsencesAlert Int    @default(3)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("attendance_settings")
+}
+
+model Grade {
+  id        String   @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  groupId   String   @db.VarChar(24)
+  group     Group    @relation("GradeGroup", fields: [groupId], references: [id])
+  studentId String   @db.VarChar(24)
+  student   User     @relation("GradeStudent", fields: [studentId], references: [id])
+  date      DateTime
+  dateKey   String   @db.VarChar(10)
+  slot      String   @default("")
+  value     Int
+  comment   String   @default("")
+  recordedById String @db.VarChar(24)
+  recordedBy   User   @relation("GradeRecordedBy", fields: [recordedById], references: [id])
+  recordedAt DateTime @default(now())
+  source    GradeSource @default(teacher)
+  history   Json     @default("[]")
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (groupId, studentId, dateKey, slot) WHERE isDeleted = false
+  @@index([studentId, dateKey])
+  @@index([groupId, date])
+  @@map("grades")
+}
+
+model LessonCancellation {
+  id      String   @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  groupId String   @db.VarChar(24)
+  group   Group    @relation("CancellationGroup", fields: [groupId], references: [id])
+  date    DateTime
+  dateKey String   @db.VarChar(10)
+  slot    String   @default("")
+  reason  CancellationReason @default(other)
+  note    String   @default("")
+  billable Boolean @default(false)
+  makeupDate DateTime?
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("CancellationCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (groupId, dateKey, slot) WHERE isDeleted = false
+  @@index([groupId, date])
+  @@map("lesson_cancellations")
+}
+
+model TeacherAbsence {
+  id      String   @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  groupId String   @db.VarChar(24)
+  group   Group    @relation("TeacherAbsenceGroup", fields: [groupId], references: [id])
+  teacherId String? @db.VarChar(24)
+  teacher   User?   @relation("TeacherAbsenceTeacher", fields: [teacherId], references: [id])
+  date    DateTime
+  dateKey String   @db.VarChar(10)
+  recordedById String @db.VarChar(24)
+  recordedBy   User   @relation("TeacherAbsenceRecordedBy", fields: [recordedById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, dateKey])
+  @@map("teacher_absences")
+}
+
+model TeacherAttendance {
+  id        String   @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  teacherId String   @db.VarChar(24)
+  teacher   User     @relation("TeacherAttendanceTeacher", fields: [teacherId], references: [id])
+  date      DateTime
+  dateKey   String   @db.VarChar(10)
+  status    TeacherAttendanceStatus
+  reason    String   @default("")
+  recordedById String? @db.VarChar(24)
+  recordedBy   User?   @relation("TeacherAttendanceRecordedBy", fields: [recordedById], references: [id])
+  recordedAt DateTime @default(now())
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teacherId, dateKey])
+  @@index([dateKey])
+  @@map("teacher_attendances")
+}
+
+// ─────────────────────── MOLIYA: TALABA ───────────────────────
+
+model StudentPayment {
+  id        String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId  String  @db.VarChar(24)
+  branch    Branch  @relation("StudentPaymentBranch", fields: [branchId], references: [id])
+  studentId String  @db.VarChar(24)
+  student   User    @relation("StudentPaymentStudent", fields: [studentId], references: [id])
+  groupId   String  @db.VarChar(24)
+  group     Group   @relation("StudentPaymentGroup", fields: [groupId], references: [id])
+  membershipId String? @db.VarChar(24)
+  membership   GroupMembership? @relation("StudentPaymentMembership", fields: [membershipId], references: [id])
+  year      Int
+  month     Int
+  baseFee   Float   @default(0)
+  prorationFactor Float @default(1)
+  discountApplied Float @default(0)
+  expectedAmount  Float @default(0)
+  paidAmount      Float @default(0)
+  status    PayStatus @default(unpaid)
+  writtenOff Boolean @default(false)
+  writeOffAmount Float @default(0)
+  writeOffAt DateTime?
+  recalculatedAt DateTime?
+  // MUHIM: `isOpening` unique kalitning bir qismi. Boshlang'ich qarz qatori
+  // oddiy oylik plan bilan BIR OYDA yonma-yon tura olishi uchun.
+  isOpening Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions PaymentTransaction[] @relation("PaymentTxPayment")
+  writeOffs    DebtWriteOffBreakdown[] @relation("BreakdownPayment")
+
+  @@unique([studentId, groupId, year, month, isOpening])
+  @@index([branchId])
+  @@index([year, month, status])
+  @@map("student_payments")
+}
+
+model PaymentTransaction {
+  id        String   @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId  String   @db.VarChar(24)
+  branch    Branch   @relation("PaymentTxBranch", fields: [branchId], references: [id])
+  paymentId String   @db.VarChar(24)
+  payment   StudentPayment @relation("PaymentTxPayment", fields: [paymentId], references: [id])
+  studentId String   @db.VarChar(24)
+  student   User     @relation("PaymentTxStudent", fields: [studentId], references: [id])
+  groupId   String   @db.VarChar(24)
+  group     Group    @relation("PaymentTxGroup", fields: [groupId], references: [id])
+  year      Int
+  month     Int
+  amount    Float
+  source    PaymentSource @default(direct)
+  method    PaymentMethod @default(cash)
+  paidAt    DateTime
+  note      String   @default("")
+  // Takroriy to'lovni to'sadi. QISMAN UNIQUE (NULL bo'lmaganda).
+  idempotencyKey String?
+  batchId   String?  @db.VarChar(24)
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("PaymentTxCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([paymentId])
+  @@index([studentId])
+  @@index([groupId])
+  @@index([paidAt])
+  @@index([batchId])
+  @@index([year, month, paidAt])
+  @@map("payment_transactions")
+}
+
+model StudentDeposit {
+  id        String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  studentId String @unique @db.VarChar(24)
+  student   User   @relation("StudentDepositStudent", fields: [studentId], references: [id])
+  balance   Float  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions DepositTransaction[] @relation("DepositTxDeposit")
+
+  @@map("student_deposits")
+}
+
+model DepositTransaction {
+  id        String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId  String? @db.VarChar(24)
+  branch    Branch? @relation("DepositTxBranch", fields: [branchId], references: [id])
+  studentId String  @db.VarChar(24)
+  student   User    @relation("DepositTxStudent", fields: [studentId], references: [id])
+  depositId String  @db.VarChar(24)
+  deposit   StudentDeposit @relation("DepositTxDeposit", fields: [depositId], references: [id])
+  type      DepositTxType
+  amount    Float
+  method    PaymentMethod @default(cash)
+  balanceAfter Float @default(0)
+  note      String  @default("")
+  isOpening Boolean @default(false)
+  paidAt    DateTime
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("DepositTxCreatedBy", fields: [createdById], references: [id])
+  expenseApprovalId String? @db.VarChar(24)
+  expenseApproval   Approval? @relation("DepositTxApproval", fields: [expenseApprovalId], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (expenseApprovalId) WHERE expenseApprovalId IS NOT NULL
+  @@index([branchId])
+  @@index([studentId, paidAt])
+  @@index([depositId])
+  @@index([type])
+  @@index([isOpening])
+  @@map("deposit_transactions")
+}
+
+model Discount {
+  id        String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  studentId String  @db.VarChar(24)
+  student   User    @relation("DiscountStudent", fields: [studentId], references: [id])
+  groupId   String  @db.VarChar(24)
+  group     Group   @relation("DiscountGroup", fields: [groupId], references: [id])
+  type      DiscountType
+  value     Float
+  scope     DiscountScope
+  year      Int?
+  month     Int?
+  reason    String  @default("")
+  isActive  Boolean @default(true)
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("DiscountCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, groupId, scope, year, month])
+  @@index([isActive])
+  @@map("discounts")
+}
+
+model GroupFee {
+  id      String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  groupId String @db.VarChar(24)
+  group   Group  @relation("GroupFeeGroup", fields: [groupId], references: [id])
+  year    Int
+  month   Int
+  amount  Float  @default(0)
+  source  FeeSource @default(auto)
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("GroupFeeCreatedBy", fields: [createdById], references: [id])
+  updatedById String? @db.VarChar(24)
+  updatedBy   User?   @relation("GroupFeeUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, year, month])
+  @@map("group_fees")
+}
+
+model DebtWriteOff {
+  id        String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  studentId String @db.VarChar(24)
+  student   User   @relation("DebtWriteOffStudent", fields: [studentId], references: [id])
+  groupId   String @db.VarChar(24)
+  group     Group  @relation("DebtWriteOffGroup", fields: [groupId], references: [id])
+  membershipId String? @db.VarChar(24)
+  membership   GroupMembership? @relation("DebtWriteOffMembership", fields: [membershipId], references: [id])
+  amount    Float  @default(0)
+  reasonTitle String @default("")
+  studentName String @default("")
+  groupName   String @default("")
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("DebtWriteOffCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  breakdown DebtWriteOffBreakdown[] @relation("BreakdownWriteOff")
+
+  @@index([studentId])
+  @@index([groupId, createdAt])
+  @@map("debt_write_offs")
+}
+
+// Mongo'da DebtWriteOff ichidagi massiv edi; `breakdown.year/month`
+// bo'yicha indeks bor edi — shuning uchun alohida jadval.
+model DebtWriteOffBreakdown {
+  id         String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  writeOffId String @db.VarChar(24)
+  writeOff   DebtWriteOff @relation("BreakdownWriteOff", fields: [writeOffId], references: [id], onDelete: Cascade)
+  paymentId  String? @db.VarChar(24)
+  payment    StudentPayment? @relation("BreakdownPayment", fields: [paymentId], references: [id])
+  year       Int
+  month      Int
+  amount     Float
+
+  @@index([writeOffId])
+  @@index([year, month])
+  @@map("debt_write_off_breakdown")
+}
+
+model StudentFreeze {
+  id        String    @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  studentId String    @db.VarChar(24)
+  student   User      @relation("FreezeStudent", fields: [studentId], references: [id])
+  startDate DateTime
+  endDate   DateTime?
+  reason    String    @default("")
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("FreezeCreatedBy", fields: [createdById], references: [id])
+  endedById   String? @db.VarChar(24)
+  endedBy     User?   @relation("FreezeEndedBy", fields: [endedById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, endDate, isDeleted])
+  @@map("student_freezes")
+}
+
+// ─────────────────────── MOLIYA: CHIQIM ───────────────────────
+
+model ExpenseCategory {
+  id        String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  name      String
+  code      String?
+  kind      ExpenseCategoryKind @default(operating)
+  branchId  String? @db.VarChar(24)
+  branch    Branch? @relation("ExpenseCategoryBranch", fields: [branchId], references: [id])
+  isSystem  Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("ExpenseCategoryCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenses Expense[] @relation("ExpenseCategoryRel")
+
+  // QISMAN UNIQUE: (branchId, name) WHERE isDeleted = false
+  @@index([kind])
+  @@index([branchId])
+  @@index([isActive])
+  @@map("expense_categories")
+}
+
+model Expense {
+  id          String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId    String? @db.VarChar(24)
+  branch      Branch? @relation("ExpenseBranch", fields: [branchId], references: [id])
+  allocation  ExpenseAllocation @default(none)
+  categoryId  String  @db.VarChar(24)
+  category    ExpenseCategory @relation("ExpenseCategoryRel", fields: [categoryId], references: [id])
+  categoryName String @default("")
+  categoryKind String @default("operating")
+  title       String
+  description String  @default("")
+  amount      Float
+  currency    ExpenseCurrency @default(UZS)
+  originalAmount Float?
+  exchangeRate   Float?
+  rateSource     String @default("")
+  spentAt     DateTime
+  accrualYear Int
+  accrualMonth Int
+  method      ExpenseMethod @default(cash)
+  vendor      String  @default("")
+  receiptId   String? @db.VarChar(24)
+  receipt     StoredFile? @relation("ExpenseReceipt", fields: [receiptId], references: [id])
+  isCapital   Boolean @default(false)
+  depreciationMonths Int?
+  expenseApprovalId String? @db.VarChar(24)
+  expenseApproval   Approval? @relation("ExpenseApproval", fields: [expenseApprovalId], references: [id])
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (expenseApprovalId) WHERE expenseApprovalId IS NOT NULL
+  @@index([spentAt, isDeleted])
+  @@index([accrualYear, accrualMonth, categoryId])
+  @@index([branchId, spentAt])
+  @@index([categoryId])
+  @@index([isCapital])
+  @@map("expenses")
+}
+
+model Approval {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String @db.VarChar(24)
+  branch   Branch @relation("ApprovalBranch", fields: [branchId], references: [id])
+  kind     ApprovalKind
+  category ApprovalCategory @default(financial)
+  amount   Float?
+  thresholdAtRequest Float?
+  payload  Json   @default("{}")
+  // QISMAN UNIQUE: bitta subject bo'yicha bir vaqtda faqat bitta
+  // `pending` so'rov bo'lishi mumkin.
+  subjectKey  String?
+  subjectName String @default("")
+  contextName String @default("")
+  status   ApprovalStatus @default(pending)
+  requestedById String @db.VarChar(24)
+  requestedBy   User   @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
+  requestNote String @default("")
+  decidedById String? @db.VarChar(24)
+  decidedBy   User?   @relation("ApprovalDecidedBy", fields: [decidedById], references: [id])
+  decidedAt   DateTime?
+  decisionNote String @default("")
+  resultTransactionId String? @db.VarChar(24)
+  executedAt  DateTime?
+  failureReason String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  depositTransactions DepositTransaction[]     @relation("DepositTxApproval")
+  expenses            Expense[]                @relation("ExpenseApproval")
+  salaryTransactions  SalaryTransaction[]      @relation("SalaryTxApproval")
+  staffSalaryTx       StaffSalaryTransaction[] @relation("StaffSalaryTxApproval")
+  teacherSalaries     TeacherSalary[]          @relation("TeacherSalaryApproval")
+
+  @@index([branchId, status, createdAt])
+  @@index([requestedById, createdAt])
+  @@index([category, status, createdAt])
+  @@index([kind])
+  @@map("expense_approvals")
+}
+
+// ─────────────────────── MOLIYA: O'QITUVCHI MAOSHI ───────────────────────
+
+model TeacherCompensation {
+  id        String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  teacherId String  @db.VarChar(24)
+  teacher   User    @relation("TeacherCompTeacher", fields: [teacherId], references: [id])
+  branchId  String? @db.VarChar(24)
+  branch    Branch? @relation("TeacherCompBranch", fields: [branchId], references: [id])
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  baseType     CompBaseType @default(none)
+  baseAmount   Float @default(0)
+  variableType CompVariableType @default(none)
+  variableRate Float @default(0)
+  percentBase  CompPercentBase @default(billed)
+  note      String  @default("")
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("TeacherCompCreatedBy", fields: [createdById], references: [id])
+  updatedById String? @db.VarChar(24)
+  updatedBy   User?   @relation("TeacherCompUpdatedBy", fields: [updatedById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  salaries TeacherSalary[] @relation("TeacherSalaryComp")
+
+  // QISMAN UNIQUE: (teacherId) WHERE effectiveTo IS NULL AND isDeleted = false
+  @@index([teacherId, effectiveFrom])
+  @@index([branchId])
+  @@map("teacher_compensations")
+}
+
+model TeacherGroupPeriod {
+  id        String    @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  teacherId String    @db.VarChar(24)
+  teacher   User      @relation("GroupPeriodTeacher", fields: [teacherId], references: [id])
+  groupId   String    @db.VarChar(24)
+  group     Group     @relation("GroupPeriodGroup", fields: [groupId], references: [id])
+  startDate DateTime
+  endDate   DateTime?
+  variableType CompVariableType?
+  variableRate Float?
+  percentBase  CompPercentBase?
+  salaryType   SalaryRateType?
+  fixedAmount  Float?
+  percentRate  Float?
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("GroupPeriodCreatedBy", fields: [createdById], references: [id])
+  updatedById String? @db.VarChar(24)
+  updatedBy   User?   @relation("GroupPeriodUpdatedBy", fields: [updatedById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId, startDate])
+  @@index([teacherId, startDate])
+  @@map("teacher_group_periods")
+}
+
+model TeacherSalary {
+  id        String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId  String  @db.VarChar(24)
+  branch    Branch  @relation("TeacherSalaryBranch", fields: [branchId], references: [id])
+  teacherId String  @db.VarChar(24)
+  teacher   User    @relation("TeacherSalaryTeacher", fields: [teacherId], references: [id])
+  // NULL = markaz qatori (base/bonus/deduction/opening).
+  groupId   String? @db.VarChar(24)
+  group     Group?  @relation("TeacherSalaryGroup", fields: [groupId], references: [id])
+  kind      SalaryKind @default(group)
+  year      Int
+  month     Int
+  salaryType SalaryRateType @default(fixed)
+  fixedAmount Float @default(0)
+  percentRate Float @default(0)
+  workStartDate DateTime?
+  workEndDate   DateTime?
+  variableType  CompVariableType?
+  variableRate  Float @default(0)
+  percentBase   CompPercentBase?
+  rateSource    String @default("none")
+  compensationId String? @db.VarChar(24)
+  compensation   TeacherCompensation? @relation("TeacherSalaryComp", fields: [compensationId], references: [id])
+  groupRevenue    Float @default(0)
+  prorationFactor Float @default(1)
+  payableDays     Int   @default(0)
+  totalDays       Int   @default(0)
+  proratedFixed   Float @default(0)
+  percentAmount   Float @default(0)
+  studentUnits    Float @default(0)
+  perStudentAmount Float @default(0)
+  lessonHours     Float @default(0)
+  perHourAmount   Float @default(0)
+  perGroupAmount  Float @default(0)
+  baseEarnings    Float @default(0)
+  expectedAmount  Float @default(0)
+  isOpening       Boolean @default(false)
+  paidAmount      Float @default(0)
+  overpaidAmount  Float @default(0)
+  status    PayStatus @default(unpaid)
+  isLocked  Boolean @default(false)
+  lockedAt  DateTime?
+  lockedById String? @db.VarChar(24)
+  lockedBy   User?   @relation("TeacherSalaryLockedBy", fields: [lockedById], references: [id])
+  source    SalarySource @default(auto)
+  reason    String  @default("")
+  approvalId String? @db.VarChar(24)
+  approval   Approval? @relation("TeacherSalaryApproval", fields: [approvalId], references: [id])
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("TeacherSalaryCreatedBy", fields: [createdById], references: [id])
+  recalculatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions SalaryTransaction[] @relation("SalaryTxSalary")
+
+  // IKKITA QISMAN UNIQUE (Mongo'dagi kabi — ular ATAYLAB ajratilgan):
+  //   a) (teacherId, groupId, year, month, kind) WHERE groupId IS NOT NULL
+  //   b) (teacherId, year, month, kind)          WHERE groupId IS NULL AND kind = 'base'
+  // Oddiy bitta unique indeks NULL'larni teng sanamagani uchun fiksa va
+  // bonus qatorlari bir oyda yonma-yon TURA OLMAY qolardi.
+  @@index([branchId])
+  @@index([teacherId])
+  @@index([groupId])
+  @@index([kind])
+  @@index([isOpening])
+  @@index([status])
+  @@index([year, month, status])
+  @@map("teacher_salaries")
+}
+
+model SalaryTransaction {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String @db.VarChar(24)
+  branch   Branch @relation("SalaryTxBranch", fields: [branchId], references: [id])
+  salaryId String @db.VarChar(24)
+  salary   TeacherSalary @relation("SalaryTxSalary", fields: [salaryId], references: [id])
+  teacherId String @db.VarChar(24)
+  teacher   User   @relation("SalaryTxTeacher", fields: [teacherId], references: [id])
+  groupId  String? @db.VarChar(24)
+  group    Group?  @relation("SalaryTxGroup", fields: [groupId], references: [id])
+  year     Int
+  month    Int
+  amount   Float
+  method   PaymentMethod
+  paidAt   DateTime
+  note     String @default("")
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("SalaryTxCreatedBy", fields: [createdById], references: [id])
+  expenseApprovalId String? @db.VarChar(24)
+  expenseApproval   Approval? @relation("SalaryTxApproval", fields: [expenseApprovalId], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (expenseApprovalId) WHERE expenseApprovalId IS NOT NULL
+  @@index([branchId])
+  @@index([salaryId])
+  @@index([teacherId])
+  @@index([groupId])
+  @@index([paidAt])
+  @@index([year, month, paidAt])
+  @@map("salary_transactions")
+}
+
+// ─────────────────────── MOLIYA: XODIM MAOSHI (KPI) ───────────────────────
+
+model StaffCompensation {
+  id         String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  employeeId String  @db.VarChar(24)
+  employee   User    @relation("StaffCompEmployee", fields: [employeeId], references: [id])
+  branchId   String? @db.VarChar(24)
+  branch     Branch? @relation("StaffCompBranch", fields: [branchId], references: [id])
+  salaryType StaffSalaryType @default(fixed)
+  baseAmount Float   @default(0)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  note       String  @default("")
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("StaffCompCreatedBy", fields: [createdById], references: [id])
+  updatedById String? @db.VarChar(24)
+  updatedBy   User?   @relation("StaffCompUpdatedBy", fields: [updatedById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (employeeId) WHERE effectiveTo IS NULL AND isDeleted = false
+  @@index([employeeId, effectiveFrom])
+  @@map("staff_compensations")
+}
+
+model KpiRule {
+  id          String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  name        String
+  description String  @default("")
+  trigger     KpiTrigger
+  conditions  Json    @default("{}")
+  rewardType  KpiRewardType @default(fixed)
+  rewardValue Float
+  applicableRoles String[] @default([])
+  branchId    String? @db.VarChar(24)
+  branch      Branch? @relation("KpiRuleBranch", fields: [branchId], references: [id])
+  monthlyCap  Float   @default(0)
+  enabled     Boolean @default(true)
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("KpiRuleCreatedBy", fields: [createdById], references: [id])
+  updatedById String? @db.VarChar(24)
+  updatedBy   User?   @relation("KpiRuleUpdatedBy", fields: [updatedById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments  StaffKpiAssignment[] @relation("KpiAssignmentRule")
+  payrollItems StaffPayrollItem[]   @relation("PayrollItemRule")
+
+  @@index([trigger])
+  @@index([enabled, trigger])
+  @@map("kpi_rules")
+}
+
+model StaffKpiAssignment {
+  id         String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  employeeId String  @db.VarChar(24)
+  employee   User    @relation("KpiAssignmentEmployee", fields: [employeeId], references: [id])
+  ruleId     String  @db.VarChar(24)
+  rule       KpiRule @relation("KpiAssignmentRule", fields: [ruleId], references: [id])
+  enabled    Boolean @default(true)
+  rewardValueOverride Float?
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("KpiAssignmentCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (employeeId, ruleId) WHERE isDeleted = false
+  @@index([employeeId])
+  @@index([ruleId])
+  @@map("staff_kpi_assignments")
+}
+
+model StaffPayroll {
+  id         String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  employeeId String  @db.VarChar(24)
+  employee   User    @relation("StaffPayrollEmployee", fields: [employeeId], references: [id])
+  branchId   String? @db.VarChar(24)
+  branch     Branch? @relation("StaffPayrollBranch", fields: [branchId], references: [id])
+  year       Int
+  month      Int
+  salaryType String  @default("fixed")
+  baseAmount Float   @default(0)
+  prorationFactor Float @default(1)
+  payableDays Int    @default(0)
+  totalDays   Int    @default(0)
+  fixedAmount Float  @default(0)
+  autoKpiTotal Float @default(0)
+  manualBonusTotal Float @default(0)
+  penaltyTotal     Float @default(0)
+  openingCreditTotal Float @default(0)
+  openingDebtTotal   Float @default(0)
+  openingDebtApplied Float @default(0)
+  finalAmount Float  @default(0)
+  paidAmount  Float  @default(0)
+  status      PayStatus @default(unpaid)
+  computedAt  DateTime?
+  source      PayrollSource @default(auto)
+  snapshot    Json?
+  lifecycle   PayrollLifecycle @default(draft)
+  finalizedAt DateTime?
+  finalizedById String? @db.VarChar(24)
+  finalizedBy   User?   @relation("StaffPayrollFinalizedBy", fields: [finalizedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items        StaffPayrollItem[]       @relation("PayrollItemPayroll")
+  transactions StaffSalaryTransaction[] @relation("StaffSalaryTxPayroll")
+
+  @@unique([employeeId, year, month])
+  @@index([branchId])
+  @@index([status])
+  @@index([source])
+  @@index([lifecycle])
+  @@index([year, month, status])
+  @@map("staff_payrolls")
+}
+
+model StaffPayrollItem {
+  id         String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  payrollId  String @db.VarChar(24)
+  payroll    StaffPayroll @relation("PayrollItemPayroll", fields: [payrollId], references: [id])
+  employeeId String @db.VarChar(24)
+  employee   User   @relation("PayrollItemEmployee", fields: [employeeId], references: [id])
+  year       Int
+  month      Int
+  ruleId     String @db.VarChar(24)
+  rule       KpiRule @relation("PayrollItemRule", fields: [ruleId], references: [id])
+  ruleName   String @default("")
+  trigger    String @default("")
+  sourceType String
+  sourceId   String? @db.VarChar(24)
+  // Takroriy KPI hisoblanishini to'sadi.
+  eventKey   String
+  quantity   Float  @default(1)
+  unitAmount Float  @default(0)
+  amount     Float  @default(0)
+  meta       Json   @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, ruleId, eventKey])
+  @@index([payrollId])
+  @@index([employeeId, year, month])
+  @@map("staff_payroll_items")
+}
+
+model StaffPayrollAdjustment {
+  id         String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  employeeId String  @db.VarChar(24)
+  employee   User    @relation("AdjustmentEmployee", fields: [employeeId], references: [id])
+  branchId   String? @db.VarChar(24)
+  branch     Branch? @relation("AdjustmentBranch", fields: [branchId], references: [id])
+  year       Int
+  month      Int
+  kind       StaffAdjustmentKind
+  amount     Float
+  reason     String
+  occurredAt DateTime?
+  // Mongo'da `carriedFrom: { year, month }` ichki obyekt edi — yassilandi.
+  carriedFromYear  Int?
+  carriedFromMonth Int?
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("AdjustmentCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (employeeId, year, month, kind)
+  //                WHERE kind IN ('opening_credit','opening_debt')
+  @@index([employeeId, year, month])
+  @@map("staff_payroll_adjustments")
+}
+
+model StaffSalaryTransaction {
+  id         String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId   String? @db.VarChar(24)
+  branch     Branch? @relation("StaffSalaryTxBranch", fields: [branchId], references: [id])
+  payrollId  String  @db.VarChar(24)
+  payroll    StaffPayroll @relation("StaffSalaryTxPayroll", fields: [payrollId], references: [id])
+  employeeId String  @db.VarChar(24)
+  employee   User    @relation("StaffSalaryTxEmployee", fields: [employeeId], references: [id])
+  year       Int
+  month      Int
+  amount     Float
+  method     PaymentMethod
+  paidAt     DateTime
+  note       String  @default("")
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("StaffSalaryTxCreatedBy", fields: [createdById], references: [id])
+  expenseApprovalId String? @db.VarChar(24)
+  expenseApproval   Approval? @relation("StaffSalaryTxApproval", fields: [expenseApprovalId], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (expenseApprovalId) WHERE expenseApprovalId IS NOT NULL
+  @@index([branchId])
+  @@index([payrollId])
+  @@index([employeeId])
+  @@index([paidAt])
+  @@index([year, month, paidAt])
+  @@map("staff_salary_transactions")
+}
+
+model PayrollAuditLog {
+  id         String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  employeeId String  @db.VarChar(24)
+  employee   User    @relation("PayrollAuditEmployee", fields: [employeeId], references: [id])
+  year       Int?
+  month      Int?
+  action     String
+  targetType String  @default("")
+  targetId   String? @db.VarChar(24)
+  oldValue   Json?
+  newValue   Json?
+  reason     String  @default("")
+  actorId    String? @db.VarChar(24)
+  actor      User?   @relation("PayrollAuditActor", fields: [actorId], references: [id])
+  actorLabel String  @default("")
+  meta       Json    @default("{}")
+
+  createdAt DateTime @default(now())
+
+  @@index([employeeId, createdAt])
+  @@index([employeeId, year, month, createdAt])
+  @@index([action])
+  @@map("payroll_audit_logs")
+}
+
+// ─────────────────────── XAZINA / BUXGALTERIYA ───────────────────────
+
+model Account {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String @db.VarChar(24)
+  branch   Branch @relation("AccountBranch", fields: [branchId], references: [id])
+  kind     AccountKind
+  // FAQAT due_from / due_to uchun: qaysi filial bilan hisob-kitob.
+  counterpartyBranchId String? @db.VarChar(24)
+  counterpartyBranch   Branch? @relation("AccountCounterparty", fields: [counterpartyBranchId], references: [id])
+  name     String  @default("")
+  currency String  @default("UZS")
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines JournalLine[] @relation("JournalLineAccount")
+
+  // DIQQAT: Mongo'da (branchId, kind, counterpartyBranchId) unique edi va
+  // NULL'lar TENG sanalardi. Postgres'da NULL'lar teng EMAS — shuning uchun
+  // migratsiyada IKKITA qisman unique indeks yaratiladi:
+  //   a) (branchId, kind, counterpartyBranchId) WHERE counterpartyBranchId IS NOT NULL
+  //   b) (branchId, kind)                       WHERE counterpartyBranchId IS NULL
+  @@index([branchId])
+  @@index([counterpartyBranchId])
+  @@map("accounts")
+}
+
+model JournalEntry {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String @db.VarChar(24)
+  branch   Branch @relation("JournalBranch", fields: [branchId], references: [id])
+  date     DateTime
+  kind     EntryKind
+  memo     String @default("")
+  refModel String?
+  refId    String? @db.VarChar(24)
+  isInternal Boolean @default(false)
+  counterpartyBranchId String? @db.VarChar(24)
+  counterpartyBranch   Branch? @relation("JournalCounterparty", fields: [counterpartyBranchId], references: [id])
+  totalDebit  Float
+  totalCredit Float
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("JournalEntryCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines JournalLine[] @relation("JournalLineEntry")
+
+  @@index([branchId, date])
+  @@index([date])
+  @@index([kind])
+  @@index([refId])
+  @@index([isInternal])
+  @@map("journal_entries")
+}
+
+// Mongo'da JournalEntry ichidagi massiv edi. Alohida jadval — `lines.accountId`
+// bo'yicha indeks va hisob qoldig'ini yig'ish (aggregate) shu ustunga tayanadi.
+model JournalLine {
+  id        String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  entryId   String @db.VarChar(24)
+  entry     JournalEntry @relation("JournalLineEntry", fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String @db.VarChar(24)
+  account   Account @relation("JournalLineAccount", fields: [accountId], references: [id])
+  accountKind String
+  debit     Float  @default(0)
+  credit    Float  @default(0)
+
+  @@index([entryId])
+  @@index([accountId])
+  @@map("journal_lines")
+}
+
+model Shift {
+  id        String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId  String @db.VarChar(24)
+  branch    Branch @relation("ShiftBranch", fields: [branchId], references: [id])
+  cashierId String @db.VarChar(24)
+  cashier   User   @relation("ShiftCashier", fields: [cashierId], references: [id])
+  openedAt  DateTime
+  openedById String? @db.VarChar(24)
+  openedBy   User?   @relation("ShiftOpenedBy", fields: [openedById], references: [id])
+  closedAt  DateTime?
+  closedById String? @db.VarChar(24)
+  closedBy   User?   @relation("ShiftClosedBy", fields: [closedById], references: [id])
+  openingCash  Float @default(0)
+  expectedCash Float?
+  countedCash  Float?
+  variance     Float?
+  varianceNote String @default("")
+  status    ShiftStatus @default(open)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cashTransfers CashTransfer[] @relation("TransferShift")
+
+  // QISMAN UNIQUE: (branchId, cashierId) WHERE status = 'open'
+  // — bitta kassirda bir vaqtda bitta ochiq smena.
+  @@index([branchId, openedAt])
+  @@index([cashierId])
+  @@index([status])
+  @@map("shifts")
+}
+
+model CashTransfer {
+  id           String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  fromBranchId String @db.VarChar(24)
+  fromBranch   Branch @relation("TransferFrom", fields: [fromBranchId], references: [id])
+  toBranchId   String @db.VarChar(24)
+  toBranch     Branch @relation("TransferTo", fields: [toBranchId], references: [id])
+  amount       Float
+  countedOnArrival Float?
+  discrepancy      Float?
+  status     TransferStatus @default(in_transit)
+  sentById   String? @db.VarChar(24)
+  sentBy     User?   @relation("CashTransferSentBy", fields: [sentById], references: [id])
+  sentAt     DateTime
+  receivedById String? @db.VarChar(24)
+  receivedBy   User?   @relation("CashTransferReceivedBy", fields: [receivedById], references: [id])
+  receivedAt DateTime?
+  shiftId    String? @db.VarChar(24)
+  shift      Shift?  @relation("TransferShift", fields: [shiftId], references: [id])
+  note       String  @default("")
+  discrepancyNote String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fromBranchId])
+  @@index([toBranchId, status])
+  @@index([status, sentAt])
+  @@map("cash_transfers")
+}
+
+model OpeningBalance {
+  id     String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  userId String @unique @db.VarChar(24)
+  user   User   @relation("OpeningBalanceUser", fields: [userId], references: [id])
+  role   OpeningRole
+  amount Float
+  signConvention OpeningSignConvention @default(flow)
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("OpeningBalanceBranch", fields: [branchId], references: [id])
+  groupId  String? @db.VarChar(24)
+  group    Group?  @relation("OpeningBalanceGroup", fields: [groupId], references: [id])
+  year   Int
+  month  Int
+  kind   OpeningKind
+  // [{ model, docId }] — materializatsiya qilingan hujjatlar izi.
+  materializedRefs Json @default("[]")
+  materializedAt   DateTime?
+  materializeError String @default("")
+  pendingReason    OpeningPendingReason @default(none)
+  note   String @default("")
+  importJobId String? @db.VarChar(24)
+  importJob   ImportJob? @relation("OpeningBalanceImportJob", fields: [importJobId], references: [id])
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("OpeningBalanceCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([pendingReason])
+  @@index([importJobId])
+  @@index([materializedAt])
+  @@map("opening_balances")
+}
+
+// ─────────────────────── LIDLAR (CRM) ───────────────────────
+
+model Lead {
+  id        String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId  String  @db.VarChar(24)
+  branch    Branch  @relation("LeadBranch", fields: [branchId], references: [id])
+  firstName String
+  lastName  String  @default("")
+  age       Int?
+  phone     String
+  parentPhone String?
+  sourceId  String? @db.VarChar(24)
+  source    LeadOption? @relation("LeadSource", fields: [sourceId], references: [id])
+  directionId String? @db.VarChar(24)
+  direction   LeadOption? @relation("LeadDirection", fields: [directionId], references: [id])
+  status    LeadStatus @default(new)
+  rejectionReasonId String? @db.VarChar(24)
+  rejectionReason   LeadOption? @relation("LeadRejection", fields: [rejectionReasonId], references: [id])
+  rejectionNote String @default("")
+  closedAt  DateTime?
+  trialDate DateTime?
+  notes     String  @default("")
+  assignedToId String? @db.VarChar(24)
+  assignedTo   User?   @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
+  followUpAt   DateTime?
+  followUpNote String  @default("")
+  followUpNotifiedAt DateTime?
+  studentId String? @db.VarChar(24)
+  student   User?   @relation("LeadStudent", fields: [studentId], references: [id])
+  creditedToId String? @db.VarChar(24)
+  creditedTo   User?   @relation("LeadCreditedTo", fields: [creditedToId], references: [id])
+  convertedById String? @db.VarChar(24)
+  convertedBy   User?   @relation("LeadConvertedBy", fields: [convertedById], references: [id])
+  convertedAt DateTime?
+  // [{ status, at, by }]
+  statusHistory Json @default("[]")
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("LeadCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  convertedUsers User[] @relation("UserFromLead")
+
+  @@index([branchId])
+  @@index([status, createdAt])
+  @@index([sourceId])
+  @@index([directionId])
+  @@index([closedAt])
+  @@index([followUpAt, followUpNotifiedAt])
+  @@index([assignedToId, followUpAt])
+  @@index([creditedToId, convertedAt])
+  @@index([studentId])
+  @@index([createdById, createdAt])
+  @@index([phone, createdAt])
+  @@map("leads")
+}
+
+model LeadOption {
+  id     String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  kind   LeadOptionKind
+  name   String
+  isActive Boolean @default(true)
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("LeadOptionCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leadsAsSource    Lead[]   @relation("LeadSource")
+  leadsAsDirection Lead[]   @relation("LeadDirection")
+  leadsAsRejection Lead[]   @relation("LeadRejection")
+  courses          Course[] @relation("CourseLeadDirection")
+
+  @@index([kind, isActive])
+  @@map("lead_options")
+}
+
+model LeadRoutingRule {
+  id        String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId  String  @db.VarChar(24)
+  branch    Branch  @relation("LeadRoutingBranch", fields: [branchId], references: [id])
+  sourceKey String?
+  isFallback Boolean @default(false)
+  assigneeId String? @db.VarChar(24)
+  assignee   User?   @relation("LeadRoutingAssignee", fields: [assigneeId], references: [id])
+  priority  Int     @default(100)
+  isActive  Boolean @default(true)
+  note      String  @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE:
+  //   a) (sourceKey, branchId) WHERE sourceKey IS NOT NULL
+  //   b) (isFallback)          WHERE isFallback = true AND isActive = true
+  @@index([branchId])
+  @@index([isActive])
+  @@map("lead_routing_rules")
+}
+
+// ─────────────────────── BILDIRISHNOMA ───────────────────────
+
+model Notification {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  senderId String? @db.VarChar(24)
+  sender   User?   @relation("NotificationSender", fields: [senderId], references: [id])
+  senderRole SenderRole @default(system)
+  title    String @default("")
+  body     String
+  category NotificationCategory @default(other)
+  templateId String? @db.VarChar(24)
+  template   NotificationTemplate? @relation("NotificationTemplateRel", fields: [templateId], references: [id])
+
+  // Mongo'da `audience: { type, groupIds[], userIds[] }` ichki obyekt edi.
+  // groupIds/userIds populate qilinadi — shuning uchun haqiqiy bog'lanish.
+  audienceType   AudienceType
+  audienceGroups Group[] @relation("NotificationAudienceGroups")
+  audienceUsers  User[]  @relation("NotificationAudienceUsers")
+
+  channels NotificationChannel[] @default([inapp, telegram])
+  status   NotificationStatus @default(sent)
+  scheduleAt DateTime?
+  recipientsCount  Int @default(0)
+  deliveredViaBot  Int @default(0)
+  readCount        Int @default(0)
+  isAuto     Boolean @default(false)
+  // QISMAN UNIQUE (NULL bo'lmaganda) — takroriy avto-xabarni to'sadi.
+  dedupeKey  String?
+  relatedFeedbackId String? @db.VarChar(24)
+  relatedFeedback   Feedback? @relation("NotificationFeedback", fields: [relatedFeedbackId], references: [id])
+  sentAt     DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients NotificationRecipient[] @relation("NotificationRecipientNotification")
+
+  @@index([senderId, sentAt])
+  @@index([category, sentAt])
+  @@index([sentAt])
+  @@index([status])
+  @@index([scheduleAt])
+  @@map("notifications")
+}
+
+model NotificationRecipient {
+  id             String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  notificationId String @db.VarChar(24)
+  notification   Notification @relation("NotificationRecipientNotification", fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String @db.VarChar(24)
+  user           User   @relation("NotificationRecipientUser", fields: [userId], references: [id])
+  inapp          Boolean @default(true)
+  readAt         DateTime?
+  botDeliveredAt DateTime?
+  botFailedReason String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([notificationId, userId])
+  @@index([userId, readAt, createdAt])
+  @@map("notification_recipients")
+}
+
+model NotificationTemplate {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  name     String
+  body     String
+  category TemplateCategory @default(custom)
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notifications Notification[] @relation("NotificationTemplateRel")
+
+  // QISMAN UNIQUE: (name) WHERE isActive = true
+  @@index([isActive])
+  @@map("notification_templates")
+}
+
+model SystemNotification {
+  id      String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  message String
+  link    String?
+  isRead  Boolean @default(false)
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("system_notifications")
+}
+
+// ─────────────────────── FIKR-MULOHAZA ───────────────────────
+
+model Feedback {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  authorId String? @db.VarChar(24)
+  author   User?   @relation("FeedbackAuthor", fields: [authorId], references: [id])
+  authorRoleSnapshot String @default("")
+  isAnonymous Boolean @default(false)
+  typeId   String  @db.VarChar(24)
+  type     FeedbackType @relation("FeedbackTypeRel", fields: [typeId], references: [id])
+  groupId  String? @db.VarChar(24)
+  group    Group?  @relation("FeedbackGroup", fields: [groupId], references: [id])
+  message  String
+  status   FeedbackStatus @default(new)
+  rejectionReason String @default("")
+  adminReply      String @default("")
+  repliedById String? @db.VarChar(24)
+  repliedBy   User?   @relation("FeedbackRepliedBy", fields: [repliedById], references: [id])
+  repliedAt   DateTime?
+  reviewedById String? @db.VarChar(24)
+  reviewedBy   User?   @relation("FeedbackReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  resolvedById String? @db.VarChar(24)
+  resolvedBy   User?   @relation("FeedbackResolvedBy", fields: [resolvedById], references: [id])
+  resolvedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notifications Notification[] @relation("NotificationFeedback")
+
+  @@index([status, createdAt])
+  @@index([authorId, createdAt])
+  @@index([typeId])
+  @@map("feedbacks")
+}
+
+model FeedbackType {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  name     String
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  feedbacks Feedback[] @relation("FeedbackTypeRel")
+
+  // QISMAN UNIQUE: (name) WHERE isActive = true
+  @@index([isActive])
+  @@map("feedback_types")
+}
+
+// ─────────────────────── TOPSHIRIQ VA FAYL ───────────────────────
+
+model Assignment {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  senderId String  @db.VarChar(24)
+  sender   User    @relation("AssignmentSender", fields: [senderId], references: [id])
+  title    String
+  body     String  @default("")
+  groups   Group[] @relation("AssignmentGroups")
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("AssignmentBranch", fields: [branchId], references: [id])
+  fileId   String? @db.VarChar(24)
+  file     StoredFile? @relation("AssignmentFile", fields: [fileId], references: [id])
+  fileRemovedAt DateTime?
+  dueDate  DateTime?
+  recipientsCount Int @default(0)
+  deliveredCount  Int @default(0)
+  blockedCount    Int @default(0)
+  noBotCount      Int @default(0)
+  failedCount     Int @default(0)
+  sentAt   DateTime @default(now())
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients AssignmentRecipient[] @relation("AssignmentRecipientAssignment")
+
+  @@index([senderId, sentAt])
+  @@index([branchId])
+  @@index([sentAt])
+  @@map("assignments")
+}
+
+model AssignmentRecipient {
+  id           String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  assignmentId String @db.VarChar(24)
+  assignment   Assignment @relation("AssignmentRecipientAssignment", fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    String @db.VarChar(24)
+  student      User   @relation("AssignmentRecipientStudent", fields: [studentId], references: [id])
+  groupId      String? @db.VarChar(24)
+  group        Group?  @relation("AssignmentRecipientGroup", fields: [groupId], references: [id])
+  status       DeliveryStatus @default(pending)
+  deliveredAt  DateTime?
+  failedReason String @default("")
+  readAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([assignmentId, studentId])
+  @@index([studentId, createdAt])
+  @@index([status])
+  @@map("assignment_recipients")
+}
+
+model StoredFile {
+  id           String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  originalName String
+  storedName   String @unique
+  relPath      String
+  mimeType     String @default("application/octet-stream")
+  size         Float
+  purpose      FilePurpose @default(assignment)
+  uploadedById String? @db.VarChar(24)
+  uploadedBy   User?   @relation("StoredFileUploadedBy", fields: [uploadedById], references: [id])
+  telegramFileId String?
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments Assignment[] @relation("AssignmentFile")
+  expenses    Expense[]    @relation("ExpenseReceipt")
+
+  @@index([purpose])
+  @@index([uploadedById])
+  @@index([isDeleted, createdAt])
+  @@map("stored_files")
+}
+
+model StorageSettings {
+  id                 String  @id @default("default")
+  autoCleanupEnabled Boolean @default(false)
+  frequency          CleanupFrequency @default(monthly)
+  olderThanDays      Int     @default(180)
+  lastRunAt          DateTime?
+  lastRunDeleted     Int     @default(0)
+  lastRunFreedBytes  Float   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("storage_settings")
+}
+
+model StorageUsage {
+  id           String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  key          String @unique @default("global")
+  usedBytes    Float  @default(0)
+  reconciledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("storage_usage")
+}
+
+// ─────────────────────── TELEGRAM BOT ───────────────────────
+
+model BotUser {
+  id         String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  telegramId BigInt
+  chatId     BigInt
+  username   String?
+  firstName  String  @default("")
+  lastName   String  @default("")
+  languageCode String @default("uz")
+  isBot      Boolean @default(false)
+  isBlocked  Boolean @default(false)
+  userId     String? @db.VarChar(24)
+  user       User?   @relation("BotUserUser", fields: [userId], references: [id])
+  // { type, step, data, expiresAt } — qisqa muddatli dialog holati.
+  flowState  Json?
+  lastSeenAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (telegramId, userId) WHERE userId IS NOT NULL
+  // — bitta Telegram bir nechta userga bog'lana oladi, lekin bir userga
+  // ikki marta emas.
+  @@index([telegramId])
+  @@index([userId])
+  @@map("bot_users")
+}
+
+model BotLock {
+  id        String   @id
+  holder    String
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bot_locks")
+}
+
+// ─────────────────────── LOG VA XIZMAT JADVALLARI ───────────────────────
+
+model ActivityLog {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  userId   String? @db.VarChar(24)
+  user     User?   @relation("ActivityLogUser", fields: [userId], references: [id])
+  userRole String  @default("system")
+  actorLabel String @default("")
+  method   HttpMethod
+  path     String
+  status   Int     @default(0)
+  durationMs Int   @default(0)
+  ip       String  @default("")
+  userAgent String @default("")
+  body     Json?
+  resourceType String @default("")
+  resourceId   String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([resourceType, createdAt])
+  @@index([method, createdAt])
+  @@map("activity_logs")
+}
+
+model ArchiveReason {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  title    String
+  isActive Boolean @default(true)
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("ArchiveReasonCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  logs        ArchiveLog[]      @relation("ArchiveLogReason")
+  memberships GroupMembership[] @relation("MembershipLeftReason")
+
+  @@index([isActive])
+  @@map("archive_reasons")
+}
+
+model ArchiveLog {
+  id     String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  userId String @db.VarChar(24)
+  user   User   @relation("ArchiveLogUser", fields: [userId], references: [id])
+  action ArchiveAction
+  reasonId String? @db.VarChar(24)
+  reason   ArchiveReason? @relation("ArchiveLogReason", fields: [reasonId], references: [id])
+  reasonTitle String @default("")
+  performedById String? @db.VarChar(24)
+  performedBy   User?   @relation("ArchiveLogPerformedBy", fields: [performedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reasonId, action, createdAt])
+  @@map("archive_logs")
+}
+
+model Holiday {
+  id          String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  name        String
+  isRecurring Boolean @default(true)
+  month       Int
+  day         Int
+  year        Int?
+  message     String
+  audience    HolidayAudience @default(all)
+  isActive    Boolean @default(true)
+  lastSentAt  DateTime?
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("HolidayCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, month, day])
+  @@map("holidays")
+}
+
+model ImportJob {
+  id          String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId    String? @db.VarChar(24)
+  branch      Branch? @relation("ImportJobBranch", fields: [branchId], references: [id])
+  importerKey String
+  fileName    String  @default("")
+  userId      String? @db.VarChar(24)
+  user        User?   @relation("ImportJobUser", fields: [userId], references: [id])
+  userName    String  @default("")
+  total       Int     @default(0)
+  imported    Int     @default(0)
+  failed      Int     @default(0)
+  duplicate   Int     @default(0)
+  pending     Int     @default(0)
+  durationMs  Int     @default(0)
+  mode        ImportMode @default(file)
+  status      ImportStatus @default(completed)
+  processed   Int     @default(0)
+  rows        Json    @default("[]")
+  results     Json    @default("[]")
+  // { branchId, allowedBranchIds[], canSeeAllBranches, permissions[] }
+  scope       Json    @default("{}")
+  error       String  @default("")
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  openingBalances OpeningBalance[] @relation("OpeningBalanceImportJob")
+
+  @@index([branchId, createdAt])
+  @@index([userId, status, createdAt])
+  @@index([importerKey])
+  @@index([status])
+  @@map("import_jobs")
+}
+
+model Cache {
+  id        String   @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  key       String   @unique
+  value     Json?
+  // Mongo'da TTL indeks edi → ttlCleanup.job.js.
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@map("caches")
+}
+
+model RatingSettings {
+  id               String @id @default("default")
+  gradeWeight      Float  @default(0.7)
+  attendanceWeight Float  @default(0.3)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("rating_settings")
+}
+
+// ─────────────────────── AI QATLAMI ───────────────────────
+
+model AiConfig {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  // NULL = global standart, aks holda filial uchun override.
+  // QISMAN UNIQUE: bittadan ortiq global konfiguratsiya bo'lmasligi kerak.
+  branchId String? @unique @db.VarChar(24)
+  branch   Branch? @relation("AiConfigBranch", fields: [branchId], references: [id])
+  // Mongo'da Map<String, Number> edi.
+  churnWeights   Json
+  paymentWeights Json
+  thresholds     Json
+  confidenceFloor Float @default(0.4)
+  narrationEnabled Boolean @default(true)
+  narrationModel   String @default("gemini-2.5-flash")
+  engineVersion    String @default("1.0.0")
+  updatedById String? @db.VarChar(24)
+  updatedBy   User?   @relation("AiConfigUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_configs")
+}
+
+model Insight {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String @db.VarChar(24)
+  branch   Branch @relation("InsightBranch", fields: [branchId], references: [id])
+  subjectType InsightSubjectType
+  // Polimorf ishora (student/teacher/group/lead/course/branch) — FK EMAS.
+  subjectId   String @db.VarChar(24)
+  subjectLabel String @default("")
+  subjectHref  String?
+  kind     InsightKind
+  domain   InsightDomain
+  stance   InsightStance @default(risk)
+  severity InsightSeverity
+  title    String @default("")
+  score      Float
+  confidence Float
+  factors    Json @default("[]")
+  sourceRefs Json @default("[]")
+  recommendedActions Json @default("[]")
+  expectedImpactAmount   Float  @default(0)
+  expectedImpactCurrency String @default("UZS")
+  expectedImpactLabel    String @default("")
+  priority Int @default(0)
+  narration      String?
+  narrationHash  String?
+  narrationModel String?
+  status   InsightStatus @default(open)
+  acknowledgedById String? @db.VarChar(24)
+  acknowledgedBy   User?   @relation("InsightAcknowledgedBy", fields: [acknowledgedById], references: [id])
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  dismissReason  String @default("")
+  outcome        InsightOutcome @default(pending)
+  outcomeCheckedAt DateTime?
+  engineVersion  String
+  generatedAt    DateTime @default(now())
+  expiresAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // QISMAN UNIQUE: (subjectType, subjectId, kind) WHERE status IN ('open','acked')
+  @@index([branchId, status, priority])
+  @@index([branchId, domain, status, priority])
+  @@index([subjectId, status])
+  @@index([outcome, resolvedAt])
+  @@index([generatedAt])
+  @@index([expiresAt])
+  @@map("insights")
+}
+
+model AiRanking {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String @db.VarChar(24)
+  branch   Branch @relation("AiRankingBranch", fields: [branchId], references: [id])
+  type     RankingType
+  generatedAt DateTime @default(now())
+  scanned  Int    @default(0)
+  // [{ rank, subjectType, subjectId, label, href, score, severity,
+  //    confidence, metrics[], note }]
+  rows     Json   @default("[]")
+  totals   Json   @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, type])
+  @@map("ai_rankings")
+}
+
+model AiReport {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String @db.VarChar(24)
+  branch   Branch @relation("AiReportBranch", fields: [branchId], references: [id])
+  period   AiReportPeriod
+  periodKey String
+  periodStart DateTime
+  periodEnd   DateTime
+  title    String
+  summary  String @default("")
+  // [{ key, title, headline, metrics[], narration }]
+  sections Json   @default("[]")
+  insightHigh          Int   @default(0)
+  insightMedium        Int   @default(0)
+  insightOpportunities Int   @default(0)
+  insightImpactAtRisk  Float @default(0)
+  outcomePrevented       Int @default(0)
+  outcomeOccurred        Int @default(0)
+  outcomeResolvedByOwner Int @default(0)
+  narrationModel String?
+  engineVersion  String
+  generatedAt    DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, period, periodKey])
+  @@index([branchId, period, periodStart])
+  @@index([generatedAt])
+  @@map("ai_reports")
+}
+
+model AiRun {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String @db.VarChar(24)
+  branch   Branch @relation("AiRunBranch", fields: [branchId], references: [id])
+  trigger  AiRunTrigger
+  scope    AiRunScope @default(full)
+  status   AiRunStatus @default(running)
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+  stats      Json @default("{}")
+  openHigh          Int @default(0)
+  openMedium        Int @default(0)
+  openOpportunities Int @default(0)
+  error         String @default("")
+  engineVersion String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Mongo'da 90 kunlik TTL indeks edi → ttlCleanup.job.js.
+  @@index([branchId, startedAt])
+  @@index([status])
+  @@index([startedAt])
+  @@map("ai_runs")
+}
+
+model AiUsageLog {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("AiUsageBranch", fields: [branchId], references: [id])
+  monthKey String
+  provider AiUsageProvider
+  model    String
+  kind     AiUsageKind
+  inputTokens  Int   @default(0)
+  outputTokens Int   @default(0)
+  costUsd      Float @default(0)
+  latencyMs    Int   @default(0)
+  ok           Boolean @default(true)
+  errorCode    String  @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Mongo'da 400 kunlik TTL indeks edi → ttlCleanup.job.js.
+  @@index([branchId])
+  @@index([monthKey, ok])
+  @@index([kind])
+  @@index([ok])
+  @@index([createdAt])
+  @@map("ai_usage_logs")
+}

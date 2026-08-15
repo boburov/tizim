@@ -6,6 +6,8 @@ import User from "../../../models/user.model.js";
 import Group from "../../../models/group.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import BotUser from "../../../models/botUser.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -391,7 +393,7 @@ export const deliverNotification = async (notificationId) => {
 // Agenda mavjud bo'lmasa (mas. test) - fonда (detached) bajaramiz.
 const scheduleDelivery = async (notificationId) => {
   try {
-    const agenda = (await import("../../../config/agenda.js")).default;
+    const agenda = (await import("../../../config/scheduler.js")).default;
     await agenda.now("notification.deliver", {
       notificationId: String(notificationId),
     });
@@ -501,7 +503,7 @@ const materializeRecipients = async (notificationId, recipientIds, channels) => 
 // Rejalashtirilgan yuborishni belgilangan vaqtga Agenda job'iga qo'yadi.
 const scheduleSend = async (notificationId, when) => {
   try {
-    const agenda = (await import("../../../config/agenda.js")).default;
+    const agenda = (await import("../../../config/scheduler.js")).default;
     await agenda.schedule(when, "notification.send", {
       notificationId: String(notificationId),
     });
@@ -545,7 +547,7 @@ export const cancelScheduled = async (notificationId) => {
   notif.status = "canceled";
   await notif.save();
   try {
-    const agenda = (await import("../../../config/agenda.js")).default;
+    const agenda = (await import("../../../config/scheduler.js")).default;
     await agenda.cancel({
       name: "notification.send",
       "data.notificationId": String(notificationId),
@@ -657,35 +659,40 @@ export const getMyInbox = async (
 };
 
 export const getUnreadCount = async (userId) =>
-  NotificationRecipient.countDocuments({
-    user: userId,
-    readAt: null,
-    inapp: { $ne: false },
+  prisma.notificationRecipient.count({
+    where: { userId: String(userId), readAt: null, inapp: true },
   });
 
 export const markRead = async (recipientId, userId) => {
-  const updated = await NotificationRecipient.findOneAndUpdate(
-    { _id: recipientId, user: userId, readAt: null },
-    { $set: { readAt: new Date() } },
-    { new: true },
-  );
+  // Shartli atomik yangilanish: `readAt: null` WHERE ichida, ya'ni ikki
+  // marta bosilsa ikkinchisi `count = 0` oladi va readCount IKKI MARTA
+  // oshmaydi.
+  const res = await prisma.notificationRecipient.updateMany({
+    where: { id: String(recipientId), userId: String(userId), readAt: null },
+    data: { readAt: new Date() },
+  });
+  if (!res.count) return null;
+
+  const updated = await prisma.notificationRecipient.findUnique({
+    where: { id: String(recipientId) },
+  });
   if (updated) {
-    await Notification.updateOne(
-      { _id: updated.notification },
-      { $inc: { readCount: 1 } },
-    );
+    await prisma.notification.update({
+      where: { id: updated.notificationId },
+      data: { readCount: { increment: 1 } },
+    });
   }
-  return updated;
+  return withLegacyId(updated);
 };
 
 export const markAllRead = async (userId) => {
   // Faqat in-app kanalidagi xabarlarni "o'qildi" qilamiz - getMyInbox va
   // getUnreadCount bilan bir xil qamrov (telegram-only recipientlar inbox'da
   // ko'rinmaydi, shuning uchun ularning readCount'iga ham tegmaymiz).
-  const docs = await NotificationRecipient.find(
-    { user: userId, readAt: null, inapp: { $ne: false } },
-    { _id: 1, notification: 1 },
-  ).lean();
+  const docs = await prisma.notificationRecipient.findMany({
+    where: { userId: String(userId), readAt: null, inapp: true },
+    select: { id: true, notificationId: true },
+  });
   if (!docs.length) return { updated: 0 };
 
   // Har bir notification bo'yicha recipient id'larini guruhlaymiz, so'ng
@@ -694,21 +701,24 @@ export const markAllRead = async (userId) => {
   // ikki marta sanash poygasini oldini oladi.
   const byNotif = new Map();
   for (const d of docs) {
-    const k = String(d.notification);
+    const k = String(d.notificationId);
     if (!byNotif.has(k)) byNotif.set(k, []);
-    byNotif.get(k).push(d._id);
+    byNotif.get(k).push(d.id);
   }
 
   const now = new Date();
   const results = await Promise.all(
     [...byNotif.entries()].map(async ([nid, ids]) => {
-      const res = await NotificationRecipient.updateMany(
-        { _id: { $in: ids }, readAt: null },
-        { $set: { readAt: now } },
-      );
-      const n = res.modifiedCount || 0;
+      const res = await prisma.notificationRecipient.updateMany({
+        where: { id: { in: ids }, readAt: null },
+        data: { readAt: now },
+      });
+      const n = res.count || 0;
       if (n > 0) {
-        await Notification.updateOne({ _id: nid }, { $inc: { readCount: n } });
+        await prisma.notification.update({
+          where: { id: nid },
+          data: { readCount: { increment: n } },
+        });
       }
       return n;
     }),

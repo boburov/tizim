@@ -175,7 +175,7 @@ ${input.templateName || "O'quv markaz tizimi"} — \`${tenant.domain}\` uchun al
 
 | Papka | Nima |
 |---|---|
-| \`server/\` | Node.js + Express + MongoDB API |
+| \`server/\` | Node.js + Express + PostgreSQL (Prisma) API |
 | \`client/\` | Vite + React panel |
 | \`.env.example\` | Qanday o'zgaruvchilar borligi (qiymatlarsiz) |
 | \`tenant.json\` | Texnik ma'lumot: domen, port, pm2 nomi, brend |
@@ -183,7 +183,7 @@ ${input.templateName || "O'quv markaz tizimi"} — \`${tenant.domain}\` uchun al
 ## Muhim: \`.env\` bu repoda YO'Q
 
 Haqiqiy \`.env\` fayllarini **admin panel** yaratadi va to'g'ridan-to'g'ri
-serverga yozadi. Ular repoga hech qachon tushmaydi — ichida MongoDB manzili,
+serverga yozadi. Ular repoga hech qachon tushmaydi — ichida PostgreSQL manzili,
 JWT sirlari va Telegram tokeni bor.
 
 Sozlamani o'zgartirish kerak bo'lsa — **admin panel → loyiha → Sozlamalar**.

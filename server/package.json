@@ -7,6 +7,12 @@
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "lint": "eslint .",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:validate": "prisma validate",
+    "prisma:studio": "prisma studio",
     "db:clean": "node src/seeds/cleanDatabase.seed.js",
     "db:reset": "bash scripts/db-reset.sh",
     "seed:permissions": "node src/seeds/permissions.seed.js",
@@ -68,10 +74,11 @@
     "test:salary-balance": "node tests/teacherSalaryBalance.test.js",
     "migrate:teacher-compensation": "node src/seeds/migrateTeacherCompensation.seed.js",
     "test:opening": "node tests/openingBalance.test.js",
-    "test:ledger": "node tests/ledger.test.js"
+    "test:ledger": "node tests/ledger.test.js",
+    "test:auth-prisma": "node tests/authPrisma.test.js"
   },
   "dependencies": {
-    "agenda": "^5.0.0",
+    "@prisma/client": "^6.19.3",
     "bcrypt": "^5.1.1",
     "bullmq": "^6.0.9",
     "compression": "^1.7.4",
@@ -88,6 +95,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "node-telegram-bot-api": "^0.67.0",
+    "pg-boss": "^12.27.0",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0",
     "zod": "^3.23.8"
@@ -95,6 +103,7 @@
   "devDependencies": {
     "@faker-js/faker": "^10.4.0",
     "eslint": "^9.13.0",
-    "nodemon": "^3.1.7"
+    "nodemon": "^3.1.7",
+    "prisma": "^6.19.3"
   }
 }

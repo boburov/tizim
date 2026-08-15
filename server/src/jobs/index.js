@@ -1,4 +1,4 @@
-import agenda from "../config/agenda.js";
+import agenda from "../config/scheduler.js";
 import logger from "../config/logger.js";
 import defineCleanupExpiredTokens, {
   JOB_NAME as CLEANUP_JOB,
@@ -68,6 +68,9 @@ import defineAiMorningDigest, {
 import defineAiNarration, {
   JOB_NAME as AI_NARRATION_JOB,
 } from "./aiNarration.job.js";
+import defineTtlCleanup, {
+  JOB_NAME as TTL_CLEANUP_JOB,
+} from "./ttlCleanup.job.js";
 import { catchUpMonthlyGeneration } from "./catchUpMonthly.js";
 import * as groupsService from "../modules/groups/services/groups.service.js";
 
@@ -102,11 +105,19 @@ export const startJobs = async () => {
   defineAiMorningDigest(agenda);
   defineAiNarration(agenda);
   defineUsageHeartbeat(agenda);
+  defineTtlCleanup(agenda);
 
   await agenda.start();
 
   // Har kuni 03:00 da eski tokenlarni tozalash
   await every("0 3 * * *", CLEANUP_JOB);
+
+  // TTL TOZALASH - har kuni 03:15 da.
+  //
+  // Mongo'da bu ish BAZANING O'ZIDA bo'lardi (expireAfterSeconds indeksi).
+  // PostgreSQL'da TTL yo'q, shuning uchun eskirgan cache/token/AI yozuvlari
+  // shu job orqali o'chiriladi. Jobsiz jadvallar cheksiz o'sadi.
+  await every("15 3 * * *", TTL_CLEANUP_JOB);
 
   // Bayram tabriklari - har kuni 08:30 da (past davomat bilan to'qnashmasin)
   await every("30 8 * * *", HOLIDAY_JOB);

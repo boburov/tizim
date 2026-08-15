@@ -1,5 +1,4 @@
-import User from "../../../models/user.model.js";
-import RefreshToken from "../../../models/refreshToken.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { signAccess, signRefresh, verifyRefresh } from "../../../utils/jwt.js";
 import {
@@ -15,11 +14,11 @@ import {
 import { getActiveBranchId } from "../../../helpers/branchContext.helper.js";
 import { buildUserProfile } from "../../../helpers/userProfile.helper.js";
 import { sha256 } from "../../../utils/hashToken.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import { normalizePhone, isPhoneLike } from "../../../utils/phone.js";
 import { ROLES } from "../../../constants/roles.js";
 import env from "../../../config/env.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
-import Branch from "../../../models/branch.model.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
 import logger from "../../../config/logger.js";
 
@@ -28,25 +27,31 @@ const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const buildRefreshExpiry = () => new Date(Date.now() + REFRESH_TTL_MS);
 
 export const issueTokens = async (user, { userAgent, ip }) => {
-  const payload = { sub: String(user._id), role: user.role };
+  const payload = { sub: String(user.id), role: user.role };
   const accessToken = signAccess(payload);
   const refreshToken = signRefresh(payload);
 
-  await RefreshToken.create({
-    user: user._id,
-    tokenHash: sha256(refreshToken),
-    userAgent,
-    ip,
-    expiresAt: buildRefreshExpiry(),
+  await prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      tokenHash: sha256(refreshToken),
+      userAgent,
+      ip,
+      expiresAt: buildRefreshExpiry(),
+    },
   });
 
   return { accessToken, refreshToken };
 };
 
+// Prisma oddiy obyekt qaytaradi (Mongoose hujjati emas), shuning uchun
+// `toJSON()` yo'q. Global `omit` tufayli passwordHash odatda umuman
+// kelmaydi - lekin login oqimi uni ATAYLAB so'raydi, shuning uchun bu
+// yerda yana bir bor olib tashlanadi (ikkinchi qulf).
 export const sanitizeUser = (user) => {
-  const obj = user.toJSON ? user.toJSON() : user;
-  delete obj.passwordHash;
-  return obj;
+  if (!user) return user;
+  const { passwordHash, ...rest } = user;
+  return withLegacyId(rest);
 };
 
 export const login = async ({ login, password, userAgent, ip }) => {
@@ -57,7 +62,12 @@ export const login = async ({ login, password, userAgent, ip }) => {
   const filters = [{ username: trimmed.toLowerCase() }];
   if (phone) filters.push({ phone });
 
-  const user = await User.findOne({ $or: filters }).select("+passwordHash");
+  // `omit: { passwordHash: false }` - Mongoose'dagi `.select("+passwordHash")`
+  // ning ekvivalenti. Xesh FAQAT shu yerda o'qiladi.
+  const user = await prisma.user.findFirst({
+    where: { OR: filters },
+    omit: { passwordHash: false },
+  });
   if (!user || !user.isActive || user.isDeleted) {
     throw new ApiError(401, "Login yoki parol noto'g'ri");
   }
@@ -86,7 +96,10 @@ export const login = async ({ login, password, userAgent, ip }) => {
   // token yangilanganda ham chaqiriladi va maydon "oxirgi faollik"ka aylanib
   // qolardi. updateOne ishlatiladi (user.save() emas) - hujjat +passwordHash
   // bilan yuklangan, save() uni qayta validatsiya qilardi.
-  await User.updateOne({ _id: user._id }, { $set: { lastLoginAt: new Date() } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
 
   return {
     accessToken,
@@ -115,15 +128,19 @@ export const rotateRefresh = async ({ rawRefresh, userAgent, ip }) => {
 
   const tokenHash = sha256(rawRefresh);
   const now = new Date();
-  // Race-safe: faqat hali revoke qilinmagan yozuvni atomik tarzda yopamiz
-  const revoked = await RefreshToken.findOneAndUpdate(
-    { tokenHash, revokedAt: null, expiresAt: { $gt: now } },
-    { $set: { revokedAt: now } },
-    { new: true },
-  );
-  if (!revoked) throw new ApiError(401, "Sessiya tugagan");
+  // POYGA XAVFSIZ (race-safe): shart ichida `revokedAt: null` turibdi,
+  // shuning uchun ikkita parallel so'rovdan FAQAT BITTASI yozuvni yopa
+  // oladi va `count === 1` oladi. Ikkinchisi 0 olib rad etiladi.
+  //
+  // Mongo'dagi findOneAndUpdate ham xuddi shu vazifani bajarardi -
+  // Prisma'da atomik shartli yangilanish `updateMany` orqali beriladi.
+  const revoked = await prisma.refreshToken.updateMany({
+    where: { tokenHash, revokedAt: null, expiresAt: { gt: now } },
+    data: { revokedAt: now },
+  });
+  if (revoked.count !== 1) throw new ApiError(401, "Sessiya tugagan");
 
-  const user = await User.findById(payload.sub);
+  const user = await prisma.user.findUnique({ where: { id: payload.sub } });
   if (!user || !user.isActive || user.isDeleted) {
     throw new ApiError(401, "Foydalanuvchi topilmadi");
   }
@@ -146,10 +163,10 @@ export const rotateRefresh = async ({ rawRefresh, userAgent, ip }) => {
 export const logout = async ({ rawRefresh }) => {
   if (!rawRefresh) return;
   const tokenHash = sha256(rawRefresh);
-  await RefreshToken.findOneAndUpdate(
-    { tokenHash, revokedAt: null },
-    { $set: { revokedAt: new Date() } },
-  );
+  await prisma.refreshToken.updateMany({
+    where: { tokenHash, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
 };
 
 /**
@@ -179,14 +196,17 @@ export const me = async (user, ctx = {}) => {
     const allowedIds = await resolveAllowedBranchIds(user, baseRole.permissions);
     const [list, total] = await Promise.all([
       allowedIds.length
-        ? Branch.find({ _id: { $in: allowedIds }, isDeleted: false, isActive: true })
-            .select("_id name code isMain")
-            .sort({ isMain: -1, name: 1 })
-            .lean()
+        ? prisma.branch.findMany({
+            where: { id: { in: allowedIds }, isDeleted: false, isActive: true },
+            select: { id: true, name: true, code: true, isMain: true },
+            // Mongo: .sort({ isMain: -1, name: 1 }) - asosiy filial birinchi.
+            orderBy: [{ isMain: "desc" }, { name: "asc" }],
+          })
         : [],
-      Branch.countDocuments({ isDeleted: false, isActive: true }),
+      prisma.branch.count({ where: { isDeleted: false, isActive: true } }),
     ]);
-    return { list, total };
+    // Klient `_id` kutadi (qarang: utils/serialize.js).
+    return { list: list.map(withLegacyId), total };
   };
 
   let { list: branches, total: branchCount } = await readBranchState();
@@ -245,42 +265,62 @@ export const me = async (user, ctx = {}) => {
 };
 
 export const updateProfile = async (currentUser, body) => {
-  const user = await User.findById(currentUser._id);
-  if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
+  const userId = currentUser.id || currentUser._id;
+  const exists = await prisma.user.findUnique({ where: { id: userId } });
+  if (!exists) throw new ApiError(404, "Foydalanuvchi topilmadi");
 
-  // Telefon takrorlanishi BLOKLANMAYDI (qarang: user.model.js phone izohi).
+  // Faqat KELGAN maydonlar yoziladi. Mongoose'da bu `user.x = ...` +
+  // `save()` bilan bo'lardi; Prisma'da `data` obyektini shu tarzda
+  // yig'amiz - berilmagan maydon umuman tegilmaydi.
+  const data = {};
+
+  // Telefon takrorlanishi BLOKLANMAYDI (qarang: prisma/schema.prisma dagi
+  // User.phone izohi - unique EMAS).
   if (body.phone !== undefined) {
     const phone = body.phone ? normalizePhone(body.phone) : null;
     if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
-    user.phone = phone || undefined;
+    data.phone = phone || null;
   }
 
-  if (body.firstName !== undefined) user.firstName = body.firstName.trim();
-  if (body.lastName !== undefined) user.lastName = body.lastName.trim();
+  if (body.firstName !== undefined) data.firstName = body.firstName.trim();
+  if (body.lastName !== undefined) data.lastName = body.lastName.trim();
   if (body.birthDate !== undefined) {
-    user.birthDate = body.birthDate ? new Date(body.birthDate) : null;
+    data.birthDate = body.birthDate ? new Date(body.birthDate) : null;
   }
-  if (body.gender !== undefined) user.gender = body.gender || null;
+  if (body.gender !== undefined) data.gender = body.gender || null;
 
-  await user.save();
+  const user = await prisma.user.update({ where: { id: userId }, data });
   return sanitizeUser(user);
 };
 
 export const changePassword = async (currentUser, { currentPassword, newPassword }) => {
-  const user = await User.findById(currentUser._id).select("+passwordHash");
+  const userId = currentUser.id || currentUser._id;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    omit: { passwordHash: false },
+  });
   if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
 
   const ok = await comparePassword(currentPassword, user.passwordHash);
   if (!ok) throw new ApiError(400, "Joriy parol noto'g'ri");
 
-  user.passwordHash = await hashPassword(newPassword);
-  await user.save();
-
-  // Parol o'zgargach barcha eski sessiyalarni bekor qilamiz
-  await RefreshToken.updateMany(
-    { user: user._id, revokedAt: null },
-    { $set: { revokedAt: new Date() } },
-  );
+  // Parolni yangilash va eski sessiyalarni yopish BITTA TRANZAKSIYADA.
+  //
+  // Mongo'da bu ikki alohida so'rov edi va oradagi xato "parol o'zgardi,
+  // lekin eski sessiyalar tirik" degan xavfli holatni qoldirardi.
+  // PostgreSQL tranzaksiyasi bunga yo'l qo'ymaydi - migratsiyaning
+  // ochiq yutug'i.
+  const newHash = await hashPassword(newPassword);
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash },
+    }),
+    prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+  ]);
 };
 
 export const registerUser = async (body, scope = {}) => {
@@ -291,7 +331,7 @@ export const registerUser = async (body, scope = {}) => {
 
   // TELEFON TAKRORLANISHI RUXSAT ETILADI (qarang: user.model.js phone izohi).
   // Login (username) esa hamon yagona - u autentifikatsiya kaliti.
-  const usernameTaken = await User.findOne({ username });
+  const usernameTaken = await prisma.user.findUnique({ where: { username } });
   if (usernameTaken) {
     throw new ApiError(409, "Bunday login (username) allaqachon mavjud");
   }
@@ -331,7 +371,7 @@ export const registerUser = async (body, scope = {}) => {
     firstName: body.firstName.trim(),
     lastName: body.lastName.trim(),
     username,
-    phone: phone || undefined,
+    phone: phone || null,
     passwordHash,
     role: body.role,
     isActive: true,
@@ -351,7 +391,7 @@ export const registerUser = async (body, scope = {}) => {
     doc.hiredAt = body.hiredAt ? parseLocalDay(body.hiredAt) : localTodayMidnight();
   }
 
-  const user = await User.create(doc);
+  const user = await prisma.user.create({ data: doc });
 
   // ISHGA OLISHDA MAOSH (ikki bosqichli formaning 2-qadami).
   //
@@ -367,7 +407,7 @@ export const registerUser = async (body, scope = {}) => {
       await compensationService.setCompensation(
         {
           ...body.compensation,
-          teacher: user._id,
+          teacher: user.id,
           branchId: homeBranchId,
           // Stavka ishga olingan kundan boshlanadi (aks holda oradagi
           // kunlar stavkasiz qolib, maosh 0 chiqardi).
@@ -377,7 +417,7 @@ export const registerUser = async (body, scope = {}) => {
       );
     } catch (err) {
       logger.warn(
-        { err, userId: user._id },
+        { err, userId: user.id },
         "Ishga olishda maosh stavkasi belgilanmadi - profil orqali kiritish kerak",
       );
     }
@@ -401,7 +441,7 @@ export const registerUser = async (body, scope = {}) => {
       );
       await openingBalanceService.create(
         {
-          user: user._id,
+          user: user.id,
           role: body.role,
           amount: body.openingBalance,
           branchId: homeBranchId,
@@ -414,7 +454,7 @@ export const registerUser = async (body, scope = {}) => {
       );
     } catch (err) {
       logger.error(
-        { err, userId: user._id, amount: body.openingBalance },
+        { err, userId: user.id, amount: body.openingBalance },
         "Boshlang'ich qoldiq yozilmadi - qo'lda kiritish kerak",
       );
       result.openingBalanceError =

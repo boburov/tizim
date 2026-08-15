@@ -363,7 +363,7 @@ export class ProvisioningService {
   /**
    * Tenantni to'xtatadi — pm2 jarayoni o'chadi (obuna tugagan holat).
    *
-   * O'CHIRISH EMAS: papka, MongoDB bazasi, yuklangan fayllar, nginx vhost va
+   * O'CHIRISH EMAS: papka, PostgreSQL bazasi, yuklangan fayllar, nginx vhost va
    * sertifikat joyida qoladi. Shuning uchun to'lov kelgach `resume` bir
    * soniyada hammasini qaytaradi va mijoz hech narsa yo'qotmaydi.
    *

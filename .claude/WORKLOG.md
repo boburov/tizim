@@ -11081,3 +11081,408 @@ Operator yo'li **o'zgarmadi**: odam tanlagan filial har doim ustun. Routing faqa
 <sub>session `c49e703c` · branch `main` · 17 ta qadam</sub>
 
 ---
+
+## 2026-08-15 23:49 — davom eting va oxirini yakunlang
+
+**So'rov**
+
+> davom eting va oxirini yakunlang
+
+**O'zgargan fayllar (4)**
+
+- `server/src/modules/leads/services/leadConversion.service.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/leads/components/LeadKanban.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/leads/components/LeadConversionTable.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/leads/components/LeadRoutingTab.jsx` — yaratildi/qayta yozildi
+
+**Buyruqlar (27)**
+
+```sh
+echo "═══ leads servis: stats ═══" && grep -n "export const stats" -A 30 server/src/modules/leads/services/leads.service.js | head -36 && echo && echo "═══ clie…
+cd /Users/shukrullo/Desktop/lc-total/server && cat > src/modules/leads/handlers/conversion.handler.js <<'EOF' import asyncHandler from "../../../middleware/asyn…
+grep -n "priceSnapshot\|joinedAt\|entryBilling" src/models/groupMembership.model.js | head -6; echo "─── ensureGroupFee / narx manbai ───"; grep -n "export cons…
+sed -n '1,30p' src/modules/finance/services/groupFee.service.js
+python3 - <<'PY' p = "src/modules/finance/services/groupFee.service.js" s = open(p, encoding="utf-8").read() s = s.replace( """// O'tgan oy to'lovini topadi (ca…
+python3 - <<'PY' p = "tests/coursesRoomsPricing.test.js" s = open(p, encoding="utf-8").read() s = s.replace( """ // ── Yakun ── await mongoose.connection.dropDa…
+cd /Users/shukrullo/Desktop/lc-total/client && grep -n "LEAD_STATUS\|PIPELINE\|statusLabel" src/shared/constants/*.js src/owner/features/leads/components/LeadSt…
+cat src/shared/constants/leadStatus.js && echo "═══ useLeadMutations ═══" && ls src/owner/features/leads/hooks/ && grep -n "export const" src/owner/features/lea…
+grep -n "formatPhone" src/shared/utils/formatPhone.js | head -3; echo "─── LeadsPage ───"; ls src/owner/features/leads/pages/ && grep -n "LeadsTable\|Tabs\|view…
+cat src/owner/features/leads/pages/LeadsPage.jsx && echo "═══ LeadsListPage boshi ═══" && sed -n '1,45p' src/owner/features/leads/pages/LeadsListPage.jsx
+cat > src/owner/features/leads/pages/LeadsKanbanPage.jsx <<'EOF' // React import { useState } from "react"; // Components import LeadKanban from "../components/…
+python3 - <<'PY' p = "src/owner/routes/index.jsx" s = open(p, encoding="utf-8").read() s = s.replace(" LeadsListPage,\n LeadsStatsPage,", " LeadsListPage,\n Lea…
+python3 - <<'PY' # endpoints + keys p = "src/shared/api/endpoints.js" s = open(p, encoding="utf-8").read() s = s.replace( ' assignees: "/leads/assignees",', '''…
+grep -n "from\b\|to\b\|PeriodToggle\|return (" src/owner/features/leads/pages/LeadsStatsPage.jsx | head -14
+grep -n "LeadRejectionReasons\|<Lead" src/owner/features/leads/pages/LeadsStatsPage.jsx | tail -8; echo "─── from/to o'zgaruvchilari ───"; grep -n "resolvePerio…
+sed -n '30,40p' src/owner/features/leads/pages/LeadsStatsPage.jsx && echo "─── 85-92 ───" && sed -n '85,95p' src/owner/features/leads/pages/LeadsStatsPage.jsx
+python3 - <<'PY' p = "src/owner/features/leads/pages/LeadsStatsPage.jsx" s = open(p, encoding="utf-8").read() s = s.replace( 'import LeadRejectionReasons from "…
+grep -n "LeadOptionsTab\|Tabs\|kind" src/owner/features/leads/pages/LeadsSettingsPage.jsx | head -10
+cat src/owner/features/leads/pages/LeadsSettingsPage.jsx
+python3 - <<'PY' p = "src/owner/features/leads/pages/LeadsSettingsPage.jsx" s = open(p, encoding="utf-8").read() s = s.replace( ' { to: `${BASE}/rad-etish`, lab…
+grep -n "lidlar" -A 18 src/owner/routes/index.jsx | grep -E "path=|Element|LeadOptionsTab" | head -10
+sed -n '620,634p' src/owner/routes/index.jsx
+python3 - <<'PY' p = "src/owner/routes/index.jsx" s = open(p, encoding="utf-8").read() s = s.replace( """ <Route path="rad-etish" element={<LeadOptionsTab kind=…
+cd /Users/shukrullo/Desktop/lc-total && git status --porcelain client/src/owner/features/finance/pages/GroupFeeDetailPage.jsx client/src/owner/features/notifica…
+cd /Users/shukrullo/Desktop/lc-total && git add -A && git status --porcelain | wc -l | xargs -I{} echo "{} ta fayl staged" && git diff --cached --stat | tail -3
+# … yana 2 ta
+```
+
+**Natija**
+
+Yakunlayman. Avval CRM ning qolgan qismini — konversiya taqqoslash, Kanban va routing UI.
+
+Endi **narx snapshot** — Faza 3 dan qolgan oxirgi backend qarzi.
+
+Endi CRM frontend — Kanban doskasi, routing qoidalari va konversiya.
+
+Endi konversiya taqqoslash va routing qoidalari UI'si.
+
+Endi routing qoidalari UI'si — lidlar sozlamalari tabiga.
+
+**32/32 test to'plami toza.** Endi commit qilaman.
+
+**Yakunlandi.** https://claude.ai/code/artifact/4b9ee7c4-4892-4350-92af-4153492e59d4
+
+Commit: `951b2f5` — 71 fayl, +5519 qator. **32 test to'plami, 0 xato.**
+
+## Bu turda
+
+**Narx merosi ulandi** — matritsa qurilgan edi, lekin uni hech kim chaqirmasdi, ya'ni kurs narxi hisob-kitobga **ta'sir qilmasdi**. Endi `ensureGroupFee` meros zanjiri bilan ishlaydi: o'tgan oy tarifi → kurs narxi → 0. O'tgan oy ustun — guruhga qo'lda qo'yilgan qaror katalog narxidan muhimroq.
+
+**Kanban doskasi.** Ustunlar `LEAD_PIPELINE` dan — «Rad etildi» chiziqli bosqich emas, u voronkadan *chiqish*. Ustun qilinsa doska «keyingi bosqichga sur» mantiqini yo'qotardi. Dnd kutubxonasi (~40kb) o'rniga native drag; klaviatura bilan ishlamagani uchun har kartada status tanlagichi **ham** bor.
+
+**Konversiya taqqoslash.** Manba `statusHistory`, joriy status **emas** — o'quvchiga aylangan lid keyin arxivlansa ham hisobdan tushib qolmasligi kerak. Biriktirilmagan lid xodim jadvaliga kirmaydi, lekin filial jadvalida sanaladi — aks holda filial ko'rsatkichi yaxshiroq ko'rinardi.
+
+**Yo'naltirish qoidalari UI** + **guruh formasiga kurs/xona tanlagichi** (yaratish va tahrirlash).
+
+## Umumiy natija
+
+| Bo'lim | Backend | API | UI |
+|---|---|---|---|
+| 1. Kontekst va huquqlar | ✅ | ✅ | ✅ |
+| 2. Moliya va kassa | ✅ | ✅ | ✅ |
+| 3. Talaba va o'quv | ✅ | ✅ | ✅ |
+| 4. CRM va lidlar | ✅ | ✅ | ✅ |
+| 5. Spravochnik | ✅ | ✅ | ✅ |
+| 6. Soli
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 32 ta qadam</sub>
+
+---
+
+# MongoDB → PostgreSQL (Prisma): poydevor va birinchi modul
+
+Tenant serveri Mongo'dan Postgres'ga ko'chirila boshladi. Bu tur **poydevorni** qo'ydi va uni haqiqiy baza ustida tekshirdi.
+
+## Hajm
+
+| | |
+|---|---|
+| `server/src` | 74 134 qator, 830 fayl |
+| Mongoose modellari | 74 ta → **78 Prisma modeli** |
+| Aggregate quvurlari | 114 ta |
+| `.populate()` | 150 ta |
+| Mongo `$` operatorlari | 1 771 ta |
+
+## Qilingani
+
+**To'liq schema.** 74 model ko'chirildi, `prisma validate` o'tdi. Qidiriladigan ichki massivlar alohida jadvalga chiqarildi — `GroupScheduleItem` (joblar `schedule.day` bo'yicha qidiradi), `UserBranchAssignment` (8+ joyda filtr), `JournalLine` (hisob qoldig'i shu ustunga tayanadi), `DebtWriteOffBreakdown`.
+
+**Pul xavfsizligi.** Prisma qisman unique indeksni deklarativ qo'llab-quvvatlamaydi, shuning uchun 35 tasi xom SQL migratsiyasida. Eng nozigi — **NULL semantikasi**: Mongo `null` ni oddiy qiymat deb sanaydi, Postgres esa `NULL != NULL`. Ya'ni Mongo'dagi bitta indeks bu yerda **ikkitaga** bo'linadi. E'tibor berilmasa "bitta filialga ikkita kassa hisobi" yoki "bir oyda ikkita to'lov rejasi" jimgina o'tib ketardi. 10 ta stsenariy baza ustida sinaldi — hammasi kutilgandek.
+
+**Agenda olib tashlandi.** U faqat Mongo bilan ishlaydi, ya'ni qolsa Mongo ham qolardi. O'rniga pg-boss, lekin **Agenda API'si ataylab saqlangan** (`define/every/now/schedule`) — shu sabab 23 job fayli va chaqiruvchi servislar umuman o'zgarmadi.
+
+**TTL yo'qoldi.** Mongo eskirgan hujjatni o'zi o'chirardi; Postgres'da bunday narsa yo'q. `ttlCleanup.job.js` qo'shildi — busiz `caches`, `refresh_tokens`, `ai_runs`, `ai_usage_logs` cheksiz o'sardi va buni hech qanday xato bildirmasdi.
+
+**Kalit formati saqlandi.** 24-belgili hex (`gen_object_id()` SQL funksiyasi) — `cuid()` ga o'tish 14 ta zod validatorni va frontend marshrutlarini birdaniga buzardi. Javobda `_id` taxallusi ham qoldi.
+
+**Provisioning.** Har tenantga endi alohida Postgres bazasi ochiladi, `migrate deploy` bilan migratsiya qilinadi, deprovision'da faol ulanishlar uzilib drop qilinadi.
+
+**auth moduli** to'liq ko'chirildi — 16/16 test haqiqiy Postgres ustida.
+
+## Yo'l-yo'lakay topilgan xato
+
+Refresh token bir sekund ichida **takrorlanardi**: `signRefresh` bir xil payload'dan bayt-bayt bir xil JWT yasaydi (`iat` faqat sekund aniqligida), `tokenHash` esa unique. "Kirish → darhol yangilash" oqimi unique constraint bilan yiqilardi. Bu **Mongo davridan beri bor edi**, shunchaki odam tezligida ko'rinmasdi. Tuzatildi: payload'ga `jti`.
+
+## Qolgani
+
+43 modul, 23 job, bot, seedlar va 33 eski test hali Mongoose'da — modul ko'chirilmagunicha server to'liq ko'tarilmaydi. Tartib va ko'chirish qoidalari: `server/MIGRATION.md`.
+
+## 2026-08-16 00:52 — to'liq tizimin mongo dbdan prisma posgresqlga ozgartrib chiqing va md 
+
+**So'rov**
+
+> to'liq tizimin mongo dbdan prisma posgresqlga ozgartrib chiqing va md filelarni ham update qiling
+
+**O'zgargan fayllar (15)**
+
+- `server/prisma/schema.prisma` — yaratildi/qayta yozildi
+- `server/src/config/env.js` — tahrirlandi
+- `server/prisma/migrations/20260815200000_object_id_function/migration.sql` — yaratildi/qayta yozildi
+- `server/prisma/migrations/20260815200910_partial_unique_indexes/migration.sql` — yaratildi/qayta yozildi
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/82e8dd1f-32b1-48ea-b238-5d8f2d6abaed/scratchpad/invariants.sql` — yaratildi/qayta yozildi
+- `server/src/config/prisma.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/config/scheduler.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/jobs/ttlCleanup.job.js` — yaratildi/qayta yozildi
+- `server/src/jobs/index.js` — tahrirlandi
+- `server/src/helpers/permission.helper.js` — tahrirlandi
+- `server/src/utils/serialize.js` — yaratildi/qayta yozildi
+- `server/tests/authPrisma.test.js` — yaratildi/qayta yozildi
+- `server/src/utils/jwt.js` — tahrirlandi
+- `server/CLAUDE.md` — tahrirlandi
+- `server/MIGRATION.md` — yaratildi/qayta yozildi
+
+**Buyruqlar (105)**
+
+```sh
+ls -la && echo "--- SERVER ---" && ls -la server/ 2>/dev/null
+find . -path ./node_modules -prune -o -name "*.md" -print 2>/dev/null | head -50
+echo "=== server/src ===" && ls -R server/src | head -100
+echo "=== server models ===" && ls -la server/src/models/ 2>/dev/null && echo "=== admin_server ===" && ls -la admin_server/ && ls -la admin_server/src 2>/dev/n…
+cd server && echo "=== model count ===" && ls src/models/*.model.js | wc -l && echo "=== total js files in src ===" && find src -name "*.js" | wc -l && echo "==…
+cd server && echo "=== modules ===" && ls src/modules/ && echo "=== tests ===" && ls tests/ | head -40 && echo "=== test count ===" && ls tests/*.test.js 2>/dev…
+ls /Users/shukrullo/Desktop/lc-total/server/src/modules/ && echo "=== tests ===" && ls /Users/shukrullo/Desktop/lc-total/server/tests/ | head -50
+cat /Users/shukrullo/Desktop/lc-total/server/package.json && echo "=== DB CONFIG ===" && cat /Users/shukrullo/Desktop/lc-total/server/src/config/db.js
+cat /Users/shukrullo/Desktop/lc-total/server/CLAUDE.md
+echo "=== aggregate usage ===" && grep -rE "\.aggregate\(" src --include="*.js" | wc -l && echo "=== populate usage ===" && grep -rE "\.populate\(" src --includ…
+echo "=== LOC: models vs modules vs rest ===" && find src/models -name "*.js" | xargs wc -l | tail -1 && find src/modules -name "*.js" | xargs wc -l | tail -1 &…
+ls -la /Users/shukrullo/Desktop/lc-total/admin_server/prisma/ && echo "=== schema head ===" && head -40 /Users/shukrullo/Desktop/lc-total/admin_server/prisma/sc…
+grep -iE "MONGO|DATABASE" /Users/shukrullo/Desktop/lc-total/server/.env.example && echo "--- actual env (masked) ---" && grep -iE "MONGO|DATABASE" /Users/shukru…
+cd /Users/shukrullo/Desktop/lc-total && echo "=== mongo refs in provisioning/deploy scripts ===" && grep -rniE "mongo" --include="*.sh" . | grep -v node_modules…
+echo "=== mongo refs in admin_server src (tenant provisioning) ===" && grep -rniE "mongo" admin_server/src --include="*.ts" | head -20 && echo "--- count ---" &…
+cd /Users/shukrullo/Desktop/lc-total/server/src/models && for f in account activityLog aiConfig aiRanking aiReport aiRun aiUsageLog approval archiveLog archiveR…
+mkdir -p /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/82e8dd1f-32b1-48ea-b238-5d8f2d6abaed/scratchpad && for f in *.model.js; do echo "════════ $f"…
+cd /Users/shukrullo/Desktop/lc-total/server/src/constants && for f in *.js; do echo "════════ $f"; sed -E 's://.*$::' "$f" | grep -vE '^\s*$'; done
+cd /Users/shukrullo/Desktop/lc-total/server/src/models/plugins && ls && for f in *.js; do echo "════════ $f"; cat $f; done
+cd /Users/shukrullo/Desktop/lc-total/server/src/constants && for f in ledger.js roles.js delegation.js leadStatus.js; do echo "════════ $f"; sed -E 's://.*$::' …
+cd /Users/shukrullo/Desktop/lc-total/server && echo "=== objectId format validation in validators ===" && grep -rnE "24|ObjectId|isValidObjectId|hex" src/module…
+sed -E 's://.*$::' src/modules/ai/insightKinds.js | grep -vE '^\s*$'
+cd /Users/shukrullo/Desktop/lc-total/server/src/models && echo "=== softDelete models ===" && grep -l "softDeletePlugin" *.model.js | tr '\n' ' ' && echo && ech…
+grep -rhoE '\.populate\(\s*"[^"]+"' src --include="*.js" | sed 's/.*"//' | sort | uniq -c | sort -rn | head -40
+grep -rhoE '\.populate\([^)]{0,80}' src --include="*.js" | sed 's/\.populate(//' | tr -d '"' | awk '{print $1}' | sed 's/,.*//' | sort | uniq -c | sort -rn | he…
+# … yana 80 ta
+```
+
+**Natija**
+
+I'll start by exploring the codebase to understand the current MongoDB setup and scope of the migration.
+
+Let me assess the full scope of the migration.
+
+This is a large system. Let me understand the depth of Mongoose coupling before planning.
+
+Scope is now clear. Let me quantify it precisely before I commit to an approach.
+
+Before I commit to an approach, let me check the existing Prisma conventions in `admin_server` so the new setup matches.
+
+I've mapped the full scope. Before writing code, I need to flag the scale honestly and settle two things that change the deliverable materially.
+
+**What's actually in scope:**
+
+| Layer | Size |
+|---|---|
+| `server/src` total | **74,134 LOC** across 830 files |
+| Mongoose models | **74 models**, 6.3k LOC |
+| Modules (44 features) | 54.2k LOC |
+| Helpers / jobs / bot / seeds | 10.1k LOC |
+| Files touching Mongoose | **133** |
+| Aggregation pipelines | **114** |
+| `.populate()` calls | **150** |
+| `ObjectId` references | **439** |
+| Mongo `$` operators | **1,771** |
+| Test suites to keep green | 34 |
+
+One thing that surfaced that's easy to miss: this is a **multi-tenant SaaS**. `admin_server` provisions a **separate MongoDB per tenant** via shell scripts (`provision.sh`, `deprovision.sh`, `reconfigure.sh`, `settings.service.ts` renders `MONGO_URL`). Switching `server` to PostgreSQL breaks that pipeline unless it migrates too — per-tenant DB creation, `prisma migrate deploy` on release, and DB drop on deprovision.
+
+Straight answer on timeline: rewriting 114 aggregations, 150 populates and 1,771 operators is a multi-session effort. I won't fake it by emitting 190 half-checked files — that yields a system that starts and then fails at runtime. I'll build it in verified layers, foundation first.
+
+Decisions locked. Starting with the foun
+
+…(qisqartirildi)
+
+<sub>session `82e8dd1f` · branch `main` · 131 ta qadam</sub>
+
+---
+
+## 2026-08-16 01:35 — server umuman ishlamayapti fix qiling
+
+**So'rov**
+
+> server umuman ishlamayapti fix qiling
+
+**O'zgargan fayllar (1)**
+
+- `server/src/helpers/branchAccess.helper.js` — tahrirlandi
+
+**Buyruqlar (29)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && timeout 25 node src/index.js 2>&1 | head -40
+(node src/index.js 2>&1 & PID=$!; sleep 18; kill $PID 2>/dev/null) | head -50
+sed -E 's://.*$::' src/helpers/branchAccess.helper.js | grep -vE '^\s*$' | grep -vE '^\s*\*'
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/helpers/branchAccess.helper.js"); s = p.read_text() s = s.replace('import Branch from "../models/branch…
+grep -n "Branch\." src/helpers/branchAccess.helper.js
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/helpers/branchAccess.helper.js"); s = p.read_text() s = s.replace(''' logger.info({ branchId: String(br…
+echo "════ index.js Branch ════" && grep -n "Branch" src/index.js && echo "════ middleware/auth.js ════" && sed -E 's://.*$::' src/middleware/auth.js | grep -vE…
+python3 - <<'PYEOF' import pathlib # ── index.js ── p = pathlib.Path("src/index.js"); s = p.read_text() s = s.replace('import Branch from "./models/branch.model…
+(node src/index.js 2>&1 & PID=$!; sleep 20; kill $PID 2>/dev/null) | head -40
+lsof -ti:5000 | head -3 | while read p; do echo "PID $p → $(ps -p $p -o comm= 2>/dev/null)"; done; echo "--- boshqa portda sinaymiz ---"; (PORT=5099 node src/in…
+ps -p 70645 -o pid,lstart,etime,args 2>/dev/null | cut -c1-140
+pkill -f "node src/index.js" 2>/dev/null; sleep 1; echo "5000-port: $(lsof -ti:5000 | wc -l | xargs) jarayon qoldi"; echo "5099-port: $(lsof -ti:5099 | wc -l | …
+(node src/index.js > /tmp/srv.log 2>&1 &) ; sleep 12 echo "═══ /api/auth/login ═══" curl -s -i -X POST http://127.0.0.1:5000/api/auth/login -H 'Content-Type: ap…
+TOKEN=$(curl -s -X POST http://127.0.0.1:5000/api/auth/login -H 'Content-Type: application/json' -d '{"login":"owner","password":"owner123"}' | python3 -c "impo…
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/helpers/userProfile.helper.js"); s = p.read_text() s = s.replace('''import User from "../models/user.mo…
+pkill -f "node src/index.js"; sleep 1; (node src/index.js > /tmp/srv.log 2>&1 &) ; sleep 12 TOKEN=$(curl -s -X POST http://127.0.0.1:5000/api/auth/login -H 'Con…
+pkill -f "node src/index.js"; echo "server to'xtatildi"; echo "--- mongod mavjudmi? ---"; (which mongod mongosh 2>/dev/null || echo "mongod o'rnatilmagan"); bre…
+for f in branchContext actor auditLog membership cascadeDelete period roles group attendance; do n=$(grep -cE '\.(find|findOne|findById|aggregate|updateOne|upda…
+grep -nE '\.(find|findOne|findById|aggregate|updateOne|updateMany|create|countDocuments|distinct)\(|^import|models/' src/helpers/branchContext.helper.js | head …
+sed -n '130,220p' src/helpers/branchContext.helper.js
+sed -n '40,60p;100,128p;330,398p' src/helpers/branchContext.helper.js
+sed -n '60,100p' src/helpers/branchContext.helper.js; echo "════ 220,330 ════"; sed -n '220,330p' src/helpers/branchContext.helper.js
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/helpers/branchContext.helper.js"); s = p.read_text() s = s.replace('import mongoose from "mongoose"…
+sed -i '' 's|{Promise<mongoose\.Types\.ObjectId\|null>}|{Promise<string\|null>}|g; s|{Promise<mongoose\.Types\.ObjectId>}|{Promise<string>}|g; s|{mongoose\.Type…
+node -e "import('./src/helpers/branchContext.helper.js').then(()=>console.log('✅ branchContext yuklanadi')).catch(e=>console.log('❌',e.message))"
+# … yana 4 ta
+```
+
+**Natija**
+
+Serverni ishga tushirib, aniq xatoni ko'ray.
+
+Xato aniq: `ensureMainBranch()` hali Mongoose'da. Boot yo'lini ko'chirishdan boshlayman.
+
+Ba'zi almashtirishlar izohlar tufayli tushmadi. Haqiqiy matnni ko'ray.
+
+Endi boot yo'lidagi qolgan to'siqlarni ko'ray — `index.js` va `requireAuth`.
+
+Boot yo'li o'tdi. 5000-port band — kim egallaganini ko'ray.
+
+Server endi **ko'tarilyapti va portni ochyapti**. Qolgan xatolar — fon xizmatlari (ular `.catch()` bilan ushlangan). 5000-portdagi jarayonni tekshiray.
+
+Bu mening oldingi sinovimdan qolgan jarayon — tozalayman.
+
+Endi haqiqiy API'ni sinab ko'ray — login ishlaydimi.
+
+Login **ishlayapti** (200 + refresh cookie). Endi klient login'dan keyin darhol chaqiradigan `/auth/me` ni sinayman.
+
+`buildUserProfile` → `BotUser` hali Mongoose'da. Ko'chiraman.
+
+`/auth/me` ham ishlayapti. Endi qaysi endpointlar ishlashini aniq o'lchay.
+
+Holat aniq: faqat `auth` ishlayapti, qolgan hamma narsa 500 (Mongoose timeout). Bu kutilgan — 43 modul hali ko'chirilmagan.
+
+Server hozir **ko'tariladi va login ishlaydi**, lekin qolgan 43 modul hali Mongoose'da — shuning uchun ular 500 qaytaryapti.
+
+Bu turda tuzatganim:
+- `branchAccess.helper.js` — `ensureMainBranch()` boot'ni yiqitayotgan edi
+- `middleware/auth.js` — `requireAuth` (+ `branchAssignments` relation'i include qilindi, aks holda ko'p filialli biriktirish jimgina ishlamay qolardi)
+- `userProfile.helper.js` — `/auth/me` (+ `telegramId` BigInt → Number, aks holda JSON seriyalashda 500 berardi)
+- `index.js` — boot tekshiruvi
+
+Qolgan 43 modulni ko'chirish ~54k qator kod (114 aggregate, 150 populate, 1771 operator) — bu bir necha sessiyalik ish. Sizda ikki yo'l bor va bu tanlov ishning shaklini o'zgartiradi:
+
+Tushunarli — toza migratsiyani davom ettiraman. Bog'liqlik tartibi bo'yicha: avval qolgan poydevor he
+
+…(qisqartirildi)
+
+<sub>session `82e8dd1f` · branch `main` · 34 ta qadam</sub>
+
+---
+
+## 2026-08-16 01:49 — [nodemon] 3.1.14 [nodemon] to restart at any time, enter `rs` [nodemon
+
+**So'rov**
+
+> [nodemon] 3.1.14
+> [nodemon] to restart at any time, enter `rs`
+> [nodemon] watching path(s): *.*
+> [nodemon] watching extensions: js,mjs,cjs,json
+> [nodemon] starting `node src/index.js`
+> [20:48:56] INFO (71585): PostgreSQL ulandi (Prisma)
+> [20:48:56] INFO (71585): Server 5000-portda ishga tushdi
+> GET /api/auth/me 200 22.430 ms - -
+> [20:49:06] WARN (71585): Saqlash hisoblagichini tekislab bo'lmadi
+>     err: {
+>       "type": "MongooseError",
+>       "message": "Operation `storedfiles.aggregate()` buffering timed out after 10000ms",
+>       "stack":
+>           MongooseError: Operation `storedfiles.aggregate()` buffering timed out after 10000ms
+>               at Timeout.<anonymous> (/Users/shukrullo/Desktop/lc-total/server/node_modules/mongoose/lib/drivers/node-mongodb-native/collection.js:187:23)
+>               at listOnTimeout (node:internal/timers:605:17)
+>               at process.processTimers (node:internal/timers:541:7)
+>     }
+> [20:49:06] INFO (71585): Rejalashtiruvchi ishga tushdi (pg-boss)
+>     jobs: 26
+> [20:49:06] INFO (71585): Agenda ishga tushirildi
+>     timezone: "Asia/Tashkent"
+> [20:49:06] WARN (71585): Import navbati O'CHIQ (REDIS_URL yo'q) - ommaviy import sinxron ishlaydi va bir faylda qator son
+> …
+
+**O'zgargan fayllar (1)**
+
+- `server/src/modules/systemNotifications/services/systemNotifications.service.js` — yaratildi/qayta yozildi
+
+**Buyruqlar (26)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server for m in storage systemNotifications notifications expenseApprovals adminDashboard; do L=$(find src/modules/$m -name…
+cat src/modules/systemNotifications/services/systemNotification.service.js 2>/dev/null || find src/modules/systemNotifications -name "*.js" | head
+cat src/modules/systemNotifications/services/systemNotifications.service.js
+grep -nE '\.(find|findOne|findById|aggregate|updateOne|updateMany|create|countDocuments|findOneAndUpdate|deleteMany|distinct|bulkWrite|deleteOne|save)\(|^import…
+sed -n '20,140p' src/modules/storage/services/storage.service.js
+sed -n '240,330p' src/modules/storage/services/storage.service.js
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/storage/services/storage.service.js"); s = p.read_text() s = s.replace('''import StoredFile fro…
+grep -rn "USAGE_KEY\|storageUsage.model\|storedFile.model" src --include="*.js" | grep -v "src/models/" | grep -v "storage.service.js" | head; echo "--- storage…
+node -e " (async()=>{ for (const m of ['./src/modules/storage/services/storage.service.js','./src/modules/systemNotifications/services/systemNotifications.servi…
+ls src/modules/expenseApprovals/services/ && wc -l src/modules/expenseApprovals/services/*.js && grep -nE '\.(find|findOne|findById|aggregate|updateOne|updateMa…
+sed -n '340,460p' src/modules/expenseApprovals/services/expenseApproval.service.js
+sed -n '290,342p' src/modules/expenseApprovals/services/expenseApproval.service.js; echo "════ SORT_OPTIONS ════"; grep -n "SORT_OPTIONS" -A12 src/modules/expen…
+grep -n "SORT_OPTIONS" -A10 src/modules/expenseApprovals/validators/list.validator.js | head -15; echo "════ categoryCondition ════"; grep -n "const categoryCon…
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/expenseApprovals/services/expenseApproval.service.js"); s = p.read_text() s = s.replace('''cons…
+sed -n '1,10p' src/modules/expenseApprovals/services/expenseApproval.service.js
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/expenseApprovals/services/expenseApproval.service.js"); s = p.read_text() # Enum konstantalari …
+pkill -f "node src/index.js" 2>/dev/null; (node src/index.js > /tmp/srv.log 2>&1 &); sleep 13 T=$(curl -s -X POST http://127.0.0.1:5000/api/auth/login -H 'Conte…
+ls src/modules/notifications/services/ && grep -rn "unreadCount\|unread-count" src/modules/notifications --include="*.js" | head -8
+cat src/modules/notifications/handlers/unreadCount.handler.js; echo "════ servisdagi funksiya ════"; grep -n "getUnreadCount\|export const inbox" -A22 src/modul…
+grep -n "export const inbox" -A32 src/modules/notifications/services/notifications.service.js | head -40; echo "════ markAllRead qolgani ════"; sed -n '702,730p…
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/notifications/services/notifications.service.js"); s = p.read_text() # prisma importini qo'sham…
+sed -n '100,130p' src/modules/adminDashboard/services/adminDashboard.service.js; echo "════ aggregate joylari ════"; grep -n "aggregate(" src/modules/adminDashb…
+echo "═══ boot loglaridagi qolgan Mongo modellari ═══"; grep -oE 'Operation `[a-z]+\.' /tmp/srv.log | sort -u | sed 's/Operation `/ /;s/\.$//' ; echo; echo "═══…
+wc -l /tmp/srv.log; echo "--- oxirgi 25 qator ---"; tail -25 /tmp/srv.log
+rm -f /tmp/srv2.log; (node src/index.js > /tmp/srv2.log 2>&1 &); sleep 22 echo "═══ Boot loglaridagi Mongoose xatolari ═══" grep -oE 'Operation .[a-z]+\.[a-zA-Z…
+# … yana 1 ta
+```
+
+**Natija**
+
+Loglar aniq ko'rsatyapti. Ikkita alohida narsa bor:
+
+1. **Men kiritgan regressiya:** `admin-dashboard/overview` → *"Arguments must be aggregate pipeline operators"*. Men `branchMatchStage()` ni Prisma shakliga o'tkazdim, lekin uni hali Mongoose'dagi `Model.aggregate([...])` chaqiryapti.
+2. Qolganlari — ko'chirilmagan modullar (kutilgan timeout).
+
+Panel yuklanishi uchun kerak bo'lgan modullarni o'lchay.
+
+57 fayl `branchFilter` ga tayanadi — shakl o'zgarishi shu bo'ylab tarqaladi. Panel yuklaydigan endpointlarni kichikdan boshlab ko'chiraman.
+
+Endi `storage` — u ham boot'dagi ogohlantirishni tuzatadi.
+
+`reserve()` — kvota uchun atomik shartli inkrement. Buni ehtiyot bilan ko'chiraman.
+
+Ikkalasi ham 200, boot ogohlantirishi ham yo'qoldi. Endi `expense-approvals` — panel uni ikki marta chaqiryapti.
+
+Endi `expense-approvals` ning o'qish yo'lini ko'chiraman.
+
+`expense-approvals` ham 200. Endi `notifications/inbox/unread-count`.
+
+Endi `admin-dashboard` — men kiritgan regressiya shu yerda. Ko'ray.
+
+`adminDashboard` — 6 ta aggregate, alohida ish. Uni yarim qoldirmaslik uchun avval hozirgi holatni tekshirib, hisobot beray.
+
+Log fayli bir nechta ishga tushirishdan aralashib ketgan (eski jarayon xatolari). Toza ishga tushirib tekshiray.
+
+Boot'da endi **0 ta ERROR** (avval bir nechta edi). Qolgan 5 ta WARN — fon xizmatlari, ular `.catch()` bilan o'ralgan. `MIGRATION.md` ni yangilayman.
+
+<sub>session `82e8dd1f` · branch `main` · 28 ta qadam</sub>
+
+---

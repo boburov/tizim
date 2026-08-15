@@ -258,7 +258,7 @@ export const create = async ({ body, file, currentUser }) => {
 // Agenda bo'lmasa (masalan test) - fonda (detached) bajaramiz.
 const scheduleDelivery = async (assignmentId) => {
   try {
-    const agenda = (await import("../../../config/agenda.js")).default;
+    const agenda = (await import("../../../config/scheduler.js")).default;
     await agenda.now("assignment.deliver", {
       assignmentId: String(assignmentId),
     });

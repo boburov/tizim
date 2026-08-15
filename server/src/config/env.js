@@ -44,7 +44,7 @@ const env = Object.freeze({
   // yo'qotmasligi uchun (client/shared/constants/app.js bilan bir xil).
   APP_NAME: (process.env.APP_NAME || "").trim() || "Bayyina",
 
-  MONGO_URL: need("MONGO_URL"),
+  DATABASE_URL: need("DATABASE_URL"),
 
   JWT_ACCESS_SECRET: need("JWT_ACCESS_SECRET"),
   JWT_REFRESH_SECRET: need("JWT_REFRESH_SECRET"),

@@ -1,6 +1,5 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
-import User from "../models/user.model.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import { ROLES } from "../constants/roles.js";
 import { hashPassword } from "../helpers/password.helper.js";
 import logger from "../config/logger.js";
@@ -28,19 +27,21 @@ const resolvePassword = () => {
 const seed = async () => {
   await connectDB();
 
-  const exists = await User.findOne({ username: OWNER.username });
+  const exists = await prisma.user.findUnique({ where: { username: OWNER.username } });
   if (exists) {
     logger.info("Owner mavjud, o'tkazib yuborildi");
   } else {
     const password = resolvePassword();
     const passwordHash = await hashPassword(password);
-    await User.create({
-      firstName: OWNER.firstName,
-      lastName: OWNER.lastName,
-      username: OWNER.username,
-      passwordHash,
-      role: ROLES.OWNER,
-      isActive: true,
+    await prisma.user.create({
+      data: {
+        firstName: OWNER.firstName,
+        lastName: OWNER.lastName,
+        username: OWNER.username,
+        passwordHash,
+        role: ROLES.OWNER,
+        isActive: true,
+      },
     });
     logger.info(`Owner yaratildi (login: ${OWNER.username})`);
   }

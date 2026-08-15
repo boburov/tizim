@@ -15,7 +15,7 @@
  *   2) shu ro'yxatga bitta yozuv qo'shing;
  *   3) tamom — admin panelda maydon o'zi paydo bo'ladi, .env ga o'zi tushadi.
  *
- * BU YERDA YO'Q narsalar (ataylab): MONGO_URL, PORT, JWT sirlari, CLIENT_URL,
+ * BU YERDA YO'Q narsalar (ataylab): DATABASE_URL, PORT, JWT sirlari, CLIENT_URL,
  * COOKIE_DOMAIN, heartbeat kalitlari va brend ranglari. Ular tenant yozuvidan
  * HOSIL QILINADI (`settings.service.ts` → `buildManagedValues`), qo'lda
  * o'zgartirilmaydi: noto'g'ri qiymat tenantni butunlay ishdan chiqaradi.

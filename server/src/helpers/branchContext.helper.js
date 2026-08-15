@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import mongoose from "mongoose";
+import prisma from "../config/prisma.js";
 import { ensureMainBranch } from "./branchAccess.helper.js";
 
 // FILIAL KONTEKSTI (request-scoped).
@@ -49,8 +49,10 @@ export const getAllowedBranchIds = () => {
 /** Owner yoki cross-branch huquqiga ega bo'lgan foydalanuvchimi. */
 export const canSeeAllBranches = () => Boolean(storage.getStore()?.canSeeAllBranches);
 
-const toObjectId = (id) =>
-  id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(String(id));
+// Prisma'da kalit oddiy SATR (VarChar(24)) - ObjectId o'rami kerak emas.
+// Nom saqlangan: u 30+ joyda chaqiriladi va migratsiya davomida
+// almashtirishlar sonini kamaytiradi.
+const toObjectId = (id) => String(id);
 
 /**
  * Mongoose query uchun filial filtri.
@@ -70,7 +72,7 @@ export const branchFilter = (field = "branchId") => {
   if (!ctx) return {};
 
   // Aniq bitta filial tanlangan.
-  if (ctx.branchId) return { [field]: toObjectId(ctx.branchId) };
+  if (ctx.branchId) return { [field]: String(ctx.branchId) };
 
   // Cross-branch: owner hamma narsani ko'radi -> filtr yo'q.
   if (ctx.canSeeAllBranches) return {};
@@ -80,9 +82,9 @@ export const branchFilter = (field = "branchId") => {
   if (allowed.length === 0) {
     // Hech qaysi filialga biriktirilmagan -> hech narsa ko'rmaydi.
     // Bo'sh $in ataylab: fail-closed (ochiq qoldirishdan xavfsizroq).
-    return { [field]: { $in: [] } };
+    return { [field]: { in: [] } };
   }
-  return { [field]: { $in: allowed.map(toObjectId) } };
+  return { [field]: { in: allowed.map(String) } };
 };
 
 /**
@@ -102,10 +104,13 @@ export const branchFilter = (field = "branchId") => {
  * @param {string} [field="branchId"]
  * @returns {Array<{$match: object}>}
  */
+// Mongo aggregate'da bu `$match` bosqichi edi. Prisma'da quvur yo'q -
+// shuning uchun `where` bo'lagi massiv ichida qaytariladi, chaqiruvchi
+// uni `AND: [...]` ga qo'shadi. Bo'sh massiv - spread xavfsiz.
 export const branchMatchStage = (field = "branchId") => {
   const filter = branchFilter(field);
   if (Object.keys(filter).length === 0) return [];
-  return [{ $match: filter }];
+  return [filter];
 };
 
 /**
@@ -116,7 +121,7 @@ export const branchMatchStage = (field = "branchId") => {
 export const requireActiveBranchId = () => {
   const branchId = getActiveBranchId();
   if (!branchId) return null;
-  return toObjectId(branchId);
+  return String(branchId);
 };
 
 /**
@@ -138,12 +143,11 @@ export const branchGroupMatchStage = async (field = "group") => {
   // Ko'lam cheklanmagan (owner "barcha filiallar") - filtr shart emas.
   if (Object.keys(filter).length === 0) return [];
 
-  // Sikldan qochish uchun modelni to'g'ridan-to'g'ri olamiz.
-  const Group = mongoose.models.Group;
-  if (!Group) return [];
-
-  const groups = await Group.find(filter).select("_id").lean();
-  return [{ $match: { [field]: { $in: groups.map((g) => g._id) } } }];
+  const groups = await prisma.group.findMany({
+    where: filter,
+    select: { id: true },
+  });
+  return [{ [field]: { in: groups.map((g) => g.id) } }];
 };
 
 /**
@@ -152,7 +156,7 @@ export const branchGroupMatchStage = async (field = "group") => {
  */
 export const branchGroupFilter = async (field = "group") => {
   const stages = await branchGroupMatchStage(field);
-  return stages.length ? stages[0].$match : {};
+  return stages.length ? stages[0] : {};
 };
 
 /**
@@ -179,19 +183,19 @@ export const branchUserMatchStage = async (field = "student") => {
   // null = cheklov yo'q (kontekstsiz job/seed yoki owner "barcha filiallar").
   if (!condition) return [];
 
-  const User = mongoose.models.User;
-  if (!User) return [];
-
-  const users = await User.find(condition).select("_id").lean();
+  const users = await prisma.user.findMany({
+    where: condition,
+    select: { id: true },
+  });
   // Bo'sh ro'yxat ham TO'G'RI natija: hech qaysi filialga biriktirilmagan
   // foydalanuvchi hech kimni ko'rmasligi kerak (fail-closed).
-  return [{ $match: { [field]: { $in: users.map((u) => u._id) } } }];
+  return [{ [field]: { in: users.map((u) => u.id) } }];
 };
 
 /** Yuqoridagining oddiy query (aggregate emas) uchun varianti. */
 export const branchUserFilter = async (field = "student") => {
   const stages = await branchUserMatchStage(field);
-  return stages.length ? stages[0].$match : {};
+  return stages.length ? stages[0] : {};
 };
 
 /**
@@ -206,19 +210,18 @@ export const branchUserFilter = async (field = "student") => {
  * ishga tushmaguncha hech narsa yarata olmasdi.
  */
 const resolveSoleBranchId = async () => {
-  const Branch = mongoose.models.Branch;
-  if (!Branch) return null;
-  const branches = await Branch.find({ isDeleted: false })
-    .select("_id")
-    .limit(2)
-    .lean();
+  const branches = await prisma.branch.findMany({
+    where: { isDeleted: false },
+    select: { id: true },
+    take: 2,
+  });
 
   if (branches.length === 0) {
     const main = await ensureMainBranch();
-    return main?._id || null;
+    return main?.id || null;
   }
 
-  return branches.length === 1 ? branches[0]._id : null;
+  return branches.length === 1 ? branches[0].id : null;
 };
 
 /**
@@ -233,7 +236,7 @@ const resolveSoleBranchId = async () => {
  *
  * @param {object} [user] - fallback uchun (homeBranchId)
  * @param {string} [requestedBranchId] - formada tanlangan filial
- * @returns {Promise<mongoose.Types.ObjectId>}
+ * @returns {Promise<string>}
  * @throws {Error} filial aniqlanmasa
  */
 export const resolveBranchForWrite = async (user, requestedBranchId = null) => {
@@ -301,17 +304,14 @@ export const resolveBranchForWrite = async (user, requestedBranchId = null) => {
  * vazifasi (Agenda job) ishlasa - noto'g'ri filial yozilardi.
  * Guruhdan olish har doim to'g'ri va kontekstga bog'liq emas.
  *
- * @param {mongoose.Types.ObjectId|string} groupId
- * @returns {Promise<mongoose.Types.ObjectId>}
+ * @param {string} groupId
+ * @returns {Promise<string>}
  */
 export const resolveBranchFromGroup = async (groupId) => {
-  const Group = mongoose.models.Group;
-  if (!Group) {
-    const err = new Error("Group modeli topilmadi");
-    err.statusCode = 500;
-    throw err;
-  }
-  const group = await Group.findById(groupId).select("branchId").lean();
+  const group = await prisma.group.findUnique({
+    where: { id: String(groupId) },
+    select: { branchId: true },
+  });
   if (!group?.branchId) {
     const err = new Error("Guruhning filiali aniqlanmadi");
     err.statusCode = 400;
@@ -347,20 +347,24 @@ export const userBranchCondition = () => {
 
   // Aniq filial tanlangan - faqat o'sha filial odamlari.
   if (ctx.branchId) {
-    const id = toObjectId(ctx.branchId);
-    return { $or: [{ homeBranchId: id }, { "branchAssignments.branchId": id }] };
+    const id = String(ctx.branchId);
+    // `branchAssignments` endi ALOHIDA jadval, shuning uchun ichki nuqta
+    // yozuvi ("branchAssignments.branchId") o'rniga relation filtri `some`.
+    return {
+      OR: [{ homeBranchId: id }, { branchAssignments: { some: { branchId: id } } }],
+    };
   }
 
   // Cross-branch, cheklangan: ruxsat etilgan filiallar doirasi.
-  const allowed = (ctx.allowedBranchIds || []).map(toObjectId);
+  const allowed = (ctx.allowedBranchIds || []).map(String);
   if (allowed.length === 0) {
     // Hech qaysi filialga biriktirilmagan -> hech kimni ko'rmaydi.
-    return { _id: { $in: [] } };
+    return { id: { in: [] } };
   }
   return {
-    $or: [
-      { homeBranchId: { $in: allowed } },
-      { "branchAssignments.branchId": { $in: allowed } },
+    OR: [
+      { homeBranchId: { in: allowed } },
+      { branchAssignments: { some: { branchId: { in: allowed } } } },
     ],
   };
 };
@@ -375,13 +379,14 @@ export const userBranchCondition = () => {
  * Chaqiruvchi buni xato deb hisoblamasligi kerak - DepositTransaction.branchId
  * ataylab `required: false`.
  *
- * @param {mongoose.Types.ObjectId|string} studentId
- * @returns {Promise<mongoose.Types.ObjectId|null>}
+ * @param {string} studentId
+ * @returns {Promise<string|null>}
  */
 export const resolveBranchFromUser = async (studentId) => {
-  const User = mongoose.models.User;
-  if (!User) return null;
-  const user = await User.findById(studentId).select("homeBranchId").lean();
+  const user = await prisma.user.findUnique({
+    where: { id: String(studentId) },
+    select: { homeBranchId: true },
+  });
   return user?.homeBranchId || null;
 };
 

@@ -1,7 +1,7 @@
 import asyncHandler from "./asyncHandler.js";
 import ApiError from "../utils/ApiError.js";
 import { verifyAccess } from "../utils/jwt.js";
-import User from "../models/user.model.js";
+import prisma from "../config/prisma.js";
 import { resolveRole } from "../helpers/permission.helper.js";
 import {
   resolveBranchScope,
@@ -24,8 +24,20 @@ const requireAuth = asyncHandler(async (req, _res, next) => {
     throw new ApiError(401, "Token yaroqsiz yoki muddati o'tgan");
   }
 
-  const user = await User.findById(payload.sub);
-  if (!user || !user.isActive) throw new ApiError(401, "Foydalanuvchi topilmadi");
+  // `branchAssignments` ATAYLAB include qilinadi: resolveAllowedBranchIds()
+  // va resolveRoleForBranch() shu ro'yxatni aylanadi. U kelmasa har bir
+  // xodim faqat o'z "home" filialini ko'rib qolardi - ya'ni ko'p filialli
+  // biriktirish JIMGINA ishlamay qo'yardi.
+  const found = await prisma.user.findUnique({
+    where: { id: payload.sub },
+    include: { branchAssignments: { select: { branchId: true, role: true } } },
+  });
+  if (!found || !found.isActive || found.isDeleted) {
+    throw new ApiError(401, "Foydalanuvchi topilmadi");
+  }
+  // `_id` taxallusi: pastdagi servislar/handlerlar hali `req.user._id`
+  // ishlatadi (migratsiya tugagach olib tashlanadi).
+  const user = { ...found, _id: found.id };
 
   // 1-BOSQICH: asosiy (global) rol.
   const baseRole = await resolveRole(user.role);
@@ -105,7 +117,7 @@ const requireAuth = asyncHandler(async (req, _res, next) => {
       branchId: scope.branchId,
       allowedBranchIds: scope.allowedBranchIds,
       canSeeAllBranches: scope.canSeeAllBranches,
-      userId: String(user._id),
+      userId: String(user.id),
     },
     () => next(),
   );

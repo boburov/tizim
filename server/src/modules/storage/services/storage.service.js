@@ -4,8 +4,11 @@ import crypto from "node:crypto";
 import env from "../../../config/env.js";
 import logger from "../../../config/logger.js";
 import ApiError from "../../../utils/ApiError.js";
-import StoredFile from "../../../models/storedFile.model.js";
-import StorageUsage, { USAGE_KEY } from "../../../models/storageUsage.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId } from "../../../utils/serialize.js";
+
+// Mongo modelidagi konstanta shu yerga ko'chdi (model fayli o'chiriladi).
+export const USAGE_KEY = "global";
 
 // ───────────────────────────────────────────────────────────────────────
 // KVOTA HISOBI
@@ -20,32 +23,35 @@ import StorageUsage, { USAGE_KEY } from "../../../models/storageUsage.model.js";
 
 /** Hisoblagich hujjati borligini kafolatlaydi (birinchi ishga tushish). */
 const ensureCounter = async () => {
-  const existing = await StorageUsage.findOne({ key: USAGE_KEY }).lean();
+  const existing = await prisma.storageUsage.findUnique({ where: { key: USAGE_KEY } });
   if (existing) return existing;
 
   // Eski o'rnatmalarda fayllar bor, hisoblagich yo'q - shuning uchun
   // noldan emas, MAVJUD fayllardan boshlaymiz.
   const { usedBytes } = await aggregateFromFiles();
   try {
-    return await StorageUsage.create({
-      key: USAGE_KEY,
-      usedBytes,
-      reconciledAt: new Date(),
+    return await prisma.storageUsage.create({
+      data: { key: USAGE_KEY, usedBytes, reconciledAt: new Date() },
     });
   } catch (err) {
-    // Ikki instans bir vaqtda yaratmoqchi bo'lsa biri E11000 oladi -
-    // bu xato emas, hujjat allaqachon bor degani.
-    if (err?.code === 11000) return StorageUsage.findOne({ key: USAGE_KEY }).lean();
+    // Ikki instans bir vaqtda yaratmoqchi bo'lsa biri unique xatosini
+    // oladi - bu xato emas, hujjat allaqachon bor degani.
+    // Mongo: E11000 → Prisma: P2002.
+    if (err?.code === "P2002") {
+      return prisma.storageUsage.findUnique({ where: { key: USAGE_KEY } });
+    }
     throw err;
   }
 };
 
 const aggregateFromFiles = async () => {
-  const [row] = await StoredFile.aggregate([
-    { $match: { isDeleted: { $ne: true } } },
-    { $group: { _id: null, usedBytes: { $sum: "$size" }, fileCount: { $sum: 1 } } },
-  ]);
-  return { usedBytes: row?.usedBytes || 0, fileCount: row?.fileCount || 0 };
+  // Mongo: aggregate([$match, $group $sum]) → Prisma: aggregate({_sum,_count}).
+  const row = await prisma.storedFile.aggregate({
+    where: { isDeleted: false },
+    _sum: { size: true },
+    _count: { _all: true },
+  });
+  return { usedBytes: row._sum.size || 0, fileCount: row._count._all || 0 };
 };
 
 /**
@@ -59,11 +65,17 @@ const aggregateFromFiles = async () => {
  */
 export const reconcile = async () => {
   const { usedBytes, fileCount } = await aggregateFromFiles();
-  const before = await StorageUsage.findOneAndUpdate(
-    { key: USAGE_KEY },
-    { $set: { usedBytes, reconciledAt: new Date() } },
-    { upsert: true, new: false },
-  ).lean();
+  // `new: false` - Mongo ESKI hujjatni qaytarardi (drift hisoblash uchun).
+  // Prisma upsert HAR DOIM yangisini qaytaradi, shuning uchun eskisini
+  // OLDIN o'qib olamiz.
+  const before = await prisma.storageUsage.findUnique({
+    where: { key: USAGE_KEY },
+  });
+  await prisma.storageUsage.upsert({
+    where: { key: USAGE_KEY },
+    update: { usedBytes, reconciledAt: new Date() },
+    create: { key: USAGE_KEY, usedBytes, reconciledAt: new Date() },
+  });
 
   const drift = (before?.usedBytes ?? usedBytes) - usedBytes;
   if (drift !== 0) {
@@ -87,26 +99,36 @@ const reserve = async (size) => {
   await ensureCounter();
   const quota = env.STORAGE_QUOTA_BYTES;
 
-  const updated = await StorageUsage.findOneAndUpdate(
-    { key: USAGE_KEY, usedBytes: { $lte: quota - size } },
-    { $inc: { usedBytes: size } },
-    { new: true },
-  ).lean();
+  // ATOMIKLIK: shart `WHERE` ichida - PostgreSQL `UPDATE ... WHERE` ni
+  // qator darajasida atomik bajaradi. Ya'ni ikkita parallel yuklash
+  // kvotani birgalikda oshirib yubora olmaydi: ikkinchisining sharti
+  // birinchisi yozgandan keyin tekshiriladi va `count = 0` qaytadi.
+  //
+  // `updateMany` ATAYLAB (`update` emas): `update` faqat unique maydon
+  // bo'yicha ishlaydi va qo'shimcha shart qo'ya olmaydi.
+  const res = await prisma.storageUsage.updateMany({
+    where: { key: USAGE_KEY, usedBytes: { lte: quota - size } },
+    data: { usedBytes: { increment: size } },
+  });
+  if (res.count !== 1) return null;
 
-  return updated || null;
+  return prisma.storageUsage.findUnique({ where: { key: USAGE_KEY } });
 };
 
 /** Band qilingan joyni qaytaradi (yozish yiqilsa yoki fayl o'chsa). */
 const release = async (size) => {
   if (!size) return;
-  await StorageUsage.updateOne({ key: USAGE_KEY }, { $inc: { usedBytes: -size } });
+  await prisma.storageUsage.updateMany({
+    where: { key: USAGE_KEY },
+    data: { usedBytes: { decrement: size } },
+  });
   // Hisoblagich manfiyga tushib ketmasin (ikki marta release bo'lsa) -
   // manfiy qiymat keyingi kvota tekshiruvini yolg'on "bo'sh" qilib
   // ko'rsatardi.
-  await StorageUsage.updateOne(
-    { key: USAGE_KEY, usedBytes: { $lt: 0 } },
-    { $set: { usedBytes: 0 } },
-  );
+  await prisma.storageUsage.updateMany({
+    where: { key: USAGE_KEY, usedBytes: { lt: 0 } },
+    data: { usedBytes: 0 },
+  });
 };
 
 /**
@@ -129,7 +151,7 @@ export const getUsage = async () => {
   // Fayl SONI hisoblagichda saqlanmaydi - u kvota qaroriga ta'sir
   // qilmaydi, shuning uchun indekslangan countDocuments yetarli
   // (bayt yig'indisi kabi agregatsiya kerak emas).
-  const fileCount = await StoredFile.countDocuments({ isDeleted: { $ne: true } });
+  const fileCount = await prisma.storedFile.count({ where: { isDeleted: false } });
 
   return {
     usedBytes,
@@ -250,15 +272,18 @@ export const saveBuffer = async ({
   }
 
   try {
-    return await StoredFile.create({
-      originalName: String(originalName || "fayl").slice(0, 255),
-      storedName,
-      relPath,
-      mimeType: mimeType || "application/octet-stream",
-      size,
-      purpose,
-      uploadedBy: userId || null,
+    const created = await prisma.storedFile.create({
+      data: {
+        originalName: String(originalName || "fayl").slice(0, 255),
+        storedName,
+        relPath,
+        mimeType: mimeType || "application/octet-stream",
+        size,
+        purpose,
+        uploadedById: userId || null,
+      },
     });
+    return withLegacyId(created);
   } catch (err) {
     // Baza yozuvi yaratilmasa diskdagi fayl YETIM qolardi: u ro'yxatda
     // ko'rinmaydi, lekin joyni egallab turadi. Ikkalasini ham qaytaramiz.
@@ -278,7 +303,7 @@ export const readFile = async (storedFile) => {
     return await fs.readFile(absolutePathOf(storedFile));
   } catch (err) {
     logger.error(
-      { err, fileId: storedFile._id },
+      { err, fileId: storedFile.id || storedFile._id },
       "Saqlangan fayl diskda topilmadi",
     );
     throw new ApiError(404, "Fayl topilmadi");
@@ -298,19 +323,19 @@ export const readFile = async (storedFile) => {
 export const removeFile = async (storedFile, userId) => {
   if (!storedFile) return;
 
-  const res = await StoredFile.updateOne(
-    { _id: storedFile._id, isDeleted: { $ne: true } },
-    {
-      $set: {
-        isDeleted: true,
-        deletedAt: new Date(),
-        deletedBy: userId || null,
-        telegramFileId: null,
-      },
+  // Shart ichidagi `isDeleted: false` MUHIM: ikki marta o'chirish so'rovi
+  // kelsa ikkinchisi `count = 0` oladi va joy IKKI MARTA bo'shatilmaydi.
+  const res = await prisma.storedFile.updateMany({
+    where: { id: storedFile.id || storedFile._id, isDeleted: false },
+    data: {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: userId || null,
+      telegramFileId: null,
     },
-  );
+  });
 
-  if (!res.modifiedCount) return; // allaqachon o'chirilgan - qayta hisoblamaymiz
+  if (!res.count) return; // allaqachon o'chirilgan - qayta hisoblamaymiz
 
   await fs.unlink(absolutePathOf(storedFile)).catch(() => null);
   await release(storedFile.size);
@@ -319,9 +344,9 @@ export const removeFile = async (storedFile, userId) => {
 /** Telegram file_id ni keshlaydi - keyingi yuborishlar tez bo'lsin. */
 export const cacheTelegramFileId = async (fileId, telegramFileId) => {
   if (!fileId || !telegramFileId) return;
-  await StoredFile.updateOne({ _id: fileId }, { $set: { telegramFileId } }).catch(
-    () => null,
-  );
+  await prisma.storedFile
+    .update({ where: { id: String(fileId) }, data: { telegramFileId } })
+    .catch(() => null);
 };
 
 /** Baytni odam o'qiydigan ko'rinishga o'giradi ("4.2 MB"). */

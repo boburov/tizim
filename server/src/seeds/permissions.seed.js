@@ -1,7 +1,5 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
-import Permission from "../models/permission.model.js";
-import Role from "../models/role.model.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import {
   PERMISSIONS,
   PERMISSION_LABELS,
@@ -29,31 +27,33 @@ const seed = async () => {
     const { module, action } = splitPermissionKey(key);
     const moduleMeta = getModuleMeta(module);
 
-    const doc = await Permission.findOneAndUpdate(
-      { key },
-      {
-        $set: {
-          label: meta.label,
-          group: meta.group,
-          module,
-          action,
-          moduleLabel: moduleMeta.label,
-          moduleOrder: moduleMeta.order,
-        },
-      },
-      { upsert: true, new: true },
-    );
-    permIds[key] = doc._id;
+    const fields = {
+      label: meta.label,
+      group: meta.group,
+      module,
+      action,
+      moduleLabel: moduleMeta.label,
+      moduleOrder: moduleMeta.order,
+    };
+
+    // Mongo: findOneAndUpdate({key}, {$set}, {upsert:true})
+    // Prisma: upsert - `update` mavjudini yangilaydi, `create` yangisini yasaydi.
+    const doc = await prisma.permission.upsert({
+      where: { key },
+      update: fields,
+      create: { key, ...fields },
+    });
+    permIds[key] = doc.id;
   }
   logger.info(`Permissions seed qilindi: ${Object.keys(permIds).length}`);
 
   // Kod bazasidan olib tashlangan permission'lar DB'da qolib ketmasin -
   // aks holda ular matritsada "o'lik katak" bo'lib turadi.
-  const stale = await Permission.deleteMany({
-    key: { $nin: Object.values(PERMISSIONS) },
+  const stale = await prisma.permission.deleteMany({
+    where: { key: { notIn: Object.values(PERMISSIONS) } },
   });
-  if (stale.deletedCount) {
-    logger.info(`Eskirgan permission o'chirildi: ${stale.deletedCount}`);
+  if (stale.count) {
+    logger.info(`Eskirgan permission o'chirildi: ${stale.count}`);
   }
 
   // Built-in rollar. isSystem=true - UI'dan o'chirib/muzlatib bo'lmaydi.
@@ -72,14 +72,20 @@ const seed = async () => {
     };
 
     if (value === ROLES.OWNER) {
-      await Role.findOneAndUpdate(
-        { value },
-        {
-          $setOnInsert: { value, label: labels[value] },
-          $set: { ...systemFields, permissions: Object.values(permIds) },
+      // `set` - BARCHA ruxsatni qayta biriktiradi (Mongo'dagi
+      // `$set: { permissions: [...] }` bilan bir xil): yangi qo'shilgan
+      // ruxsat kalitlari owner'ga avtomatik tushishi kerak.
+      const allPerms = Object.values(permIds).map((id) => ({ id }));
+      await prisma.role.upsert({
+        where: { value },
+        update: { ...systemFields, permissions: { set: allPerms } },
+        create: {
+          value,
+          label: labels[value],
+          ...systemFields,
+          permissions: { connect: allPerms },
         },
-        { upsert: true, new: true },
-      );
+      });
     } else if (value === ROLES.TEACHER) {
       // Teacher: default permissionlarni har seedda qo'shamiz (mavjudlarini buzmaymiz)
       const teacherDefaults = [
@@ -94,27 +100,35 @@ const seed = async () => {
         permIds[PERMISSIONS.ASSIGNMENTS_READ],
         permIds[PERMISSIONS.ASSIGNMENTS_SEND],
       ].filter(Boolean);
-      await Role.findOneAndUpdate(
-        { value },
-        {
-          $setOnInsert: { value, label: labels[value] },
-          $set: systemFields,
-          $addToSet: { permissions: { $each: teacherDefaults } },
+      // `connect` - MAVJUDLARINI BUZMAY qo'shadi (Mongo'dagi `$addToSet`).
+      // Owner qo'lda bergan qo'shimcha ruxsatlar shu sabab saqlanadi.
+      const connectDefaults = teacherDefaults.map((id) => ({ id }));
+      await prisma.role.upsert({
+        where: { value },
+        update: { ...systemFields, permissions: { connect: connectDefaults } },
+        create: {
+          value,
+          label: labels[value],
+          ...systemFields,
+          permissions: { connect: connectDefaults },
         },
-        { upsert: true, new: true },
-      );
+      });
     } else {
       // Student: reytingni ko'rishi mumkin (faqat o'qish). Har seedda qo'shamiz.
       const studentDefaults = [permIds[PERMISSIONS.RATING_READ]].filter(Boolean);
-      await Role.findOneAndUpdate(
-        { value },
-        {
-          $setOnInsert: { value, label: labels[value] },
-          $set: systemFields,
-          $addToSet: { permissions: { $each: studentDefaults } },
+      // `connect` - MAVJUDLARINI BUZMAY qo'shadi (Mongo'dagi `$addToSet`).
+      // Owner qo'lda bergan qo'shimcha ruxsatlar shu sabab saqlanadi.
+      const connectDefaults = studentDefaults.map((id) => ({ id }));
+      await prisma.role.upsert({
+        where: { value },
+        update: { ...systemFields, permissions: { connect: connectDefaults } },
+        create: {
+          value,
+          label: labels[value],
+          ...systemFields,
+          permissions: { connect: connectDefaults },
         },
-        { upsert: true, new: true },
-      );
+      });
     }
   }
   logger.info("Rollar seed qilindi");
@@ -164,24 +178,24 @@ const seed = async () => {
 
   const directorPermIds = directorPermKeys.map((k) => permIds[k]).filter(Boolean);
 
-  await Role.findOneAndUpdate(
-    { value: "director" },
-    {
-      // $setOnInsert: mavjud rolning ruxsatlarini QAYTA YOZMAYMIZ - owner
-      // uni o'zgartirgan bo'lsa, keyingi seed uni tiklab yubormasin.
-      $setOnInsert: {
-        value: "director",
-        label: "Filial direktori",
-        description: "Filial administratori - o'z filiali doirasida ishlaydi",
-        isSystem: false,
-        isFrozen: false,
-        roleType: ROLE_TYPES.STAFF,
-        defaultPath: "/owner",
-        permissions: directorPermIds,
-      },
+  // `update: {}` - BO'SH, ataylab. Mongo'dagi $setOnInsert bilan bir xil
+  // ma'no: rol allaqachon bor bo'lsa unga TEGILMAYDI, chunki owner uning
+  // ruxsatlarini o'zgartirgan bo'lishi mumkin va seed uni tiklab
+  // yubormasligi kerak.
+  await prisma.role.upsert({
+    where: { value: "director" },
+    update: {},
+    create: {
+      value: "director",
+      label: "Filial direktori",
+      description: "Filial administratori - o'z filiali doirasida ishlaydi",
+      isSystem: false,
+      isFrozen: false,
+      roleType: ROLE_TYPES.STAFF,
+      defaultPath: "/owner",
+      permissions: { connect: directorPermIds.map((id) => ({ id })) },
     },
-    { upsert: true, new: true },
-  );
+  });
   logger.info("Direktor roli tayyor");
 
   // --- RESEPSHIN (qabul xodimi) roli ---
@@ -210,27 +224,24 @@ const seed = async () => {
   ];
   const receptionPermIds = receptionPermKeys.map((k) => permIds[k]).filter(Boolean);
 
-  await Role.findOneAndUpdate(
-    { value: "reception" },
-    {
-      // $setOnInsert - direktor rolidagi bilan bir xil sabab: owner
-      // ruxsatlarni o'zgartirgan bo'lsa, keyingi seed uni tiklamasin.
-      $setOnInsert: {
-        value: "reception",
-        label: "Resepshin",
-        description: "Qabul xodimi - lid qabul qiladi va ular bilan ishlaydi",
-        isSystem: false,
-        isFrozen: false,
-        roleType: ROLE_TYPES.STAFF,
-        // Kirgach darhol lidlar sahifasi ochiladi - uning yagona ish joyi.
-        // "/owner" bo'lsa u bo'sh dashboard'ga tushib, qayerga borishni
-        // izlab yurardi.
-        defaultPath: "/owner/leads",
-        permissions: receptionPermIds,
-      },
+  // `update: {}` - direktor rolidagi bilan bir xil sabab.
+  await prisma.role.upsert({
+    where: { value: "reception" },
+    update: {},
+    create: {
+      value: "reception",
+      label: "Resepshin",
+      description: "Qabul xodimi - lid qabul qiladi va ular bilan ishlaydi",
+      isSystem: false,
+      isFrozen: false,
+      roleType: ROLE_TYPES.STAFF,
+      // Kirgach darhol lidlar sahifasi ochiladi - uning yagona ish joyi.
+      // "/owner" bo'lsa u bo'sh dashboard'ga tushib, qayerga borishni
+      // izlab yurardi.
+      defaultPath: "/owner/leads",
+      permissions: { connect: receptionPermIds.map((id) => ({ id })) },
     },
-    { upsert: true, new: true },
-  );
+  });
   logger.info("Resepshin roli tayyor");
 
   await disconnectDB();
