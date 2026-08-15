@@ -3,6 +3,10 @@ import Feedback from "../../../models/feedback.model.js";
 import FeedbackType from "../../../models/feedbackType.model.js";
 import Group from "../../../models/group.model.js";
 import ApiError from "../../../utils/ApiError.js";
+import {
+  branchGroupFilter,
+  branchUserFilter,
+} from "../../../helpers/branchContext.helper.js";
 
 const FEEDBACK_STATUS_LABEL = {
   new: "Yangi",
@@ -52,6 +56,32 @@ export const submit = async (body, currentUser) => {
   return doc;
 };
 
+// FILIAL KO'LAMI: Feedback'da `branchId` YO'Q va u IKKI yo'l bilan
+// filialga bog'lanadi - MUALLIF (`author`) yoki GURUH (`group`) orqali.
+//
+// Nega ikkalasi ham kerak: o'quvchi guruhsiz ham fikr yozishi mumkin
+// (umumiy shikoyat), guruh esa anonim fikrda yagona iz bo'lib qoladi
+// (`isAnonymous` da author saqlanadi, lekin ko'rsatilmaydi).
+// Bittasi bilan cheklansak, ikkinchi turdagi yozuvlar jimgina
+// yo'qolardi yoki aksincha sizib chiqardi.
+//
+// HECH QAYSISIGA bog'lanmagan yozuv (anonim + guruhsiz) filial
+// direktoriga KO'RINMAYDI - fail-closed, u markaz darajasidagi fikr.
+const feedbackScopeFilter = async () => {
+  const [groupScope, authorScope] = await Promise.all([
+    branchGroupFilter("group"),
+    branchUserFilter("author"),
+  ]);
+
+  // Ko'lam cheklanmagan (owner "barcha filiallar") - filtr shart emas.
+  if (!groupScope.group && !authorScope.author) return {};
+
+  const or = [];
+  if (groupScope.group) or.push(groupScope);
+  if (authorScope.author) or.push(authorScope);
+  return { $or: or };
+};
+
 export const list = async ({
   type,
   status,
@@ -61,7 +91,7 @@ export const list = async ({
   page = 1,
   limit = 20,
 }) => {
-  const filter = {};
+  const filter = { ...(await feedbackScopeFilter()) };
   if (type) filter.type = type;
   if (status) filter.status = status;
   if (search && search.trim()) {
@@ -218,7 +248,9 @@ export const reject = async (id, body, currentUser) => {
 };
 
 export const getStats = async ({ fromDate, toDate } = {}) => {
-  const range = {};
+  // Ro'yxat bilan AYNI ko'lam - aks holda kartochkadagi son ro'yxatdagi
+  // qatorlar soniga to'g'ri kelmasdi (va boshqa filialni oshkor qilardi).
+  const range = { ...(await feedbackScopeFilter()) };
   if (fromDate || toDate) {
     range.createdAt = {};
     if (fromDate) range.createdAt.$gte = new Date(fromDate);

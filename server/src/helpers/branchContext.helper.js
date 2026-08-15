@@ -156,6 +156,45 @@ export const branchGroupFilter = async (field = "group") => {
 };
 
 /**
+ * O'QUVCHI orqali filialga bog'langan modellar uchun $match bosqichi.
+ *
+ * branchGroupMatchStage'ning egizagi, lekin BOSHQA yo'l bilan: depozit
+ * guruhga emas, O'QUVCHIGA tegishli (qarang: studentDeposit.model.js).
+ * O'quvchining filiali esa `homeBranchId` / `branchAssignments` da.
+ *
+ * NEGA KERAK BO'LDI: StudentDeposit modelida `branchId` YO'Q va uni
+ * qo'shish ham to'g'ri emas - depozit o'quvchi bilan birga ko'chadi.
+ * Filtrsiz esa `StudentDeposit.find({ balance: { $gt: 0 } })` butun
+ * markazning balanslarini qaytarardi (tests/branchScopeExploit.test.js
+ * shu sizishni tutgan edi).
+ *
+ * userBranchCondition() ni QAYTA ISHLATADI - "foydalanuvchi qaysi
+ * filialda" qoidasi ikki joyda ikki xil bo'lib qolmasligi uchun.
+ *
+ * @param {string} [field="student"] - modeldagi foydalanuvchi maydoni nomi
+ * @returns {Promise<Array<{$match: object}>>}
+ */
+export const branchUserMatchStage = async (field = "student") => {
+  const condition = userBranchCondition();
+  // null = cheklov yo'q (kontekstsiz job/seed yoki owner "barcha filiallar").
+  if (!condition) return [];
+
+  const User = mongoose.models.User;
+  if (!User) return [];
+
+  const users = await User.find(condition).select("_id").lean();
+  // Bo'sh ro'yxat ham TO'G'RI natija: hech qaysi filialga biriktirilmagan
+  // foydalanuvchi hech kimni ko'rmasligi kerak (fail-closed).
+  return [{ $match: { [field]: { $in: users.map((u) => u._id) } } }];
+};
+
+/** Yuqoridagining oddiy query (aggregate emas) uchun varianti. */
+export const branchUserFilter = async (field = "student") => {
+  const stages = await branchUserMatchStage(field);
+  return stages.length ? stages[0].$match : {};
+};
+
+/**
  * Markazda FAQAT BITTA filial bormi - bo'lsa o'sha filial ID'si.
  *
  * `limit(2)`: aniq sonini bilish shart emas, "bittami yoki ko'pmi" yetarli.

@@ -14,6 +14,7 @@ import {
   ROLE_TYPES,
   SYSTEM_ROLE_META,
 } from "../constants/roles.js";
+import { BRANCH_LOCAL_PERMISSIONS } from "../constants/permissionScope.js";
 import logger from "../config/logger.js";
 
 const seed = async () => {
@@ -126,78 +127,41 @@ const seed = async () => {
   // KIRA OLMAYDI" degani - muzlatilgan holda yaratilsa, tayinlangan direktor
   // darhol qulflangan bo'lardi.
   //
-  // ASOSIY PRINSIP: direktor amalni BOSHLAY oladi, lekin TASDIQLAY olmaydi.
+  // ── ASOSIY PRINSIP (owner qarori) ──
+  // Filial rahbari O'Z FILIALIDA hamma narsani qila oladi. Faqat GLOBAL
+  // va FILIALLARARO ishlar owner'da qoladi.
   //
-  // Shuning uchun bu ro'yxatda tasdiqlash kalitlari ATAYLAB YO'Q:
-  //   finance.approve          - limitdan oshgan chiqimni tasdiqlash
-  //   approvals.decide_config  - maosh stavkasi / chegirma / ishga olishni
-  //                              tasdiqlash
-  // Ular yo'qligi sababli direktorning quyidagi amallari owner tasdig'iga
-  // tushadi (202 qaytariladi, hech narsa o'zgarmaydi):
-  //   groups.update    -> maosh stavkasi belgilash  (salary_terms)
-  //   finance.manage   -> chegirma belgilash        (discount_set)
-  //   teachers.create  -> ishga olish               (staff_hire)
-  //   + roles.update   - ishga olish route'i talab qiladi (rol biriktirish).
-  //     Xavfsiz: roles.service.js dagi assertCanGrantPermissions direktorga
-  //     O'ZIDA YO'Q ruxsatni bera olmasligini kafolatlaydi, ya'ni u o'ziga
-  //     approvals.decide_config qo'sha olmaydi. Owner esa ["*"] bypass
-  //     bilan himoyalangan (permission.helper.js).
+  // Ro'yxat QO'LDA yozilmaydi - constants/permissionScope.js dan
+  // hisoblanadi: "hamma ruxsat minus owner-only istisnolar". Shuning
+  // uchun yangi ruxsat qo'shilganda u avtomatik ravishda direktorga
+  // tushadi.
   //
-  // BU RO'YXATGA finance.approve YOKI approvals.decide_config QO'SHMANG -
-  // aks holda direktor o'z so'rovini o'zi tasdiqlay oladigan bo'lib qoladi
-  // va butun tasdiq zanjiri ma'nosini yo'qotadi. (tests/directorRole.test.js
-  // shu invariantni qulflaydi.)
-  const directorPermKeys = [
-    PERMISSIONS.ADMIN_DASHBOARD_READ,
-    PERMISSIONS.USERS_READ,
-    PERMISSIONS.BRANCHES_READ,
-    PERMISSIONS.STUDENTS_READ,
-    PERMISSIONS.STUDENTS_CREATE,
-    PERMISSIONS.STUDENTS_UPDATE,
-    PERMISSIONS.TEACHERS_READ,
-    // Ishga olish so'rovini yubora olishi uchun (owner tasdiqlaydi).
-    // Route ikkalasini birga talab qiladi: users.routes.js "/staff".
-    PERMISSIONS.TEACHERS_CREATE,
-    PERMISSIONS.ROLES_UPDATE,
-    PERMISSIONS.GROUPS_READ,
-    PERMISSIONS.GROUPS_CREATE,
-    PERMISSIONS.GROUPS_UPDATE,
-    PERMISSIONS.GROUPS_MANAGE_STUDENTS,
-    PERMISSIONS.ATTENDANCE_READ,
-    PERMISSIONS.ATTENDANCE_RECORD,
-    PERMISSIONS.ATTENDANCE_MANAGE,
-    PERMISSIONS.GRADES_READ,
-    // ASIMMETRIYANI TUZATISH: direktorda ATTENDANCE_RECORD bor edi,
-    // GRADES_RECORD esa yo'q - ya'ni davomatni belgilay olardi, lekin
-    // baho qo'ya olmasdi. Bu ataylab emas, e'tibordan chetda qolgan:
-    // ikkalasi ham bir xil ish (o'qituvchi kelmaganda darsni yopish).
-    // GRADES_MANAGE ataylab BERILMAGAN - u boshqalarning bahosini
-    // o'chirish/tahrirlash demak.
-    PERMISSIONS.GRADES_RECORD,
-    PERMISSIONS.RATING_READ,
-    PERMISSIONS.LEADS_READ,
-    PERMISSIONS.LEADS_MANAGE,
-    PERMISSIONS.FINANCE_READ,
-    PERMISSIONS.FINANCE_PAY,
-    // Chegirma so'rovini yubora olishi uchun (owner tasdiqlaydi).
-    // DIQQAT: bu kalit guruh narxini (PUT /finance/group-fees) ham ochadi -
-    // u hozircha tasdiqsiz o'zgaradi.
-    PERMISSIONS.FINANCE_MANAGE,
-    PERMISSIONS.SALARY_READ,
-    PERMISSIONS.SALARY_PAY,
-    // Xodimlar maoshini KO'RA oladi. PAYROLL_MANAGE/PAY ataylab
-    // berilmagan: KPI qoidasini o'zgartirish va pul chiqarish - egasining
-    // qarori.
-    PERMISSIONS.PAYROLL_READ,
-    PERMISSIONS.NOTIFICATIONS_READ,
-    PERMISSIONS.NOTIFICATIONS_SEND,
-    // Vazifalarni KO'RA oladi (kvota kimning fayllari bilan to'layotganini
-    // bilishi kerak), lekin ASSIGNMENTS_SEND ataylab berilmagan: yuborish
-    // diskni yeydi va u o'qituvchining ishi.
-    PERMISSIONS.ASSIGNMENTS_READ,
-    PERMISSIONS.FEEDBACK_READ,
-    PERMISSIONS.FEEDBACK_RESPOND,
-  ];
+  // NEGA QO'LDA RO'YXAT TASHLANDI: ilgari bu yerda 35 ta kalit sanalgan
+  // edi va shablonga yangi kalit qo'shish ESDAN CHIQARDI. Natijada
+  // direktor davomat belgilay olardi, lekin baho qo'ya olmasdi
+  // (grades.record) - va buni tuzatish uchun alohida migratsiya
+  // yozishga to'g'ri kelgan. Endi bunday og'ish mumkin emas.
+  //
+  // ── NIMA BERILMAYDI VA NEGA ──
+  // To'liq ro'yxat va sabablari: constants/permissionScope.js.
+  // Eng muhimlari:
+  //   system.admin_access     - owner-ga tenglashtiradi
+  //   branches.view_all       - boshqa filialni ko'radi
+  //   branches.update         - o'ziga qo'yilgan cheklovni o'zi olib tashlaydi
+  //   approvals.decide_config } matritsani BUTUNLAY chetlab o'tadi, ya'ni
+  //   finance.approve         } owner biror amalni "tasdiqqa" qaytara olmasdi
+  //
+  // ── TASDIQ ZANJIRI QAYERGA KETDI ──
+  // Endi u ruxsatga emas, FILIAL matritsasiga bog'langan
+  // (Branch.delegation, qarang constants/delegation.js). Standart holat -
+  // `auto`: direktor o'zi bajaradi. Owner istagan turni istagan filialda
+  // `threshold` yoki `approval` ga qaytara oladi.
+  //
+  // O'ziga o'zi maosh belgilash esa ALOHIDA to'siq bilan yopilgan
+  // (helpers/selfSalary.guard.js) - u rejimdan ham, ruxsatdan ham
+  // qat'i nazar ishlaydi.
+  const directorPermKeys = BRANCH_LOCAL_PERMISSIONS;
+
   const directorPermIds = directorPermKeys.map((k) => permIds[k]).filter(Boolean);
 
   await Role.findOneAndUpdate(

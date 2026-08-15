@@ -20,7 +20,25 @@ http.interceptors.request.use((config) => {
   // so'ralayotganini biladi. "all" = konsolidatsiya (faqat view_all bilan).
   // Yuborilmasa server avtomatik aniqlaydi (foydalanuvchining filiali).
   const branchId = getActiveBranchId();
-  if (branchId) config.headers["x-branch-id"] = branchId;
+  if (branchId) {
+    config.headers["x-branch-id"] = branchId;
+
+    // FILIAL NIYATI - faqat YOZISH so'rovlarida.
+    //
+    // `x-branch-id` bu SO'ROV ("shu filialni ko'rsat"), server esa uni
+    // rad etib boshqasiga tushishi mumkin: foydalanuvchi filialdan
+    // chiqarilgan, filial arxivlangan, yoki markazda yagona filial
+    // qolgan. O'qishda bu zararsiz, YOZISHDA esa ma'lumot jimgina
+    // noto'g'ri filialga tushardi.
+    //
+    // Bu sarlavha TASDIQ: "men aynan shu filialga yozyapman". Server
+    // boshqasini hal qilgan bo'lsa 409 qaytaradi va hech narsa
+    // yozilmaydi (server: helpers/branchIntent.guard.js).
+    const method = String(config.method || "get").toUpperCase();
+    if (method !== "GET" && method !== "HEAD") {
+      config.headers["x-branch-context"] = branchId;
+    }
+  }
   return config;
 });
 

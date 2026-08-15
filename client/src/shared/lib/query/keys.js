@@ -12,6 +12,7 @@ export const qk = Object.freeze({
     one: (id) => ["branches", "detail", id],
     stats: (id) => ["branches", "stats", id],
     compare: () => ["branches", "compare"],
+    delegationOptions: () => ["branches", "delegationOptions"],
   },
   expenseApprovals: {
     all: () => ["expenseApprovals"],

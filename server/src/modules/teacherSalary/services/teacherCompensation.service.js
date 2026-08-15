@@ -9,6 +9,7 @@ import { ROLES } from "../../../constants/roles.js";
 import { toUtcMidnight, localTodayMidnight } from "../../../helpers/attendance.helper.js";
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { resolveBranchForWrite } from "../../../helpers/branchContext.helper.js";
+import { assertNotSelfSalary } from "../../../helpers/selfSalary.guard.js";
 import * as teacherSalaryService from "./teacherSalary.service.js";
 
 // O'QITUVCHINING STANDART MAOSH STAVKASI - servis qatlami.
@@ -104,6 +105,10 @@ export const getActive = async (teacherId, onDate = null) => {
  */
 export const setCompensation = async (body, currentUser) => {
   const teacher = await assertTeacher(body.teacher);
+  // O'ZIGA O'ZI STAVKA QO'YISH TAQIQI (helpers/selfSalary.guard.js).
+  // Bu funksiya ishga olish oqimidan (createStaff) ham chaqiriladi, lekin
+  // u yerda yangi yaratilgan xodim chaqiruvchining o'zi bo'la olmaydi.
+  assertNotSelfSalary(currentUser, teacher._id);
   const from = toUtcMidnight(body.effectiveFrom || localTodayMidnight());
 
   // Ishga olingan sanadan oldin stavka bo'la olmaydi.
@@ -181,6 +186,8 @@ export const setCompensation = async (body, currentUser) => {
 export const amendCompensation = async (id, patch, currentUser) => {
   const doc = await TeacherCompensation.findById(toObjectId(id));
   if (!doc || doc.isDeleted) throw new ApiError(404, "Maosh stavkasi topilmadi");
+  // Tuzatish ham stavkani o'zgartiradi - bir xil taqiq.
+  assertNotSelfSalary(currentUser, doc.teacher);
 
   const before = toUtcMidnight(doc.effectiveFrom);
   if (patch.effectiveFrom !== undefined) doc.effectiveFrom = toUtcMidnight(patch.effectiveFrom);
@@ -308,6 +315,8 @@ export const requestSet = async (body, currentUser) => {
     "../../expenseApprovals/services/expenseApproval.service.js"
   );
   const teacher = await assertTeacher(body.teacher);
+  // So'rov ham yaratilmaydi - qarang teacherGroupPeriod.requestSalaryTerms.
+  assertNotSelfSalary(currentUser, teacher._id);
   const branchId = await resolveBranchForWrite(currentUser, body.branchId ?? null);
 
   return approvalService.createRequest({

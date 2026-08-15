@@ -5,6 +5,8 @@ import StudentPayment from "../../../models/studentPayment.model.js";
 import PaymentTransaction from "../../../models/paymentTransaction.model.js";
 import User from "../../../models/user.model.js";
 import ArchiveReason from "../../../models/archiveReason.model.js";
+import Course from "../../../models/course.model.js";
+import Room from "../../../models/room.model.js";
 import { attachBotStatus } from "../../../helpers/botStatus.helper.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -310,6 +312,32 @@ const mergeScheduleVersion = (existing, incoming, effectiveFromInput) => {
   }));
 };
 
+// KURS: global katalog, faqat mavjudligi va faolligi tekshiriladi.
+// null = biriktirilmagan (ruxsat etilgan - eski/aralash guruhlar).
+const assertCourseExists = async (courseId) => {
+  if (!courseId) return;
+  const course = await Course.findById(courseId).select("isActive").lean();
+  if (!course) throw new ApiError(400, "Kurs topilmadi");
+  if (!course.isActive) throw new ApiError(400, "Nofaol kursni biriktirib bo'lmaydi");
+};
+
+// XONA: FILIAL resursi. Guruh bilan BIR filialda bo'lishi SHART.
+//
+// Aks holda A filial guruhi B filialning xonasini "band qilib" qo'yardi:
+// B ning bandlik hisobi soxta band ko'rsatardi, A niki esa bo'sh - ya'ni
+// ikkala filialning ham utilization raqami yolg'on bo'lardi.
+const assertRoomInBranch = async (roomId, branchId) => {
+  if (!roomId) return;
+  const room = await Room.findOne({ _id: roomId, isDeleted: false })
+    .select("branchId isActive name")
+    .lean();
+  if (!room) throw new ApiError(400, "Xona topilmadi");
+  if (!room.isActive) throw new ApiError(400, "Nofaol xonani biriktirib bo'lmaydi");
+  if (String(room.branchId) !== String(branchId)) {
+    throw new ApiError(400, "Xona guruh bilan bir xil filialda bo'lishi kerak");
+  }
+};
+
 export const create = async (body, currentUser) => {
   await ensureTeachers(body.teachers);
   // O'qituvchi ishga olingan sanasi guruh boshlanish sanasidan KEYIN bo'lsa -
@@ -343,8 +371,19 @@ export const create = async (body, currentUser) => {
   // client formada aniq filialni so'raydi va `branchId` bilan yuboradi.
   const branchId = await resolveBranchForWrite(currentUser, body.branchId);
 
+  // KURS va XONA - Faza 3 da qo'shildi.
+  //
+  // Kurs GLOBAL katalog, shuning uchun faqat mavjudligi tekshiriladi.
+  // Xona esa FILIAL resursi: u guruh bilan BIR filialda bo'lishi shart,
+  // aks holda A filial guruhi B filialning xonasini "band qilib" qo'yardi
+  // va bandlik hisoboti ikkala filialda ham noto'g'ri chiqardi.
+  await assertCourseExists(body.courseId);
+  await assertRoomInBranch(body.roomId, branchId);
+
   const group = await Group.create({
     branchId,
+    courseId: body.courseId || null,
+    roomId: body.roomId || null,
     name: body.name.trim(),
     schedule: normalizeSchedule(body.schedule, { dropEffective: true }),
     // teachers[] - davrlardan HOSILA kesh; assignTeacher syncGroupTeachersCache qiladi.
@@ -474,6 +513,22 @@ export const update = async (id, body) => {
   }
 
   if (body.name !== undefined) group.name = body.name.trim();
+
+  // KURS va XONA. Tekshiruvlar create() dagi bilan AYNI - ular bitta
+  // joyda turgani uchun ikki yo'l vaqt o'tib ajralib ketmaydi.
+  //
+  // XONA uchun filial GURUHNIKI olinadi (body'dan emas): guruhning
+  // filiali bu yerda o'zgarmaydi, ya'ni xona baribir shu filialda
+  // bo'lishi shart.
+  if (body.courseId !== undefined) {
+    await assertCourseExists(body.courseId);
+    group.courseId = body.courseId || null;
+  }
+  if (body.roomId !== undefined) {
+    await assertRoomInBranch(body.roomId, group.branchId);
+    group.roomId = body.roomId || null;
+  }
+
   // Versiyalash: client HOZIRGI versiya qatorlarini + bitta "amal qilish sanasi"
   // (scheduleEffectiveFrom) yuboradi. Yangi jadval joriy amaldagi versiyadan farq
   // qilsa - eski versiyalar TARIX uchun saqlanib, yangi qatorlar shu sanadan

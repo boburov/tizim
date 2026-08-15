@@ -1,6 +1,29 @@
 // Permission keys (the seed writes the same keys to the DB)
 export const PERMISSIONS = Object.freeze({
   USERS_READ: "users.read",
+
+  // FOYDALANUVCHI USTIDAN AMALLAR (rolidan qat'i nazar).
+  //
+  // NEGA students.* / teachers.* dan ALOHIDA: bu route'lar GENERIK -
+  // bitta endpoint o'quvchini ham, o'qituvchini ham, xodimni ham
+  // tahrirlaydi (users.service.js dagi update/softRemove roliga qarab
+  // maydonlarni ajratadi). Rolga bog'liq kalit ishlatilsa, "o'qituvchini
+  // tahrirlay oladi, lekin resepshinni yo'q" degan holat kelib chiqardi.
+  //
+  // Ilgari bu uchtasi requireRole(OWNER) bilan qulflangan edi - ya'ni
+  // filial direktori O'Z filialidagi xodimini ham tahrirlay olmasdi.
+  // Endi ular ruxsatga ko'chirildi, filial himoyasi esa servis
+  // qatlamidagi assertTargetInScope bilan ta'minlanadi.
+  USERS_CREATE: "users.create",
+  USERS_UPDATE: "users.update",
+  // Arxivlash + tiklash (yumshoq o'chirish). Butunlay o'chirish
+  // (/permanent) bu kalitga KIRMAYDI - u owner-only bo'lib qoladi.
+  USERS_ARCHIVE: "users.archive",
+  // Parolni ko'rish va almashtirish. Filial chegarasi ALOHIDA
+  // himoyalangan: helpers/credentialScope.helper.js - `branches.view_all`
+  // bu yerda o'tkazgich bo'lmaydi.
+  USERS_PASSWORD: "users.password",
+
   ARCHIVE_REASONS_MANAGE: "archive_reasons.manage",
 
   // LIDLAR. Uch darajaga ATAYLAB ajratilgan - "resepshin" roli uchun.
@@ -25,6 +48,11 @@ export const PERMISSIONS = Object.freeze({
   STUDENTS_CREATE: "students.create",
   STUDENTS_UPDATE: "students.update",
   STUDENTS_DELETE: "students.delete",
+  // MUZLATISH: o'quvchi vaqtincha to'xtaydi (to'lov hisoblanmaydi).
+  // STUDENTS_DELETE dan ATAYLAB ajratilgan - o'quvchi ARXIVLANMAYDI
+  // (users.service.js softRemove buni ochiq rad etadi), muzlatish esa
+  // uning o'rnini bosadigan kundalik filial amali.
+  STUDENTS_FREEZE: "students.freeze",
 
   TEACHERS_READ: "teachers.read",
   TEACHERS_CREATE: "teachers.create",
@@ -84,6 +112,11 @@ export const PERMISSIONS = Object.freeze({
   FINANCE_READ: "finance.read",
   FINANCE_PAY: "finance.pay",
   FINANCE_MANAGE: "finance.manage",
+  // BOSHLANG'ICH QOLDIQ: tizimga o'tishdan oldingi qarz/haq.
+  // FINANCE_MANAGE dan ATAYLAB ajratilgan - yozuv O'ZGARMAS (model
+  // darajasida immutable + unique), ya'ni xato kiritilsa faqat
+  // korreksiya tranzaksiyasi bilan tuzatiladi.
+  FINANCE_OPENING_BALANCE: "finance.opening_balance",
 
   // Teacher salary (O'qituvchi maoshlari)
   SALARY_READ: "salary.read",
@@ -158,6 +191,22 @@ export const PERMISSIONS = Object.freeze({
 // Human-readable labels (used by the seed)
 export const PERMISSION_LABELS = {
   [PERMISSIONS.USERS_READ]: { label: "Foydalanuvchilarni ko'rish", group: "users" },
+  [PERMISSIONS.USERS_CREATE]: {
+    label: "Foydalanuvchi yaratish",
+    group: "users",
+  },
+  [PERMISSIONS.USERS_UPDATE]: {
+    label: "Foydalanuvchini tahrirlash",
+    group: "users",
+  },
+  [PERMISSIONS.USERS_ARCHIVE]: {
+    label: "Foydalanuvchini arxivlash va tiklash",
+    group: "users",
+  },
+  [PERMISSIONS.USERS_PASSWORD]: {
+    label: "Parolni ko'rish va almashtirish",
+    group: "users",
+  },
   [PERMISSIONS.ARCHIVE_REASONS_MANAGE]: {
     label: "Arxiv sabablarini boshqarish",
     group: "users",
@@ -177,6 +226,10 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.STUDENTS_CREATE]: { label: "O'quvchilarni yaratish", group: "students" },
   [PERMISSIONS.STUDENTS_UPDATE]: { label: "O'quvchilarni tahrirlash", group: "students" },
   [PERMISSIONS.STUDENTS_DELETE]: { label: "O'quvchilarni o'chirish", group: "students" },
+  [PERMISSIONS.STUDENTS_FREEZE]: {
+    label: "O'quvchini muzlatish",
+    group: "students",
+  },
 
   [PERMISSIONS.TEACHERS_READ]: { label: "O'qituvchilarni ko'rish", group: "teachers" },
   [PERMISSIONS.TEACHERS_CREATE]: { label: "O'qituvchilarni yaratish", group: "teachers" },
@@ -261,6 +314,10 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.FINANCE_READ]: { label: "Moliyani ko'rish", group: "finance" },
   [PERMISSIONS.FINANCE_PAY]: { label: "To'lov qabul qilish", group: "finance" },
   [PERMISSIONS.FINANCE_MANAGE]: { label: "Moliyani boshqarish", group: "finance" },
+  [PERMISSIONS.FINANCE_OPENING_BALANCE]: {
+    label: "Boshlang'ich qoldiq kiritish",
+    group: "finance",
+  },
 
   [PERMISSIONS.SALARY_READ]: { label: "Maoshlarni ko'rish", group: "finance" },
   [PERMISSIONS.SALARY_PAY]: { label: "Maosh to'lash", group: "finance" },

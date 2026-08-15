@@ -28,6 +28,7 @@ import list from "./handlers/list.handler.js";
 import getById from "./handlers/getById.handler.js";
 import stats from "./handlers/stats.handler.js";
 import compare from "./handlers/compare.handler.js";
+import delegationOptions from "./handlers/delegationOptions.handler.js";
 import create from "./handlers/create.handler.js";
 import update from "./handlers/update.handler.js";
 import remove from "./handlers/remove.handler.js";
@@ -39,6 +40,15 @@ const router = Router();
 router.get("/", requireAuth, validate(listSchema), list);
 // "/:id" dan OLDIN: aks holda "compare" filial ID deb o'qilardi.
 router.get("/compare", requireAuth, requirePermission(PERMISSIONS.BRANCHES_READ), compare);
+// Delegatsiya katalogi - statik metama'lumot (turlar, ruxsat etilgan
+// rejimlar). "/:id" dan OLDIN bo'lishi SHART - aks holda "delegation-options"
+// filial ID sifatida o'qilardi.
+router.get(
+  "/delegation-options",
+  requireAuth,
+  requirePermission(PERMISSIONS.BRANCHES_READ),
+  delegationOptions,
+);
 router.get("/:id", requireAuth, validate(idSchema), getById);
 // Statistika filial rahbariyatining ism/loginini ham qaytaradi, shuning
 // uchun ruxsat SHART - ilgari har qanday auth'langan foydalanuvchi (hatto

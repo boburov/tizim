@@ -53,6 +53,20 @@ const groupSchema = new mongoose.Schema(
       index: true,
     },
 
+    // XONA. null = biriktirilmagan (eski guruhlar yoki onlayn dars).
+    //
+    // Kurs bilan FARQI: kurs global taksonomiya, xona esa FILIAL resursi.
+    // Shuning uchun xona guruh bilan BIR filialda bo'lishi shart - bu
+    // groups.service.js da tekshiriladi (aks holda A filial guruhi B
+    // filialning xonasini "band qilib" qo'yardi va bandlik hisobi
+    // buzilardi).
+    roomId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+      default: null,
+      index: true,
+    },
+
     schedule: { type: [scheduleItemSchema], default: [] },
     teachers: [
       { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },

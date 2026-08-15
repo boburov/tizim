@@ -24,6 +24,9 @@ export const updateSchema = z.object({
       endDate: z.coerce.date().nullable().optional(),
       durationMonths: z.coerce.number().min(0).nullable().optional(),
       entryBilling: z.enum(["prorated", "full"]).optional(),
+      // Kurs va xona - qarang create.validator.js.
+      courseId: z.string().min(1).nullable().optional(),
+      roomId: z.string().min(1).nullable().optional(),
     })
     .refine((b) => Object.keys(b).length > 0, {
       message: "Hech bo'lmaganda bitta maydon kerak",

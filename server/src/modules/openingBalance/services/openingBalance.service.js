@@ -9,7 +9,10 @@ import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { localTodayMidnight, toUtcMidnight } from "../../../helpers/attendance.helper.js";
-import { resolveBranchFromGroup } from "../../../helpers/branchContext.helper.js";
+import {
+  resolveBranchFromGroup,
+  branchFilter,
+} from "../../../helpers/branchContext.helper.js";
 import * as depositService from "../../deposits/services/deposit.service.js";
 import * as staffPayrollService from "../../staffPayroll/services/staffPayroll.service.js";
 
@@ -508,7 +511,16 @@ export const getForUser = async (userId) =>
 
 /** Ro'yxat - owner nazorati uchun (yarim qolganlar birinchi). */
 export const list = async ({ page = 1, limit = 50, pendingOnly = false } = {}) => {
-  const filter = pendingOnly ? { materializedAt: null } : {};
+  // FILIAL KO'LAMI: OpeningBalance'da `branchId` bor.
+  //
+  // Ilgari bu route owner-only edi va filtr keraksiz tuyulardi. Endi u
+  // `finance.opening_balance` ruxsatiga ochilgan, ya'ni filial direktori
+  // ham kiradi - filtrsiz u butun markazning boshlang'ich qoldiqlarini
+  // (ya'ni boshqa filiallarning qarz/avans summalarini) ko'rardi.
+  const filter = {
+    ...branchFilter(),
+    ...(pendingOnly ? { materializedAt: null } : {}),
+  };
   const skip = (Math.max(1, page) - 1) * limit;
   const [rows, total] = await Promise.all([
     OpeningBalance.find(filter)

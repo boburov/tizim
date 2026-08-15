@@ -8,6 +8,8 @@ import archiveReasonsRouter from "../modules/archiveReasons/archiveReasons.route
 import leadsRouter from "../modules/leads/leads.routes.js";
 import leadOptionsRouter from "../modules/leadOptions/leadOptions.routes.js";
 import groupsRouter from "../modules/groups/groups.routes.js";
+import coursesRouter from "../modules/courses/courses.routes.js";
+import roomsRouter from "../modules/rooms/rooms.routes.js";
 import attendanceRouter from "../modules/attendance/attendance.routes.js";
 import teacherAttendanceRouter from "../modules/teacherAttendance/teacherAttendance.routes.js";
 import attendanceExemptionsRouter from "../modules/attendanceExemptions/attendanceExemptions.routes.js";
@@ -56,6 +58,10 @@ router.use("/archive-reasons", archiveReasonsRouter);
 router.use("/leads", leadsRouter);
 router.use("/lead-options", leadOptionsRouter);
 router.use("/groups", groupsRouter);
+// KURS KATALOGI (global) va XONALAR (filial resursi).
+// Ikkalasi ham modeli bor-u route'i yo'q holatda turgan edi.
+router.use("/courses", coursesRouter);
+router.use("/rooms", roomsRouter);
 
 // Attendance subsystem
 router.use("/attendance", attendanceRouter);

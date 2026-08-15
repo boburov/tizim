@@ -102,17 +102,25 @@ router.get(
   validate(idSchema),
   groupHistory,
 );
+// PAROL: ko'rish va almashtirish.
+//
+// Ilgari owner-only edi - filial direktori o'zi yaratgan xodimga login
+// ma'lumotini ayta olmasdi. Endi `users.password` ruxsati bilan ochiq,
+// lekin FILIAL CHEGARASI eng qattiq shu yerda: servis uzatilgan
+// ko'lamga ishonmaydi va aktyorning haqiqiy filiallarini o'zi o'qiydi
+// (helpers/credentialScope.helper.js). `branches.view_all` bu yerda
+// o'tkazgich BO'LMAYDI - parollar ochiq matnda saqlanadi.
 router.get(
   "/:id/password",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.USERS_PASSWORD),
   validate(idSchema),
   getPassword,
 );
 router.patch(
   "/:id/password",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.USERS_PASSWORD),
   validate(setPasswordSchema),
   setPassword,
 );
@@ -124,27 +132,38 @@ router.patch(
   validate(setRoleSchema),
   setRole,
 );
+// TAHRIRLASH va ARXIVLASH: filial direktori O'Z filialidagi odam ustidan
+// bajaradi. Chegara servis qatlamida (assertTargetInScope) - route
+// qatlamida ruxsat bor-yo'qligi, servisda esa "kimga" tekshiriladi.
 router.patch(
   "/:id",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.USERS_UPDATE),
   validate(updateSchema),
   update,
 );
 router.delete(
   "/:id",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.USERS_ARCHIVE),
   validate(archiveActionSchema),
   remove,
 );
 router.post(
   "/:id/restore",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.USERS_ARCHIVE),
   validate(archiveActionSchema),
   restore,
 );
+
+// BUTUNLAY O'CHIRISH - OWNER-ONLY BO'LIB QOLADI.
+//
+// Bu ATAYLAB ochilmadi. Sabab globallik emas, QAYTARIB BO'LMASLIK:
+// permanentRemove o'quvchining to'lov tarixini, o'qituvchining maosh
+// yozuvlarini va bog'liq hujjatlarni butunlay o'chiradi
+// (hardDeleteStudentData / hardDeleteTeacherData). Arxivlash
+// (DELETE "/:id") kundalik ehtiyojni to'liq qoplaydi va u qaytariladi.
 router.delete(
   "/:id/permanent",
   requireAuth,

@@ -192,6 +192,35 @@ const run = async () => {
   await Attendance.create({ group: gA._id, student: studA._id, date: new Date(), dateKey: "2026-07-20", status: "present", recordedBy: rec });
   await Attendance.create({ group: gB._id, student: studB._id, date: new Date(), dateKey: "2026-07-20", status: "absent", recordedBy: rec });
 
+  // FEEDBACK va ACTIVITY LOG - bu modellarda `branchId` YO'Q.
+  //
+  // Ilgari bu test ular uchun HECH QANDAY yozuv yaratmasdi, ya'ni
+  // servislar bo'sh ro'yxat qaytarardi va test ularni "toza" deb
+  // belgilardi. Bu SOXTA O'TISH edi: filtr umuman yo'qligini bo'sh
+  // natija yashirib turardi.
+  const FeedbackType = (await import("../src/models/feedbackType.model.js")).default;
+  const Feedback = (await import("../src/models/feedback.model.js")).default;
+  const ActivityLog = (await import("../src/models/activityLog.model.js")).default;
+
+  const fbType = await FeedbackType.create({ name: "Shikoyat", isActive: true });
+  await Feedback.create({
+    author: studA._id, type: fbType._id, group: gA._id,
+    message: "A filial fikri", status: "new",
+  });
+  await Feedback.create({
+    author: studB._id, type: fbType._id, group: gB._id,
+    message: "StudB maxfiy shikoyati", status: "new",
+  });
+
+  await ActivityLog.create({
+    user: teachA._id, actorLabel: "TeachA", actorRole: "teacher",
+    method: "POST", path: "/api/groups", status: 201,
+  });
+  await ActivityLog.create({
+    user: teachB._id, actorLabel: "TeachB", actorRole: "teacher",
+    method: "POST", path: "/api/groups/B-MAXFIY", status: 201,
+  });
+
   await Lead.create({ branchId: A._id, firstName: "LeadA", phone: "998901111111", status: "new" });
   await Lead.create({ branchId: B._id, firstName: "LeadB", phone: "998902222222", status: "new" });
 

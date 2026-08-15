@@ -2,6 +2,7 @@ import ActivityLog from "../../../models/activityLog.model.js";
 import User from "../../../models/user.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { describeLog } from "../../../constants/auditActions.js";
+import { branchUserFilter } from "../../../helpers/branchContext.helper.js";
 
 const USER_PROJECTION = { firstName: 1, lastName: 1, role: 1, username: 1 };
 
@@ -51,7 +52,18 @@ export const list = async ({
   page = 1,
   limit = 30,
 }) => {
-  const filter = {};
+  // FILIAL KO'LAMI: ActivityLog'da `branchId` YO'Q - yozuv AKTYORGA
+  // (`user`) tegishli, aktyor esa filialga.
+  //
+  // Ilgari bu yerda hech qanday filtr yo'q edi va A filial direktori
+  // B filial xodimlarining barcha amallarini (kim nima o'zgartirgani,
+  // qaysi endpoint'ga borgani) ko'rardi. branchLeak testi buni
+  // ko'rsatmasdi, chunki u ActivityLog yozuvi umuman YARATMASDI -
+  // bo'sh natija "toza" deb hisoblanardi.
+  //
+  // TIZIM yozuvlari (user: null) filial direktoriga KO'RINMAYDI -
+  // fail-closed. Markaz darajasidagi audit owner'ning ishi.
+  const filter = { ...(await branchUserFilter("user")) };
   if (userId) filter.user = userId;
   if (method) filter.method = method;
   if (resourceType) filter.resourceType = resourceType;
@@ -83,7 +95,9 @@ export const getById = async (id) => {
 };
 
 export const getStats = async ({ fromDate, toDate } = {}) => {
-  const match = {};
+  // Ro'yxat bilan AYNI ko'lam. Aggregate'da mongoose hook'lari
+  // ishlamaydi, shuning uchun $match'ga qo'lda qo'shiladi.
+  const match = { ...(await branchUserFilter("user")) };
   if (fromDate || toDate) {
     match.createdAt = {};
     if (fromDate) match.createdAt.$gte = new Date(fromDate);
@@ -104,7 +118,14 @@ export const getStats = async ({ fromDate, toDate } = {}) => {
       { $limit: 15 },
     ]),
     ActivityLog.aggregate([
-      { $match: { ...match, user: { $ne: null } } },
+      // DIQQAT - `$and` ISHLATILADI, spread EMAS.
+      //
+      // `{ ...match, user: { $ne: null } }` yozilsa, `user` kaliti IKKI
+      // marta uchraydi va keyingisi FILIAL FILTRINI jimgina bosib
+      // ketardi (branchUserFilter ham aynan `user` bo'yicha filtrlaydi).
+      // Natijada "eng faol foydalanuvchilar" kartochkasi butun markaz
+      // bo'yicha hisoblanardi - ro'yxat toza bo'lsa-da.
+      { $match: { $and: [match, { user: { $ne: null } }] } },
       { $group: { _id: "$user", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 5 },

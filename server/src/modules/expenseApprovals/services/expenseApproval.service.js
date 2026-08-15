@@ -10,7 +10,17 @@ import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 import { hasPermission } from "../../../helpers/permission.helper.js";
-import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import {
+  branchFilter,
+  getActiveBranchId,
+} from "../../../helpers/branchContext.helper.js";
+import {
+  DELEGATION_MODES,
+  LIMIT_DIRECTIONS,
+  DELEGATABLE_KINDS,
+  FALLBACK_DELEGATION_MODE,
+  resolveRule,
+} from "../../../constants/delegation.js";
 import { SORT_OPTIONS } from "../validators/list.validator.js";
 
 // Kategoriya -> uni tasdiqlash uchun kerak bo'lgan ruxsat.
@@ -64,19 +74,120 @@ export const checkExpenseLimit = async ({ branchId, amount, permissions }) => {
 };
 
 /**
+ * Qoida chegarasi ichidami.
+ *
+ * FAIL-CLOSED: o'lchov (metrics) aniqlanmagan bo'lsa yoki tegishli chegara
+ * kiritilmagan bo'lsa - `false`, ya'ni tasdiqqa tushadi. "Bilmasam
+ * o'tkazaman" bu yerda xavfli, chunki sozlama TAKRORLANUVCHI ta'sirga ega.
+ *
+ * Amalda bu shuni anglatadi: chegirmani TAHRIRLASHDA body'da `value`
+ * bo'lmasa (masalan faqat izoh o'zgartirilsa) o'zgarish baribir tasdiqqa
+ * tushadi. Bu ATAYLAB - `type` bilan `value` ni bir-birisiz baholab
+ * bo'lmaydi va noto'g'ri "o'tkazib yuborish" xatosi qimmatroq.
+ * `auto` rejimida esa o'lchov umuman kerak emas, ya'ni bu cheklov
+ * faqat `threshold` rejimiga tegishli.
+ */
+const withinLimit = (spec, rule, metrics) => {
+  const amount = metrics?.amount;
+  const percent = metrics?.percent;
+
+  const hasAmount = amount !== null && amount !== undefined && Number.isFinite(Number(amount));
+  const hasPercent = percent !== null && percent !== undefined && Number.isFinite(Number(percent));
+
+  // O'lchovsiz baholab bo'lmaydi.
+  if (!hasAmount && !hasPercent) return false;
+
+  if (hasAmount) {
+    if (spec.direction === LIMIT_DIRECTIONS.FLOOR) {
+      // Guruh narxi: PASTGA tushirish xavfli.
+      if (rule.minAmount === null) return false;
+      if (Number(amount) < rule.minAmount) return false;
+    } else {
+      // Chegirma / maosh: YUQORIGA ko'tarish xavfli.
+      if (rule.maxAmount === null) return false;
+      if (Number(amount) > rule.maxAmount) return false;
+    }
+  }
+
+  if (hasPercent) {
+    if (rule.maxPercent === null) return false;
+    if (Number(percent) > rule.maxPercent) return false;
+  }
+
+  return true;
+};
+
+/**
  * KONFIGURATSIYA o'zgarishi tasdiq talab qiladimi.
  *
- * Chiqimdan farqi: SUMMA YO'Q. Maosh stavkasi va chegirma TAKRORLANUVCHI -
- * ularni bir martalik `expenseApprovalThreshold` bilan solishtirish ma'nosiz
- * (oyiga 500k so'm chegirma 2 yilda 12 mln bo'ladi, lekin bironta ham
- * "amaliyot" limitdan oshmaydi). Shuning uchun tekshiruv IKKILIK:
- * approvals.decide_config bor -> darhol; yo'q -> tasdiqqa yuboriladi.
+ * Chiqimdan farqi: bir martalik summa yo'q. Maosh stavkasi va chegirma
+ * TAKRORLANUVCHI - ularni `expenseApprovalThreshold` bilan solishtirish
+ * ma'nosiz (oyiga 500k so'm chegirma 2 yilda 12 mln bo'ladi, lekin bironta
+ * ham "amaliyot" limitdan oshmaydi).
  *
- * Qaytaradi: { needsApproval: boolean }
+ * ILGARI tekshiruv IKKILIK edi: approvals.decide_config bor -> darhol;
+ * yo'q -> tasdiqqa. Endi o'rtada FILIAL DELEGATSIYA MATRITSASI turadi
+ * (Branch.delegation), ya'ni owner har bir filialga alohida ishonch
+ * darajasini bera oladi. Batafsil: constants/delegation.js.
+ *
+ * @param {object}  args
+ * @param {string[]} args.permissions
+ * @param {string}  [args.kind]     - APPROVAL_KINDS qiymati
+ * @param {string}  [args.branchId] - berilmasa joriy kontekstdan olinadi
+ * @param {{amount?: number, percent?: number}} [args.metrics]
+ * @returns {Promise<{needsApproval: boolean, mode: string}>}
+ * @throws {ApiError} 403 - tur bu filialda umuman taqiqlangan bo'lsa
  */
-export const checkConfigApproval = ({ permissions }) => ({
-  needsApproval: !hasPermission(permissions, PERMISSIONS.APPROVALS_DECIDE_CONFIG),
-});
+export const checkConfigApproval = async ({
+  permissions,
+  kind = null,
+  branchId = null,
+  metrics = null,
+} = {}) => {
+  // Tasdiqlash huquqi borlar (owner va unga tenglashtirilganlar) matritsadan
+  // TASHQARIDA. Sabab avvalgidek: ular so'rov yaratsa ham o'zi tasdiqlardi,
+  // ya'ni oraliq qadam faqat ortiqcha ish bo'lardi.
+  if (hasPermission(permissions, PERMISSIONS.APPROVALS_DECIDE_CONFIG)) {
+    return { needsApproval: false, mode: DELEGATION_MODES.AUTO };
+  }
+
+  const spec = kind ? DELEGATABLE_KINDS[kind] : null;
+  const activeBranchId = branchId || getActiveBranchId();
+
+  // FAIL-CLOSED IKKI HOLAT:
+  //   1. Tur delegatsiya qilinmaydi (matritsa unga taalluqli emas).
+  //   2. Aniq filial tanlanmagan ("barcha filiallar" rejimi) - qaysi
+  //      filialning qoidasini o'qishni bilmaymiz.
+  // Ikkalasida ham tasdiqqa yuboriladi.
+  if (!spec || !activeBranchId) {
+    return { needsApproval: true, mode: FALLBACK_DELEGATION_MODE };
+  }
+
+  const branch = await Branch.findById(activeBranchId).select("delegation").lean();
+  const rule = resolveRule(branch?.delegation, kind);
+
+  switch (rule.mode) {
+    case DELEGATION_MODES.FORBIDDEN:
+      // So'rov ham YARATILMAYDI. Tasdiqqa yuborish "balki o'tar" degan
+      // umid qoldirardi va owner navbatini keraksiz so'rov bilan to'ldirardi.
+      throw new ApiError(
+        403,
+        `Bu filialda "${spec.label}" amali sizga taqiqlangan`,
+      );
+
+    case DELEGATION_MODES.AUTO:
+      return { needsApproval: false, mode: rule.mode };
+
+    case DELEGATION_MODES.THRESHOLD:
+      return {
+        needsApproval: !withinLimit(spec, rule, metrics),
+        mode: rule.mode,
+      };
+
+    default:
+      return { needsApproval: true, mode: DELEGATION_MODES.APPROVAL };
+  }
+};
 
 /**
  * Tasdiq so'rovini yaratadi. Hech qanday holat o'zgarmaydi - so'rov faqat

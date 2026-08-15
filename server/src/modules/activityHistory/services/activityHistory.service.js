@@ -8,6 +8,7 @@ import DebtWriteOff from "../../../models/debtWriteOff.model.js";
 import TeacherGroupPeriod from "../../../models/teacherGroupPeriod.model.js";
 import ArchiveLog from "../../../models/archiveLog.model.js";
 import ApiError from "../../../utils/ApiError.js";
+import { assertTargetInScope } from "../../../helpers/branchAccess.helper.js";
 import { ROLES } from "../../../constants/roles.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -256,10 +257,24 @@ const teacherPeriodEvents = (tp) => {
 };
 
 // ═══════════════════ O'QUVCHI TIMELINE ═══════════════════
-export const getStudentTimeline = async (studentId, { page = 1, limit = 30 } = {}) => {
+export const getStudentTimeline = async (
+  studentId,
+  { page = 1, limit = 30, scope = null } = {},
+) => {
   const student = await User.findById(studentId).lean();
   if (!student || student.role !== ROLES.STUDENT) {
     throw new ApiError(404, "O'quvchi topilmadi");
+  }
+
+  // FILIAL CHEGARASI.
+  //
+  // Ilgari bu modul owner-only edi. Endi `activity_logs.read` ruxsatiga
+  // ochilgan, ya'ni filial direktori ham kiradi. Timeline o'quvchining
+  // BUTUN tarixini beradi - to'lovlar, qarz hisobdan chiqarishlar,
+  // depozitlar - shuning uchun boshqa filial o'quvchisiga kirish
+  // to'silishi kerak.
+  if (scope) {
+    assertTargetInScope(scope.allowedBranchIds, scope.canSeeAllBranches, student);
   }
 
   const [memberships, freezes, txns, writeOffs, deposits, archiveLogs] =
@@ -293,9 +308,22 @@ export const getStudentTimeline = async (studentId, { page = 1, limit = 30 } = {
 };
 
 // ═══════════════════ GURUH TIMELINE ═══════════════════
-export const getGroupTimeline = async (groupId, { page = 1, limit = 30 } = {}) => {
+export const getGroupTimeline = async (
+  groupId,
+  { page = 1, limit = 30, scope = null } = {},
+) => {
   const group = await Group.findById(groupId).lean();
   if (!group) throw new ApiError(404, "Guruh topilmadi");
+
+  // FILIAL CHEGARASI - o'quvchi timeline'i bilan bir xil sabab.
+  // Guruhda `branchId` bevosita bor (required), shuning uchun
+  // assertTargetInScope emas, to'g'ridan-to'g'ri solishtiriladi.
+  if (scope && !scope.canSeeAllBranches) {
+    const allowed = (scope.allowedBranchIds || []).map(String);
+    if (!group.branchId || !allowed.includes(String(group.branchId))) {
+      throw new ApiError(403, "Bu guruhga kirish huquqingiz yo'q");
+    }
+  }
 
   const [memberships, teacherPeriods, txns, writeOffs] = await Promise.all([
     GroupMembership.find({ group: groupId, isDeleted: { $ne: true } })

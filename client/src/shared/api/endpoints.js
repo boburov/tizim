@@ -13,6 +13,10 @@ export const ENDPOINTS = Object.freeze({
     byId: (id) => `/branches/${id}`,
     stats: (id) => `/branches/${id}/stats`,
     compare: "/branches/compare",
+    // Delegatsiya katalogi: qaysi sozlama turiga qaysi rejim mumkin.
+    // Serverdan olinadi - ro'yxat xavfsizlik qoidasi (maosh turlarida
+    // `auto` yo'q) va client bilan ajralib ketmasligi kerak.
+    delegationOptions: "/branches/delegation-options",
   },
   expenseApprovals: {
     base: "/expense-approvals",

@@ -3,6 +3,7 @@ import User from "../../../models/user.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
+import { assertTargetInScope } from "../../../helpers/branchAccess.helper.js";
 import {
   toUtcMidnight,
   localTodayMidnight,
@@ -11,10 +12,21 @@ import { correlationCacheInvalidate } from "../../../helpers/correlationCache.js
 import * as financePaymentService from "../../finance/services/studentPayment.service.js";
 import logger from "../../../config/logger.js";
 
-const ensureStudent = async (studentId) => {
+// FILIAL HIMOYASI.
+//
+// Ilgari bu modul butunlay requireRole(OWNER) bilan qulflangan edi, ya'ni
+// faqat owner kirardi va o'quvchi qaysi filialda ekani ahamiyatsiz edi.
+// Endi muzlatish `students.freeze` ruxsatiga ochilgan (filial direktori
+// uchun kundalik amal), shuning uchun chegara shu yerda qo'yiladi.
+//
+// `scope` berilmasa (job / ichki chaqiruv) tekshirilmaydi.
+const ensureStudent = async (studentId, scope = null) => {
   const u = await User.findById(studentId);
   if (!u || u.role !== ROLES.STUDENT) {
     throw new ApiError(404, "O'quvchi topilmadi");
+  }
+  if (scope) {
+    assertTargetInScope(scope.allowedBranchIds, scope.canSeeAllBranches, u);
   }
   return u;
 };
@@ -39,8 +51,8 @@ const afterFreezeChange = async (studentId) => {
 };
 
 // O'quvchini muzlatish. startDate berilmasa - bugun. Kelajak sana bo'lmaydi.
-export const freeze = async (studentId, { startDate, reason, by } = {}) => {
-  const student = await ensureStudent(studentId);
+export const freeze = async (studentId, { startDate, reason, by, scope } = {}) => {
+  const student = await ensureStudent(studentId, scope);
   if (!student.isActive) {
     throw new ApiError(
       400,
@@ -93,8 +105,8 @@ export const freeze = async (studentId, { startDate, reason, by } = {}) => {
 
 // O'quvchini muzlatishdan chiqarish. endDate berilmasa - bugun (EXCLUSIVE:
 // shu kundan boshlab o'quvchi yana faol). Kelajak/boshlanishidan oldin bo'lmaydi.
-export const unfreeze = async (studentId, { endDate, by } = {}) => {
-  await ensureStudent(studentId);
+export const unfreeze = async (studentId, { endDate, by, scope } = {}) => {
+  await ensureStudent(studentId, scope);
 
   const active = await findActiveFreeze(studentId);
   if (!active) {
@@ -121,8 +133,8 @@ export const unfreeze = async (studentId, { endDate, by } = {}) => {
 };
 
 // Bitta o'quvchining muzlatish tarixi (yangi -> eski).
-export const listForStudent = async (studentId) => {
-  await ensureStudent(studentId);
+export const listForStudent = async (studentId, scope = null) => {
+  await ensureStudent(studentId, scope);
   const items = await StudentFreeze.find({
     student: studentId,
     isDeleted: { $ne: true },

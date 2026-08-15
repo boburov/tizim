@@ -17,6 +17,27 @@ import {
   personalizeManyForUser,
   personalizeBulk,
 } from "./personalizeBody.helper.js";
+import { userBranchCondition } from "../../../helpers/branchContext.helper.js";
+
+// OLUVCHILARNI FILIAL BO'YICHA KESISH.
+//
+// Ilgari `resolveAudience` ichidagi HECH BIR User.find'da filial ko'lami
+// yo'q edi: "Barcha o'quvchilar" ni tanlagan filial direktori butun
+// markazning o'quvchilariga xabar yuborardi va preview'da ularning
+// ism-familiyasi bilan telefon raqamini ko'rardi
+// (tests/branchLeak.test.js shu sizishni tutgan edi).
+//
+// $and ISHLATILADI, $or emas: userBranchCondition() o'zi $or qaytaradi va
+// uni to'g'ridan-to'g'ri qo'yish filtrdagi boshqa $or ni jimgina bosib
+// ketardi (helper izohida ogohlantirilgan).
+//
+// FON VAZIFALARI (Agenda job) ta'sirlanmaydi: ular request konteksti
+// tashqarisida ishlaydi, u yerda helper `null` qaytaradi va filtr
+// o'zgarishsiz qoladi.
+const withBranchScope = (filter) => {
+  const condition = userBranchCondition();
+  return condition ? { ...filter, $and: [condition] } : filter;
+};
 
 // Bir vaqtning o'zida nechta bot xabari yuborilsin (Telegram ~30/sek global limit)
 const DELIVERY_CONCURRENCY = 20;
@@ -98,7 +119,11 @@ export const resolveAudience = async (audience, currentUser) => {
         throw new ApiError(403, "Ruxsat yo'q");
       }
       const users = await User.find(
-        { role: ROLES.STUDENT, isActive: true, isDeleted: { $ne: true } },
+        withBranchScope({
+          role: ROLES.STUDENT,
+          isActive: true,
+          isDeleted: { $ne: true },
+        }),
         { _id: 1 },
       );
       recipientIds = users.map((u) => u._id);
@@ -109,7 +134,11 @@ export const resolveAudience = async (audience, currentUser) => {
         throw new ApiError(403, "Ruxsat yo'q");
       }
       const users = await User.find(
-        { role: ROLES.TEACHER, isActive: true, isDeleted: { $ne: true } },
+        withBranchScope({
+          role: ROLES.TEACHER,
+          isActive: true,
+          isDeleted: { $ne: true },
+        }),
         { _id: 1 },
       );
       recipientIds = users.map((u) => u._id);
@@ -140,7 +169,11 @@ export const resolveAudience = async (audience, currentUser) => {
       const studentIds = [...new Set(memberships.map((m) => String(m.student)))];
       // Boshqa branchlar kabi - faqat aktiv, o'chirilmagan o'quvchilar.
       const activeStudents = await User.find(
-        { _id: { $in: studentIds }, isActive: true, isDeleted: { $ne: true } },
+        withBranchScope({
+          _id: { $in: studentIds },
+          isActive: true,
+          isDeleted: { $ne: true },
+        }),
         { _id: 1 },
       );
       recipientIds = activeStudents.map((u) => u._id);
@@ -164,14 +197,31 @@ export const resolveAudience = async (audience, currentUser) => {
           );
         }
       }
+      // ID'lar OCHIQ berilgani ko'lamdan ozod qilmaydi: aks holda direktor
+      // boshqa filial o'quvchisining ID'sini qo'lda kiritib xabar
+      // yuborardi (va preview orqali uning telefon raqamini olardi).
       const users = await User.find(
-        { _id: { $in: userIds }, isActive: true, isDeleted: { $ne: true } },
+        withBranchScope({
+          _id: { $in: userIds },
+          isActive: true,
+          isDeleted: { $ne: true },
+        }),
         { _id: 1 },
       );
       recipientIds = users.map((u) => u._id);
       break;
     }
     case "auto_system": {
+      // FILIAL KO'LAMI ATAYLAB QO'LLANMAYDI.
+      //
+      // Bu tur foydalanuvchi kiritmasidan emas, TIZIM kodidan keladi
+      // (jobs/*.job.js, leadNotify.service.js, attendance.service.js) va
+      // oluvchilar ro'yxatini server o'zi hisoblaydi. Ular orasida odatda
+      // OWNER bo'ladi, owner'ning homeBranchId'si esa joriy filialdan
+      // boshqa bo'lishi mumkin - ko'lam qo'yilsa u ro'yxatdan tushib
+      // qolardi va lid eslatmasi/davomat ogohlantirishi unga umuman
+      // yetmasdi. Ya'ni bu yerda ko'lam sizishni emas, XABARNI to'sardi.
+      //
       // Auto job userIds beradi - boshqa branchlar kabi aktiv foydalanuvchilarga filtrlaymiz
       const ids = (audience.userIds || []).map(String);
       if (ids.length === 0) {

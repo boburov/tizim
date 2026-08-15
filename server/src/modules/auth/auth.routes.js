@@ -1,7 +1,9 @@
 import { Router } from "express";
 import requireAuth from "../../middleware/auth.js";
 import requireRole from "../../middleware/requireRole.js";
+import requirePermission from "../../middleware/requirePermission.js";
 import validate from "../../middleware/validate.js";
+import { PERMISSIONS } from "../../constants/permissions.js";
 import { authLimiter } from "../../middleware/rateLimiter.js";
 import { enforceLimit } from "../../middleware/enforceLimit.js";
 import { ROLES } from "../../constants/roles.js";
@@ -55,10 +57,18 @@ const countForRole = (req) => {
 const enforceUserLimit = (req, res, next) =>
   enforceLimit(limitKeyForRole(req.body?.role), countForRole)(req, res, next);
 
+// O'QUVCHI / O'QITUVCHI yaratish.
+//
+// Ilgari owner-only edi. Endi `users.create` ruxsati bilan ochiq -
+// filial direktori o'z filialiga odam qo'sha olishi kerak.
+//
+// XAVFSIZ: servis qatlamida `assertCanAssignBranch` allaqachon bor,
+// ya'ni direktor boshqa filialga odam yozib qo'ya olmaydi va filialsiz
+// ham yarata olmaydi (auth.service.js registerUser).
 router.post(
   "/register-user",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.USERS_CREATE),
   validate(registerUserSchema),
   enforceUserLimit,
   registerUser,

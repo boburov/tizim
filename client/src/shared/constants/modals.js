@@ -36,6 +36,8 @@ export const MODAL = Object.freeze({
   BRANCH_EDIT: "branch:edit",
   BRANCH_DELETE: "branch:delete",
   BRANCH_FREEZE: "branch:freeze",
+  // Filial rahbariga qaysi sozlama amallari ishonib topshirilgani
+  BRANCH_DELEGATION: "branch:delegation",
 
   // Archive reasons
   ARCHIVE_REASON_CREATE: "archiveReason:create",

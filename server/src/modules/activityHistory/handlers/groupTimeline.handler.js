@@ -4,7 +4,15 @@ import * as service from "../services/activityHistory.service.js";
 const groupTimeline = asyncHandler(async (req, res) => {
   const { items, total, page, limit } = await service.getGroupTimeline(
     req.params.groupId,
-    { page: Number(req.query.page) || 1, limit: Number(req.query.limit) || 30 },
+    {
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 30,
+      // FILIAL CHEGARASI - servis boshqa filial obyektini rad etadi.
+      scope: {
+        allowedBranchIds: req.allowedBranchIds,
+        canSeeAllBranches: req.canSeeAllBranches,
+      },
+    },
   );
   res.json({ success: true, data: items, meta: { page, limit, total } });
 });

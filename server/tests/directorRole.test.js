@@ -1,25 +1,39 @@
 /**
  * DIREKTOR ROLI INVARIANTI.
  *
- * SAVOL: "Direktor o'z so'rovini o'zi tasdiqlay olmasligiga ishonchim komilmi?"
+ * SAVOL: "Filial direktori o'z filialida hamma narsani qila oladimi -
+ * va SHU BILAN BIRGA o'z ko'lamini kengaytira olmasligiga ishonchim
+ * komilmi?"
  *
- * Butun tasdiq zanjiri BITTA shartga tayanadi: direktorda tasdiqlash kaliti
- * BO'LMASLIGI. Kimdir matritsada beparvo "hammasini belgilash" bosib qo'ysa
- * yoki seed shabloniga kalit qo'shib yuborsa - tizim jimgina ma'nosini
- * yo'qotadi (hech qanday xato chiqmaydi, so'rovlar shunchaki darhol
- * bajarilaveradi).
+ * IKKI TOMONLAMA TEKSHIRUV:
  *
- * Bu test ikkalasini ham tekshiradi:
- *   1. SEED SHABLONI  - kod bazasidagi ro'yxat (DB'siz);
- *   2. JORIY BAZA     - haqiqatda saqlangan rol (ulanish bo'lsa).
+ *   (+) BO'LISHI SHART - kundalik filial ishi. Kalit tushib qolsa
+ *       direktor jimgina "yarim ishlaydigan" holatga tushadi va buni
+ *       faqat u 403 olganda bilib qolamiz (grades.record hikoyasi).
+ *
+ *   (−) BO'LMASLIGI SHART - imtiyoz oshirish yo'llari. Bittasi ham
+ *       o'tib ketsa butun filial izolyatsiyasi ma'nosini yo'qotadi:
+ *         branches.view_all      -> boshqa filial ma'lumoti (parollar ham)
+ *         branches.update        -> o'ziga qo'yilgan cheklovni o'zi olib tashlaydi
+ *         system.admin_access    -> owner-only bo'limlar ochiladi
+ *         approvals.decide_config } delegatsiya matritsasini chetlab o'tadi,
+ *         finance.approve         } owner huquqni qaytarib ololmaydi
+ *
+ * MANBA: ro'yxat endi qo'lda yozilmaydi, constants/permissionScope.js
+ * dan HISOBLANADI. Shuning uchun test ham seed faylining MATNINI
+ * o'qimaydi (ilgari shunday edi va formatlash o'zgarganda buzilardi) -
+ * to'g'ridan-to'g'ri hisoblangan ro'yxatni tekshiradi.
  *
  * ISHLATISH:
  *   npm run test:director
  */
 import "dotenv/config";
 import mongoose from "mongoose";
-import { readFileSync } from "node:fs";
 import { PERMISSIONS } from "../src/constants/permissions.js";
+import {
+  BRANCH_LOCAL_PERMISSIONS,
+  OWNER_ONLY_PERMISSIONS,
+} from "../src/constants/permissionScope.js";
 
 const R = { pass: 0, fail: 0, notes: [] };
 const ok = (n, extra = "") => {
@@ -33,49 +47,62 @@ const bad = (n, d) => {
 };
 const check = (n, cond, d = "") => (cond ? ok(n) : bad(n, d || "shart bajarilmadi"));
 
-// Direktorda BO'LMASLIGI shart bo'lgan kalitlar.
-const FORBIDDEN = [PERMISSIONS.FINANCE_APPROVE, PERMISSIONS.APPROVALS_DECIDE_CONFIG];
+// Direktorda BO'LMASLIGI shart - har birining sababi permissionScope.js da.
+const FORBIDDEN = OWNER_ONLY_PERMISSIONS;
 
-// Direktorda BO'LISHI kerak bo'lgan kalitlar - ular bo'lmasa u so'rovni
-// BOSHLAY olmaydi va tasdiq zanjiri umuman ishga tushmaydi.
+// Direktorda BO'LISHI kerak bo'lgan kalitlar - kundalik filial ishi.
+// Ro'yxat to'liq emas (u BRANCH_LOCAL_PERMISSIONS ning o'zi), bu yerda
+// faqat ENG MUHIMLARI sanaladi - ular tushib qolsa filial ishlamaydi.
 const REQUIRED = [
-  [PERMISSIONS.GROUPS_UPDATE, "maosh stavkasi so'rash"],
-  [PERMISSIONS.FINANCE_MANAGE, "chegirma so'rash"],
-  [PERMISSIONS.TEACHERS_CREATE, "ishga olish so'rash"],
+  [PERMISSIONS.TEACHERS_CREATE, "xodim qo'shish"],
   [PERMISSIONS.ROLES_UPDATE, "ishga olish route'i talab qiladi"],
-  [PERMISSIONS.FINANCE_READ, "tasdiqlar ro'yxatini ko'rish"],
+  [PERMISSIONS.STUDENTS_CREATE, "o'quvchi qo'shish"],
+  [PERMISSIONS.GROUPS_CREATE, "guruh ochish"],
+  [PERMISSIONS.GROUPS_UPDATE, "maosh stavkasi belgilash"],
+  [PERMISSIONS.FINANCE_MANAGE, "chegirma va guruh narxi"],
+  [PERMISSIONS.FINANCE_READ, "moliya ro'yxatlari"],
+  [PERMISSIONS.FINANCE_PAY, "to'lov qabul qilish"],
+  [PERMISSIONS.EXPENSES_CREATE, "chiqim yozish"],
+  [PERMISSIONS.PAYROLL_MANAGE, "xodim maosh shartlari"],
+  [PERMISSIONS.SALARY_PAY, "o'qituvchiga maosh to'lash"],
   // Davomat/baho JUFTLIGI. Direktor o'qituvchi kelmagan darsni yopadi -
-  // buning uchun ikkalasi ham kerak. Ilgari GRADES_RECORD tushib qolgan
-  // edi: davomat belgilanardi, baho esa 403 berardi.
+  // buning uchun ikkalasi ham kerak.
   [PERMISSIONS.ATTENDANCE_RECORD, "davomat belgilash"],
   [PERMISSIONS.GRADES_RECORD, "baho qo'yish"],
+  [PERMISSIONS.BRANCHES_READ, "o'z filialini ko'rish"],
+  [PERMISSIONS.LEADS_MANAGE, "lidni o'quvchiga aylantirish"],
 ];
 
 console.log("\n\x1b[1mDIREKTOR ROLI\x1b[0m");
 
-// ── 1. SEED SHABLONI (kod bazasi) ─────────────────────────────
-console.log("\n\x1b[1m1) Seed shabloni (kod)\x1b[0m");
+// ── 1. HISOBLANGAN SHABLON (kod bazasi) ───────────────────────
+console.log("\n\x1b[1m1) Hisoblangan shablon (permissionScope.js)\x1b[0m");
 
-const seedSrc = readFileSync(new URL("../src/seeds/permissions.seed.js", import.meta.url), "utf8");
-const block = seedSrc.slice(
-  seedSrc.indexOf("const directorPermKeys = ["),
-  seedSrc.indexOf("const directorPermIds"),
+check(
+  "shablon bo'sh emas",
+  BRANCH_LOCAL_PERMISSIONS.length > 0,
+  "BRANCH_LOCAL_PERMISSIONS bo'sh",
 );
-// "PERMISSIONS.FOO" -> haqiqiy kalit qiymati.
-const seedKeys = [...block.matchAll(/PERMISSIONS\.([A-Z_]+)/g)]
-  .map((m) => PERMISSIONS[m[1]])
-  .filter(Boolean);
+check(
+  "hamma ruxsat qamrab olingan",
+  BRANCH_LOCAL_PERMISSIONS.length + OWNER_ONLY_PERMISSIONS.length ===
+    Object.values(PERMISSIONS).length,
+  "kalitlar soni mos kelmadi - bir kalit ikkala ro'yxatda yoki hech qaysisida yo'q",
+);
 
-check("shablon o'qildi", seedKeys.length > 0, "directorPermKeys topilmadi");
 for (const key of FORBIDDEN) {
   check(
-    `shabloncha "${key}" YO'Q`,
-    !seedKeys.includes(key),
-    "direktor o'z so'rovini o'zi tasdiqlay oladigan bo'lib qoladi!",
+    `shablonda "${key}" YO'Q`,
+    !BRANCH_LOCAL_PERMISSIONS.includes(key),
+    "imtiyoz oshirish yo'li ochiq!",
   );
 }
 for (const [key, why] of REQUIRED) {
-  check(`shablonda "${key}" bor`, seedKeys.includes(key), `${why} - ishlamaydi`);
+  check(
+    `shablonda "${key}" bor`,
+    BRANCH_LOCAL_PERMISSIONS.includes(key),
+    `${why} - ishlamaydi`,
+  );
 }
 
 // ── 2. JORIY BAZA ─────────────────────────────────────────────
@@ -93,21 +120,28 @@ const run = async () => {
 
   const keys = (role.permissions || []).map((p) => p.key);
   check("rol muzlatilmagan (aks holda kira olmaydi)", role.isFrozen === false);
+
   for (const key of FORBIDDEN) {
     check(
       `bazada "${key}" YO'Q`,
       !keys.includes(key),
-      "matritsada qo'lda berib yuborilgan - tasdiq zanjiri buzilgan!",
+      "qo'lda berib yuborilgan - «npm run migrate:director-full» uni olib tashlaydi",
     );
   }
   for (const [key, why] of REQUIRED) {
-    check(`bazada "${key}" bor`, keys.includes(key), `${why} - ishlamaydi`);
+    check(
+      `bazada "${key}" bor`,
+      keys.includes(key),
+      `${why} - «npm run migrate:director-full» ni ishga tushiring`,
+    );
   }
 };
 
 run()
   .catch((e) => {
-    console.log(`\n  \x1b[2m~ bazaga ulanib bo'lmadi (${e?.message}) - faqat shablon tekshirildi\x1b[0m`);
+    console.log(
+      `\n  \x1b[2m~ bazaga ulanib bo'lmadi (${e?.message}) - faqat shablon tekshirildi\x1b[0m`,
+    );
   })
   .finally(async () => {
     if (mongoose.connection.readyState === 1) await mongoose.disconnect();

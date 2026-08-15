@@ -5,6 +5,7 @@ import Group from "../../../models/group.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
+import { branchGroupFilter } from "../../../helpers/branchContext.helper.js";
 import { ROLES } from "../../../constants/roles.js";
 import * as studentPaymentService from "./studentPayment.service.js";
 import * as teacherSalaryService from "../../teacherSalary/services/teacherSalary.service.js";
@@ -31,9 +32,26 @@ const toObjectId = (id) => {
 const studentProjection = { firstName: 1, lastName: 1, username: 1, phone: 1 };
 
 export const list = async ({ studentId, groupId, year, month, page = 1, limit = 50 }) => {
-  const filter = { isDeleted: { $ne: true } };
+  // FILIAL KO'LAMI: Discount'da `branchId` YO'Q - u GURUHGA tegishli,
+  // guruh esa filialga (qarang: branchContext.helper.js dagi
+  // branchGroupFilter). Ilgari bu filtr yo'q edi va A filial direktori
+  // B filialning chegirmalarini ko'rardi.
+  const groupScope = await branchGroupFilter("group");
+
+  const filter = { ...groupScope, isDeleted: { $ne: true } };
   if (studentId) filter.student = toObjectId(studentId);
-  if (groupId) filter.group = toObjectId(groupId);
+
+  if (groupId) {
+    const gid = toObjectId(groupId);
+    // So'ralgan guruh ko'lam ICHIDA ekanini tekshiramiz. Tekshirmasdan
+    // `filter.group = gid` deb yozilsa, guruh ID'sini qo'lda berish
+    // orqali ko'lam butunlay chetlab o'tilardi.
+    const allowed = groupScope.group?.$in;
+    if (allowed && !allowed.some((id) => String(id) === String(gid))) {
+      return { items: [], total: 0, page, limit };
+    }
+    filter.group = gid;
+  }
   // Oy filtri: o'sha oyga tegishli monthly + barcha permanent
   if (year && month) {
     filter.$or = [

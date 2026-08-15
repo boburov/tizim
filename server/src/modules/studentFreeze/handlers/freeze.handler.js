@@ -6,6 +6,11 @@ const freeze = asyncHandler(async (req, res) => {
     startDate: req.body.startDate,
     reason: req.body.reason,
     by: req.user,
+    // FILIAL CHEGARASI: boshqa filial o'quvchisiga tegib bo'lmaydi.
+    scope: {
+      allowedBranchIds: req.allowedBranchIds,
+      canSeeAllBranches: req.canSeeAllBranches,
+    },
   });
   res.status(201).json({ success: true, data, message: "O'quvchi muzlatildi" });
 });

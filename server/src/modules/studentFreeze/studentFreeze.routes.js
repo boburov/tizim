@@ -1,8 +1,8 @@
 import { Router } from "express";
 import requireAuth from "../../middleware/auth.js";
-import requireRole from "../../middleware/requireRole.js";
+import requirePermission from "../../middleware/requirePermission.js";
 import validate from "../../middleware/validate.js";
-import { ROLES } from "../../constants/roles.js";
+import { PERMISSIONS } from "../../constants/permissions.js";
 import {
   freezeSchema,
   unfreezeSchema,
@@ -14,25 +14,33 @@ import list from "./handlers/list.handler.js";
 
 const router = Router();
 
-// Muzlatish - arxivlash kabi FAQAT owner boshqaradi.
+// MUZLATISH - filial direktorining kundalik amali.
+//
+// Ilgari butunlay owner-only edi va bu amalda ishlamasdi: o'quvchi
+// ARXIVLANMAYDI (users.service.js softRemove buni ochiq rad etadi),
+// ya'ni muzlatish - o'quvchini vaqtincha to'xtatishning YAGONA yo'li.
+// Uni owner'ga qulflash filialni har safar owner'ni kutishga majburlardi.
+//
+// FILIAL CHEGARASI servis qatlamida: ensureStudent() o'quvchi
+// chaqiruvchining ko'lamida ekanini tekshiradi.
 router.get(
   "/:studentId",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.STUDENTS_FREEZE),
   validate(studentIdSchema),
   list,
 );
 router.post(
   "/:studentId/freeze",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.STUDENTS_FREEZE),
   validate(freezeSchema),
   freeze,
 );
 router.post(
   "/:studentId/unfreeze",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.STUDENTS_FREEZE),
   validate(unfreezeSchema),
   unfreeze,
 );

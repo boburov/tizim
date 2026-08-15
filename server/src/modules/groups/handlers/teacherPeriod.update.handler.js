@@ -1,12 +1,15 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
 import * as teacherGroupPeriodService from "../services/teacherGroupPeriod.service.js";
 import * as approvalService from "../../expenseApprovals/services/expenseApproval.service.js";
+import { salaryTermsMetrics } from "../../../helpers/configMetrics.helper.js";
 
 // Qarang: teacherPeriod.create.handler.js - bir xil tasdiq qoidasi.
 const update = asyncHandler(async (req, res) => {
   const { periodId } = req.params;
-  const { needsApproval } = approvalService.checkConfigApproval({
+  const { needsApproval } = await approvalService.checkConfigApproval({
     permissions: req.permissions,
+    kind: approvalService.APPROVAL_KINDS.SALARY_TERMS,
+    metrics: salaryTermsMetrics(req.body),
   });
 
   if (needsApproval) {

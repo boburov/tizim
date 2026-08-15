@@ -8,7 +8,12 @@ import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
-import { resolveBranchFromUser } from "../../../helpers/branchContext.helper.js";
+import {
+  resolveBranchFromUser,
+  branchFilter,
+  branchMatchStage,
+  branchUserFilter,
+} from "../../../helpers/branchContext.helper.js";
 import { EXPENSE_KINDS } from "../../../models/approval.model.js";
 import {
   checkExpenseLimit,
@@ -544,7 +549,13 @@ export const historyFor = async (studentId) => {
 
 // Owner sahifa tab1: depozit tranzaksiyalari ro'yxati (barcha o'quvchilar, filtrli).
 export const list = async ({ studentId, from, to, type, page = 1, limit = 50 }) => {
-  const filter = { isDeleted: { $ne: true } };
+  // FILIAL KO'LAMI: DepositTransaction'da `branchId` bor (o'quvchining
+  // homeBranchId'sidan yoziladi), shuning uchun to'g'ridan-to'g'ri filtr.
+  //
+  // `branchId: null` yozuvlar (filialga biriktirilmagan o'quvchi) aniq
+  // filial tanlanganda KO'RINMAYDI - fail-closed. Ular owner'ning "barcha
+  // filiallar" ko'rinishida chiqadi, chunki u yerda filtr umuman qo'yilmaydi.
+  const filter = { ...branchFilter(), isDeleted: { $ne: true } };
   if (studentId) filter.student = toObjectId(studentId);
   if (type) filter.type = type;
   if (from || to) {
@@ -575,16 +586,30 @@ export const report = async ({ from, to } = {}) => {
     if (to) range.paidAt.$lte = parseLocalDay(to);
   }
 
+  // FILIAL KO'LAMI - uchala manba UCH XIL yo'l bilan filialga bog'langan:
+  //
+  //   DepositTransaction  -> o'zida `branchId` bor          -> branchMatchStage
+  //   PaymentTransaction  -> o'zida `branchId` bor (required) -> branchMatchStage
+  //   StudentDeposit      -> `branchId` YO'Q, o'quvchiga tegishli -> branchUserFilter
+  //
+  // DIQQAT: aggregate() da mongoose hook'lari ISHLAMAYDI, shuning uchun
+  // $match bosqichi QO'LDA qo'yiladi (branchContext.helper.js:88-104).
+  // Ilgari bu yerda filtr umuman yo'q edi va hisobot butun markazning
+  // pulini bitta filial soni sifatida ko'rsatardi.
+  const studentScope = await branchUserFilter("student");
+
   const [ledgerRows, appliedAgg, balances] = await Promise.all([
     DepositTransaction.aggregate([
+      ...branchMatchStage(),
       { $match: { isDeleted: { $ne: true }, ...range } },
       { $group: { _id: "$type", total: { $sum: "$amount" } } },
     ]),
     PaymentTransaction.aggregate([
+      ...branchMatchStage(),
       { $match: { source: "deposit", isDeleted: { $ne: true }, ...range } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
-    StudentDeposit.find({ balance: { $gt: 0 } })
+    StudentDeposit.find({ ...studentScope, balance: { $gt: 0 } })
       .populate("student", safeStudentProjection)
       .sort({ balance: -1 })
       .lean(),

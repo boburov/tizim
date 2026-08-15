@@ -2,6 +2,7 @@ import asyncHandler from "../../../middleware/asyncHandler.js";
 import ApiError from "../../../utils/ApiError.js";
 import User from "../../../models/user.model.js";
 import { ROLES } from "../../../constants/roles.js";
+import { assertTargetInScope } from "../../../helpers/branchAccess.helper.js";
 import * as openingBalanceService from "../services/openingBalance.service.js";
 
 /**
@@ -16,9 +17,16 @@ const create = asyncHandler(async (req, res) => {
   const user = await User.findById(req.body.user, {
     role: 1,
     homeBranchId: 1,
+    branchAssignments: 1,
     enrolledAt: 1,
   }).lean();
   if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
+
+  // FILIAL CHEGARASI: bu route endi owner-only emas
+  // (`finance.opening_balance`), shuning uchun boshqa filial odamiga
+  // qarz/avans yozib qo'yish to'siladi. Yozuv O'ZGARMAS - noto'g'ri
+  // filialga tushsa uni faqat korreksiya bilan tuzatib bo'lardi.
+  assertTargetInScope(req.allowedBranchIds, req.canSeeAllBranches, user);
 
   // Rol uchta guruhga keltiriladi: o'quvchi / o'qituvchi / qolgan hammasi
   // (direktor, administrator, buxgalter... - ular "staff" hisobida).

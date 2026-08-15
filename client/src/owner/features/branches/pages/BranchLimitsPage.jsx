@@ -2,16 +2,22 @@
 import { useState } from "react";
 
 // Icons
-import { Check } from "lucide-react";
+import { Check, SlidersHorizontal } from "lucide-react";
 
 // Components
 import DataTable from "@/shared/components/ui/table/DataTable";
 import Button from "@/shared/components/ui/button/Button";
 import InputMoney from "@/shared/components/ui/input/InputMoney";
+import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
+import BranchDelegationModal from "../components/modals/BranchDelegationModal";
 
 // Hooks
+import useModal from "@/shared/hooks/useModal";
 import useBranchesQuery from "../hooks/useBranchesQuery";
 import { useBranchUpdateMutation } from "../hooks/useBranchMutations";
+
+// Constants
+import { MODAL } from "@/shared/constants/modals";
 
 /**
  * Bitta qator uchun limit tahriri.
@@ -66,7 +72,36 @@ const LimitRow = ({ branch }) => {
 };
 
 /**
- * Filiallarning chiqim tasdiq limitlari bitta jadvalda.
+ * Cheklovlar ustuni: filial rahbariga qo'yilgan cheklovlar soni.
+ *
+ * DIQQAT - SON CHEKLOVNI bildiradi, ruxsatni EMAS. Standart holatda
+ * rahbar hamma sozlamani o'zi hal qiladi, matritsaga esa faqat undan
+ * OLIB QO'YILGAN amallar yoziladi. Shuning uchun 0 = "to'liq erkin",
+ * ko'p = "ko'p narsa cheklangan".
+ *
+ * Faqat SON ko'rsatiladi, ro'yxat emas - jadval qatoriga 5 ta tur
+ * sig'masdi va eng kerakli savol baribir "umuman cheklanganmi" degani.
+ */
+const DelegationCell = ({ branch }) => {
+  const { openModal } = useModal();
+  const count = Object.keys(branch.delegation || {}).length;
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="gap-1.5"
+      onClick={() => openModal(MODAL.BRANCH_DELEGATION, { branch })}
+    >
+      <SlidersHorizontal size={14} strokeWidth={2} />
+      {count > 0 ? `${count} ta cheklov` : "Cheklovsiz"}
+    </Button>
+  );
+};
+
+/**
+ * Filiallarning chiqim tasdiq limitlari va ishonch darajasi bitta jadvalda.
  *
  * Ilgari bu maydon faqat filialni tahrirlash modalida edi - "qaysi
  * filialda limit qancha" degan savolga javob berish uchun har birini
@@ -89,22 +124,31 @@ const BranchLimitsPage = () => {
       headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
       cell: (row) => <LimitRow branch={row} />,
     },
+    {
+      key: "delegation",
+      header: "Cheklovlar",
+      headerClassName: "px-4 py-2.5 text-left font-medium text-muted-foreground",
+      cell: (row) => <DelegationCell branch={row} />,
+    },
   ];
 
   const renderCard = (row) => (
     <div className="space-y-2">
       <p className="text-sm font-medium">{row.name}</p>
       <LimitRow branch={row} />
+      <DelegationCell branch={row} />
     </div>
   );
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Limitlar</h1>
+        <h1 className="text-2xl font-semibold">Limitlar va cheklovlar</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Limitdan oshgan chiqim tasdiqdan o'tadi. Bo'sh qoldirilsa tasdiq
-          talab qilinmaydi.
+          talab qilinmaydi. Filial rahbari standart holatda o'z filialida
+          hamma sozlamani o'zi hal qiladi — cheklov qo'shsangiz o'sha amal
+          sizning tasdig'ingizga qaytadi.
         </p>
       </div>
 
@@ -119,6 +163,10 @@ const BranchLimitsPage = () => {
           </p>
         }
       />
+
+      <ModalWrapper name={MODAL.BRANCH_DELEGATION} title="Ishonch darajasi">
+        <BranchDelegationModal />
+      </ModalWrapper>
     </div>
   );
 };

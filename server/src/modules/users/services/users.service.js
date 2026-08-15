@@ -382,10 +382,23 @@ export const getProfile = async (id) => {
   return buildUserProfile(user);
 };
 
-export const update = async (id, body, currentUser = null) => {
+export const update = async (id, body, currentUser = null, scope = null) => {
   const user = await getById(id);
   if (user.role === ROLES.OWNER) {
     throw new ApiError(403, "Owner foydalanuvchini tahrirlab bo'lmaydi");
+  }
+
+  // FILIAL HIMOYASI.
+  //
+  // Ilgari bu route requireRole(OWNER) bilan qulflangan edi, ya'ni
+  // faqat owner kirardi va tekshiruv keraksiz tuyulardi. Endi u
+  // `users.update` ruxsatiga ochilgan (filial direktori O'Z xodimini
+  // tahrirlashi kerak), shuning uchun chegara SHU YERDA qo'yiladi.
+  //
+  // `scope` berilmasa (seed / job / ichki chaqiruv) tekshirilmaydi -
+  // ular kontekstdan tashqarida ishlaydi.
+  if (scope) {
+    assertTargetInScope(scope.allowedBranchIds, scope.canSeeAllBranches, user);
   }
 
   // Role-conditional maydonlar
@@ -548,6 +561,39 @@ export const update = async (id, body, currentUser = null) => {
   return user;
 };
 
+/**
+ * PAROL AMALLARI UCHUN AKTYORNING HAQIQIY FILIALLARI.
+ *
+ * NEGA UZATILGAN `allowedBranchIds` GA ISHONMAYMIZ: u
+ * resolveBranchScope() natijasi va `branches.view_all` ruxsati bo'lsa
+ * ICHIGA BARCHA FILIALLAR solinadi. Ya'ni "A filial direktori" ning
+ * ro'yxatida B filial ham turadi va kesishuv tekshiruvi o'tib ketadi -
+ * natijada u B filial xodimining ochiq matndagi parolini o'qiydi
+ * (tests/privEscalation.test.js "A) DRIFT").
+ *
+ * view_all HISOBOT uchun to'g'ri, MAXFIY MA'LUMOT uchun emas. Shuning
+ * uchun bu yerda faqat odamning O'ZIGA BIRIKTIRILGAN filiallari
+ * hisobga olinadi.
+ *
+ * Bo'sh massiv qaytishi ham to'g'ri natija: hech qaysi filialga
+ * biriktirilmagan (yoki aktyori noma'lum) chaqiruv hech kimning
+ * parolini ko'rmasligi kerak - fail-closed.
+ */
+const resolveActorBranchIds = async (actorId) => {
+  if (!actorId) return [];
+  const actor = await User.findById(actorId)
+    .select("homeBranchId branchAssignments")
+    .lean();
+  if (!actor) return [];
+
+  const ids = new Set();
+  if (actor.homeBranchId) ids.add(String(actor.homeBranchId));
+  for (const a of actor.branchAssignments || []) {
+    if (a?.branchId) ids.add(String(a.branchId));
+  }
+  return [...ids];
+};
+
 // Owner uchun: login va parolni qaytaradi. Parol OCHIQ MATNDA saqlanadi,
 // shu sababli to'g'ridan-to'g'ri o'qib ko'rsatiladi.
 export const getPassword = async (id, currentUser) => {
@@ -560,14 +606,17 @@ export const getPassword = async (id, currentUser) => {
   }
 
   // FILIAL HIMOYASI (eng muhim tekshiruv).
+  //
   // Parollar OCHIQ MATNDA saqlanadi. requireRole(OWNER) uchinchi bosqichda
   // system.admin_access borlarni ham o'tkazadi - ya'ni filial direktori
   // shu endpoint orqali BOSHQA filial xodimining parolini o'qiy olardi.
-  assertTargetInScope(
-    currentUser?.allowedBranchIds,
-    currentUser?.canSeeAllBranches,
-    user,
-  );
+  //
+  // DIQQAT - uzatilgan `allowedBranchIds`/`canSeeAllBranches` ATAYLAB
+  // ISHLATILMAYDI. Sabab resolveActorBranchIds izohida: `view_all`
+  // ikkalasini ham kengaytiradi va zaiflik aynan shundan kelib chiqadi.
+  // Faqat HAQIQIY owner (roleType === "owner") cheklovsiz o'qiydi.
+  const actorBranchIds = await resolveActorBranchIds(currentUser?.actorId);
+  assertTargetInScope(actorBranchIds, Boolean(currentUser?.isOwner), user);
 
   return { username: user.username, password: user.passwordHash || "" };
 };
@@ -581,11 +630,9 @@ export const setPassword = async (id, newPassword, currentUser) => {
 
   // FILIAL HIMOYASI: boshqa filial xodimining parolini almashtirib,
   // uning hisobiga kirib olishni to'sadi.
-  assertTargetInScope(
-    currentUser?.allowedBranchIds,
-    currentUser?.canSeeAllBranches,
-    user,
-  );
+  // getPassword bilan AYNI qoida - sabablari o'sha yerda.
+  const actorBranchIds = await resolveActorBranchIds(currentUser?.actorId);
+  assertTargetInScope(actorBranchIds, Boolean(currentUser?.isOwner), user);
   user.passwordHash = await hashPassword(newPassword);
   await user.save();
 
@@ -598,10 +645,15 @@ export const setPassword = async (id, newPassword, currentUser) => {
   return { username: user.username, password: newPassword };
 };
 
-export const softRemove = async (id, { reasonId, archiveDate, by } = {}) => {
+export const softRemove = async (id, { reasonId, archiveDate, by, scope } = {}) => {
   const user = await getById(id);
   if (user.role === ROLES.OWNER) {
     throw new ApiError(403, "Owner foydalanuvchini o'chirib bo'lmaydi");
+  }
+
+  // FILIAL HIMOYASI - sabab update() dagi izohda.
+  if (scope) {
+    assertTargetInScope(scope.allowedBranchIds, scope.canSeeAllBranches, user);
   }
   // O'quvchi arxivlanmaydi - u tizimda doim faol obyekt bo'lib qoladi.
   // Vaqtincha to'xtatish uchun "Muzlatish" (StudentFreeze) ishlatiladi, chiqib
@@ -746,8 +798,16 @@ export const softRemove = async (id, { reasonId, archiveDate, by } = {}) => {
   return user;
 };
 
-export const restore = async (id, { reasonId, by } = {}) => {
+export const restore = async (id, { reasonId, by, scope } = {}) => {
   const user = await getById(id);
+
+  // FILIAL HIMOYASI - sabab update() dagi izohda.
+  // Arxivlash bilan bir xil chegara: boshqa filialning arxivlangan
+  // xodimini tiklab, uni o'z ro'yxatiga chiqarib olish mumkin edi.
+  if (scope) {
+    assertTargetInScope(scope.allowedBranchIds, scope.canSeeAllBranches, user);
+  }
+
   user.isActive = true;
   user.archivedAt = null;
 

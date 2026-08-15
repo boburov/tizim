@@ -6,6 +6,7 @@ import Approval from "../../../models/approval.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
+import { validateDelegation } from "../../../constants/delegation.js";
 import { hashPassword } from "../../../helpers/password.helper.js";
 import { normalizePhone } from "../../../utils/phone.js";
 import {
@@ -168,6 +169,27 @@ export const update = async (id, body) => {
   }
   if (body.phone !== undefined) {
     doc.phone = body.phone ? String(body.phone).trim() : null;
+  }
+
+  // DELEGATSIYA MATRITSASI.
+  //
+  // TO'LIQ ALMASHTIRISH (qisman birlashtirish EMAS): owner matritsani
+  // yaxlit forma sifatida ko'radi va saqlaydi. Birlashtirish bo'lsa,
+  // formadan olib tashlangan qoida bazada qolib ketardi - ya'ni owner
+  // "o'chirdim" deb o'ylagan ishonch amalda kuchda qolardi.
+  //
+  // Tekshiruv validateDelegation orqali: maosh turlariga `auto` qo'yish
+  // yoki turga tegishsiz chegara kiritish shu yerda 400 bilan to'xtaydi.
+  // (Model'ning pre("validate") hook'i ham shuni chaqiradi - u seed va
+  // migratsiya kabi servisdan chetlab o'tuvchi yo'llarni qoplaydi.)
+  if (body.delegation !== undefined) {
+    if (body.delegation === null) {
+      doc.delegation = undefined;
+    } else {
+      const error = validateDelegation(body.delegation);
+      if (error) throw new ApiError(400, error);
+      doc.delegation = body.delegation;
+    }
   }
 
   // CHIQIM LIMITI: null yoki 0 = cheksiz.

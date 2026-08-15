@@ -2,12 +2,17 @@ import asyncHandler from "../../../middleware/asyncHandler.js";
 import * as service from "../services/users.service.js";
 import * as approvalService from "../../expenseApprovals/services/expenseApproval.service.js";
 
-// ISHGA OLISH TASDIG'I: approvals.decide_config ruxsati yo'q bo'lsa (odatda
-// filial direktori), User DARHOL yaratilmaydi - owner tasdig'iga yuboriladi.
-// 202 = "qabul qilindi, lekin hali bajarilmadi".
+// ISHGA OLISH TASDIG'I: filialning delegatsiya matritsasi hal qiladi
+// (Branch.delegation.staff_hire). `auto` bo'lsa direktor xodimni o'zi
+// qo'shadi, `approval` bo'lsa User DARHOL yaratilmaydi - owner tasdig'iga
+// yuboriladi. 202 = "qabul qilindi, lekin hali bajarilmadi".
+//
+// Ishga olishda o'lchanadigan summa yo'q, shuning uchun `metrics` ham yo'q -
+// bu tur uchun `threshold` rejimi mavjud emas (constants/delegation.js).
 const createStaff = asyncHandler(async (req, res) => {
-  const { needsApproval } = approvalService.checkConfigApproval({
+  const { needsApproval } = await approvalService.checkConfigApproval({
     permissions: req.permissions,
+    kind: approvalService.APPROVAL_KINDS.STAFF_HIRE,
   });
 
   if (needsApproval) {

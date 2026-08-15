@@ -1,8 +1,8 @@
 import { Router } from "express";
 import requireAuth from "../../middleware/auth.js";
-import requireRole from "../../middleware/requireRole.js";
+import requirePermission from "../../middleware/requirePermission.js";
 import validate from "../../middleware/validate.js";
-import { ROLES } from "../../constants/roles.js";
+import { PERMISSIONS } from "../../constants/permissions.js";
 import {
   studentTimelineSchema,
   groupTimelineSchema,
@@ -16,14 +16,14 @@ const router = Router();
 router.get(
   "/students/:studentId",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.ACTIVITY_LOGS_READ),
   validate(studentTimelineSchema),
   studentTimeline,
 );
 router.get(
   "/groups/:groupId",
   requireAuth,
-  requireRole(ROLES.OWNER),
+  requirePermission(PERMISSIONS.ACTIVITY_LOGS_READ),
   validate(groupTimelineSchema),
   groupTimeline,
 );

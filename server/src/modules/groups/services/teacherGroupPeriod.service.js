@@ -16,6 +16,7 @@ import {
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
 import { resolveBranchFromGroup } from "../../../helpers/branchContext.helper.js";
+import { assertNotSelfSalary } from "../../../helpers/selfSalary.guard.js";
 
 const DAY_LABEL_UZ = {
   mon: "Dushanba",
@@ -382,6 +383,15 @@ export const create = async (
   const grp = await Group.findById(group);
   assertGroupActive(grp);
 
+  // O'ZIGA O'ZI STAVKA QO'YISH TAQIQI - faqat stavka HAQIQATAN
+  // yozilayotgan bo'lsa. `inheritStandardRate` da davrga hech qanday
+  // summa yozilmaydi (o'qituvchining standart shartnomasi ishlaydi),
+  // ya'ni bu yerda taqiqlaydigan narsa yo'q - aks holda guruhni boshqa
+  // o'qituvchiga topshirish kabi oddiy amal ham to'silib qolardi.
+  if (!inheritStandardRate) {
+    assertNotSelfSalary(currentUser, teacher);
+  }
+
   const candidate = {
     startDate: toUtcMidnight(startDate),
     endDate: endDate ? toUtcMidnight(endDate) : null,
@@ -424,6 +434,17 @@ export const update = async (id, patch, currentUser) => {
   if (!doc || doc.isDeleted) throw new ApiError(404, "Dars berish davri topilmadi");
   const grp = await Group.findById(doc.group);
   assertGroupActive(grp);
+
+  // O'ZIGA O'ZI STAVKA QO'YISH TAQIQI - faqat patch STAVKAGA tegsa.
+  // Sanani surish yoki davrni yopish stavkani o'zgartirmaydi, ya'ni
+  // o'qituvchi o'z davrining sanasini tuzata olishi kerak.
+  const touchesRate =
+    patch.salaryType !== undefined ||
+    patch.fixedAmount !== undefined ||
+    patch.percentRate !== undefined;
+  if (touchesRate) {
+    assertNotSelfSalary(currentUser, doc.teacher);
+  }
 
   const next = {
     startDate: patch.startDate ? toUtcMidnight(patch.startDate) : doc.startDate,
@@ -721,6 +742,11 @@ export const requestSalaryTerms = async ({ op, group, periodId, body }, currentU
   const grp = await Group.findById(groupId);
   assertGroupActive(grp);
   const teacherDoc = await assertTeacher(teacher);
+
+  // O'ZIGA O'ZI STAVKA: so'rov ham YARATILMAYDI. Tasdiqlash bosqichida
+  // approve() o'zini-o'zi tasdiqlashni to'sardi, lekin so'rov owner
+  // navbatiga tushib, u e'tiborsiz tasdiqlab yuborishi mumkin edi.
+  assertNotSelfSalary(currentUser, teacher);
 
   const branchId = await resolveBranchFromGroup(groupId);
 

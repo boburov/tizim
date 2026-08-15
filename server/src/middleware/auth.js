@@ -8,6 +8,7 @@ import {
   resolveRoleForBranch,
 } from "../helpers/branchAccess.helper.js";
 import { runWithBranchContext } from "../helpers/branchContext.helper.js";
+import { assertBranchIntent } from "../helpers/branchIntent.guard.js";
 
 // Verifies access JWT and populates req.user / req.permissions / req.role
 const requireAuth = asyncHandler(async (req, _res, next) => {
@@ -54,6 +55,13 @@ const requireAuth = asyncHandler(async (req, _res, next) => {
       ? String(req.headers["x-branch-id"]).trim()
       : null,
   });
+
+  // FILIAL NIYATI: client kutgan filial server hal qilganiga mos keladimi.
+  //
+  // Ko'lam hal qilingandan KEYIN, lekin hech narsa yozilishidan OLDIN
+  // turishi shart - shu sababli aynan shu joyda (batafsil sabab:
+  // helpers/branchIntent.guard.js).
+  assertBranchIntent(req, scope);
 
   // 2-BOSQICH: FILIALGA XOS ROL.
   //

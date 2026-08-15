@@ -12,6 +12,11 @@ export const createSchema = z.object({
     // so'raydi. Bo'sh bo'lsa server aktiv filialdan (yoki markazda yagona
     // filial bo'lsa - o'shandan) aniqlaydi.
     branchId: z.string().nullable().optional(),
+    // KURS (global katalog) va XONA (filial resursi). Ikkalasi ham
+    // ixtiyoriy: eski/aralash guruhlar va onlayn darslar uchun null.
+    // Tekshiruv servisda: kurs faolmi, xona SHU filialdami.
+    courseId: z.string().min(1).nullable().optional(),
+    roomId: z.string().min(1).nullable().optional(),
     name: z
       .string({ required_error: "Guruh nomini kiriting" })
       .min(2, "Kamida 2 belgidan iborat bo'lishi kerak")

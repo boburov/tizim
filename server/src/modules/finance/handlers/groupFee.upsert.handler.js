@@ -1,13 +1,20 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
 import * as groupFeeService from "../services/groupFee.service.js";
 import * as approvalService from "../../expenseApprovals/services/expenseApproval.service.js";
+import { groupFeeMetrics } from "../../../helpers/configMetrics.helper.js";
 
-// GURUH NARXI TASDIG'I: approvals.decide_config ruxsati yo'q bo'lsa (odatda
-// filial direktori), narx DARHOL o'zgarmaydi - owner tasdig'iga yuboriladi.
-// Chegirma bilan bir xil qoida: ikkalasi ham tushumni kamaytiradi.
+// GURUH NARXI TASDIG'I: filialning delegatsiya matritsasi hal qiladi
+// (Branch.delegation.group_fee_set). Chegirma bilan bir xil qoida:
+// ikkalasi ham tushumni kamaytiradi.
+//
+// DIQQAT - CHEGARA YO'NALISHI TESKARI: bu yerda xavf katta raqam emas,
+// KICHIK raqam (narxni tushirib yuborish). Shuning uchun chegara `minAmount`
+// - "shu summadan pastga tushirsang, mendan so'ra".
 const upsert = asyncHandler(async (req, res) => {
-  const { needsApproval } = approvalService.checkConfigApproval({
+  const { needsApproval } = await approvalService.checkConfigApproval({
     permissions: req.permissions,
+    kind: approvalService.APPROVAL_KINDS.GROUP_FEE_SET,
+    metrics: groupFeeMetrics(req.body),
   });
 
   if (needsApproval) {
