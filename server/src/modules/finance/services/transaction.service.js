@@ -9,6 +9,8 @@ import * as studentPaymentService from "./studentPayment.service.js";
 import * as depositService from "../../deposits/services/deposit.service.js";
 import { runFinanceTxn } from "./financeTxn.helper.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import * as journalPosting from "../../../helpers/journalPosting.helper.js";
+import * as journal from "../../journal/services/journal.service.js";
 
 // Bir martada qabul qilinadigan maksimal summa (kassa xatosini cheklash uchun).
 const MAX_PAYMENT_AMOUNT = 50_000_000;
@@ -119,6 +121,11 @@ export const create = async (
         batchId,
         createdBy: currentUser?._id || null,
       });
+      // JURNAL: pul kassaga kirdi (Faza 4).
+      // Xato yutiladi - to'lov jurnal tufayli rad etilmasin
+      // (helpers/journalPosting.helper.js dagi izoh).
+      await journalPosting.postPayment(trx, journal);
+
       transactions.push(trx);
       pendingKey = null;
       left -= take;

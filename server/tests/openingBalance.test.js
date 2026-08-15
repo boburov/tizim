@@ -60,6 +60,8 @@ const run = async () => {
   const StudentPayment = (await import("../src/models/studentPayment.model.js")).default;
   const StudentDeposit = (await import("../src/models/studentDeposit.model.js")).default;
   const DepositTransaction = (await import("../src/models/depositTransaction.model.js")).default;
+  const PaymentTransaction = (await import("../src/models/paymentTransaction.model.js")).default;
+  const JournalEntry = (await import("../src/models/journalEntry.model.js")).default;
   const OpeningBalance = (await import("../src/models/openingBalance.model.js")).default;
   const StaffPayroll = (await import("../src/models/staffPayroll.model.js")).default;
   const StaffPayrollAdjustment = (
@@ -131,6 +133,28 @@ const run = async () => {
   const createdUsers = [];
   const cleanup = async () => {
     const ids = createdUsers.map((u) => u._id);
+
+    // JURNAL YOZUVLARI (Faza 4).
+    //
+    // Bu test ISHCHI bazada ishlaydi va o'z yozuvlarini o'zi tozalaydi.
+    // Moliya oqimlari endi jurnalga ham yozadi, ya'ni to'lov/depozit
+    // o'chirilganda unga bog'liq jurnal yozuvi YETIM qolardi - va
+    // journalVerify har safar "farq bor" deb qichqirardi.
+    //
+    // Shuning uchun avval MANBA hujjatlarning ID'lari yig'iladi, keyin
+    // ular bo'yicha jurnal tozalanadi. Tartib muhim: manba o'chirilgach
+    // uning ID'sini topib bo'lmaydi.
+    const [payIds, depIds] = await Promise.all([
+      PaymentTransaction.find({ student: { $in: ids } }).distinct("_id"),
+      DepositTransaction.find({ student: { $in: ids } }).distinct("_id"),
+    ]);
+    await JournalEntry.deleteMany({
+      $or: [
+        { refModel: "PaymentTransaction", refId: { $in: payIds } },
+        { refModel: "DepositTransaction", refId: { $in: depIds } },
+      ],
+    });
+
     await Promise.all([
       OpeningBalance.deleteMany({ user: { $in: ids } }),
       StudentPayment.deleteMany({ student: { $in: ids } }),

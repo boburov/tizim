@@ -10654,3 +10654,137 @@ Faza 3 to'liq. Endi yakuniy regression.
 <sub>session `c49e703c` · branch `main` · 38 ta qadam</sub>
 
 ---
+
+## 2026-08-15 19:18 — davom eting
+
+**So'rov**
+
+> davom eting
+
+**O'zgargan fayllar (11)**
+
+- `server/src/constants/ledger.js` — yaratildi/qayta yozildi
+- `server/src/models/account.model.js` — yaratildi/qayta yozildi
+- `server/src/models/journalEntry.model.js` — yaratildi/qayta yozildi
+- `server/src/models/shift.model.js` — yaratildi/qayta yozildi
+- `server/src/models/cashTransfer.model.js` — yaratildi/qayta yozildi
+- `server/src/modules/ledger/services/ledger.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/journal/services/journal.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/journal/services/shift.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/journal/services/cashTransfer.service.js` — yaratildi/qayta yozildi
+- `server/tests/journalTreasury.test.js` — tahrirlandi, yaratildi/qayta yozildi
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/filial-plan.html` — tahrirlandi
+
+**Buyruqlar (9)**
+
+```sh
+cat > src/models/account.model.js <<'JSEOF' import mongoose from "mongoose"; import { ALL_ACCOUNT_KINDS, ACCOUNT_KINDS } from "../constants/ledger.js"; // HISOB…
+cd /Users/shukrullo/Desktop/lc-total/server && pwd && ls src/constants/ledger.js
+cd /Users/shukrullo/Desktop/lc-total && git status --porcelain src/ server/src/modules/ledger/ && echo "─── ledger moduli tarkibi ───" && find server/src/module…
+git checkout -- server/src/modules/ledger/services/ledger.service.js && echo "tiklandi" && wc -l server/src/modules/ledger/services/ledger.service.js && git sta…
+cd /Users/shukrullo/Desktop/lc-total/server && python3 - <<'PY' p = "package.json" s = open(p, encoding="utf-8").read() s = s.replace( ' "test:courses": "node t…
+npm run test:journal 2>&1 | tail -32
+python3 - <<'PY' p = "src/constants/resourceScope.js" s = open(p, encoding="utf-8").read() s = s.replace( " room: SCOPE.BRANCH,", " room: SCOPE.BRANCH,\n" " // …
+for t in test:journal test:courses test:resource-scope test:branch-intent test:opened-routes test:delegation test:director test:priv test:scope test:leak test:c…
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad && python3 - <<'PY' p = "filial-plan.html" s = open…
+```
+
+**Natija**
+
+Faza 4 — eng katta va eng xavfli qism. Avval **qo'sh yozuv poydevori**ni quraman.
+
+Endi smena va inkassatsiya modellari.
+
+Endi eng muhimi — jurnalga yozuvchi servis va invariant tekshiruvi.
+
+Xato qildim — mavjud `ledger.service.js` (455 qator, o'quvchi/o'qituvchi hisobvarag'i) ustiga yozib yuboribman. Darhol tiklayman.
+
+Tiklandi — fayl 508 qatorga qaytdi, git'da o'zgarish yo'q. Yangi servisni to'g'ri joyga, `journal` moduliga yozaman (mavjud `ledger` — shaxsiy hisobvaraq, boshqa narsa).
+
+Endi smena va inkassatsiya servislari — jurnal yozuvlari bilan birga.
+
+Endi test — pul bilan ishlaganda invariantlarni isbotlash shart.
+
+Test hisobi: A da naqd 0 qolgan (5M − 1M chiqim − 3M − 1M). Bekor qilish sinovidan oldin kassaga pul qo'shaman.
+
+44/44. Reyestrni yangilab, yakuniy regression yuritaman.
+
+<sub>session `c49e703c` · branch `main` · 22 ta qadam</sub>
+
+---
+
+## 2026-08-15 20:39 — davom eiting , A) ni tanladim
+
+**So'rov**
+
+> davom eiting , A) ni tanladim
+
+**O'zgargan fayllar (6)**
+
+- `server/src/constants/ledger.js` — tahrirlandi
+- `server/src/helpers/journalPosting.helper.js` — yaratildi/qayta yozildi
+- `server/src/modules/journal/services/journalVerify.service.js` — yaratildi/qayta yozildi
+- `server/src/seeds/journalBackfill.seed.js` — yaratildi/qayta yozildi
+- `server/tests/journalWiring.test.js` — yaratildi/qayta yozildi
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/filial-plan.html` — tahrirlandi
+
+**Buyruqlar (29)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && echo "═══ PaymentTransaction.create ═══" && grep -rn "PaymentTransaction.create\|PaymentTransaction(" src/modules…
+echo "═══ transaction.service.js: to'lov yaratish ═══" && sed -n '85,135p' src/modules/finance/services/transaction.service.js
+echo "═══ deposit.service.js: topup (102) ═══" && sed -n '92,120p' src/modules/deposits/services/deposit.service.js && echo && echo "═══ deposit apply (252-290)…
+python3 - <<'PY' import re # ── 1) To'lov (transaction.service.js) ── p = "src/modules/finance/services/transaction.service.js" s = open(p, encoding="utf-8").re…
+python3 - <<'PY' import re def add_imports(s, rel_helper, rel_journal): if "import * as journalPosting" in s: return s return re.sub( r'(^import [^\n]*\n)(?![\s…
+echo "═══ expense.service.js: ikkinchi create (149 atrofida) ═══" && sed -n '145,175p' src/modules/expenses/services/expense.service.js && echo && echo "═══ tea…
+sed -n '118,145p' src/modules/expenses/services/expense.service.js
+sed -n '9,18p' src/modules/expenses/services/expense.service.js
+python3 - <<'PY' p = "src/modules/expenses/services/expense.service.js" s = open(p, encoding="utf-8").read() # Noto'g'ri joydan olib tashlaymiz s = s.replace( '…
+echo "═══ boshqa fayllarda ham shu xato bormi ═══" && for f in src/modules/finance/services/transaction.service.js src/modules/deposits/services/deposit.service…
+python3 - <<'PY' p = "package.json" s = open(p, encoding="utf-8").read() s = s.replace( ' "test:journal": "node tests/journalTreasury.test.js",', ' "test:journa…
+grep -n "required: true" -B 2 src/models/expense.model.js | grep -E "^\s*[0-9]+[-:]\s+[a-zA-Z]+:" | head -12
+python3 - <<'PY' p = "tests/journalWiring.test.js" s = open(p, encoding="utf-8").read() s = s.replace( """ const exp = await Expense.create({ branchId: A._id, t…
+for t in test:journal-wiring test:journal test:money-prop test:race test:ledger test:opening test:salary-balance test:salary-rate test:approval test:config-appr…
+for t in test:courses test:resource-scope test:branch-intent test:opened-routes test:delegation test:director test:priv test:scope test:leak test:export test:sc…
+npm run migrate:journal-backfill -- --dry 2>&1 | grep -E "INFO|WARN|ERROR" | tail -12
+cat > ./inspect.tmp.mjs <<'EOF' import "dotenv/config"; import mongoose from "mongoose"; await mongoose.connect(process.env.MONGO_URL || "mongodb://127.0.0.1:27…
+for f in tests/*.test.js; do db=$(grep -oE 'MONGO_URL[^;]*|mongodb://[^"]*' "$f" | head -1); repl=$(grep -c "replace(/\\\\/(" "$f" 2>/dev/null || echo 0); if [ …
+for f in tests/*.test.js; do if ! grep -q "replace(/" "$f" && ! grep -q "lc_.*_test\|_test\$2\|127.0.0.1:27017/lc" "$f"; then if grep -q "mongoose.connect" "$f"…
+echo "═══ openingBalance.test.js baza va tozalash ═══" && grep -n "mongoose.connect\|dropDatabase\|deleteMany\|MONGO_URL" tests/openingBalance.test.js | head -8…
+sed -n '128,150p' tests/openingBalance.test.js
+python3 - <<'PY' p = "tests/openingBalance.test.js" s = open(p, encoding="utf-8").read() s = s.replace( """ const createdUsers = []; const cleanup = async () =>…
+grep -n "^import\|^const .* = (await import" tests/openingBalance.test.js | grep -iE "payment|journal|deposit" | head -5; echo "─── import bloki ───"; sed -n '3…
+grep -n "StaffPayroll\b\|DepositTransaction\|GroupFee" tests/openingBalance.test.js | grep -E "import|=" | head -6
+python3 - <<'PY' p = "tests/openingBalance.test.js" s = open(p, encoding="utf-8").read() s = s.replace( ' const DepositTransaction = (await import("../src/model…
+# … yana 4 ta
+```
+
+**Natija**
+
+A) tanlandi. Avval mavjud pul oqimlarining yaratilish nuqtalarini topaman.
+
+Oqimlar aniq. Avval depozit uchun hisob turi kerak — u daromad emas, **majburiyat**.
+
+Endi ulash yordamchisi — mavjud oqimlardan jurnalga yozadigan yagona joy.
+
+Endi 7 ta yaratish nuqtasiga ulayman.
+
+Regex ko'p qatorli `import` ning o'rtasiga tushib qolibdi — tuzataman.
+
+Endi backfill migratsiyasi va tekshiruv servisi — jurnal haqiqat bilan mos kelishini isbotlash uchun.
+
+20/20. Endi to'liq regression — ulash mavjud moliya oqimlariga tegdi, buzilmaganini tekshirish shart.
+
+Hammasi toza. Backfill'ni avval **quruq yurish** rejimida ko'ray — nima ko'chishini bilib olaylik.
+
+«Avvaldan bor 3» — jurnal bo'sh bo'lishi kerak edi. Tekshiraman.
+
+Jurnalda 10 ta yozuv bor ekan — ular testlardan kelgan. Qaysi testlar **jonli bazaga** yozayotganini aniqlayman.
+
+Topildi — `openingBalance.test.js` **jonli bazada** ishlaydi va o'z yozuvlarini o'chiradi, lekin `JournalEntry` dan xabari yo'q. Mening ulashim tufayli yetim yozuvlar qolibdi. Ikkalasini tuzataman.
+
+7 ta yetim tozalandi, 3 tasi qoldi (ularning manba hujjatlari mavjud — to'g'ri). Endi haqiqiy backfill.
+
+<sub>session `c49e703c` · branch `main` · 40 ta qadam</sub>
+
+---

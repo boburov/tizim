@@ -13,6 +13,8 @@ import {
   checkExpenseLimit,
   createRequest,
 } from "../../expenseApprovals/services/expenseApproval.service.js";
+import * as journalPosting from "../../../helpers/journalPosting.helper.js";
+import * as journal from "../../journal/services/journal.service.js";
 
 // UMUMIY CHIQIMLAR - servis qatlami.
 //
@@ -126,7 +128,13 @@ export const create = async (body, currentUser) => {
     return { pendingApproval: true, approval };
   }
 
-  return Expense.create({ ...draft, createdBy: currentUser?._id || null });
+  const created = await Expense.create({
+    ...draft,
+    createdBy: currentUser?._id || null,
+  });
+  // JURNAL: xarajat o'sdi, kassa kamaydi (Faza 4).
+  await journalPosting.postExpense(created, journal);
+  return created;
 };
 
 /**
@@ -146,13 +154,18 @@ export const executeApprovedExpense = async (approval) => {
     canSeeAllBranches: true,
   });
 
-  return Expense.create({
+  const created = await Expense.create({
     ...draft,
     branchId: approval.payload?.resolvedBranchId || null,
     amount: approval.amount ?? draft.amount,
     createdBy: approval.requestedBy || null,
     expenseApprovalId: approval._id,
   });
+
+  // JURNAL: tasdiqlangan chiqim ham xuddi to'g'ridan-to'g'ri yozilgani
+  // kabi pul harakati - shuning uchun bu yerda ham yoziladi.
+  await journalPosting.postExpense(created, journal);
+  return created;
 };
 
 export const list = async ({

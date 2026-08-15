@@ -20,6 +20,8 @@ import {
   createRequest,
 } from "../../expenseApprovals/services/expenseApproval.service.js";
 import * as studentPaymentService from "../../finance/services/studentPayment.service.js";
+import * as journalPosting from "../../../helpers/journalPosting.helper.js";
+import * as journal from "../../journal/services/journal.service.js";
 
 const safeStudentProjection = { firstName: 1, lastName: 1, username: 1, phone: 1 };
 
@@ -113,6 +115,10 @@ export const topup = async (
     createdBy: currentUser?._id || null,
   });
 
+  // JURNAL: pul kassaga kirdi, lekin DAROMAD EMAS - o'quvchining
+  // depoziti (majburiyat). Qarang constants/ledger.js DEPOSIT izohi.
+  await journalPosting.postDepositTopup(txn, journal);
+
   // Pul qo'yilishi bilan mavjud qarzlarni darhol qoplaymiz (eng eskisidan).
   await autoApply(studentId);
   // txn - chaqiruvchi audit izini yozishi uchun (openingBalance.service.js
@@ -153,7 +159,7 @@ const writeWithdraw = async ({
     throw new ApiError(400, `To'lovda yetarli mablag' yo'q (balans: ${deposit.balance} so'm)`);
   }
   try {
-    await DepositTransaction.create({
+    const txn = await DepositTransaction.create({
       branchId: student.homeBranchId || null,
       student: deposit.student,
       deposit: deposit._id,
@@ -166,6 +172,9 @@ const writeWithdraw = async ({
       createdBy: createdBy || null,
       expenseApprovalId,
     });
+
+    // JURNAL: majburiyat kamaydi, pul kassadan chiqdi.
+    await journalPosting.postDepositWithdraw(txn, journal);
   } catch (err) {
     // Yozuv yaratilmasa balans kamaytirilgancha qolmasin (rollback).
     await applyBalanceDelta(deposit._id, amt);
@@ -270,7 +279,7 @@ const applyToPayment = async (deposit, payment, amount, currentUser) => {
   }
 
   try {
-    await PaymentTransaction.create({
+    const applied = await PaymentTransaction.create({
       // FILIAL: oylik plandan meros.
       branchId: payment.branchId,
       payment: payment._id,
@@ -285,6 +294,10 @@ const applyToPayment = async (deposit, payment, amount, currentUser) => {
       note: "To'lovdan qoplandi",
       createdBy: currentUser?._id || null,
     });
+
+    // JURNAL: PUL HARAKATI YO'Q - depozit majburiyati daromadga
+    // aylanadi. Kassa qoldig'i o'zgarmaydi (pul to'ldirishda kirgan).
+    await journalPosting.postDepositApply(applied, journal);
   } catch (err) {
     // Tranzaksiya yozilmasa - plan va balansni qaytaramiz.
     await studentPaymentService.applyPaidDelta(payment._id, -amt);

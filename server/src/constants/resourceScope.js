@@ -26,6 +26,9 @@ export const SCOPE = Object.freeze({
   // (branchId: null) qator hammaga kerak va u filtrdan tushib qolardi.
   // Filtrlash resolver ichida, aniq qoida bilan bo'ladi.
   BRANCH_OPTIONAL: "branch-optional",
+  // IKKI filialga tegishli: `branchId` o'rniga `fromBranchId` +
+  // `toBranchId`. Filtr ikkala maydon bo'yicha $or bilan quriladi.
+  BRANCH_PAIR: "branch-pair",
   // branchId YO'Q, GURUH orqali bog'lanadi -> branchGroupFilter()
   VIA_GROUP: "via-group",
   // branchId YO'Q, FOYDALANUVCHI orqali bog'lanadi -> branchUserFilter()
@@ -59,6 +62,13 @@ export const RESOURCE_SCOPE = Object.freeze({
   // XONA - filialning FIZIK resursi (Faza 3). Kursdan farqli ravishda
   // filialga bog'langan: "3-xona" har filialda boshqa xona.
   room: SCOPE.BRANCH,
+  // ── QO'SH YOZUV (Faza 4) ──
+  // Hisob va jurnal yozuvi DOIM bitta filialga tegishli. Filiallararo
+  // o'tkazma IKKI yozuv bilan ifodalanadi (har filialda bittadan) -
+  // shunda har bir filialning jurnali o'zicha muvozanatda qoladi.
+  account: SCOPE.BRANCH,
+  journalEntry: SCOPE.BRANCH,
+  shift: SCOPE.BRANCH,
   paymentTransaction: SCOPE.BRANCH,
   salaryTransaction: SCOPE.BRANCH,
   staffCompensation: SCOPE.BRANCH,
@@ -77,6 +87,14 @@ export const RESOURCE_SCOPE = Object.freeze({
   // shu filial uchun istisno. branchFilter() bilan kesilsa bazaviy qator
   // yo'qolib, filialda narx umuman topilmasdi (coursePrice.service.js).
   coursePrice: SCOPE.BRANCH_OPTIONAL,
+
+  // ── IKKI FILIALGA TEGISHLI ──
+  // Inkassatsiyada IKKI filial bor: jo'natuvchi va qabul qiluvchi.
+  // Shuning uchun `branchId` maydoni yo'q - `fromBranchId` va
+  // `toBranchId`. Ro'yxat IKKALASI bo'yicha filtrlanadi, aks holda
+  // qabul qiluvchi kutilayotgan pulni umuman ko'rmasdi
+  // (cashTransfer.service.js dagi list()).
+  cashTransfer: SCOPE.BRANCH_PAIR,
 
   // ── GURUH ORQALI ──
   attendance: SCOPE.VIA_GROUP,

@@ -10,6 +10,8 @@ import {
 } from "../../expenseApprovals/services/expenseApproval.service.js";
 import * as payrollService from "./staffPayroll.service.js";
 import * as auditService from "./payrollAudit.service.js";
+import * as journalPosting from "../../../helpers/journalPosting.helper.js";
+import * as journal from "../../journal/services/journal.service.js";
 
 /**
  * XODIMGA MAOSH TO'LASH.
@@ -79,6 +81,10 @@ const writeTransaction = async ({
       createdBy: createdBy || null,
       expenseApprovalId,
     });
+
+    // JURNAL: xodim maoshi ham xarajat (o'qituvchinikidan farqi -
+    // boshqa modelda saqlanadi, shuning uchun refModel boshqa).
+    await journalPosting.postSalary(created, journal, "StaffSalaryTransaction");
 
     await auditService.record({
       employee: payroll.employee,

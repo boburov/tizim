@@ -15,6 +15,8 @@ import {
 import { assertGroupActive } from "../../../helpers/group.helper.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
 import * as teacherSalaryService from "./teacherSalary.service.js";
+import * as journalPosting from "../../../helpers/journalPosting.helper.js";
+import * as journal from "../../journal/services/journal.service.js";
 
 // O'qituvchiga maosh to'lovi (chiqim). Qoldiqdan (expected - paid) ORTIQ to'lashga
 // yo'l qo'yilmaydi - cheklov shartli-atomik update bilan tekshiriladi, shuning
@@ -88,7 +90,7 @@ const writeSalaryTransaction = async ({
   }
 
   try {
-    return await SalaryTransaction.create({
+    const created = await SalaryTransaction.create({
       branchId,
       salary: salary._id,
       teacher: salary.teacher,
@@ -102,6 +104,10 @@ const writeSalaryTransaction = async ({
       createdBy: createdBy || null,
       expenseApprovalId,
     });
+
+    // JURNAL: maosh - xarajat, pul kassadan chiqdi.
+    await journalPosting.postSalary(created, journal, "SalaryTransaction");
+    return created;
   } catch (err) {
     // Tranzaksiya yozilmasa - balans oshirilgancha qolmasin (rollback)
     await teacherSalaryService.applyPaidDelta(salary._id, -amount);
