@@ -11486,3 +11486,320 @@ Boot'da endi **0 ta ERROR** (avval bir nechta edi). Qolgan 5 ta WARN — fon xiz
 <sub>session `82e8dd1f` · branch `main` · 28 ta qadam</sub>
 
 ---
+
+## 2026-08-16 02:00 — [nodemon] starting `node src/index.js` [20:55:18] INFO (72420): Postgr
+
+**So'rov**
+
+> [nodemon] starting `node src/index.js`
+> [20:55:18] INFO (72420): PostgreSQL ulandi (Prisma)
+> [20:55:18] ERROR (72420): 5000-port band. Eski server nusxasi ishlab turibdi - uni to'xtating (lsof -ti:5000 | xargskill) yoki PORT ni o'zgartiring.
+> [nodemon] app crashed - waiting for file changes before starting...
+> ^C
+> shukrullo@shukrullos-MacBook-Air server % clear
+> shukrullo@shukrullos-MacBook-Air server % npm run dev
+>
+> > bayyina-server@0.1.0 dev
+> > nodemon src/index.js
+>
+> [nodemon] 3.1.14
+> [nodemon] to restart at any time, enter `rs`
+> [nodemon] watching path(s): *.*
+> [nodemon] watching extensions: js,mjs,cjs,json
+> [nodemon] starting `node src/index.js`
+> [20:59:43] INFO (72869): PostgreSQL ulandi (Prisma)
+> [20:59:43] INFO (72869): Server 5000-portda ishga tushdi
+> [20:59:43] INFO (72869): Rejalashtiruvchi ishga tushdi (pg-boss)
+>     jobs: 26
+> [20:59:43] INFO (72869): Agenda ishga tushirildi
+>     timezone: "Asia/Tashkent"
+> [20:59:43] WARN (72869): Import navbati O'CHIQ (REDIS_URL yo'q) - ommaviy import sinxron ishlaydi va bir faylda qator soni cheklanadi
+>     syncMaxRows: 50
+> GET /api/auth/me 401 3.803 ms - 64
+> POST /api/auth/refresh 200 12.956 ms - 806
+> GET /api/auth/me 200 12.179 ms - -
+> GET /api/notifications
+> …
+
+**O'zgargan fayllar (1)**
+
+- `server/src/modules/adminDashboard/services/adminDashboard.service.js` — yaratildi/qayta yozildi
+
+**Buyruqlar (33)**
+
+```sh
+wc -l src/modules/adminDashboard/services/*.js && sed -n '1,60p' src/modules/adminDashboard/services/adminDashboard.service.js
+cd /Users/shukrullo/Desktop/lc-total/server && wc -l src/modules/adminDashboard/services/*.js && sed -n '1,58p' src/modules/adminDashboard/services/adminDashboa…
+sed -n '58,200p' src/modules/adminDashboard/services/adminDashboard.service.js
+sed -n '200,414p' src/modules/adminDashboard/services/adminDashboard.service.js
+pkill -f "node src/index.js" 2>/dev/null; (node src/index.js > /tmp/s.log 2>&1 &); sleep 13 T=$(curl -s -X POST http://127.0.0.1:5000/api/auth/login -H 'Content…
+echo "═══ Hali Mongoose'da qolgan fayllar ═══" grep -rl "models/[a-zA-Z]*\.model\.js" src --include="*.js" | grep -v "^src/models/" | wc -l | xargs echo " jami …
+for m in archiveReasons feedbackTypes leadOptions notificationTemplates attendanceSettings holidays roles rooms courses branches users groups; do f=$(grep -rl "…
+for m in attendanceSettings leadOptions feedbackTypes notificationTemplates archiveReasons; do echo "════════ $m ════════"; cat $(grep -rl "models/[a-zA-Z]*\.mo…
+sed -n '45,100p' src/modules/notificationTemplates/services/notificationTemplates.service.js 2>/dev/null || find src/modules/notificationTemplates -name "*.serv…
+cat > /tmp/mig1.py <<'PYEOF' import pathlib, subprocess def find(mod): out = subprocess.run(["grep","-rl","models/","--include=*.js",f"src/modules/{mod}"], capt…
+cat > /tmp/mig2.py <<'PYEOF' import pathlib, subprocess def find(mod): out = subprocess.run(["grep","-rl","models/","--include=*.js",f"src/modules/{mod}"], capt…
+grep -rn "TEMPLATE_CATEGORIES" src --include="*.js" | grep -v "src/models/" | grep -v "notificationTemplates.service.js"; echo "--- sweep ---" pkill -f "node sr…
+echo "════ roles ════"; cat $(grep -rl "models/" src/modules/roles --include="*.service.js") | head -120
+sed -n '120,240p' $(grep -rl "models/" src/modules/roles --include="*.service.js"); echo "════ roles.helper.js ════"; cat src/helpers/roles.helper.js
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/helpers/roles.helper.js"); s = p.read_text() s = s.replace('''import Role from "../models/role.model.js…
+python3 - <<'PYEOF' import pathlib, subprocess f = [p for p in subprocess.run(["grep","-rl","models/","--include=*.js","src/modules/roles"],capture_output=True,…
+cat $(grep -rl "models/" src/modules/rooms --include="*.service.js")
+python3 - <<'PYEOF' import pathlib, subprocess f = [p for p in subprocess.run(["grep","-rl","models/","--include=*.js","src/modules/rooms"],capture_output=True,…
+ls src/modules/courses/services/ && grep -nE '\.(find|findOne|findById|aggregate|countDocuments|create|updateMany|updateOne|deleteOne|save|softDelete)\(|^import…
+cat src/modules/courses/services/courses.service.js | sed -n '25,160p'
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/modules/courses/services/courses.service.js"); s = p.read_text() s = s.replace('''import Course fro…
+sed -n '20,120p' src/modules/courses/services/coursePrice.service.js
+sed -n '120,240p' src/modules/courses/services/coursePrice.service.js
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/modules/courses/services/coursePrice.service.js"); s = p.read_text() s = s.replace('''import mongoo…
+sed -n '1,60p;95,150p' src/modules/branches/services/branches.service.js
+# … yana 8 ta
+```
+
+**Natija**
+
+To'liq migratsiyani davom ettiraman. Avval hozir xato berayotgan `adminDashboard`.
+
+To'liq rasm oydin. `adminDashboard` ni qayta yozaman — sana bo'yicha guruhlashni JS'da qilaman (xom SQL o'rniga), shunda filial ko'lami Prisma `where` orqali saqlanadi.
+
+`adminDashboard` to'liq ishlayapti. Endi qolgan hajmni o'lchab, tizimli davom etaman.
+
+170 fayl qoldi. Kichik lookup modullaridan boshlayman — ular tez va panelni ochadi.
+
+Bu beshtasini birdaniga ko'chiraman — ular bir xil CRUD naqshiga ega.
+
+Beshtasi ham 200. Endi `roles`, `rooms`, `courses` — keyin `branches` va `users`.
+
+`roles` to'g'ri ishlayapti — ruxsat sonlari ham mos. Endi `rooms` va `courses`.
+
+Endi `coursePrice` — narx merosi zanjiri, moliyaga ta'sir qiladi.
+
+Endi `branches`. To'liq o'qib chiqaman — unda foydalanuvchi arxivlash mantig'i bor.
+
+Endi `branches` ni ko'chiraman — `branchAssignments` alohida jadval bo'lgani uchun `$pull` va `$unwind` mantiqini qayta qurish kerak.
+
+Sizning loglaringizdagi ikkala xato ham tuzatildi.
+
+## Bu turda
+
+**`admin-dashboard` regressiyasi yopildi.** Sabab men `branchMatchStage()` ni Prisma shakliga o'tkazganim edi. Moduli to'liq ko'chirdim — 6 ta aggregate quvuri.
+
+Bir qarorni alohida aytaman: sana bo'yicha guruhlashda (`$dateToString`, `$dayOfWeek`) xom SQL ishlatmadim. `EXTRACT(DOW …)` yozilsa, **filial ko'lami sharti ham qo'lda SQL'ga ko'chirilishi** kerak bo'lardi — ya'ni xavfsizlik qoidasi ikki joyda ikki xil yozilardi. O'rniga faqat kerakli ikki ustun o'qiladi va bucket JS'da yig'iladi; ko'lam mantig'i yagona manbada (`branchGroupFilter`) qoladi.
+
+**Ko'chirilgan modullar:** `adminDashboard`, `roles` (+ `roles.helper.js`), `branches`, `courses` + `coursePrice`, `rooms`, va 5 ta lookup moduli (`archiveReasons`, `feedbackTypes`, `leadOptions`, `notificationTemplates`, `attend
+
+…(qisqartirildi)
+
+<sub>session `82e8dd1f` · branch `main` · 39 ta qadam</sub>
+
+---
+
+## 2026-08-16 02:19 — [nodemon] starting `node src/index.js` [20:40:17] INFO (70861): Postgr
+
+**So'rov**
+
+> [nodemon] starting `node src/index.js`
+> [20:40:17] INFO (70861): PostgreSQL ulandi (Prisma)
+> [20:40:17] ERROR (70861): 5000-port band. Eski server nusxasi ishlab turibdi - uni to'xtating (lsof -ti:5000 | xargs kill) yoki PORT ni o'zgartiring.
+> [nodemon] app crashed - waiting for file changes before starting...
+> ^C
+> shukrullo@shukrullos-MacBook-Air server % clear
+> shukrullo@shukrullos-MacBook-Air server % npm run dev
+>
+> > bayyina-server@0.1.0 dev
+> > nodemon src/index.js
+>
+> [nodemon] 3.1.14
+> [nodemon] to restart at any time, enter `rs`
+> [nodemon] watching path(s): *.*
+> [nodemon] watching extensions: js,mjs,cjs,json
+> [nodemon] starting `node src/index.js`
+> [21:16:39] INFO (74870): PostgreSQL ulandi (Prisma)
+> [21:16:39] INFO (74870): Server 5000-portda ishga tushdi
+> [21:16:39] INFO (74870): Rejalashtiruvchi ishga tushdi (pg-boss)
+>     jobs: 26
+> [21:16:39] INFO (74870): Agenda ishga tushirildi
+>     timezone: "Asia/Tashkent"
+> [21:16:39] WARN (74870): Import navbati O'CHIQ (REDIS_URL yo'q) - ommaviy import sinxron ishlaydi va bir faylda qator soni cheklanadi
+>     syncMaxRows: 50
+> GET /api/expense-approvals/pending-count 401 7.802 ms - 64
+> GET /api/expense-approvals?status=pending&limit=5&sort=-createdAt 401 0.993
+> …
+
+**Buyruqlar (12)**
+
+```sh
+cd /Users/shukrullo/.claude/skills/llm-council && ls && (grep -oE "^(OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_MODEL|GEMINI_MODEL)=" .env 2>/dev/null || echo "skill …
+V=$(grep -E "^GEMINI_API_KEY=" /Users/shukrullo/Desktop/lc-total/server/.env | cut -d= -f2-); echo "GEMINI_API_KEY uzunligi: ${#V}"; echo "OPENAI_API_KEY: $(gre…
+cd /Users/shukrullo/Desktop/lc-total/server && head -40 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py
+python3 /Users/shukrullo/.claude/skills/llm-council/scripts/query_llms.py "$(cat <<'EOF' Katta Node.js tizimini (74k LOC, Express, ESM) MongoDB/Mongoose'dan Pos…
+K=$(grep '^GEMINI_API_KEY=' .env | cut -d= -f2-) for M in gemini-2.5-flash gemini-2.0-flash gemini-1.5-flash; do C=$(curl -s -o /tmp/g.json -w '%{http_code}' -X…
+K=$(grep '^GEMINI_API_KEY=' .env | cut -d= -f2-) echo "=== mavjud modellar ro'yxati ===" C=$(curl -s -o /tmp/models.json -w '%{http_code}' "https://generativela…
+cd /Users/shukrullo/Desktop/lc-total && echo "=== .env git'da kuzatilyaptimi? ===" git check-ignore -v server/.env 2>/dev/null || echo " ⚠️ server/.env .gitigno…
+cd /Users/shukrullo/Desktop/lc-total echo "=== .claude/WORKLOG.md git'da kuzatilyaptimi? ===" git ls-files --error-unmatch .claude/WORKLOG.md >/dev/null 2>&1 &&…
+cd /Users/shukrullo/Desktop/lc-total echo "=== commit push qilinganmi? ===" git branch -r --contains 95a7b93 2>/dev/null | head -3 || echo " remote branch'da to…
+cd /Users/shukrullo/Desktop/lc-total echo "=== WORKLOG.md dagi sir turlari (qiymatlarsiz) ===" grep -nE "sk-[A-Za-z0-9]{20}|AIzaSy|ghp_|xox[baprs]-|[0-9]{9,10}:…
+cd /Users/shukrullo/Desktop/lc-total echo "=== admin_client/src/components/TenantRepo.jsx ===" grep -nE "AIzaSy|sk-[A-Za-z0-9]{20}|ghp_|[0-9]{9,10}:AA[A-Za-z0-9…
+cd /Users/shukrullo/Desktop/lc-total echo "=== 4329-qatordagi GitHub token haqiqiymi? ===" sed -n '4329p' .claude/WORKLOG.md | grep -oE "ghp_[A-Za-z0-9_]*" | aw…
+```
+
+**Natija**
+
+Ikkita narsani birdaniga qilaman: `/llm-council` (siz so'raganingizdek) va to'liq audit. Avval skill'ni yuklay.
+
+`OPENAI_API_KEY` yo'q, `GEMINI_API_KEY` bor — kengashni Gemini bilan yuritaman. Parallel ravishda to'liq auditni ishga tushiraman.
+
+Audit fonda ketyapti. Endi kengashni Gemini bilan yuritaman.
+
+Ikkalasi ham ishlamadi. Gemini kaliti `gemini-3-flash-preview` ga 403 berdi — boshqa model bilan sinab ko'ray.
+
+Kengash ishlamaydi va sababi jiddiy — buni darhol aytishim kerak.
+
+Kalit qanday sizib chiqqani topildi.
+
+<sub>session `82e8dd1f` · branch `main` · 14 ta qadam</sub>
+
+---
+
+## 2026-08-16 02:31 — umuman ishlamaypti hech nima shu authdan boshqa fix qil tezzda
+
+**So'rov**
+
+> umuman ishlamaypti hech nima shu authdan boshqa fix qil tezzda
+
+**Buyruqlar (23)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && ls src/modules/leads/services/ && wc -l src/modules/leads/services/*.js && echo "=== assignees 400 sababi ===" &&…
+sed -E 's://.*$::' src/modules/leads/services/leads.service.js | grep -vE '^\s*$' | grep -vE '^\s*\*|^\s*/\*'
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() s = s.replace('''import Lead from "../…
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() # ── create ── s = s.replace(''' const lea…
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() # ── setReminder ── s = s.replace(''' …
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() # ── convertOne ── s = s.replace(''' l…
+grep -n "Lead\.\|User\.\|LeadOption\.\|Group\." src/modules/leads/services/leads.service.js | head -20; echo "--- fayl hajmi ---"; wc -l src/modules/leads/servi…
+sed -n '70,100p;150,180p' src/modules/leads/services/leads.service.js
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() # assignableStaff s = s.replace(''' co…
+sed -n '255,300p' src/modules/leads/services/leads.service.js
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() s = s.replace(''' const lead = await Lead.…
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() s = s.replace('''export const update =…
+sed -n '375,395p;410,432p;530,560p' src/modules/leads/services/leads.service.js
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() # setReminder s = s.replace(''' const lead…
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() s = s.replace(''' const lead = await L…
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/leads/services/leads.service.js"); s = p.read_text() s = s.replace(''' if (to) match.createdAt.…
+grep -n "Lead\.\|User\.\|LeadRoutingRule\.\|Notification\|models/" src/modules/leads/services/leadRouting.service.js src/modules/leads/services/leadNotify.servi…
+sed -n '30,100p' src/modules/leads/services/leadRouting.service.js; echo "════ 110,180 ════"; sed -n '110,180p' src/modules/leads/services/leadRouting.service.j…
+python3 - <<'PYEOF' import pathlib, re p = pathlib.Path("src/modules/leads/services/leadRouting.service.js"); s = p.read_text() s = s.replace('''import LeadRout…
+sed -n '15,35p' src/modules/leads/services/leadNotify.service.js; echo "════ leadConversion 50,100 ════"; sed -n '50,100p' src/modules/leads/services/leadConver…
+python3 - <<'PYEOF' import pathlib, re # ── leadNotify ── p = pathlib.Path("src/modules/leads/services/leadNotify.service.js"); s = p.read_text() s = s.replace(…
+pkill -f "node src/index.js" 2>/dev/null; (node src/index.js > /tmp/s.log 2>&1 &); sleep 13 T=$(curl -s -X POST http://127.0.0.1:5000/api/auth/login -H 'Content…
+T=$(curl -s -X POST http://127.0.0.1:5000/api/auth/login -H 'Content-Type: application/json' -d '{"login":"owner","password":"owner123"}' | python3 -c "import s…
+```
+
+**Natija**
+
+Tushundim, tez ishlayman. `leads` modulini ko'chiraman.
+
+Ishlayapman. `leads` ni ko'chiraman.
+
+Almashtirishlar izohlar tufayli tushmadi — men izohsiz nusxaga qarab yozgan edim. Haqiqiy faylni o'qiyman.
+
+Endi qolgan 3 ta leads servisi.
+
+`leads` ishlayapti. Endi lid yaratishni sinayman — siz aynan shunda xato olgan edingiz.
+
+Lid yaratish ishlayapti. Ro'yxatda ko'rinishini tekshiray.
+
+<sub>session `82e8dd1f` · branch `main` · 25 ta qadam</sub>
+
+---
+
+# Migratsiya auditi: 22 tasdiqlangan bug va ularning ildizi
+
+54 agentli sud-ekspertiza auditi ishga tushirildi — har topilma mustaqil skeptik tomonidan **rad etishga urinilib** tekshirildi. 45 topilmadan 22 tasi tasdiqlandi, qolgani rad etildi (asosan "hali ko'chirilmagan modul" — bu bug emas).
+
+## 22 topilma → 5 ta ildiz
+
+**1. `withLegacyId` YUZAKI edi** (13 topilma shundan). Mongo `.populate("requestedBy", {...})` ichki hujjatni HAR DOIM `_id` bilan qaytarardi. Prisma `include: { select: {...} }` esa faqat so'ralganini beradi. Natija: `approval.requestedBy._id` — `undefined`, klientdagi `String(a.requestedBy?._id || a.requestedBy) === String(user._id)` esa `"[object Object]"` bilan taqqoslanib **hech qachon** to'g'ri kelmasdi. Ya'ni so'rov muallifi o'z so'rovini bekor qila olmasdi, o'z so'roviga esa "Tasdiqlash" tugmasi ko'rinardi. Serializer chuqur qilindi — Date/massiv/null buzilmasligi alohida sinaldi.
+
+**2. Populate shakli buzilgan.** Mongo `.populate("branchId")` maydonning **o'zini** obyektga aylantirardi; Prisma `branchId` ni satr qoldirib, `branch` ni alohida qo'shadi. Frontend `row.branchId?.name` o'qib `undefined` olardi — xonalar va tasdiqlar jadvalida "Filial" ustuni bo'sh. `withPopulatedShape()` qo'shildi.
+
+**3. `getById` larda `_id` umuman yo'q edi** — courses, branches, rooms, archiveReasons, feedbackTypes, leadOptions, notificationTemplates, attendanceSettings. Davomat sozlamalarida bu ayniqsa yomon: forma `useEffect(..., [settings?._id])` ga tayanadi, `_id` bo'lmagach effekt qayta ishlamay, forma saqlangan qiymatni **yuklamasdan** standart qiymatni ko'rsatardi — "Saqlash" bosilsa bazadagi sozlama ustiga yozib yuborardi.
+
+**4. Bitta xususiyat IKKI bazadan o'qiyotgan edi.** `notifications` da inbox ro'yxati Mongo'da, hisoblagich Postgres'da qolgan edi — belgi 0 ko'rsatib, ro'yxatda o'qilmagan xabar turishi mumkin edi. Inbox to'liq ko'chirildi.
+
+**5. Telefon orqali login BEQAROR edi.** Telefon ataylab unique emas (ota va o'g'il bitta raqamdan). Mongo'da sort'siz `findOne` amalda barqaror natija berardi; Postgres'da esa `ORDER BY` siz tartib kafolatlanmaydi va **har `lastLoginAt` UPDATE qatorni siljitadi** — ya'ni ikkinchi urinishda boshqa odamning qatori qaytib, to'g'ri parol ham 401 berardi. `orderBy` + `isActive`/`isDeleted` shartga qo'shildi (fail-closed).
+
+## Yana ikkitasi
+
+**NULL saralash tartibi teskari aylangan.** Mongo BSON'da `null` sonlardan past, Postgres'da esa `DESC` standarti `NULLS FIRST`. "Summa bo'yicha kattadan" saralashda birinchi sahifa to'liq null-summali sozlama so'rovlaridan iborat bo'lib, eng katta chiqim ikkinchi sahifaga tushardi. `nulls: "last"` qo'shildi — lekin **faqat nullable ustunga**, aks holda Prisma validatsiya xatosi beradi (buni sinovda tutdim).
+
+**Eskirgan Mongoose job hali ro'yxatda turgan edi** — har kecha 03:00 da ishlab, 10 s timeout keyin 3 marta qayta urinardi. Olib tashlandi; vazifasini `ttlCleanup` allaqachon qamrab olgan.
+
+## Natija
+
+30 endpoint ishlaydi (audit boshida 22 edi). `leads` ham to'liq ko'chirildi — sahifa ham, lid yaratish ham.
+
+## 2026-08-16 02:47 — <task-notification> <task-id>wz9nq9n1z</task-id> <tool-use-id>toolu_01
+
+**So'rov**
+
+> <task-notification>
+> <task-id>wz9nq9n1z</task-id>
+> <tool-use-id>toolu_01So4cgBZnAky92b89dvpji6</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/82e8dd1f-32b1-48ea-b238-5d8f2d6abaed/tasks/wz9nq9n1z.output</output-file>
+> <status>completed</status>
+> <summary>Dynamic workflow "MongoDB→Prisma migratsiyasida yo'qolgan xulq-atvor va yashirin buglarni topish (git diff asosida)" completed</summary>
+> <result>{"total":45,"confirmed":22,"findings":[{"severity":"HIGH","file":"server/src/modules/expenseApprovals/services/expenseApproval.service.js","line":362,"title":"populate() o'rniga include: ichma-ich (nested) obyektlarda `_id` yo'qoldi — \"o'z so'rovim\" mantig'i buzildi","oldBehavior":"Mongoose `.populate(\"requestedBy\", { firstName: 1, lastName: 1, username: 1 })` ichma-ich hujjatni HAR DOIM `_id` bilan qaytarardi (populate `_id` ni ataylab chiqarib tashlamasa). Shuning uchun `approval.requestedBy._id` klientda mavjud edi.","newBehavior":"`LIST_INCLUDE` da `requestedBy`/`decidedBy` uchun `select: { id, firstName, lastName, username }` ishlatiladi, ya'ni faqat `id`. Javob esa `stripSensitive(withLegacyId(i))` dan o'tadi, `withLegacyId` esa SAYOZ (utils/seria
+> …
+
+**O'zgargan fayllar (1)**
+
+- `server/src/utils/serialize.js` — yaratildi/qayta yozildi
+
+**Buyruqlar (17)**
+
+```sh
+F=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/82e8dd1f-32b1-48ea-b238-5d8f2d6abaed/tasks/wz9nq9n1z.output python3 - <<'PYEOF' import json d=json.l…
+F=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/82e8dd1f-32b1-48ea-b238-5d8f2d6abaed/tasks/wz9nq9n1z.output ls -la $F; head -c 300 $F; echo; echo "-…
+python3 - <<'PYEOF' import json d=json.load(open("/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/82e8dd1f-32b1-48ea-b238-5d8f2d6abaed/tasks/wz9nq9n1z…
+python3 - <<'PYEOF' import pathlib # ── expenseApprovals: branchId populate shakli + amount NULL tartibi ── p = pathlib.Path("src/modules/expenseApprovals/servi…
+cd /Users/shukrullo/Desktop/lc-total/server && python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/expenseApprovals/services/expenseApproval.servic…
+python3 - <<'PYEOF' import pathlib, re # ── 1) getById larda withLegacyId ── targets = { "src/modules/courses/services/courses.service.js": [ (' if (!doc) throw…
+grep -n "CLEANUP_JOB\|cleanupExpiredTokens" src/jobs/index.js
+grep -n "getMyInbox\|getRecipientList" -A30 src/modules/notifications/services/notifications.service.js | sed -n '1,60p'
+sed -n '655,668p' src/modules/notifications/services/notifications.service.js; echo "=== SENDER_PROJECTION ==="; grep -n "SENDER_PROJECTION" src/modules/notific…
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/notifications/services/notifications.service.js"); s = p.read_text() s = s.replace('import { wi…
+grep -n "NotificationRecipient\." src/modules/notifications/services/notifications.service.js
+node -e " import('./src/utils/serialize.js').then(({withLegacyId, withPopulatedShape})=>{ const d = new Date('2026-08-16T00:00:00Z'); const row = { id:'a1', nam…
+pkill -f "node src/index.js" 2>/dev/null; (node src/index.js > /tmp/s.log 2>&1 &); sleep 14 T=$(curl -s -X POST http://127.0.0.1:5000/api/auth/login -H 'Content…
+tail -30 /tmp/s.log | grep -A12 "amount" | head -20; echo "---"; grep -B2 -A10 "Unknown argument\|Invalid.*orderBy\|nulls" /tmp/s.log | head -25
+T=$(curl -s -X POST http://127.0.0.1:5000/api/auth/login -H 'Content-Type: application/json' -d '{"login":"owner","password":"owner123"}' | python3 -c "import s…
+python3 - <<'PYEOF' import pathlib p = pathlib.Path("src/modules/expenseApprovals/services/expenseApproval.service.js"); s = p.read_text() s = s.replace('''cons…
+cd /Users/shukrullo/Desktop/lc-total && cat >> .claude/WORKLOG.md <<'EOF' # Migratsiya auditi: 22 tasdiqlangan bug va ularning ildizi 54 agentli sud-ekspertiza …
+```
+
+**Natija**
+
+Audit tugadi — **45 topilma, 22 tasi tasdiqlandi**. To'liq natijani o'qiyman.
+
+Topilmalar bir nechta **umumiy ildizga** yig'iladi. Tafsilotlarni olay.
+
+22 topilma **5 ta umumiy ildizga** yig'ilyapti. Eng kattasidan boshlayman — `withLegacyId` yuzaki bo'lgani.
+
+Endi populate shaklini tiklayman — `expenseApprovals` va `rooms` da.
+
+Endi `getById` larda yetishmayotgan `_id`, auth tartibsizligi va eskirgan job.
+
+Eski job to'liq olib tashlangan (qolganlari — boshqa joblar). Endi `notifications` — audit uni eng xavfli deb topdi: bitta funksiya Mongo'dan, boshqasi Postgres'dan o'qiyapti.
+
+Serializer to'g'ri ishlayapti (Date buzilmadi). Endi to'liq tekshiruv.
+
+`sort=-amount` 500 berdi — mening `nulls` o'zgarishim. Xatoni ko'ray.
+
+Aniq: `nulls` faqat nullable maydonda ishlaydi, `createdAt` esa majburiy. Tuzataman.
+
+Barcha tuzatishlar haqiqiy ma'lumot bilan tasdiqlandi. Yakuniy tekshiruv.
+
+<sub>session `82e8dd1f` · branch `main` · 21 ta qadam</sub>
+
+---

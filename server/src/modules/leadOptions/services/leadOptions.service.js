@@ -23,7 +23,7 @@ export const list = async ({ kind, search, includeInactive = false }) => {
 export const getById = async (id) => {
   const doc = await prisma.leadOption.findUnique({ where: { id } });
   if (!doc) throw new ApiError(404, "Sozlama topilmadi");
-  return doc;
+  return withLegacyId(doc);
 };
 
 export const create = async (body, currentUser) => {

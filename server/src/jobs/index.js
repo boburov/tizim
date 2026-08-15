@@ -1,8 +1,5 @@
 import agenda from "../config/scheduler.js";
 import logger from "../config/logger.js";
-import defineCleanupExpiredTokens, {
-  JOB_NAME as CLEANUP_JOB,
-} from "./cleanupExpiredTokens.job.js";
 import defineHolidayGreetings, {
   JOB_NAME as HOLIDAY_JOB,
 } from "./holidayGreetings.job.js";
@@ -82,7 +79,6 @@ const TZ = process.env.TZ_NAME || "Asia/Tashkent";
 const every = (cron, name) => agenda.every(cron, name, undefined, { timezone: TZ });
 
 export const startJobs = async () => {
-  defineCleanupExpiredTokens(agenda);
   defineHolidayGreetings(agenda);
   defineAttendanceReminders(agenda);
   defineLessonReminders(agenda);
@@ -108,9 +104,6 @@ export const startJobs = async () => {
   defineTtlCleanup(agenda);
 
   await agenda.start();
-
-  // Har kuni 03:00 da eski tokenlarni tozalash
-  await every("0 3 * * *", CLEANUP_JOB);
 
   // TTL TOZALASH - har kuni 03:15 da.
   //

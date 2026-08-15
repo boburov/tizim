@@ -7,7 +7,7 @@ import Group from "../../../models/group.model.js";
 import GroupMembership from "../../../models/groupMembership.model.js";
 import BotUser from "../../../models/botUser.model.js";
 import prisma from "../../../config/prisma.js";
-import { withLegacyId } from "../../../utils/serialize.js";
+import { withLegacyId, withPopulatedShape } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -609,17 +609,25 @@ export const getById = async (id) => {
 };
 
 export const getRecipientList = async (notifId, { page = 1, limit = 50 }) => {
-  const filter = { notification: notifId };
+  const where = { notificationId: String(notifId) };
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    NotificationRecipient.find(filter)
-      .sort({ createdAt: 1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("user", { firstName: 1, lastName: 1, phone: 1, role: 1 }),
-    NotificationRecipient.countDocuments(filter),
+    prisma.notificationRecipient.findMany({
+      where,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      skip,
+      take: limit,
+      include: {
+        user: {
+          select: {
+            id: true, firstName: true, lastName: true, phone: true, role: true,
+          },
+        },
+      },
+    }),
+    prisma.notificationRecipient.count({ where }),
   ]);
-  return { items, total, page, limit };
+  return { items: items.map(withLegacyId), total, page, limit };
 };
 
 export const getMyInbox = async (
@@ -628,21 +636,34 @@ export const getMyInbox = async (
 ) => {
   // Faqat in-app kanali tanlangan xabarlar inbox'da ko'rinadi
   // (eski yozuvlarda inapp maydoni yo'q - ularni ham ko'rsatamiz).
-  const filter = { user: userId, inapp: { $ne: false } };
-  if (unreadOnly) filter.readAt = null;
+  const where = { userId: String(userId), inapp: true };
+  if (unreadOnly) where.readAt = null;
 
   const skip = (page - 1) * limit;
-  const [items, total] = await Promise.all([
-    NotificationRecipient.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate({
-        path: "notification",
-        populate: { path: "sender", select: SENDER_PROJECTION },
-      }),
-    NotificationRecipient.countDocuments(filter),
+  const [rows, total] = await Promise.all([
+    prisma.notificationRecipient.findMany({
+      where,
+      // Ikkilamchi tartib (id): createdAt teng bo'lgan yozuvlarda
+      // sahifalash beqaror bo'lib qolmasligi uchun.
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip,
+      take: limit,
+      include: {
+        notification: {
+          include: {
+            sender: {
+              select: { id: true, firstName: true, lastName: true, role: true },
+            },
+          },
+        },
+      },
+    }),
+    prisma.notificationRecipient.count({ where }),
   ]);
+
+  // Prisma yozuvlari o'zgarmas (frozen) emas, lekin quyida `notification.body`
+  // JOYIDA almashtiriladi — shuning uchun avval nusxa olamiz.
+  const items = rows.map((r) => withLegacyId(r));
 
   // O'zgaruvchilarni ({ism}, {familiya}, {guruh}, {markaz}) shu o'quvchi uchun
   // almashtiramiz. Ism/guruh BIR MARTA yechiladi (barcha xabarlar bitta userники).

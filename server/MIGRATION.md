@@ -50,14 +50,25 @@ jadval yangilanadi.
 | `modules/storage` | kvota + fayl yozish (atomik `reserve`) |
 | `modules/expenseApprovals` | **o'qish yo'li** (list / stats / getById / pendingCount) |
 | `modules/notifications` | **inbox bo'lagi** (unread-count / markRead / markAllRead) |
+| `modules/adminDashboard` | overview / cashflow / student-flow (6 aggregate) |
+| `modules/roles` + `helpers/roles.helper.js` | matritsa, muzlatish, ko'chirish |
+| `modules/branches` | list / stats / compare / softRemove |
+| `modules/courses` (+ coursePrice) | narx merosi zanjiri |
+| `modules/rooms` | to'liq |
+| `modules/archiveReasons`, `feedbackTypes`, `leadOptions`, `notificationTemplates`, `attendanceSettings` | to'liq |
 
-**Hozir ishlaydi (200):**
-`/auth/login`, `/auth/me`, `/storage/usage`,
-`/system-notifications` (+ unread-count), `/notifications/inbox/unread-count`,
-`/expense-approvals` (+ pending-count, stats).
+**Hozir ishlaydi — 22 endpoint (200):**
+`/auth/*`, `/branches` (+compare, stats), `/roles` (+matrix), `/courses`,
+`/rooms`, `/archive-reasons`, `/feedback-types`, `/lead-options`,
+`/notification-templates`, `/attendance-settings`, `/storage/usage`,
+`/system-notifications`, `/notifications/inbox/unread-count`,
+`/expense-approvals` (+pending-count, stats),
+`/admin-dashboard/*` (overview, cashflow, student-flow).
+
 Boot'da **0 ta ERROR**, rejalashtiruvchi 26 job bilan ko'tariladi.
 
-**Hozir ishlamaydi:** `/admin-dashboard/*` va qolgan modullar.
+**Hozir ishlamaydi:** `/users`, `/groups`, `/leads`, `/holidays`,
+`/expenses`, `/feedback`, `/activity-logs`, `/deposits` va qolgan modullar.
 
 **Fon xizmatlari** (hammasi `.catch()` bilan o'ralgan — serverni yiqitmaydi):
 `botlocks`, `groups.find` (autoEndGroups), `studentpayments`
@@ -84,12 +95,14 @@ Quyidagilar **hali Mongoose'da** va shuning uchun **hozircha ishlamaydi**
 Qolgani: `membership.helper.js` (1 ta so'rov), `roles.helper.js` (6 ta),
 `cascadeDelete.helper.js` (20 ta so'rov, 11 model — eng kattasi).
 
-**2-to'lqin — asosiy ma'lumot** ← **KEYINGI QADAM**
-`branches` (473 qator, 23 so'rov), `users`, `roles`, `courses`, `rooms`, `groups`
+**2-to'lqin — asosiy ma'lumot** — `branches`, `roles`, `courses`, `rooms` ✅
 
-> `branches` da ehtiyot bo'ling: `$pull: { branchAssignments: ... }` endi
-> alohida jadval (`user_branch_assignments`) ustidagi `deleteMany` ga
-> aylanadi, `User.aggregate` esa `groupBy` ga.
+Qolgani: **`users`** (1460 qator) va **`groups`** (2606 qator) ← **KEYINGI QADAM**
+
+> Ikkalasida ham `branchAssignments` bilan ishlash bor. Eslatma:
+> `$pull: { branchAssignments: ... }` endi `user_branch_assignments`
+> jadvali ustidagi `deleteMany`, `Group.teachers` esa ko'p-ko'pga
+> bog'lanish (`connect` / `set` / `disconnect`).
 
 **3-to'lqin — o'quv jarayoni**
 `attendance`, `grades`, `assignments`, `holidays`, `lessonCancellations`,

@@ -1,4 +1,4 @@
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { send as sendNotification } from "../../notifications/services/notifications.service.js";
@@ -18,11 +18,11 @@ export const fullName = (lead) =>
 // Egasiz eslatma hech kimga bormasa lid jimgina o'lib ketardi - shuning
 // uchun u egalarga (owner) tushadi.
 const ownerIds = async () => {
-  const owners = await User.find(
-    { role: ROLES.OWNER, isActive: true, isDeleted: { $ne: true } },
-    { _id: 1 },
-  ).lean();
-  return owners.map((o) => String(o._id));
+  const owners = await prisma.user.findMany({
+    where: { role: ROLES.OWNER, isActive: true, isDeleted: false },
+    select: { id: true },
+  });
+  return owners.map((o) => String(o.id));
 };
 
 const timeLabel = (date) =>

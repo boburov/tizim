@@ -1,6 +1,6 @@
-import Course from "../../../models/course.model.js";
-import Group from "../../../models/group.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
 
 // KURS KATALOGI - markazlashgan spravochnik.
@@ -17,7 +17,6 @@ import { branchFilter } from "../../../helpers/branchContext.helper.js";
 // tarmoq hisobotini birlashtirib bo'lmasdi.
 // O'QISH esa hammaga - guruh yaratishda kurs tanlanadi.
 
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export const list = async ({
   search,
@@ -25,22 +24,23 @@ export const list = async ({
   page = 1,
   limit = 100,
 }) => {
-  const filter = {};
-  if (!includeInactive) filter.isActive = true;
+  const where = {};
+  if (!includeInactive) where.isActive = true;
   if (search && search.trim()) {
-    const rx = { $regex: escapeRegex(search.trim()), $options: "i" };
-    filter.$or = [{ title: rx }, { code: rx }];
+    const q = { contains: search.trim(), mode: "insensitive" };
+    where.OR = [{ title: q }, { code: q }];
   }
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Course.find(filter)
-      .sort({ isActive: -1, title: 1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("leadDirection", { name: 1 })
-      .lean(),
-    Course.countDocuments(filter),
+    prisma.course.findMany({
+      where,
+      orderBy: [{ isActive: "desc" }, { title: "asc" }],
+      skip,
+      take: limit,
+      include: { leadDirection: { select: { id: true, name: true } } },
+    }),
+    prisma.course.count({ where }),
   ]);
 
   // GURUHLAR SONI - katalogda "bu kurs ishlatilyaptimi" ko'rinishi uchun.
@@ -48,23 +48,21 @@ export const list = async ({
   // FILIAL KO'LAMI QO'LLANADI: katalogning o'zi global, lekin SON filialga
   // tegishli. A filial direktori "IELTS - 12 guruh" degan raqamni ko'rsa,
   // uning 9 tasi boshqa filialda bo'lsa - bu yolg'on ma'lumot.
-  const ids = items.map((c) => c._id);
+  const ids = items.map((c) => c.id);
   const counts = ids.length
-    ? await Group.aggregate([
-        {
-          $match: {
-            ...branchFilter(),
-            courseId: { $in: ids },
-            isDeleted: { $ne: true },
-          },
-        },
-        { $group: { _id: "$courseId", count: { $sum: 1 } } },
-      ])
+    ? await prisma.group.groupBy({
+        by: ["courseId"],
+        where: { ...branchFilter(), courseId: { in: ids }, isDeleted: false },
+        _count: { _all: true },
+      })
     : [];
-  const countMap = new Map(counts.map((r) => [String(r._id), r.count]));
+  const countMap = new Map(counts.map((r) => [String(r.courseId), r._count._all]));
 
   return {
-    items: items.map((c) => ({ ...c, groupCount: countMap.get(String(c._id)) || 0 })),
+    items: items.map((c) => ({
+      ...withLegacyId(c),
+      groupCount: countMap.get(String(c.id)) || 0,
+    })),
     total,
     page,
     limit,
@@ -72,9 +70,12 @@ export const list = async ({
 };
 
 export const getById = async (id) => {
-  const doc = await Course.findById(id).populate("leadDirection", { name: 1 });
+  const doc = await prisma.course.findUnique({
+    where: { id },
+    include: { leadDirection: { select: { id: true, name: true } } },
+  });
   if (!doc) throw new ApiError(404, "Kurs topilmadi");
-  return doc;
+  return withLegacyId(doc);
 };
 
 const normalizeCode = (raw) => String(raw || "").trim().toLowerCase();
@@ -88,47 +89,55 @@ export const create = async (body, currentUser) => {
 
   // Kod UNIKAL (model darajasida ham), lekin xatoni bu yerda ushlaymiz -
   // aks holda foydalanuvchi tushunarsiz E11000 ko'rardi.
-  const clash = await Course.findOne({ code }).lean();
+  const clash = await prisma.course.findUnique({ where: { code } });
   if (clash) throw new ApiError(409, `"${code}" kodi allaqachon band`);
 
-  return Course.create({
-    title,
-    code,
-    level: String(body.level || "").trim(),
-    defaultDurationMonths: body.defaultDurationMonths ?? null,
-    leadDirection: body.leadDirection || null,
-    createdBy: currentUser?._id || null,
+  const doc = await prisma.course.create({
+    data: {
+      title,
+      code,
+      level: String(body.level || "").trim(),
+      defaultDurationMonths: body.defaultDurationMonths ?? null,
+      leadDirectionId: body.leadDirection || null,
+      createdById: currentUser?.id || currentUser?._id || null,
+    },
   });
+  return withLegacyId(doc);
 };
 
 export const update = async (id, body) => {
   const doc = await getById(id);
+  const data = {};
 
   if (body.title !== undefined) {
     const title = String(body.title).trim();
     if (!title) throw new ApiError(400, "Kurs nomi kerak");
-    doc.title = title;
+    data.title = title;
   }
 
   if (body.code !== undefined) {
     const code = normalizeCode(body.code);
     if (!code) throw new ApiError(400, "Kurs kodi kerak");
     if (code !== doc.code) {
-      const clash = await Course.findOne({ code, _id: { $ne: doc._id } }).lean();
+      const clash = await prisma.course.findFirst({
+        where: { code, id: { not: doc.id } },
+      });
       if (clash) throw new ApiError(409, `"${code}" kodi allaqachon band`);
-      doc.code = code;
+      data.code = code;
     }
   }
 
-  if (body.level !== undefined) doc.level = String(body.level || "").trim();
+  if (body.level !== undefined) data.level = String(body.level || "").trim();
   if (body.defaultDurationMonths !== undefined) {
-    doc.defaultDurationMonths = body.defaultDurationMonths ?? null;
+    data.defaultDurationMonths = body.defaultDurationMonths ?? null;
   }
-  if (body.leadDirection !== undefined) doc.leadDirection = body.leadDirection || null;
-  if (body.isActive !== undefined) doc.isActive = Boolean(body.isActive);
+  if (body.leadDirection !== undefined) {
+    data.leadDirectionId = body.leadDirection || null;
+  }
+  if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
 
-  await doc.save();
-  return doc;
+  const updated = await prisma.course.update({ where: { id: doc.id }, data });
+  return withLegacyId(updated);
 };
 
 /**
@@ -144,13 +153,13 @@ export const update = async (id, body) => {
  */
 export const softRemove = async (id) => {
   const doc = await getById(id);
-  const activeGroups = await Group.countDocuments({
-    courseId: doc._id,
-    isActive: true,
-    isDeleted: { $ne: true },
+  const activeGroups = await prisma.group.count({
+    where: { courseId: doc.id, isActive: true, isDeleted: false },
   });
 
-  doc.isActive = false;
-  await doc.save();
-  return { course: doc, activeGroups };
+  const course = await prisma.course.update({
+    where: { id: doc.id },
+    data: { isActive: false },
+  });
+  return { course: withLegacyId(course), activeGroups };
 };

@@ -1,17 +1,13 @@
-import mongoose from "mongoose";
-import CoursePrice from "../../../models/coursePrice.model.js";
-import Course from "../../../models/course.model.js";
-import Group from "../../../models/group.model.js";
-import GroupFee from "../../../models/groupFee.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import { isBranchAllowed } from "../../../helpers/branchContext.helper.js";
 
 // NARX YECHUVCHI (resolver) + narx matritsasini boshqarish.
 //
 // Batafsil sabab va yechim tartibi: models/coursePrice.model.js.
 
-const toObjectId = (id) =>
-  id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(String(id));
+const toObjectId = (id) => (id ? String(id) : null);
 
 /** Manbalar - javobda "narx qayerdan keldi" ko'rinishi uchun. */
 export const PRICE_SOURCES = Object.freeze({
@@ -32,23 +28,22 @@ const findPriceRow = async (courseId, branchId, at) => {
   const base = {
     courseId: toObjectId(courseId),
     isDeleted: false,
-    validFrom: { $lte: when },
-    $or: [{ validTo: null }, { validTo: { $gt: when } }],
+    validFrom: { lte: when },
+    OR: [{ validTo: null }, { validTo: { gt: when } }],
   };
 
   if (branchId) {
-    const branchRow = await CoursePrice.findOne({
-      ...base,
-      branchId: toObjectId(branchId),
-    })
-      .sort({ validFrom: -1 })
-      .lean();
+    const branchRow = await prisma.coursePrice.findFirst({
+      where: { ...base, branchId: toObjectId(branchId) },
+      orderBy: { validFrom: "desc" },
+    });
     if (branchRow) return { row: branchRow, source: PRICE_SOURCES.BRANCH_PRICE };
   }
 
-  const baseRow = await CoursePrice.findOne({ ...base, branchId: null })
-    .sort({ validFrom: -1 })
-    .lean();
+  const baseRow = await prisma.coursePrice.findFirst({
+    where: { ...base, branchId: null },
+    orderBy: { validFrom: "desc" },
+  });
   if (baseRow) return { row: baseRow, source: PRICE_SOURCES.BASE_PRICE };
 
   return null;
@@ -66,21 +61,22 @@ const findPriceRow = async (courseId, branchId, at) => {
  * @returns {Promise<{amount: number|null, source: string, priceId: string|null}>}
  */
 export const resolveGroupPrice = async (groupId, { year, month } = {}) => {
-  const group = await Group.findById(groupId)
-    .select("courseId branchId")
-    .lean();
+  const group = await prisma.group.findUnique({
+    where: { id: String(groupId) },
+    select: { courseId: true, branchId: true },
+  });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
   // 1) Guruhga qo'lda qo'yilgan narx (oy bo'yicha).
   if (year && month) {
-    const fee = await GroupFee.findOne({
-      group: toObjectId(groupId),
-      year: Number(year),
-      month: Number(month),
-      isDeleted: { $ne: true },
-    })
-      .select("amount")
-      .lean();
+    const fee = await prisma.groupFee.findFirst({
+      where: {
+        groupId: toObjectId(groupId),
+        year: Number(year),
+        month: Number(month),
+      },
+      select: { amount: true },
+    });
     if (fee) {
       return {
         amount: fee.amount,
@@ -105,7 +101,7 @@ export const resolveGroupPrice = async (groupId, { year, month } = {}) => {
   return {
     amount: found.row.amount,
     source: found.source,
-    priceId: String(found.row._id),
+    priceId: String(found.row.id),
   };
 };
 
@@ -117,18 +113,18 @@ export const resolveGroupPrice = async (groupId, { year, month } = {}) => {
  * katalogning bir qismi.
  */
 export const listForCourse = async (courseId) => {
-  const course = await Course.findById(courseId).select("title code").lean();
+  const course = await prisma.course.findUnique({
+    where: { id: String(courseId) },
+    select: { id: true, title: true, code: true },
+  });
   if (!course) throw new ApiError(404, "Kurs topilmadi");
 
-  const rows = await CoursePrice.find({
-    courseId: toObjectId(courseId),
-    isDeleted: false,
-    validTo: null,
-  })
-    .populate("branchId", { name: 1, code: 1 })
-    .lean();
+  const rows = await prisma.coursePrice.findMany({
+    where: { courseId: toObjectId(courseId), isDeleted: false, validTo: null },
+    include: { branch: { select: { id: true, name: true, code: true } } },
+  });
 
-  const visible = rows.filter((r) => !r.branchId || isBranchAllowed(r.branchId._id));
+  const visible = rows.filter((r) => !r.branchId || isBranchAllowed(r.branchId));
 
   // `isPending` - narx KELAJAKDA boshlanadi.
   //
@@ -139,7 +135,9 @@ export const listForCourse = async (courseId) => {
   // buni xato deb o'ylardi.
   const now = new Date();
   const annotate = (r) => ({
-    ...r,
+    ...withLegacyId(r),
+    // Klient `branchId` ni obyekt sifatida kutadi (eski populate shakli).
+    branchId: r.branch ? withLegacyId(r.branch) : null,
     isPending: new Date(r.validFrom).getTime() > now.getTime(),
   });
 
@@ -161,7 +159,10 @@ export const setPrice = async (
   { courseId, branchId = null, amount, validFrom, note },
   currentUser,
 ) => {
-  const course = await Course.findById(courseId).select("_id").lean();
+  const course = await prisma.course.findUnique({
+    where: { id: String(courseId) },
+    select: { id: true },
+  });
   if (!course) throw new ApiError(404, "Kurs topilmadi");
 
   const value = Number(amount);
@@ -178,16 +179,18 @@ export const setPrice = async (
   const from = validFrom ? new Date(validFrom) : new Date();
   const branch = branchId ? toObjectId(branchId) : null;
 
-  const open = await CoursePrice.findOne({
-    courseId: toObjectId(courseId),
-    branchId: branch,
-    validTo: null,
-    isDeleted: false,
+  const open = await prisma.coursePrice.findFirst({
+    where: {
+      courseId: toObjectId(courseId),
+      branchId: branch,
+      validTo: null,
+      isDeleted: false,
+    },
   });
 
   if (open) {
     // Bir xil summa - yangi qator ochish shart emas (shovqin bo'lardi).
-    if (Number(open.amount) === value) return open;
+    if (Number(open.amount) === value) return withLegacyId(open);
 
     if (from.getTime() <= new Date(open.validFrom).getTime()) {
       throw new ApiError(
@@ -195,18 +198,31 @@ export const setPrice = async (
         "Yangi narx amaldagi narx boshlangan sanadan keyin boshlanishi kerak",
       );
     }
-    open.validTo = from;
-    await open.save();
   }
 
-  return CoursePrice.create({
-    courseId: toObjectId(courseId),
-    branchId: branch,
-    amount: value,
-    validFrom: from,
-    note: String(note || "").trim(),
-    createdBy: currentUser?._id || null,
-  });
+  // ESKI DAVRNI YOPISH va YANGISINI OCHISH - BITTA TRANZAKSIYADA.
+  //
+  // Mongo'da bu ikki alohida yozuv edi: oradagi xato "eski narx yopilgan,
+  // yangisi yo'q" holatini qoldirardi va kurs NARXSIZ qolib, hisob-kitob
+  // jimgina 0 ga tushardi. Endi ikkalasi birga bajariladi yoki umuman
+  // bajarilmaydi.
+  const [, created] = await prisma.$transaction([
+    open
+      ? prisma.coursePrice.update({ where: { id: open.id }, data: { validTo: from } })
+      : prisma.coursePrice.count(), // no-op (tranzaksiya shakli bir xil qolsin)
+    prisma.coursePrice.create({
+      data: {
+        courseId: toObjectId(courseId),
+        branchId: branch,
+        amount: value,
+        validFrom: from,
+        note: String(note || "").trim(),
+        createdById: currentUser?.id || currentUser?._id || null,
+      },
+    }),
+  ]);
+
+  return withLegacyId(created);
 };
 
 /**
@@ -221,16 +237,20 @@ export const clearBranchPrice = async (courseId, branchId, currentUser) => {
     throw new ApiError(403, "Bu filialga narx belgilash huquqingiz yo'q");
   }
 
-  const open = await CoursePrice.findOne({
-    courseId: toObjectId(courseId),
-    branchId: toObjectId(branchId),
-    validTo: null,
-    isDeleted: false,
+  const open = await prisma.coursePrice.findFirst({
+    where: {
+      courseId: toObjectId(courseId),
+      branchId: toObjectId(branchId),
+      validTo: null,
+      isDeleted: false,
+    },
   });
   if (!open) throw new ApiError(404, "Bu filial uchun istisno narx yo'q");
 
   // Davrni YOPAMIZ (o'chirmaymiz) - tarix saqlanadi.
-  open.validTo = new Date();
-  await open.save();
-  return open;
+  const closed = await prisma.coursePrice.update({
+    where: { id: open.id },
+    data: { validTo: new Date() },
+  });
+  return withLegacyId(closed);
 };

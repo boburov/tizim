@@ -64,9 +64,21 @@ export const login = async ({ login, password, userAgent, ip }) => {
 
   // `omit: { passwordHash: false }` - Mongoose'dagi `.select("+passwordHash")`
   // ning ekvivalenti. Xesh FAQAT shu yerda o'qiladi.
+  // TARTIB KAFOLATI SHART.
+  //
+  // Telefon ATAYLAB unique emas (bitta raqamdan ota va o'g'il
+  // foydalanishi mumkin). Mongo'da sort'siz `findOne` amalda barqaror
+  // natija berardi. PostgreSQL'da esa ORDER BY siz qator tartibi
+  // rejalashtiruvchiga bog'liq va HAR `lastLoginAt` UPDATE qatorni
+  // heap oxiriga siljitadi — ya'ni keyingi urinishda BOSHQA odamning
+  // qatori qaytib, to'g'ri parol ham 401 berardi.
+  //
+  // `isActive`/`isDeleted` ham shart ichida: aks holda arxivlangan
+  // qator faol qatorni "bosib" qo'yishi mumkin edi (fail-closed).
   const user = await prisma.user.findFirst({
-    where: { OR: filters },
+    where: { OR: filters, isDeleted: false, isActive: true },
     omit: { passwordHash: false },
+    orderBy: { createdAt: "asc" },
   });
   if (!user || !user.isActive || user.isDeleted) {
     throw new ApiError(401, "Login yoki parol noto'g'ri");

@@ -1,8 +1,6 @@
-import Lead from "../../../models/lead.model.js";
-import LeadOption from "../../../models/leadOption.model.js";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import { normalizePhone } from "../../../utils/phone.js";
 import {
   branchFilter,
@@ -20,13 +18,30 @@ import * as authService from "../../auth/services/auth.service.js";
 import * as groupsService from "../../groups/services/groups.service.js";
 import * as leadRouting from "./leadRouting.service.js";
 
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const POPULATE = [
-  { path: "source", select: { name: 1 } },
-  { path: "direction", select: { name: 1 } },
-  { path: "rejectionReason", select: { name: 1 } },
-  { path: "assignedTo", select: { firstName: 1, lastName: 1, role: 1 } },
-];
+// Mongo `.populate(POPULATE)` o'rniga Prisma `include`.
+//
+// DIQQAT — KLIENT SHARTNOMASI: Mongo populate maydonning O'ZINI obyektga
+// aylantirardi (`lead.source = {_id, name}`). Prisma esa `sourceId` ni
+// satr qoldirib, `source` deb ALOHIDA maydon qo'shadi. Frontend eski
+// shaklni kutadi, shuning uchun javob `shapeLead()` orqali o'giriladi.
+const INCLUDE = {
+  source: { select: { id: true, name: true } },
+  direction: { select: { id: true, name: true } },
+  rejectionReason: { select: { id: true, name: true } },
+  assignedTo: { select: { id: true, firstName: true, lastName: true, role: true } },
+};
+
+// Prisma yozuvini Mongo-populate shakliga qaytaradi.
+const shapeLead = (l) => {
+  if (!l) return l;
+  const out = withLegacyId(l);
+  // Populate qilingan ichki obyektlarda ham `_id` bo'lishi kerak.
+  out.source = l.source ? withLegacyId(l.source) : null;
+  out.direction = l.direction ? withLegacyId(l.direction) : null;
+  out.rejectionReason = l.rejectionReason ? withLegacyId(l.rejectionReason) : null;
+  out.assignedTo = l.assignedTo ? withLegacyId(l.assignedTo) : null;
+  return out;
+};
 
 /**
  * LIDGA BIRIKTIRISH MUMKIN BO'LGAN XODIMLAR.
@@ -55,7 +70,7 @@ export const assignableStaff = async () => {
   const catalog = await loadRoleCatalog();
 
   const filter = {
-    isDeleted: { $ne: true },
+    isDeleted: false,
     isActive: true,
     // XODIM = o'quvchi TIPIDAGI rollardan boshqa hamma. Rol NOMIGA emas
     // TIPIGA qaraydi, ya'ni ertaga yaratilgan custom rol ham avtomatik
@@ -64,18 +79,18 @@ export const assignableStaff = async () => {
   };
 
   const branchCond = userBranchCondition();
-  if (branchCond) filter.$and = [branchCond];
+  // AND ichiga: userBranchCondition() OR beradi, to'g'ridan-to'g'ri
+  // qo'shilsa boshqa OR bilan to'qnashardi.
+  if (branchCond) filter.AND = [branchCond];
 
-  const rows = await User.find(filter, {
-    firstName: 1,
-    lastName: 1,
-    role: 1,
-  })
-    .sort({ firstName: 1, lastName: 1 })
-    .lean();
+  const rows = await prisma.user.findMany({
+    where: filter,
+    select: { id: true, firstName: true, lastName: true, role: true },
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+  });
 
   return rows.map((u) => ({
-    ...u,
+    ...withLegacyId(u),
     // Rol yorlig'i serverdan keladi: custom rollar ("Buxgalter") client
     // tomonidagi qattiq ro'yxatda yo'q va u yerda "noma'lum rol" bo'lib
     // chiqardi.
@@ -98,12 +113,12 @@ export const list = async ({
   // FILIAL ko'lami
   const filter = { ...branchFilter() };
   if (status) filter.status = status;
-  if (source) filter.source = source;
-  if (direction) filter.direction = direction;
+  if (source) filter.sourceId = source;
+  if (direction) filter.directionId = direction;
   // "none" - mas'ul biriktirilmagan lidlar. Bu filtr aynan eng xavfli
   // to'plamni ko'rsatadi: egasiz lid bilan hech kim ishlamaydi.
-  if (assignedTo === "none") filter.assignedTo = null;
-  else if (assignedTo) filter.assignedTo = assignedTo;
+  if (assignedTo === "none") filter.assignedToId = null;
+  else if (assignedTo) filter.assignedToId = assignedTo;
 
   // ALOQA FILTRI.
   //
@@ -119,26 +134,35 @@ export const list = async ({
   // O'ZI qiziqib murojaat qilgan, faqat javob kutgan.
   if (engagement === "no_contact") {
     filter.status = "new";
-    filter.statusHistory = { $size: 1 };
+    // `statusHistory` Json massiv - Prisma uzunlik bo'yicha filtrlay
+    // olmaydi (Mongo'da `$size: 1` edi). Mos ID'lar xom SQL bilan
+    // olinadi; filial ko'lami ASOSIY so'rovda qoladi, ya'ni xavfsizlik
+    // sharti SQL'da TAKRORLANMAYDI.
+    const noContactRows = await prisma.$queryRaw`
+      SELECT id FROM leads WHERE jsonb_array_length("statusHistory") = 1
+    `;
+    filter.id = { in: noContactRows.map((r) => r.id) };
   } else if (engagement === "stale") {
     const STALE_DAYS = 7;
-    filter.status = { $nin: ["enrolled", "rejected"] };
+    filter.status = { notIn: ["enrolled", "rejected"] };
     filter.followUpAt = null;
     filter.updatedAt = {
-      $lt: new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000),
+      lt: new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000),
     };
   }
   if (from || to) {
     filter.createdAt = {};
-    if (from) filter.createdAt.$gte = new Date(from);
-    if (to) filter.createdAt.$lte = new Date(to);
+    if (from) filter.createdAt.gte = new Date(from);
+    if (to) filter.createdAt.lte = new Date(to);
   }
   if (search && search.trim()) {
-    const rx = new RegExp(escapeRegex(search.trim()), "i");
+    // Prisma `contains` + `insensitive`: escapeRegex kerak emas, matn
+    // SQL parametri sifatida uzatiladi.
+    const rx = { contains: search.trim(), mode: "insensitive" };
     // QO'SHIMCHA RAQAM ham qidiriladi: xodim ota-onaning raqami bilan
     // qo'ng'iroq qilib, "bu kim edi?" deb qidirsa lid TOPILISHI kerak.
     // Aks holda ikkinchi raqamni saqlashning yarim ma'nosi yo'qolardi.
-    filter.$or = [
+    filter.OR = [
       { firstName: rx },
       { lastName: rx },
       { phone: rx },
@@ -148,20 +172,24 @@ export const list = async ({
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Lead.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate(POPULATE),
-    Lead.countDocuments(filter),
+    prisma.lead.findMany({
+      where: filter,
+      // Ikkilamchi tartib (id): createdAt teng bo'lganda tartib beqaror
+      // bo'lib, sahifalashda qator takrorlanishi/tushib qolishi mumkin edi.
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip,
+      take: limit,
+      include: INCLUDE,
+    }),
+    prisma.lead.count({ where: filter }),
   ]);
-  return { items, total, page, limit };
+  return { items: items.map(shapeLead), total, page, limit };
 };
 
 export const getById = async (id) => {
-  const lead = await Lead.findById(id).populate(POPULATE);
+  const lead = await prisma.lead.findUnique({ where: { id }, include: INCLUDE });
   if (!lead) throw new ApiError(404, "Lid topilmadi");
-  return lead;
+  return shapeLead(lead);
 };
 
 const normalizeOptionalPhone = (raw) => {
@@ -233,17 +261,20 @@ export const create = async (body, currentUser) => {
     branchId = await resolveBranchForWrite(currentUser, body.branchId);
   }
 
-  const lead = await Lead.create({
+  const actorId = currentUser?.id || currentUser?._id || null;
+
+  const lead = await prisma.lead.create({
+    data: {
     branchId,
     firstName: String(body.firstName).trim(),
     lastName: body.lastName ? String(body.lastName).trim() : "",
     age: body.age ?? null,
     phone,
     parentPhone,
-    source: body.sourceId || null,
-    direction: body.directionId || null,
+    sourceId: body.sourceId || null,
+    directionId: body.directionId || null,
     status,
-    rejectionReason: body.rejectionReasonId || null,
+    rejectionReasonId: body.rejectionReasonId || null,
     rejectionNote: (body.rejectionNote || "").trim(),
     // Darhol rad etilgan holatda yaratilsa - yopilish sanasi ham o'sha payt.
     closedAt: status === "rejected" ? new Date() : null,
@@ -251,22 +282,29 @@ export const create = async (body, currentUser) => {
     notes: body.notes || "",
     // Yo'naltirish qoidasi xodim ko'rsatgan bo'lsa - lid darhol unga
     // biriktiriladi. Aks holda filialga tushadi va admin o'zi oladi.
-    assignedTo: body.assignedTo || routing?.assigneeId || null,
-    createdBy: currentUser?._id || null,
+    assignedToId: body.assignedTo || routing?.assigneeId || null,
+    createdById: actorId,
+    // Json massiv: sana ISO satr sifatida (JSON'da Date turi yo'q).
     statusHistory: [
-      { status, at: new Date(), by: currentUser?._id || null },
+      { status, at: new Date().toISOString(), by: actorId },
     ],
+    },
   });
-  return getById(lead._id);
+  return getById(lead.id);
 };
 
 export const update = async (id, body, currentUser) => {
-  const lead = await Lead.findById(id);
+  const lead = await prisma.lead.findUnique({ where: { id } });
   if (!lead) throw new ApiError(404, "Lid topilmadi");
 
-  if (body.firstName !== undefined) lead.firstName = String(body.firstName).trim();
-  if (body.lastName !== undefined) lead.lastName = String(body.lastName).trim();
-  if (body.age !== undefined) lead.age = body.age ?? null;
+  // Mongoose'da hujjatga to'g'ridan-to'g'ri yozilardi. Prisma'da `data`
+  // obyektini yig'amiz - berilmagan maydonga umuman tegilmaydi.
+  const actorId = currentUser?.id || currentUser?._id || null;
+  const lead_ = {};
+
+  if (body.firstName !== undefined) lead_.firstName = String(body.firstName).trim();
+  if (body.lastName !== undefined) lead_.lastName = String(body.lastName).trim();
+  if (body.age !== undefined) lead_.age = body.age ?? null;
   if (body.phone !== undefined) {
     // Takroriy raqam BLOKLANMAYDI (qarang: create'dagi izoh), lekin raqamni
     // BO'SHATIB ham bo'lmaydi. Tekshiruvsiz `lead.phone = null` bo'lib,
@@ -274,10 +312,10 @@ export const update = async (id, body, currentUser) => {
     // 500 ko'rardi.
     const phone = normalizeOptionalPhone(body.phone);
     if (!phone) throw new ApiError(400, "Telefon kerak");
-    lead.phone = phone;
+    lead_.phone = phone;
   }
   if (body.parentPhone !== undefined) {
-    lead.parentPhone = body.parentPhone
+    lead_.parentPhone = body.parentPhone
       ? normalizeOptionalPhone(body.parentPhone)
       : null;
   }
@@ -290,61 +328,67 @@ export const update = async (id, body, currentUser) => {
   // "telefon bir xil" xatosi bilan bloklanardi - foydalanuvchi esa telefonga
   // umuman tegmagan bo'lardi.
   if (body.phone !== undefined || body.parentPhone !== undefined) {
-    assertDistinctPhones(lead.phone, lead.parentPhone);
+    assertDistinctPhones(
+      lead_.phone ?? lead.phone,
+      lead_.parentPhone !== undefined ? lead_.parentPhone : lead.parentPhone,
+    );
   }
-  if (body.sourceId !== undefined) lead.source = body.sourceId || null;
-  if (body.directionId !== undefined) lead.direction = body.directionId || null;
+  if (body.sourceId !== undefined) lead_.sourceId = body.sourceId || null;
+  if (body.directionId !== undefined) lead_.directionId = body.directionId || null;
   if (body.rejectionReasonId !== undefined) {
-    lead.rejectionReason = body.rejectionReasonId || null;
+    lead_.rejectionReasonId = body.rejectionReasonId || null;
   }
   if (body.trialDate !== undefined) {
-    lead.trialDate = body.trialDate ? new Date(body.trialDate) : null;
+    lead_.trialDate = body.trialDate ? new Date(body.trialDate) : null;
   }
-  if (body.notes !== undefined) lead.notes = body.notes || "";
-  if (body.assignedTo !== undefined) lead.assignedTo = body.assignedTo || null;
+  if (body.notes !== undefined) lead_.notes = body.notes || "";
+  if (body.assignedTo !== undefined) lead_.assignedToId = body.assignedTo || null;
   if (body.rejectionNote !== undefined) {
-    lead.rejectionNote = (body.rejectionNote || "").trim();
+    lead_.rejectionNote = (body.rejectionNote || "").trim();
   }
 
   if (body.status !== undefined && body.status !== lead.status) {
     const wasRejected = lead.status === "rejected";
-    lead.status = body.status;
-    lead.statusHistory.push({
-      status: body.status,
-      at: new Date(),
-      by: currentUser?._id || null,
-    });
+    lead_.status = body.status;
+    // Json massivga qo'shish: `.push()` o'rniga yangi massiv.
+    lead_.statusHistory = [
+      ...(Array.isArray(lead.statusHistory) ? lead.statusHistory : []),
+      { status: body.status, at: new Date().toISOString(), by: actorId },
+    ];
 
     if (body.status === "rejected") {
-      lead.closedAt = new Date();
+      lead_.closedAt = new Date();
     } else if (wasRejected) {
       // QAYTA OCHILDI: yopilish izlarini tozalaymiz.
       //
       // Aks holda "yopilgan lidlar" hisobotida u hali ham yopiq sanaladi va
       // yo'qotish sababi statistikasi shishib ketardi - lid ikki marta
       // (bir marta yopilgan, bir marta qayta yopilgan) sanalardi.
-      lead.closedAt = null;
-      lead.rejectionNote = "";
-      lead.rejectionReason = null;
+      lead_.closedAt = null;
+      lead_.rejectionNote = "";
+      lead_.rejectionReasonId = null;
     }
   }
 
-  await lead.save();
-  return getById(lead._id);
+  await prisma.lead.update({ where: { id }, data: lead_ });
+  return getById(id);
 };
 
 // Qayta bog'lanish eslatmasini o'rnatish/o'zgartirish/o'chirish
 export const setReminder = async (id, { followUpAt, followUpNote }) => {
-  const lead = await Lead.findById(id);
+  const lead = await prisma.lead.findUnique({ where: { id } });
   if (!lead) throw new ApiError(404, "Lid topilmadi");
 
-  lead.followUpAt = followUpAt ? new Date(followUpAt) : null;
-  lead.followUpNote = followUpNote || "";
-  // Yangi/yangilangan eslatma qayta yuborilishi uchun bayroqni tozalaymiz
-  lead.followUpNotifiedAt = null;
-
-  await lead.save();
-  return getById(lead._id);
+  await prisma.lead.update({
+    where: { id },
+    data: {
+      followUpAt: followUpAt ? new Date(followUpAt) : null,
+      followUpNote: followUpNote || "",
+      // Yangi/yangilangan eslatma qayta yuborilishi uchun bayroq tozalanadi.
+      followUpNotifiedAt: null,
+    },
+  });
+  return getById(id);
 };
 
 // KO'P LIDGA BIR MARTADA eslatma.
@@ -372,19 +416,23 @@ export const setReminderBulk = async ({
   for (const id of ids) {
     try {
       // FILIAL: boshqa filial lidiga eslatma qo'yib bo'lmaydi.
-      const lead = await Lead.findOne({ _id: id, ...branchFilter() });
+      const lead = await prisma.lead.findFirst({
+        where: { id, ...branchFilter() },
+      });
       if (!lead) throw new ApiError(404, "Lid topilmadi");
 
-      lead.followUpAt = followUpAt ? new Date(followUpAt) : null;
-      lead.followUpNote = followUpNote || "";
-      // Yangi/yangilangan eslatma qayta yuborilishi uchun bayroq tozalanadi.
-      lead.followUpNotifiedAt = null;
+      const patch = {
+        followUpAt: followUpAt ? new Date(followUpAt) : null,
+        followUpNote: followUpNote || "",
+        // Yangi/yangilangan eslatma qayta yuborilishi uchun bayroq tozalanadi.
+        followUpNotifiedAt: null,
+      };
       // Mas'ul BERILGANDA almashtiriladi. Berilmasa lidning o'z mas'uli
       // saqlanadi - ommaviy eslatma tayinlashni bekor qilmasligi kerak.
-      if (assignedTo !== undefined) lead.assignedTo = assignedTo || null;
+      if (assignedTo !== undefined) patch.assignedToId = assignedTo || null;
 
-      await lead.save();
-      updated.push(String(lead._id));
+      await prisma.lead.update({ where: { id: lead.id }, data: patch });
+      updated.push(String(lead.id));
     } catch (err) {
       failed.push({
         leadId: String(id),
@@ -398,32 +446,47 @@ export const setReminderBulk = async ({
 
 // Vaqti kelgan, hali bildirishnoma yuborilmagan eslatmalar (job uchun)
 export const dueReminders = async (now = new Date()) =>
-  Lead.find({
-    followUpAt: { $ne: null, $lte: now },
-    followUpNotifiedAt: null,
-  }).lean();
+  prisma.lead.findMany({
+    where: { followUpAt: { not: null, lte: now }, followUpNotifiedAt: null },
+  });
 
 // Kunlik yig'ma uchun: berilgan oraliqda vaqti kelgan/o'tib ketgan, hali
 // yopilmagan lidlar. Yopilgan (rad etilgan/aylantirilgan) lid uchun
 // "bog'laning" deyish - operatorni bekorga chalg'itish.
-export const remindersUpTo = async (until = new Date()) =>
-  Lead.find({
-    followUpAt: { $ne: null, $lte: until },
-    status: { $nin: ["enrolled", "rejected"] },
-    studentId: null,
-  })
-    .select({ firstName: 1, lastName: 1, phone: 1, followUpAt: 1, followUpNote: 1, assignedTo: 1 })
-    .sort({ followUpAt: 1 })
-    .lean();
+export const remindersUpTo = async (until = new Date()) => {
+  const rows = await prisma.lead.findMany({
+    where: {
+      followUpAt: { not: null, lte: until },
+      status: { notIn: ["enrolled", "rejected"] },
+      studentId: null,
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      followUpAt: true,
+      followUpNote: true,
+      assignedToId: true,
+    },
+    orderBy: { followUpAt: "asc" },
+  });
+  // Chaqiruvchi eski `assignedTo` nomini kutadi.
+  return rows.map((r) => ({ ...withLegacyId(r), assignedTo: r.assignedToId }));
+};
 
 export const markReminderNotified = async (id, at = new Date()) => {
-  await Lead.updateOne({ _id: id }, { $set: { followUpNotifiedAt: at } });
+  await prisma.lead.update({
+    where: { id: String(id) },
+    data: { followUpNotifiedAt: at },
+  });
 };
 
 export const remove = async (id) => {
-  const lead = await Lead.findByIdAndDelete(id);
+  const lead = await prisma.lead.findUnique({ where: { id } });
   if (!lead) throw new ApiError(404, "Lid topilmadi");
-  return { _id: id };
+  await prisma.lead.delete({ where: { id } });
+  return { _id: id, id };
 };
 
 // Lidni aylantirishda ochiladigan o'quvchi HAM shu so'rov ko'lamida
@@ -434,17 +497,15 @@ export const remove = async (id) => {
 const registerScope = (currentUser) => ({
   allowedBranchIds: getAllowedBranchIds(),
   canSeeAllBranches: canSeeAllBranches(),
-  userId: currentUser?._id || null,
+  userId: currentUser?.id || currentUser?._id || null,
 });
 
 // Guruh mavjudmi va so'rov ko'lamidami. Aylantirishdan OLDIN tekshiriladi:
 // o'quvchi yaratilib bo'lgach xato chiqsa uni orqaga qaytarib bo'lmaydi.
 const ensureGroupInScope = async (groupId, leadBranchId) => {
   if (!groupId) return null;
-  const group = await Group.findOne({
-    _id: groupId,
-    isDeleted: { $ne: true },
-    ...branchFilter(),
+  const group = await prisma.group.findFirst({
+    where: { id: String(groupId), isDeleted: false, ...branchFilter() },
   });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
   if (leadBranchId && String(group.branchId) !== String(leadBranchId)) {
@@ -474,32 +535,40 @@ const convertOne = async (lead, body, currentUser, groupId) => {
     registerScope(currentUser),
   );
 
-  lead.studentId = student._id;
+  const actorId = currentUser?.id || currentUser?._id || null;
+  const studentId = student.id || student._id;
+  const patch = { studentId };
 
   // ATRIBUTSIYA - KPI mukofoti kimga tegishli.
   //
   // Tartib: mas'ul xodim -> lidni yaratgan -> aylantirgan odam. Bir marta
   // yoziladi va keyin O'ZGARMAYDI: mas'ulni ertaga almashtirish o'tgan
   // oyning maoshini qayta yozib yuborishi mumkin emas.
-  lead.creditedTo =
-    lead.creditedTo || lead.assignedTo || lead.createdBy || currentUser?._id || null;
-  lead.convertedBy = lead.convertedBy || currentUser?._id || null;
-  lead.convertedAt = lead.convertedAt || new Date();
+  patch.creditedToId =
+    lead.creditedToId || lead.assignedToId || lead.createdById || actorId || null;
+  patch.convertedById = lead.convertedById || actorId || null;
+  patch.convertedAt = lead.convertedAt || new Date();
 
   if (lead.status !== "enrolled") {
-    lead.status = "enrolled";
-    lead.statusHistory.push({
-      status: "enrolled",
-      at: new Date(),
-      by: currentUser?._id || null,
-    });
+    patch.status = "enrolled";
+    patch.statusHistory = [
+      ...(Array.isArray(lead.statusHistory) ? lead.statusHistory : []),
+      { status: "enrolled", at: new Date().toISOString(), by: actorId },
+    ];
   }
-  await lead.save();
 
   // O'QUVCHI -> LID havolasi. registerUser hujjatni QAT'IY oq ro'yxat
   // bo'yicha quradi, shuning uchun `leadId` ni body orqali uzatib bo'lmaydi -
   // u jimgina tushib qolardi. Alohida yozamiz (auth modulига tegmasdan).
-  await User.updateOne({ _id: student._id }, { $set: { leadId: lead._id } });
+  // Lid yangilanishi va o'quvchi havolasi BITTA TRANZAKSIYADA.
+  //
+  // Mongo'da bu ikki alohida yozuv edi: oradagi xato "lid aylantirilgan,
+  // lekin o'quvchida leadId yo'q" holatini qoldirardi va konversiya
+  // atributsiyasi (KPI mukofoti) jimgina yo'qolardi.
+  await prisma.$transaction([
+    prisma.lead.update({ where: { id: lead.id }, data: patch }),
+    prisma.user.update({ where: { id: studentId }, data: { leadId: lead.id } }),
+  ]);
 
   let groupError = null;
   if (groupId) {
@@ -519,7 +588,7 @@ const convertOne = async (lead, body, currentUser, groupId) => {
 // Lidni o'quvchiga aylantirish: o'quvchi yaratiladi + lid bog'lanadi
 export const convert = async (id, body, currentUser) => {
   // FILIAL: boshqa filial lidini aylantirib bo'lmaydi.
-  const lead = await Lead.findOne({ _id: id, ...branchFilter() });
+  const lead = await prisma.lead.findFirst({ where: { id, ...branchFilter() } });
   if (!lead) throw new ApiError(404, "Lid topilmadi");
   if (lead.studentId) {
     throw new ApiError(409, "Bu lid allaqachon o'quvchiga aylantirilgan");
@@ -559,7 +628,9 @@ export const convertBulk = async ({ leads = [], groupId }, currentUser) => {
   for (const item of leads) {
     const { id, ...body } = item;
     try {
-      const lead = await Lead.findOne({ _id: id, ...branchFilter() });
+      const lead = await prisma.lead.findFirst({
+        where: { id, ...branchFilter() },
+      });
       if (!lead) throw new ApiError(404, "Lid topilmadi");
       if (lead.studentId) {
         throw new ApiError(409, "Bu lid allaqachon o'quvchiga aylantirilgan");
@@ -577,8 +648,8 @@ export const convertBulk = async ({ leads = [], groupId }, currentUser) => {
         groupId,
       );
       converted.push({
-        leadId: String(lead._id),
-        studentId: String(student._id),
+        leadId: String(lead.id),
+        studentId: String(student.id || student._id),
         firstName: student.firstName,
         lastName: student.lastName,
         username: student.username,
@@ -605,29 +676,46 @@ export const stats = async ({ from, to } = {}) => {
   const match = { ...branchFilter() };
   if (from || to) {
     match.createdAt = {};
-    if (from) match.createdAt.$gte = new Date(from);
-    if (to) match.createdAt.$lte = new Date(to);
+    if (from) match.createdAt.gte = new Date(from);
+    if (to) match.createdAt.lte = new Date(to);
   }
 
-  const leads = await Lead.find(match, {
-    status: 1,
-    statusHistory: 1,
-    source: 1,
-    direction: 1,
-    // Yo'qotish tahlili uchun: sabab (tanlangan) + izoh (erkin matn).
-    rejectionReason: 1,
-    rejectionNote: 1,
-    // "Aloqa qilinganmi?" savoliga javob beradigan maydonlar.
-    followUpAt: 1,
-    createdAt: 1,
-    updatedAt: 1,
-  }).lean();
+  const rows = await prisma.lead.findMany({
+    where: match,
+    select: {
+      status: true,
+      statusHistory: true,
+      sourceId: true,
+      directionId: true,
+      // Yo'qotish tahlili uchun: sabab (tanlangan) + izoh (erkin matn).
+      rejectionReasonId: true,
+      rejectionNote: true,
+      // "Aloqa qilinganmi?" savoliga javob beradigan maydonlar.
+      followUpAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  // Pastdagi hisob mantig'i Mongo maydon nomlarini kutadi
+  // (source/direction/rejectionReason). Formulalarga TEGMASLIK uchun
+  // shu yerda faqat nomlarni moslashtiramiz - biznes qoidasi o'zgarmaydi.
+  const leads = rows.map((l) => ({
+    ...l,
+    source: l.sourceId,
+    direction: l.directionId,
+    rejectionReason: l.rejectionReasonId,
+    statusHistory: Array.isArray(l.statusHistory) ? l.statusHistory : [],
+  }));
 
   // Faqat aktiv (o'chirilmagan) sozlamalar. O'chirilgan yoki yo'q bo'lib
   // ketgan manba/yo'nalishlar statistikada alohida ko'rinmasligi kerak -
   // ular "Noma'lum" guruhiga qo'shiladi.
-  const options = await LeadOption.find({ isActive: true }, { name: 1 }).lean();
-  const nameOf = new Map(options.map((o) => [String(o._id), o.name]));
+  const options = await prisma.leadOption.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+  });
+  const nameOf = new Map(options.map((o) => [String(o.id), o.name]));
 
   const total = leads.length;
   const pipeIndex = (s) => LEAD_PIPELINE.indexOf(s);

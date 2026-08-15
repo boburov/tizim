@@ -1,6 +1,4 @@
-import Lead from "../../../models/lead.model.js";
-import Branch from "../../../models/branch.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
 
 // KONVERSIYA TAQQOSLASH - "qaysi filial / qaysi admin lidni yaxshiroq
@@ -49,16 +47,27 @@ export const conversion = async ({ from = null, to = null } = {}) => {
   const match = { ...branchFilter() };
   if (from || to) {
     match.createdAt = {};
-    if (from) match.createdAt.$gte = new Date(from);
-    if (to) match.createdAt.$lte = new Date(to);
+    if (from) match.createdAt.gte = new Date(from);
+    if (to) match.createdAt.lte = new Date(to);
   }
 
-  const leads = await Lead.find(match, {
-    branchId: 1,
-    assignedTo: 1,
-    status: 1,
-    statusHistory: 1,
-  }).lean();
+  const rows = await prisma.lead.findMany({
+    where: match,
+    select: {
+      branchId: true,
+      assignedToId: true,
+      status: true,
+      statusHistory: true,
+    },
+  });
+
+  // Pastdagi mantiq eski `assignedTo` nomini kutadi - formulalarga
+  // tegmaslik uchun shu yerda moslashtiramiz.
+  const leads = rows.map((l) => ({
+    ...l,
+    assignedTo: l.assignedToId,
+    statusHistory: Array.isArray(l.statusHistory) ? l.statusHistory : [],
+  }));
 
   const byBranch = new Map();
   const byAssignee = new Map();
@@ -86,17 +95,24 @@ export const conversion = async ({ from = null, to = null } = {}) => {
 
   const [branches, users] = await Promise.all([
     branchIds.length
-      ? Branch.find({ _id: { $in: branchIds } }).select("name code").lean()
+      ? prisma.branch.findMany({
+          where: { id: { in: branchIds } },
+          select: { id: true, name: true, code: true },
+        })
       : [],
     userIds.length
-      ? User.find({ _id: { $in: userIds } })
-          .select("firstName lastName username homeBranchId")
-          .lean()
+      ? prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: {
+            id: true, firstName: true, lastName: true,
+            username: true, homeBranchId: true,
+          },
+        })
       : [],
   ]);
 
-  const branchMap = new Map(branches.map((b) => [String(b._id), b]));
-  const userMap = new Map(users.map((u) => [String(u._id), u]));
+  const branchMap = new Map(branches.map((b) => [String(b.id), b]));
+  const userMap = new Map(users.map((u) => [String(u.id), u]));
 
   const shape = (key, row, meta) => ({
     ...meta,

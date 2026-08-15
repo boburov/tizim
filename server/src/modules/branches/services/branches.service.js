@@ -1,9 +1,6 @@
-import mongoose from "mongoose";
-import Branch from "../../../models/branch.model.js";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
-import Approval from "../../../models/approval.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { validateDelegation } from "../../../constants/delegation.js";
@@ -14,7 +11,24 @@ import {
   assertCanGrantRole,
 } from "../../../helpers/roles.helper.js";
 
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Foydalanuvchi filialga IKKI yo'l bilan bog'lanadi. Mongo'da bu
+// `{ $or: [{homeBranchId}, {"branchAssignments.branchId"}] }` edi;
+// Prisma'da `branchAssignments` ALOHIDA jadval, shuning uchun relation
+// filtri `some` ishlatiladi.
+const userInBranch = (branchId) => ({
+  OR: [
+    { homeBranchId: String(branchId) },
+    { branchAssignments: { some: { branchId: String(branchId) } } },
+  ],
+});
+
+const userInBranches = (ids) => ({
+  OR: [
+    { homeBranchId: { in: ids } },
+    { branchAssignments: { some: { branchId: { in: ids } } } },
+  ],
+});
 
 /**
  * Filiallar ro'yxati.
@@ -31,47 +45,55 @@ export const list = async ({
   page = 1,
   limit = 100,
 }) => {
-  const filter = { isDeleted: false };
-  if (!includeInactive) filter.isActive = true;
+  const where = { isDeleted: false };
+  if (!includeInactive) where.isActive = true;
   if (search && search.trim()) {
-    filter.name = { $regex: escapeRegex(search.trim()), $options: "i" };
+    where.name = { contains: search.trim(), mode: "insensitive" };
   }
   // view_all yo'q bo'lsa - faqat biriktirilgan filiallar.
   if (!canSeeAllBranches) {
-    filter._id = { $in: allowedBranchIds.map((id) => new mongoose.Types.ObjectId(id)) };
+    where.id = { in: allowedBranchIds.map(String) };
   }
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Branch.find(filter).sort({ isMain: -1, name: 1 }).skip(skip).limit(limit),
-    Branch.countDocuments(filter),
+    prisma.branch.findMany({
+      where,
+      orderBy: [{ isMain: "desc" }, { name: "asc" }],
+      skip,
+      take: limit,
+    }),
+    prisma.branch.count({ where }),
   ]);
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 export const getById = async (id) => {
-  const doc = await Branch.findOne({ _id: id, isDeleted: false });
+  const doc = await prisma.branch.findFirst({ where: { id, isDeleted: false } });
   if (!doc) throw new ApiError(404, "Filial topilmadi");
-  return doc;
+  return withLegacyId(doc);
 };
 
 export const create = async (body) => {
   const name = String(body.name || "").trim();
   if (!name) throw new ApiError(400, "Filial nomi kerak");
 
-  const exists = await Branch.findOne({ name, isDeleted: false }).lean();
+  const exists = await prisma.branch.findFirst({ where: { name, isDeleted: false } });
   if (exists) throw new ApiError(409, "Bunday nomli filial allaqachon mavjud");
 
   // Birinchi filial avtomatik ASOSIY bo'ladi.
-  const count = await Branch.countDocuments({ isDeleted: false });
+  const count = await prisma.branch.count({ where: { isDeleted: false } });
 
-  return Branch.create({
-    name,
-    code: body.code ? String(body.code).trim().toUpperCase() : null,
-    address: body.address ? String(body.address).trim() : null,
-    phone: body.phone ? String(body.phone).trim() : null,
-    isMain: count === 0,
+  const doc = await prisma.branch.create({
+    data: {
+      name,
+      code: body.code ? String(body.code).trim().toUpperCase() : null,
+      address: body.address ? String(body.address).trim() : null,
+      phone: body.phone ? String(body.phone).trim() : null,
+      isMain: count === 0,
+    },
   });
+  return withLegacyId(doc);
 };
 
 /**
@@ -99,7 +121,7 @@ export const createWithDirector = async (body, currentUser) => {
   // Login/telefon bandligini shu yerda tekshiramiz - keyinroq bilsak,
   // filial yaratilib bo'lgan bo'lardi va uni orqaga qaytarish kerak edi.
   const username = String(director.username || "").toLowerCase().trim();
-  if (await User.findOne({ username })) {
+  if (await prisma.user.findUnique({ where: { username } })) {
     throw new ApiError(409, "Bunday login (username) allaqachon mavjud");
   }
   const dirPhone = director.phone ? normalizePhone(director.phone) : null;
@@ -120,26 +142,30 @@ export const createWithDirector = async (body, currentUser) => {
   // ── 3-QADAM: direktor (xato bo'lsa filialni qaytarib olamiz) ──
   try {
     const passwordHash = await hashPassword(director.password);
-    const user = await User.create({
-      firstName: director.firstName.trim(),
-      lastName: director.lastName.trim(),
-      username,
-      phone: dirPhone || undefined,
-      passwordHash,
-      role: roleValue,
-      homeBranchId: branch._id,
-      branchAssignments: [],
-      isActive: true,
-      hiredAt: new Date(),
+    const user = await prisma.user.create({
+      data: {
+        firstName: director.firstName.trim(),
+        lastName: director.lastName.trim(),
+        username,
+        phone: dirPhone || null,
+        passwordHash,
+        role: roleValue,
+        homeBranchId: branch.id,
+        isActive: true,
+        hiredAt: new Date(),
+      },
     });
 
-    return { branch, director: { _id: user._id, username: user.username } };
+    return {
+      branch,
+      director: { _id: user.id, id: user.id, username: user.username },
+    };
   } catch (err) {
     // KOMPENSATSIYA: direktorsiz filial qolmasin.
     // Bu yerda hard delete - filial hozirgina yaratilgan, ichida ma'lumot yo'q.
-    await Branch.deleteOne({ _id: branch._id }).catch(() => {});
+    await prisma.branch.delete({ where: { id: branch.id } }).catch(() => {});
     logger.warn(
-      { branchId: String(branch._id), msg: err?.message },
+      { branchId: String(branch.id), msg: err?.message },
       "Direktor yaratilmadi - filial qaytarib olindi",
     );
     throw err;
@@ -148,27 +174,26 @@ export const createWithDirector = async (body, currentUser) => {
 
 export const update = async (id, body) => {
   const doc = await getById(id);
+  const data = {};
 
   if (body.name !== undefined) {
     const name = String(body.name).trim();
     if (!name) throw new ApiError(400, "Filial nomi kerak");
-    const clash = await Branch.findOne({
-      name,
-      isDeleted: false,
-      _id: { $ne: doc._id },
-    }).lean();
+    const clash = await prisma.branch.findFirst({
+      where: { name, isDeleted: false, id: { not: doc.id } },
+    });
     if (clash) throw new ApiError(409, "Bunday nomli filial allaqachon mavjud");
-    doc.name = name;
+    data.name = name;
   }
 
   if (body.code !== undefined) {
-    doc.code = body.code ? String(body.code).trim().toUpperCase() : null;
+    data.code = body.code ? String(body.code).trim().toUpperCase() : null;
   }
   if (body.address !== undefined) {
-    doc.address = body.address ? String(body.address).trim() : null;
+    data.address = body.address ? String(body.address).trim() : null;
   }
   if (body.phone !== undefined) {
-    doc.phone = body.phone ? String(body.phone).trim() : null;
+    data.phone = body.phone ? String(body.phone).trim() : null;
   }
 
   // DELEGATSIYA MATRITSASI.
@@ -184,11 +209,13 @@ export const update = async (id, body) => {
   // migratsiya kabi servisdan chetlab o'tuvchi yo'llarni qoplaydi.)
   if (body.delegation !== undefined) {
     if (body.delegation === null) {
-      doc.delegation = undefined;
+      // Prisma'da Json ustunni tozalash - `Prisma.DbNull` emas, oddiy null
+      // (ustun nullable). Mongo'dagi `undefined` ham shu ma'noni berardi.
+      data.delegation = null;
     } else {
       const error = validateDelegation(body.delegation);
       if (error) throw new ApiError(400, error);
-      doc.delegation = body.delegation;
+      data.delegation = body.delegation;
     }
   }
 
@@ -196,9 +223,9 @@ export const update = async (id, body) => {
   if (body.expenseApprovalThreshold !== undefined) {
     const v = body.expenseApprovalThreshold;
     if (v === null || v === "" || Number(v) <= 0) {
-      doc.expenseApprovalThreshold = null;
+      data.expenseApprovalThreshold = null;
     } else {
-      doc.expenseApprovalThreshold = Number(v);
+      data.expenseApprovalThreshold = Number(v);
     }
   }
 
@@ -209,12 +236,12 @@ export const update = async (id, body) => {
     if (!nextActive && doc.isMain) {
       throw new ApiError(400, "Asosiy filialni nofaol qilib bo'lmaydi");
     }
-    doc.isActive = nextActive;
-    doc.archivedAt = nextActive ? null : new Date();
+    data.isActive = nextActive;
+    data.archivedAt = nextActive ? null : new Date();
   }
 
-  await doc.save();
-  return doc;
+  const updated = await prisma.branch.update({ where: { id: doc.id }, data });
+  return withLegacyId(updated);
 };
 
 /**
@@ -239,26 +266,32 @@ export const softRemove = async (id, currentUser) => {
   // to'sqinlik qilardi - ya'ni yaratilgan filialni hech qachon o'chirib
   // bo'lmasdi. Endi xodim filial bilan birga arxivlanadi.
   const [groupCount, members, staff] = await Promise.all([
-    Group.countDocuments({ branchId: doc._id, isDeleted: { $ne: true } }),
+    prisma.group.count({ where: { branchId: doc.id, isDeleted: false } }),
     // SANAB emas, RO'YXAT bilan olamiz - to'siq xabari kimni ko'chirish
     // kerakligini AYTISHI kerak. Ilgari faqat son berilardi va arxivlangan
     // o'qituvchi kartada ko'rinmagani uchun ("Xodim 0") ega nimani
     // ko'chirishni bilmay qolardi - o'chirib bo'lmaydigan filial.
-    User.find({
-      $or: [{ homeBranchId: doc._id }, { "branchAssignments.branchId": doc._id }],
-      role: { $in: [ROLES.STUDENT, ROLES.TEACHER] },
-      isDeleted: { $ne: true },
-    })
-      .select("firstName lastName role isActive")
-      .limit(10)
-      .lean(),
-    User.find({
-      $or: [{ homeBranchId: doc._id }, { "branchAssignments.branchId": doc._id }],
-      role: { $nin: [ROLES.STUDENT, ROLES.TEACHER, ROLES.OWNER] },
-      isDeleted: { $ne: true },
-    })
-      .select("_id homeBranchId branchAssignments")
-      .lean(),
+    prisma.user.findMany({
+      where: {
+        ...userInBranch(doc.id),
+        role: { in: [ROLES.STUDENT, ROLES.TEACHER] },
+        isDeleted: false,
+      },
+      select: { firstName: true, lastName: true, role: true, isActive: true },
+      take: 10,
+    }),
+    prisma.user.findMany({
+      where: {
+        ...userInBranch(doc.id),
+        role: { notIn: [ROLES.STUDENT, ROLES.TEACHER, ROLES.OWNER] },
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        homeBranchId: true,
+        branchAssignments: { select: { branchId: true } },
+      },
+    }),
   ]);
 
   if (groupCount > 0 || members.length > 0) {
@@ -290,34 +323,42 @@ export const softRemove = async (id, currentUser) => {
   const alsoElsewhere = [];
   for (const u of staff) {
     const others = (u.branchAssignments || []).filter(
-      (a) => a?.branchId && String(a.branchId) !== String(doc._id),
+      (a) => a?.branchId && String(a.branchId) !== String(doc.id),
     );
     const homeElsewhere =
-      u.homeBranchId && String(u.homeBranchId) !== String(doc._id);
-    (others.length || homeElsewhere ? alsoElsewhere : solelyHere).push(u._id);
+      u.homeBranchId && String(u.homeBranchId) !== String(doc.id);
+    (others.length || homeElsewhere ? alsoElsewhere : solelyHere).push(u.id);
   }
 
   if (solelyHere.length) {
-    await User.updateMany(
-      { _id: { $in: solelyHere } },
-      { $set: { isActive: false, archivedAt: new Date() } },
-    );
+    await prisma.user.updateMany({
+      where: { id: { in: solelyHere } },
+      data: { isActive: false, archivedAt: new Date() },
+    });
   }
   if (alsoElsewhere.length) {
-    await User.updateMany(
-      { _id: { $in: alsoElsewhere } },
-      { $pull: { branchAssignments: { branchId: doc._id } } },
-    );
+    // Mongo'da bu massivdan element olib tashlash edi (`$pull`).
+    // Endi `branchAssignments` alohida jadval, ya'ni oddiy `deleteMany`.
+    await prisma.userBranchAssignment.deleteMany({
+      where: { userId: { in: alsoElsewhere }, branchId: doc.id },
+    });
   }
 
-  await doc.softDelete(currentUser?._id);
-  return doc;
+  const removed = await prisma.branch.update({
+    where: { id: doc.id },
+    data: {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: currentUser?.id || currentUser?._id || null,
+    },
+  });
+  return withLegacyId(removed);
 };
 
 /** Filial statistikasi - kartochkada ko'rsatish uchun. */
 export const stats = async (id, { allowedBranchIds = [], canSeeAllBranches = false } = {}) => {
   const doc = await getById(id);
-  const branchId = doc._id;
+  const branchId = doc.id;
 
   // KO'LAM TEKSHIRUVI. Bu endpoint filial rahbariyatining ism va loginini
   // ham qaytaradi, ya'ni "o'z filialingdan boshqasini o'qima" qoidasi shart.
@@ -328,19 +369,25 @@ export const stats = async (id, { allowedBranchIds = [], canSeeAllBranches = fal
 
   const [groupCount, activeGroupCount, staffCount, studentCount, managers] =
     await Promise.all([
-      Group.countDocuments({ branchId, isDeleted: { $ne: true } }),
-      Group.countDocuments({ branchId, isActive: true, isDeleted: { $ne: true } }),
-      User.countDocuments({
-        $or: [{ homeBranchId: branchId }, { "branchAssignments.branchId": branchId }],
-        role: { $nin: ["student"] },
-        isActive: true,
-        isDeleted: { $ne: true },
+      prisma.group.count({ where: { branchId, isDeleted: false } }),
+      prisma.group.count({
+        where: { branchId, isActive: true, isDeleted: false },
       }),
-      User.countDocuments({
-        $or: [{ homeBranchId: branchId }, { "branchAssignments.branchId": branchId }],
-        role: "student",
-        isActive: true,
-        isDeleted: { $ne: true },
+      prisma.user.count({
+        where: {
+          ...userInBranch(branchId),
+          role: { notIn: ["student"] },
+          isActive: true,
+          isDeleted: false,
+        },
+      }),
+      prisma.user.count({
+        where: {
+          ...userInBranch(branchId),
+          role: "student",
+          isActive: true,
+          isDeleted: false,
+        },
       }),
       // FILIAL RAHBARIYATI - kartada login/parolni ko'rsatish uchun.
       //
@@ -351,19 +398,28 @@ export const stats = async (id, { allowedBranchIds = [], canSeeAllBranches = fal
       //
       // PAROL BU YERDA QAYTARILMAYDI: uni alohida /users/:id/password
       // beradi, ya'ni ro'yxat so'ralganda parollar yopiq qoladi.
-      User.find({
-        $or: [{ homeBranchId: branchId }, { "branchAssignments.branchId": branchId }],
-        role: { $nin: ["student", "teacher", "owner"] },
-        isActive: true,
-        isDeleted: { $ne: true },
-      })
-        .select("firstName lastName username role")
-        .sort({ createdAt: 1 })
-        .limit(5)
-        .lean(),
+      prisma.user.findMany({
+        where: {
+          ...userInBranch(branchId),
+          role: { notIn: ["student", "teacher", "owner"] },
+          isActive: true,
+          isDeleted: false,
+        },
+        select: {
+          id: true, firstName: true, lastName: true, username: true, role: true,
+        },
+        orderBy: { createdAt: "asc" },
+        take: 5,
+      }),
     ]);
 
-  return { groupCount, activeGroupCount, staffCount, studentCount, managers };
+  return {
+    groupCount,
+    activeGroupCount,
+    staffCount,
+    studentCount,
+    managers: withLegacyIds(managers),
+  };
 };
 
 /**
@@ -378,96 +434,105 @@ export const stats = async (id, { allowedBranchIds = [], canSeeAllBranches = fal
  * ishlaydi va natija filial bo'yicha guruhlanadi.
  */
 export const compare = async ({ allowedBranchIds = [], canSeeAllBranches = false }) => {
-  const filter = { isDeleted: false, isActive: true };
+  const where = { isDeleted: false, isActive: true };
   if (!canSeeAllBranches) {
-    filter._id = { $in: allowedBranchIds.map((id) => new mongoose.Types.ObjectId(id)) };
+    where.id = { in: allowedBranchIds.map(String) };
   }
 
-  const branches = await Branch.find(filter)
-    .sort({ isMain: -1, name: 1 })
-    .select({ name: 1, code: 1, isMain: 1, expenseApprovalThreshold: 1 })
-    .lean();
+  const branches = await prisma.branch.findMany({
+    where,
+    orderBy: [{ isMain: "desc" }, { name: "asc" }],
+    select: {
+      id: true, name: true, code: true, isMain: true,
+      expenseApprovalThreshold: true,
+    },
+  });
 
   if (!branches.length) return [];
 
-  const ids = branches.map((b) => b._id);
+  const ids = branches.map((b) => b.id);
 
   // Xodim/o'quvchi filialga IKKI yo'l bilan bog'lanadi: `homeBranchId` yoki
   // `branchAssignments`. Ikkalasini bitta massivga yig'ib, `$unwind` bilan
   // sanaymiz - aks holda ikki filialga biriktirilgan xodim faqat bittasida
   // hisoblanardi.
-  const userCounts = await User.aggregate([
-    {
-      $match: {
-        isActive: true,
-        isDeleted: { $ne: true },
-        $or: [
-          { homeBranchId: { $in: ids } },
-          { "branchAssignments.branchId": { $in: ids } },
-        ],
-      },
+  // Mongo'da bu $project + $setUnion + $unwind quvuri edi: bir odam
+  // homeBranchId va branchAssignments orqali BIR NECHTA filialga tegishli
+  // bo'lishi mumkin va har birida sanalishi kerak.
+  //
+  // Prisma'da ikkala bog'lanishni birga o'qib, JS'da yig'amiz. Ro'yxat
+  // faqat FAOL foydalanuvchilar bilan cheklangan, ya'ni hajmi kichik.
+  const scopedUsers = await prisma.user.findMany({
+    where: { isActive: true, isDeleted: false, ...userInBranches(ids) },
+    select: {
+      role: true,
+      homeBranchId: true,
+      branchAssignments: { select: { branchId: true } },
     },
-    {
-      $project: {
-        role: 1,
-        branches: {
-          $setUnion: [
-            { $cond: [{ $ifNull: ["$homeBranchId", false] }, ["$homeBranchId"], []] },
-            { $ifNull: ["$branchAssignments.branchId", []] },
-          ],
-        },
-      },
-    },
-    { $unwind: "$branches" },
-    { $match: { branches: { $in: ids } } },
-    {
-      $group: {
-        _id: "$branches",
-        studentCount: { $sum: { $cond: [{ $eq: ["$role", "student"] }, 1, 0] } },
-        staffCount: { $sum: { $cond: [{ $ne: ["$role", "student"] }, 1, 0] } },
-      },
-    },
+  });
+
+  const idSet = new Set(ids.map(String));
+  const users = {};
+  for (const u of scopedUsers) {
+    // `Set` - bitta odam bir filialda IKKI MARTA sanalmasligi uchun
+    // (homeBranchId ham, biriktirish ham bir xil filialni ko'rsatishi mumkin).
+    const uBranches = new Set();
+    if (u.homeBranchId && idSet.has(String(u.homeBranchId))) {
+      uBranches.add(String(u.homeBranchId));
+    }
+    for (const a of u.branchAssignments) {
+      if (idSet.has(String(a.branchId))) uBranches.add(String(a.branchId));
+    }
+    for (const b of uBranches) {
+      if (!users[b]) users[b] = { studentCount: 0, staffCount: 0 };
+      if (u.role === "student") users[b].studentCount += 1;
+      else users[b].staffCount += 1;
+    }
+  }
+
+  // Guruhlar: jami va faol - ikki groupBy (Prisma shartli $sum bilmaydi).
+  const [groupRows, activeGroupRows, pendingRows] = await Promise.all([
+    prisma.group.groupBy({
+      by: ["branchId"],
+      where: { branchId: { in: ids }, isDeleted: false },
+      _count: { _all: true },
+    }),
+    prisma.group.groupBy({
+      by: ["branchId"],
+      where: { branchId: { in: ids }, isDeleted: false, isActive: true },
+      _count: { _all: true },
+    }),
+    prisma.approval.groupBy({
+      by: ["branchId"],
+      where: { branchId: { in: ids }, status: "pending" },
+      _count: { _all: true },
+    }),
   ]);
 
-  const groupCounts = await Group.aggregate([
-    { $match: { branchId: { $in: ids }, isDeleted: { $ne: true } } },
-    {
-      $group: {
-        _id: "$branchId",
-        groupCount: { $sum: 1 },
-        activeGroupCount: { $sum: { $cond: [{ $eq: ["$isActive", true] }, 1, 0] } },
-      },
-    },
-  ]);
-
-  const pendingCounts = await Approval.aggregate([
-    { $match: { branchId: { $in: ids }, status: "pending" } },
-    { $group: { _id: "$branchId", pendingApprovals: { $sum: 1 } } },
-  ]);
-
-  const byId = (rows) =>
-    rows.reduce((acc, row) => {
-      acc[String(row._id)] = row;
+  const toMap = (rows) =>
+    rows.reduce((acc, r) => {
+      acc[String(r.branchId)] = r._count._all;
       return acc;
     }, {});
 
-  const users = byId(userCounts);
-  const groups = byId(groupCounts);
-  const pending = byId(pendingCounts);
+  const groups = toMap(groupRows);
+  const activeGroups = toMap(activeGroupRows);
+  const pending = toMap(pendingRows);
 
   return branches.map((b) => {
-    const key = String(b._id);
+    const key = String(b.id);
     return {
-      _id: b._id,
+      _id: b.id,
+      id: b.id,
       name: b.name,
       code: b.code,
       isMain: b.isMain,
       expenseApprovalThreshold: b.expenseApprovalThreshold ?? null,
       studentCount: users[key]?.studentCount || 0,
       staffCount: users[key]?.staffCount || 0,
-      groupCount: groups[key]?.groupCount || 0,
-      activeGroupCount: groups[key]?.activeGroupCount || 0,
-      pendingApprovals: pending[key]?.pendingApprovals || 0,
+      groupCount: groups[key] || 0,
+      activeGroupCount: activeGroups[key] || 0,
+      pendingApprovals: pending[key] || 0,
     };
   });
 };

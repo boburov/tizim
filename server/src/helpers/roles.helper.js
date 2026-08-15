@@ -1,5 +1,4 @@
-import Role from "../models/role.model.js";
-import User from "../models/user.model.js";
+import prisma from "../config/prisma.js";
 import ApiError from "../utils/ApiError.js";
 import { ROLES, ROLE_TYPES } from "../constants/roles.js";
 import { hasPermission } from "./permission.helper.js";
@@ -20,7 +19,7 @@ export const generateUniqueRoleValue = async (label) => {
   let value = base;
   let n = 1;
   // eslint-disable-next-line no-await-in-loop
-  while (await Role.exists({ value })) {
+  while (await prisma.role.findUnique({ where: { value }, select: { id: true } })) {
     n += 1;
     value = `${base}-${n}`;
   }
@@ -32,10 +31,11 @@ export const generateUniqueRoleValue = async (label) => {
 // Role kolleksiyasi kichik (odatda 20 dan kam hujjat), shuning uchun bitta
 // to'liq o'qish har qator uchun resolveRole() chaqirishdan (N+1) arzonroq.
 export const loadRoleCatalog = async () => {
-  const docs = await Role.find(
-    {},
-    { value: 1, label: 1, roleType: 1, isFrozen: 1, isSystem: 1 },
-  ).lean();
+  const docs = await prisma.role.findMany({
+    select: {
+      value: true, label: true, roleType: true, isFrozen: true, isSystem: true,
+    },
+  });
   return new Map(docs.map((r) => [r.value, r]));
 };
 
@@ -52,13 +52,14 @@ export const staffRoleFilter = (catalog) => {
   // Katalog bo'sh yoki student roli o'chirilgan bo'lsa ham built-in qiymat
   // chetlab o'tilmasin.
   if (!studentValues.includes(ROLES.STUDENT)) studentValues.push(ROLES.STUDENT);
-  return { $nin: studentValues };
+  // Mongo `$nin` → Prisma `notIn`.
+  return { notIn: studentValues };
 };
 
 // Rol mavjudmi va foydalanuvchiga biriktirsa bo'ladimi.
 // User.role'dan enum olib tashlangani uchun YAGONA himoya shu.
 export const assertRoleAssignable = async (value) => {
-  const role = await Role.findOne({ value }).lean();
+  const role = await prisma.role.findUnique({ where: { value } });
   if (!role) throw new ApiError(400, "Bunday rol mavjud emas");
   if (role.isFrozen) {
     throw new ApiError(400, "Muzlatilgan rolni foydalanuvchiga biriktirib bo'lmaydi");
@@ -103,9 +104,10 @@ export const assertCanGrantRole = async (targetRole, currentUser) => {
   }
 
   // Rolning ruxsatlarini ochib, har birini aktorda bor-yo'qligini tekshiramiz.
-  const populated = await Role.findById(targetRole._id)
-    .populate("permissions")
-    .lean();
+  const populated = await prisma.role.findUnique({
+    where: { id: String(targetRole.id || targetRole._id) },
+    include: { permissions: { select: { key: true } } },
+  });
   const keys = (populated?.permissions || []).map((p) => p.key);
   assertCanGrantPermissions(actorPerms, keys);
 };
@@ -119,21 +121,23 @@ export const assertNotSystemRole = (role, action = "o'zgartirib") => {
 
 // Owner o'z rolini yoki o'zini qulflab qo'ymasligi uchun.
 export const assertNotSelfRoleChange = (currentUser, targetUserId) => {
-  if (String(currentUser._id) === String(targetUserId)) {
+  if (String(currentUser.id || currentUser._id) === String(targetUserId)) {
     throw new ApiError(400, "O'z rolingizni o'zgartira olmaysiz");
   }
 };
 
 // Oxirgi owner o'chirilmasin/rolidan ayrilmasin.
 export const assertNotLastOwner = async (targetUserId) => {
-  const target = await User.findById(targetUserId).lean();
+  const target = await prisma.user.findUnique({ where: { id: String(targetUserId) } });
   if (!target || target.role !== ROLES.OWNER) return;
 
-  const owners = await User.countDocuments({
-    role: ROLES.OWNER,
-    isActive: true,
-    isDeleted: { $ne: true },
-    _id: { $ne: targetUserId },
+  const owners = await prisma.user.count({
+    where: {
+      role: ROLES.OWNER,
+      isActive: true,
+      isDeleted: false,
+      id: { not: String(targetUserId) },
+    },
   });
   if (owners === 0) {
     throw new ApiError(400, "Tizimdagi yagona egani o'zgartirib bo'lmaydi");
@@ -142,7 +146,7 @@ export const assertNotLastOwner = async (targetUserId) => {
 
 // Rolda nechta faol foydalanuvchi bor.
 export const countRoleUsers = (value) =>
-  User.countDocuments({ role: value, isDeleted: { $ne: true } });
+  prisma.user.count({ where: { role: value, isDeleted: false } });
 
 // roleType bo'yicha tekshiruv - servicelardagi scope logikasi uchun.
 // Rol nomiga emas, tipiga qaraydi: custom "Katta o'qituvchi" ham teacher.

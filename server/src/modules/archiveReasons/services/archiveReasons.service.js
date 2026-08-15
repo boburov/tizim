@@ -30,7 +30,7 @@ export const list = async ({
 export const getById = async (id) => {
   const doc = await prisma.archiveReason.findUnique({ where: { id } });
   if (!doc) throw new ApiError(404, "Sabab topilmadi");
-  return doc;
+  return withLegacyId(doc);
 };
 
 export const create = async (body, currentUser) => {

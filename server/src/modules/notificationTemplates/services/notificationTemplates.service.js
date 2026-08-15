@@ -45,7 +45,7 @@ export const list = async ({
 export const getById = async (id) => {
   const doc = await prisma.notificationTemplate.findUnique({ where: { id } });
   if (!doc) throw new ApiError(404, "Shablon topilmadi");
-  return doc;
+  return withLegacyId(doc);
 };
 
 const validateBody = (body) => {

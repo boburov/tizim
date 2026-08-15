@@ -6,7 +6,7 @@ import Approval, {
   resolveCategory,
 } from "../../../models/approval.model.js";
 import prisma from "../../../config/prisma.js";
-import { withLegacyId } from "../../../utils/serialize.js";
+import { withLegacyId, withPopulatedShape } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
@@ -354,10 +354,31 @@ const buildListFilter = ({
 // SORT_OPTIONS validatorda Mongo shaklida ({createdAt: -1}). Prisma
 // `"desc"/"asc"` kutadi - shu yerda o'giramiz (validator o'zgarmaydi,
 // u klient shartnomasining bir qismi).
+// NULL TARTIBI — MONGO BILAN POSTGRES ZID.
+//
+// MongoDB BSON tartibida `null` sonlardan PAST turadi, ya'ni kamayuvchi
+// saralashda null'lar OXIRIDA qolardi. PostgreSQL'da esa DESC ning
+// standarti NULLS FIRST — aksincha.
+//
+// Bu MUHIM: konfiguratsiya so'rovlarida `amount = null`. E'tibor
+// berilmasa "summa bo'yicha, kattadan" saralashda birinchi sahifa
+// TO'LIQ null-summali sozlama so'rovlaridan iborat bo'lib, eng katta
+// chiqim ikkinchi sahifaga tushib ketardi — ya'ni saralash aynan
+// mo'ljallangan maqsadiga TESKARI ishlardi.
+// `nulls` FAQAT nullable ustunda ishlatiladi — Prisma uni majburiy
+// maydonga (createdAt) berilsa validatsiya xatosi bilan rad etadi.
+const NULLABLE_SORT_FIELDS = new Set(["amount"]);
+
 const toOrderBy = (mongoSort) =>
-  Object.entries(mongoSort).map(([field, dir]) => ({
-    [field]: dir === -1 ? "desc" : "asc",
-  }));
+  Object.entries(mongoSort).map(([field, dir]) => {
+    const sort = dir === -1 ? "desc" : "asc";
+    return {
+      [field]: NULLABLE_SORT_FIELDS.has(field) ? { sort, nulls: "last" } : sort,
+    };
+  });
+
+// Prisma relation nomi → klient kutadigan eski maydon nomi.
+const SHAPE_MAP = { branch: "branchId" };
 
 const LIST_INCLUDE = {
   requestedBy: { select: { id: true, firstName: true, lastName: true, username: true } },
@@ -402,7 +423,13 @@ export const list = async ({
     }),
     prisma.approval.count({ where: filter }),
   ]);
-  return { items: items.map((i) => stripSensitive(withLegacyId(i))), total, page, limit };
+  // Klient `branchId` ni OBYEKT sifatida kutadi (eski populate shakli).
+  return {
+    items: items.map((i) => stripSensitive(withPopulatedShape(i, SHAPE_MAP))),
+    total,
+    page,
+    limit,
+  };
 };
 
 /**
@@ -463,7 +490,7 @@ export const getById = async (id, { permissions, currentUser } = {}) => {
     String(currentUser?.id || currentUser?._id);
   if (!canRead && !isOwnRequest) throw new ApiError(403, "Ruxsat etilmagan");
 
-  return stripSensitive(withLegacyId(doc));
+  return stripSensitive(withPopulatedShape(doc, SHAPE_MAP));
 };
 
 /** Kutilayotgan so'rovlar soni - sidebar belgisi uchun. */
