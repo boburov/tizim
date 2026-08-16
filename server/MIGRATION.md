@@ -140,6 +140,27 @@ ular davomat/to'lov to'lqiniga tegishli (chaqiruvchilari hali Mongoose'da).
 | `groups/groups.service.js` | ✅ |
 | `journal/journal.service.js` | ✅ |
 
+**Moliyaviy zanjir (4-to'lqin)** ✅ **bajarildi**
+
+| Modul | Holat |
+|---|---|
+| `expenseApprovals` (qaror yo'llari) | ✅ — **butun zanjirning to'sig'i edi** |
+| `expenses/expense.service.js` | ✅ |
+| `expenses/expenseCategory.service.js` | ✅ |
+| `journal/cashTransfer.service.js` | ✅ |
+| `journal/shift.service.js` | ✅ |
+| `journal/journalVerify.service.js` | ✅ |
+| `financeReport/financeReport.service.js` | ✅ |
+| `branchAnalytics/branchPnl.service.js` | ✅ |
+
+**TARTIB O'ZGARDI VA NEGA.** Reja "chiqimlardan boshlash" edi, lekin
+chiqimlar tasdiqlarga bog'liq, tasdiqlarning YOZISH yo'llari esa hali
+Mongoose'da edi. `expenseApproval.service.js` ni **29 fayl** ishlatadi —
+jumladan allaqachon ko'chirilgan `users`, `groups`, `teacherSalary`,
+`deposits`, `finance`, `staffPayroll`. Ya'ni ular ham yashirin Mongoose
+bog'liqligiga ega edi: tasdiq talab qiladigan har qanday yo'l 501
+qaytarardi. Shuning uchun tasdiqlar birinchi ko'chirildi.
+
 **Xodim oyligi (3-to'lqin)** ✅ **bajarildi**
 
 | Modul | Holat |
@@ -475,6 +496,20 @@ qaysi oydan ko'chganini yo'qotadi va zanjir uziladi.
 - **Hal qilinmagan:** yo'q. `⏳` bilan belgilangan 3 tasi hali Mongoose
   ostida **tirik** — ular yo'qolgan emas, moduli ko'chganda ko'chiriladi.
 
+
+### 4-to'lqinda topilgan va tuzatilgan xatolar
+
+| Xato | Qayerda | Ta'siri |
+|---|---|---|
+| **Pul ikkilanishi (poyga)** | `cashTransfer.receive/cancel`, `shift.close` | "O'qi → tekshir → jurnalga yoz → holatni yoz". Ikki bir vaqtdagi `receive` IKKALASI ham `in_transit` ni o'qib, IKKALASI ham jurnal yozardi: `due_from`/`due_to` va kassa **ikki barobar** oshardi. Endi holat AVVAL atomik olinadi (`updateMany` + count), jurnal esa o'sha tranzaksiyada. |
+| **`/journal/reconcile` butunlay buzuq** | `journal.findUnbalanced` (Wave 2 dan beri) | Prisma maydon havolasi `not` bilan ishlamaydi → `PrismaClientValidationError` → 500. Jurnal to'g'riligini tekshiradigan **yagona vosita** o'zi yiqilgan edi. Xom SQL bilan tuzatildi. |
+| **Filial sizishi ×2** | `financeReport.getLedger`, `getWriteOffs` | Filial ko'lami UMUMAN yo'q edi: filial direktori butun tarmoqning tranzaksiyalarini **o'quvchi/o'qituvchi ismlari bilan** ko'rardi. Modul 501 bo'lgani uchun ko'rinmasdi — ko'chirish uni tiriltirardi, shuning uchun ayni ko'chirishda yopildi. `debt_write_offs` da `branchId` ustuni yo'q, shuning uchun ko'lam guruh orqali (`branchGroupFilter`). |
+| **Prisma xatolari moslanmagan** | `errorHandler` | `P2002` (unique) → 500 "Serverda xatolik" bo'lib chiqardi. Endi 409/400 + CHECK buzilishi uchun 400. |
+| **Yo'qolgan invariant #27** | `Approval` | Model `amount: {min: 0}` va "moliyaviy so'rovda summa majburiy" qoidalarini ushlab turardi. Model o'lgach ikkalasi ham yo'qolardi — chiqim so'rovining butun ma'nosi limit tekshiruvida, summasiz so'rov esa uni aylanib o'tish yo'li bo'lardi. Servis + 2 ta CHECK. |
+| **Yo'qolgan invariant #29** | `Expense` | Valyuta → kurs va asl summa majburiy; kapital → amortizatsiya muddati majburiy. Servisga qo'yildi (Zod'ga EMAS: `executeApprovedExpense` HTTP'ni chetlab o'tadi). |
+| **Ikki xil sxemaga bitta funksiya** | `financeReport.billedAndOutstanding` | `TeacherSalary` da `writtenOff` ustuni **yo'q** — Mongo `$ifNull` bilan jimgina `false` qilardi, Postgres esa `column does not exist` beradi. Ikkita alohida funksiyaga ajratildi; farq endi kodda ko'rinadi. |
+| **Soat mintaqasi** | `groupsChain` testi | Handover cutoff'i `getUTCDate()+1` bilan hisoblanardi, ilova esa kunni MAHALLIY zonada belgilaydi. Kechasi 00:00–05:00 oralig'ida ikkalasi teng bo'lib qolib test yiqilardi. |
+
 ### Migratsiyani qo'llash haqida ogohlantirish
 
 `20260816090000_validation_invariants` **ma'lumot buzuq bo'lsa yiqiladi.**
@@ -578,9 +613,16 @@ va 501 **o'z-o'zidan** yo'qoladi.
 
 | Endpoint | Sabab |
 |---|---|
-| `/ai/insights`, `/ai/briefing` | `insights.find()` — Mongoose |
-| `/branch-analytics/pnl` | `journalentries.aggregate()` — Mongoose |
-| `/finance-report/*` | `expense.model.js` — Mongoose |
+| `/ai/*` | `insights.find()` — Mongoose |
+
+**4-to'lqindan keyin 200 qaytaradiganlar** (ilgari 501 edi):
+`/expenses/*`, `/expense-approvals/*`, `/journal/transfers`,
+`/journal/shifts`, `/journal/reconcile`, `/finance-report/*`,
+`/branch-analytics/pnl`.
+
+Rahbariyat paneli ularni **avtomatik** ko'rsata boshladi — klient kodiga
+BIR QATOR ham tegilmadi. Shartnoma shunga mo'ljallangan edi:
+`fromQuery` 501 ni `not_connected`, 200 ni `ready` deb o'qiydi.
 
 Test: `npm run test:dashboard-contract` (32 tekshiruv). U **501 ni ham, 200 ni
 ham** qabul qiladi — modul ko'chganda test yiqilmasligi kerak, aks holda uni
@@ -626,7 +668,8 @@ npm run test:salary-chain     #  31  o'qituvchi maoshi + jurnal
 npm run test:groups-chain     #  32  guruh, jadval versiyalash
 npm run test:staff-payroll    #  47  xodim oyligi + filial qo'riqchisi
 npm run test:invariants       #  44  validatsiya invariantlari (servis + CHECK)
-npm run test:dashboard-contract  # 32  klient↔server kontrakti (server ISHLAB TURSIN)
+npm run test:expenses-chain      # 35  chiqim + tasdiq zanjiri
+npm run test:dashboard-contract  # 40  klient↔server kontrakti (server ISHLAB TURSIN)
 ```
 
 `test:dashboard-contract` boshqalardan FARQ QILADI: u haqiqiy HTTP so'rov

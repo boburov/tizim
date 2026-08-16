@@ -287,10 +287,14 @@ const run = async () => {
   // ko'rsatadi - qizil xato emas.
   //
   // Modul ko'chgach 200 beradi va test BARIBIR o'tadi.
+  // `/branch-analytics/pnl` va `/finance-report/*` WAVE 4 DA
+  // KO'CHIRILDI - ular endi 200 beradi va shu ro'yxatdan chiqarildi.
+  // Ro'yxat "hali ko'chirilmagan" modullarni qayd etadi; modul
+  // ko'chgach uni bu yerdan olib tashlash kerak, aks holda test
+  // kelajakda ham 501 kutib turaverardi.
   for (const [name, path] of [
     ["/ai/insights", "/ai/insights?limit=4"],
     ["/ai/briefing", "/ai/briefing"],
-    ["/branch-analytics/pnl", "/branch-analytics/pnl"],
   ]) {
     const res = await expectStatus(`${name} 501 yoki 200 (500 EMAS)`, path, [501, 200]);
     if (res?.status === 501) {
@@ -319,11 +323,88 @@ const run = async () => {
   // ilgari aynan shuni chaqirardi. Test uni qayd etib turadi:
   // kimdir yana shu manzilni yozsa, sababi darhol ko'rinadi.
   await expectStatus("/finance-report (pastki manzilsiz) 404", "/finance-report", 404);
-  await expectStatus(
-    "/finance-report/summary MAVJUD (501 yoki 200)",
+
+  // ══ 6b) MOLIYA HISOBOTI (wave 4 da ko'chirildi) ════════════════
+  console.log("\n6b) /finance-report/* — shakl kontrakti");
+
+  const frSummary = await expectStatus(
+    "summary 200",
     `/finance-report/summary?year=${Y}&month=${M}`,
-    [501, 200, 400],
+    200,
   );
+  const fr = expectEnvelope("konvert { success, data }", frSummary);
+  if (fr) {
+    // Rahbariyat paneli shu maydonlarni o'qiydi. Bittasi nomi
+    // o'zgarsa karta jimgina "Ma'lumot yo'q" bo'lib qolardi.
+    // Shakl SERVERDAN olindi (taxmin emas):
+    // { period, income, expense, netProfit, netProfitDelta, margin,
+    //   accrual, paymentMethods }
+    expectShape("summary bo'limlari", fr, {
+      period: "object",
+      income: "object",
+      expense: "object",
+      netProfit: "number",
+      // O'tgan oy nolga teng bo'lsa `null` - "0%" EMAS.
+      netProfitDelta: "number?",
+      margin: "number?",
+      accrual: "object",
+      paymentMethods: "object",
+    });
+
+    // `income` - o'quvchi to'lovlari kesimi. `billed`/`outstanding`/
+    // `badDebt` xom SQL bilan hisoblanadi (studentBilledStats).
+    expectShape("income (collected/billed/outstanding/badDebt)", fr.income, {
+      collected: "number",
+      billed: "number",
+      outstanding: "number",
+      badDebt: "number",
+      rate: "number?",
+      count: "number",
+    });
+
+    // `expense.billed`/`outstanding` - o'qituvchi maoshi kesimi
+    // (teacherBilledStats). `badDebt` bu yerda YO'Q va bo'lmasligi
+    // ham kerak: `teacher_salaries` da `writtenOff` ustuni mavjud
+    // emas, ya'ni maosh uchun "yomon qarz" tushunchasi yo'q.
+    expectShape("expense (paid/billed/outstanding/byKind)", fr.expense, {
+      paid: "number",
+      billed: "number",
+      outstanding: "number",
+      salaryPaid: "number",
+      staffSalaryPaid: "number",
+      operatingAccrued: "number",
+      byKind: "object",
+      capital: "number",
+    });
+
+    expectShape("accrual (revenue/expense/profit)", fr.accrual, {
+      revenue: "number",
+      expense: "number",
+      profit: "number",
+      margin: "number?",
+    });
+
+    expectShape("paymentMethods (cash/card)", fr.paymentMethods, {
+      cash: "number",
+      card: "number",
+    });
+  }
+
+  await (async () => {
+    const name = "trend MASSIV qaytaradi";
+    const r = await call("/finance-report/trend?months=6");
+    const d = r.body?.data;
+    if (r.status === 200 && Array.isArray(d)) ok(name, `${d.length} oy`);
+    else bad(name, `HTTP ${r.status}, turi: ${Array.isArray(d) ? "array" : typeof d}`);
+  })();
+
+  for (const [name, path] of [
+    ["group-breakdown", `/finance-report/group-breakdown?year=${Y}&month=${M}`],
+    ["ledger", `/finance-report/ledger?year=${Y}&month=${M}`],
+    ["write-offs", `/finance-report/write-offs?year=${Y}&month=${M}`],
+  ]) {
+    await expectStatus(`${name} 200`, path, 200);
+  }
 
   // ══ 7) PAGINATION KONTRAKTI (PHASE 5) ══════════════════════════
   console.log("\n7) pagination kontrakti — ?page&limit -> meta");
