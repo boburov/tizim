@@ -12088,3 +12088,108 @@ Barcha maqsad modullar toza. MIGRATION.md ni yangilab, commit qilaman.
 <sub>session `c49e703c` · branch `main` · 32 ta qadam</sub>
 
 ---
+
+## 2026-08-16 18:33 — This session is being continued from a previous conversation that ran 
+
+**So'rov**
+
+> This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+>
+> Summary:
+> 1. **Primary Request and Intent:**
+>
+>    This segment covers **Migration Wave 2** and **Wave 3** of an ongoing MongoDB(Mongoose) → PostgreSQL(Prisma) migration recovery, plus the tail of Wave 1.
+>
+>    **Wave 2 (user message "MIGRATION WAVE 2 — TEACHER COMPENSATION → SALARY → STUDENT PAYMENTS → GROUPS"):** Migrate in dependency order: `rateResolver`, `variableBase`, `teacherCompensation`, `teacherSalary`, `groupFee`, `studentPayment`, `deposit`, `openingBalance`, `groups.service.js`. Explicit constraints stated verbatim:
+>    - "Do NOT bypass this dependency with `try/catch`." / "Do NOT silently skip salary recalculation." / "Do NOT mark a function as successful if its financial side effects did not execute."
+>    - "A successful API response must mean all required business invariants were successfully maintained."
+>    - Preserve: precision (no unsafe float conversion), idempotency (no duplicate rows), historical correctness, branch isolation ("Branch-scoped users cannot calculate/read salary data for another branch"), transaction i
+> …
+
+**O'zgargan fayllar (12)**
+
+- `server/src/modules/teacherSalary/services/teacherCompensation.service.js` — tahrirlandi
+- `server/src/modules/staffPayroll/services/kpiRule.service.js` — tahrirlandi
+- `server/src/modules/finance/services/discount.service.js` — tahrirlandi
+- `server/prisma/migrations/20260816090000_validation_invariants/migration.sql` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/staffPayroll/services/staffCompensation.service.js` — tahrirlandi
+- `server/tests/usersPrisma.test.js` — tahrirlandi
+- `server/tests/invariantsPrisma.test.js` — yaratildi/qayta yozildi
+- `server/tests/staffPayrollPrisma.test.js` — tahrirlandi
+- `server/src/helpers/branchContext.helper.js` — tahrirlandi
+- `server/src/modules/staffPayroll/services/staffPayroll.service.js` — tahrirlandi
+- `server/src/modules/groups/services/teacherGroupPeriod.service.js` — tahrirlandi
+- `server/tests/groupsChainPrisma.test.js` — tahrirlandi
+
+**Buyruqlar (84)**
+
+```sh
+D=/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/subagents/workflows/wf_ca3a2bc8-85a node -e " const f…
+D=/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/subagents/workflows/wf_ca3a2bc8-85a for a in a7dbb056…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== HOZIR mavjud model fayllaridagi pre(validate) ===" grep -rln "pre(\"validate\"\|pre('validate')" src/model…
+cd /Users/shukrullo/Desktop/lc-total/server for f in $(grep -rln "pre(\"validate\"\|pre('validate')" src/models/ | sort); do echo "╔════════════════════════════…
+cd /Users/shukrullo/Desktop/lc-total/server for m in account approval attendanceExemption branch cashTransfer discount expense group holiday journalEntry kpiRul…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== openingBalance importerlari ===" grep -rn "models/openingBalance.model.js" src --include="*.js" | grep -v …
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== Bazadagi mavjud CHECK constraintlar ===" grep -rn "CHECK" prisma/migrations/ | head -20 echo "(jami: $(gre…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ 1. journalEntry: muvozanat ═══" grep -n "debet va kredit birga\|Bo'sh qator\|muvozanati buzilgan\|Nol summ…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ journal.service.js post() invariantlari ═══" sed -n '120,175p' src/modules/journal/services/journal.servic…
+cd /Users/shukrullo/Desktop/lc-total/server ls src/modules/teacherSalary/services/ echo "─── effectiveTo yoziladigan joylar ───" grep -rn "effectiveTo" src/modu…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ teacherCompensation.service create yo'llari ═══" sed -n '178,196p;382,400p' src/modules/teacherSalary/serv…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ account: ensureAccount ═══" grep -n "counterpartyBranchId" src/modules/journal/services/journal.service.js…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ account ensureAccount (40-100) ═══"; sed -n '40,80p' src/modules/journal/services/journal.service.js echo;…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ discount validator ═══"; cat src/modules/finance/validators/discount.validator.js echo; echo "═══ discount…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ roles.service.create: value tekshiruvi ═══"; sed -n '110,140p' src/modules/roles/services/roles.service.js…
+cd /Users/shukrullo/Desktop/lc-total/server grep -n "enum SalaryKind\|enum DiscountType\|enum DiscountScope\|enum KpiRewardType\|enum AccountKind" -A 12 prisma/…
+cd /Users/shukrullo/Desktop/lc-total/server node -e ' import("./src/config/prisma.js").then(async ({default: prisma}) => { const q = async (label, sql) => { con…
+cd /Users/shukrullo/Desktop/lc-total/server cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/chec…
+cd /Users/shukrullo/Desktop/lc-total/server echo "─── salaryAdjustment.service.js:85-105 ───"; sed -n '85,105p' src/modules/teacherSalary/services/salaryAdjustm…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '1,40p' src/modules/teacherSalary/services/teacherCompensation.service.js echo "..." sed -n '128,200p' src/mo…
+cd /Users/shukrullo/Desktop/lc-total/server; sed -n '300,345p' src/modules/teacherSalary/services/teacherCompensation.service.js
+cd /Users/shukrullo/Desktop/lc-total/server; sed -n '100,190p' src/modules/finance/services/discount.service.js
+cd /Users/shukrullo/Desktop/lc-total/server grep -n '@@map' prisma/schema.prisma | grep -iE "journal_line|holiday|lead_routing|opening_balance|student_freeze|at…
+cd /Users/shukrullo/Desktop/lc-total/server ls prisma/migrations/ echo "─── mavjud qo'lda yozilgan migratsiya uslubi ───" head -30 prisma/migrations/*partial_un…
+cd /Users/shukrullo/Desktop/lc-total/server npx prisma migrate deploy 2>&1 | tail -20
+# … yana 59 ta
+```
+
+**Natija**
+
+Audit agentlari uzilgan — invariant inventarizatsiyasini o'zim qilaman (baribir "taxmin qilma" talabi shuni so'raydi). Avval barcha `pre('validate')` hooklarini topaman.
+
+19 ta hook. Endi har biri uchun: model hali Mongoose orqali tiriklikmi yoki Prisma'ga ko'chganmi.
+
+Aniq manzara chiqdi. Endi bazadagi mavjud ma'lumot yangi qoidalarga mos kelishini tekshiraman (CHECK qo'shishdan oldin — shart).
+
+Ma'lumot toza — CHECK qo'shish xavfsiz. Endi tuzataman. Avval `teacherSalary` yozuv yo'llari:
+
+Endi tuzatishlarni yozaman. Avval `teacherCompensation` (3 ta yo'qolgan invariant):
+
+Endi `amend` — bu yerda holat qisman, shuning uchun "keyingi holat" ustida tekshiriladi:
+
+Endi `discount` — bu yerda ikkita invariant yo'qolgan, biri **jimgina** yo'qolgan (Mongo rad etardi, Prisma `null` yozib ketardi):
+
+DB CHECK'lar uchun qolgan nomzodlarni ham tekshiraman (jurnal qatorlari, bayram, boshlang'ich qoldiq, lead marshruti):
+
+Aynan shu naqsh bor ekan. Endi CHECK migratsiyasini yozaman:
+
+Migratsiya qo'llandi. Audit workflow ham tugadi — invariant qismini o'z inventarizatsiyam bilan solishtiray:
+
+Audit ikkita narsani qo'shimcha topdi — biri men o'tkazib yuborgan haqiqiy kamchilik. To'liq ro'yxatni o'qiy:
+
+Bu yerda **ikkita** narsa bor: yo'qolgan koersiya, va `try/catch` bilan yopilgan qayta hisob. Ikkinchisi Wave 2 da ochiq taqiqlangan — avval bu meniki yoki eskidan qolganini tekshiraman:
+
+Eskidan qolgan — men sodiq ko'chirganman. Endi audit topgan haqiqiy kamchilikni tuzataman:
+
+Migratsiya allaqachon qo'llangan edi — cheksummasi buzilmasligi uchun uni toza qayta qo'llayman:
+
+Sorov pg-boss sxemasiga ham tegib ketdi. Aniqroq qilaman:
+
+27 ta cheklov, 14 jadvalda. Regressiyani ishga tushiraman — yangi cheklovlar mavjud testlarni buzmasligi kerak:
+
+Cheklov o'z ishini qildi — bu **test fixture'
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 110 ta qadam</sub>
+
+---

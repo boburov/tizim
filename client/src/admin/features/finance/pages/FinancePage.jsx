@@ -1,0 +1,136 @@
+// Icons
+import { Building2, CircleDollarSign, Receipt, Wallet } from "lucide-react";
+
+// Dashboard components
+import KpiTile from "@/shared/components/dashboard/KpiTile";
+import ChartCard from "@/shared/components/dashboard/ChartCard";
+import DataState from "@/shared/components/dashboard/DataState";
+import DashboardSection, {
+  KpiGrid,
+} from "@/shared/components/dashboard/SectionGrid";
+
+// Hooks
+import useObjectState from "@/shared/hooks/useObjectState";
+import {
+  useOverviewData,
+  useCashflowData,
+  useBranchPnlData,
+} from "../../../hooks/useExecutiveData";
+
+// Local components
+import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
+import CashflowBars from "../../../components/CashflowBars";
+import BranchPnlTable from "../components/BranchPnlTable";
+
+/**
+ * MOLIYA KESIMI.
+ *
+ * Bu sahifa MOLIYA HISOBOTI EMAS - u `/owner/finance-report` da.
+ * Bu yerda faqat "pul qayerga ketyapti" degan savolga darhol javob
+ * beradigan uchta narsa bor: hajm, oqim va filiallar bo'yicha kesim.
+ * Tafsilotga drill-down orqali tushiladi.
+ */
+const FinancePage = () => {
+  const now = new Date();
+  const period = useObjectState({
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+    range: "month",
+  });
+
+  const params = { year: period.year, month: period.month };
+
+  const overview = useOverviewData(params);
+  const cashflow = useCashflowData({ range: period.range });
+  const pnl = useBranchPnlData(params);
+
+  const o = overview.data;
+
+  return (
+    <div className="space-y-6">
+      <ExecutivePageHeader
+        title="Moliya"
+        hint="Tushum, pul oqimi va filiallar bo'yicha kesim."
+        period={period}
+      />
+
+      <KpiGrid cols={3}>
+        <KpiTile
+          label="Bu oy tushum"
+          icon={CircleDollarSign}
+          isMoney
+          value={o?.revenueThisMonth}
+          delta={o?.revenueDelta}
+          status={overview.status}
+          error={overview.error}
+          onRetry={overview.refetch}
+          to="/owner/students/tolovlar"
+          hint="O'tgan oyga nisbatan"
+        />
+        <KpiTile
+          label="O'tgan oy tushum"
+          icon={Wallet}
+          isMoney
+          value={o?.revenueLastMonth}
+          status={overview.status}
+          error={overview.error}
+          onRetry={overview.refetch}
+          hint="Solishtirish uchun"
+        />
+        <KpiTile
+          label="To'lovlar soni"
+          icon={Receipt}
+          value={o?.paymentsCount}
+          status={overview.status}
+          error={overview.error}
+          onRetry={overview.refetch}
+          to="/owner/students/tolovlar"
+          hint="Bu oy qabul qilingan"
+        />
+      </KpiGrid>
+
+      <ChartCard
+        title="Pul oqimi"
+        hint="Kirim va chiqim solishtiruvi"
+        status={cashflow.status}
+        data={cashflow.data}
+        error={cashflow.error}
+        onRetry={cashflow.refetch}
+        ranges={[
+          { value: "week", label: "Hafta" },
+          { value: "month", label: "Oy" },
+          { value: "year", label: "Yil" },
+        ]}
+        range={period.range}
+        onRangeChange={(v) => period.setField("range", v)}
+        to="/owner/finance-report"
+        height="h-64"
+        emptyHint="Tanlangan davrda pul harakati qayd etilmagan."
+      >
+        {(d) => <CashflowBars buckets={d.buckets} />}
+      </ChartCard>
+
+      <DashboardSection
+        title="Filiallar kesimi"
+        hint="Qaysi filial qancha keltirdi"
+        to="/owner/branches"
+        toLabel="Filiallar"
+      >
+        <DataState
+          status={pnl.status}
+          data={pnl.data}
+          error={pnl.error}
+          onRetry={pnl.refetch}
+          emptyIcon={Building2}
+          emptyHint="Tanlangan davr uchun filial kesimi hisoblanmagan."
+          notConnectedHint="Filial tahlili moduli ma'lumot manbai ulangach chiqadi."
+          skeletonClassName="h-48"
+        >
+          {(rows) => <BranchPnlTable rows={rows} />}
+        </DataState>
+      </DashboardSection>
+    </div>
+  );
+};
+
+export default FinancePage;
