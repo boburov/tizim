@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:ai-metrics": "node scripts/check-ai-metrics.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:data-contract": "node scripts/check-data-contract.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

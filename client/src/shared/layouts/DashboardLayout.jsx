@@ -1,26 +1,11 @@
-// Router
-import { Outlet } from "react-router-dom";
-
-// Components
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/shared/components/shadcn/sidebar";
-import AppHeader from "@/shared/components/layout/AppHeader";
-import AppSidebar from "@/shared/components/layout/AppSidebar";
-import BranchModeBanner from "@/shared/components/layout/BranchModeBanner";
-
-const DashboardLayout = () => (
-  <SidebarProvider className="relative z-10">
-    <AppSidebar />
-    <SidebarInset className="min-w-0">
-      <AppHeader />
-      <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:py-2">
-        <BranchModeBanner />
-        <Outlet />
-      </div>
-    </SidebarInset>
-  </SidebarProvider>
-);
-
-export default DashboardLayout;
+/**
+ * ESKIRGAN NOM - `OperationalLayout` ga qayta nomlangan.
+ *
+ * Ikkita qobiq paydo bo'lgach ("rahbariyat" va "operatsion") "Dashboard"
+ * nomi ikkalasiga ham tegishli bo'lib qoldi va fayl nomidan qaysi biri
+ * ekani bilinmasdi. Qarang: `OperationalLayout.jsx`.
+ *
+ * Bu re-export MAVJUD IMPORTLAR uchun saqlanadi. Yangi kodda
+ * `OperationalLayout` ishlating.
+ */
+export { default } from "./OperationalLayout";

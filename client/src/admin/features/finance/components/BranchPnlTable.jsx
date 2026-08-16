@@ -1,6 +1,3 @@
-// Router
-import { Link } from "react-router-dom";
-
 // Utils
 import { cn } from "@/shared/utils/cn";
 import { formatMoney } from "@/shared/utils/formatMoney";
@@ -32,13 +29,16 @@ const BranchPnlTable = ({ rows = [] }) => (
           const net = typeof r.net === "number" ? r.net : null;
           return (
             <tr key={r.branchId} className="border-b last:border-0">
-              <td className="px-3 py-2.5">
-                <Link
-                  to={`/owner/branches/${r.branchId}`}
-                  className="font-medium text-foreground hover:underline"
-                >
-                  {r.branchName || "—"}
-                </Link>
+              {/* FILIAL NOMI HAVOLA EMAS.
+                  `/owner/branches/:id` degan marshrut MAVJUD EMAS
+                  (bor: `branches`, `branches/compare`, `branches/stats`,
+                  `branches/limits`), `branches/stats` esa filialni
+                  URL'dan emas, faol filial kontekstidan oladi. Ya'ni
+                  har qanday chuqur havola yo 404 berardi, yo boshqa
+                  filial ma'lumotini ochardi. Bo'lim sarlavhasidagi
+                  "Filiallar" havolasi ro'yxatga olib boradi. */}
+              <td className="px-3 py-2.5 font-medium text-foreground">
+                {r.branchName || "—"}
               </td>
               <Td value={r.income} />
               <Td value={r.expense} />

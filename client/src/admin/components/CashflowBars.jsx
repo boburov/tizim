@@ -27,6 +27,23 @@ import { formatMoneyShort } from "@/shared/utils/formatMoney";
  * chiqim esa `chart-2` tokeni bilan chiziladi.
  *
  * @param {Array<{label: string, income: number, expense: number}>} buckets
+ *
+ * ─────────────────────────────────────────────────────────────────
+ * `Number(x) || 0` BU YERDA NEGA MUMKIN
+ *
+ * Yuqorida `|| 0` ni "yolg'on raqam" deb atadik. Farq shunda:
+ *
+ *   • YOMONI - YO'Q ko'rsatkich o'rniga 0 qo'yish. So'rov yiqilgan,
+ *     ekranda esa "0 so'm tushum". Bu YANGI da'vo yaratadi.
+ *
+ *   • MUMKINI - MAVJUD ro'yxatning ichidagi maydonni songa keltirish.
+ *     Bu yerga ma'lumot faqat `status === "ready"` bo'lganda yetadi,
+ *     ya'ni massiv BOR va server uni yubordi. Server shakli har
+ *     bandda ikkala maydonni ham kafolatlaydi; `|| 0` shunchaki
+ *     `undefined` arifmetikaga tushib `NaN` chiqarmasligi uchun.
+ *
+ * Ya'ni bu yerda 0 "o'lchanmadi" degani emas, "shu bandda harakat
+ * bo'lmagan" degani - va nolinchi ustun ATAYLAB chizilmaydi.
  */
 const CashflowBars = ({ buckets = [] }) => {
   // Maxraj: eng katta ustun. `1` - nolga bo'lishdan himoya, ma'lumot

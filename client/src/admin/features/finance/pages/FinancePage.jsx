@@ -22,10 +22,13 @@ import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
 import CashflowBars from "../../../components/CashflowBars";
 import BranchPnlTable from "../components/BranchPnlTable";
 
+// Navigation
+import { DRILLDOWN } from "../../../navigation/drilldown";
+
 /**
  * MOLIYA KESIMI.
  *
- * Bu sahifa MOLIYA HISOBOTI EMAS - u `/owner/finance-report` da.
+ * Bu sahifa MOLIYA HISOBOTI EMAS - u `/owner/finance/accounting` da.
  * Bu yerda faqat "pul qayerga ketyapti" degan savolga darhol javob
  * beradigan uchta narsa bor: hajm, oqim va filiallar bo'yicha kesim.
  * Tafsilotga drill-down orqali tushiladi.
@@ -64,7 +67,7 @@ const FinancePage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/students/tolovlar"
+          to={DRILLDOWN.studentPayments}
           hint="O'tgan oyga nisbatan"
         />
         <KpiTile
@@ -84,7 +87,7 @@ const FinancePage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/students/tolovlar"
+          to={DRILLDOWN.studentPayments}
           hint="Bu oy qabul qilingan"
         />
       </KpiGrid>
@@ -103,7 +106,7 @@ const FinancePage = () => {
         ]}
         range={period.range}
         onRangeChange={(v) => period.setField("range", v)}
-        to="/owner/finance-report"
+        to={DRILLDOWN.financeReport}
         height="h-64"
         emptyHint="Tanlangan davrda pul harakati qayd etilmagan."
       >
@@ -113,7 +116,7 @@ const FinancePage = () => {
       <DashboardSection
         title="Filiallar kesimi"
         hint="Qaysi filial qancha keltirdi"
-        to="/owner/branches"
+        to={DRILLDOWN.branches}
         toLabel="Filiallar"
       >
         <DataState

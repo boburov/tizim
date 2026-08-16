@@ -71,20 +71,28 @@ const KpiTile = ({
   const interactive = Boolean(to || onClick);
 
   /**
-   * `null` QIYMAT - HOLAT `ready` BO'LSA HAM RAQAM CHIQMAYDI.
+   * QIYMAT HAQIQIY SON BO'LMASA - HOLAT `ready` BO'LSA HAM RAQAM CHIQMAYDI.
    *
-   * Server ba'zi ko'rsatkichni ataylab `null` qaytaradi: masalan
-   * `attendanceGauge.rate` bugun birorta dars belgilanmagan bo'lsa
-   * `null` bo'ladi (maxraj nol - qarang server adminDashboard.service.js,
-   * computeAttendanceGauge). Bu "0% davomat" DEGANI EMAS, "o'lchanmadi"
-   * degani.
+   * IKKI XIL XAVF, ikkalasi ham jimgina "0" chiqarardi:
    *
-   * Busiz `AnimatedCounter` `null` ni 0 ga aylantirib, ekranda ishonchli
-   * "0%" chiqarardi - va bu butun sahifadagi eng xavfli yolg'on
-   * bo'lardi, chunki so'rov MUVAFFAQIYATLI, ya'ni hech qanday xato
-   * belgisi ko'rinmaydi.
+   * 1) `null` / `undefined`. Server ba'zi ko'rsatkichni ATAYLAB `null`
+   *    qaytaradi: `attendanceGauge.rate` bugun birorta dars
+   *    belgilanmagan bo'lsa `null` (maxraj nol - qarang server
+   *    adminDashboard.service.js, computeAttendanceGauge). Bu "0%
+   *    davomat" DEGANI EMAS, "o'lchanmadi" degani.
+   *
+   * 2) SON BO'LMAGAN qiymat (satr, obyekt, NaN). `AnimatedCounter`
+   *    `Number.isFinite` dan o'tmagan hamma narsani `0` ga aylantiradi
+   *    (useCountUp, `safeTarget`). Ya'ni server `"1500000"` deb SATR
+   *    qaytarsa yoki maydon nomi o'zgarib obyekt kelsa, ekranda
+   *    ishonchli "0 so'm" turardi.
+   *
+   * Ikkinchisi ayniqsa xavfli: so'rov MUVAFFAQIYATLI, ya'ni hech
+   * qanday xato belgisi ko'rinmaydi va raqam to'g'ri deb o'qiladi.
+   * Shuning uchun tekshiruv `Number.isFinite` bilan QAT'IY - "0 ga
+   * o'girib qo'ya qolaylik" degan zaxira ATAYLAB yo'q.
    */
-  const missingValue = value === null || value === undefined;
+  const missingValue = typeof value !== "number" || !Number.isFinite(value);
   const effectiveStatus =
     status === DATA_STATUS.READY && missingValue ? DATA_STATUS.EMPTY : status;
 
@@ -136,11 +144,10 @@ const KpiTile = ({
               isMoney ? "break-words text-xl leading-snug" : "text-2xl",
             )}
           >
-            <AnimatedCounter
-              value={typeof v === "number" && Number.isFinite(v) ? v : 0}
-              formatter={format}
-              suffix={suffix}
-            />
+            {/* `v` bu yerga faqat haqiqiy son bo'lganda yetib keladi
+                (yuqoridagi `missingValue`), shuning uchun zaxira
+                qiymat ATAYLAB yo'q - u yolg'on nol chiqarardi. */}
+            <AnimatedCounter value={v} formatter={format} suffix={suffix} />
           </p>
         )}
       </DataState>

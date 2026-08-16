@@ -28,6 +28,9 @@ import {
 import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
 import CashflowBars from "../../../components/CashflowBars";
 
+// Navigation
+import { DRILLDOWN } from "../../../navigation/drilldown";
+
 /**
  * UMUMIY KO'RINISH - ertalabki birinchi ekran.
  *
@@ -91,7 +94,7 @@ const OverviewPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/students/tolovlar"
+          to={DRILLDOWN.studentPayments}
           hint="O'tgan oyga nisbatan"
         />
         <KpiTile
@@ -101,7 +104,7 @@ const OverviewPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/students"
+          to={DRILLDOWN.students}
           hint={
             typeof o?.activeGroupsCount === "number"
               ? `${o.activeGroupsCount} faol guruh`
@@ -115,7 +118,7 @@ const OverviewPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/students"
+          to={DRILLDOWN.students}
           hint={
             typeof o?.newStudentsThisMonth === "number"
               ? `${o.newStudentsThisMonth} yangi, ${o.lostStudentsThisMonth ?? 0} ketgan`
@@ -132,7 +135,7 @@ const OverviewPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/attendance"
+          to={DRILLDOWN.attendance}
         />
       </KpiGrid>
 
@@ -153,7 +156,7 @@ const OverviewPage = () => {
             ]}
             range={period.range}
             onRangeChange={(v) => period.setField("range", v)}
-            to="/owner/finance-report"
+            to={DRILLDOWN.financeReport}
             emptyHint="Tanlangan davrda pul harakati qayd etilmagan."
           >
             {(d) => <CashflowBars buckets={d.buckets} />}
@@ -163,7 +166,7 @@ const OverviewPage = () => {
           <DashboardSection
             title="Tavsiyalar"
             hint="Hozir e'tibor talab qiladigan holatlar"
-            to="/owner/ai"
+            to={DRILLDOWN.ai}
           >
             <DataState
               status={insights.status}

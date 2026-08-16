@@ -1,6 +1,7 @@
 import {
   BadgeCheck,
   Building2,
+  Gauge,
   GraduationCap,
   LayoutDashboard,
   Monitor,
@@ -30,6 +31,25 @@ const ownerSidebar = [
     title: "Bosh sahifa",
     icon: LayoutDashboard,
     url: "/owner/dashboard",
+    permission: "admin_dashboard.read",
+  },
+
+  // RAHBARIYAT QOBIG'IGA O'TISH (/admin) - sidebar'siz kesim.
+  //
+  // NEGA SIDEBAR'DA: `/admin` ning o'zida sidebar YO'Q, ya'ni u yerga
+  // faqat manzilni qo'lda yozib kirish mumkin bo'lardi. Kirish yo'li
+  // ko'rinmasa butun qobiq mavjud bo'lmagandek bo'ladi.
+  //
+  // ENG YUQORIDA, "Bosh sahifa"dan keyin: bu kunlik ish emas, kunni
+  // BOSHLAYDIGAN ekran. Guruh ichiga yashirilsa odatga aylanmaydi.
+  //
+  // Qaytish yo'li ham bor: `/admin` sarlavhasida "Operatsion panel"
+  // tugmasi (ExecutiveHeader) - ikki qobiq orasida yurish ikki
+  // tomonlama bo'lishi kerak.
+  {
+    title: "Rahbariyat",
+    icon: Gauge,
+    url: "/admin",
     permission: "admin_dashboard.read",
   },
 

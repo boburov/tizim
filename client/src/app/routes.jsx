@@ -12,7 +12,7 @@ import NotFoundPage from "@/shared/components/ui/feedback/NotFoundPage";
 
 // Layouts
 import AuthLayout from "@/features/auth/layouts/AuthLayout";
-import DashboardLayout from "@/shared/layouts/DashboardLayout";
+import OperationalLayout from "@/shared/layouts/OperationalLayout";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
@@ -27,6 +27,9 @@ import { LoginPage, BotAuthPage } from "@/features/auth";
 import { OwnerRoutes } from "@/owner";
 import { TeacherRoutes } from "@/teacher";
 import { StudentRoutes } from "@/student";
+
+// Rahbariyat qobig'i (rol emas - qarash nuqtasi, qarang admin/index.js)
+import { AdminRoutes, ExecutiveLayout } from "@/admin";
 
 const RoleHomeRedirect = () => {
   const { role, roleType, homePath, isLoading } = useAuth();
@@ -56,7 +59,23 @@ const Routes = () => (
 
     {/* Auth Guard Routes */}
     <Route element={<AuthGuard />}>
-      <Route element={<DashboardLayout />}>
+      {/* ═══ RAHBARIYAT QOBIG'I - SIDEBAR YO'Q ═══
+
+          `OperationalLayout` DAN TASHQARIDA turishi SHART. U
+          `SidebarProvider` bilan o'raladi va `AppHeader` `useSidebar()`
+          ni chaqiradi - ya'ni ichkarida "sidebar'ni yashirish" degan
+          narsa yo'q, provider baribir qoladi (Ctrl+B ko'rinmas panelni
+          ochib yuborardi, `SidebarRail` esa chetda bosiladigan zona
+          bo'lib turardi).
+
+          Ikkalasi ham `AuthGuard` ICHIDA: kirmagan foydalanuvchi
+          rahbariyat ekraniga ham tushmasligi kerak. Bo'lim ruxsatlari
+          esa `admin/routes/index.jsx` da (har bo'lim alohida). */}
+      <Route element={<ExecutiveLayout />}>
+        <Route path="/admin/*" element={<AdminRoutes />} />
+      </Route>
+
+      <Route element={<OperationalLayout />}>
         {/* Owner */}
         <Route
           path="/owner/*"

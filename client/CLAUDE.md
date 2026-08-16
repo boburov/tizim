@@ -33,8 +33,77 @@ client/src/
 │  ├─ navigation/sidebar.config.js
 │  └─ index.js
 ├─ teacher/                 # TEACHER panel (same structure)
-└─ student/                 # STUDENT panel (same structure)
+├─ student/                 # STUDENT panel (same structure)
+└─ admin/                   # EXECUTIVE shell (/admin) - NOT a role, a viewpoint
+   ├─ features/<name>/      # overview, finance, academic, team, insights
+   ├─ layout/               # ExecutiveLayout (NO sidebar) + ExecutiveHeader
+   ├─ navigation/           # executiveNav.config.js, drilldown.js
+   ├─ api/ hooks/           # data adapters (status contract)
+   ├─ routes/index.jsx
+   └─ index.js
 ```
+
+## Two shells: operational vs executive
+
+| | `/owner/*` (+ `/teacher`, `/student`) | `/admin` |
+|---|---|---|
+| Layout | `OperationalLayout` - **sidebar** | `ExecutiveLayout` - **no sidebar** |
+| Navigation | `AppSidebar`, 30+ links | top bar + 5 section tabs |
+| Purpose | daily work ("what do I do") | oversight ("how are we doing") |
+| Guarded by | `RoleGuard` | `PermissionGuard` per section |
+
+`admin/` is **not a role** - it is a second view of the same data. It adds **no new
+permission keys**; each section reuses an existing one (`admin_dashboard.read`,
+`finance.read`, `salary.read`, `ai.read`).
+
+`/admin` is mounted **outside** `OperationalLayout` in `app/routes.jsx`. It has to
+be: `OperationalLayout` wraps everything in `SidebarProvider` and `AppHeader` calls
+`useSidebar()`, so "hiding" the sidebar from inside is not possible - the provider,
+the `Ctrl+B` shortcut and `SidebarRail` would all still be there.
+
+> `DashboardLayout` is now a re-export of `OperationalLayout`. Use the new name.
+
+### Dashboard components and the data contract
+
+`shared/components/dashboard/` holds the reusable pieces: `KpiTile`, `ChartCard`,
+`InsightCard`, `DataState`, `SectionGrid` (`DashboardSection` / `KpiGrid` /
+`SplitRow`).
+
+They are **data-source agnostic**: they take `{ status, data, error, onRetry }`,
+never a query. `dataStatus.js` is the contract:
+
+```js
+const overview = useOverviewData(params);   // -> { status, data, error, refetch }
+
+<KpiTile label="Bu oy tushum" isMoney
+         value={overview.data?.revenueThisMonth}
+         status={overview.status} error={overview.error}
+         onRetry={overview.refetch} />
+```
+
+`DATA_STATUS`: `idle | loading | error | empty | not_connected | ready`.
+
+**A number is rendered only when `status === "ready"` AND the value is a finite
+number.** `DataState` takes its children as a *render prop*, so `data` simply does
+not exist outside the ready branch - fabricating a value would take deliberate
+effort rather than a stray `|| 0`.
+
+Rules that follow from this, and why:
+
+- **Never write `|| 0` / `?? 0` on a metric.** A failed request would render a
+  confident "0 so'm". The server distinguishes these: `attendanceGauge.rate` is
+  `null` when no lesson was scheduled - that is "not measured", not "0%".
+- `not_connected` is **separate from** `empty`. "No payments this month" is a
+  business fact; "the payments module is not migrated yet" is a technical state.
+  It is detected from the response (404/501), **not** from a hardcoded list - so
+  a section lights up on its own once its endpoint ships.
+- Use `narrow(source, selector, { emptyWhen })` when one response feeds several
+  blocks and a sub-field can be missing while the request itself succeeded.
+- **Do not re-compute on the client what the server already computes**
+  (`netGrowth`, attendance `rate`). Two formulas drift into two different numbers.
+- Drill-down targets live **only** in `admin/navigation/drilldown.js`, verified
+  against `owner/routes/index.jsx`. A 404 from an executive card destroys trust in
+  the numbers next to it.
 
 ## Feature rules
 
@@ -228,7 +297,14 @@ The same validation (`validateHsl` in `shared/utils/color.js`) logs a `console.w
 ## Commands
 
 ```bash
-npm run dev      # on port 5173
+npm run dev                  # on port 5173
 npm run build
 npm run lint
+npm run check:contrast       # WCAG AA on colour tokens
+npm run check:ai-metrics     # AI metric tone logic
+npm run check:data-contract  # dashboard status contract (29 checks)
 ```
+
+`check:data-contract` guards `shared/components/dashboard/dataStatus.js`. A bug
+there does not crash - it puts a **confident wrong number** on an executive screen,
+which nobody double-checks. Run it after touching that file.

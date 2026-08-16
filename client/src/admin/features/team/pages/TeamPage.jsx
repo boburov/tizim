@@ -19,11 +19,14 @@ import { useOverviewData } from "../../../hooks/useExecutiveData";
 // Local components
 import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
 
+// Navigation
+import { DRILLDOWN, userHref } from "../../../navigation/drilldown";
+
 /**
  * JAMOA KESIMI.
  *
- * HOZIRCHA CHEKLANGAN va bu ATAYLAB ochiq ko'rsatilgan: maosh
- * (`/staff-payroll`) va o'qituvchi davomati modullari `overview`
+ * HOZIRCHA CHEKLANGAN va bu ATAYLAB ochiq ko'rsatilgan: maosh va
+ * o'qituvchi davomati modullari `overview`
  * javobiga kirmaydi. Ular uchun "ulanmagan" emas, DRILL-DOWN
  * havolasi berilgan - modullar ishlaydi, shunchaki bu yerda
  * jamlanma ko'rsatkich yo'q.
@@ -60,7 +63,7 @@ const TeamPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/teachers"
+          to={DRILLDOWN.teachers}
           hint="Faol o'qituvchilar"
         />
         <KpiTile
@@ -70,7 +73,7 @@ const TeamPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/groups"
+          to={DRILLDOWN.groups}
           hint="O'qituvchilarga taqsimlangan"
         />
       </KpiGrid>
@@ -78,7 +81,7 @@ const TeamPage = () => {
       <DashboardSection
         title="Eng faol o'qituvchilar"
         hint="Guruh va o'quvchi soni bo'yicha"
-        to="/owner/teachers"
+        to={DRILLDOWN.teachers}
         toLabel="Barcha o'qituvchilar"
       >
         <DataState
@@ -95,7 +98,9 @@ const TeamPage = () => {
               {items.map((t, i) => (
                 <li key={t.id || t._id || i}>
                   <Link
-                    to={t.id || t._id ? `/owner/teachers/${t.id || t._id}` : "/owner/teachers"}
+                    // `/owner/teachers/:id` MARSHRUTI YO'Q - o'qituvchi
+                    // tafsiloti umumiy `/owner/users/:id` sahifasida.
+                    to={userHref(t.id || t._id)}
                     className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent"
                   >
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
@@ -130,9 +135,9 @@ const TeamPage = () => {
         hint="Bu yerda jamlanma ko'rsatkich hali yo'q - modul o'z sahifasida ishlaydi"
       >
         <div className="flex flex-wrap gap-2">
-          <QuickLink to="/owner/teachers/maosh" label="O'qituvchi maoshlari" />
-          <QuickLink to="/owner/staff/payroll" label="Xodimlar oyligi" />
-          <QuickLink to="/owner/teacher-attendance" label="O'qituvchi davomati" />
+          <QuickLink to={DRILLDOWN.teacherSalaries} label="O'qituvchi maoshlari" />
+          <QuickLink to={DRILLDOWN.staffPayroll} label="Xodimlar oyligi" />
+          <QuickLink to={DRILLDOWN.teacherAttendance} label="O'qituvchi davomati" />
         </div>
       </DashboardSection>
     </div>

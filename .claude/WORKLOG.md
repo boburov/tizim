@@ -12193,3 +12193,109 @@ Cheklov o'z ishini qildi — bu **test fixture'
 <sub>session `c49e703c` · branch `main` · 110 ta qadam</sub>
 
 ---
+
+## 2026-08-16 22:20 — davom eting
+
+**So'rov**
+
+> davom eting
+
+**O'zgargan fayllar (22)**
+
+- `client/src/admin/layout/ExecutiveLayout.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/components/dashboard/dataStatus.js` — tahrirlandi
+- `client/src/admin/api/executive.api.js` — yaratildi/qayta yozildi
+- `client/src/admin/hooks/useExecutiveData.js` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/admin/features/overview/pages/OverviewPage.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/shared/components/dashboard/KpiTile.jsx` — tahrirlandi
+- `client/src/admin/components/ExecutivePageHeader.jsx` — yaratildi/qayta yozildi
+- `client/src/admin/components/CashflowBars.jsx` — yaratildi/qayta yozildi
+- `client/src/admin/features/finance/pages/FinancePage.jsx` — yaratildi/qayta yozildi
+- `client/src/admin/features/finance/components/BranchPnlTable.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/admin/features/academic/pages/AcademicPage.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/admin/features/academic/components/StudentFlowBars.jsx` — yaratildi/qayta yozildi
+- `client/src/admin/features/academic/components/AttendanceBreakdown.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/admin/features/team/pages/TeamPage.jsx` — yaratildi/qayta yozildi
+- `client/src/admin/navigation/drilldown.js` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/admin/features/insights/pages/InsightsPage.jsx` — yaratildi/qayta yozildi
+- `client/src/admin/routes/index.jsx` — yaratildi/qayta yozildi
+- `client/src/admin/index.js` — yaratildi/qayta yozildi
+- `client/src/app/routes.jsx` — tahrirlandi
+- `client/src/shared/layouts/OperationalLayout.jsx` — yaratildi/qayta yozildi
+- `client/src/shared/layouts/DashboardLayout.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/navigation/sidebar.config.js` — tahrirlandi
+
+**Buyruqlar (46)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ BranchModeBanner (sidebar'ga bog'liqmi?) ═══"; head -40 src/shared/components/layout/BranchModeBanner.jsx …
+D=/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/subagents/workflows/wf_1298f7bc-7ee node -e "const fs…
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ ENDPOINTS.adminDashboard ═══"; grep -n "adminDashboard" -A 8 src/shared/api/endpoints.js | head -12 echo; …
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ qk.ai kalitlari ═══"; sed -n '245,275p' src/shared/lib/query/keys.js
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ DashboardStatCards.jsx ═══"; cat src/owner/features/adminDashboard/components/DashboardStatCards.jsx echo;…
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ MonthlySummaryCard (data.* maydonlari) ═══"; grep -oE "data\.[a-zA-Z]+" src/owner/features/adminDashboard/…
+cd /Users/shukrullo/Desktop/lc-total/server grep -n "return {" -A 40 src/modules/adminDashboard/services/adminDashboard.service.js 2>/dev/null | head -50 ls src…
+cd /Users/shukrullo/Desktop/lc-total/server grep -n "export const overview" -A 80 src/modules/adminDashboard/services/adminDashboard.service.js | grep -nE "retu…
+cd /Users/shukrullo/Desktop/lc-total/server grep -n "^export const" src/modules/adminDashboard/services/adminDashboard.service.js echo "───── overview qismi ───…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '255,296p' src/modules/adminDashboard/services/adminDashboard.service.js
+cd /Users/shukrullo/Desktop/lc-total/client python3 - <<'PY' import io p="src/shared/components/dashboard/KpiTile.jsx"; s=io.open(p,encoding="utf-8").read() s =…
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ SelectYear props ═══"; cat src/shared/components/ui/select/SelectYear.jsx
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '296,330p' src/modules/adminDashboard/services/adminDashboard.service.js echo "─── attendanceGauge return ───…
+cd /Users/shukrullo/Desktop/lc-total/client grep -oE 'path="[^"]+"' src/owner/routes/index.jsx | sed 's/path="//;s/"//' | sort -u | head -60
+cd /Users/shukrullo/Desktop/lc-total/client grep -oE 'path="[^"]+"' src/owner/routes/index.jsx | sed 's/path="//;s/"//' | sort -u | tail -40 echo "═══ nested tu…
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ moliya hisoboti marshruti ═══" grep -n "FinanceReportPage\|WriteOffsPage\|BranchPnlPage" src/owner/routes/…
+cd /Users/shukrullo/Desktop/lc-total/client sed -n '452,466p' src/owner/routes/index.jsx echo "─── students/tolovlar mavjudmi (162-192) ───" sed -n '162,192p' s…
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ branches/stats query param qabul qiladimi ═══" grep -n "BranchStatsPage" -B 5 -A 8 src/owner/routes/index.…
+cd /Users/shukrullo/Desktop/lc-total/client python3 - <<'PY' import io, re, os FIX = { '"/owner/students/tolovlar"': 'DRILLDOWN.studentPayments', '"/owner/stude…
+cd /Users/shukrullo/Desktop/lc-total/client python3 - <<'PY' import io p="src/admin/features/team/pages/TeamPage.jsx"; s=io.open(p,encoding="utf-8").read() s = …
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ branches/:id marshruti bormi ═══" grep -n 'path="branches' src/owner/routes/index.jsx
+cd /Users/shukrullo/Desktop/lc-total/client python3 - <<'PY' import io p="src/admin/features/insights/pages/InsightsPage.jsx"; s=io.open(p,encoding="utf-8").rea…
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ build ═══" npm run build 2>&1 | tail -25
+cd /Users/shukrullo/Desktop/lc-total/client npx eslint src/admin src/shared/components/dashboard src/shared/layouts src/app/routes.jsx 2>&1 | tail -30
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ to'liq lint ═══"; npm run lint 2>&1 | tail -8 echo; echo "═══ workflow ═══" D=/Users/shukrullo/.claude/pro…
+# … yana 21 ta
+```
+
+**Natija**
+
+Uchalasi ham sidebar'dan mustaqil. Workflow holatini ko'ray:
+
+Endi muhim yaxshilanish: "ulanmagan" ni **qo'lda ro'yxatlash o'rniga** javobning o'zidan aniqlash — aks holda backend ulanganda klient hamon "ulanmagan" deb turaverardi:
+
+Endi ma'lumot qatlami — `admin` o'z API'siga ega, lekin **bir xil query kaliti** bilan (TanStack ikki marta so'ramaydi):
+
+`qk.ai.insights()` — bu prefiks, parametr olmaydi. Ro'yxat uchun `qk.ai.list(params)`:
+
+Endi executive sahifalar. Avval umumiy ko'rinish — drill-down `/owner/*` ga olib boradi:
+
+Overview javobining haqiqiy shaklini tekshiray — maydon nomlarini o'ylab topmaslik uchun:
+
+Haqiqiy shakl aniqlandi. Qolgan maydonlarni ham tekshiray:
+
+Muhim topilma: server `attendanceGauge.rate` ni **`null`** qaytaradi (o'lchanmaganda), `debt` maydoni esa **umuman yo'q**. `KpiTile` hozir `null` ni "0%" qilib ko'rsatardi — bu aynan soxta raqam:
+
+Endi `OverviewPage` ni serverning **haqiqiy** maydonlariga moslashtiraman (`debt` maydoni yo'q — uni o'ylab topmayman):
+
+`SelectYear` yorliq bilan keladi — sarlavha qatorida noqulay. Ikkala tanlagichni bir xil qilaman:
+
+Endi `CashflowBars` — sof prezentatsion, **o'z ma'lumotini olmaydi**:
+
+Qolgan sahifalar. Har biri mavjud maydonlarga tayanadi, yo'qlari **ochiq "ulanmagan"** deb ko'rsatiladi:
+
+`ChartCard` ga qism-maydon uzatilganda holat qayta hisoblanishi kerak. Buning uchun shartnomaga `narrow()` qo'shaman:
+
+Endi jamoa va tavsiyalar sahifalari:
+
+Havolalar haqiqiy bo'lishi shart — o'zim "ishlamaydigan havola ishonchni yo'qotadi" deb yozdim. Marshrutlarni tekshiraman:
+
+`maosh` emas — `maoshlar`; `staff/payroll` ham noto'g'ri. Aniq manzillarni tekshiraman:
+
+Barcha manzillarni bitta tekshirilgan joyga yig'aman — sochib yuborilsa yana noto'g'ri havola paydo bo'ladi:
+
+`BranchStatsPage` query param o'qimaydi (`
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 89 ta qadam</sub>
+
+---

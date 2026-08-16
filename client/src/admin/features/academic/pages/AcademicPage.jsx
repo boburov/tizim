@@ -19,6 +19,9 @@ import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
 import StudentFlowBars from "../components/StudentFlowBars";
 import AttendanceBreakdown from "../components/AttendanceBreakdown";
 
+// Navigation
+import { DRILLDOWN } from "../../../navigation/drilldown";
+
 /**
  * O'QUV JARAYONI KESIMI.
  *
@@ -62,7 +65,7 @@ const AcademicPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/students"
+          to={DRILLDOWN.students}
         />
         <KpiTile
           label="Faol guruhlar"
@@ -71,7 +74,7 @@ const AcademicPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/groups"
+          to={DRILLDOWN.groups}
           hint={
             typeof o?.teachersCount === "number"
               ? `${o.teachersCount} o'qituvchi`
@@ -85,7 +88,7 @@ const AcademicPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/students/chiqib-ketish"
+          to={DRILLDOWN.studentRetention}
           hint="Chiqib ketish tahlili"
         />
         <KpiTile
@@ -96,7 +99,7 @@ const AcademicPage = () => {
           status={overview.status}
           error={overview.error}
           onRetry={overview.refetch}
-          to="/owner/attendance"
+          to={DRILLDOWN.attendance}
         />
       </KpiGrid>
 
@@ -109,7 +112,7 @@ const AcademicPage = () => {
             data={flow.data}
             error={flow.error}
             onRetry={flow.refetch}
-            to="/owner/students/chiqib-ketish"
+            to={DRILLDOWN.studentRetention}
             height="h-64"
             emptyHint="Oqim hisoblash uchun yetarli tarix yo'q."
           >
@@ -127,11 +130,15 @@ const AcademicPage = () => {
             // xulosa berardi.
             {...gauge}
             onRetry={overview.refetch}
-            to="/owner/attendance"
+            to={DRILLDOWN.attendance}
             height="h-64"
             emptyHint="Bugun dars belgilanmagan."
           >
-            {(gauge) => <AttendanceBreakdown gauge={gauge} />}
+            {/* Nom `gauge` EMAS: tashqaridagi `gauge` o'zgaruvchisi
+                (holat obyekti) bilan bir xil bo'lsa, kim nimani
+                oladi degan savol tug'ilardi. Bu yerga NARROW
+                QILINGAN ma'lumot keladi, holat obyekti emas. */}
+            {(gaugeData) => <AttendanceBreakdown gauge={gaugeData} />}
           </ChartCard>
         }
       />

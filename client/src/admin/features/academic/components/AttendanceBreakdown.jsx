@@ -21,7 +21,20 @@ const AttendanceBreakdown = ({ gauge }) => {
     { label: "Kelmagan", value: gauge?.absent, className: "bg-chart-2" },
   ];
 
-  const total = rows.reduce((s, r) => s + (Number(r.value) || 0), 0);
+  // MAXRAJ SERVERDAN (`gauge.total`), qayta hisoblanmaydi.
+  //
+  // Server `total` ni `present + late + absent` deb hisoblaydi va
+  // `rate` ni AYNAN shu maxrajdan chiqaradi. Bu yerda uni qayta
+  // yig'ish hozir bir xil natija berardi, lekin serverdagi ta'rif
+  // o'zgarsa (masalan `excused` maxrajga qo'shilsa) ekranda foiz bir
+  // maxrajdan, "N ta yozuv" boshqa maxrajdan chiqib, ular bir-biriga
+  // zid bo'lib qolardi.
+  //
+  // Segment kengligi uchun esa yig'indi KERAK - u faqat chizish
+  // nisbati, da'vo emas.
+  const total = Number(gauge?.total);
+  const hasTotal = Number.isFinite(total);
+  const barSum = rows.reduce((s, r) => s + (Number(r.value) || 0), 0);
 
   return (
     <div className="flex h-full flex-col justify-center gap-4">
@@ -30,15 +43,20 @@ const AttendanceBreakdown = ({ gauge }) => {
           {rate}
           <span className="text-2xl text-muted-foreground">%</span>
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {total} ta yozuv bo'yicha
-        </p>
+        {/* Sanoq faqat server bergan bo'lsa. Yo'q bo'lsa umuman
+            yozilmaydi - "0 ta yozuv bo'yicha" degan da'vo foizni
+            ma'nosiz qilib qo'yardi. */}
+        {hasTotal && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {total} ta yozuv bo'yicha
+          </p>
+        )}
       </div>
 
       {/* Yagona gorizontal chiziq - uchta segment. Aylana diagramma
           o'rniga: uchta qiymatni solishtirishda uzunlik burchakdan
           aniqroq o'qiladi. */}
-      {total > 0 && (
+      {barSum > 0 && (
         <div className="flex h-2 overflow-hidden rounded-full bg-muted">
           {rows.map((r) => {
             const v = Number(r.value) || 0;
@@ -47,7 +65,7 @@ const AttendanceBreakdown = ({ gauge }) => {
               <div
                 key={r.label}
                 className={r.className}
-                style={{ width: `${(v / total) * 100}%` }}
+                style={{ width: `${(v / barSum) * 100}%` }}
               />
             );
           })}
