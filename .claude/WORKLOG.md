@@ -11803,3 +11803,110 @@ Barcha tuzatishlar haqiqiy ma'lumot bilan tasdiqlandi. Yakuniy tekshiruv.
 <sub>session `82e8dd1f` · branch `main` · 21 ta qadam</sub>
 
 ---
+
+## 2026-08-16 13:17 — # EDUCATION CENTER ERP/CRM — SUPER ADMIN DASHBOARD + DYNAMIC BRANCH AR
+
+**So'rov**
+
+> # EDUCATION CENTER ERP/CRM — SUPER ADMIN DASHBOARD + DYNAMIC BRANCH ARCHITECTURE UPGRADE
+>
+> You are working on an existing production-level Education Center ERP/CRM system.
+>
+> ## 0. CRITICAL RULE
+>
+> DO NOT rebuild the project from scratch.
+>
+> DO NOT migrate the technology stack.
+>
+> The current stack is:
+>
+> * Backend: Node.js
+> * Database: PostgreSQL
+> * ORM: Prisma
+> * Frontend: existing frontend already connected to the backend
+> * Authentication: existing authentication system
+> * Authorization: existing role-based access control
+>
+> Your job is to **upgrade and refactor the existing system safely**.
+>
+> Before changing anything, inspect the entire existing codebase and understand:
+>
+> * database schema
+> * Prisma relations
+> * authentication
+> * authorization
+> * users
+> * roles
+> * students
+> * teachers
+> * groups
+> * courses
+> * payments
+> * expenses
+> * finance
+> * leads
+> * attendance
+> * feedback
+> * branches
+> * rooms
+> * salaries
+> * transactions
+> * existing dashboard APIs
+> * existing frontend dashboard
+> * existing routes
+> * existing services
+> * existing controllers
+> * existing middleware
+> * existing validation
+> * existing business logic
+>
+> Do not assume a feature does not exist just because it is not mentioned in this prompt.
+>
+> If functionality alre
+> …
+
+**O'zgargan fayllar (2)**
+
+- `server/src/modules/leads/services/leadRouting.service.js` — tahrirlandi
+- `server/src/modules/auth/services/auth.service.js` — tahrirlandi
+
+**Buyruqlar (20)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && echo "═══ MIGRATION.md ═══" && head -70 MIGRATION.md 2>/dev/null || echo "yo'q"
+echo "═══ Prisma bormi ═══" && ls prisma/ 2>/dev/null && echo && echo "═══ schema modellari soni ═══" && grep -c "^model " prisma/schema.prisma 2>/dev/null && e…
+sed -n '70,140p' MIGRATION.md
+echo "═══ MULTI_BRANCH env ═══" && grep -rn "MULTI_BRANCH" src/ .env.example 2>/dev/null | head -12 && echo && echo "═══ Mongoose hali ishlatilyaptimi ═══" && g…
+echo "═══ ensureMainBranch nima qaytaradi ═══" && grep -n "export const ensureMainBranch" -A 25 src/helpers/branchAccess.helper.js | head -30 && echo && echo "═…
+echo "═══ prisma ishlatadigan fayllarda qolgan ._id ═══" && for f in $(grep -rl "config/prisma" src/ 2>/dev/null); do n=$(grep -c "\._id" "$f" 2>/dev/null || ec…
+echo "═══ withLegacyId ═══" && cat src/utils/serialize.js 2>/dev/null | head -30 && echo && echo "═══ findAnyBranch wrap qiladimi ═══" && grep -n "findAnyBranch…
+echo "═══ ensureMainBranch/resolveMainBranchId natijasida ._id o'qilyaptimi ═══" && grep -rn "ensureMainBranch()\|resolveMainBranchId()" src/ --include="*.js" -…
+sed -n '145,185p' src/helpers/branchAccess.helper.js && echo "═══ index.js boot tekshiruvi ═══" && sed -n '10,55p' src/index.js
+sed -n '1,52p' src/helpers/branchAccess.helper.js
+python3 - <<'PY' p = "src/helpers/branchAccess.helper.js" s = open(p, encoding="utf-8").read() # 1) isMultiBranch qo'shamiz + keshni umumlashtiramiz s = s.repla…
+grep -n "env\." src/helpers/branchAccess.helper.js | head -3; echo "(bo'sh = env import endi keraksiz)" python3 - <<'PY' p = "src/helpers/branchAccess.helper.js…
+sed -n '8,18p' src/modules/auth/services/auth.service.js
+node --check src/modules/auth/services/auth.service.js && echo "auth ok" && grep -n "env\." src/modules/auth/services/auth.service.js | head -3; echo "(bo'sh = …
+python3 - <<'PY' # branches.routes.js: keraksiz importlarni olib tashlaymiz p = "src/modules/branches/branches.routes.js" s = open(p, encoding="utf-8").read() b…
+python3 - <<'PY' p = "src/index.js" s = open(p, encoding="utf-8").read() import re # qolgan chaqiruvni to'liq olib tashlaymiz (ko'p qatorli .catch bilan) s = re…
+python3 - <<'PY' p = ".env.example" s = open(p, encoding="utf-8").read() import re lines = s.split("\n") out, skip_next_blank = [], False for i, ln in enumerate…
+grep -n '"test' package.json | head -5; echo "─── auth-prisma testi ───"; npm run test:auth-prisma 2>&1 | tail -8
+cd /Users/shukrullo/Desktop/lc-total && git status --porcelain | head -20 && echo "..." && git log --oneline -3
+git add -A && git commit -q -F - <<'EOF' refactor(branch): MULTI_BRANCH env bayrog'ini bazadan aniqlanadigan qildi MUAMMO - Filial rejimi `.env` da (MULTI_BRANC…
+```
+
+**Natija**
+
+Loyiha MongoDB → PostgreSQL/Prisma ga ko'chirilyapti. Kod yozishdan oldin **Faza 1 — audit** qilaman.
+
+Migratsiya bitta invariantni jimgina buzibdi. Shunga o'xshash xatolar bor-yo'qligini tekshiraman.
+
+Tasdiqlandi — `findAnyBranch` faqat `id` qaytaradi, ya'ni `main._id` **undefined**. Tuzataman.
+
+`req.user._id` ataylab taxallus qilingan — qolgan `._id` lar xavfsiz. Bitta haqiqiy xato topildi va tuzatildi.
+
+Endi **env-ga bog'liq filial mantig'ini olib tashlayman** — yangi spetsifikatsiyaning 2-bo'limi. Avval mavjud kesh mexanizmini ko'ray.
+
+<sub>session `c49e703c` · branch `main` · 22 ta qadam</sub>
+
+---

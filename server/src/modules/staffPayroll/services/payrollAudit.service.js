@@ -1,11 +1,24 @@
-import PayrollAuditLog, {
+import prisma from "../../../config/prisma.js";
+import {
   PAYROLL_AUDIT_ACTIONS,
   PAYROLL_AUDIT_ACTION_LABELS,
-} from "../../../models/payrollAuditLog.model.js";
+} from "../../../constants/payrollAudit.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyIds } from "../../../utils/serialize.js";
 import logger from "../../../config/logger.js";
 
 export { PAYROLL_AUDIT_ACTIONS };
+
+// Chaqiruvchilar `employee` / `actor` / `targetId` ga hujjat ham,
+// ID ham uzatadi (masalan `actor` - to'liq `req.user`). Prisma faqat
+// satr qabul qiladi, shuning uchun bitta joyda normallashtiramiz.
+const toId = (v) => {
+  if (!v) return null;
+  if (typeof v === "string") return v;
+  // Prisma obyektida `id`, eski Mongoose hujjatida `_id` - ikkalasi ham
+  // bo'lishi mumkin (migratsiya davomida aralash chaqiruvchilar bor).
+  return v.id ? String(v.id) : v._id ? String(v._id) : null;
+};
 
 /**
  * AUDIT YOZUVI.
@@ -31,23 +44,35 @@ export const record = async ({
   meta = {},
 }) => {
   try {
-    return await PayrollAuditLog.create({
-      employee,
-      year,
-      month,
-      action,
-      targetType,
-      targetId,
-      oldValue,
-      newValue,
-      reason,
-      actor: actor?._id || actor || null,
-      actorLabel: actor?.firstName
-        ? `${actor.firstName} ${actor.lastName || ""}`.trim()
-        : actor
-          ? ""
-          : "Tizim",
-      meta,
+    const employeeId = toId(employee);
+    if (!employeeId) {
+      // Ilgari Mongoose `required: true` bilan rad etardi. Prisma'da FK
+      // xatosi kelib chiqardi - uni oldindan, aniq xabar bilan ushlaymiz.
+      logger.warn({ action }, "Audit yozuvi: xodim aniqlanmadi");
+      return null;
+    }
+
+    return await prisma.payrollAuditLog.create({
+      data: {
+        employeeId,
+        year,
+        month,
+        action,
+        targetType,
+        targetId: toId(targetId),
+        // Mongo `Mixed` → Prisma `Json?`. `undefined` Prisma'da "tegma"
+        // degani, `null` esa "NULL yoz" - shuning uchun ochiq `?? null`.
+        oldValue: oldValue ?? null,
+        newValue: newValue ?? null,
+        reason,
+        actorId: toId(actor),
+        actorLabel: actor?.firstName
+          ? `${actor.firstName} ${actor.lastName || ""}`.trim()
+          : actor
+            ? ""
+            : "Tizim",
+        meta: meta ?? {},
+      },
     });
   } catch (err) {
     logger.warn({ err: err?.message, action }, "Audit yozuvini saqlab bo'lmadi");
@@ -73,12 +98,13 @@ export const assertMutable = async (payroll, { action, actor, reason } = {}) => 
   if (!locked && !paid) return;
 
   await record({
-    employee: payroll.employee,
+    // Prisma'da ustun `employeeId`; eski Mongoose hujjatida `employee`.
+    employee: payroll.employeeId || payroll.employee,
     year: payroll.year,
     month: payroll.month,
     action: PAYROLL_AUDIT_ACTIONS.BLOCKED,
     targetType: "staffPayroll",
-    targetId: payroll._id,
+    targetId: payroll.id || payroll._id,
     oldValue: {
       lifecycle: payroll.lifecycle,
       paidAmount: payroll.paidAmount,
@@ -99,21 +125,27 @@ export const assertMutable = async (payroll, { action, actor, reason } = {}) => 
 
 /** Xodimning moliyaviy TAYMLAYNI (audit tarixi). */
 export const timeline = async (employeeId, { limit = 100, year, month } = {}) => {
-  const filter = { employee: employeeId };
-  if (year) filter.year = Number(year);
-  if (month) filter.month = Number(month);
+  const where = { employeeId: String(employeeId) };
+  if (year) where.year = Number(year);
+  if (month) where.month = Number(month);
 
-  const rows = await PayrollAuditLog.find(filter)
-    .sort({ createdAt: -1 })
-    .limit(Math.min(Number(limit) || 100, 300))
-    .populate("actor", { firstName: 1, lastName: 1 })
-    .lean();
+  const rows = await prisma.payrollAuditLog.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: Math.min(Number(limit) || 100, 300),
+    // Mongoose `.populate("actor", {...})` → Prisma `include` + `select`.
+    include: {
+      actor: { select: { id: true, firstName: true, lastName: true } },
+    },
+  });
 
-  return rows.map((r) => ({
-    ...r,
-    actionLabel: PAYROLL_AUDIT_ACTION_LABELS[r.action] || r.action,
-    actorName: r.actor
-      ? `${r.actor.firstName || ""} ${r.actor.lastName || ""}`.trim()
-      : r.actorLabel || "Tizim",
-  }));
+  return withLegacyIds(
+    rows.map((r) => ({
+      ...r,
+      actionLabel: PAYROLL_AUDIT_ACTION_LABELS[r.action] || r.action,
+      actorName: r.actor
+        ? `${r.actor.firstName || ""} ${r.actor.lastName || ""}`.trim()
+        : r.actorLabel || "Tizim",
+    })),
+  );
 };

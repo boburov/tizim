@@ -1,6 +1,4 @@
-import StudentFreeze from "../../../models/studentFreeze.model.js";
-import User from "../../../models/user.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
 import { assertTargetInScope } from "../../../helpers/branchAccess.helper.js";
@@ -9,8 +7,19 @@ import {
   localTodayMidnight,
 } from "../../../helpers/attendance.helper.js";
 import { correlationCacheInvalidate } from "../../../helpers/correlationCache.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import * as financePaymentService from "../../finance/services/studentPayment.service.js";
 import logger from "../../../config/logger.js";
+
+// ─────────────────────────────────────────────────────────────────
+// MONGO → PRISMA
+//   student   → studentId      createdBy → createdById
+//   endedBy   → endedById      isDeleted: { $ne: true } → isDeleted: false
+//
+// `isDeleted: { $ne: true }` NEGA `false` GA AYLANDI: Mongo'da maydon
+// umuman bo'lmasligi mumkin edi ("mavjud emas" ham "true emas"), Postgres
+// ustunida esa `@default(false)` bor - NULL holat yo'q.
+// ─────────────────────────────────────────────────────────────────
 
 // FILIAL HIMOYASI.
 //
@@ -20,8 +29,25 @@ import logger from "../../../config/logger.js";
 // uchun kundalik amal), shuning uchun chegara shu yerda qo'yiladi.
 //
 // `scope` berilmasa (job / ichki chaqiruv) tekshirilmaydi.
+//
+// DIQQAT - `branchAssignments` ATAYLAB YUKLANADI: assertTargetInScope
+// o'quvchining filiallarini `homeBranchId` VA `branchAssignments[]` dan
+// yig'adi. Prisma relation'ni so'ralmasa qaytarmaydi, ya'ni ro'yxat bo'sh
+// bo'lib qolardi va faqat `homeBranchId` mos kelgan holat o'tardi -
+// qo'shimcha filialga biriktirilgan o'quvchi "kirish huquqingiz yo'q"
+// xatosini olardi (jimgina fail-closed regressiya).
 const ensureStudent = async (studentId, scope = null) => {
-  const u = await User.findById(studentId);
+  const u = await prisma.user.findUnique({
+    where: { id: String(studentId) },
+    select: {
+      id: true,
+      role: true,
+      isActive: true,
+      enrolledAt: true,
+      homeBranchId: true,
+      branchAssignments: { select: { branchId: true } },
+    },
+  });
   if (!u || u.role !== ROLES.STUDENT) {
     throw new ApiError(404, "O'quvchi topilmadi");
   }
@@ -33,10 +59,8 @@ const ensureStudent = async (studentId, scope = null) => {
 
 // Ochiq (hozir amaldagi) muzlatishni qaytaradi yoki null.
 const findActiveFreeze = (studentId) =>
-  StudentFreeze.findOne({
-    student: studentId,
-    endDate: null,
-    isDeleted: { $ne: true },
+  prisma.studentFreeze.findFirst({
+    where: { studentId: String(studentId), endDate: null, isDeleted: false },
   });
 
 // Muzlatish/chiqarishdan keyin: to'lovlarni qayta hisoblaymiz (muzlatilgan
@@ -73,12 +97,11 @@ export const freeze = async (studentId, { startDate, reason, by, scope } = {}) =
   // Muzlatish sanasi o'quvchi guruhga qo'shilgan (kelgan) kundan oldin bo'lmasin.
   // Bir nechta faol guruh bo'lsa - eng erta qo'shilgan sana bilan cheklanadi;
   // faol a'zolik bo'lmasa - ro'yxatga olingan sana (enrolledAt) bilan.
-  const firstJoin = await GroupMembership.findOne(
-    { student: studentId, leftAt: null, isDeleted: { $ne: true } },
-    { joinedAt: 1 },
-  )
-    .sort({ joinedAt: 1 })
-    .lean();
+  const firstJoin = await prisma.groupMembership.findFirst({
+    where: { studentId: student.id, leftAt: null, isDeleted: false },
+    select: { joinedAt: true },
+    orderBy: { joinedAt: "asc" },
+  });
   const joinBound = firstJoin
     ? toUtcMidnight(firstJoin.joinedAt)
     : student.enrolledAt
@@ -91,24 +114,26 @@ export const freeze = async (studentId, { startDate, reason, by, scope } = {}) =
     );
   }
 
-  const created = await StudentFreeze.create({
-    student: studentId,
-    startDate: start,
-    endDate: null,
-    reason: reason || "",
-    createdBy: by?._id || null,
+  const created = await prisma.studentFreeze.create({
+    data: {
+      studentId: student.id,
+      startDate: start,
+      endDate: null,
+      reason: reason || "",
+      createdById: by?.id || by?._id || null,
+    },
   });
 
-  await afterFreezeChange(studentId);
-  return created;
+  await afterFreezeChange(student.id);
+  return withLegacyId(created);
 };
 
 // O'quvchini muzlatishdan chiqarish. endDate berilmasa - bugun (EXCLUSIVE:
 // shu kundan boshlab o'quvchi yana faol). Kelajak/boshlanishidan oldin bo'lmaydi.
 export const unfreeze = async (studentId, { endDate, by, scope } = {}) => {
-  await ensureStudent(studentId, scope);
+  const student = await ensureStudent(studentId, scope);
 
-  const active = await findActiveFreeze(studentId);
+  const active = await findActiveFreeze(student.id);
   if (!active) {
     throw new ApiError(400, "O'quvchi muzlatilmagan");
   }
@@ -124,55 +149,68 @@ export const unfreeze = async (studentId, { endDate, by, scope } = {}) => {
     );
   }
 
-  active.endDate = end;
-  active.endedBy = by?._id || null;
-  await active.save();
+  // Mongoose'da bu `active.endDate = ...; await active.save()` edi.
+  // Prisma yozuvlari oddiy obyekt - `save()` yo'q, ochiq `update` kerak.
+  const updated = await prisma.studentFreeze.update({
+    where: { id: active.id },
+    data: { endDate: end, endedById: by?.id || by?._id || null },
+  });
 
-  await afterFreezeChange(studentId);
-  return active;
+  await afterFreezeChange(student.id);
+  return withLegacyId(updated);
 };
 
 // Bitta o'quvchining muzlatish tarixi (yangi -> eski).
 export const listForStudent = async (studentId, scope = null) => {
-  await ensureStudent(studentId, scope);
-  const items = await StudentFreeze.find({
-    student: studentId,
-    isDeleted: { $ne: true },
-  })
-    .sort({ startDate: -1 })
-    .populate("createdBy", { firstName: 1, lastName: 1 })
-    .populate("endedBy", { firstName: 1, lastName: 1 });
-  return { items };
+  const student = await ensureStudent(studentId, scope);
+  const items = await prisma.studentFreeze.findMany({
+    where: { studentId: student.id, isDeleted: false },
+    orderBy: { startDate: "desc" },
+    // Mongoose `.populate("createdBy", {...})` bilan bir xil shakl:
+    // relation nomi ikkalasida ham `createdBy` / `endedBy`.
+    include: {
+      createdBy: { select: { id: true, firstName: true, lastName: true } },
+      endedBy: { select: { id: true, firstName: true, lastName: true } },
+    },
+  });
+  return { items: withLegacyIds(items) };
 };
 
 // Bitta o'quvchining HOZIRGI (ochiq) muzlatishi yoki null.
-export const getActiveFreeze = (studentId) =>
-  StudentFreeze.findOne({
-    student: studentId,
-    endDate: null,
-    isDeleted: { $ne: true },
-  })
-    .select("student startDate reason createdAt")
-    .lean();
+export const getActiveFreeze = async (studentId) => {
+  const row = await prisma.studentFreeze.findFirst({
+    where: { studentId: String(studentId), endDate: null, isDeleted: false },
+    select: { id: true, studentId: true, startDate: true, reason: true, createdAt: true },
+  });
+  return row ? withLegacyId(row) : null;
+};
 
 // HOZIR muzlatilgan barcha o'quvchilarning id'lari (ro'yxat filtri uchun).
-export const getActiveFrozenStudentIds = () =>
-  StudentFreeze.find({ endDate: null, isDeleted: { $ne: true } }).distinct(
-    "student",
-  );
+//
+// Mongoose `.distinct("student")` → Prisma `distinct` + `select`.
+// `distinct` qatorlarni qaytaradi, maydonni emas - shuning uchun `map`.
+export const getActiveFrozenStudentIds = async () => {
+  const rows = await prisma.studentFreeze.findMany({
+    where: { endDate: null, isDeleted: false },
+    select: { studentId: true },
+    distinct: ["studentId"],
+  });
+  return rows.map((r) => r.studentId);
+};
 
 // Ro'yxatni boyitish uchun: berilgan o'quvchilardan qaysilari HOZIR muzlatilgan.
 // Map(studentId -> { startDate, reason }).
 export const getActiveFreezeMap = async (studentIds) => {
   if (!studentIds || studentIds.length === 0) return new Map();
-  const rows = await StudentFreeze.find({
-    student: { $in: studentIds },
-    endDate: null,
-    isDeleted: { $ne: true },
-  })
-    .select("student startDate reason")
-    .lean();
+  const rows = await prisma.studentFreeze.findMany({
+    where: {
+      studentId: { in: studentIds.map(String) },
+      endDate: null,
+      isDeleted: false,
+    },
+    select: { studentId: true, startDate: true, reason: true },
+  });
   const map = new Map();
-  for (const r of rows) map.set(String(r.student), r);
+  for (const r of rows) map.set(String(r.studentId), r);
   return map;
 };

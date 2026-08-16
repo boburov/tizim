@@ -1,18 +1,37 @@
-import User from "../models/user.model.js";
-import GroupMembership from "../models/groupMembership.model.js";
+import prisma from "../config/prisma.js";
 import { ROLES } from "../constants/roles.js";
 import { toUtcMidnight } from "./attendance.helper.js";
 import logger from "../config/logger.js";
 
-// O'quvchining "yakunlash sanasi" (completedAt) ni qayta hisoblaydi. Manba ustuvorligi:
-//  1) completedAtManual=true → qo'lda override, tegmaymiz.
-//  2) archivedAt bor → completedAt = archivedAt (arxiv sanasi).
-//  3) faol a'zolik (leftAt=null) bor → null (hali o'qiyapti).
-//  4) faol a'zolik yo'q, lekin a'zoliklar bor → eng oxirgi leftAt.
-//  5) umuman a'zolik yo'q → null.
-// softDelete plugin avtomatik filtr QO'YMAYDI - isDeleted ni qo'lda filtrlash shart.
-export const recomputeStudentCompletion = async (studentId, { session } = {}) => {
-  const user = await User.findById(studentId).session(session || null);
+const db = (tx) => tx || prisma;
+
+/**
+ * O'quvchining "yakunlash sanasi" (completedAt) ni qayta hisoblaydi.
+ *
+ * MANBA USTUVORLIGI (o'zgarmadi):
+ *   1) completedAtManual=true → qo'lda override, tegmaymiz.
+ *   2) archivedAt bor        → completedAt = archivedAt.
+ *   3) faol a'zolik bor      → null (hali o'qiyapti).
+ *   4) faol a'zolik yo'q, lekin a'zoliklar bor → eng oxirgi leftAt.
+ *   5) umuman a'zolik yo'q   → null.
+ *
+ * PRISMA ESLATMASI: soft-delete avtomatik filtrlanmaydi (Mongo'da ham
+ * shunday edi - plugin faqat helper berardi), shuning uchun
+ * `isDeleted: false` ochiq yozilgan.
+ */
+export const recomputeStudentCompletion = async (studentId, { tx } = {}) => {
+  const client = db(tx);
+
+  const user = await client.user.findUnique({
+    where: { id: String(studentId) },
+    select: {
+      id: true,
+      role: true,
+      completedAt: true,
+      completedAtManual: true,
+      archivedAt: true,
+    },
+  });
   if (!user || user.role !== ROLES.STUDENT) return;
   if (user.completedAtManual) return;
 
@@ -20,33 +39,35 @@ export const recomputeStudentCompletion = async (studentId, { session } = {}) =>
   if (user.archivedAt) {
     completedAt = toUtcMidnight(user.archivedAt);
   } else {
-    const memberships = await GroupMembership.find({
-      student: studentId,
-      isDeleted: { $ne: true },
-    })
-      .select("leftAt")
-      .session(session || null)
-      .lean();
+    // FAOL a'zolik bormi - bitta so'rov yetadi (hammasini o'qish shart emas).
+    const active = await client.groupMembership.findFirst({
+      where: { studentId: user.id, isDeleted: false, leftAt: null },
+      select: { id: true },
+    });
 
-    const hasActive = memberships.some((m) => !m.leftAt);
-    if (!hasActive && memberships.length > 0) {
-      const maxLeft = memberships.reduce((max, m) => {
-        const t = new Date(m.leftAt).getTime();
-        return t > max ? t : max;
-      }, 0);
-      if (maxLeft > 0) completedAt = toUtcMidnight(new Date(maxLeft));
+    if (!active) {
+      // Eng OXIRGI chiqish sanasi. Mongo'da hamma a'zolik o'qilib JS'da
+      // reduce qilinardi; Postgres buni `orderBy` bilan o'zi qiladi.
+      const lastLeft = await client.groupMembership.findFirst({
+        where: { studentId: user.id, isDeleted: false, leftAt: { not: null } },
+        select: { leftAt: true },
+        orderBy: { leftAt: "desc" },
+      });
+      if (lastLeft?.leftAt) completedAt = toUtcMidnight(lastLeft.leftAt);
     }
   }
 
   const current = user.completedAt ? new Date(user.completedAt).getTime() : null;
   const next = completedAt ? completedAt.getTime() : null;
   if (current !== next) {
-    user.completedAt = completedAt;
-    await user.save({ session });
+    await client.user.update({
+      where: { id: user.id },
+      data: { completedAt },
+    });
   }
 };
 
-// Xato bo'lsa ham asosiy oqim buzilmasligi uchun best-effort variant.
+/** Xato bo'lsa ham asosiy oqim buzilmasligi uchun best-effort variant. */
 export const safeRecomputeStudentCompletion = async (studentId, opts) => {
   try {
     await recomputeStudentCompletion(studentId, opts);

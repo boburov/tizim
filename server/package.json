@@ -75,7 +75,8 @@
     "migrate:teacher-compensation": "node src/seeds/migrateTeacherCompensation.seed.js",
     "test:opening": "node tests/openingBalance.test.js",
     "test:ledger": "node tests/ledger.test.js",
-    "test:auth-prisma": "node tests/authPrisma.test.js"
+    "test:auth-prisma": "node tests/authPrisma.test.js",
+    "test:users-prisma": "node tests/usersPrisma.test.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

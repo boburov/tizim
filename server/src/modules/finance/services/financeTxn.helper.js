@@ -1,51 +1,45 @@
-import mongoose from "mongoose";
-import logger from "../../../config/logger.js";
+import prisma from "../../../config/prisma.js";
 
 // Moliyaviy ko'p-yozuvli amallarni ATOMIK qiladi. To'lov qabul qilish (create)
-// va bekor qilish (remove) bir nechta hujjatga yozadi (PaymentTransaction +
+// va bekor qilish (remove) bir nechta jadvalga yozadi (PaymentTransaction +
 // StudentPayment.paidAmount). Yarmida xato bo'lsa pul "yarim holatda" qolib
-// ketmasligi uchun barchasini bitta MongoDB tranzaksiyasiga o'raymiz.
+// ketmasligi uchun barchasini bitta tranzaksiyaga o'raymiz.
 //
-// MUHIM: MongoDB tranzaksiyasi faqat replica set / mongos'da ishlaydi. Standalone
-// Mongo'da (replica set yo'q) startSession().withTransaction() xato beradi -
-// shu holatda session=null bilan ketma-ket bajaramiz (atomiklik kafolati yo'q,
-// lekin ishlash to'xtamaydi) - kod bazada o'rnatilgan pattern.
+// ─────────────────────────────────────────────────────────────────
+// MONGO → POSTGRES: ENG MUHIM YAXSHILANISH SHU YERDA
 //
-// work(session) - berilgan session bilan barcha yozuvlarni bajaradigan funksiya.
-// Session berilgan barcha .create/.save/.findByIdAndUpdate'ga { session } sifatida
-// uzatilishi shart, aks holda yozuv tranzaksiyadan tashqarida qoladi.
-export const runFinanceTxn = async (work) => {
-  let session;
-  try {
-    session = await mongoose.startSession();
-  } catch {
-    // Session umuman ochilmadi - standalone fallback
-    return work(null);
-  }
+// Mongo variantida atomiklik SHARTLI edi: tranzaksiya faqat replica
+// set / mongos'da ishlardi, standalone Mongo'da esa kod jimgina
+// `work(null)` ga tushib, yozuvlarni KAFOLATSIZ ketma-ket bajarardi.
+// Ya'ni ishlab chiqarishda "atomik", lokalda esa yo'q - va pul yarim
+// holatda qolishi MUMKIN edi.
+//
+// PostgreSQL'da tranzaksiya har doim bor, shuning uchun zaxira yo'l
+// (fallback) ATAYLAB OLIB TASHLANDI: endi yoki hammasi yoziladi, yoki
+// hech nima. "Atomiklik yo'q" degan holat umuman mavjud emas.
+//
+// IMZO O'ZGARMADI: `work(client)` avvalgidek bitta argument oladi.
+// Mongo'da u `session` edi va har bir so'rovga `{ session }` sifatida
+// uzatilardi; endi u PRISMA TRANZAKSIYA KLIENTI - so'rovlar to'g'ridan
+// to'g'ri o'sha klientda bajariladi:
+//
+//     await runFinanceTxn(async (tx) => {
+//       await tx.studentPayment.update(...);
+//       await tx.paymentTransaction.create(...);
+//     });
+//
+// DIQQAT: `work` ichida `prisma` (global klient) ishlatilsa, o'sha
+// so'rov tranzaksiyadan TASHQARIDA qoladi va rollback unga ta'sir
+// qilmaydi. Har doim berilgan `tx` dan foydalaning.
+// ─────────────────────────────────────────────────────────────────
 
-  try {
-    let result;
-    await session.withTransaction(async () => {
-      result = await work(session);
-    });
-    return result;
-  } catch (err) {
-    // Replica set bo'lmasa Mongo bu kodlar bilan rad etadi - sessiyasiz qayta urinamiz.
-    const noTxnSupport =
-      err?.code === 20 || // IllegalOperation: Transaction numbers ... require replica set
-      err?.codeName === "IllegalOperation" ||
-      /Transaction numbers are only allowed|replica set|Transactions are not supported/i.test(
-        err?.message || "",
-      );
-    if (noTxnSupport) {
-      logger.warn(
-        { err },
-        "MongoDB tranzaksiyasi qo'llab-quvvatlanmaydi - sessiyasiz (atomiksiz) bajarilmoqda",
-      );
-      return work(null);
-    }
-    throw err;
-  } finally {
-    session?.endSession();
-  }
+// Prisma'ning standart chegaralari moliya uchun juda qisqa (maxWait 2s,
+// timeout 5s). O'quvchini butunlay o'chirish 12 ta jadvalga tegadi va
+// katta guruhda 5 soniyaga sig'masligi mumkin - o'shanda tranzaksiya
+// yarim yo'lda uzilardi. Chegaralar ochiq va kengaytirilgan.
+const TXN_OPTIONS = {
+  maxWait: 10_000, // ulanish havzasidan klient kutish
+  timeout: 60_000, // tranzaksiyaning umumiy davomiyligi
 };
+
+export const runFinanceTxn = (work) => prisma.$transaction(work, TXN_OPTIONS);
