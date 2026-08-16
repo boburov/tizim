@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { STAFF_SALARY_TYPES } from "../../../models/staffCompensation.model.js";
-import { KPI_TRIGGERS, KPI_REWARD_TYPES } from "../../../models/kpiRule.model.js";
-import { STAFF_ADJUSTMENT_KINDS } from "../../../models/staffPayrollAdjustment.model.js";
+import { STAFF_SALARY_TYPES } from "../../../constants/staffPayroll.js";
+import { KPI_TRIGGERS, KPI_REWARD_TYPES } from "../../../constants/staffPayroll.js";
+import { STAFF_ADJUSTMENT_KINDS } from "../../../constants/staffPayroll.js";
 
 // Modul bo'yicha yagona pul turi (o'qituvchi validatoridagi bilan bir xil
 // chegara - ikki modulda ikki xil limit bo'lib qolmasin).

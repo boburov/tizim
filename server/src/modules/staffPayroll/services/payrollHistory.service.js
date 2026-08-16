@@ -1,9 +1,6 @@
-import mongoose from "mongoose";
-import User from "../../../models/user.model.js";
-import TeacherSalary from "../../../models/teacherSalary.model.js";
-import StaffPayroll from "../../../models/staffPayroll.model.js";
-import StaffCompensation from "../../../models/staffCompensation.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
@@ -29,7 +26,14 @@ import * as auditService from "./payrollAudit.service.js";
  * o'tadi.
  */
 
-const toId = (v) => new mongoose.Types.ObjectId(String(v));
+// MONGO → PRISMA
+//   { employee: id } → { employeeId: id },  { teacher: id } → { teacherId: id }
+//   `.exists(...)`   → findFirst({ select: { id: true } })
+//   `$ne: "finalized"` → `not: "finalized"`
+//   TeacherSalary.lockedBy → lockedById (ustun nomi)
+//
+// `toId()` OLIB TASHLANDI - kalit oddiy 24-belgili satr.
+const actorId = (u) => u?.id || u?._id || null;
 
 /** [from, to] oralig'idagi oylar ro'yxati (kelajakka o'tmaydi). */
 const monthsBetween = (from, to) => {
@@ -63,40 +67,46 @@ const monthKey = (y, m) => y * 100 + m;
  * bo'lsa - oyna umuman ochilmaydi (ortiqcha bosish).
  */
 export const getImpact = async (employeeId) => {
-  const user = await User.findById(employeeId, {
-    firstName: 1,
-    lastName: 1,
-    role: 1,
-    hiredAt: 1,
-    payrollStartFrom: 1,
-  }).lean();
+  const user = await prisma.user.findUnique({
+    where: { id: String(employeeId) },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      hiredAt: true,
+      payrollStartFrom: true,
+    },
+  });
   if (!user) throw new ApiError(404, "Xodim topilmadi");
 
   const [teacherRows, staffRows] = await Promise.all([
     // O'qituvchi maoshi - MAVJUD modul qatorlari (faqat o'qiladi).
-    TeacherSalary.find(
-      { teacher: toId(employeeId) },
-      {
-        year: 1,
-        month: 1,
-        kind: 1,
-        expectedAmount: 1,
-        paidAmount: 1,
-        status: 1,
-        isLocked: 1,
+    prisma.teacherSalary.findMany({
+      where: { teacherId: user.id },
+      select: {
+        id: true,
+        year: true,
+        month: true,
+        kind: true,
+        expectedAmount: true,
+        paidAmount: true,
+        status: true,
+        isLocked: true,
       },
-    ).lean(),
-    StaffPayroll.find(
-      { employee: toId(employeeId) },
-      {
-        year: 1,
-        month: 1,
-        finalAmount: 1,
-        paidAmount: 1,
-        status: 1,
-        lifecycle: 1,
+    }),
+    prisma.staffPayroll.findMany({
+      where: { employeeId: user.id },
+      select: {
+        id: true,
+        year: true,
+        month: true,
+        finalAmount: true,
+        paidAmount: true,
+        status: true,
+        lifecycle: true,
       },
-    ).lean(),
+    }),
   ]);
 
   // Oylar bo'yicha yig'ma ko'rinish (ikkala manba birlashtiriladi).
@@ -120,7 +130,7 @@ export const getImpact = async (employeeId) => {
     entry.paid += row.paidAmount || 0;
     const rowLocked = Boolean(row.isLocked) || row.lifecycle === "finalized";
     entry.locked = entry.locked || rowLocked;
-    entry.rows.push({ kind, id: String(row._id), locked: rowLocked });
+    entry.rows.push({ kind, id: String(row.id), locked: rowLocked });
     if (!entry.sources.includes(kind)) entry.sources.push(kind);
     return entry;
   };
@@ -137,7 +147,8 @@ export const getImpact = async (employeeId) => {
 
   return {
     employee: {
-      _id: user._id,
+      id: user.id,
+      _id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role,
@@ -166,7 +177,10 @@ export const setPayrollStart = async (
   payrollStartFrom,
   { currentUser, reason = "", confirm = false } = {},
 ) => {
-  const user = await User.findById(employeeId);
+  const user = await prisma.user.findUnique({
+    where: { id: String(employeeId) },
+    select: { id: true, payrollStartFrom: true },
+  });
   if (!user) throw new ApiError(404, "Xodim topilmadi");
 
   const parsed = payrollStartFrom ? parseLocalDay(payrollStartFrom) : null;
@@ -176,7 +190,7 @@ export const setPayrollStart = async (
 
   const previous = user.payrollStartFrom;
   const changed = String(previous || "") !== String(parsed || "");
-  if (!changed) return { _id: user._id, payrollStartFrom: previous };
+  if (!changed) return { id: user.id, _id: user.id, payrollStartFrom: previous };
 
   // ─── HIMOYA: birinchi maosh yaratilgandan keyin ───
   //
@@ -184,7 +198,10 @@ export const setPayrollStart = async (
   // paydo bo'lgach uni beparvo o'zgartirish "qaysi oylar bor edi"
   // savolini chalkashtiradi, shuning uchun ATAYLAB tasdiqlash va SABAB
   // talab qilinadi. Bu amal tarixiy ma'lumotni to'g'rilash uchun.
-  const hasPayroll = await StaffPayroll.exists({ employee: user._id });
+  const hasPayroll = await prisma.staffPayroll.findFirst({
+    where: { employeeId: user.id },
+    select: { id: true },
+  });
   if (hasPayroll) {
     if (!confirm) {
       throw new ApiError(
@@ -197,21 +214,24 @@ export const setPayrollStart = async (
     }
   }
 
-  user.payrollStartFrom = parsed;
-  await user.save();
+  const saved = await prisma.user.update({
+    where: { id: user.id },
+    data: { payrollStartFrom: parsed },
+    select: { id: true, payrollStartFrom: true },
+  });
 
   await auditService.record({
-    employee: user._id,
+    employee: user.id,
     action: auditService.PAYROLL_AUDIT_ACTIONS.ACTIVATION_CHANGED,
     targetType: "user",
-    targetId: user._id,
+    targetId: user.id,
     oldValue: { payrollStartFrom: previous },
     newValue: { payrollStartFrom: parsed },
     reason,
     actor: currentUser,
   });
 
-  return { _id: user._id, payrollStartFrom: user.payrollStartFrom };
+  return { id: saved.id, _id: saved.id, payrollStartFrom: saved.payrollStartFrom };
 };
 
 /**
@@ -222,7 +242,16 @@ export const setPayrollStart = async (
  * Bu ERP odati: moliyaviy amal ko'r-ko'rona bajarilmaydi.
  */
 export const previewGenerate = async ({ employeeId, from, to }) => {
-  const user = await User.findById(employeeId).lean();
+  const user = await prisma.user.findUnique({
+    where: { id: String(employeeId) },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      payrollStartFrom: true,
+    },
+  });
   if (!user) throw new ApiError(404, "Xodim topilmadi");
 
   const fromDate = parseLocalDay(from);
@@ -232,17 +261,24 @@ export const previewGenerate = async ({ employeeId, from, to }) => {
   const boundary = user.payrollStartFrom;
   const months = monthsBetween(fromDate, toDate);
 
-  const existing = await StaffPayroll.find(
-    { employee: user._id },
-    { year: 1, month: 1, lifecycle: 1, paidAmount: 1, finalAmount: 1, source: 1 },
-  ).lean();
+  const existing = await prisma.staffPayroll.findMany({
+    where: { employeeId: user.id },
+    select: {
+      year: true,
+      month: true,
+      lifecycle: true,
+      paidAmount: true,
+      finalAmount: true,
+      source: true,
+    },
+  });
   const existingMap = new Map(
     existing.map((r) => [monthKey(r.year, r.month), r]),
   );
 
-  const hasContract = await StaffCompensation.exists({
-    employee: user._id,
-    isDeleted: { $ne: true },
+  const hasContract = await prisma.staffCompensation.findFirst({
+    where: { employeeId: user.id, isDeleted: false },
+    select: { id: true },
   });
 
   const rows = [];
@@ -269,7 +305,7 @@ export const previewGenerate = async ({ employeeId, from, to }) => {
 
     // Yozmasdan hisoblab ko'ramiz (save: false).
     // eslint-disable-next-line no-await-in-loop
-    const projected = await payrollService.computePayroll(user._id, year, month, {
+    const projected = await payrollService.computePayroll(user.id, year, month, {
       save: false,
     });
     rows.push({
@@ -292,7 +328,8 @@ export const previewGenerate = async ({ employeeId, from, to }) => {
 
   return {
     employee: {
-      _id: user._id,
+      id: user.id,
+      _id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
       payrollStartFrom: boundary || null,
@@ -315,7 +352,10 @@ export const previewGenerate = async ({ employeeId, from, to }) => {
  * Shuning uchun uni ikki marta bosish ham xavfsiz va tarixni buzmaydi.
  */
 export const generateRange = async ({ employeeId, from, to }, currentUser) => {
-  const user = await User.findById(employeeId).lean();
+  const user = await prisma.user.findUnique({
+    where: { id: String(employeeId) },
+    select: { id: true, role: true, payrollStartFrom: true },
+  });
   if (!user) throw new ApiError(404, "Xodim topilmadi");
   if (user.role === ROLES.STUDENT) {
     throw new ApiError(400, "O'quvchiga maosh hisoblanmaydi");
@@ -336,9 +376,9 @@ export const generateRange = async ({ employeeId, from, to }, currentUser) => {
   }
 
   // Shartnomasi yo'q oylarda hisoblash ma'nosiz - avval buni aytamiz.
-  const hasContract = await StaffCompensation.exists({
-    employee: user._id,
-    isDeleted: { $ne: true },
+  const hasContract = await prisma.staffCompensation.findFirst({
+    where: { employeeId: user.id, isDeleted: false },
+    select: { id: true },
   });
   if (!hasContract) {
     throw new ApiError(
@@ -353,10 +393,11 @@ export const generateRange = async ({ employeeId, from, to }, currentUser) => {
 
   for (const { year, month } of months) {
     // eslint-disable-next-line no-await-in-loop
-    const existing = await StaffPayroll.findOne(
-      { employee: user._id, year, month },
-      { _id: 1 },
-    ).lean();
+    // (employeeId, year, month) HAQIQIY unique kalit - findUnique.
+    const existing = await prisma.staffPayroll.findUnique({
+      where: { employeeId_year_month: { employeeId: user.id, year, month } },
+      select: { id: true },
+    });
 
     if (existing) {
       skipped += 1;
@@ -366,7 +407,7 @@ export const generateRange = async ({ employeeId, from, to }, currentUser) => {
 
     try {
       // eslint-disable-next-line no-await-in-loop
-      await payrollService.computePayroll(user._id, year, month, {
+      await payrollService.computePayroll(user.id, year, month, {
         source: "generated",
         actor: currentUser,
         reason: "Yetishmayotgan oy qo'lda yaratildi",
@@ -375,7 +416,7 @@ export const generateRange = async ({ employeeId, from, to }, currentUser) => {
       details.push({ year, month, status: "yaratildi" });
     } catch (err) {
       logger.warn(
-        { err: err?.message, employee: String(user._id), year, month },
+        { err: err?.message, employee: String(user.id), year, month },
         "Yetishmayotgan maoshni yaratib bo'lmadi",
       );
       details.push({ year, month, status: "xato" });
@@ -397,14 +438,20 @@ export const generateRange = async ({ employeeId, from, to }, currentUser) => {
  * kirgan/topshirilgan davrlar.
  */
 export const recalcUnlocked = async ({ employeeId, from, to }, currentUser) => {
-  const user = await User.findById(employeeId).lean();
+  const user = await prisma.user.findUnique({
+    where: { id: String(employeeId) },
+    select: { id: true },
+  });
   if (!user) throw new ApiError(404, "Xodim topilmadi");
 
-  const filter = { employee: toId(employeeId), lifecycle: { $ne: "finalized" } };
+  const where = { employeeId: user.id, lifecycle: { not: "finalized" } };
 
   const fromDate = from ? parseLocalDay(from) : null;
   const toDate = to ? parseLocalDay(to) : null;
-  const rows = await StaffPayroll.find(filter, { year: 1, month: 1 }).lean();
+  const rows = await prisma.staffPayroll.findMany({
+    where,
+    select: { year: true, month: true },
+  });
 
   const inRange = rows.filter((r) => {
     const rowStart = new Date(Date.UTC(r.year, r.month - 1, 1));
@@ -422,7 +469,7 @@ export const recalcUnlocked = async ({ employeeId, from, to }, currentUser) => {
     try {
       // `force` BERILMAYDI: yopilgan oy o'z-o'zidan ochilmasligi kerak.
       // eslint-disable-next-line no-await-in-loop
-      await payrollService.computePayroll(user._id, r.year, r.month, {
+      await payrollService.computePayroll(user.id, r.year, r.month, {
         source: "manual",
         actor: currentUser,
         reason: "Qulflanmagan oylar qayta hisoblandi",
@@ -430,15 +477,14 @@ export const recalcUnlocked = async ({ employeeId, from, to }, currentUser) => {
       recalculated += 1;
     } catch (err) {
       logger.warn(
-        { err: err?.message, employee: String(user._id), ...r },
+        { err: err?.message, employee: String(user.id), ...r },
         "Maoshni qayta hisoblab bo'lmadi",
       );
     }
   }
 
-  const lockedSkipped = await StaffPayroll.countDocuments({
-    employee: toId(employeeId),
-    lifecycle: "finalized",
+  const lockedSkipped = await prisma.staffPayroll.count({
+    where: { employeeId: user.id, lifecycle: "finalized" },
   });
 
   return { recalculated, lockedSkipped };
@@ -455,33 +501,40 @@ export const recalcUnlocked = async ({ employeeId, from, to }, currentUser) => {
  */
 export const setLock = async ({ kind, id, locked, reason = "" }, currentUser) => {
   const now = new Date();
+  // `lockedBy` Mongo maydoni; Prisma ustuni `lockedById`.
   const patch = locked
-    ? { isLocked: true, lockedAt: now, lockedBy: currentUser?._id || null }
-    : { isLocked: false, lockedAt: null, lockedBy: null };
+    ? { isLocked: true, lockedAt: now, lockedById: actorId(currentUser) }
+    : { isLocked: false, lockedAt: null, lockedById: null };
 
   if (kind === "teacher") {
-    const before = await TeacherSalary.findById(id).lean();
+    const before = await prisma.teacherSalary.findUnique({
+      where: { id: String(id) },
+      select: { id: true, teacherId: true, year: true, month: true, isLocked: true },
+    });
     if (!before) throw new ApiError(404, "Maosh qatori topilmadi");
     if (before.isLocked && !locked && !String(reason || "").trim()) {
       throw new ApiError(400, "Qulfni ochish sababini ko'rsating");
     }
 
-    const row = await TeacherSalary.findByIdAndUpdate(id, { $set: patch }, { new: true });
+    const row = await prisma.teacherSalary.update({
+      where: { id: before.id },
+      data: patch,
+    });
     await auditService.record({
-      employee: before.teacher,
+      employee: before.teacherId,
       year: before.year,
       month: before.month,
       action: locked
         ? auditService.PAYROLL_AUDIT_ACTIONS.LOCKED
         : auditService.PAYROLL_AUDIT_ACTIONS.UNLOCKED,
       targetType: "teacherSalary",
-      targetId: before._id,
+      targetId: before.id,
       oldValue: { isLocked: Boolean(before.isLocked) },
       newValue: { isLocked: locked },
       reason,
       actor: currentUser,
     });
-    return row;
+    return withLegacyId(row);
   }
 
   // Xodim maoshida qulf `lifecycle` bilan ifodalanadi - ikkinchi

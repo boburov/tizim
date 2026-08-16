@@ -1,15 +1,12 @@
-import mongoose from "mongoose";
-import User from "../../../models/user.model.js";
-import StaffCompensation from "../../../models/staffCompensation.model.js";
-import StaffPayroll from "../../../models/staffPayroll.model.js";
-import StaffPayrollItem from "../../../models/staffPayrollItem.model.js";
-import StaffPayrollAdjustment from "../../../models/staffPayrollAdjustment.model.js";
+import { Prisma } from "@prisma/client";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
-import { loadRoleCatalog, staffRoleFilter } from "../../../helpers/roles.helper.js";
+import { loadRoleCatalog } from "../../../helpers/roles.helper.js";
 import { userBranchCondition } from "../../../helpers/branchContext.helper.js";
 import { daysInMonth, deriveStatus } from "../../finance/services/proration.helper.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import { rebuildAutoKpi } from "./kpiEngine.service.js";
 import * as auditService from "./payrollAudit.service.js";
 import { monthRange } from "./kpiTriggers.js";
@@ -22,9 +19,52 @@ import { monthRange } from "./kpiTriggers.js";
  * na o'qiydi, na yozadi. Yagona umumiy narsa - proration.helper dagi
  * sof matematik yordamchilar (daysInMonth, deriveStatus), ular hech
  * qanday o'qituvchi/guruh farazini olib yurmaydi.
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * MONGO → PRISMA
+ *   { employee: id } → { employeeId: id }   (relation emas, USTUN)
+ *   { payroll: id }  → { payrollId: id }
+ *   carriedFrom: { year, month } → carriedFromYear / carriedFromMonth
+ *       (Mongo'dagi ichki obyekt Prisma'da YASSILANGAN)
+ *   $expr: { $gt: [a, b] } → { a: { gt: prisma.model.fields.b } }
+ *   .distinct("employee") → findMany({ distinct, select })
+ *   err.code 11000 → err.code "P2002"
+ *   findOneAndUpdate(..., upsert) → upsert (@@unique([employeeId,year,month]))
+ *
+ * ATOMIK TO'LOV: `applyPaidDelta` Mongo'da aggregation update pipeline
+ * edi - status BAZADAGI joriy `paidAmount` dan bitta amalda chiqarilardi.
+ * Prisma'da bunday quvur yo'q, shuning uchun u BITTA XOM `UPDATE` ga
+ * ko'chirildi (teacherSalary/studentPayment bilan bir xil naqsh).
+ * "O'qi → hisobla → yoz" naqshi YO'Q - u yo'qolgan to'lov demakdir.
+ * ═══════════════════════════════════════════════════════════════════
  */
 
-const toId = (v) => new mongoose.Types.ObjectId(String(v));
+const actorId = (u) => u?.id || u?._id || null;
+
+// Xodim/filial ma'lumoti ro'yxat va tafsilotda bir xil bo'lsin.
+const EMPLOYEE_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  role: true,
+  username: true,
+};
+const BRANCH_SELECT = { id: true, name: true, code: true };
+
+// `branch` relation'ini eski `branchId` nomiga qaytaradi.
+//
+// Mongoose `.populate("branchId")` maydonning O'ZINI obyektga
+// aylantirardi va client shunga tayanadi. Prisma esa `branchId` ni satr
+// qoldirib, obyektni `branch` deb alohida beradi.
+const shapePayroll = (row) => {
+  if (!row) return row;
+  const out = withLegacyId(row);
+  if (row.branch !== undefined) {
+    out.branchId = row.branch ? withLegacyId(row.branch) : null;
+    delete out.branch;
+  }
+  return out;
+};
 
 /** Oy ichida amal qilgan shartnoma bo'laklari (ishga kirish/bo'shash proratsiyasi). */
 const compensationSegmentsForMonth = (comps, year, month) => {
@@ -60,7 +100,18 @@ export const computePayroll = async (
   month,
   { save = true, force = false, source = "auto", actor = null, reason = "" } = {},
 ) => {
-  const employee = await User.findById(employeeId).lean();
+  const employee = await prisma.user.findUnique({
+    where: { id: String(employeeId) },
+    select: {
+      id: true,
+      role: true,
+      homeBranchId: true,
+      payrollStartFrom: true,
+      firstName: true,
+      lastName: true,
+      username: true,
+    },
+  });
   if (!employee) throw new ApiError(404, "Xodim topilmadi");
   if (employee.role === ROLES.STUDENT) {
     throw new ApiError(400, "O'quvchiga maosh hisoblanmaydi");
@@ -79,13 +130,11 @@ export const computePayroll = async (
     const boundary = employee.payrollStartFrom;
     const monthEnd = new Date(Date.UTC(year, month, 1));
     if (monthEnd <= boundary) {
-      const existing = await StaffPayroll.findOne({
-        employee: employee._id,
-        year,
-        month,
+      const existing = await prisma.staffPayroll.findUnique({
+        where: { employeeId_year_month: { employeeId: employee.id, year, month } },
       });
       // Mavjud qatorni O'CHIRMAYMIZ - u qo'lda kiritilgan bo'lishi mumkin.
-      return existing || null;
+      return existing ? withLegacyId(existing) : null;
     }
   }
 
@@ -95,35 +144,41 @@ export const computePayroll = async (
   // ham kiritilgan: pul chiqib bo'lgandan keyin summani o'zgartirish
   // kassa bilan hisobot orasida farq qoldirardi.
   //
-  // `force` bu to'siqni OCHMAYDI - u faqat "yopilganini bilaman, baribir
-  // hisobla" degan ichki chaqiruvlar uchun emas, balki qayta ochilgan
-  // oyni darhol hisoblash uchun ishlatiladi (setLifecycle).
+  // `force` bu to'siqni faqat OCHIQ qaror bilan chetlab o'tadi
+  // (setLifecycle - qulf ataylab ochilgan).
   if (save) {
-    const existing = await StaffPayroll.findOne(
-      { employee: employee._id, year, month },
-      { lifecycle: 1, paidAmount: 1, finalAmount: 1, employee: 1, year: 1, month: 1 },
-    ).lean();
+    const existing = await prisma.staffPayroll.findUnique({
+      where: { employeeId_year_month: { employeeId: employee.id, year, month } },
+      select: { id: true, lifecycle: true, paidAmount: true },
+    });
 
     const immutable =
       existing &&
       (existing.lifecycle === "finalized" || (existing.paidAmount || 0) > 0);
 
     if (immutable && !force) {
-      return StaffPayroll.findById(existing._id);
+      const row = await prisma.staffPayroll.findUnique({ where: { id: existing.id } });
+      return withLegacyId(row);
     }
   }
 
   const { start, endExcl } = monthRange(year, month);
 
   // Amal qilayotgan shartnomalar (oy bilan kesishganlari).
-  const comps = await StaffCompensation.find({
-    employee: employee._id,
-    isDeleted: { $ne: true },
-    effectiveFrom: { $lt: endExcl },
-    $or: [{ effectiveTo: null }, { effectiveTo: { $gt: start } }],
-  })
-    .sort({ effectiveFrom: 1 })
-    .lean();
+  //
+  // TARTIB `createdAt` bilan mustahkamlangan: bir xil `effectiveFrom`
+  // bo'lgan ikki shartnomada oxirgi segment (lastComp) qaysi biri
+  // ekani BARQAROR bo'lishi kerak, aks holda `salaryType`/`branchId`
+  // har qayta hisoblanganda o'zgarib ketardi.
+  const comps = await prisma.staffCompensation.findMany({
+    where: {
+      employeeId: employee.id,
+      isDeleted: false,
+      effectiveFrom: { lt: endExcl },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gt: start } }],
+    },
+    orderBy: [{ effectiveFrom: "asc" }, { createdAt: "asc" }],
+  });
 
   const segments = compensationSegmentsForMonth(comps, year, month);
   const totalDays = daysInMonth(year, month);
@@ -147,20 +202,34 @@ export const computePayroll = async (
   }
 
   // Yaratilishidan OLDINGI holat - audit uchun ("nima edi").
-  const before = await StaffPayroll.findOne(
-    { employee: employee._id, year, month },
-    { finalAmount: 1, fixedAmount: 1, autoKpiTotal: 1, manualBonusTotal: 1, penaltyTotal: 1 },
-  ).lean();
+  const before = await prisma.staffPayroll.findUnique({
+    where: { employeeId_year_month: { employeeId: employee.id, year, month } },
+    select: {
+      finalAmount: true,
+      fixedAmount: true,
+      autoKpiTotal: true,
+      manualBonusTotal: true,
+      penaltyTotal: true,
+    },
+  });
 
   // Qator (yo'q bo'lsa yaratiladi) - KPI qatorlari unga bog'lanadi.
-  const payroll = await StaffPayroll.findOneAndUpdate(
-    { employee: employee._id, year, month },
-    {
-      $set: { branchId, salaryType, baseAmount: lastComp?.baseAmount || 0 },
-      $setOnInsert: { paidAmount: 0 },
+  // `@@unique([employeeId, year, month])` HAQIQIY unique kalit, shuning
+  // uchun Prisma'ning tabiiy `upsert` i ishlaydi: bir xodimga bir oyda
+  // ikkinchi maosh qatori bazada yaratilishi MUMKIN EMAS.
+  const payroll = await prisma.staffPayroll.upsert({
+    where: { employeeId_year_month: { employeeId: employee.id, year, month } },
+    update: { branchId, salaryType, baseAmount: lastComp?.baseAmount || 0 },
+    create: {
+      employeeId: employee.id,
+      year,
+      month,
+      branchId,
+      salaryType,
+      baseAmount: lastComp?.baseAmount || 0,
+      paidAmount: 0,
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+  });
 
   // AVTOMATIK KPI - shartnoma turi ruxsat bersagina.
   let autoKpiTotal = 0;
@@ -172,23 +241,18 @@ export const computePayroll = async (
   } else {
     // Tur "fixed"ga o'zgartirilgan bo'lsa eski KPI qatorlari qolib
     // ketmasin.
-    await StaffPayrollItem.deleteMany({ payroll: payroll._id });
+    await prisma.staffPayrollItem.deleteMany({ where: { payrollId: payroll.id } });
   }
 
   // QO'LDA kiritilgan bonus/jarima - qayta hisoblash ularga TEGMAYDI,
   // faqat yig'indisini oladi.
-  const adjustments = await StaffPayrollAdjustment.aggregate([
-    {
-      $match: {
-        employee: toId(employee._id),
-        year,
-        month,
-        isDeleted: { $ne: true },
-      },
-    },
-    { $group: { _id: "$kind", total: { $sum: "$amount" } } },
-  ]);
-  const totalOf = (kind) => adjustments.find((a) => a._id === kind)?.total || 0;
+  const adjustments = await prisma.staffPayrollAdjustment.groupBy({
+    by: ["kind"],
+    where: { employeeId: employee.id, year, month, isDeleted: false },
+    _sum: { amount: true },
+  });
+  const totalOf = (kind) =>
+    adjustments.find((a) => a.kind === kind)?._sum.amount || 0;
   const manualBonusTotal = totalOf("bonus");
   const penaltyTotal = totalOf("penalty");
   const openingCreditTotal = totalOf("opening_credit");
@@ -218,7 +282,7 @@ export const computePayroll = async (
     takenAt: new Date(),
     compensation: lastComp
       ? {
-          id: String(lastComp._id),
+          id: String(lastComp.id),
           salaryType: lastComp.salaryType,
           baseAmount: lastComp.baseAmount,
           effectiveFrom: lastComp.effectiveFrom,
@@ -246,43 +310,42 @@ export const computePayroll = async (
     },
   };
 
-  const updated = await StaffPayroll.findByIdAndUpdate(
-    payroll._id,
-    {
-      $set: {
-        branchId,
-        salaryType,
-        baseAmount: lastComp?.baseAmount || 0,
-        prorationFactor: totalDays ? payableDays / totalDays : 0,
-        payableDays,
-        totalDays,
-        fixedAmount,
-        autoKpiTotal,
-        manualBonusTotal,
-        penaltyTotal,
-        openingCreditTotal,
-        openingDebtTotal,
-        openingDebtApplied,
-        finalAmount,
-        status: deriveStatus(payroll.paidAmount || 0, finalAmount),
-        computedAt: new Date(),
-        source,
-        snapshot,
-      },
+  const updated = await prisma.staffPayroll.update({
+    where: { id: payroll.id },
+    data: {
+      branchId,
+      salaryType,
+      baseAmount: lastComp?.baseAmount || 0,
+      prorationFactor: totalDays ? payableDays / totalDays : 0,
+      payableDays,
+      totalDays,
+      fixedAmount,
+      autoKpiTotal,
+      manualBonusTotal,
+      penaltyTotal,
+      openingCreditTotal,
+      openingDebtTotal,
+      openingDebtApplied,
+      finalAmount,
+      status: deriveStatus(payroll.paidAmount || 0, finalAmount),
+      computedAt: new Date(),
+      source,
+      // `snapshot` Prisma'da `Json?` - Date obyektlari JSON'ga
+      // seriyalanadi (Mongo'da ham Mixed edi, xulq bir xil).
+      snapshot,
     },
-    { new: true },
-  );
+  });
 
   // AUDIT: yaratildimi yoki qayta hisoblandimi - ikkalasi ham yoziladi.
   await auditService.record({
-    employee: employee._id,
+    employee: employee.id,
     year,
     month,
     action: before
       ? auditService.PAYROLL_AUDIT_ACTIONS.RECALCULATED
       : auditService.PAYROLL_AUDIT_ACTIONS.GENERATED,
     targetType: "staffPayroll",
-    targetId: updated._id,
+    targetId: updated.id,
     oldValue: before
       ? {
           finalAmount: before.finalAmount,
@@ -296,7 +359,7 @@ export const computePayroll = async (
     meta: { source },
   });
 
-  return updated;
+  return withLegacyId(updated);
 };
 
 /**
@@ -315,9 +378,10 @@ export const computePayroll = async (
  * IKKI BARAVAR USHLAB QOLISHDAN HIMOYA - bu yerda eng muhimi. Funksiya
  * har oy boshida job orqali, server qayta yonganida catch-up orqali va
  * qo'lda regenerate orqali ham chaqiriladi. Himoya ikki qavatli:
- *   1) partial unique indeks {employee,year,month,kind} - DB darajasida
+ *   1) qisman unique indeks (employeeId, year, month, kind)
+ *      WHERE kind IN ('opening_credit','opening_debt') - DB darajasida
  *      bitta oyga ikkinchi opening_debt qatori UMUMAN yozilmaydi;
- *   2) E11000 jimgina yutiladi (qator allaqachon bor = ish bajarilgan).
+ *   2) P2002 jimgina yutiladi (qator allaqachon bor = ish bajarilgan).
  *
  * DIQQAT (ma'lum cheklov): ko'chirilgandan KEYIN o'tgan oy qayta
  * hisoblansa va `openingDebtApplied` o'zgarsa, ko'chirilgan summa
@@ -336,14 +400,21 @@ export const carryOverOpeningDebt = async (year, month) => {
   // ro'yxatga tushmaydi - va agar bu yerda ham filtrlasak, uning qarzi
   // ko'chirilmay zanjir UZILARDI va pul yo'qolardi. Shuning uchun manba
   // faqat "o'tgan oyda ushlanmagan qarzi bor" sharti.
-  const prevPayrolls = await StaffPayroll.find(
-    {
+  //
+  // Mongo `$expr: { $gt: [...] }` → Prisma "field reference".
+  const prevPayrolls = await prisma.staffPayroll.findMany({
+    where: {
       year: prevYear,
       month: prevMonth,
-      $expr: { $gt: ["$openingDebtTotal", "$openingDebtApplied"] },
+      openingDebtTotal: { gt: prisma.staffPayroll.fields.openingDebtApplied },
     },
-    { employee: 1, branchId: 1, openingDebtTotal: 1, openingDebtApplied: 1 },
-  ).lean();
+    select: {
+      employeeId: true,
+      branchId: true,
+      openingDebtTotal: true,
+      openingDebtApplied: true,
+    },
+  });
 
   const carriedEmployeeIds = [];
   let carried = 0;
@@ -354,29 +425,34 @@ export const carryOverOpeningDebt = async (year, month) => {
 
     try {
       // eslint-disable-next-line no-await-in-loop
-      await StaffPayrollAdjustment.create({
-        employee: p.employee,
-        branchId: p.branchId || null,
-        year,
-        month,
-        kind: "opening_debt",
-        amount: remaining,
-        reason: `Boshlang'ich qarz qoldig'i (${prevMonth}/${prevYear} oyidan ko'chirildi)`,
-        carriedFrom: { year: prevYear, month: prevMonth },
+      await prisma.staffPayrollAdjustment.create({
+        data: {
+          employeeId: p.employeeId,
+          branchId: p.branchId || null,
+          year,
+          month,
+          kind: "opening_debt",
+          amount: remaining,
+          reason: `Boshlang'ich qarz qoldig'i (${prevMonth}/${prevYear} oyidan ko'chirildi)`,
+          // Mongo'da `carriedFrom: { year, month }` ichki obyekt edi -
+          // Prisma'da YASSILANGAN ikki ustun.
+          carriedFromYear: prevYear,
+          carriedFromMonth: prevMonth,
+        },
       });
       carried += 1;
-      carriedEmployeeIds.push(p.employee);
+      carriedEmployeeIds.push(p.employeeId);
     } catch (err) {
-      // E11000 = shu oyga allaqachon ko'chirilgan. Bu XATO EMAS, bu
+      // P2002 = shu oyga allaqachon ko'chirilgan. Bu XATO EMAS, bu
       // idempotentlik ishlagani. Lekin xodim baribir ro'yxatga tushadi:
       // qator bor, ammo uning oylik hisobi hali qurilmagan bo'lishi
       // mumkin (birinchi urinish yarim yo'lda uzilgan bo'lsa).
-      if (err?.code === 11000) {
-        carriedEmployeeIds.push(p.employee);
+      if (err?.code === "P2002") {
+        carriedEmployeeIds.push(p.employeeId);
         continue;
       }
       logger.warn(
-        { err: err?.message, employee: String(p.employee), year, month },
+        { err: err?.message, employee: String(p.employeeId), year, month },
         "Boshlang'ich qarz qoldig'ini ko'chirib bo'lmadi",
       );
     }
@@ -398,11 +474,16 @@ export const carryOverOpeningDebt = async (year, month) => {
 export const generateMonth = async (year, month) => {
   const { start, endExcl } = monthRange(year, month);
 
-  const employeeIds = await StaffCompensation.distinct("employee", {
-    isDeleted: { $ne: true },
-    effectiveFrom: { $lt: endExcl },
-    $or: [{ effectiveTo: null }, { effectiveTo: { $gt: start } }],
+  const compRows = await prisma.staffCompensation.findMany({
+    where: {
+      isDeleted: false,
+      effectiveFrom: { lt: endExcl },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gt: start } }],
+    },
+    select: { employeeId: true },
+    distinct: ["employeeId"],
   });
+  const employeeIds = compRows.map((r) => r.employeeId);
 
   // KO'CHIRISH HISOBLASHDAN OLDIN: yangi oyning qatori yaratilishidan
   // avval o'tgan oyda ushlab qololmagan boshlang'ich qarz shu oyga
@@ -445,7 +526,7 @@ export const generateMonth = async (year, month) => {
  * Qayta ochish - ataylab qilinadigan amal (egasi xato topgan bo'lsa).
  */
 export const setLifecycle = async (id, lifecycle, currentUser, { reason = "" } = {}) => {
-  const payroll = await StaffPayroll.findById(id);
+  const payroll = await prisma.staffPayroll.findUnique({ where: { id: String(id) } });
   if (!payroll) throw new ApiError(404, "Maosh qatori topilmadi");
 
   // QULFNI OCHISH - sabab MAJBURIY. Yopilgan moliyaviy davrni qayta
@@ -457,19 +538,19 @@ export const setLifecycle = async (id, lifecycle, currentUser, { reason = "" } =
 
   const previous = payroll.lifecycle;
 
-  if (lifecycle === "finalized") {
-    payroll.lifecycle = "finalized";
-    payroll.finalizedAt = new Date();
-    payroll.finalizedBy = currentUser?._id || null;
-  } else {
-    payroll.lifecycle = "draft";
-    payroll.finalizedAt = null;
-    payroll.finalizedBy = null;
-  }
-  await payroll.save();
+  const data =
+    lifecycle === "finalized"
+      ? {
+          lifecycle: "finalized",
+          finalizedAt: new Date(),
+          finalizedById: actorId(currentUser),
+        }
+      : { lifecycle: "draft", finalizedAt: null, finalizedById: null };
+
+  const saved = await prisma.staffPayroll.update({ where: { id: payroll.id }, data });
 
   await auditService.record({
-    employee: payroll.employee,
+    employee: payroll.employeeId,
     year: payroll.year,
     month: payroll.month,
     action:
@@ -477,7 +558,7 @@ export const setLifecycle = async (id, lifecycle, currentUser, { reason = "" } =
         ? auditService.PAYROLL_AUDIT_ACTIONS.LOCKED
         : auditService.PAYROLL_AUDIT_ACTIONS.UNLOCKED,
     targetType: "staffPayroll",
-    targetId: payroll._id,
+    targetId: payroll.id,
     oldValue: { lifecycle: previous },
     newValue: { lifecycle },
     reason,
@@ -487,14 +568,14 @@ export const setLifecycle = async (id, lifecycle, currentUser, { reason = "" } =
   // Qayta ochilganda darhol yangi raqamni ko'rsatamiz. `force` shu yerda
   // O'RINLI: qulf ataylab ochildi, ya'ni bu egasining qarori.
   if (lifecycle !== "finalized") {
-    return computePayroll(payroll.employee, payroll.year, payroll.month, {
+    return computePayroll(payroll.employeeId, payroll.year, payroll.month, {
       force: true,
       source: "manual",
       actor: currentUser,
       reason,
     });
   }
-  return payroll;
+  return withLegacyId(saved);
 };
 
 /** Maosh qatorlari ro'yxati (filial ko'lami bilan). */
@@ -506,46 +587,50 @@ export const list = async ({
   page = 1,
   limit = 50,
 }) => {
-  const filter = {};
-  if (year) filter.year = Number(year);
-  if (month) filter.month = Number(month);
-  if (employeeId) filter.employee = toId(employeeId);
-  if (status) filter.status = status;
+  const where = {};
+  if (year) where.year = Number(year);
+  if (month) where.month = Number(month);
+  if (employeeId) where.employeeId = String(employeeId);
+  if (status) where.status = status;
 
   // FILIAL KO'LAMI.
   //
-  // DIQQAT: shart `$and` ichiga qo'shiladi va `employee` filtri bilan
+  // DIQQAT: shart `AND` ichiga qo'shiladi va `employeeId` filtri bilan
   // ALMASHTIRILMAYDI. Aks holda aniq employeeId berilganda filial sharti
   // butunlay tushib qolardi - ya'ni boshqa filial xodimining maoshini
   // ID bilan so'rab olish mumkin bo'lardi (jimgina sizish).
+  //
+  // `userBranchCondition()` FOYDALANUVCHI ustidagi shartni beradi
+  // (homeBranchId YOKI branchAssignments), shuning uchun u
+  // `employee` relation'iga qo'llanadi - StaffPayroll.branchId
+  // shartnomadan meros bo'lgani uchun undan ishonchliroq.
   const branchCond = userBranchCondition();
   if (branchCond) {
-    const ids = await User.find(
-      { $and: [branchCond], isDeleted: { $ne: true } },
-      { _id: 1 },
-    ).lean();
-    filter.$and = [
-      ...(filter.$and || []),
-      { employee: { $in: ids.map((u) => u._id) } },
+    where.AND = [
+      ...(where.AND || []),
+      { employee: { AND: [branchCond], isDeleted: false } },
     ];
   }
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    StaffPayroll.find(filter)
-      .sort({ year: -1, month: -1, finalAmount: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("employee", { firstName: 1, lastName: 1, role: 1, username: 1 })
-      .populate("branchId", { name: 1, code: 1 })
-      .lean(),
-    StaffPayroll.countDocuments(filter),
+    prisma.staffPayroll.findMany({
+      where,
+      orderBy: [{ year: "desc" }, { month: "desc" }, { finalAmount: "desc" }],
+      skip,
+      take: limit,
+      include: {
+        employee: { select: EMPLOYEE_SELECT },
+        branch: { select: BRANCH_SELECT },
+      },
+    }),
+    prisma.staffPayroll.count({ where }),
   ]);
 
   // Rol yorlig'i - ro'yxatda "direktor" xom qiymat bo'lib ko'rinmasin.
   const catalog = await loadRoleCatalog();
   const withRole = items.map((p) => ({
-    ...p,
+    ...shapePayroll(p),
     roleLabel: catalog.get(p.employee?.role)?.label || p.employee?.role || "",
   }));
 
@@ -554,39 +639,49 @@ export const list = async ({
 
 /** Bitta qator + to'liq tafsilot (KPI qatorlari, bonus/jarima). */
 export const getById = async (id) => {
-  const payroll = await StaffPayroll.findById(id)
-    .populate("employee", { firstName: 1, lastName: 1, role: 1, username: 1 })
-    .populate("branchId", { name: 1, code: 1 })
-    .lean();
+  const payroll = await prisma.staffPayroll.findUnique({
+    where: { id: String(id) },
+    include: {
+      employee: { select: EMPLOYEE_SELECT },
+      branch: { select: BRANCH_SELECT },
+    },
+  });
   if (!payroll) throw new ApiError(404, "Maosh qatori topilmadi");
 
   const [items, adjustments] = await Promise.all([
-    StaffPayrollItem.find({ payroll: payroll._id }).sort({ amount: -1 }).lean(),
-    StaffPayrollAdjustment.find({
-      employee: payroll.employee._id,
-      year: payroll.year,
-      month: payroll.month,
-      isDeleted: { $ne: true },
-    })
-      .sort({ createdAt: -1 })
-      .populate("createdBy", { firstName: 1, lastName: 1 })
-      .lean(),
+    prisma.staffPayrollItem.findMany({
+      where: { payrollId: payroll.id },
+      orderBy: { amount: "desc" },
+    }),
+    prisma.staffPayrollAdjustment.findMany({
+      where: {
+        employeeId: payroll.employeeId,
+        year: payroll.year,
+        month: payroll.month,
+        isDeleted: false,
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
   ]);
 
   return {
-    ...payroll,
-    items,
-    bonuses: adjustments.filter((a) => a.kind === "bonus"),
-    penalties: adjustments.filter((a) => a.kind === "penalty"),
+    ...shapePayroll(payroll),
+    items: withLegacyIds(items),
+    bonuses: withLegacyIds(adjustments.filter((a) => a.kind === "bonus")),
+    penalties: withLegacyIds(adjustments.filter((a) => a.kind === "penalty")),
   };
 };
 
 /** Xodimning maosh tarixi (profil bo'limi uchun). */
 export const historyByEmployee = async (employeeId, { limit = 12 } = {}) => {
-  const items = await StaffPayroll.find({ employee: toId(employeeId) })
-    .sort({ year: -1, month: -1 })
-    .limit(limit)
-    .lean();
+  const items = await prisma.staffPayroll.findMany({
+    where: { employeeId: String(employeeId) },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+    take: limit,
+  });
 
   const summary = items.reduce(
     (acc, p) => ({
@@ -598,7 +693,7 @@ export const historyByEmployee = async (employeeId, { limit = 12 } = {}) => {
   );
   summary.totalRemaining = Math.max(0, summary.totalFinal - summary.totalPaid);
 
-  return { items, summary };
+  return { items: withLegacyIds(items), summary };
 };
 
 /**
@@ -606,42 +701,49 @@ export const historyByEmployee = async (employeeId, { limit = 12 } = {}) => {
  *
  * capToRemaining - qoldiqdan oshib ketishga yo'l qo'ymaydi: ikki marta
  * bosilgan "To'lash" tugmasi ikki barobar to'lovga aylanmaydi.
- * Yangilanish bitta agregatsiya-quvuri bilan bajariladi, ya'ni holat
- * DB'dagi JORIY paidAmount asosida chiqadi (poyga yo'q).
+ *
+ * BITTA XOM `UPDATE`: SQL'da o'ng tomondagi ustun ESKI qiymatni beradi,
+ * ya'ni Mongo'dagi update-pipeline bilan aynan bir xil semantika -
+ * status DB'dagi JORIY `paidAmount` dan chiqadi va poyga oynasi yo'q.
+ *
+ * DIQQAT - KLAMP: yangi `paidAmount` NOLDAN PASTGA tushmaydi
+ * (`GREATEST(0, ...)`), va status AYNAN shu klamplangan qiymatdan
+ * hisoblanadi. Mongo quvurida ham ikkinchi `$set` bosqichi birinchisi
+ * yozgan qiymatni ko'rardi - shuning uchun bu yerda ham bitta ifoda
+ * ikki marta takrorlanadi, xom `paidAmount + delta` EMAS.
+ *
+ * `updatedAt`: Prisma'ning `@updatedAt` KLIENT tomonida ishlaydi, xom
+ * SQL uni chetlab o'tadi - ochiq yoziladi.
  */
 export const applyPaidDelta = async (payrollId, delta, { capToRemaining = false } = {}) => {
-  const filter = { _id: payrollId };
-  if (capToRemaining && delta > 0) {
-    filter.$expr = {
-      $lte: [{ $add: ["$paidAmount", delta] }, "$finalAmount"],
-    };
-  }
+  const id = String(payrollId);
+  const d = Number(delta) || 0;
 
-  return StaffPayroll.findOneAndUpdate(
-    filter,
-    [
-      {
-        $set: {
-          paidAmount: { $max: [0, { $add: ["$paidAmount", delta] }] },
-        },
-      },
-      {
-        $set: {
-          status: {
-            $switch: {
-              branches: [
-                { case: { $lte: ["$paidAmount", 0] }, then: "unpaid" },
-                {
-                  case: { $gte: ["$paidAmount", "$finalAmount"] },
-                  then: "paid",
-                },
-              ],
-              default: "partial",
-            },
-          },
-        },
-      },
-    ],
-    { new: true },
-  );
+  const setClause = Prisma.sql`
+    SET "paidAmount" = GREATEST(0, "paidAmount" + ${d}::double precision),
+        "status"     = CASE
+          WHEN GREATEST(0, "paidAmount" + ${d}::double precision) <= 0
+            THEN 'unpaid'::"PayStatus"
+          WHEN GREATEST(0, "paidAmount" + ${d}::double precision) >= "finalAmount"
+            THEN 'paid'::"PayStatus"
+          ELSE 'partial'::"PayStatus"
+        END,
+        "updatedAt"  = NOW()
+  `;
+
+  const affected =
+    capToRemaining && d > 0
+      ? await prisma.$executeRaw`
+          UPDATE "staff_payrolls" ${setClause}
+          WHERE "id" = ${id}
+            AND "paidAmount" + ${d}::double precision <= "finalAmount"
+        `
+      : await prisma.$executeRaw`
+          UPDATE "staff_payrolls" ${setClause}
+          WHERE "id" = ${id}
+        `;
+
+  if (affected === 0) return null;
+  const row = await prisma.staffPayroll.findUnique({ where: { id } });
+  return row ? withLegacyId(row) : null;
 };

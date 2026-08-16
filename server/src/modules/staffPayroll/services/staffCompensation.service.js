@@ -1,6 +1,6 @@
-import User from "../../../models/user.model.js";
-import StaffCompensation from "../../../models/staffCompensation.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { loadRoleCatalog } from "../../../helpers/roles.helper.js";
@@ -20,9 +20,26 @@ import * as auditService from "./payrollAudit.service.js";
  * ochilsa, u faqat KPI uchun bo'lishi kerak (salaryType="kpi_only") -
  * aks holda oylik IKKI marta hisoblanardi. Shuning uchun o'qituvchiga
  * "fixed" tur berilishi bloklanadi.
+ *
+ * ═════════════════════════════════════════════════════════════════
+ * MONGO → PRISMA
+ *   { employee: id } → { employeeId: id }
+ *   doc.save()       → prisma.staffCompensation.update(...)
+ *   doc.softDelete() → update({ isDeleted, deletedAt, deletedBy })
+ *   .distinct("employee") → findMany({ distinct, select })
+ *   $nin → notIn
+ *
+ * ATOMIKLIK: `setCompensation` IKKI yozuv qiladi (eskisini yopish +
+ * yangisini ochish). Mongo'da ular alohida edi - ikkinchisi yiqilsa
+ * xodim SHARTNOMASIZ qolardi va oyligi jimgina 0 ga tushardi. Endi
+ * ikkalasi bitta `$transaction` ichida.
+ * ═════════════════════════════════════════════════════════════════
  */
 const assertEmployee = async (employeeId) => {
-  const user = await User.findById(employeeId).lean();
+  const user = await prisma.user.findUnique({
+    where: { id: String(employeeId) },
+    select: { id: true, role: true, homeBranchId: true },
+  });
   if (!user) throw new ApiError(404, "Xodim topilmadi");
   if (user.role === ROLES.STUDENT) {
     throw new ApiError(400, "O'quvchiga maosh shartnomasi ochilmaydi");
@@ -39,16 +56,19 @@ const assertTeacherKpiOnly = (user, salaryType) => {
   );
 };
 
+const actorId = (u) => u?.id || u?._id || null;
+
 export const listByEmployee = async (employeeId) => {
-  const items = await StaffCompensation.find({
-    employee: employeeId,
-    isDeleted: { $ne: true },
-  })
-    .sort({ effectiveFrom: -1 })
-    .lean();
+  const items = await prisma.staffCompensation.findMany({
+    where: { employeeId: String(employeeId), isDeleted: false },
+    orderBy: { effectiveFrom: "desc" },
+  });
 
   const active = items.find((i) => !i.effectiveTo) || null;
-  return { items, active };
+  return {
+    items: withLegacyIds(items),
+    active: active ? withLegacyId(active) : null,
+  };
 };
 
 /**
@@ -78,39 +98,47 @@ export const setCompensation = async (body, currentUser) => {
     );
   }
 
-  const open = await StaffCompensation.findOne({
-    employee: user._id,
-    effectiveTo: null,
-    isDeleted: { $ne: true },
+  const open = await prisma.staffCompensation.findFirst({
+    where: { employeeId: user.id, effectiveTo: null, isDeleted: false },
+    select: { id: true, effectiveFrom: true, salaryType: true, baseAmount: true },
   });
 
-  if (open) {
-    if (open.effectiveFrom >= effectiveFrom) {
-      throw new ApiError(
-        400,
-        "Yangi shartnoma amaldagisidan keyin boshlanishi kerak",
-      );
-    }
-    open.effectiveTo = effectiveFrom;
-    open.updatedBy = currentUser?._id || null;
-    await open.save();
+  if (open && open.effectiveFrom >= effectiveFrom) {
+    throw new ApiError(
+      400,
+      "Yangi shartnoma amaldagisidan keyin boshlanishi kerak",
+    );
   }
 
-  const created = await StaffCompensation.create({
-    employee: user._id,
-    branchId,
-    salaryType,
-    baseAmount: salaryType === "kpi_only" ? 0 : body.baseAmount || 0,
-    effectiveFrom,
-    note: body.note || "",
-    createdBy: currentUser?._id || null,
+  // Eskisini yopish va yangisini ochish BITTA tranzaksiyada: qisman
+  // unique indeks (employeeId) WHERE effectiveTo IS NULL bitta ochiq
+  // shartnomaga ruxsat beradi, ya'ni yopish yiqilsa yaratish ham
+  // o'tmaydi - "shartnomasiz xodim" holati mumkin emas.
+  const created = await prisma.$transaction(async (tx) => {
+    if (open) {
+      await tx.staffCompensation.update({
+        where: { id: open.id },
+        data: { effectiveTo: effectiveFrom, updatedById: actorId(currentUser) },
+      });
+    }
+    return tx.staffCompensation.create({
+      data: {
+        employeeId: user.id,
+        branchId,
+        salaryType,
+        baseAmount: salaryType === "kpi_only" ? 0 : body.baseAmount || 0,
+        effectiveFrom,
+        note: body.note || "",
+        createdById: actorId(currentUser),
+      },
+    });
   });
 
   await auditService.record({
-    employee: user._id,
+    employee: user.id,
     action: auditService.PAYROLL_AUDIT_ACTIONS.SALARY_CHANGED,
     targetType: "compensation",
-    targetId: created._id,
+    targetId: created.id,
     oldValue: open
       ? { salaryType: open.salaryType, baseAmount: open.baseAmount }
       : null,
@@ -123,44 +151,47 @@ export const setCompensation = async (body, currentUser) => {
   const now = new Date();
   try {
     await payrollService.computePayroll(
-      user._id,
+      user.id,
       now.getUTCFullYear(),
       now.getUTCMonth() + 1,
     );
   } catch (err) {
     // Hisob xatosi shartnoma yaratilishini bekor qilmasin.
     logger.warn(
-      { err: err?.message, employee: String(user._id) },
+      { err: err?.message, employee: String(user.id) },
       "Shartnomadan keyin maoshni qayta hisoblab bo'lmadi",
     );
   }
 
-  return created;
+  return withLegacyId(created);
 };
 
 /** Xato kiritilgan shartnomani tuzatish (summani/turini o'zgartirish). */
 export const amendCompensation = async (id, patch, currentUser) => {
-  const doc = await StaffCompensation.findOne({
-    _id: id,
-    isDeleted: { $ne: true },
+  const doc = await prisma.staffCompensation.findFirst({
+    where: { id: String(id), isDeleted: false },
   });
   if (!doc) throw new ApiError(404, "Shartnoma topilmadi");
 
-  const user = await assertEmployee(doc.employee);
+  const user = await assertEmployee(doc.employeeId);
   const salaryType = patch.salaryType || doc.salaryType;
   assertTeacherKpiOnly(user, salaryType);
 
-  if (patch.baseAmount !== undefined) doc.baseAmount = patch.baseAmount;
-  if (patch.salaryType !== undefined) doc.salaryType = patch.salaryType;
-  if (patch.note !== undefined) doc.note = patch.note;
-  if (patch.branchId !== undefined) doc.branchId = patch.branchId;
-  doc.updatedBy = currentUser?._id || null;
-  await doc.save();
+  const data = { updatedById: actorId(currentUser) };
+  if (patch.baseAmount !== undefined) data.baseAmount = patch.baseAmount;
+  if (patch.salaryType !== undefined) data.salaryType = patch.salaryType;
+  if (patch.note !== undefined) data.note = patch.note;
+  if (patch.branchId !== undefined) data.branchId = patch.branchId || null;
+
+  const saved = await prisma.staffCompensation.update({
+    where: { id: doc.id },
+    data,
+  });
 
   const now = new Date();
   try {
     await payrollService.computePayroll(
-      doc.employee,
+      doc.employeeId,
       now.getUTCFullYear(),
       now.getUTCMonth() + 1,
     );
@@ -168,31 +199,43 @@ export const amendCompensation = async (id, patch, currentUser) => {
     logger.warn({ err: err?.message }, "Tuzatishdan keyin qayta hisob xatosi");
   }
 
-  return doc;
+  return withLegacyId(saved);
 };
 
 /** Shartnomani bekor qilish (yopish emas - xato kiritilgan bo'lsa). */
 export const removeCompensation = async (id, currentUser) => {
-  const doc = await StaffCompensation.findOne({
-    _id: id,
-    isDeleted: { $ne: true },
+  const doc = await prisma.staffCompensation.findFirst({
+    where: { id: String(id), isDeleted: false },
   });
   if (!doc) throw new ApiError(404, "Shartnoma topilmadi");
 
-  await doc.softDelete(currentUser?._id);
+  // O'chirish va oldingi davrni qayta ochish BIRGA: ikkinchisi yiqilsa
+  // xodimda shartnomasiz teshik qolardi.
+  await prisma.$transaction(async (tx) => {
+    await tx.staffCompensation.update({
+      where: { id: doc.id },
+      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+    });
 
-  // Oldingi davr ochiq qolsin - bo'shliq qolmasin.
-  const prev = await StaffCompensation.findOne({
-    employee: doc.employee,
-    isDeleted: { $ne: true },
-    effectiveTo: doc.effectiveFrom,
-  }).sort({ effectiveFrom: -1 });
-  if (prev) {
-    prev.effectiveTo = doc.effectiveTo || null;
-    await prev.save();
-  }
+    // Oldingi davr ochiq qolsin - bo'shliq qolmasin.
+    const prev = await tx.staffCompensation.findFirst({
+      where: {
+        employeeId: doc.employeeId,
+        isDeleted: false,
+        effectiveTo: doc.effectiveFrom,
+      },
+      orderBy: { effectiveFrom: "desc" },
+      select: { id: true },
+    });
+    if (prev) {
+      await tx.staffCompensation.update({
+        where: { id: prev.id },
+        data: { effectiveTo: doc.effectiveTo || null },
+      });
+    }
+  });
 
-  return { id };
+  return { id: doc.id };
 };
 
 /**
@@ -206,18 +249,28 @@ export const employeesWithoutCompensation = async () => {
     .map((r) => r.value);
   if (!studentValues.includes(ROLES.STUDENT)) studentValues.push(ROLES.STUDENT);
 
-  const withComp = await StaffCompensation.distinct("employee", {
-    isDeleted: { $ne: true },
-    effectiveTo: null,
+  const compRows = await prisma.staffCompensation.findMany({
+    where: { isDeleted: false, effectiveTo: null },
+    select: { employeeId: true },
+    distinct: ["employeeId"],
   });
+  const withComp = compRows.map((r) => r.employeeId);
 
-  return User.find(
-    {
-      role: { $nin: [...studentValues, ROLES.TEACHER] },
-      isActive: true,
-      isDeleted: { $ne: true },
-      _id: { $nin: withComp },
-    },
-    { firstName: 1, lastName: 1, role: 1, homeBranchId: 1 },
-  ).lean();
+  return withLegacyIds(
+    await prisma.user.findMany({
+      where: {
+        role: { notIn: [...studentValues, ROLES.TEACHER] },
+        isActive: true,
+        isDeleted: false,
+        id: { notIn: withComp },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        homeBranchId: true,
+      },
+    }),
+  );
 };

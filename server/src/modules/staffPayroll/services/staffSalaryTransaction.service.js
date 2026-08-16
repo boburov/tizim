@@ -1,6 +1,6 @@
-import StaffPayroll from "../../../models/staffPayroll.model.js";
-import StaffSalaryTransaction from "../../../models/staffSalaryTransaction.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import { APPROVAL_KINDS } from "../../../constants/approvals.js";
 import { parseLocalDay, isFutureLocalDay } from "../../../helpers/attendance.helper.js";
 import { isBranchAllowed } from "../../../helpers/branchContext.helper.js";
@@ -23,9 +23,16 @@ import * as journal from "../../journal/services/journal.service.js";
  * salaryTransaction.service.js:32-36 filialni GURUHDAN oladi va guruhsiz
  * qatorlar (markaz oyligi, bonus) uchun 404 "Guruh topilmadi" qaytaradi -
  * ya'ni ular umuman to'lanmaydi. Bu yerda filial maosh QATORIDAN olinadi.
+ *
+ * MONGO → PRISMA: { payroll } → { payrollId }, { employee } → { employeeId };
+ * doc.softDelete(by) → update(...); err.code 11000 → "P2002".
  */
+const actorId = (u) => u?.id || u?._id || null;
+
 const validatePayment = async ({ payrollId, paidAt }) => {
-  const payroll = await StaffPayroll.findById(payrollId);
+  const payroll = await prisma.staffPayroll.findUnique({
+    where: { id: String(payrollId) },
+  });
   if (!payroll) throw new ApiError(404, "Maosh qatori topilmadi");
   if (!payroll.branchId) {
     throw new ApiError(400, "Maosh qatorida filial yo'q - shartnomani tekshiring");
@@ -53,7 +60,7 @@ const writeTransaction = async ({
   createdBy,
   expenseApprovalId = null,
 }) => {
-  const updated = await payrollService.applyPaidDelta(payroll._id, amount, {
+  const updated = await payrollService.applyPaidDelta(payroll.id, amount, {
     capToRemaining: true,
   });
   if (!updated) {
@@ -68,18 +75,20 @@ const writeTransaction = async ({
   }
 
   try {
-    const created = await StaffSalaryTransaction.create({
-      branchId: payroll.branchId,
-      payroll: payroll._id,
-      employee: payroll.employee,
-      year: payroll.year,
-      month: payroll.month,
-      amount,
-      method,
-      paidAt: day,
-      note: note || "",
-      createdBy: createdBy || null,
-      expenseApprovalId,
+    const created = await prisma.staffSalaryTransaction.create({
+      data: {
+        branchId: payroll.branchId,
+        payrollId: payroll.id,
+        employeeId: payroll.employeeId,
+        year: payroll.year,
+        month: payroll.month,
+        amount,
+        method,
+        paidAt: day,
+        note: note || "",
+        createdById: createdBy ? String(createdBy) : null,
+        expenseApprovalId: expenseApprovalId ? String(expenseApprovalId) : null,
+      },
     });
 
     // JURNAL: xodim maoshi ham xarajat (o'qituvchinikidan farqi -
@@ -87,22 +96,22 @@ const writeTransaction = async ({
     await journalPosting.postSalary(created, journal, "StaffSalaryTransaction");
 
     await auditService.record({
-      employee: payroll.employee,
+      employee: payroll.employeeId,
       year: payroll.year,
       month: payroll.month,
       action: auditService.PAYROLL_AUDIT_ACTIONS.PAID,
       targetType: "staffSalaryTransaction",
-      targetId: created._id,
+      targetId: created.id,
       oldValue: { paidAmount: payroll.paidAmount || 0 },
       newValue: { paidAmount: (payroll.paidAmount || 0) + amount, amount, method },
       reason: note || "",
-      actor: createdBy ? { _id: createdBy } : null,
+      actor: createdBy ? { id: createdBy, _id: createdBy } : null,
     });
 
-    return created;
+    return withLegacyId(created);
   } catch (err) {
     // Yozuv o'tmadi - band qilingan balansni qaytaramiz.
-    await payrollService.applyPaidDelta(payroll._id, -amount);
+    await payrollService.applyPaidDelta(payroll.id, -amount);
     throw err;
   }
 };
@@ -131,7 +140,7 @@ export const create = async (body, currentUser) => {
       amount,
       threshold,
       payload: {
-        payrollId: String(payroll._id),
+        payrollId: String(payroll.id),
         method: body.method,
         paidAt: day,
         note: body.note || "",
@@ -150,7 +159,7 @@ export const create = async (body, currentUser) => {
     amount,
     method: body.method,
     note: body.note,
-    createdBy: currentUser?._id,
+    createdBy: actorId(currentUser),
   });
 };
 
@@ -163,10 +172,11 @@ export const create = async (body, currentUser) => {
  * chunki so'rov va tasdiq orasida holat o'zgargan bo'lishi mumkin.
  */
 export const executeApproved = async (approval) => {
-  const existing = await StaffSalaryTransaction.findOne({
-    expenseApprovalId: approval._id,
+  const approvalId = String(approval.id ?? approval._id);
+  const existing = await prisma.staffSalaryTransaction.findFirst({
+    where: { expenseApprovalId: approvalId },
   });
-  if (existing) return existing;
+  if (existing) return withLegacyId(existing);
 
   const { payroll, day } = await validatePayment({
     payrollId: approval.payload?.payrollId,
@@ -183,40 +193,47 @@ export const executeApproved = async (approval) => {
     amount: approval.amount,
     method: approval.payload?.method || "cash",
     note: approval.payload?.note || "",
-    createdBy: approval.requestedBy,
-    expenseApprovalId: approval._id,
+    createdBy: approval.requestedById || approval.requestedBy,
+    expenseApprovalId: approvalId,
   });
 };
 
 export const remove = async (id, currentUser) => {
-  const doc = await StaffSalaryTransaction.findOne({
-    _id: id,
-    isDeleted: { $ne: true },
+  const doc = await prisma.staffSalaryTransaction.findFirst({
+    where: { id: String(id), isDeleted: false },
   });
   if (!doc) throw new ApiError(404, "To'lov topilmadi");
   if (!isBranchAllowed(doc.branchId)) {
     throw new ApiError(403, "Bu filial bo'yicha amal bajarib bo'lmaydi");
   }
 
-  await doc.softDelete(currentUser?._id);
-  await payrollService.applyPaidDelta(doc.payroll, -doc.amount);
+  await prisma.staffSalaryTransaction.update({
+    where: { id: doc.id },
+    data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+  });
+  await payrollService.applyPaidDelta(doc.payrollId, -doc.amount);
 
   await auditService.record({
-    employee: doc.employee,
+    employee: doc.employeeId,
     year: doc.year,
     month: doc.month,
     action: auditService.PAYROLL_AUDIT_ACTIONS.PAYMENT_REVERSED,
     targetType: "staffSalaryTransaction",
-    targetId: doc._id,
+    targetId: doc.id,
     oldValue: { amount: doc.amount, method: doc.method, paidAt: doc.paidAt },
     actor: currentUser,
   });
 
-  return { id };
+  return { id: doc.id };
 };
 
 export const listByPayroll = async (payrollId) =>
-  StaffSalaryTransaction.find({ payroll: payrollId, isDeleted: { $ne: true } })
-    .sort({ paidAt: -1 })
-    .populate("createdBy", { firstName: 1, lastName: 1 })
-    .lean();
+  withLegacyIds(
+    await prisma.staffSalaryTransaction.findMany({
+      where: { payrollId: String(payrollId), isDeleted: false },
+      orderBy: { paidAt: "desc" },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+  );

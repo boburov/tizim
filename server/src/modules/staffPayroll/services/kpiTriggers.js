@@ -1,9 +1,4 @@
-import mongoose from "mongoose";
-import Lead from "../../../models/lead.model.js";
-import User from "../../../models/user.model.js";
-import Attendance from "../../../models/attendance.model.js";
-import TeacherAttendance from "../../../models/teacherAttendance.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
+import prisma from "../../../config/prisma.js";
 import { computeRate } from "../../attendance/services/attendance.service.js";
 
 /**
@@ -29,7 +24,19 @@ import { computeRate } from "../../attendance/services/attendance.service.js";
  * olinishini trigger biladi, qoida emas).
  */
 
-const toId = (v) => new mongoose.Types.ObjectId(String(v));
+// MONGO → PRISMA
+//   Lead.createdBy   → createdById      Lead.creditedTo → creditedToId
+//   Lead.source      → sourceId         Lead.direction  → directionId
+//   Attendance.student → studentId      TeacherAttendance.teacher → teacherId
+//   PaymentTransaction.createdBy → createdById,  .student → studentId
+//   `_id` → `id`   |   `$in` → `in`   |   `$ne: null` → `not: null`
+//
+// `toId()` OLIB TASHLANDI - Prisma kaliti oddiy 24-belgili satr.
+//
+// `computeRate` (attendance.service) SOF FUNKSIYA - bazaga tegmaydi,
+// shuning uchun u modul hali Mongoose'da bo'lsa ham bu fayl mustaqil
+// ko'chirildi.
+const toId = (v) => String(v);
 
 // Oy chegaralari - loyihadagi hamma joyda bir xil (UTC oy boshi/oxiri).
 export const monthRange = (year, month) => ({
@@ -104,26 +111,32 @@ const leadCreated = {
   conditionKeys: ["minStatus", "dedupeDays", "sourceIds", "directionIds"],
   async evaluate({ employeeId, year, month, conditions }) {
     const { start, endExcl } = monthRange(year, month);
-    const filter = {
-      createdBy: toId(employeeId),
-      createdAt: { $gte: start, $lt: endExcl },
+    const where = {
+      createdById: toId(employeeId),
+      createdAt: { gte: start, lt: endExcl },
     };
     // Ixtiyoriy shartlar: faqat ma'lum manba/yo'nalish uchun mukofot.
     if (conditions?.sourceIds?.length) {
-      filter.source = { $in: conditions.sourceIds.map(toId) };
+      where.sourceId = { in: conditions.sourceIds.map(toId) };
     }
     if (conditions?.directionIds?.length) {
-      filter.direction = { $in: conditions.directionIds.map(toId) };
+      where.directionId = { in: conditions.directionIds.map(toId) };
     }
 
-    const leads = await Lead.find(filter, {
-      firstName: 1,
-      lastName: 1,
-      phone: 1,
-      status: 1,
-      statusHistory: 1,
-      createdAt: 1,
-    }).lean();
+    const leads = await prisma.lead.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        status: true,
+        // `statusHistory` Prisma'da `Json` (Mongo'da embedded massiv edi) -
+        // o'qishda shakl bir xil: [{ status, at, by }].
+        statusHistory: true,
+        createdAt: true,
+      },
+    });
     if (!leads.length) return [];
 
     // 1) SIFAT DARVOZASI
@@ -144,10 +157,10 @@ const leadCreated = {
 
     // BARCHA yaratuvchilar bo'ylab qidiramiz, faqat shu xodim bo'yicha emas:
     // aks holda ikki sotuvchi bitta raqamni kiritib, IKKALASI ham pul olardi.
-    const sameNumber = await Lead.find(
-      { phone: { $in: phones }, createdAt: { $lt: endExcl } },
-      { phone: 1, createdAt: 1 },
-    ).lean();
+    const sameNumber = await prisma.lead.findMany({
+      where: { phone: { in: phones }, createdAt: { lt: endExcl } },
+      select: { id: true, phone: true, createdAt: true },
+    });
 
     const byPhone = new Map();
     for (const row of sameNumber) {
@@ -161,13 +174,13 @@ const leadCreated = {
         const siblings = byPhone.get(lead.phone) || [];
         // Oraliq ichida O'ZIDAN OLDIN kelgan yozuv bormi?
         return !siblings.some((s) => {
-          if (String(s._id) === String(lead._id)) return false;
+          if (String(s.id) === String(lead.id)) return false;
           const gap = new Date(lead.createdAt) - new Date(s.createdAt);
           // Bir xil soniyada yaratilgan ikki yozuvdan qaysi biri "oldin"
-          // ekani sanadan chiqmaydi - kichik _id yutadi. Bu shart BARQAROR
+          // ekani sanadan chiqmaydi - kichik `id` yutadi. Bu shart BARQAROR
           // bo'lishi kerak, aks holda oy har qayta hisoblanganda boshqa
           // qator to'lanardi.
-          if (gap === 0) return String(s._id) < String(lead._id);
+          if (gap === 0) return String(s.id) < String(lead.id);
           return gap > 0 && gap <= windowMs;
         });
       })
@@ -177,7 +190,7 @@ const leadCreated = {
 
 const rowOfLead = (l) => ({
   sourceType: "lead",
-  sourceId: l._id,
+  sourceId: l.id,
   quantity: 1,
   base: 0,
   meta: {
@@ -202,29 +215,33 @@ const leadConverted = {
   conditionKeys: ["sourceIds", "directionIds"],
   async evaluate({ employeeId, year, month, conditions }) {
     const { start, endExcl } = monthRange(year, month);
-    const filter = {
-      creditedTo: toId(employeeId),
-      studentId: { $ne: null },
-      convertedAt: { $gte: start, $lt: endExcl },
+    const where = {
+      creditedToId: toId(employeeId),
+      studentId: { not: null },
+      convertedAt: { gte: start, lt: endExcl },
     };
     // Ixtiyoriy shartlar: faqat ma'lum manba/yo'nalish uchun mukofot.
     if (conditions?.sourceIds?.length) {
-      filter.source = { $in: conditions.sourceIds.map(toId) };
+      where.sourceId = { in: conditions.sourceIds.map(toId) };
     }
     if (conditions?.directionIds?.length) {
-      filter.direction = { $in: conditions.directionIds.map(toId) };
+      where.directionId = { in: conditions.directionIds.map(toId) };
     }
 
-    const leads = await Lead.find(filter, {
-      firstName: 1,
-      lastName: 1,
-      studentId: 1,
-      convertedAt: 1,
-    }).lean();
+    const leads = await prisma.lead.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        studentId: true,
+        convertedAt: true,
+      },
+    });
 
     return leads.map((l) => ({
       sourceType: "lead",
-      sourceId: l._id,
+      sourceId: l.id,
       quantity: 1,
       base: 0,
       meta: {
@@ -257,56 +274,68 @@ const studentFirstPayment = {
     // AVVAL lidlardan boshlaymiz (indekslangan: creditedTo), keyin
     // o'quvchilar. Teskari tartibda butun o'quvchilar jadvali
     // o'qilardi - katta markazda bu qimmat.
-    const ownedLeads = await Lead.find(
-      { creditedTo: toId(employeeId), studentId: { $ne: null } },
-      { studentId: 1 },
-    ).lean();
+    const ownedLeads = await prisma.lead.findMany({
+      where: { creditedToId: toId(employeeId), studentId: { not: null } },
+      select: { studentId: true },
+    });
     if (!ownedLeads.length) return [];
 
-    const mine = await User.find(
-      {
-        _id: { $in: ownedLeads.map((l) => l.studentId) },
-        isDeleted: { $ne: true },
+    const mine = await prisma.user.findMany({
+      where: {
+        id: { in: ownedLeads.map((l) => l.studentId) },
+        isDeleted: false,
       },
-      { _id: 1, firstName: 1, lastName: 1 },
-    ).lean();
+      select: { id: true, firstName: true, lastName: true },
+    });
     if (!mine.length) return [];
 
-    const studentIds = mine.map((s) => toId(s._id));
-    // Har o'quvchining ENG BIRINCHI to'lovi - bitta agregatda.
-    const rows = await PaymentTransaction.aggregate([
-      { $match: { student: { $in: studentIds }, isDeleted: { $ne: true } } },
-      { $sort: { paidAt: 1 } },
-      {
-        $group: {
-          _id: "$student",
-          firstAt: { $first: "$paidAt" },
-          firstId: { $first: "$_id" },
-          firstAmount: { $first: "$amount" },
-        },
-      },
-    ]);
+    const studentIds = mine.map((s) => s.id);
+
+    // HAR O'QUVCHINING ENG BIRINCHI TO'LOVI.
+    //
+    // Mongo'da bu `$sort` + `$group/$first` quvuri edi - Prisma'ning
+    // `groupBy` i "guruh ichidagi birinchi qator" ni bera olmaydi
+    // (faqat _min/_max/_sum). Shuning uchun to'lovlar sana bo'yicha
+    // O'SISH tartibida bir marta o'qilib, birinchisi JS'da olinadi.
+    //
+    // NEGA BU XAVFSIZ: filtr o'quvchilar ro'yxati bilan cheklangan
+    // (butun jadval emas), ya'ni qatorlar soni shu xodimning
+    // o'quvchilari to'lovlari bilan chegaralangan.
+    //
+    // TARTIB `id` bilan mustahkamlangan: bir xil `paidAt` da qaysi
+    // to'lov "birinchi" ekani barqaror bo'lishi shart - aks holda oy
+    // har qayta hisoblanganda boshqa qator mukofotlanardi.
+    const txs = await prisma.paymentTransaction.findMany({
+      where: { studentId: { in: studentIds }, isDeleted: false },
+      select: { id: true, studentId: true, paidAt: true, amount: true },
+      orderBy: [{ paidAt: "asc" }, { id: "asc" }],
+    });
+
+    const firstByStudent = new Map();
+    for (const t of txs) {
+      if (!firstByStudent.has(t.studentId)) firstByStudent.set(t.studentId, t);
+    }
 
     const nameOf = new Map(
       mine.map((s) => [
-        String(s._id),
+        String(s.id),
         [s.firstName, s.lastName].filter(Boolean).join(" "),
       ]),
     );
     const minAmount = Number(conditions?.minAmount || 0);
 
-    return rows
-      .filter((r) => r.firstAt >= start && r.firstAt < endExcl)
-      .filter((r) => r.firstAmount >= minAmount)
-      .map((r) => ({
+    return [...firstByStudent.entries()]
+      .filter(([, r]) => r.paidAt >= start && r.paidAt < endExcl)
+      .filter(([, r]) => r.amount >= minAmount)
+      .map(([studentId, r]) => ({
         sourceType: "payment",
-        sourceId: r.firstId,
+        sourceId: r.id,
         quantity: 1,
-        base: r.firstAmount,
+        base: r.amount,
         meta: {
-          studentName: nameOf.get(String(r._id)) || "",
-          paidAt: r.firstAt,
-          amount: r.firstAmount,
+          studentName: nameOf.get(String(studentId)) || "",
+          paidAt: r.paidAt,
+          amount: r.amount,
         },
       }));
   },
@@ -333,17 +362,17 @@ const studentRetained = {
     const minDays = Number(conditions?.minDays || 30);
     const minRate = Number(conditions?.minAttendanceRate || 0);
 
-    const ownedLeads = await Lead.find(
-      { creditedTo: toId(employeeId), studentId: { $ne: null } },
-      { studentId: 1 },
-    ).lean();
+    const ownedLeads = await prisma.lead.findMany({
+      where: { creditedToId: toId(employeeId), studentId: { not: null } },
+      select: { studentId: true },
+    });
     if (!ownedLeads.length) return [];
 
-    const studentIds = ownedLeads.map((l) => toId(l.studentId));
-    const students = await User.find(
-      { _id: { $in: studentIds }, isDeleted: { $ne: true } },
-      { firstName: 1, lastName: 1, enrolledAt: 1 },
-    ).lean();
+    const studentIds = ownedLeads.map((l) => l.studentId);
+    const students = await prisma.user.findMany({
+      where: { id: { in: studentIds }, isDeleted: false },
+      select: { id: true, firstName: true, lastName: true, enrolledAt: true },
+    });
     if (!students.length) return [];
 
     // Mukofot O'SHA OYDA beriladi: muddat aynan shu oy ichida to'lgan
@@ -358,32 +387,30 @@ const studentRetained = {
     if (!eligible.length) return [];
 
     // Davomat - bitta agregat (har o'quvchi uchun alohida so'rov emas).
-    const rows = await Attendance.aggregate([
-      {
-        $match: {
-          student: { $in: eligible.map((s) => toId(s._id)) },
-          isDeleted: { $ne: true },
-          status: { $in: ["present", "absent"] },
-        },
+    // Mongo `$group` + `$cond` o'rniga (studentId, status) bo'yicha
+    // guruhlash: Prisma `_count` beradi, statuslar esa JS'da yig'iladi.
+    const rows = await prisma.attendance.groupBy({
+      by: ["studentId", "status"],
+      where: {
+        studentId: { in: eligible.map((s) => s.id) },
+        isDeleted: false,
+        status: { in: ["present", "absent"] },
       },
-      {
-        $group: {
-          _id: "$student",
-          present: { $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] } },
-          absent: { $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] } },
-        },
-      },
-    ]);
+      _count: { _all: true },
+    });
+    const buckets = new Map();
+    for (const r of rows) {
+      const b = buckets.get(r.studentId) || { present: 0, absent: 0 };
+      b[r.status] = r._count._all;
+      buckets.set(r.studentId, b);
+    }
     const rateOf = new Map(
-      rows.map((r) => [
-        String(r._id),
-        computeRate({ present: r.present, absent: r.absent }),
-      ]),
+      [...buckets.entries()].map(([sid, b]) => [String(sid), computeRate(b)]),
     );
 
     return eligible
       .filter((s) => {
-        const rate = rateOf.get(String(s._id));
+        const rate = rateOf.get(String(s.id));
         // null = umuman belgilanmagan. "Ma'lumot yo'q"ni 0% deb hisoblash
         // xodimni o'zi aybdor bo'lmagan narsa uchun jazolardi.
         if (minRate > 0) return rate !== null && rate >= minRate;
@@ -391,13 +418,15 @@ const studentRetained = {
       })
       .map((s) => ({
         sourceType: "student",
-        sourceId: s._id,
+        sourceId: s.id,
         quantity: 1,
         base: 0,
         meta: {
           studentName: [s.firstName, s.lastName].filter(Boolean).join(" "),
           enrolledAt: s.enrolledAt,
-          attendanceRate: rateOf.get(String(s._id)),
+          // `rateOf` da yozuv bo'lmasa `undefined` emas, `null` beriladi:
+          // "davomat umuman belgilanmagan" degani (yuqoridagi izohga qarang).
+          attendanceRate: rateOf.get(String(s.id)) ?? null,
           minDays,
         },
       }));
@@ -420,19 +449,19 @@ const paymentsCollected = {
     const { start, endExcl } = monthRange(year, month);
     const minAmount = Number(conditions?.minAmount || 0);
 
-    const rows = await PaymentTransaction.find(
-      {
-        createdBy: toId(employeeId),
-        paidAt: { $gte: start, $lt: endExcl },
-        amount: { $gte: minAmount || 1 },
-        isDeleted: { $ne: true },
+    const rows = await prisma.paymentTransaction.findMany({
+      where: {
+        createdById: toId(employeeId),
+        paidAt: { gte: start, lt: endExcl },
+        amount: { gte: minAmount || 1 },
+        isDeleted: false,
       },
-      { amount: 1, paidAt: 1, student: 1 },
-    ).lean();
+      select: { id: true, amount: true, paidAt: true, studentId: true },
+    });
 
     return rows.map((r) => ({
       sourceType: "payment",
-      sourceId: r._id,
+      sourceId: r.id,
       quantity: 1,
       base: r.amount,
       meta: { amount: r.amount, paidAt: r.paidAt },
@@ -460,14 +489,14 @@ const employeeAttendance = {
   conditionKeys: ["countMode"],
   async evaluate({ employeeId, year, month }) {
     const { start, endExcl } = monthRange(year, month);
-    const rows = await TeacherAttendance.find(
-      {
-        teacher: toId(employeeId),
-        date: { $gte: start, $lt: endExcl },
-        isDeleted: { $ne: true },
+    const rows = await prisma.teacherAttendance.findMany({
+      where: {
+        teacherId: toId(employeeId),
+        date: { gte: start, lt: endExcl },
+        isDeleted: false,
       },
-      { status: 1 },
-    ).lean();
+      select: { status: true },
+    });
 
     const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
     const missed = rows.filter((r) => r.status !== "present").length;

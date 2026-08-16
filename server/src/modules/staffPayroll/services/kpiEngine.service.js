@@ -1,6 +1,4 @@
-import KpiRule from "../../../models/kpiRule.model.js";
-import StaffKpiAssignment from "../../../models/staffKpiAssignment.model.js";
-import StaffPayrollItem from "../../../models/staffPayrollItem.model.js";
+import prisma from "../../../config/prisma.js";
 import { getTrigger } from "./kpiTriggers.js";
 import logger from "../../../config/logger.js";
 
@@ -17,19 +15,22 @@ import logger from "../../../config/logger.js";
  * tashqari" holati qoidani ko'chirmasdan hal bo'ladi.
  */
 export const resolveRulesForEmployee = async (employee) => {
+  // MONGO → PRISMA: { employee } → { employeeId }, { rule } → { ruleId }.
+  // `employee` chaqiruvchidan keladi va Prisma yozuvi bo'lgani uchun `id`.
+  const employeeId = String(employee.id ?? employee._id);
+
   const [rules, assignments] = await Promise.all([
-    KpiRule.find({ enabled: true, isDeleted: { $ne: true } }).lean(),
-    StaffKpiAssignment.find({
-      employee: employee._id,
-      isDeleted: { $ne: true },
-    }).lean(),
+    prisma.kpiRule.findMany({ where: { enabled: true, isDeleted: false } }),
+    prisma.staffKpiAssignment.findMany({
+      where: { employeeId, isDeleted: false },
+    }),
   ]);
 
-  const byRule = new Map(assignments.map((a) => [String(a.rule), a]));
+  const byRule = new Map(assignments.map((a) => [String(a.ruleId), a]));
 
   return rules
     .map((rule) => {
-      const assignment = byRule.get(String(rule._id));
+      const assignment = byRule.get(String(rule.id));
 
       // Aniq o'chirilgan - rol bo'yicha tegishli bo'lsa ham qo'llanmaydi.
       if (assignment && assignment.enabled === false) return null;
@@ -85,6 +86,7 @@ const computeAmount = ({ rewardType, rewardValue, quantity, base }) => {
  * @returns {Promise<{ total: number, items: Array }>}
  */
 export const rebuildAutoKpi = async ({ payroll, employee }) => {
+  const employeeId = String(employee.id ?? employee._id);
   const applicable = await resolveRulesForEmployee(employee);
   const keptIds = [];
   // Snapshot uchun: hisob paytida QAYSI qoidalar qanday stavka bilan
@@ -99,7 +101,7 @@ export const rebuildAutoKpi = async ({ payroll, employee }) => {
       // Qoida noma'lum triggerga ishora qilyapti (kod orqaga qaytarilgan?).
       // Butun maoshni yiqitmaymiz - qoidani o'tkazib yuboramiz.
       logger.warn(
-        { rule: String(rule._id), trigger: rule.trigger },
+        { rule: String(rule.id), trigger: rule.trigger },
         "KPI qoidasi noma'lum triggerga ishora qilmoqda",
       );
       continue;
@@ -109,7 +111,7 @@ export const rebuildAutoKpi = async ({ payroll, employee }) => {
     try {
       // eslint-disable-next-line no-await-in-loop
       events = await trigger.evaluate({
-        employeeId: employee._id,
+        employeeId,
         year: payroll.year,
         month: payroll.month,
         conditions: rule.conditions || {},
@@ -117,7 +119,7 @@ export const rebuildAutoKpi = async ({ payroll, employee }) => {
     } catch (err) {
       // Bitta qoidaning xatosi qolgan mukofotlarni yo'qotmasin.
       logger.warn(
-        { err: err?.message, rule: String(rule._id) },
+        { err: err?.message, rule: String(rule.id) },
         "KPI qoidasini hisoblab bo'lmadi",
       );
       continue;
@@ -146,31 +148,36 @@ export const rebuildAutoKpi = async ({ payroll, employee }) => {
       // hodisa oyi siljisa ham ikkinchi marta to'lanmaydi.
       const eventKey = ev.eventKey || `${ev.sourceType}:${ev.sourceId || "-"}`;
 
+      // IDEMPOTENTLIK ANKARI: @@unique([employeeId, ruleId, eventKey]).
+      // Bu HAQIQIY (qisman emas) unique kalit, shuning uchun Prisma'ning
+      // tabiiy `upsert` i ishlaydi - bir hodisa uchun ikkinchi mukofot
+      // qatori bazada jismonan yaratilmaydi.
+      const payload = {
+        payrollId: payroll.id,
+        sourceType: ev.sourceType,
+        sourceId: ev.sourceId ? String(ev.sourceId) : null,
+        year: payroll.year,
+        month: payroll.month,
+        ruleName: rule.name,
+        trigger: rule.trigger,
+        quantity: ev.quantity || 1,
+        unitAmount: rewardValue,
+        amount,
+        meta: ev.meta || {},
+      };
       // eslint-disable-next-line no-await-in-loop
-      const doc = await StaffPayrollItem.findOneAndUpdate(
-        { employee: employee._id, rule: rule._id, eventKey },
-        {
-          $set: {
-            payroll: payroll._id,
-            sourceType: ev.sourceType,
-            sourceId: ev.sourceId || null,
-            year: payroll.year,
-            month: payroll.month,
-            ruleName: rule.name,
-            trigger: rule.trigger,
-            quantity: ev.quantity || 1,
-            unitAmount: rewardValue,
-            amount,
-            meta: ev.meta || {},
-          },
+      const doc = await prisma.staffPayrollItem.upsert({
+        where: {
+          employeeId_ruleId_eventKey: { employeeId, ruleId: rule.id, eventKey },
         },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
-      );
-      keptIds.push(doc._id);
+        update: payload,
+        create: { ...payload, employeeId, ruleId: rule.id, eventKey },
+      });
+      keptIds.push(doc.id);
     }
     total += ruleTotal;
     appliedRules.push({
-      rule: String(rule._id),
+      rule: String(rule.id),
       name: rule.name,
       trigger: rule.trigger,
       rewardType: rule.rewardType,
@@ -183,9 +190,11 @@ export const rebuildAutoKpi = async ({ payroll, employee }) => {
 
   // Endi tegishli bo'lmagan qatorlar (qoida o'chirilgan, shart o'zgargan,
   // lid boshqa xodimga o'tgan) - tozalanadi.
-  await StaffPayrollItem.deleteMany({
-    payroll: payroll._id,
-    _id: { $nin: keptIds },
+  // Mongo `$nin` → Prisma `notIn`. Bo'sh ro'yxatda `notIn: []` HAMMA
+  // qatorga to'g'ri keladi - bu aynan kerak: hech bir qoida qo'llanmasa
+  // shu oyning barcha avtomatik qatorlari tozalanishi shart.
+  await prisma.staffPayrollItem.deleteMany({
+    where: { payrollId: payroll.id, id: { notIn: keptIds } },
   });
 
   return { total, count: keptIds.length, appliedRules };
