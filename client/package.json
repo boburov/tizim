@@ -9,7 +9,8 @@
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:ai-metrics": "node scripts/check-ai-metrics.mjs",
     "preview": "vite preview",
-    "check:data-contract": "node scripts/check-data-contract.mjs"
+    "check:data-contract": "node scripts/check-data-contract.mjs",
+    "test:browser": "node tests/browserAcceptance.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
