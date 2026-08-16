@@ -1,9 +1,4 @@
-import mongoose from "mongoose";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import StudentDeposit from "../../../models/studentDeposit.model.js";
-import Branch from "../../../models/branch.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
 import { ACCOUNT_KINDS, ENTRY_KINDS } from "../../../constants/ledger.js";
@@ -46,9 +41,6 @@ import * as journal from "../../journal/services/journal.service.js";
 //
 // IKKALA yozuv ham `isInternal: true` - konsolidatsiyada ular ayiriladi.
 
-const toObjectId = (id) =>
-  id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(String(id));
-
 /**
  * KO'CHIRISHDAN OLDIN: nima bo'lishini oldindan ko'rsatadi.
  *
@@ -57,13 +49,10 @@ const toObjectId = (id) =>
  * va tasdiqlashi kerak.
  */
 export const preview = async (studentId, toBranchId) => {
-  const student = await User.findOne({
-    _id: studentId,
-    role: ROLES.STUDENT,
-    isDeleted: { $ne: true },
-  })
-    .select("firstName lastName homeBranchId")
-    .lean();
+  const student = await prisma.user.findFirst({
+    where: { id: String(studentId), role: ROLES.STUDENT, isDeleted: false },
+    select: { id: true, firstName: true, lastName: true, homeBranchId: true },
+  });
   if (!student) throw new ApiError(404, "O'quvchi topilmadi");
 
   const fromBranchId = student.homeBranchId;
@@ -75,33 +64,41 @@ export const preview = async (studentId, toBranchId) => {
   }
 
   const [toBranch, deposit, activeMemberships] = await Promise.all([
-    Branch.findOne({ _id: toBranchId, isDeleted: false }).select("name").lean(),
-    StudentDeposit.findOne({ student: toObjectId(studentId) }).lean(),
-    GroupMembership.find({
-      student: toObjectId(studentId),
-      leftAt: null,
-      isDeleted: { $ne: true },
-    })
-      .populate("group", { name: 1, branchId: 1 })
-      .lean(),
+    prisma.branch.findFirst({
+      where: { id: String(toBranchId), isDeleted: false },
+      select: { id: true, name: true },
+    }),
+    // `{ student: id }` -> `{ studentId: id }`. `StudentDeposit.studentId`
+    // unique, shuning uchun `findUnique` ham bo'lardi - lekin depozit
+    // hali ochilmagan bo'lishi mumkin (null), `findUnique` esa shuni
+    // bemalol qaytaradi.
+    prisma.studentDeposit.findUnique({ where: { studentId: String(studentId) } }),
+    prisma.groupMembership.findMany({
+      where: { studentId: String(studentId), leftAt: null, isDeleted: false },
+      // Mongo `.populate("group", ...)` maydonni obyektga almashtirardi;
+      // Prisma ALOHIDA relation qaytaradi - `m.group` bo'lib qoladi va
+      // pastdagi o'qish shakli o'zgarmaydi.
+      include: { group: { select: { id: true, name: true, branchId: true } } },
+    }),
   ]);
 
   if (!toBranch) throw new ApiError(400, "Maqsad filial topilmadi");
 
   return {
     student: {
-      _id: student._id,
+      // Klient `_id` ni kutadi - javob chegarasidagi eski shakl.
+      _id: student.id,
       name: `${student.firstName} ${student.lastName || ""}`.trim(),
     },
     fromBranchId,
-    toBranchId: toBranch._id,
+    toBranchId: toBranch.id,
     toBranchName: toBranch.name,
     // Ko'chadigan pul.
     depositBalance: deposit?.balance || 0,
     // Yopiladigan guruhlar - operator ularni ko'rib tasdiqlasin.
     groupsToClose: activeMemberships.map((m) => ({
-      membershipId: m._id,
-      groupId: m.group?._id,
+      membershipId: m.id,
+      groupId: m.group?.id,
       groupName: m.group?.name || "",
     })),
   };
@@ -128,9 +125,17 @@ export const transfer = async (studentId, { toBranchId, note }, currentUser) => 
   // Faqat bittasini tekshirish yetarli emas: A filial direktori
   // o'quvchini B ga "itarib yuborib", B ning rahbarini xabarsiz
   // qoldirardi - va B ning kassasiga qarz paydo bo'lardi.
-  const student = await User.findById(studentId).select(
-    "homeBranchId branchAssignments",
-  );
+  const student = await prisma.user.findUnique({
+    where: { id: String(studentId) },
+    select: {
+      id: true,
+      homeBranchId: true,
+      // `branchAssignments` ALOHIDA jadval (Mongo'da ichki massiv edi) -
+      // `assertTargetInScope` uni o'qiydi, shuning uchun include SHART.
+      branchAssignments: { select: { branchId: true } },
+    },
+  });
+  if (!student) throw new ApiError(404, "O'quvchi topilmadi");
   assertTargetInScope(
     currentUser?.allowedBranchIds,
     currentUser?.canSeeAllBranches,
@@ -145,67 +150,91 @@ export const transfer = async (studentId, { toBranchId, note }, currentUser) => 
 
   const at = new Date();
 
-  // ── 1) Eski guruhlarni yopamiz ──
-  if (info.groupsToClose.length) {
-    await GroupMembership.updateMany(
-      {
-        _id: { $in: info.groupsToClose.map((g) => g.membershipId) },
-        leftAt: null,
-      },
-      { $set: { leftAt: at } },
-    );
-  }
-
-  // ── 2) Depozitni jurnalda ko'chiramiz ──
+  // ═══════════════════════════════════════════════════════════════
+  // UCHALA QADAM BITTA TRANZAKSIYADA.
   //
-  // StudentDeposit hujjatining O'ZI o'zgarmaydi - u o'quvchiga bog'langan,
-  // filialga emas. O'zgaradigan narsa - qaysi filial kassasida shu pul
-  // turgani, va bu FAQAT jurnalda ifodalanadi.
-  if (depositBalance > 0) {
-    await journal.post({
-      branchId: fromBranchId,
-      date: at,
-      kind: ENTRY_KINDS.INTER_BRANCH,
-      memo: `O'quvchi ko'chirildi: depozit ${depositBalance} ${info.toBranchName} ga`,
-      lines: [
-        { accountKind: ACCOUNT_KINDS.DEPOSIT, debit: depositBalance },
-        {
-          accountKind: ACCOUNT_KINDS.DUE_TO,
-          credit: depositBalance,
-          counterpartyBranchId: toBranchId,
+  // Ilgari ular alohida edi va yuqoridagi izoh buni oqlardi:
+  // "2 yiqilsa 3 bajarilmaydi - qayta urinish mumkin". Tartib
+  // to'g'ri edi, lekin oraliq holat baribir bazada QOLARDI:
+  // guruhlar yopilgan, depozit ko'chmagan, o'quvchi eski filialda.
+  // Operator buni ko'rmasdi va qayta urinish guruhlarni IKKINCHI
+  // marta yopishga urinardi (`leftAt: null` sharti tufayli zararsiz,
+  // lekin holat baribir chalkash edi).
+  //
+  // Endi yo hammasi, yo hech biri. Tartib SAQLANADI - u jurnal
+  // yozuvlarining mantiqiy ketma-ketligi uchun hamon muhim.
+  //
+  // Bu ko'chirish regressiyasi emas, KUCHAYTIRISH: muvaffaqiyat
+  // yo'li aynan avvalgidek, faqat yarim bajarilgan holat endi
+  // mumkin emas.
+  // ═══════════════════════════════════════════════════════════════
+  await prisma.$transaction(async (tx) => {
+    // ── 1) Eski guruhlarni yopamiz ──
+    if (info.groupsToClose.length) {
+      await tx.groupMembership.updateMany({
+        where: {
+          id: { in: info.groupsToClose.map((g) => g.membershipId) },
+          leftAt: null,
         },
-      ],
-      refModel: "User",
-      refId: studentId,
-      isInternal: true,
-      counterpartyBranchId: toBranchId,
-      createdBy: currentUser?._id || null,
-    });
+        data: { leftAt: at },
+      });
+    }
 
-    await journal.post({
-      branchId: toBranchId,
-      date: at,
-      kind: ENTRY_KINDS.INTER_BRANCH,
-      memo: `O'quvchi qabul qilindi: depozit ${depositBalance}`,
-      lines: [
-        {
-          accountKind: ACCOUNT_KINDS.DUE_FROM,
-          debit: depositBalance,
-          counterpartyBranchId: fromBranchId,
-        },
-        { accountKind: ACCOUNT_KINDS.DEPOSIT, credit: depositBalance },
-      ],
-      refModel: "User",
-      refId: studentId,
-      isInternal: true,
-      counterpartyBranchId: fromBranchId,
-      createdBy: currentUser?._id || null,
-    });
-  }
+    // ── 2) Depozitni jurnalda ko'chiramiz ──
+    //
+    // StudentDeposit hujjatining O'ZI o'zgarmaydi - u o'quvchiga
+    // bog'langan, filialga emas. O'zgaradigan narsa - qaysi filial
+    // kassasida shu pul turgani, va bu FAQAT jurnalda ifodalanadi.
+    if (depositBalance > 0) {
+      await journal.post({
+        branchId: fromBranchId,
+        date: at,
+        kind: ENTRY_KINDS.INTER_BRANCH,
+        memo: `O'quvchi ko'chirildi: depozit ${depositBalance} ${info.toBranchName} ga`,
+        lines: [
+          { accountKind: ACCOUNT_KINDS.DEPOSIT, debit: depositBalance },
+          {
+            accountKind: ACCOUNT_KINDS.DUE_TO,
+            credit: depositBalance,
+            counterpartyBranchId: toBranchId,
+          },
+        ],
+        refModel: "User",
+        refId: studentId,
+        isInternal: true,
+        counterpartyBranchId: toBranchId,
+        createdBy: currentUser?.id || currentUser?._id || null,
+        tx,
+      });
 
-  // ── 3) O'quvchini yangi filialga biriktiramiz ──
-  student.homeBranchId = toObjectId(toBranchId);
-  await student.save();
+      await journal.post({
+        branchId: toBranchId,
+        date: at,
+        kind: ENTRY_KINDS.INTER_BRANCH,
+        memo: `O'quvchi qabul qilindi: depozit ${depositBalance}`,
+        lines: [
+          {
+            accountKind: ACCOUNT_KINDS.DUE_FROM,
+            debit: depositBalance,
+            counterpartyBranchId: fromBranchId,
+          },
+          { accountKind: ACCOUNT_KINDS.DEPOSIT, credit: depositBalance },
+        ],
+        refModel: "User",
+        refId: studentId,
+        isInternal: true,
+        counterpartyBranchId: fromBranchId,
+        createdBy: currentUser?.id || currentUser?._id || null,
+        tx,
+      });
+    }
+
+    // ── 3) O'quvchini yangi filialga biriktiramiz ──
+    await tx.user.update({
+      where: { id: student.id },
+      data: { homeBranchId: String(toBranchId) },
+    });
+  });
 
   return {
     ...info,

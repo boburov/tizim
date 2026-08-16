@@ -1,9 +1,10 @@
-import Branch from "../../../models/branch.model.js";
+import prisma from "../../../config/prisma.js";
 import { utilization, churn } from "./branchMetrics.service.js";
 import * as journal from "../../journal/services/journal.service.js";
 import * as journalVerify from "../../journal/services/journalVerify.service.js";
-import CashTransfer, { TRANSFER_STATUSES } from "../../../models/cashTransfer.model.js";
-import Shift, { SHIFT_STATUSES } from "../../../models/shift.model.js";
+// Lug'atlar model fayllaridan `constants/treasury.js` ga ko'chirildi -
+// modellar o'chirilganda ular bilan birga yo'qolib ketmasin.
+import { TRANSFER_STATUSES, SHIFT_STATUSES } from "../../../constants/treasury.js";
 
 // ANOMALIYA XABARNOMALARI.
 //
@@ -74,11 +75,15 @@ const alert = (severity, code, branchId, branchName, message, extra = {}) => ({
 export const evaluate = async () => {
   const alerts = [];
 
-  const branches = await Branch.find({ isDeleted: false, isActive: true })
-    .select("name")
-    .lean();
-  const nameOf = (id) =>
-    branches.find((b) => String(b._id) === String(id))?.name || "";
+  const branches = await prisma.branch.findMany({
+    where: { isDeleted: false, isActive: true },
+    select: { id: true, name: true },
+  });
+  // `Map` - ilgari bu har chaqiruvda butun massivni skanerlardi
+  // (`branches.find(...)`), o'nlab ogohlantirishda esa u kvadratik
+  // bo'lardi. Xatti-harakat AYNAN bir xil, faqat qidiruv O(1).
+  const nameById = new Map(branches.map((b) => [String(b.id), b.name]));
+  const nameOf = (id) => nameById.get(String(id)) || "";
 
   // ── 1) PUL: jurnal muvozanati (KRITIK) ──
   const rec = await journal.reconcile();
@@ -134,12 +139,19 @@ export const evaluate = async () => {
   const staleDate = new Date(
     Date.now() - THRESHOLDS.TRANSIT_STALE_DAYS * 24 * 60 * 60 * 1000,
   );
-  const stuck = await CashTransfer.find({
-    status: TRANSFER_STATUSES.IN_TRANSIT,
-    sentAt: { $lt: staleDate },
-  })
-    .select("fromBranchId toBranchId amount sentAt")
-    .lean();
+  const stuck = await prisma.cashTransfer.findMany({
+    where: {
+      status: TRANSFER_STATUSES.IN_TRANSIT,
+      sentAt: { lt: staleDate },
+    },
+    select: {
+      id: true,
+      fromBranchId: true,
+      toBranchId: true,
+      amount: true,
+      sentAt: true,
+    },
+  });
   for (const t of stuck) {
     const days = Math.floor((Date.now() - new Date(t.sentAt)) / (24 * 60 * 60 * 1000));
     alerts.push(
@@ -155,9 +167,10 @@ export const evaluate = async () => {
   }
 
   // ── 4) FARQ CHIQQAN INKASSATSIYA (KRITIK) ──
-  const disputed = await CashTransfer.find({ status: TRANSFER_STATUSES.DISPUTED })
-    .select("fromBranchId discrepancy amount")
-    .lean();
+  const disputed = await prisma.cashTransfer.findMany({
+    where: { status: TRANSFER_STATUSES.DISPUTED },
+    select: { id: true, fromBranchId: true, discrepancy: true, amount: true },
+  });
   for (const t of disputed) {
     alerts.push(
       alert(
@@ -177,12 +190,13 @@ export const evaluate = async () => {
   const shiftStale = new Date(
     Date.now() - THRESHOLDS.SHIFT_STALE_HOURS * 60 * 60 * 1000,
   );
-  const openShifts = await Shift.find({
-    status: SHIFT_STATUSES.OPEN,
-    openedAt: { $lt: shiftStale },
-  })
-    .select("branchId openedAt")
-    .lean();
+  const openShifts = await prisma.shift.findMany({
+    where: {
+      status: SHIFT_STATUSES.OPEN,
+      openedAt: { lt: shiftStale },
+    },
+    select: { id: true, branchId: true, openedAt: true },
+  });
   for (const s of openShifts) {
     const hours = Math.floor((Date.now() - new Date(s.openedAt)) / (60 * 60 * 1000));
     alerts.push(

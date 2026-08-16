@@ -12423,3 +12423,93 @@ Xato mat
 <sub>session `c49e703c` · branch `main` · 64 ta qadam</sub>
 
 ---
+
+## 2026-08-17 00:05 — Continue the backend migration. Do not modify the Executive Dashboard 
+
+**So'rov**
+
+> Continue the backend migration. Do not modify the Executive Dashboard architecture unless a real browser test reveals a UI bug. Preserve the existing 501 MODULE_NOT_CONNECTED contract and automatically activate the frontend when /ai, /branch-analytics, and /finance-report become available. Next migrate the financial/analytics dependency chain, starting with expenses, then treasury and finance reporting. Do not create mock data or fake 200 responses.
+
+**O'zgargan fayllar (6)**
+
+- `server/src/modules/expenses/services/expenseCategory.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/expenses/services/expense.service.js` — yaratildi/qayta yozildi
+- `server/tests/expensesChainPrisma.test.js` — yaratildi/qayta yozildi
+- `server/prisma/migrations/20260817090000_approval_amount_invariants/migration.sql` — yaratildi/qayta yozildi
+- `server/src/middleware/errorHandler.js` — tahrirlandi
+- `server/src/modules/journal/services/journal.service.js` — tahrirlandi
+
+**Buyruqlar (79)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ expenses moduli ═══"; find src/modules/expenses -type f | sort | while read f; do printf " %-58s %s\n" "$f…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ Prisma Expense — TO'LIQ ═══"; sed -n '1520,1585p' prisma/schema.prisma echo; echo "═══ Prisma ExpenseCateg…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '1,90p' src/modules/expenses/services/expense.service.js
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '90,200p' src/modules/expenses/services/expense.service.js
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '200,302p' src/modules/expenses/services/expense.service.js
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ expenseApprovals moduli ═══"; find src/modules/expenseApprovals -type f | sort | while read f; do printf "…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ ko'chirilgan modullar uni QANDAY chaqiradi ═══" for f in modules/users/services/users.service.js modules/g…
+cd /Users/shukrullo/Desktop/lc-total/server TOK=$(node /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ expenseApproval.service.js — nima Prisma, nima Mongoose ═══" grep -n "^export const\|^const .* = async" sr…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '200,270p' src/modules/expenseApprovals/services/expenseApproval.service.js
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '520,600p' src/modules/expenseApprovals/services/expenseApproval.service.js
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '600,720p' src/modules/expenseApprovals/services/expenseApproval.service.js
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ markFailed + retry ═══"; grep -n "markFailed" -A 14 src/modules/expenseApprovals/services/expenseApproval.…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ Mongoose approval modeli: branchId/requestedBy majburiymi ═══" grep -n "branchId\|requestedBy" -A 4 src/mo…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '1,62p' src/modules/expenseApprovals/services/expenseApproval.service.js echo "─────── mavjud Prisma qismi (l…
+cd /Users/shukrullo/Desktop/lc-total/server python3 - <<'PY' import io p="src/modules/expenseApprovals/services/expenseApproval.service.js"; s=io.open(p,encodin…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ eski markFailed (795) ═══"; sed -n '790,805p' src/modules/expenseApprovals/services/expenseApproval.servic…
+cd /Users/shukrullo/Desktop/lc-total/server node -e "import('./src/modules/expenseApprovals/services/expenseApproval.service.js').then(m=>console.log(' ✅ yuklan…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ journalPosting.postExpense ═══" grep -n "postExpense" -A 30 src/helpers/journalPosting.helper.js | head -3…
+cd /Users/shukrullo/Desktop/lc-total/server cat src/modules/expenses/services/expenseCategory.service.js echo "═══ branchFilter Prisma shakli ═══"; sed -n '70,1…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ expense.model.js pre(validate) — ko'chiriladigan invariantlar ═══" sed -n '130,150p' src/models/expense.mo…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ validator hali modeldan import qiladi ═══" head -10 src/modules/expenses/validators/expense.validator.js e…
+cd /Users/shukrullo/Desktop/lc-total/server grep -n "EXPENSE_ALLOCATIONS\|ALLOCATION" src/models/expense.model.js | head -3 cat > src/constants/expenses.js <<'E…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ expenses modulida Mongoose qoldimi ═══" grep -rn "^import mongoose\|from \"\(\.\./\)*models/" src/modules/…
+cd /Users/shukrullo/Desktop/lc-total/server D=/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/subagents…
+# … yana 54 ta
+```
+
+**Natija**
+
+Wave 4 — moliyaviy zanjir. `expenses` dan boshlayman. Avval hajm va bog'liqliklarni aniqlayman:
+
+Prisma modellari tayyor. Endi Mongoose servisini o'qiyman — sodiq ko'chirish uchun:
+
+`expenses` → `expenseApprovals` ga bog'liq, u esa hali Mongoose. Bog'liqlik zanjirini aniqlayman:
+
+**Muhim topilma**: `expenseApproval.service.js` (787 qator, Mongoose) **29 fayl** tomonidan ishlatiladi — jumladan allaqachon ko'chirilgan `groups`, `teacherSalary`, `deposits`, `users`, `finance`, `staffPayroll`. Tekshiray:
+
+`/expense-approvals` **o'qish yo'li allaqachon Prisma'da**, yozish yo'li esa Mongoose. Aniqlaymiz:
+
+Zanjirning haqiqiy to'sig'i aniqlandi: **qaror yo'llari** (`createRequest`, `approve`, `reject`, `cancel`, `bulkDecide`, `retry`). O'qish yo'li allaqachon Prisma. Fonda audit ishga tushirib, o'zim ko'chirishni boshlayman:
+
+Audit fonda. Men blokerdan boshlayman — `createRequest` va qaror yo'llari:
+
+Ikkita jiddiy farq bor — tekshiraman:
+
+Ikkalasi ham Mongo'da ham majburiy edi — Prisma mos. Qisman unique indeks mavjud. Servisning boshini va Prisma qismini ko'rib, uslubga moslashaman:
+
+Endi qaror yo'llarini ko'chiraman. Eng nozik joyi — atomik holat o'zgarishi:
+
+Endi umumiy `transition` yordamchisi — atomik holat o'zgarishining **yagona** joyi:
+
+`expenseApprovals` to'liq Prisma'da (qolgani — izohdagi matn). Tekshiraman:
+
+Endi `expenses` moduli. `journalPosting.postExpense` Prisma'dami — avval shuni tekshiraman:
+
+`journalPosting` toza. Endi `expenses`. Kategoriya servisini ham o'qiy:
+
+Endi ikkala servisni ham ko'chiraman. `expenseCategory` dan boshlayman:
+
+Endi asosiy `expense.service.js` — pre('validate') invariantlari ham ko'chiriladi:
+
+Konstantalarni modeldan ajrataman (avvalgi to'lqinlardagi naqsh):
+
+`/expenses` va tasdiqlar to'liq tirik. Endi test yozaman — zanjirning eng no
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 109 ta qadam</sub>
+
+---

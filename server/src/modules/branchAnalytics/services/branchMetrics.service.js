@@ -1,10 +1,4 @@
-import mongoose from "mongoose";
-import Branch from "../../../models/branch.model.js";
-import Room from "../../../models/room.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import Lead from "../../../models/lead.model.js";
-import Expense from "../../../models/expense.model.js";
+import prisma from "../../../config/prisma.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
 import { pnl } from "./branchPnl.service.js";
 
@@ -23,9 +17,6 @@ import { pnl } from "./branchPnl.service.js";
 // MA'LUMOT YO'Q BO'LSA null - 0 EMAS. Nol "yomon ishlayapti" degan
 // yolg'on xabar berardi; null esa "hisoblab bo'lmaydi, kirish
 // ma'lumotini to'ldiring" deydi.
-
-const toObjectId = (id) =>
-  id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(String(id));
 
 /** Nolga bo'lishdan himoyalangan bo'lish. */
 const div = (a, b) => (b > 0 ? Math.round((a / b) * 100) / 100 : null);
@@ -57,10 +48,23 @@ export const utilization = async () => {
   const scope = branchFilter();
 
   const [rooms, groups] = await Promise.all([
-    Room.find({ ...scope, isActive: true, isDeleted: false }).select("branchId").lean(),
-    Group.find({ ...scope, isActive: true, isDeleted: { $ne: true } })
-      .select("branchId schedule roomId")
-      .lean(),
+    prisma.room.findMany({
+      where: { ...scope, isActive: true, isDeleted: false },
+      select: { id: true, branchId: true },
+    }),
+    // ⚠ `schedule` MAJBURIY `include`: Mongo'da u hujjat ICHIDAGI
+    // massiv edi va `select` bilan birga kelardi. Prisma'da u ALOHIDA
+    // jadval (`GroupScheduleItem`) - so'ralmasa `undefined` bo'lib
+    // qoladi va bandlik soati JIMGINA 0 chiqardi.
+    prisma.group.findMany({
+      where: { ...scope, isActive: true, isDeleted: false },
+      select: {
+        id: true,
+        branchId: true,
+        roomId: true,
+        schedule: { select: { startTime: true, endTime: true } },
+      },
+    }),
   ]);
 
   const roomsByBranch = new Map();
@@ -81,11 +85,12 @@ export const utilization = async () => {
 
   const branchIds = [...new Set([...roomsByBranch.keys(), ...busyByBranch.keys()])];
   const branches = branchIds.length
-    ? await Branch.find({ _id: { $in: branchIds.map(toObjectId) } })
-        .select("name code")
-        .lean()
+    ? await prisma.branch.findMany({
+        where: { id: { in: branchIds.map(String) } },
+        select: { id: true, name: true, code: true },
+      })
     : [];
-  const nameMap = new Map(branches.map((b) => [String(b._id), b]));
+  const nameMap = new Map(branches.map((b) => [String(b.id), b]));
 
   return branchIds.map((k) => {
     const roomCount = roomsByBranch.get(k) || 0;
@@ -124,57 +129,61 @@ export const utilization = async () => {
  */
 export const churn = async ({ from, to } = {}) => {
   const scope = branchFilter();
-  const groups = await Group.find(scope).select("_id branchId").lean();
-  const groupBranch = new Map(groups.map((g) => [String(g._id), String(g.branchId)]));
-  const groupIds = groups.map((g) => g._id);
+  const groups = await prisma.group.findMany({
+    where: scope,
+    select: { id: true, branchId: true },
+  });
+  const groupBranch = new Map(groups.map((g) => [String(g.id), String(g.branchId)]));
+  const groupIds = groups.map((g) => g.id);
 
   if (!groupIds.length) return [];
 
-  const range = {};
-  if (from) range.$gte = from;
-  if (to) range.$lte = to;
+  // `leftAt: { $ne: null, $gte, $lte }` -> Prisma'da `not: null` va
+  // oraliq BIR obyektda birga turadi. Sana berilmasa oraliq umuman
+  // qo'shilmaydi (Mongo'dagi kabi).
+  const leftRange = { not: null };
+  if (from) leftRange.gte = from;
+  if (to) leftRange.lte = to;
 
   const [left, active] = await Promise.all([
-    GroupMembership.find({
-      group: { $in: groupIds },
-      leftAt: { $ne: null, ...(Object.keys(range).length ? range : {}) },
-      isDeleted: { $ne: true },
-    })
-      .select("student group")
-      .lean(),
-    GroupMembership.find({
-      group: { $in: groupIds },
-      leftAt: null,
-      isDeleted: { $ne: true },
-    })
-      .select("student group")
-      .lean(),
+    prisma.groupMembership.findMany({
+      // `group` (Mongo ref) -> `groupId`, `student` -> `studentId`.
+      where: { groupId: { in: groupIds }, leftAt: leftRange, isDeleted: false },
+      select: { studentId: true, groupId: true },
+    }),
+    prisma.groupMembership.findMany({
+      where: { groupId: { in: groupIds }, leftAt: null, isDeleted: false },
+      select: { studentId: true, groupId: true },
+    }),
   ]);
 
   // Hali biror guruhda faol bo'lganlar - ular KETMAGAN.
-  const stillActive = new Set(active.map((m) => String(m.student)));
+  const stillActive = new Set(active.map((m) => String(m.studentId)));
 
   const byBranch = new Map();
   const ensure = (k) =>
     byBranch.get(k) || byBranch.set(k, { branchId: k, churned: 0, active: 0 }).get(k);
 
   for (const m of left) {
-    const k = groupBranch.get(String(m.group));
+    const k = groupBranch.get(String(m.groupId));
     if (!k) continue;
-    if (stillActive.has(String(m.student))) continue;
+    if (stillActive.has(String(m.studentId))) continue;
     ensure(k).churned += 1;
   }
   for (const m of active) {
-    const k = groupBranch.get(String(m.group));
+    const k = groupBranch.get(String(m.groupId));
     if (!k) continue;
     ensure(k).active += 1;
   }
 
   const ids = [...byBranch.keys()];
   const branches = ids.length
-    ? await Branch.find({ _id: { $in: ids.map(toObjectId) } }).select("name").lean()
+    ? await prisma.branch.findMany({
+        where: { id: { in: ids.map(String) } },
+        select: { id: true, name: true },
+      })
     : [];
-  const nameMap = new Map(branches.map((b) => [String(b._id), b.name]));
+  const nameMap = new Map(branches.map((b) => [String(b.id), b.name]));
 
   return [...byBranch.values()].map((b) => {
     const base = b.churned + b.active;
@@ -198,78 +207,94 @@ export const normalized = async ({ from = null, to = null } = {}) => {
   const [report, util, branches] = await Promise.all([
     pnl({ from, to, consolidated: false }),
     utilization(),
-    Branch.find({ ...branchFilter("_id"), isDeleted: false })
-      .select("name code areaM2 openedAt")
-      .lean(),
+    // `branchFilter("_id")` -> `branchFilter("id")`: Prisma'da
+    // birlamchi kalit ustuni `id` deb ataladi.
+    prisma.branch.findMany({
+      where: { ...branchFilter("id"), isDeleted: false },
+      select: { id: true, name: true, code: true, areaM2: true, openedAt: true },
+    }),
   ]);
 
   const utilMap = new Map(util.map((u) => [String(u.branchId), u]));
   const pnlMap = new Map(report.items.map((i) => [String(i.branchId), i]));
 
   // Aktiv o'quvchilar soni (filial bo'yicha).
-  const groups = await Group.find({ ...branchFilter(), isActive: true, isDeleted: { $ne: true } })
-    .select("_id branchId")
-    .lean();
-  const groupBranch = new Map(groups.map((g) => [String(g._id), String(g.branchId)]));
+  const groups = await prisma.group.findMany({
+    where: { ...branchFilter(), isActive: true, isDeleted: false },
+    select: { id: true, branchId: true },
+  });
+  const groupBranch = new Map(groups.map((g) => [String(g.id), String(g.branchId)]));
   const memberships = groups.length
-    ? await GroupMembership.find({
-        group: { $in: groups.map((g) => g._id) },
-        leftAt: null,
-        isDeleted: { $ne: true },
+    ? await prisma.groupMembership.findMany({
+        where: {
+          groupId: { in: groups.map((g) => g.id) },
+          leftAt: null,
+          isDeleted: false,
+        },
+        select: { studentId: true, groupId: true },
       })
-        .select("student group")
-        .lean()
     : [];
 
   const studentsByBranch = new Map();
   for (const m of memberships) {
-    const k = groupBranch.get(String(m.group));
+    const k = groupBranch.get(String(m.groupId));
     if (!k) continue;
     if (!studentsByBranch.has(k)) studentsByBranch.set(k, new Set());
-    studentsByBranch.get(k).add(String(m.student));
+    studentsByBranch.get(k).add(String(m.studentId));
   }
 
   // Marketing xarajati - CAC uchun.
   const expRange = {};
-  if (from) expRange.$gte = from;
-  if (to) expRange.$lte = to;
-  const marketing = await Expense.aggregate([
-    {
-      $match: {
-        ...branchFilter(),
-        isDeleted: { $ne: true },
-        ...(Object.keys(expRange).length ? { spentAt: expRange } : {}),
+  if (from) expRange.gte = from;
+  if (to) expRange.lte = to;
+
+  // MARKETING XARAJATI.
+  //
+  // Mongo'da bu `$lookup` + `$unwind` + regex edi. Prisma'da JOIN
+  // RELATION FILTRI bilan ifodalanadi (`category: { name: {...} }`) -
+  // qo'lda `$lookup` kerak emas, chunki `Expense.categoryId` haqiqiy
+  // tashqi kalit.
+  //
+  // Regex `mode: "insensitive"` bilan almashtirildi; Mongo'dagi
+  // `marketing|reklama` ikkita `contains` shartiga bo'linadi -
+  // Postgres'da bu indeksdan foydalana oladi, regexdan farqli.
+  //
+  // GURUHLASH: `groupBy` bog'langan jadval maydoni bo'yicha guruhlay
+  // olmaydi, lekin bu yerda guruhlash `branchId` BO'YICHA - u
+  // `expenses` jadvalining O'Z ustuni, ya'ni muammo yo'q.
+  const marketing = await prisma.expense.groupBy({
+    by: ["branchId"],
+    where: {
+      ...branchFilter(),
+      isDeleted: false,
+      ...(Object.keys(expRange).length ? { spentAt: expRange } : {}),
+      category: {
+        OR: [
+          { name: { contains: "marketing", mode: "insensitive" } },
+          { name: { contains: "reklama", mode: "insensitive" } },
+        ],
       },
     },
-    {
-      $lookup: {
-        from: "expensecategories",
-        localField: "category",
-        foreignField: "_id",
-        as: "cat",
-      },
-    },
-    { $unwind: { path: "$cat", preserveNullAndEmptyArrays: true } },
-    { $match: { "cat.name": { $regex: "marketing|reklama", $options: "i" } } },
-    { $group: { _id: "$branchId", total: { $sum: "$amount" } } },
-  ]);
-  const marketingMap = new Map(marketing.map((m) => [String(m._id), m.total]));
+    _sum: { amount: true },
+  });
+  const marketingMap = new Map(
+    marketing.map((m) => [String(m.branchId), m._sum.amount || 0]),
+  );
 
   // Yangi o'quvchi (davr ichida yozilgan) - CAC maxraji.
-  const newLeads = await Lead.aggregate([
-    {
-      $match: {
-        ...branchFilter(),
-        status: "enrolled",
-        ...(Object.keys(expRange).length ? { updatedAt: expRange } : {}),
-      },
+  const newLeads = await prisma.lead.groupBy({
+    by: ["branchId"],
+    where: {
+      ...branchFilter(),
+      status: "enrolled",
+      ...(Object.keys(expRange).length ? { updatedAt: expRange } : {}),
     },
-    { $group: { _id: "$branchId", count: { $sum: 1 } } },
-  ]);
-  const newMap = new Map(newLeads.map((n) => [String(n._id), n.count]));
+    _count: { _all: true },
+  });
+  const newMap = new Map(newLeads.map((n) => [String(n.branchId), n._count._all]));
 
   return branches.map((b) => {
-    const k = String(b._id);
+    const k = String(b.id);
     const p = pnlMap.get(k) || { revenue: 0, expense: 0, net: 0 };
     const u = utilMap.get(k) || { roomCount: 0, utilizationPercent: null };
     const students = studentsByBranch.get(k)?.size || 0;
