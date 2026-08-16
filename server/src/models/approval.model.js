@@ -17,86 +17,35 @@ import mongoose from "mongoose";
 // umumiy tasdiqqa kengaytirilganda ma'lumot ko'chirish (migration) qilmaslik
 // uchun. Model nomi - Approval, jismoniy kolleksiya - eski nomida.
 
-export const APPROVAL_STATUSES = Object.freeze({
-  PENDING: "pending",
-  APPROVED: "approved", // tasdiqlandi, lekin hali bajarilmadi
-  EXECUTED: "executed", // bajarildi - tranzaksiya/hujjat yaratildi
-  REJECTED: "rejected",
-  CANCELED: "canceled", // so'rovchi o'zi bekor qildi
-  FAILED: "failed", // tasdiqlandi, lekin bajarishda xato (masalan balans yetmadi)
-});
-
-export const ALL_APPROVAL_STATUSES = Object.values(APPROVAL_STATUSES);
-
-// KATEGORIYA: "pul chiqdi" va "sozlama o'zgardi" bir xil hayot siklida,
-// lekin BOSHQA huquq bilan tasdiqlanadi va BOSHQA hisobotlarga tushadi.
+// ─────────────────────────────────────────────────────────────────
+// LUG'AT KO'CHIRILDI: holatlar, kategoriyalar va turlar endi
+// `src/constants/approvals.js` da. Ular bazaga bog'liq emas va bu
+// model fayli migratsiya oxirida o'chirilganda ham qolishi kerak.
 //
-// DIQQAT: moliya hisobotlari/summalari FAQAT `financial` bilan ishlashi shart.
-// Aks holda summasiz konfiguratsiya so'rovlari "kutilayotgan chiqim" summasiga
-// qo'shilib ketardi - yuqoridagi leakage darsining aynan takrori.
-export const APPROVAL_CATEGORIES = Object.freeze({
-  FINANCIAL: "financial", // pul hisobdan chiqadi
-  CONFIGURATION: "configuration", // sozlama/siyosat o'zgaradi (takrorlanuvchi ta'sir)
-});
+// Bu yerdagi RE-EXPORT ataylab: eski import yo'llari (`from
+// "../models/approval.model.js"`) buzilmasin. Yangi kod to'g'ridan
+// to'g'ri `constants/approvals.js` dan import qilsin.
+// ─────────────────────────────────────────────────────────────────
+export {
+  APPROVAL_STATUSES,
+  ALL_APPROVAL_STATUSES,
+  APPROVAL_CATEGORIES,
+  ALL_APPROVAL_CATEGORIES,
+  APPROVAL_KINDS,
+  ALL_APPROVAL_KINDS,
+  KIND_CATEGORY,
+  resolveCategory,
+  EXPENSE_KINDS,
+  ALL_EXPENSE_KINDS,
+} from "../constants/approvals.js";
 
-export const ALL_APPROVAL_CATEGORIES = Object.values(APPROVAL_CATEGORIES);
-
-// Tasdiq turlari. Har biri o'z payload'i va bajaruvchi funksiyasiga ega.
-export const APPROVAL_KINDS = Object.freeze({
-  SALARY_PAYMENT: "salary_payment", // o'qituvchiga maosh (financial)
-  DEPOSIT_WITHDRAW: "deposit_withdraw", // o'quvchi depozitidan naqd yechish (financial)
-  SALARY_TERMS: "salary_terms", // o'qituvchi maosh stavkasi (configuration)
-  DISCOUNT_SET: "discount_set", // o'quvchi chegirmasi (configuration)
-  // Guruh oylik narxi. Chegirma bilan BIR XIL iqtisodiy ta'sirga ega:
-  // narxni 1 mln dan 400 ming ga tushirish barcha o'quvchiga chegirma
-  // berish bilan bir xil. Shuning uchun u ham tasdiqdan o'tadi - aks holda
-  // chegirma yopilib, yonidagi eshik ochiq qolardi.
-  GROUP_FEE_SET: "group_fee_set", // (configuration)
-  STAFF_HIRE: "staff_hire", // ishga olish (configuration)
-  // O'qituvchining MARKAZ darajasidagi standart maosh stavkasi.
-  // SALARY_TERMS bir guruhga ta'sir qiladi, bu esa o'qituvchining BARCHA
-  // guruhlariga - ya'ni iqtisodiy ta'siri kattaroq, shuning uchun u ham
-  // (undan ham kuchliroq sabab bilan) tasdiqdan o'tadi.
-  TEACHER_COMPENSATION_SET: "teacher_compensation_set", // (configuration)
-  // O'quvchini ORQAGA SANA bilan guruhga qo'shish: o'tgan oylar uchun
-  // QARZ YARATADI, ya'ni chegirmaning teskarisi. Summasi bor → financial.
-  MEMBERSHIP_BACKDATE: "membership_backdate", // (financial)
-  // UMUMIY CHIQIM (ijara, ta'mir, reklama, jihoz). Pul hisobdan chiqadi →
-  // financial, filial limitiga solishtiriladi.
-  EXPENSE_CREATE: "expense_create", // (financial)
-  // XODIM MAOSHI (o'qituvchi bo'lmagan xodimlar: resepshin, buxgalter...).
-  // SALARY_PAYMENT dan ALOHIDA: u TeacherSalary qatoriga bog'langan va
-  // uning bajaruvchisi guruhni talab qiladi.
-  STAFF_SALARY_PAYMENT: "staff_salary_payment", // (financial)
-});
-
-export const ALL_APPROVAL_KINDS = Object.values(APPROVAL_KINDS);
-
-// Tur -> kategoriya. Yangi tur qo'shilganda SHU YERGA ham yozilishi shart -
-// aks holda `resolveCategory` xato beradi (jimgina financial'ga tushmaydi).
-export const KIND_CATEGORY = Object.freeze({
-  [APPROVAL_KINDS.SALARY_PAYMENT]: APPROVAL_CATEGORIES.FINANCIAL,
-  [APPROVAL_KINDS.DEPOSIT_WITHDRAW]: APPROVAL_CATEGORIES.FINANCIAL,
-  [APPROVAL_KINDS.SALARY_TERMS]: APPROVAL_CATEGORIES.CONFIGURATION,
-  [APPROVAL_KINDS.DISCOUNT_SET]: APPROVAL_CATEGORIES.CONFIGURATION,
-  [APPROVAL_KINDS.GROUP_FEE_SET]: APPROVAL_CATEGORIES.CONFIGURATION,
-  [APPROVAL_KINDS.STAFF_HIRE]: APPROVAL_CATEGORIES.CONFIGURATION,
-  [APPROVAL_KINDS.TEACHER_COMPENSATION_SET]: APPROVAL_CATEGORIES.CONFIGURATION,
-  // FINANCIAL: yaratiladigan qarz summasi limitga solishtiriladi.
-  [APPROVAL_KINDS.MEMBERSHIP_BACKDATE]: APPROVAL_CATEGORIES.FINANCIAL,
-  [APPROVAL_KINDS.EXPENSE_CREATE]: APPROVAL_CATEGORIES.FINANCIAL,
-  [APPROVAL_KINDS.STAFF_SALARY_PAYMENT]: APPROVAL_CATEGORIES.FINANCIAL,
-});
-
-export const resolveCategory = (kind) => {
-  const category = KIND_CATEGORY[kind];
-  if (!category) throw new Error(`Noma'lum tasdiq turi: ${kind}`);
-  return category;
-};
-
-// Eski nom bilan moslik (chiqim servislari shu nomni import qiladi).
-export const EXPENSE_KINDS = APPROVAL_KINDS;
-export const ALL_EXPENSE_KINDS = ALL_APPROVAL_KINDS;
+import {
+  APPROVAL_STATUSES,
+  ALL_APPROVAL_STATUSES,
+  APPROVAL_CATEGORIES,
+  ALL_APPROVAL_CATEGORIES,
+  ALL_APPROVAL_KINDS,
+} from "../constants/approvals.js";
 
 const approvalSchema = new mongoose.Schema(
   {

@@ -1,4 +1,4 @@
-import TeacherCompensation from "../../../models/teacherCompensation.model.js";
+import prisma from "../../../config/prisma.js";
 import { toUtcMidnight } from "../../../helpers/attendance.helper.js";
 
 // STAVKA ANIQLASH (rate resolution).
@@ -81,19 +81,73 @@ const applyLegacy = (rate, period) => {
 const hasOwnRate = (period) =>
   period?.variableType != null || period?.salaryType != null;
 
+// Stavka hujjatining kaliti. Prisma `id` beradi; `_id` esa migratsiya
+// davomida qolgan chaqiruvchilar uchun. Bu qiymat maosh qatoriga audit
+// havolasi bo'lib yoziladi, shuning uchun jimgina `undefined` bo'lishiga
+// yo'l qo'yib bo'lmaydi.
+const compIdOf = (comp) => comp?.id ?? comp?._id ?? null;
+
+// Stavkalar tartibi - `claimedUntil` klampi SHU tartibga tayanadi.
+//
+// `effectiveFrom` teng bo'lgan ikki stavka bo'lsa kesishgan kunlarni
+// BIRINCHISI oladi. Tartib aniq bo'lmasa bir xil oy ikki xil summaga
+// hisoblanishi mumkin edi, shuning uchun teng holatda `createdAt`
+// (avval kiritilgani yutadi) ikkinchi mezon sifatida qo'shilgan.
+// `compensationsForRange` ham bazadan aynan shu tartibda o'qiydi.
+const byEffectiveFrom = (a, b) =>
+  toUtcMidnight(a.effectiveFrom).getTime() -
+    toUtcMidnight(b.effectiveFrom).getTime() ||
+  new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+
+// Stavka hisobiga KERAK bo'lgan ustunlar - bitta manba.
+// `id` ATAYLAB bor: u TeacherSalary.compensationId ga audit havolasi
+// sifatida yoziladi (qarang segmentPeriod / baseSegmentsForMonth).
+const COMPENSATION_FIELDS = {
+  id: true,
+  branchId: true,
+  effectiveFrom: true,
+  effectiveTo: true,
+  baseType: true,
+  baseAmount: true,
+  variableType: true,
+  variableRate: true,
+  percentBase: true,
+};
+
 /**
  * O'qituvchining berilgan oraliqda amal qilgan STANDART stavkalari.
  * effectiveTo EXCLUSIVE (TeacherGroupPeriod.endDate bilan bir xil).
+ *
+ * PRISMA: `teacher` → `teacherId` (Prisma'da `teacher` bu RELATION, ustun
+ * emas - eski nomni qoldirish xato bermay, boshqa ma'noga o'tib ketardi).
+ * Oraliq sharti AYNAN o'sha: [effectiveFrom, effectiveTo) oynasi
+ * [from, to) bilan kesishsa - qatnashadi.
  */
 export const compensationsForRange = async (teacher, from, to) => {
-  const rows = await TeacherCompensation.find({
-    teacher,
-    isDeleted: { $ne: true },
-    effectiveFrom: { $lt: to },
-    $or: [{ effectiveTo: null }, { effectiveTo: { $gt: from } }],
-  })
-    .sort({ effectiveFrom: 1 })
-    .lean();
+  const rows = await prisma.teacherCompensation.findMany({
+    where: {
+      teacherId: String(teacher),
+      isDeleted: false,
+      effectiveFrom: { lt: to },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gt: from } }],
+    },
+    select: { ...COMPENSATION_FIELDS, createdAt: true },
+    // TARTIB ANIQ BO'LISHI SHART - `effectiveFrom` YETARLI EMAS.
+    //
+    // Ikki stavka bir xil `effectiveFrom` bilan tursa (assertNoOverlap
+    // buni to'sishi kerak, lekin qo'riqchi qo'yilishidan oldingi
+    // ma'lumot bazada qolgan bo'lishi mumkin), pastdagi `claimedUntil`
+    // klampi kesishgan kunlarni BIRINCHI kelgan qatorga beradi.
+    //
+    // Mongo kolleksiyani tabiiy tartibda skanerlagani uchun natija
+    // tasodifan barqaror edi. Postgres bunday kafolat BERMAYDI: bir xil
+    // `effectiveFrom` da qatorlar ixtiyoriy tartibda kelishi mumkin va
+    // O'SHA OY IKKI XIL SUMMAGA qayta hisoblanishi mumkin edi.
+    //
+    // `createdAt` qo'shilishi "avval kiritilgani yutadi" degan qoidani
+    // ochiq belgilaydi - Mongo'dagi amaldagi xatti-harakat bilan bir xil.
+    orderBy: [{ effectiveFrom: "asc" }, { createdAt: "asc" }],
+  });
   return rows;
 };
 
@@ -139,11 +193,7 @@ export const segmentPeriod = (period, compensations, windowStart, windowEndExcl)
   // Yechim: stavkalar sana bo'yicha tartiblanadi va har biri ALLAQACHON
   // egallangan eng katta nuqtadan keyin boshlanadi. Ya'ni kesishgan qismni
   // ERTAROQ boshlangan stavka oladi, keyingisi faqat qolgan qismini.
-  const sortedComps = [...compensations].sort(
-    (a, b) =>
-      toUtcMidnight(a.effectiveFrom).getTime() -
-      toUtcMidnight(b.effectiveFrom).getTime(),
-  );
+  const sortedComps = [...compensations].sort(byEffectiveFrom);
 
   const segments = [];
   let claimedUntil = -Infinity; // shu nuqtagacha kunlar allaqachon berilgan
@@ -160,7 +210,11 @@ export const segmentPeriod = (period, compensations, windowStart, windowEndExcl)
     const rate = emptyRate();
     applyVariable(rate, comp.variableType, comp.variableRate, comp.percentBase);
     rate.source = "compensation";
-    rate.compensationId = comp._id;
+    // `comp.id` (Prisma) - `comp._id` esa faqat eski chaqiruvchi qolgan
+    // bo'lsa. Faqat `_id` ga tayanish JIMGINA `undefined` berardi va
+    // TeacherSalary.compensationId (nullable) NULL bo'lib yozilardi:
+    // maosh to'g'ri chiqardi-yu, "qaysi shartnomadan" izi yo'qolardi.
+    rate.compensationId = compIdOf(comp);
     segments.push({ start: new Date(s), endExcl: new Date(e), rate });
   }
 
@@ -187,11 +241,7 @@ export const baseSegmentsForMonth = (compensations, year, month, { from = null, 
   // IKKI MARTA SANASHDAN HIMOYA - segmentPeriod dagi bilan bir xil sabab.
   // Fiksa oylikda bu ayniqsa og'ir: kesishuv to'g'ridan-to'g'ri oylikni
   // ikki barobar qiladi (2 mln → 4 mln).
-  const sortedComps = [...compensations].sort(
-    (a, b) =>
-      toUtcMidnight(a.effectiveFrom).getTime() -
-      toUtcMidnight(b.effectiveFrom).getTime(),
-  );
+  const sortedComps = [...compensations].sort(byEffectiveFrom);
 
   const segments = [];
   let claimedUntil = -Infinity;
@@ -209,7 +259,7 @@ export const baseSegmentsForMonth = (compensations, year, month, { from = null, 
       start: new Date(s),
       endExcl: new Date(e),
       amount: Number(comp.baseAmount) || 0,
-      compensationId: comp._id,
+      compensationId: compIdOf(comp),
       branchId: comp.branchId || null,
     });
   }

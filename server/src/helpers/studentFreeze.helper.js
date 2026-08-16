@@ -1,8 +1,53 @@
-import AttendanceExemption from "../models/attendanceExemption.model.js";
-import StudentFreeze from "../models/studentFreeze.model.js";
+import prisma from "../config/prisma.js";
 import { toUtcMidnight } from "./attendance.helper.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// ═════════════════════════════════════════════════════════════════
+// MONGO → PRISMA: `studentMatch` SHAKLI O'ZGARDI
+//
+// Chaqiruvchilar ilgari XOM MONGO FILTRI uzatardi:
+//     loadFreezeWindows({ student: id })
+//     loadExemptionsWithFreezes({ student: { $in: ids } })
+//
+// Bu shakl Prisma'da JIMGINA NOTO'G'RI ishlardi: `student` - relation,
+// `$in` esa umuman tanilmaydigan kalit. Xato ham bermas, boshqa
+// natija ham berardi.
+//
+// Shuning uchun endi funksiyalar ANIQ ARGUMENT oladi:
+//     loadFreezeWindows(studentId)
+//     loadFreezeWindowsByStudent(studentIds)
+//     loadExemptionsWithFreezes(studentIds)
+//
+// Eski `{ student }` / `{ student: { $in } }` shakli ham QABUL QILINADI
+// (normalizeStudentIds) - migratsiya davomida ko'chirilmagan chaqiruvchi
+// jimgina bo'sh natija olmasin.
+// ═════════════════════════════════════════════════════════════════
+
+/**
+ * Chaqiruvchidan kelgan narsani o'quvchi ID'lari massiviga keltiradi.
+ * Qabul qiladi: "id" | ["id"] | { student: "id" } | { student: { $in: [...] } }
+ *               | { studentId: "id" } | { studentId: { in: [...] } }
+ */
+const normalizeStudentIds = (input) => {
+  if (!input) return [];
+  if (typeof input === "string") return [input];
+  if (Array.isArray(input)) return input.map(String);
+
+  const raw = input.studentId ?? input.student;
+  if (!raw) return [];
+  if (typeof raw === "string") return [raw];
+  if (Array.isArray(raw)) return raw.map(String);
+  const list = raw.in ?? raw.$in;
+  return Array.isArray(list) ? list.map(String) : [];
+};
+
+const studentWhere = (input) => {
+  const ids = normalizeStudentIds(input);
+  // Bo'sh ro'yxat = "hech kim" (fail-closed), `undefined` emas -
+  // aks holda filtr yo'qolib, BUTUN jadval qaytardi.
+  return ids.length === 1 ? { studentId: ids[0] } : { studentId: { in: ids } };
+};
 
 // ─── Davomat integratsiyasi ───
 // Muzlatish oynasini davomat "exemption" shakliga aylantiradi. Muzlatish
@@ -11,7 +56,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // daysOfWeek: [] => hamma kun (to'liq muzlatish). isExemptOn/defaultStatusFor
 // bunday kunlarga "exempt" statusini beradi (davomat foiziga ta'sir qilmaydi).
 export const freezeToExemption = (f) => ({
-  student: f.student,
+  // Prisma ustuni `studentId`; chaqiruvchilar (attendance) eski `student`
+  // nomini o'qiydi - ikkalasi ham beriladi.
+  studentId: f.studentId,
+  student: f.studentId,
   isActive: true,
   startDate: f.startDate,
   endDate: f.endDate
@@ -24,25 +72,27 @@ export const freezeToExemption = (f) => ({
 // Berilgan o'quvchi(lar) uchun HAQIQIY exemption'lar + muzlatishdan olingan
 // pseudo-exemption'larni birlashtiradi. attendance.service dagi har bir
 // `AttendanceExemption.find({ ...studentMatch, isActive: true })` o'rniga
-// ishlatiladi. studentMatch: { student: id } yoki { student: { $in: ids } }.
+// ishlatiladi.
 export const loadExemptionsWithFreezes = async (studentMatch) => {
+  const where = studentWhere(studentMatch);
   const [exemptions, freezes] = await Promise.all([
-    AttendanceExemption.find({ ...studentMatch, isActive: true }),
-    StudentFreeze.find({ ...studentMatch, isDeleted: { $ne: true } }).lean(),
+    prisma.attendanceExemption.findMany({ where: { ...where, isActive: true } }),
+    prisma.studentFreeze.findMany({ where: { ...where, isDeleted: false } }),
   ]);
-  return [...exemptions, ...freezes.map(freezeToExemption)];
+  // Haqiqiy exemption'da ham `student` taxallusi kerak (chaqiruvchi
+  // `e.student` bo'yicha guruhlaydi).
+  const normalized = exemptions.map((e) => ({ ...e, student: e.studentId }));
+  return [...normalized, ...freezes.map(freezeToExemption)];
 };
 
 // ─── To'lov integratsiyasi ───
 // O'quvchining muzlatish oynalarini normallashtirilgan [{start, end}] shaklida
 // qaytaradi (UTC yarim tun, ms). end EXCLUSIVE; ochiq muzlatish => Infinity.
 export const loadFreezeWindows = async (studentMatch) => {
-  const rows = await StudentFreeze.find({
-    ...studentMatch,
-    isDeleted: { $ne: true },
-  })
-    .select("startDate endDate")
-    .lean();
+  const rows = await prisma.studentFreeze.findMany({
+    where: { ...studentWhere(studentMatch), isDeleted: false },
+    select: { startDate: true, endDate: true },
+  });
   return rows.map((r) => ({
     start: toUtcMidnight(r.startDate).getTime(),
     end: r.endDate ? toUtcMidnight(r.endDate).getTime() : Infinity,
@@ -65,16 +115,14 @@ export const isFrozenOn = (windows, dateMs) =>
  * o'quvchida 500 ta so'rov ketardi.
  */
 export const loadFreezeWindowsByStudent = async (studentMatch) => {
-  const rows = await StudentFreeze.find({
-    ...studentMatch,
-    isDeleted: { $ne: true },
-  })
-    .select("student startDate endDate")
-    .lean();
+  const rows = await prisma.studentFreeze.findMany({
+    where: { ...studentWhere(studentMatch), isDeleted: false },
+    select: { studentId: true, startDate: true, endDate: true },
+  });
 
   const map = new Map();
   for (const r of rows) {
-    const key = String(r.student);
+    const key = String(r.studentId);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push({
       start: toUtcMidnight(r.startDate).getTime(),

@@ -1,10 +1,5 @@
-import mongoose from "mongoose";
-import TeacherSalary from "../../../models/teacherSalary.model.js";
-import TeacherCompensation from "../../../models/teacherCompensation.model.js";
-import SalaryTransaction from "../../../models/salaryTransaction.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import Group from "../../../models/group.model.js";
-import User from "../../../models/user.model.js";
+import { Prisma } from "@prisma/client";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
 import {
@@ -12,14 +7,11 @@ import {
   userBranchCondition,
   resolveBranchFromGroup,
 } from "../../../helpers/branchContext.helper.js";
-import {
-  computePeriodsSnapshot,
-  deriveStatus,
-  daysInMonth,
-} from "./salaryCompute.helper.js";
+import { deriveStatus, daysInMonth } from "./salaryCompute.helper.js";
 import * as teacherGroupPeriodService from "../../groups/services/teacherGroupPeriod.service.js";
 import logger from "../../../config/logger.js";
 import { localTodayMidnight, toUtcMidnight } from "../../../helpers/attendance.helper.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import {
   compensationsForRange,
   segmentPeriod,
@@ -33,28 +25,77 @@ import {
   segmentFactor,
 } from "./variableBase.helper.js";
 
-const safeTeacherProjection = {
-  firstName: 1,
-  lastName: 1,
-  username: 1,
-  phone: 1,
+// ═══════════════════════════════════════════════════════════════════════
+// MONGO → PRISMA: BU FAYLDAGI ENG MUHIM QAROR
+//
+// Mongo varianti `paidAmount`/`status`/`overpaidAmount` ni AGGREGATION
+// UPDATE PIPELINE bilan yozardi:
+//
+//     findOneAndUpdate(f, [{ $set: { status: { $switch: ... } } }])
+//
+// Buning ma'nosi: status BAZADAGI JORIY `paidAmount` dan bitta atomik
+// amalda keltirib chiqariladi. "O'qi → JS'da hisobla → saqla" naqshi
+// EMAS — aks holda hisob davomida kelib tushgan parallel to'lov
+// yo'qolardi (lost update).
+//
+// PostgreSQL'da bu ikki xil vosita bilan saqlandi:
+//
+//  1) `applyPaidDelta` — BITTA xom `UPDATE` (SQL). Faqat shu yerda
+//     "shartli-atomik" o'zgartirish kerak: `capToRemaining` bo'lsa yangi
+//     summa qoldiqdan oshsa qator UMUMAN yangilanmasligi shart. Buni
+//     ikki bosqichda qilish poyga oynasini qaytarib olib kelardi.
+//     SQL'da o'ng tomondagi ustun ESKI qiymatni beradi — Mongo'dagi
+//     `"$paidAmount"` bilan aynan bir xil semantika.
+//
+//  2) Qolgan yo'llar — `$transaction` + `SELECT ... FOR UPDATE`. Qator
+//     qulflanadi, `paidAmount` o'qiladi, status JS'da hisoblanib
+//     yoziladi. Qulf tufayli oraliqda hech kim o'zgartira olmaydi,
+//     lekin kod Prisma tipida va o'qiladigan bo'lib qoladi
+//     (`recalc` 20 dan ortiq ustunni yozadi — ularni xom SQL'da
+//     saqlash sxema bilan sinxrondan chiqib ketish xavfini tug'dirardi).
+//
+// DIQQAT — `updatedAt`: Prisma'dagi `@updatedAt` KLIENT tomonida
+// qo'yiladi. Xom SQL uni chetlab o'tadi, shuning uchun `"updatedAt"`
+// ochiq `NOW()` bilan yoziladi.
+//
+// PUL TURI: barcha summa ustunlari `double precision` (Mongo'da ham
+// float64 edi) — Prisma ularni oddiy `number` qaytaradi. Decimal/BigInt
+// konvertatsiyasi YO'Q, arifmetika bit-bit o'zgarmadi.
+//
+// `isDeleted`: TeacherSalary'da bunday ustun UMUMAN YO'Q (u hosila
+// jadval — o'chirilmaydi, qayta hisoblanadi). Mongoose modelida ham
+// softDelete plagini yo'q edi, ya'ni eski `{ $ne: true }` sharti hamma
+// qatorga to'g'ri kelardi. Shuning uchun filtrlar OLIB TASHLANDI.
+// ═══════════════════════════════════════════════════════════════════════
+
+const SAFE_TEACHER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  username: true,
+  phone: true,
 };
 
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
-  return new mongoose.Types.ObjectId(String(id));
+// Guruh jadvali RELATION — `computeLessonHours` uni talab qiladi.
+// Unutilsa massiv bo'sh keladi va soatbay maosh JIMGINA 0 bo'lardi.
+const GROUP_FOR_SNAPSHOT = {
+  id: true,
+  startDate: true,
+  endDate: true,
+  schedule: {
+    select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
+  },
 };
 
 // Guruhning o'sha oy hisoblangan (billed) tushumi - foiz maoshi bazasi.
 // O'quvchilarning to'lashi kerak bo'lgan summalar yig'indisi (guruh to'lovi,
 // proratsiya va chegirma hisobga olingan). Guruh to'lovi o'zgarsa bu ham o'zgaradi.
 export const computeGroupRevenue = async (group, year, month) => {
-  const agg = await StudentPayment.aggregate([
-    { $match: { group: toObjectId(group), year, month, isDeleted: { $ne: true } } },
-    { $group: { _id: null, total: { $sum: "$expectedAmount" } } },
-  ]);
-  return agg.length ? agg[0].total : 0;
+  const agg = await prisma.studentPayment.aggregate({
+    where: { groupId: String(group), year, month },
+    _sum: { expectedAmount: true },
+  });
+  return agg._sum.expectedAmount ?? 0;
 };
 
 // GURUH qatori (kind="group") uchun snapshot - SEGMENT asosida.
@@ -69,22 +110,18 @@ export const computeGroupRevenue = async (group, year, month) => {
 // stavkada chiqadi, yanvar esa umuman o'zgarmaydi (tarixiy aniqlik).
 const buildSnapshot = async (salary) => {
   const { year, month } = salary;
+  const teacherId = String(salary.teacherId);
+  const groupId = String(salary.groupId);
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEndExcl = new Date(Date.UTC(year, month, 1));
 
   const [periods, group, compensations] = await Promise.all([
-    teacherGroupPeriodService.periodsForMonth(
-      salary.teacher,
-      salary.group,
-      year,
-      month,
-    ),
-    Group.findById(salary.group, {
-      startDate: 1,
-      endDate: 1,
-      schedule: 1,
-    }).lean(),
-    compensationsForRange(salary.teacher, monthStart, monthEndExcl),
+    teacherGroupPeriodService.periodsForMonth(teacherId, groupId, year, month),
+    prisma.group.findUnique({
+      where: { id: groupId },
+      select: GROUP_FOR_SNAPSHOT,
+    }),
+    compensationsForRange(teacherId, monthStart, monthEndExcl),
   ]);
 
   // Guruh kurs oynasi - davr shu chegaraga qisiladi (kurs tugagach maosh yo'q).
@@ -103,10 +140,7 @@ const buildSnapshot = async (salary) => {
   const revenueCache = new Map();
   const revenueFor = async (base) => {
     if (!revenueCache.has(base)) {
-      revenueCache.set(
-        base,
-        await computeGroupRevenueBase(salary.group, year, month, base),
-      );
+      revenueCache.set(base, await computeGroupRevenueBase(groupId, year, month, base));
     }
     return revenueCache.get(base);
   };
@@ -146,14 +180,16 @@ const buildSnapshot = async (salary) => {
 
       // (b) guruh tushumidan foiz - segment ulushiga proratsiya
       if (rate.percentRate > 0) {
+        // eslint-disable-next-line no-await-in-loop
         const revenue = await revenueFor(rate.percentBase);
         percentAmount += Math.round((revenue * rate.percentRate * factor) / 100);
       }
 
       // (c) har o'quvchi uchun - proratsiyalangan o'quvchi-oy bazasi
       if (rate.perStudent > 0) {
+        // eslint-disable-next-line no-await-in-loop
         const { units } = await computeStudentUnits({
-          group: salary.group,
+          group: groupId,
           year,
           month,
           segStart: seg.start,
@@ -165,6 +201,7 @@ const buildSnapshot = async (salary) => {
 
       // (d) har dars soati uchun - jadvaldan (bayramlar chiqarilgan)
       if (rate.perHour > 0) {
+        // eslint-disable-next-line no-await-in-loop
         const { hours } = await computeLessonHours({
           groupDoc: group,
           segStart: seg.start,
@@ -209,7 +246,9 @@ const buildSnapshot = async (salary) => {
     variableRate: lastRate?.variableRate || 0,
     percentBase: lastRate?.percentBase || null,
     rateSource: lastRate?.source || "none",
-    compensation: lastRate?.compensationId || null,
+    // Mongo'da maydon `compensation` deb atalardi; Prisma ustuni
+    // `compensationId` (relation nomi `compensation`).
+    compensationId: lastRate?.compensationId || null,
     // LEGACY display maydonlari - eski UI buzilmasligi uchun to'ldiriladi.
     salaryType:
       lastRate?.percentRate > 0 && lastRate?.perGroup > 0
@@ -231,86 +270,156 @@ const buildSnapshot = async (salary) => {
     variableRate: snap.variableRate,
     percentBase: snap.percentBase,
     rateSource: snap.rateSource,
-    compensation: snap.compensation,
+    compensationId: snap.compensationId,
   };
 
   return { snap, groupRevenue, rate };
 };
 
-// paidAmount ifodasidan status + overpaidAmount ni hisoblaydigan atomik
-// update-pipeline bosqichi ("o'qi → hisobla → save" poygasini yo'qotadi).
-const paidStatusStage = (newPaidExpr) => ({
-  $set: {
-    paidAmount: newPaidExpr,
-    overpaidAmount: {
-      $max: [0, { $subtract: [newPaidExpr, "$expectedAmount"] }],
-    },
-    status: {
-      $switch: {
-        branches: [
-          { case: { $lte: [newPaidExpr, 0] }, then: "unpaid" },
-          { case: { $lt: [newPaidExpr, "$expectedAmount"] }, then: "partial" },
-        ],
-        default: "paid",
-      },
-    },
-  },
+// ─────────────────────────────────────────────────────────────────
+// LEGACY MOSLIK: `salaryType` enum'i
+//
+// Mongo modelida `salaryType` "mixed" qiymatini ham qabul qilardi;
+// Postgres `enum SalaryRateType` da esa faqat `fixed` va `percent` bor.
+// Snapshot ko'rsatish uchun "mixed" hisoblaydi, shuning uchun yozishdan
+// oldin u eng yaqin haqiqiy qiymatga tushiriladi.
+//
+// NEGA `percent`: "mixed" ikkala kanal ham yoqilgan degani va foizli
+// qism odatda kattaroq; qolaversa `fixedAmount` maydoni baribir alohida
+// saqlanadi, ya'ni ma'lumot yo'qolmaydi. Bu FAQAT ko'rsatish maydoni -
+// hisoblangan summaga (`expectedAmount`) ta'sir qilmaydi.
+// ─────────────────────────────────────────────────────────────────
+const toRateTypeEnum = (v) => (v === "percent" || v === "mixed" ? "percent" : "fixed");
+
+const normalizeRateForWrite = (rate) => ({
+  ...rate,
+  salaryType: toRateTypeEnum(rate.salaryType),
 });
 
-// paidAmount ni atomik delta bilan o'zgartiradi. capToRemaining=true bo'lsa,
-// yangi paidAmount expectedAmount dan oshadigan bo'lsa - hujjat YANGILANMAYDI
-// (null qaytadi): qoldiqdan ortiq to'lovni shartli-atomik to'sish (C3).
-export const applyPaidDelta = async (salaryId, delta, { capToRemaining = false } = {}) => {
-  const newPaid = { $add: [{ $ifNull: ["$paidAmount", 0] }, delta] };
-  const filter = { _id: salaryId };
-  if (capToRemaining) {
-    filter.$expr = { $lte: [newPaid, "$expectedAmount"] };
-  }
-  return TeacherSalary.findOneAndUpdate(filter, [paidStatusStage(newPaid)], {
-    new: true,
+// Ustunlar SQL'da: statusni JORIY paidAmount'dan keltirib chiqaradigan
+// yagona ifoda. `applyPaidDelta` xom SQL ishlatgani uchun bu yerda ham
+// bir xil mantiq (deriveStatus) qo'llanadi - ikki joyda ikki xil qoida
+// bo'lib qolmasin.
+const derived = (paid, expected) => ({
+  status: deriveStatus(paid, expected),
+  overpaidAmount: Math.max(0, paid - expected),
+});
+
+/**
+ * Qatorni QULFLAB (FOR UPDATE) yangilaydi va status/overpaid ni bazadagi
+ * JORIY `paidAmount` dan keltirib chiqaradi.
+ *
+ * Mongo'dagi update-pipeline'ning ekvivalenti: hisob davomida kelib
+ * tushgan parallel to'lov yo'qolmaydi.
+ */
+const updateWithDerivedStatus = async (salaryId, expected, data) =>
+  prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw`
+      SELECT "paidAmount" FROM "teacher_salaries" WHERE "id" = ${String(salaryId)} FOR UPDATE
+    `;
+    if (!rows.length) return null;
+    const paid = Number(rows[0].paidAmount) || 0;
+
+    return tx.teacherSalary.update({
+      where: { id: String(salaryId) },
+      data: {
+        ...data,
+        expectedAmount: expected,
+        ...derived(paid, expected),
+        recalculatedAt: new Date(),
+      },
+    });
   });
+
+// paidAmount ni atomik delta bilan o'zgartiradi. capToRemaining=true bo'lsa,
+// yangi paidAmount expectedAmount dan oshadigan bo'lsa - qator YANGILANMAYDI
+// (null qaytadi): qoldiqdan ortiq to'lovni shartli-atomik to'sish (C3).
+//
+// BITTA SQL amali: SQL'da o'ng tomondagi `"paidAmount"` ESKI qiymatni
+// beradi, ya'ni Mongo'dagi `{ $add: ["$paidAmount", delta] }` bilan aynan
+// bir xil. Ikki bosqichga bo'lish (o'qi → yoz) poygani qaytarib kelardi.
+export const applyPaidDelta = async (salaryId, delta, { capToRemaining = false } = {}) => {
+  const id = String(salaryId);
+  const d = Number(delta) || 0;
+
+  const setClause = Prisma.sql`
+    SET "paidAmount"     = COALESCE("paidAmount", 0) + ${d}::double precision,
+        "overpaidAmount" = GREATEST(
+          0,
+          COALESCE("paidAmount", 0) + ${d}::double precision - "expectedAmount"
+        ),
+        "status"         = CASE
+          WHEN COALESCE("paidAmount", 0) + ${d}::double precision <= 0
+            THEN 'unpaid'::"PayStatus"
+          WHEN COALESCE("paidAmount", 0) + ${d}::double precision < "expectedAmount"
+            THEN 'partial'::"PayStatus"
+          ELSE 'paid'::"PayStatus"
+        END,
+        -- Prisma'ning @updatedAt KLIENT tomonida ishlaydi; xom SQL uni
+        -- chetlab o'tadi, shuning uchun ochiq yoziladi.
+        "updatedAt"      = NOW()
+  `;
+
+  const affected = capToRemaining
+    ? await prisma.$executeRaw`
+        UPDATE "teacher_salaries" ${setClause}
+        WHERE "id" = ${id}
+          AND COALESCE("paidAmount", 0) + ${d}::double precision <= "expectedAmount"
+      `
+    : await prisma.$executeRaw`
+        UPDATE "teacher_salaries" ${setClause}
+        WHERE "id" = ${id}
+      `;
+
+  if (affected === 0) return null;
+  return prisma.teacherSalary.findUnique({ where: { id } });
 };
 
 // Faol tranzaksiyalar yig'indisidan paidAmount/status ni tiklaydi (repair yo'li).
 export const recalcStatus = async (salaryId) => {
-  const salary = await TeacherSalary.findById(salaryId);
-  if (!salary) return null;
-  const agg = await SalaryTransaction.aggregate([
-    { $match: { salary: salary._id, isDeleted: { $ne: true } } },
-    { $group: { _id: null, total: { $sum: "$amount" } } },
-  ]);
-  const paidAmount = agg.length ? agg[0].total : 0;
-  return TeacherSalary.findByIdAndUpdate(salaryId, [paidStatusStage(paidAmount)], {
-    new: true,
+  const id = String(salaryId);
+  const agg = await prisma.salaryTransaction.aggregate({
+    where: { salaryId: id, isDeleted: false },
+    _sum: { amount: true },
+  });
+  const paidAmount = agg._sum.amount ?? 0;
+
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw`
+      SELECT "expectedAmount" FROM "teacher_salaries" WHERE "id" = ${id} FOR UPDATE
+    `;
+    if (!rows.length) return null;
+    const expected = Number(rows[0].expectedAmount) || 0;
+    return tx.teacherSalary.update({
+      where: { id },
+      data: { paidAmount, ...derived(paidAmount, expected) },
+    });
   });
 };
 
 // Snapshot (maosh/foiz/proratsiya) ni qayta hisoblab, statusni ham yangilaydi.
-// Yozish atomik pipeline orqali: status/overpaid DB'dagi JORIY paidAmount'dan
+// Yozish qulflangan qator ustida: status/overpaid DB'dagi JORIY paidAmount'dan
 // keltirib chiqariladi - hisob davomida kelib tushgan parallel to'lov buzmaydi.
 // Retro o'zgarish expected'ni to'langandan pastga tushirsa, farq overpaidAmount
 // sifatida KO'RINADIGAN bo'lib saqlanadi (C6) - clamp bilan yashirilmaydi.
 export const recalc = async (salaryId, { force = false, lockPaid = false } = {}) => {
-  const salary = await TeacherSalary.findById(salaryId);
+  const salary = await prisma.teacherSalary.findUnique({ where: { id: String(salaryId) } });
   if (!salary) return null;
 
   // ─── QULF: MUTLAQ TO'SIQ ───
   //
   // `force` ham buni ocha OLMAYDI - qulflangan oy avval ATAYLAB
-  // ochilishi kerak. Farqi shundaki, `lockPaid` "avtomatik tegmа" degan
+  // ochilishi kerak. Farqi shundaki, `lockPaid` "avtomatik tegma" degan
   // maslahat, qulf esa "bu davr yopilgan" degan qaror: markaz boshqa
   // tizimdan ko'chib kelgan yoki hisobot topshirilgan oylar shu bilan
   // himoyalanadi.
-  //
-  // Default false bo'lgani uchun mavjud ma'lumotlarda xatti-harakat
-  // AYNAN avvalgidek qoladi.
-  if (salary.isLocked) return salary;
+  if (salary.isLocked) return withLegacyId(salary);
 
   // FAQAT guruh qatorlari davrlardan qayta hisoblanadi.
   //  • base      - markaz fiksasi, recalcBaseForTeacherMonth() bilan yangilanadi
   //  • bonus/deduction - QO'LDA kiritilgan (KPI), avtomatik qayta hisob YO'Q.
   //    Aks holda owner kiritgan mukofot har kechqurun job'da nolga tushardi.
-  if (salary.kind && salary.kind !== "group") return salary;
+  if (salary.kind && salary.kind !== "group") return withLegacyId(salary);
 
   // ─── TO'LANGAN OY QULFI - FAQAT STAVKA O'ZGARISHIDA ───
   //
@@ -333,58 +442,29 @@ export const recalc = async (salaryId, { force = false, lockPaid = false } = {})
   //
   // force=true - qulfni ochiq buzish (owner "qayta hisobla" tugmasi).
   if (lockPaid && !force && salary.status === "paid" && salary.paidAmount > 0) {
-    return salary;
+    return withLegacyId(salary);
   }
 
   const { snap, groupRevenue, rate } = await buildSnapshot(salary);
 
-  const paidExpr = { $ifNull: ["$paidAmount", 0] };
-  return TeacherSalary.findByIdAndUpdate(
-    salaryId,
-    [
-      {
-        $set: {
-          salaryType: rate.salaryType,
-          fixedAmount: rate.fixedAmount,
-          percentRate: rate.percentRate,
-          variableType: rate.variableType,
-          variableRate: rate.variableRate,
-          percentBase: rate.percentBase,
-          rateSource: rate.rateSource,
-          compensation: rate.compensation,
-          workStartDate: snap.workStartDate || null,
-          workEndDate: snap.workEndDate || null,
-          groupRevenue,
-          prorationFactor: snap.prorationFactor,
-          payableDays: snap.payableDays,
-          totalDays: snap.totalDays,
-          proratedFixed: snap.proratedFixed,
-          percentAmount: snap.percentAmount,
-          perGroupAmount: snap.perGroupAmount,
-          perStudentAmount: snap.perStudentAmount,
-          perHourAmount: snap.perHourAmount,
-          studentUnits: snap.studentUnits,
-          lessonHours: snap.lessonHours,
-          baseEarnings: snap.baseEarnings,
-          expectedAmount: snap.expectedAmount,
-          status: {
-            $switch: {
-              branches: [
-                { case: { $lte: [paidExpr, 0] }, then: "unpaid" },
-                { case: { $lt: [paidExpr, snap.expectedAmount] }, then: "partial" },
-              ],
-              default: "paid",
-            },
-          },
-          overpaidAmount: {
-            $max: [0, { $subtract: [paidExpr, snap.expectedAmount] }],
-          },
-          recalculatedAt: new Date(),
-        },
-      },
-    ],
-    { new: true },
-  );
+  const saved = await updateWithDerivedStatus(salary.id, snap.expectedAmount, {
+    ...normalizeRateForWrite(rate),
+    workStartDate: snap.workStartDate || null,
+    workEndDate: snap.workEndDate || null,
+    groupRevenue,
+    prorationFactor: snap.prorationFactor,
+    payableDays: snap.payableDays,
+    totalDays: snap.totalDays,
+    proratedFixed: snap.proratedFixed,
+    percentAmount: snap.percentAmount,
+    perGroupAmount: snap.perGroupAmount,
+    perStudentAmount: snap.perStudentAmount,
+    perHourAmount: snap.perHourAmount,
+    studentUnits: snap.studentUnits,
+    lessonHours: snap.lessonHours,
+    baseEarnings: snap.baseEarnings,
+  });
+  return saved ? withLegacyId(saved) : null;
 };
 
 // MARKAZ DARAJASIDAGI FIKSA OYLIK (kind="base").
@@ -392,7 +472,7 @@ export const recalc = async (salaryId, { force = false, lockPaid = false } = {})
 // NEGA GURUHGA BOG'LANMAYDI: "oyligi 2 mln" degani - o'qituvchi 1 ta guruhda
 // ishlasa ham, 5 ta guruhda ishlasa ham 2 mln. Agar bu summa guruh qatoriga
 // yozilsa, 5 guruh = 10 mln bo'lib ketardi. Shuning uchun oyiga BITTA,
-// guruhsiz (group=null) qator ochiladi.
+// guruhsiz (groupId=null) qator ochiladi.
 //
 // PRORATSIYA: ishga kirgan/bo'shagan oyda kalendar kunlar ulushicha. Stavka oy
 // o'rtasida oshirilsa - har segment o'z summasi bilan qo'shiladi.
@@ -402,13 +482,17 @@ export const recalcBaseForTeacherMonth = async (
   month,
   { lockPaid = false, force = false } = {},
 ) => {
+  const teacherId = String(teacher);
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEndExcl = new Date(Date.UTC(year, month, 1));
   const totalDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
 
   const [compensations, user] = await Promise.all([
-    compensationsForRange(teacher, monthStart, monthEndExcl),
-    User.findById(teacher, { hiredAt: 1, terminatedAt: 1, homeBranchId: 1 }).lean(),
+    compensationsForRange(teacherId, monthStart, monthEndExcl),
+    prisma.user.findUnique({
+      where: { id: teacherId },
+      select: { hiredAt: true, terminatedAt: true, homeBranchId: true },
+    }),
   ]);
 
   const segments = baseSegmentsForMonth(compensations, year, month, {
@@ -416,12 +500,8 @@ export const recalcBaseForTeacherMonth = async (
     toExcl: user?.terminatedAt || null,
   });
 
-  const existing = await TeacherSalary.findOne({
-    teacher,
-    group: null,
-    kind: "base",
-    year,
-    month,
+  const existing = await prisma.teacherSalary.findFirst({
+    where: { teacherId, groupId: null, kind: "base", year, month },
   });
 
   // QULFLANGAN OY - mutlaq to'siq (recalc() dagi bilan bir xil qoida).
@@ -429,13 +509,13 @@ export const recalcBaseForTeacherMonth = async (
   // qayta yozilardi: hiredAt segmentlar chegarasini beradi (yuqorida
   // `from: user?.hiredAt`), ya'ni sana 16 oy orqaga surilsa 16 oylik
   // fiksa oylik qaytadan hisoblanib ketardi.
-  if (existing?.isLocked) return existing;
+  if (existing?.isLocked) return withLegacyId(existing);
 
   // TO'LANGAN OY QULFI - recalc() dagi bilan bir xil shart: faqat STAVKA
   // o'zgarishida. Fiksa oylikda bu ayniqsa muhim, chunki effectiveFrom xato
   // qo'yilsa allaqachon to'langan barcha oylar qayta ochilib ketardi.
   if (lockPaid && !force && existing?.status === "paid" && existing.paidAmount > 0) {
-    return existing;
+    return withLegacyId(existing);
   }
 
   // Fiksa qism umuman yo'q (stavka olib tashlandi / o'qituvchi bo'shadi):
@@ -444,7 +524,9 @@ export const recalcBaseForTeacherMonth = async (
   // allaqachon to'langan bo'lsa overpaidAmount ko'rinadigan bo'lib qoladi
   // (clawback uchun asos, jimgina yashirilmaydi).
   if (segments.length === 0) {
-    return existing ? applyExpected(existing._id, 0) : null;
+    if (!existing) return null;
+    const zeroed = await applyExpected(existing.id, 0);
+    return zeroed ? withLegacyId(zeroed) : null;
   }
 
   let expected = 0;
@@ -471,145 +553,169 @@ export const recalcBaseForTeacherMonth = async (
   branchId = branchId || user?.homeBranchId || null;
   if (!branchId) {
     logger.warn(
-      { teacher, year, month },
+      { teacher: teacherId, year, month },
       "Fiksa oylik uchun filial aniqlanmadi - qator yaratilmadi",
     );
     return null;
   }
 
-  if (existing) return applyExpected(existing._id, expected, { payableDays, totalDays });
+  if (existing) {
+    const saved = await applyExpected(existing.id, expected, { payableDays, totalDays });
+    return saved ? withLegacyId(saved) : null;
+  }
 
-  const draft = new TeacherSalary({
-    branchId,
-    teacher,
-    group: null,
-    kind: "base",
-    year,
-    month,
-    salaryType: "fixed",
-    fixedAmount: rateAmount,
-    variableType: null,
-    rateSource: "compensation",
-    compensation: compensationId,
-    prorationFactor: totalDays > 0 ? payableDays / totalDays : 0,
-    payableDays,
-    totalDays,
-    proratedFixed: expected,
-    baseEarnings: expected,
-    expectedAmount: expected,
-    status: deriveStatus(0, expected),
-    source: "auto",
-    recalculatedAt: new Date(),
-  });
   try {
-    return await draft.save();
-  } catch (err) {
-    if (err?.code === 11000) {
-      const again = await TeacherSalary.findOne({
-        teacher,
-        group: null,
+    const created = await prisma.teacherSalary.create({
+      data: {
+        branchId,
+        teacherId,
+        groupId: null,
         kind: "base",
         year,
         month,
+        salaryType: "fixed",
+        fixedAmount: rateAmount,
+        variableType: null,
+        rateSource: "compensation",
+        compensationId,
+        prorationFactor: totalDays > 0 ? payableDays / totalDays : 0,
+        payableDays,
+        totalDays,
+        proratedFixed: expected,
+        baseEarnings: expected,
+        expectedAmount: expected,
+        status: deriveStatus(0, expected),
+        source: "auto",
+        recalculatedAt: new Date(),
+      },
+    });
+    return withLegacyId(created);
+  } catch (err) {
+    // POYGA: boshqa jarayon shu qatorni endigina yaratdi.
+    // Qisman unique indeks: (teacherId, year, month, kind)
+    //   WHERE "groupId" IS NULL AND "kind" = 'base'
+    // Mongo `11000` → Prisma `P2002`.
+    if (err?.code === "P2002") {
+      const again = await prisma.teacherSalary.findFirst({
+        where: { teacherId, groupId: null, kind: "base", year, month },
       });
-      return again ? applyExpected(again._id, expected, { payableDays, totalDays }) : null;
+      if (!again) return null;
+      const saved = await applyExpected(again.id, expected, { payableDays, totalDays });
+      return saved ? withLegacyId(saved) : null;
     }
     throw err;
   }
 };
 
-// expectedAmount ni atomik yangilaydi + status/overpaid ni DB dagi paidAmount
-// dan keltirib chiqaradi (o'qi→hisobla→saqla poygasi yo'q).
-const applyExpected = async (salaryId, expected, extra = {}) => {
-  const paidExpr = { $ifNull: ["$paidAmount", 0] };
-  return TeacherSalary.findByIdAndUpdate(
-    salaryId,
-    [
-      {
-        $set: {
-          expectedAmount: expected,
-          baseEarnings: expected,
-          proratedFixed: expected,
-          ...(extra.payableDays !== undefined
-            ? {
-                payableDays: extra.payableDays,
-                totalDays: extra.totalDays,
-                prorationFactor:
-                  extra.totalDays > 0 ? extra.payableDays / extra.totalDays : 0,
-              }
-            : {}),
-          status: {
-            $switch: {
-              branches: [
-                { case: { $lte: [paidExpr, 0] }, then: "unpaid" },
-                { case: { $lt: [paidExpr, expected] }, then: "partial" },
-              ],
-              default: "paid",
-            },
-          },
-          overpaidAmount: { $max: [0, { $subtract: [paidExpr, expected] }] },
-          recalculatedAt: new Date(),
-        },
-      },
-    ],
-    { new: true },
-  );
-};
+// expectedAmount ni yangilaydi + status/overpaid ni DB dagi paidAmount
+// dan keltirib chiqaradi (qator qulflanadi, poyga yo'q).
+const applyExpected = async (salaryId, expected, extra = {}) =>
+  updateWithDerivedStatus(salaryId, expected, {
+    baseEarnings: expected,
+    proratedFixed: expected,
+    ...(extra.payableDays !== undefined
+      ? {
+          payableDays: extra.payableDays,
+          totalDays: extra.totalDays,
+          prorationFactor:
+            extra.totalDays > 0 ? extra.payableDays / extra.totalDays : 0,
+        }
+      : {}),
+  });
 
 // Guruh+oy bo'yicha barcha maoshlarni qayta hisoblaydi (guruh tushumi o'zgarganda).
 export const recalcForGroupMonth = async (group, year, month) => {
-  const salaries = await TeacherSalary.find(
-    { group, year, month, kind: "group" },
-    { _id: 1 },
-  );
-  for (const s of salaries) await recalc(s._id);
+  const salaries = await prisma.teacherSalary.findMany({
+    where: { groupId: String(group), year, month, kind: "group" },
+    select: { id: true },
+  });
+  for (const s of salaries) {
+    // eslint-disable-next-line no-await-in-loop
+    await recalc(s.id);
+  }
   return salaries.length;
 };
 
 // Guruhning barcha oylik maoshlarini qayta hisoblaydi (doimiy chegirma o'zgarganda).
 export const recalcForGroup = async (group) => {
-  const salaries = await TeacherSalary.find({ group, kind: "group" }, { _id: 1 });
-  for (const s of salaries) await recalc(s._id);
+  const salaries = await prisma.teacherSalary.findMany({
+    where: { groupId: String(group), kind: "group" },
+    select: { id: true },
+  });
+  for (const s of salaries) {
+    // eslint-disable-next-line no-await-in-loop
+    await recalc(s.id);
+  }
   return salaries.length;
 };
 
-// O'qituvchi guruhga biriktirilganda shu oy maoshini yaratadi (best-effort hook).
+// O'qituvchi guruhga biriktirilganda shu oy maoshini yaratadi.
 // Stavka/ish-oynasi davrlardan (TeacherGroupPeriod) keltirib chiqariladi.
+//
+// IDEMPOTENT: qator allaqachon bo'lsa o'sha qaytariladi; poygada esa
+// qisman unique indeks (teacherId, groupId, year, month, kind) ushlaydi
+// va P2002 dan keyin mavjud qator o'qiladi. Ya'ni bir o'qituvchiga bir
+// guruh uchun bir oyda IKKINCHI qator hech qanday yo'l bilan yaratilmaydi.
 export const ensureSalaryForTeacherGroup = async (teacher, group, year, month) => {
   if (!teacher || !group) return null;
-  const exists = await TeacherSalary.findOne({
-    teacher,
-    group,
-    year,
-    month,
-    kind: "group",
-  });
-  if (exists) return exists;
+  const teacherId = String(teacher);
+  const groupId = String(group);
 
-  // FILIAL: guruhdan meros. Bu fon vazifasidan (Agenda) ham chaqiriladi -
+  const exists = await prisma.teacherSalary.findFirst({
+    where: { teacherId, groupId, year, month, kind: "group" },
+  });
+  if (exists) return withLegacyId(exists);
+
+  // FILIAL: guruhdan meros. Bu fon vazifasidan (pg-boss) ham chaqiriladi -
   // u yerda foydalanuvchi konteksti yo'q.
-  const branchId = await resolveBranchFromGroup(group);
+  const branchId = await resolveBranchFromGroup(groupId);
 
-  const draft = new TeacherSalary({
-    branchId,
-    teacher,
-    group,
-    kind: "group",
+  // Snapshot yozuv YARATILMASDAN OLDIN hisoblanadi: Mongoose'da `new Model()`
+  // xotiradagi hujjat berardi, Prisma'da esa bunday oraliq obyekt yo'q.
+  const { snap, groupRevenue, rate } = await buildSnapshot({
+    teacherId,
+    groupId,
     year,
     month,
-    source: "auto",
   });
-  const { snap, groupRevenue, rate } = await buildSnapshot(draft);
-  Object.assign(draft, rate, snap);
-  draft.groupRevenue = groupRevenue;
-  draft.status = deriveStatus(0, snap.expectedAmount);
-  draft.recalculatedAt = new Date();
 
   try {
-    return await draft.save();
+    const created = await prisma.teacherSalary.create({
+      data: {
+        branchId,
+        teacherId,
+        groupId,
+        kind: "group",
+        year,
+        month,
+        source: "auto",
+        ...normalizeRateForWrite(rate),
+        groupRevenue,
+        prorationFactor: snap.prorationFactor,
+        payableDays: snap.payableDays,
+        totalDays: snap.totalDays,
+        proratedFixed: snap.proratedFixed,
+        percentAmount: snap.percentAmount,
+        perGroupAmount: snap.perGroupAmount,
+        perStudentAmount: snap.perStudentAmount,
+        perHourAmount: snap.perHourAmount,
+        studentUnits: snap.studentUnits,
+        lessonHours: snap.lessonHours,
+        baseEarnings: snap.baseEarnings,
+        expectedAmount: snap.expectedAmount,
+        workStartDate: snap.workStartDate || null,
+        workEndDate: snap.workEndDate || null,
+        status: deriveStatus(0, snap.expectedAmount),
+        recalculatedAt: new Date(),
+      },
+    });
+    return withLegacyId(created);
   } catch (err) {
-    if (err?.code === 11000) {
-      return TeacherSalary.findOne({ teacher, group, year, month, kind: "group" });
+    if (err?.code === "P2002") {
+      const again = await prisma.teacherSalary.findFirst({
+        where: { teacherId, groupId, year, month, kind: "group" },
+      });
+      return again ? withLegacyId(again) : null;
     }
     throw err;
   }
@@ -617,30 +723,34 @@ export const ensureSalaryForTeacherGroup = async (teacher, group, year, month) =
 
 // Berilgan oy uchun barcha faol guruh o'qituvchilariga maosh yaratadi.
 export const generateMonthLegacy = async (year, month) => {
-  const groups = await Group.find(
-    { isActive: true, isDeleted: { $ne: true } },
-    { _id: 1 },
-  );
+  const groups = await prisma.group.findMany({
+    where: { isActive: true, isDeleted: false },
+    select: { id: true },
+  });
   let created = 0;
   for (const g of groups) {
     // Shu OYDA dars bergan o'qituvchilar (TeacherGroupPeriod overlap) - tarixiy
     // generatsiyada ham o'sha davrdagi haqiqiy o'qituvchilar olinadi.
+    // eslint-disable-next-line no-await-in-loop
     const periods = await teacherGroupPeriodService.teacherPeriodsActiveInMonth(
-      g._id,
+      g.id,
       year,
       month,
     );
-    const teacherIds = [...new Set(periods.map((p) => String(p.teacher)))];
+    // `p.teacher` - teacherGroupPeriod servisi saqlagan moslik nomi
+    // (Prisma ustuni `teacherId`); ikkalasi ham qabul qilinadi.
+    const teacherIds = [
+      ...new Set(periods.map((p) => String(p.teacherId ?? p.teacher))),
+    ];
     for (const teacherId of teacherIds) {
-      const existed = await TeacherSalary.findOne({
-        teacher: teacherId,
-        group: g._id,
-        year,
-        month,
-        kind: "group",
+      // eslint-disable-next-line no-await-in-loop
+      const existed = await prisma.teacherSalary.findFirst({
+        where: { teacherId, groupId: g.id, year, month, kind: "group" },
+        select: { id: true },
       });
       if (existed) continue;
-      await ensureSalaryForTeacherGroup(teacherId, g._id, year, month);
+      // eslint-disable-next-line no-await-in-loop
+      await ensureSalaryForTeacherGroup(teacherId, g.id, year, month);
       created += 1;
     }
   }
@@ -652,7 +762,7 @@ export const generateMonthLegacy = async (year, month) => {
 //   2. markaz fiksa qatorlari (base) - standart stavkasi bor har o'qituvchi uchun.
 //
 // Idempotent: qayta ishga tushirilsa mavjud qatorlar yangilanadi, dublikat
-// yaratilmaydi (partial unique indekslar himoya qiladi).
+// yaratilmaydi (qisman unique indekslar himoya qiladi).
 export const generateMonth = async (year, month) => {
   const groupResult = await generateMonthLegacy(year, month);
 
@@ -660,16 +770,23 @@ export const generateMonth = async (year, month) => {
   const monthEndExcl = new Date(Date.UTC(year, month, 1));
 
   // Shu oyda amal qilgan fiksa stavkasi bo'lgan o'qituvchilar.
-  const teacherIds = await TeacherCompensation.distinct("teacher", {
-    isDeleted: { $ne: true },
-    baseType: "fixed_monthly",
-    effectiveFrom: { $lt: monthEndExcl },
-    $or: [{ effectiveTo: null }, { effectiveTo: { $gt: monthStart } }],
+  // Mongo `.distinct("teacher", filter)` → Prisma `distinct` + `select`.
+  const rows = await prisma.teacherCompensation.findMany({
+    where: {
+      isDeleted: false,
+      baseType: "fixed_monthly",
+      effectiveFrom: { lt: monthEndExcl },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gt: monthStart } }],
+    },
+    select: { teacherId: true },
+    distinct: ["teacherId"],
   });
+  const teacherIds = rows.map((r) => r.teacherId);
 
   let baseCreated = 0;
   for (const teacherId of teacherIds) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       const row = await recalcBaseForTeacherMonth(teacherId, year, month);
       if (row) baseCreated += 1;
     } catch (err) {
@@ -700,110 +817,119 @@ export const list = async ({
   limit = 200,
 }) => {
   // FILIAL: TeacherSalary'da branchId bor (guruhdan meros).
-  const filter = { ...branchFilter(), isDeleted: { $ne: true } };
-  if (groupId) filter.group = toObjectId(groupId);
-  if (teacherId) filter.teacher = toObjectId(teacherId);
+  const where = { ...branchFilter() };
+  if (groupId) where.groupId = String(groupId);
+  if (teacherId) where.teacherId = String(teacherId);
   // Qator turi: UI "asosiy maosh" va "mukofot" ni ajratib ko'rsatishi uchun.
   // Berilmasa - BARCHA turlar (guruh + fiksa + mukofot) qaytadi, chunki
   // o'qituvchining oylik jami aynan shularning yig'indisi.
-  if (kind) filter.kind = kind;
-  if (year) filter.year = Number(year);
-  if (month) filter.month = Number(month);
-  if (status) filter.status = status;
+  if (kind) where.kind = kind;
+  if (year) where.year = Number(year);
+  if (month) where.month = Number(month);
+  if (status) where.status = status;
 
   // Qidiruv DB darajasida (filtrga kiradi) - aks holda sahifalab bo'lingandan
-  // KEYIN filtrlash noto'g'ri sahifa/total berardi (studentPayment.list bilan bir xil).
+  // KEYIN filtrlash noto'g'ri sahifa/total berardi.
+  //
+  // FARQ (ataylab): Mongo varianti `filter.teacher` ni qidiruv natijasi bilan
+  // BOSIB KETARDI - ya'ni o'qituvchi filtri bilan birga qidirilsa filtr
+  // jimgina yo'qolib, BOSHQA o'qituvchilar ham chiqib kelardi. Prisma'da
+  // ikkala shart yonma-yon turadi va AND bilan birlashadi (kesishma), ya'ni
+  // filtr endi haqiqatan hurmat qilinadi. Bu faqat toraytiradi - hech qanday
+  // ma'lumot qo'shimcha ochilmaydi.
   if (search && search.trim()) {
-    const s = search.trim();
-    const rx = new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    const matchedTeachers = await User.find(
-      {
-        role: ROLES.TEACHER,
-        $or: [{ firstName: rx }, { lastName: rx }, { username: rx }],
-      },
-      { _id: 1 },
-    );
-    filter.teacher = { $in: matchedTeachers.map((u) => u._id) };
+    const q = search.trim();
+    where.teacher = {
+      role: ROLES.TEACHER,
+      OR: [
+        { firstName: { contains: q, mode: "insensitive" } },
+        { lastName: { contains: q, mode: "insensitive" } },
+        { username: { contains: q, mode: "insensitive" } },
+      ],
+    };
   }
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    TeacherSalary.find(filter)
-      .populate("teacher", safeTeacherProjection)
-      .populate("group", { name: 1 })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    TeacherSalary.countDocuments(filter),
+    prisma.teacherSalary.findMany({
+      where,
+      include: {
+        teacher: { select: SAFE_TEACHER_SELECT },
+        group: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.teacherSalary.count({ where }),
   ]);
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 export const getById = async (id) => {
-  const salary = await TeacherSalary.findById(id)
-    .populate("teacher", safeTeacherProjection)
-    .populate("group", { name: 1 });
+  const salary = await prisma.teacherSalary.findUnique({
+    where: { id: String(id) },
+    include: {
+      teacher: { select: SAFE_TEACHER_SELECT },
+      group: { select: { id: true, name: true } },
+    },
+  });
   if (!salary) throw new ApiError(404, "Maosh topilmadi");
 
-  const transactions = await SalaryTransaction.find({
-    salary: salary._id,
-    isDeleted: { $ne: true },
-  }).sort({ paidAt: -1, createdAt: -1 });
+  const transactions = await prisma.salaryTransaction.findMany({
+    where: { salaryId: salary.id, isDeleted: false },
+    orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+  });
 
-  return { ...salary.toJSON(), transactions };
+  return withLegacyId({ ...salary, transactions });
 };
 
 // Bitta o'qituvchining barcha oylardagi maoshlari + har biriga tegishli
 // to'lovlar (maosh to'lovlari tarixi sahifasi uchun). Eng yangi oy yuqorida.
 export const historyByTeacher = async (teacherId) => {
-  const tid = toObjectId(teacherId);
+  const tid = String(teacherId);
   // FILIAL: boshqa filial o'qituvchisining ismi ochilmasin.
   const branchCond = userBranchCondition();
-  const teacher = await User.findOne(
-    branchCond ? { _id: tid, $and: [branchCond] } : { _id: tid },
-    safeTeacherProjection,
-  ).lean();
+  const teacher = await prisma.user.findFirst({
+    where: { id: tid, ...(branchCond ? { AND: [branchCond] } : {}) },
+    select: SAFE_TEACHER_SELECT,
+  });
   if (!teacher) throw new ApiError(404, "O'qituvchi topilmadi");
 
   // FILIAL: o'qituvchi boshqa filialda ham ishlasa, u yerdagi maoshi
   // shu filial ko'rinishiga chiqmasin.
-  const salaries = await TeacherSalary.find({
-    teacher: tid,
-    ...branchFilter(),
-    isDeleted: { $ne: true },
-  })
-    .populate("group", { name: 1 })
-    .sort({ year: -1, month: -1 })
-    .lean();
+  const salaries = await prisma.teacherSalary.findMany({
+    where: { teacherId: tid, ...branchFilter() },
+    include: { group: { select: { id: true, name: true } } },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+  });
 
-  const ids = salaries.map((s) => s._id);
+  const ids = salaries.map((s) => s.id);
   const txs = ids.length
-    ? await SalaryTransaction.find({
-        salary: { $in: ids },
-        isDeleted: { $ne: true },
+    ? await prisma.salaryTransaction.findMany({
+        where: { salaryId: { in: ids }, isDeleted: false },
+        orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
       })
-        .sort({ paidAt: -1, createdAt: -1 })
-        .lean()
     : [];
 
   const txBySalary = new Map();
   for (const t of txs) {
-    const key = String(t.salary);
+    const key = String(t.salaryId);
     if (!txBySalary.has(key)) txBySalary.set(key, []);
     txBySalary.get(key).push(t);
   }
 
   const items = salaries.map((s) => ({
     ...s,
-    transactions: txBySalary.get(String(s._id)) || [],
+    transactions: txBySalary.get(String(s.id)) || [],
   }));
 
   const totalExpected = items.reduce((s, p) => s + (p.expectedAmount || 0), 0);
   const totalPaid = items.reduce((s, p) => s + (p.paidAmount || 0), 0);
 
   return {
-    teacher,
-    items,
+    teacher: withLegacyId(teacher),
+    items: withLegacyIds(items),
     summary: {
       months: items.length,
       totalExpected,
@@ -814,7 +940,7 @@ export const historyByTeacher = async (teacherId) => {
 };
 
 // O'qituvchining O'ZI uchun moliya ko'rinishi (teacher panel "Moliya" bo'limi).
-// Faqat req.user._id bilan chaqiriladi - ruxsat tekshiruvi shart emas (o'z
+// Faqat req.user.id bilan chaqiriladi - ruxsat tekshiruvi shart emas (o'z
 // ma'lumotini ko'radi).
 export const myFinance = async (teacherId) => historyByTeacher(teacherId);
 
@@ -845,13 +971,13 @@ const daysBetween = (fromMs, toMs) => Math.max(0, Math.round((toMs - fromMs) / D
 // `now` parametri TESTLAR uchun: soatni mocklamasdan istalgan lahzani
 // berish mumkin (isFutureLocalDay bilan bir xil naqsh).
 export const balanceByTeacher = async (teacherId, { now = new Date() } = {}) => {
-  const tid = toObjectId(teacherId);
+  const tid = String(teacherId);
   // FILIAL: boshqa filial o'qituvchisining ismi/moliyasi ochilmasin.
   const branchCond = userBranchCondition();
-  const teacher = await User.findOne(
-    branchCond ? { _id: tid, $and: [branchCond] } : { _id: tid },
-    { ...safeTeacherProjection, hiredAt: 1, terminatedAt: 1 },
-  ).lean();
+  const teacher = await prisma.user.findFirst({
+    where: { id: tid, ...(branchCond ? { AND: [branchCond] } : {}) },
+    select: { ...SAFE_TEACHER_SELECT, hiredAt: true, terminatedAt: true },
+  });
   if (!teacher) throw new ApiError(404, "O'qituvchi topilmadi");
 
   // "Bugun" - mahalliy (Asia/Tashkent) kalendar kuni. Yarim tundan keyin
@@ -865,19 +991,19 @@ export const balanceByTeacher = async (teacherId, { now = new Date() } = {}) => 
   // BUGUNGI KUN SANALMAYDI: u hali tugamagan. 8-avgustda 7 kun ishlangan.
   const elapsedDays = Math.min(totalDays, daysBetween(monthStart.getTime(), today.getTime()));
 
-  const rows = await TeacherSalary.find(
-    { teacher: tid, ...branchFilter(), isDeleted: { $ne: true } },
-    {
-      kind: 1,
-      year: 1,
-      month: 1,
-      expectedAmount: 1,
-      paidAmount: 1,
-      payableDays: 1,
-      workStartDate: 1,
-      workEndDate: 1,
+  const rows = await prisma.teacherSalary.findMany({
+    where: { teacherId: tid, ...branchFilter() },
+    select: {
+      kind: true,
+      year: true,
+      month: true,
+      expectedAmount: true,
+      paidAmount: true,
+      payableDays: true,
+      workStartDate: true,
+      workEndDate: true,
     },
-  ).lean();
+  });
 
   // ── O'TGAN OYLAR QOLDIG'I ──
   // Qator bo'yicha Math.max(0, ...) BILAN emas, SOF ayirma bilan: ortiqcha
@@ -977,7 +1103,7 @@ export const balanceByTeacher = async (teacherId, { now = new Date() } = {}) => 
     : null;
 
   return {
-    teacher,
+    teacher: withLegacyId(teacher),
     asOf: today,
     year,
     month,
@@ -1004,16 +1130,22 @@ export const balanceByTeacher = async (teacherId, { now = new Date() } = {}) => 
 // Majburiyatlar: qoldig'i (expected - paid) > 0 bo'lgan maoshlar.
 // month berilmasa - tanlangan yilning BARCHA oylari bo'yicha (har oy alohida qator).
 export const obligations = async ({ groupId, year, month }) => {
-  const filter = { ...branchFilter(), year: Number(year), isDeleted: { $ne: true } };
-  if (month) filter.month = Number(month);
-  if (groupId) filter.group = toObjectId(groupId);
+  const where = { ...branchFilter(), year: Number(year) };
+  if (month) where.month = Number(month);
+  if (groupId) where.groupId = String(groupId);
 
-  const items = await TeacherSalary.find(filter)
-    .populate("teacher", safeTeacherProjection)
-    .populate("group", { name: 1 })
-    .sort({ month: 1, createdAt: -1 });
+  const items = await prisma.teacherSalary.findMany({
+    where,
+    include: {
+      teacher: { select: SAFE_TEACHER_SELECT },
+      group: { select: { id: true, name: true } },
+    },
+    orderBy: [{ month: "asc" }, { createdAt: "desc" }],
+  });
 
-  return items
-    .map((s) => ({ ...s.toJSON(), remaining: Math.max(0, s.expectedAmount - s.paidAmount) }))
-    .filter((s) => s.remaining > 0);
+  return withLegacyIds(
+    items
+      .map((s) => ({ ...s, remaining: Math.max(0, s.expectedAmount - s.paidAmount) }))
+      .filter((s) => s.remaining > 0),
+  );
 };

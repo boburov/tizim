@@ -1,8 +1,5 @@
-import mongoose from "mongoose";
-import TeacherCompensation from "../../../models/teacherCompensation.model.js";
-import TeacherSalary from "../../../models/teacherSalary.model.js";
-import User from "../../../models/user.model.js";
-import { APPROVAL_KINDS } from "../../../models/approval.model.js";
+import prisma from "../../../config/prisma.js";
+import { APPROVAL_KINDS } from "../../../constants/approvals.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -10,6 +7,7 @@ import { toUtcMidnight, localTodayMidnight } from "../../../helpers/attendance.h
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { resolveBranchForWrite } from "../../../helpers/branchContext.helper.js";
 import { assertNotSelfSalary } from "../../../helpers/selfSalary.guard.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import * as teacherSalaryService from "./teacherSalary.service.js";
 
 // O'QITUVCHINING STANDART MAOSH STAVKASI - servis qatlami.
@@ -18,12 +16,28 @@ import * as teacherSalaryService from "./teacherSalary.service.js";
 // eskisini yopib (effectiveTo) yangisini ochadi. Shu tufayli "martda oshirdik"
 // yanvar maoshini qayta yozib yubormaydi - o'tgan oy recalc bo'lsa ham o'sha
 // oyda amal qilgan stavkani topadi.
+//
+// ═════════════════════════════════════════════════════════════════
+// MONGO → PRISMA
+//
+//   { teacher: id }        → { teacherId: id }
+//   doc.save()             → prisma.teacherCompensation.update(...)
+//   doc.softDelete(by)     → update({ isDeleted, deletedAt, deletedBy })
+//   toObjectId(id)         → String(id)  (kalit oddiy 24-hex satr)
+//
+// ATOMIKLIK - HAQIQIY YAXSHILANISH:
+// `setCompensation` IKKI yozuv qiladi (eskisini yopish + yangisini ochish).
+// Mongo variantida ular alohida edi: ikkinchisi yiqilsa o'qituvchi
+// STAVKASIZ qolardi (eskisi yopilgan, yangisi yo'q) va maoshi jimgina
+// 0 ga tushardi. Endi ikkalasi bitta `$transaction` ichida - yo ikkalasi,
+// yo hech biri.
+//
+// QAYTA HISOB (recomputeFrom) ATAYLAB TRANZAKSIYADAN TASHQARIDA: u o'nlab
+// oyni aylanadi va uzoq davom etadi; tranzaksiya ichiga solish qatorlarni
+// keraksiz uzoq qulflab turardi.
+// ═════════════════════════════════════════════════════════════════
 
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
-  return new mongoose.Types.ObjectId(String(id));
-};
+const actorId = (u) => u?.id || u?._id || null;
 
 /**
  * STAVKA DAVRLARI KESISHMASLIGI KERAK.
@@ -40,14 +54,14 @@ const toObjectId = (id) => {
  * (assertPeriodInvariants) - stavka davrlari ham xuddi shunday himoyalanadi.
  */
 const assertNoOverlap = async (teacherId, candidate, excludeId = null) => {
-  const rows = await TeacherCompensation.find(
-    {
-      teacher: toObjectId(teacherId),
-      isDeleted: { $ne: true },
-      ...(excludeId ? { _id: { $ne: toObjectId(excludeId) } } : {}),
+  const rows = await prisma.teacherCompensation.findMany({
+    where: {
+      teacherId: String(teacherId),
+      isDeleted: false,
+      ...(excludeId ? { id: { not: String(excludeId) } } : {}),
     },
-    { effectiveFrom: 1, effectiveTo: 1 },
-  ).lean();
+    select: { effectiveFrom: true, effectiveTo: true },
+  });
 
   assertPeriodInvariants(
     { startDate: candidate.effectiveFrom, endDate: candidate.effectiveTo || null },
@@ -57,7 +71,17 @@ const assertNoOverlap = async (teacherId, candidate, excludeId = null) => {
 };
 
 const assertTeacher = async (teacherId) => {
-  const user = await User.findById(toObjectId(teacherId));
+  const user = await prisma.user.findUnique({
+    where: { id: String(teacherId) },
+    select: {
+      id: true,
+      role: true,
+      isDeleted: true,
+      hiredAt: true,
+      firstName: true,
+      lastName: true,
+    },
+  });
   if (!user || user.isDeleted) throw new ApiError(404, "O'qituvchi topilmadi");
   if (user.role !== ROLES.TEACHER) {
     throw new ApiError(400, "Faqat o'qituvchiga maosh stavkasi belgilanadi");
@@ -67,31 +91,26 @@ const assertTeacher = async (teacherId) => {
 
 /** O'qituvchining barcha stavka tarixi (yangisidan eskisiga). */
 export const listByTeacher = async (teacherId) => {
-  const rows = await TeacherCompensation.find({
-    teacher: toObjectId(teacherId),
-    isDeleted: { $ne: true },
-  })
-    .sort({ effectiveFrom: -1 })
-    .lean();
-  return rows;
+  const rows = await prisma.teacherCompensation.findMany({
+    where: { teacherId: String(teacherId), isDeleted: false },
+    orderBy: { effectiveFrom: "desc" },
+  });
+  return withLegacyIds(rows);
 };
 
 /** Berilgan sanada (default - bugun) amal qilgan stavka. */
 export const getActive = async (teacherId, onDate = null) => {
   const t = (onDate ? toUtcMidnight(onDate) : localTodayMidnight()).getTime();
-  const rows = await TeacherCompensation.find({
-    teacher: toObjectId(teacherId),
-    isDeleted: { $ne: true },
-  })
-    .sort({ effectiveFrom: -1 })
-    .lean();
-  return (
-    rows.find((r) => {
-      const s = toUtcMidnight(r.effectiveFrom).getTime();
-      const e = r.effectiveTo ? toUtcMidnight(r.effectiveTo).getTime() : Infinity;
-      return s <= t && t < e;
-    }) || null
-  );
+  const rows = await prisma.teacherCompensation.findMany({
+    where: { teacherId: String(teacherId), isDeleted: false },
+    orderBy: { effectiveFrom: "desc" },
+  });
+  const found = rows.find((r) => {
+    const s = toUtcMidnight(r.effectiveFrom).getTime();
+    const e = r.effectiveTo ? toUtcMidnight(r.effectiveTo).getTime() : Infinity;
+    return s <= t && t < e;
+  });
+  return found ? withLegacyId(found) : null;
 };
 
 /**
@@ -108,7 +127,7 @@ export const setCompensation = async (body, currentUser) => {
   // O'ZIGA O'ZI STAVKA QO'YISH TAQIQI (helpers/selfSalary.guard.js).
   // Bu funksiya ishga olish oqimidan (createStaff) ham chaqiriladi, lekin
   // u yerda yangi yaratilgan xodim chaqiruvchining o'zi bo'la olmaydi.
-  assertNotSelfSalary(currentUser, teacher._id);
+  assertNotSelfSalary(currentUser, teacher.id);
   const from = toUtcMidnight(body.effectiveFrom || localTodayMidnight());
 
   // Ishga olingan sanadan oldin stavka bo'la olmaydi.
@@ -121,10 +140,9 @@ export const setCompensation = async (body, currentUser) => {
 
   const branchId = await resolveBranchForWrite(currentUser, body.branchId ?? null);
 
-  const open = await TeacherCompensation.findOne({
-    teacher: teacher._id,
-    effectiveTo: null,
-    isDeleted: { $ne: true },
+  const open = await prisma.teacherCompensation.findFirst({
+    where: { teacherId: teacher.id, effectiveTo: null, isDeleted: false },
+    select: { id: true, effectiveFrom: true },
   });
 
   if (open) {
@@ -139,41 +157,46 @@ export const setCompensation = async (body, currentUser) => {
 
   // KESISHUV TEKSHIRUVI HECH NARSA O'ZGARTIRILMASDAN OLDIN.
   //
-  // Ochiq davr `from` da yopilishi KERAK, lekin uni oldin saqlab qo'yib
-  // keyin tekshirsak va tekshiruv yiqilsa - o'qituvchi STAVKASIZ qolardi
-  // (eskisi yopilgan, yangisi yaratilmagan). Shuning uchun ochiq davr
-  // ro'yxatdan chiqarilib, uning YOPILGAN holati qo'lda qo'shiladi.
-  const openId = open?._id || null;
+  // Ochiq davr `from` da yopilishi KERAK, lekin uni tekshiruvga qo'shib
+  // yuborsak "o'zi bilan o'zi kesishdi" degan yolg'on xato chiqardi -
+  // shuning uchun u ro'yxatdan chiqariladi (excludeId).
+  const openId = open?.id || null;
   await assertNoOverlap(
-    teacher._id,
+    teacher.id,
     { effectiveFrom: from, effectiveTo: null },
     openId,
   );
 
-  if (open) {
-    open.effectiveTo = from;
-    open.updatedBy = currentUser?._id || null;
-    await open.save();
-  }
-
-  const created = await TeacherCompensation.create({
-    teacher: teacher._id,
-    branchId,
-    effectiveFrom: from,
-    effectiveTo: null,
-    baseType: body.baseType || "none",
-    baseAmount: Number(body.baseAmount) || 0,
-    variableType: body.variableType || "none",
-    variableRate: Number(body.variableRate) || 0,
-    percentBase: body.percentBase || "billed",
-    note: body.note || "",
-    createdBy: currentUser?._id || null,
+  // Ikkala yozuv BITTA tranzaksiyada: eskisi yopilib yangisi ochilmay
+  // qolgan "stavkasiz o'qituvchi" holati endi mumkin emas.
+  const created = await prisma.$transaction(async (tx) => {
+    if (open) {
+      await tx.teacherCompensation.update({
+        where: { id: open.id },
+        data: { effectiveTo: from, updatedById: actorId(currentUser) },
+      });
+    }
+    return tx.teacherCompensation.create({
+      data: {
+        teacherId: teacher.id,
+        branchId,
+        effectiveFrom: from,
+        effectiveTo: null,
+        baseType: body.baseType || "none",
+        baseAmount: Number(body.baseAmount) || 0,
+        variableType: body.variableType || "none",
+        variableRate: Number(body.variableRate) || 0,
+        percentBase: body.percentBase || "billed",
+        note: body.note || "",
+        createdById: actorId(currentUser),
+      },
+    });
   });
 
   // Natijaga qayta hisob xulosasini biriktiramiz - UI "3 oy yangilandi,
   // 2 oy to'langani uchun o'zgarmadi" deb ko'rsatadi.
-  const recompute = await recomputeFrom(teacher._id, from);
-  const result = created.toObject();
+  const recompute = await recomputeFrom(teacher.id, from);
+  const result = withLegacyId(created);
   result.recompute = recompute;
   return result;
 };
@@ -184,37 +207,51 @@ export const setCompensation = async (body, currentUser) => {
  * setCompensation orqali bo'lishi kerak, aks holda tarix yo'qoladi.
  */
 export const amendCompensation = async (id, patch, currentUser) => {
-  const doc = await TeacherCompensation.findById(toObjectId(id));
+  const doc = await prisma.teacherCompensation.findUnique({
+    where: { id: String(id) },
+  });
   if (!doc || doc.isDeleted) throw new ApiError(404, "Maosh stavkasi topilmadi");
   // Tuzatish ham stavkani o'zgartiradi - bir xil taqiq.
-  assertNotSelfSalary(currentUser, doc.teacher);
+  assertNotSelfSalary(currentUser, doc.teacherId);
 
   const before = toUtcMidnight(doc.effectiveFrom);
-  if (patch.effectiveFrom !== undefined) doc.effectiveFrom = toUtcMidnight(patch.effectiveFrom);
-  if (patch.baseType !== undefined) doc.baseType = patch.baseType;
-  if (patch.baseAmount !== undefined) doc.baseAmount = Number(patch.baseAmount) || 0;
-  if (patch.variableType !== undefined) doc.variableType = patch.variableType;
-  if (patch.variableRate !== undefined) doc.variableRate = Number(patch.variableRate) || 0;
-  if (patch.percentBase !== undefined) doc.percentBase = patch.percentBase;
-  if (patch.branchId !== undefined) doc.branchId = patch.branchId || null;
-  if (patch.note !== undefined) doc.note = patch.note;
-  doc.updatedBy = currentUser?._id || null;
+
+  // Mongoose hujjatni joyida mutatsiya qilardi va tekshiruv mutatsiyadan
+  // KEYIN, `save()` dan OLDIN ishlardi. Prisma'da yozuv o'zgarmasdan
+  // turadi, shuning uchun "keyingi holat" alohida hisoblanadi va
+  // tekshiruv aynan o'sha holat ustida bajariladi.
+  const data = { updatedById: actorId(currentUser) };
+  if (patch.effectiveFrom !== undefined) data.effectiveFrom = toUtcMidnight(patch.effectiveFrom);
+  if (patch.baseType !== undefined) data.baseType = patch.baseType;
+  if (patch.baseAmount !== undefined) data.baseAmount = Number(patch.baseAmount) || 0;
+  if (patch.variableType !== undefined) data.variableType = patch.variableType;
+  if (patch.variableRate !== undefined) data.variableRate = Number(patch.variableRate) || 0;
+  if (patch.percentBase !== undefined) data.percentBase = patch.percentBase;
+  if (patch.branchId !== undefined) data.branchId = patch.branchId || null;
+  if (patch.note !== undefined) data.note = patch.note;
+
+  const nextFrom = data.effectiveFrom ?? doc.effectiveFrom;
 
   // KESISHUV QO'RIQCHISI - aynan shu yerda yo'q edi.
   // effectiveFrom orqaga surilsa, yopilgan oldingi davr ustiga tushib
   // qolardi va o'sha oy maoshi IKKI BAROBAR hisoblanardi.
   await assertNoOverlap(
-    doc.teacher,
-    { effectiveFrom: doc.effectiveFrom, effectiveTo: doc.effectiveTo },
-    doc._id,
+    doc.teacherId,
+    { effectiveFrom: nextFrom, effectiveTo: doc.effectiveTo },
+    doc.id,
   );
 
-  await doc.save();
+  const saved = await prisma.teacherCompensation.update({
+    where: { id: doc.id },
+    data,
+  });
 
   // Sana orqaga surilgan bo'lsa - eskiroq nuqtadan qayta hisoblaymiz.
-  const from = new Date(Math.min(before.getTime(), toUtcMidnight(doc.effectiveFrom).getTime()));
-  await recomputeFrom(doc.teacher, from);
-  return doc;
+  const from = new Date(
+    Math.min(before.getTime(), toUtcMidnight(saved.effectiveFrom).getTime()),
+  );
+  await recomputeFrom(doc.teacherId, from);
+  return withLegacyId(saved);
 };
 
 /**
@@ -222,24 +259,41 @@ export const amendCompensation = async (id, patch, currentUser) => {
  * oldingisi qayta ochiladi, aks holda "stavkasiz teshik" qolardi.
  */
 export const removeCompensation = async (id, currentUser) => {
-  const doc = await TeacherCompensation.findById(toObjectId(id));
+  const doc = await prisma.teacherCompensation.findUnique({
+    where: { id: String(id) },
+  });
   if (!doc || doc.isDeleted) throw new ApiError(404, "Maosh stavkasi topilmadi");
 
   const from = toUtcMidnight(doc.effectiveFrom);
-  await doc.softDelete(currentUser?._id);
 
-  const prev = await TeacherCompensation.findOne({
-    teacher: doc.teacher,
-    isDeleted: { $ne: true },
-    effectiveTo: from,
+  // O'chirish va oldingi davrni qayta ochish BIRGA bajarilishi shart:
+  // ikkinchisi yiqilsa o'qituvchida stavkasiz teshik qolardi.
+  await prisma.$transaction(async (tx) => {
+    await tx.teacherCompensation.update({
+      where: { id: doc.id },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: actorId(currentUser),
+      },
+    });
+
+    const prev = await tx.teacherCompensation.findFirst({
+      where: { teacherId: doc.teacherId, isDeleted: false, effectiveTo: from },
+      select: { id: true },
+    });
+    if (prev) {
+      await tx.teacherCompensation.update({
+        where: { id: prev.id },
+        data: {
+          effectiveTo: doc.effectiveTo || null,
+          updatedById: actorId(currentUser),
+        },
+      });
+    }
   });
-  if (prev) {
-    prev.effectiveTo = doc.effectiveTo || null;
-    prev.updatedBy = currentUser?._id || null;
-    await prev.save();
-  }
 
-  await recomputeFrom(doc.teacher, from);
+  await recomputeFrom(doc.teacherId, from);
   return { ok: true };
 };
 
@@ -266,10 +320,13 @@ export const recomputeFrom = async (teacherId, fromDate) => {
 
   while (year < endYear || (year === endYear && month <= endMonth)) {
     try {
-      const rows = await TeacherSalary.find(
-        { teacher: teacherId, year, month },
-        { _id: 1, kind: 1, status: 1, paidAmount: 1 },
-      ).lean();
+      // `isDeleted` filtri YO'Q - TeacherSalary'da bunday ustun umuman
+      // mavjud emas (u qayta hisoblanadigan hosila jadval, o'chirilmaydi).
+      // eslint-disable-next-line no-await-in-loop
+      const rows = await prisma.teacherSalary.findMany({
+        where: { teacherId: String(teacherId), year, month },
+        select: { id: true, kind: true, status: true, paidAmount: true },
+      });
 
       for (const r of rows) {
         if (r.status === "paid" && r.paidAmount > 0) lockedRows += 1;
@@ -279,12 +336,14 @@ export const recomputeFrom = async (teacherId, fromDate) => {
       // (yopilgan) oylar qayta ochilmasligi kerak. Boshqa chaqiruvchilar
       // (o'quvchi qo'shildi, narx o'zgardi) qulfsiz chaqiradi, chunki u
       // yerda maoshning HAQIQIY bazasi o'zgargan.
+      // eslint-disable-next-line no-await-in-loop
       await teacherSalaryService.recalcBaseForTeacherMonth(teacherId, year, month, {
         lockPaid: true,
       });
       for (const r of rows) {
         if (r.kind !== "group") continue;
-        await teacherSalaryService.recalc(r._id, { lockPaid: true });
+        // eslint-disable-next-line no-await-in-loop
+        await teacherSalaryService.recalc(r.id, { lockPaid: true });
       }
       months += 1;
     } catch (err) {
@@ -306,7 +365,7 @@ export const recomputeFrom = async (teacherId, fromDate) => {
 const subjectKeyFor = (teacher) => `teacher_compensation:${String(teacher)}`;
 
 /**
- * Stavka o'zgarishini TASDIQQA yuboradi (hujjat yaratmaydi).
+ * Stavka o'zgarishini TASDIQQA yuboradi (yozuv yaratmaydi).
  * To'liq tekshiruvlar ATAYLAB bajarish paytida qayta ishlaydi - so'rov va
  * tasdiq orasida holat o'zgargan bo'lishi mumkin.
  */
@@ -316,7 +375,7 @@ export const requestSet = async (body, currentUser) => {
   );
   const teacher = await assertTeacher(body.teacher);
   // So'rov ham yaratilmaydi - qarang teacherGroupPeriod.requestSalaryTerms.
-  assertNotSelfSalary(currentUser, teacher._id);
+  assertNotSelfSalary(currentUser, teacher.id);
   const branchId = await resolveBranchForWrite(currentUser, body.branchId ?? null);
 
   return approvalService.createRequest({
@@ -325,7 +384,7 @@ export const requestSet = async (body, currentUser) => {
     payload: {
       op: body.op || "set",
       compensationId: body.compensationId ? String(body.compensationId) : undefined,
-      teacher: String(teacher._id),
+      teacher: String(teacher.id),
       branchId: branchId ? String(branchId) : null,
       effectiveFrom: body.effectiveFrom,
       baseType: body.baseType,
@@ -335,7 +394,7 @@ export const requestSet = async (body, currentUser) => {
       percentBase: body.percentBase,
       note: body.note,
     },
-    subjectKey: subjectKeyFor(teacher._id),
+    subjectKey: subjectKeyFor(teacher.id),
     subjectName: [teacher.firstName, teacher.lastName].filter(Boolean).join(" "),
     contextName: "Maosh stavkasi",
     requestNote: body.requestNote,
@@ -347,7 +406,10 @@ export const requestSet = async (body, currentUser) => {
 export const executeApprovedCompensation = async (approval) => {
   const p = approval?.payload || {};
   // Tarixda so'rovchi ko'rinsin (tasdiqlovchi emas).
-  const actor = { _id: approval?.requestedBy || null };
+  // Approval moduli hali ko'chirilmagan - `requestedById`/`requestedBy`
+  // ikkalasi ham bo'lishi mumkin.
+  const requesterId = approval?.requestedById || approval?.requestedBy || null;
+  const actor = { id: requesterId, _id: requesterId };
 
   if (p.op === "amend") {
     if (!p.compensationId) throw new ApiError(400, "So'rovda stavka identifikatori yo'q");

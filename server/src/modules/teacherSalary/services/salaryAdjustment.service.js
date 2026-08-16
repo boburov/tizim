@@ -1,8 +1,6 @@
-import mongoose from "mongoose";
-import TeacherSalary from "../../../models/teacherSalary.model.js";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import { ROLES } from "../../../constants/roles.js";
 import {
   resolveBranchForWrite,
@@ -24,14 +22,19 @@ import { localTodayMidnight } from "../../../helpers/attendance.helper.js";
 // Mukofot ODATDAGI maosh qatori kabi ishlaydi: unga SalaryTransaction bilan
 // to'lov qilinadi, tasdiq limiti va barcha hisobotlar avtomatik qo'llanadi.
 
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
-  return new mongoose.Types.ObjectId(String(id));
-};
+// MONGO → PRISMA
+//   { teacher: id } → { teacherId: id },  { group } → { groupId }
+//   `isDeleted: { $ne: true }` OLIB TASHLANDI - TeacherSalary'da bunday
+//   ustun UMUMAN YO'Q (hosila jadval). Mongoose modelida ham softDelete
+//   plagini yo'q edi, ya'ni eski shart hamma qatorga to'g'ri kelardi.
+//   Uni `isDeleted: false` ga aylantirish Prisma'da XATO berardi.
+const actorId = (u) => u?.id || u?._id || null;
 
 const assertTeacher = async (teacherId) => {
-  const user = await User.findById(toObjectId(teacherId));
+  const user = await prisma.user.findUnique({
+    where: { id: String(teacherId) },
+    select: { id: true, role: true, isDeleted: true, homeBranchId: true },
+  });
   if (!user || user.isDeleted) throw new ApiError(404, "O'qituvchi topilmadi");
   if (user.role !== ROLES.TEACHER) {
     throw new ApiError(400, "Faqat o'qituvchiga mukofot/jarima belgilanadi");
@@ -68,9 +71,12 @@ export const create = async (body, currentUser) => {
   let group = null;
   let branchId = null;
   if (body.group) {
-    const grp = await Group.findById(toObjectId(body.group), { _id: 1 }).lean();
+    const grp = await prisma.group.findUnique({
+      where: { id: String(body.group) },
+      select: { id: true },
+    });
     if (!grp) throw new ApiError(404, "Guruh topilmadi");
-    group = grp._id;
+    group = grp.id;
     branchId = await resolveBranchFromGroup(group);
   } else {
     branchId =
@@ -82,25 +88,27 @@ export const create = async (body, currentUser) => {
 
   const expected = kind === "deduction" ? -amount : amount;
 
-  const doc = await TeacherSalary.create({
-    branchId,
-    teacher: teacher._id,
-    group,
-    kind,
-    year,
-    month,
-    expectedAmount: expected,
-    baseEarnings: expected,
-    prorationFactor: 1,
-    payableDays: 0,
-    totalDays: 0,
-    status: deriveStatus(0, expected),
-    source: "manual",
-    reason: String(body.reason).trim(),
-    approvalId: body.approvalId || null,
-    createdBy: currentUser?._id || null,
+  const doc = await prisma.teacherSalary.create({
+    data: {
+      branchId,
+      teacherId: teacher.id,
+      groupId: group,
+      kind,
+      year,
+      month,
+      expectedAmount: expected,
+      baseEarnings: expected,
+      prorationFactor: 1,
+      payableDays: 0,
+      totalDays: 0,
+      status: deriveStatus(0, expected),
+      source: "manual",
+      reason: String(body.reason).trim(),
+      approvalId: body.approvalId ? String(body.approvalId) : null,
+      createdById: actorId(currentUser),
+    },
   });
-  return doc;
+  return withLegacyId(doc);
 };
 
 /**
@@ -128,10 +136,12 @@ export const settleBalance = async (teacherId, body, currentUser) => {
     throw new ApiError(400, "Sabab ko'rsatilishi shart");
   }
 
-  const rows = await TeacherSalary.find(
-    { teacher: teacher._id, isDeleted: { $ne: true } },
-    { expectedAmount: 1, paidAmount: 1 },
-  ).lean();
+  // XOM QATORLAR (aggregate EMAS): bo'sh natijada `_sum` NULL qaytaradi va
+  // `balance <= 0` sharti `false` bo'lib, qo'riqchi chetlab o'tilardi.
+  const rows = await prisma.teacherSalary.findMany({
+    where: { teacherId: teacher.id },
+    select: { expectedAmount: true, paidAmount: true },
+  });
 
   // NET balans (har qator alohida emas): mavjud jarima/mukofotlar ham
   // hisobga olinadi, aks holda ilgari yozilgan jarima ikki marta sanalardi.
@@ -154,7 +164,7 @@ export const settleBalance = async (teacherId, body, currentUser) => {
 
   const doc = await create(
     {
-      teacher: teacher._id,
+      teacher: teacher.id,
       kind: "deduction",
       amount: balance,
       year,
@@ -174,7 +184,7 @@ export const settleBalance = async (teacherId, body, currentUser) => {
  * aks holda SalaryTransaction yetim qolib chiqim hisoboti buzilardi.
  */
 export const remove = async (id, currentUser) => {
-  const doc = await TeacherSalary.findById(toObjectId(id));
+  const doc = await prisma.teacherSalary.findUnique({ where: { id: String(id) } });
   if (!doc) throw new ApiError(404, "Yozuv topilmadi");
   if (doc.kind !== "bonus" && doc.kind !== "deduction") {
     throw new ApiError(400, "Faqat mukofot yoki jarima o'chiriladi");
@@ -185,17 +195,20 @@ export const remove = async (id, currentUser) => {
       "Bu yozuv bo'yicha to'lov qilingan. Avval to'lovni bekor qiling.",
     );
   }
-  await TeacherSalary.deleteOne({ _id: doc._id });
-  return { ok: true, deletedBy: currentUser?._id || null };
+  await prisma.teacherSalary.delete({ where: { id: doc.id } });
+  return { ok: true, deletedBy: actorId(currentUser) };
 };
 
 /** O'qituvchining bir oydagi mukofot/jarimalari. */
 export const listByTeacherMonth = async (teacherId, year, month) =>
-  TeacherSalary.find({
-    teacher: toObjectId(teacherId),
-    year: Number(year),
-    month: Number(month),
-    kind: { $in: ["bonus", "deduction"] },
-  })
-    .sort({ createdAt: -1 })
-    .lean();
+  withLegacyIds(
+    await prisma.teacherSalary.findMany({
+      where: {
+        teacherId: String(teacherId),
+        year: Number(year),
+        month: Number(month),
+        kind: { in: ["bonus", "deduction"] },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  );

@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import Expense from "../../../models/expense.model.js";
 import ExpenseCategory from "../../../models/expenseCategory.model.js";
-import { APPROVAL_KINDS } from "../../../models/approval.model.js";
+import { APPROVAL_KINDS } from "../../../constants/approvals.js";
 import ApiError from "../../../utils/ApiError.js";
 import {
   branchFilter,

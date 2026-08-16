@@ -1,7 +1,4 @@
-import mongoose from "mongoose";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
+import prisma from "../../../config/prisma.js";
 import {
   toUtcMidnight,
   getClassDaysInRange,
@@ -16,11 +13,27 @@ import {
 //
 // Barcha bazalar SEGMENT oynasi bo'yicha hisoblanadi (oy emas) - stavka oy
 // o'rtasida o'zgarsa har segment o'z bazasini oladi.
+//
+// ─────────────────────────────────────────────────────────────────
+// MONGO → PRISMA: ARIFMETIKA O'ZGARMADI
+//
+// Bu fayldagi hisob-kitob (kunlar/oy ulushi, daqiqalar, yig'indilar)
+// TO'LIQ o'zgarishsiz qoldi - faqat ma'lumot olish usuli almashdi:
+//
+//   GroupMembership.find({ group })  → findMany({ where: { groupId } })
+//   .aggregate([{ $group: $sum }])   → aggregate({ _sum: {...} })
+//
+// PUL TURI: sxemadagi barcha summa ustunlari `Float` (Mongo'da ham
+// `float64` edi), ya'ni Prisma oddiy JS `number` qaytaradi. Hech qanday
+// Decimal/BigInt konvertatsiyasi YO'Q va natija bit-bit bir xil.
+// (Decimal(14,2) ga o'tish alohida ish - qarang MIGRATION.md §4.)
+// ─────────────────────────────────────────────────────────────────
 
 const DAY = 24 * 60 * 60 * 1000;
 
-const toObjectId = (id) =>
-  id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(String(id));
+// Guruh hujjatining kaliti. `groupDoc` chaqiruvchidan keladi: ko'chirilgan
+// servis Prisma obyektini (`id`), ko'chirilmagani esa hali `_id` beradi.
+const groupIdOf = (g) => g?.id ?? g?._id ?? null;
 
 const daysInMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
 
@@ -49,15 +62,15 @@ export const computeStudentUnits = async ({ group, year, month, segStart, segEnd
   const hi = Math.min(monthEndExcl, segEndExcl.getTime());
   if (hi <= lo) return { units: 0, headcount: 0 };
 
-  const memberships = await GroupMembership.find(
-    {
-      group: toObjectId(group),
-      isDeleted: { $ne: true },
-      joinedAt: { $lt: new Date(hi) },
-      $or: [{ leftAt: null }, { leftAt: { $gt: new Date(lo) } }],
+  const memberships = await prisma.groupMembership.findMany({
+    where: {
+      groupId: String(group),
+      isDeleted: false,
+      joinedAt: { lt: new Date(hi) },
+      OR: [{ leftAt: null }, { leftAt: { gt: new Date(lo) } }],
     },
-    { student: 1, joinedAt: 1, leftAt: 1 },
-  ).lean();
+    select: { studentId: true, joinedAt: true, leftAt: true },
+  });
 
   const total = daysInMonth(year, month);
   let units = 0;
@@ -69,7 +82,7 @@ export const computeStudentUnits = async ({ group, year, month, segStart, segEnd
     const days = overlapDays(lo, hi, mStart, mEndExcl);
     if (days <= 0) continue;
     units += days / total;
-    students.add(String(m.student));
+    students.add(String(m.studentId));
   }
   return { units, headcount: students.size };
 };
@@ -93,9 +106,13 @@ export const computeLessonHours = async ({ groupDoc, segStart, segEndExcl }) => 
   const to = new Date(segEndExcl.getTime() - DAY);
   if (to.getTime() < from.getTime()) return { hours: 0, lessons: 0 };
 
+  // DIQQAT - `groupDoc.schedule`: Prisma'da jadval endi RELATION
+  // (GroupScheduleItem[]). Chaqiruvchi uni ochiq `include` qilmasa
+  // massiv bo'sh keladi va getClassDaysInRange() 0 dars qaytaradi -
+  // ya'ni per_lesson_hour maoshi JIMGINA nolga tushardi.
   const [holidaySet, cancelledSet] = await Promise.all([
     holidayKeySetForRange(from, to),
-    loadCancelledLessonKeys(groupDoc._id, from, to),
+    loadCancelledLessonKeys(groupIdOf(groupDoc), from, to),
   ]);
   const sessions = getClassDaysInRange(groupDoc, from, to, holidaySet).filter(
     (s) => !isCancelledSession(cancelledSet, s),
@@ -122,19 +139,31 @@ export const computeLessonHours = async ({ groupDoc, segStart, segEndExcl }) => 
  * natija allaqachon filial ichida.
  */
 export const computeGroupRevenueBase = async (group, year, month, base = "billed") => {
-  const match = { group: toObjectId(group), year, month, isDeleted: { $ne: true } };
+  const scope = { groupId: String(group), year, month };
+
   if (base === "collected") {
-    const agg = await PaymentTransaction.aggregate([
-      { $match: match },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]);
-    return agg.length ? agg[0].total : 0;
+    // PaymentTransaction'da `isDeleted` HAQIQATAN bor - bekor qilingan
+    // to'lov tushumdan chiqarilishi shart.
+    const agg = await prisma.paymentTransaction.aggregate({
+      where: { ...scope, isDeleted: false },
+      _sum: { amount: true },
+    });
+    // Qator topilmasa Prisma `null` beradi (Mongo bo'sh massiv berardi) -
+    // ikkalasida ham natija 0.
+    return agg._sum.amount ?? 0;
   }
-  const agg = await StudentPayment.aggregate([
-    { $match: match },
-    { $group: { _id: null, total: { $sum: "$expectedAmount" } } },
-  ]);
-  return agg.length ? agg[0].total : 0;
+
+  // `isDeleted` ATAYLAB YO'Q: StudentPayment'da bunday ustun umuman
+  // mavjud emas (prisma/schema.prisma) va Mongoose modelida ham
+  // softDelete plagini yo'q edi - ya'ni eski `{ $ne: true }` sharti
+  // HAMMA qatorga to'g'ri kelardi. Bu yerga `isDeleted: false` yozish
+  // Prisma'da xato berardi, filtrni "tuzatib" qo'yish esa hisoblangan
+  // tushumni o'zgartirib yuborardi.
+  const agg = await prisma.studentPayment.aggregate({
+    where: scope,
+    _sum: { expectedAmount: true },
+  });
+  return agg._sum.expectedAmount ?? 0;
 };
 
 /** Segment oy ichida qancha ulush egallaydi (per_group / percent proratsiyasi uchun). */

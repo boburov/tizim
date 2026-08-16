@@ -1,5 +1,5 @@
 import prisma from "../../../config/prisma.js";
-import { APPROVAL_KINDS } from "../../../models/approval.model.js";
+import { APPROVAL_KINDS } from "../../../constants/approvals.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";

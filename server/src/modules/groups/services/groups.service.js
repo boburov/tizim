@@ -958,7 +958,7 @@ export const requestBackdate = async (groupId, studentId, body, currentUser) => 
   const approvalService = await import(
     "../../expenseApprovals/services/expenseApproval.service.js"
   );
-  const { APPROVAL_KINDS } = await import("../../../models/approval.model.js");
+  const { APPROVAL_KINDS } = await import("../../../constants/approvals.js");
 
   const group = await ensureGroup(groupId);
   const student = await ensureStudent(studentId);

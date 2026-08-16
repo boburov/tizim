@@ -1,18 +1,17 @@
-import OpeningBalance, {
-  OPENING_MAX_AMOUNT,
-} from "../../../models/openingBalance.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import TeacherSalary from "../../../models/teacherSalary.model.js";
-import StaffPayrollAdjustment from "../../../models/staffPayrollAdjustment.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
+import {
+  OPENING_MAX_AMOUNT,
+  OPENING_PENDING,
+} from "../../../constants/openingBalance.js";
 import { localTodayMidnight, toUtcMidnight } from "../../../helpers/attendance.helper.js";
 import {
   resolveBranchFromGroup,
   branchFilter,
 } from "../../../helpers/branchContext.helper.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import * as depositService from "../../deposits/services/deposit.service.js";
 import * as staffPayrollService from "../../staffPayroll/services/staffPayroll.service.js";
 
@@ -21,7 +20,7 @@ import * as staffPayrollService from "../../staffPayroll/services/staffPayroll.s
  *
  * ─── ASOSIY QOIDA ───
  * Bu servis YANGI balans tizimi qurmaydi. U boshlang'ich summani mavjud
- * hujjatlarga aylantiradi (depozit / oylik plan / maosh qatori), shundan
+ * yozuvlarga aylantiradi (depozit / oylik plan / maosh qatori), shundan
  * keyin kundalik oqim - to'lov qabul qilish, avto-qoplash, qarzdorlar
  * ro'yxati - O'ZGARISHSIZ ishlaydi. Ikkinchi "balans" jadvali bo'lganida
  * to'lov kelganda bittasi kamayib, ikkinchisi eskirib qolardi.
@@ -32,8 +31,13 @@ import * as staffPayrollService from "../../staffPayroll/services/staffPayroll.s
  * Barcha rollar uchun bir xil. Eski yozuvlar boshqa qoidada
  * (signConvention: "flow") - o'qishda partyAmount() ishlatiladi.
  *
+ * ISHORA - BIZNES MA'NOSI. Migratsiyada u NORMALLASHTIRILMADI: o'qituvchining
+ * -3 000 000 qoldig'i manfiy bo'lib qoladi. Uni musbatga aylantirish
+ * "o'qituvchi markazga qarz" ni "markaz o'qituvchiga qarz" ga o'girib
+ * yuborardi.
+ *
  * ─── XATOLIK YO'NALISHI (eng muhim qaror) ───
- * Langar hujjat (OpeningBalance) materializatsiyadan OLDIN yoziladi.
+ * Langar yozuv (OpeningBalance) materializatsiyadan OLDIN yoziladi.
  * Jarayon o'rtada uzilsa natija: langar bor, pul yozilmagan.
  *   • Qayta import PULNI IKKI MARTA YOZMAYDI (unique indeks bloklaydi).
  *   • Yozilmay qolgani `materializedAt: null` bilan KO'RINIB turadi va
@@ -41,6 +45,23 @@ import * as staffPayrollService from "../../staffPayroll/services/staffPayroll.s
  * Teskari tartibda (avval pul, keyin langar) uzilish IKKI BARAVAR
  * YOZISHGA olib kelardi - va buni keyin topib bo'lmasdi. Kam yozib
  * ogohlantirish, ko'p yozib jim turishdan xavfsizroq.
+ *
+ * ═════════════════════════════════════════════════════════════════
+ * MONGO → PRISMA
+ *   { user: id } → { userId: id },  { group: id } → { groupId: id }
+ *   err.code 11000 → err.code "P2002"
+ *   pendingReason: ""  →  pendingReason: "none"   ← ENG NOZIK NUQTA
+ *
+ * `pendingReason` bazada bo'sh satr, Prisma klientida esa `"none"`
+ * (`enum OpeningPendingReason { none @map("") }`). Eski `""` bilan
+ * filtrlash Prisma'da XATO beradi - bu yaxshi, chunki jimgina noto'g'ri
+ * to'plam qaytarmaydi. Qarang: constants/openingBalance.js.
+ *
+ * `create` ATAYLAB `upsert` EMAS: unique indeks (userId) bu importning
+ * butun idempotentlik hikoyasi. `upsert` o'zgarmas moliyaviy yozuvni
+ * jimgina qayta yozib yuborardi; `create` esa P2002 beradi va biz uni
+ * "takror" deb qaytaramiz.
+ * ═════════════════════════════════════════════════════════════════
  */
 
 // Import oldidan ogohlantirish beriladigan chegara (xato emas, ogohlantirish).
@@ -54,6 +75,8 @@ const periodOfDate = (d) => ({
   year: d.getUTCFullYear(),
   month: d.getUTCMonth() + 1,
 });
+
+const actorId = (u) => u?.id || u?._id || null;
 
 /**
  * BOSHLANG'ICH QARZ QAYSI OYGA YOZILADI.
@@ -71,12 +94,11 @@ export const resolveOpeningPeriod = async ({ student, group, joinedAt }) => {
   //    groups.service.js -> ensureFinanceForMembershipRange).
   let anchor = null;
   if (student && group) {
-    const oldest = await StudentPayment.findOne(
-      { student, group },
-      { year: 1, month: 1 },
-    )
-      .sort({ year: 1, month: 1 })
-      .lean();
+    const oldest = await prisma.studentPayment.findFirst({
+      where: { studentId: String(student), groupId: String(group) },
+      select: { year: true, month: true },
+      orderBy: [{ year: "asc" }, { month: "asc" }],
+    });
     if (oldest) anchor = { year: oldest.year, month: oldest.month };
   }
 
@@ -128,13 +150,21 @@ export const partyAmount = (ob) => {
  * Import ko'rib chiqish bosqichida ishlatiladi (yozishdan oldin ogohlantirish).
  */
 export const existsFor = async (userId) =>
-  Boolean(await OpeningBalance.exists({ user: userId }));
+  Boolean(
+    await prisma.openingBalance.findUnique({
+      where: { userId: String(userId) },
+      select: { id: true },
+    }),
+  );
 
 /** Bir nechta odam uchun birdaniga (import prepare bosqichi - N+1 so'rovsiz). */
 export const existingUserIds = async (userIds) => {
   if (!userIds?.length) return new Set();
-  const rows = await OpeningBalance.find({ user: { $in: userIds } }, { user: 1 }).lean();
-  return new Set(rows.map((r) => String(r.user)));
+  const rows = await prisma.openingBalance.findMany({
+    where: { userId: { in: userIds.map(String) } },
+    select: { userId: true },
+  });
+  return new Set(rows.map((r) => String(r.userId)));
 };
 
 // ─────────────────────────── MATERIALIZATSIYA ───────────────────────────
@@ -150,7 +180,7 @@ const materializeStudentCredit = async (ob, { currentUser }) => {
   const paidAt = periodEnd.getTime() > today.getTime() ? today : periodEnd;
 
   const deposit = await depositService.topup(
-    ob.user,
+    ob.userId,
     {
       amount: ob.amount, // musbat
       method: "cash",
@@ -161,7 +191,7 @@ const materializeStudentCredit = async (ob, { currentUser }) => {
     currentUser,
   );
 
-  const refs = [{ model: "StudentDeposit", docId: deposit._id }];
+  const refs = [{ model: "StudentDeposit", docId: deposit.id }];
   if (deposit.$lastTransactionId) {
     refs.push({ model: "DepositTransaction", docId: deposit.$lastTransactionId });
   }
@@ -173,42 +203,64 @@ const materializeStudentCredit = async (ob, { currentUser }) => {
 // lekin qarzdorlar ro'yxatida va to'lov taqsimotida NORMAL qator kabi ishtirok
 // etadi - ya'ni keyingi to'lov uni birinchi bo'lib yopadi.
 const materializeStudentDebt = async (ob) => {
-  const branchId = ob.branchId || (await resolveBranchFromGroup(ob.group));
+  const branchId = ob.branchId || (await resolveBranchFromGroup(ob.groupId));
   if (!branchId) {
     throw new ApiError(400, "O'quvchi guruhining filiali aniqlanmadi");
   }
 
   const amount = Math.abs(ob.amount);
-  const doc = await StudentPayment.create({
-    branchId,
-    student: ob.user,
-    group: ob.group,
-    membership: null,
-    year: ob.year,
-    month: ob.month,
-    baseFee: amount,
-    prorationFactor: 1,
-    discountApplied: 0,
-    expectedAmount: amount,
-    paidAmount: 0,
-    status: "unpaid",
-    isOpening: true,
-    recalculatedAt: new Date(),
-  });
+
+  // IDEMPOTENTLIK: (studentId, groupId, year, month, isOpening) unique.
+  // `create` P2002 bersa - qator allaqachon bor, ikkinchisini yozmaymiz.
+  let doc;
+  try {
+    doc = await prisma.studentPayment.create({
+      data: {
+        branchId,
+        studentId: ob.userId,
+        groupId: ob.groupId,
+        membershipId: null,
+        year: ob.year,
+        month: ob.month,
+        baseFee: amount,
+        prorationFactor: 1,
+        discountApplied: 0,
+        expectedAmount: amount,
+        paidAmount: 0,
+        status: "unpaid",
+        isOpening: true,
+        recalculatedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    if (err?.code !== "P2002") throw err;
+    doc = await prisma.studentPayment.findUnique({
+      where: {
+        studentId_groupId_year_month_isOpening: {
+          studentId: ob.userId,
+          groupId: ob.groupId,
+          year: ob.year,
+          month: ob.month,
+          isOpening: true,
+        },
+      },
+    });
+    if (!doc) throw err;
+  }
 
   // O'quvchining depozitida pul bo'lsa (avval boshqa import qatori
   // tushirgan bo'lishi mumkin) - yangi qarzni darhol qoplaymiz.
   // Best-effort: qoplanmasa qarz shunchaki ochiq qoladi, buzilish yo'q.
   try {
-    await depositService.autoApply(ob.user);
+    await depositService.autoApply(ob.userId);
   } catch (err) {
     logger.warn(
-      { err: err?.message, student: String(ob.user) },
+      { err: err?.message, student: String(ob.userId) },
       "Boshlang'ich qarzdan keyin depozit avto-qoplash bajarilmadi",
     );
   }
 
-  return [{ model: "StudentPayment", docId: doc._id }];
+  return [{ model: "StudentPayment", docId: doc.id }];
 };
 
 // O'QITUVCHI. Ikkala yo'nalish ham bitta qator: kind="opening",
@@ -220,55 +272,101 @@ const materializeStudentDebt = async (ob) => {
 // ("markaz boshqa tizimdan ko'chib kelganda"): hech qanday avtomatik
 // qayta hisob bu qatorga tegmaydi.
 const materializeTeacher = async (ob) => {
-  // GURUH IXTIYORIY: qoldiq markaz darajasidagi majburiyat (qarang
-  // teacherSalary.model.js pre-validate izohi). Guruh berilmasa filial
-  // o'qituvchining o'z filialidan olinadi.
+  // GURUH IXTIYORIY: qoldiq markaz darajasidagi majburiyat. Guruh
+  // berilmasa filial o'qituvchining o'z filialidan olinadi.
   let branchId = ob.branchId;
-  if (!branchId && ob.group) branchId = await resolveBranchFromGroup(ob.group);
+  if (!branchId && ob.groupId) branchId = await resolveBranchFromGroup(ob.groupId);
   if (!branchId) {
-    const teacher = await User.findById(ob.user, { homeBranchId: 1 }).lean();
+    const teacher = await prisma.user.findUnique({
+      where: { id: ob.userId },
+      select: { homeBranchId: true },
+    });
     branchId = teacher?.homeBranchId || null;
   }
   if (!branchId) throw new ApiError(400, "O'qituvchining filiali aniqlanmadi");
 
+  // ── DUBLIKATDAN HIMOYA - KODDA, CHUNKI BAZADA INDEKS YO'Q ──
+  //
+  // Qisman unique indekslar FAQAT `kind='group'` (groupId IS NOT NULL) va
+  // `kind='base'` (groupId IS NULL) uchun. `kind='opening'` qatorlari
+  // ATAYLAB cheklanmagan (bonus/deduction kabi bir oyda bir nechta
+  // bo'lishi mumkin), ya'ni repairPending() ikki marta ishlasa IKKINCHI
+  // -3 000 000 qatori yozilib, o'qituvchi ikki marta qarzdor bo'lardi.
+  //
+  // Langar (OpeningBalance.userId unique) bu yo'lni to'liq yopmaydi:
+  // repair aynan langar MAVJUD bo'lgan yozuvlar ustida ishlaydi.
+  // Shuning uchun tekshiruv shu yerda ochiq turibdi.
+  const existing = await prisma.teacherSalary.findFirst({
+    where: {
+      teacherId: ob.userId,
+      groupId: ob.groupId || null,
+      year: ob.year,
+      month: ob.month,
+      kind: "opening",
+    },
+    select: { id: true },
+  });
+  if (existing) return [{ model: "TeacherSalary", docId: existing.id }];
+
   // credit → musbat (biz qarzmiz), debt → manfiy (u bizga qarz).
+  // ISHORA SAQLANADI - `Math.abs` bilan "tuzatish" qarzni avansga aylantirardi.
   const expectedAmount =
     ob.kind === "teacher_credit" ? Math.abs(ob.amount) : -Math.abs(ob.amount);
 
-  const doc = await TeacherSalary.create({
-    branchId,
-    teacher: ob.user,
-    group: ob.group || null,
-    year: ob.year,
-    month: ob.month,
-    kind: "opening",
-    expectedAmount,
-    paidAmount: 0,
-    status: "unpaid",
-    isOpening: true,
-    isLocked: true,
-    source: "manual",
-    reason: "Boshlang'ich qoldiq (tizimga o'tishda kiritilgan)",
+  const doc = await prisma.teacherSalary.create({
+    data: {
+      branchId,
+      teacherId: ob.userId,
+      groupId: ob.groupId || null,
+      year: ob.year,
+      month: ob.month,
+      kind: "opening",
+      expectedAmount,
+      paidAmount: 0,
+      status: "unpaid",
+      isOpening: true,
+      isLocked: true,
+      source: "manual",
+      reason: "Boshlang'ich qoldiq (tizimga o'tishda kiritilgan)",
+    },
   });
 
-  return [{ model: "TeacherSalary", docId: doc._id }];
+  return [{ model: "TeacherSalary", docId: doc.id }];
 };
 
 // XODIM. Alohida tuzatish qatori. opening_debt oylikdan katta bo'lsa
 // qoldig'i keyingi oyga ko'chiriladi (staffPayroll.service.js ->
 // carryOverOpeningDebt) - shuning uchun bu yerda hech narsa qirqilmaydi.
 const materializeStaff = async (ob) => {
-  const employee = await User.findById(ob.user, { homeBranchId: 1 }).lean();
-
-  const doc = await StaffPayrollAdjustment.create({
-    employee: ob.user,
-    branchId: ob.branchId || employee?.homeBranchId || null,
-    year: ob.year,
-    month: ob.month,
-    kind: ob.kind === "staff_credit" ? "opening_credit" : "opening_debt",
-    amount: Math.abs(ob.amount),
-    reason: "Boshlang'ich qoldiq (tizimga o'tishda kiritilgan)",
+  const employee = await prisma.user.findUnique({
+    where: { id: ob.userId },
+    select: { homeBranchId: true },
   });
+
+  const kind = ob.kind === "staff_credit" ? "opening_credit" : "opening_debt";
+
+  // Qisman unique indeks BOR: (employeeId, year, month, kind)
+  // WHERE kind IN ('opening_credit','opening_debt') - P2002 ni ushlaymiz.
+  let doc;
+  try {
+    doc = await prisma.staffPayrollAdjustment.create({
+      data: {
+        employeeId: ob.userId,
+        branchId: ob.branchId || employee?.homeBranchId || null,
+        year: ob.year,
+        month: ob.month,
+        kind,
+        amount: Math.abs(ob.amount),
+        reason: "Boshlang'ich qoldiq (tizimga o'tishda kiritilgan)",
+      },
+    });
+  } catch (err) {
+    if (err?.code !== "P2002") throw err;
+    doc = await prisma.staffPayrollAdjustment.findFirst({
+      where: { employeeId: ob.userId, year: ob.year, month: ob.month, kind },
+    });
+    if (!doc) throw err;
+  }
 
   // Oylik qatorini darhol quramiz. IKKI SABAB:
   //  1) egasi natijani shu zahoti ko'radi;
@@ -277,17 +375,17 @@ const materializeStaff = async (ob) => {
   //     o'sha oyda muzlab qolardi va keyingi oyga o'tmasdi.
   // Best-effort: shartnomasi yo'q xodimda hisob 0 chiqadi, xato emas.
   try {
-    await staffPayrollService.computePayroll(ob.user, ob.year, ob.month, {
+    await staffPayrollService.computePayroll(ob.userId, ob.year, ob.month, {
       source: "manual",
     });
   } catch (err) {
     logger.warn(
-      { err: err?.message, employee: String(ob.user), year: ob.year, month: ob.month },
+      { err: err?.message, employee: String(ob.userId), year: ob.year, month: ob.month },
       "Boshlang'ich qoldiqdan keyin xodim oyligini hisoblab bo'lmadi",
     );
   }
 
-  return [{ model: "StaffPayrollAdjustment", docId: doc._id }];
+  return [{ model: "StaffPayrollAdjustment", docId: doc.id }];
 };
 
 const MATERIALIZERS = {
@@ -323,6 +421,8 @@ export const create = async (
     );
   }
 
+  const userId = String(user);
+  const groupId = group ? String(group) : null;
   const kind = resolveKind(role, amt);
 
   // O'QUVCHI QARZI GURUHSIZ: yozuv yaratiladi, lekin MATERIALIZATSIYA
@@ -331,10 +431,10 @@ export const create = async (
   // aynan shu daqiqada ma'lum bo'ladi.
   //
   // Xato QAYTARILMAYDI: qarz ledgerda darhol ko'rinadi (ledger
-  // OpeningBalance hujjatining O'ZIDAN o'qiydi, materializatsiya
+  // OpeningBalance yozuvining O'ZIDAN o'qiydi, materializatsiya
   // natijasidan emas), guruhga qo'shilganda esa qator avtomatik
   // yoziladi - qarang materializePendingForStudent().
-  const awaitingGroup = kind === "student_debt" && !group;
+  const awaitingGroup = kind === "student_debt" && !groupId;
 
   // DAVR. O'quvchida - eng eski oydan oldingi oy (to'lov taqsimoti shunga
   // tayanadi). Boshqalarda - o'tgan oy: xodimda ko'chirish zanjiri aynan
@@ -342,34 +442,43 @@ export const create = async (
   const today = periodOfDate(localTodayMidnight());
   const period =
     role === ROLES.STUDENT
-      ? await resolveOpeningPeriod({ student: user, group, joinedAt })
+      ? await resolveOpeningPeriod({ student: userId, group: groupId, joinedAt })
       : prevPeriod(today.year, today.month);
 
   // ── 1-QADAM: LANGAR ──
-  // Unique indeks shu yerda ishlaydi. Bu qator o'tsa - pul yozish
+  // Unique indeks (userId) shu yerda ishlaydi. Bu qator o'tsa - pul yozish
   // huquqi FAQAT shu chaqiruvda, boshqa hech kimda yo'q.
   let opening;
   try {
-    opening = await OpeningBalance.create({
-      user,
-      role,
-      amount: amt,
-      branchId,
-      group: group || null,
-      year: period.year,
-      month: period.month,
-      kind,
-      // Yangi yozuvlar HAR DOIM shaxs nuqtai nazarida (+ = markaz qarzdor).
-      signConvention: "party",
-      pendingReason: awaitingGroup ? "awaiting_group" : "",
-      note,
-      importJob,
-      createdBy: currentUser?._id || null,
+    opening = await prisma.openingBalance.create({
+      data: {
+        userId,
+        role,
+        amount: amt,
+        branchId,
+        groupId,
+        year: period.year,
+        month: period.month,
+        kind,
+        // Yangi yozuvlar HAR DOIM shaxs nuqtai nazarida (+ = markaz qarzdor).
+        // OCHIQ yoziladi: ustun standarti `flow` va unga tayanish
+        // o'qituvchi/xodim qoldig'ining ISHORASINI TESKARI o'girib
+        // yuborardi (partyAmount() eski yozuvlarni belgisiga qarab
+        // aylantiradi).
+        signConvention: "party",
+        // Prisma enum qiymati: "none" (bazada bo'sh satr).
+        pendingReason: awaitingGroup
+          ? OPENING_PENDING.AWAITING_GROUP
+          : OPENING_PENDING.NONE,
+        note,
+        importJobId: importJob ? String(importJob) : null,
+        createdById: actorId(currentUser),
+      },
     });
   } catch (err) {
-    if (err?.code === 11000) {
-      const existing = await OpeningBalance.findOne({ user }).lean();
-      return { status: "duplicate", opening: existing };
+    if (err?.code === "P2002") {
+      const existing = await prisma.openingBalance.findUnique({ where: { userId } });
+      return { status: "duplicate", opening: existing ? withLegacyId(existing) : null };
     }
     throw err;
   }
@@ -377,34 +486,38 @@ export const create = async (
   // ── 2-QADAM: MATERIALIZATSIYA ──
   // Guruh kutayotgan yozuv chetlab o'tiladi - "created" holatida qaytadi
   // va guruhga qo'shilishda materializePendingForStudent() uni oladi.
-  if (awaitingGroup) return { status: "created", opening };
+  if (awaitingGroup) return { status: "created", opening: withLegacyId(opening) };
 
   try {
     const refs = await MATERIALIZERS[kind](opening, { currentUser });
-    opening.materializedRefs = refs;
-    opening.materializedAt = new Date();
-    opening.materializeError = "";
-    await opening.save();
+    const saved = await prisma.openingBalance.update({
+      where: { id: opening.id },
+      data: { materializedRefs: refs, materializedAt: new Date(), materializeError: "" },
+    });
+    return { status: "created", opening: withLegacyId(saved) };
   } catch (err) {
     // Langar QOLADI (qayta import pulni ikki marta yozmasin), lekin
     // xato yozib qo'yiladi va repairPending() bilan tuzatiladi.
-    opening.materializeError = String(err?.message || err).slice(0, 500);
-    await opening.save().catch(() => null);
+    await prisma.openingBalance
+      .update({
+        where: { id: opening.id },
+        data: { materializeError: String(err?.message || err).slice(0, 500) },
+      })
+      .catch(() => null);
     logger.error(
-      { err, user: String(user), kind },
+      { err, user: userId, kind },
       "Boshlang'ich qoldiqni materializatsiya qilib bo'lmadi",
     );
     throw err;
   }
-
-  return { status: "created", opening };
 };
 
 /**
  * YARIM QOLGANLARNI TUZATISH.
  *
  * Langar yozilib, materializatsiya yiqilgan yozuvlarni qayta urinadi.
- * Idempotent: har bir materializator o'z hujjatini yaratadi, muvaffaqiyat
+ * Idempotent: har bir materializator o'z yozuvini yaratishdan OLDIN
+ * mavjudini tekshiradi (yoki unique indeks P2002 beradi), muvaffaqiyat
  * bo'lsa materializedAt qo'yiladi va yozuv boshqa tanlanmaydi.
  *
  * DIQQAT: bu funksiya PUL YOZADI. Faqat ochiq (owner) chaqiruv bilan
@@ -413,16 +526,15 @@ export const create = async (
  * yomoni, yarim tuzatilgan holatni ko'zdan yashirardi.
  */
 export const repairPending = async ({ limit = 200, currentUser = null } = {}) => {
-  // `pendingReason` bo'sh bo'lganlar - ya'ni HAQIQATAN yiqilganlar.
+  // `pendingReason` "none" bo'lganlar - ya'ni HAQIQATAN yiqilganlar.
   // Guruh kutayotgan o'quvchilar bu yerga tushmaydi: ularda tuzatiladigan
   // narsa yo'q va har urinishda bir xil xato bilan yiqilib, ro'yxatni
   // shovqin bilan to'ldirardi.
-  const pending = await OpeningBalance.find({
-    materializedAt: null,
-    pendingReason: "",
-  })
-    .limit(limit)
-    .sort({ createdAt: 1 });
+  const pending = await prisma.openingBalance.findMany({
+    where: { materializedAt: null, pendingReason: OPENING_PENDING.NONE },
+    take: limit,
+    orderBy: { createdAt: "asc" },
+  });
 
   let repaired = 0;
   const failed = [];
@@ -431,14 +543,14 @@ export const repairPending = async ({ limit = 200, currentUser = null } = {}) =>
     try {
       // eslint-disable-next-line no-await-in-loop
       const refs = await MATERIALIZERS[ob.kind](ob, { currentUser });
-      ob.materializedRefs = refs;
-      ob.materializedAt = new Date();
-      ob.materializeError = "";
       // eslint-disable-next-line no-await-in-loop
-      await ob.save();
+      await prisma.openingBalance.update({
+        where: { id: ob.id },
+        data: { materializedRefs: refs, materializedAt: new Date(), materializeError: "" },
+      });
       repaired += 1;
     } catch (err) {
-      failed.push({ user: String(ob.user), message: err?.message || "xato" });
+      failed.push({ user: String(ob.userId), message: err?.message || "xato" });
     }
   }
 
@@ -452,9 +564,9 @@ export const repairPending = async ({ limit = 200, currentUser = null } = {}) =>
  * StudentPayment qatori uchun kerak bo'lgan yagona narsa - guruh -
  * paydo bo'ladi.
  *
- * IDEMPOTENT: faqat `materializedAt: null` VA `pendingReason:
- * "awaiting_group"` bo'lgan yozuv olinadi. Muvaffaqiyatdan keyin
- * ikkala shart ham buziladi, ya'ni ikkinchi guruhga qo'shilish yana
+ * IDEMPOTENT: faqat `materializedAt: null` VA
+ * `pendingReason: "awaiting_group"` bo'lgan yozuv olinadi. Muvaffaqiyatdan
+ * keyin ikkala shart ham buziladi, ya'ni ikkinchi guruhga qo'shilish yana
  * bir qarz qatori yaratmaydi.
  *
  * BEST-EFFORT: bu yerdagi xato guruhga qo'shishni BEKOR QILMAYDI.
@@ -465,38 +577,57 @@ export const repairPending = async ({ limit = 200, currentUser = null } = {}) =>
 export const materializePendingForStudent = async (studentId, groupId) => {
   if (!studentId || !groupId) return null;
 
-  const ob = await OpeningBalance.findOne({
-    user: studentId,
-    kind: "student_debt",
-    materializedAt: null,
-    pendingReason: "awaiting_group",
+  const ob = await prisma.openingBalance.findFirst({
+    where: {
+      userId: String(studentId),
+      kind: "student_debt",
+      materializedAt: null,
+      pendingReason: OPENING_PENDING.AWAITING_GROUP,
+    },
   });
   if (!ob) return null;
 
-  // DAVR QAYTA HISOBLANMAYDI (year/month `immutable`) - va SHART EMAS.
+  // DAVR QAYTA HISOBLANMAYDI - va SHART EMAS.
   //
   // Yaratilishda davr `enrolledAt` dan bir oy OLDIN qo'yilgan, a'zolik esa
   // ro'yxatga olingan sanadan oldin boshlana olmaydi (groups.service.js ->
   // applyMembershipDates buni rad etadi). Demak guruhning eng eski oylik
   // plani HAR DOIM shu davrdan keyin turadi va to'lov taqsimoti eng eski
   // qarzni - boshlang'ich qarzni - birinchi bo'lib yopadi.
-  ob.group = groupId;
-  if (!ob.branchId) ob.branchId = await resolveBranchFromGroup(groupId);
+  const withGroup = {
+    ...ob,
+    groupId: String(groupId),
+    branchId: ob.branchId || (await resolveBranchFromGroup(groupId)),
+  };
 
   try {
-    const refs = await materializeStudentDebt(ob);
-    ob.materializedRefs = refs;
-    ob.materializedAt = new Date();
-    ob.materializeError = "";
-    ob.pendingReason = "";
-    await ob.save();
-    return ob;
+    const refs = await materializeStudentDebt(withGroup);
+    const saved = await prisma.openingBalance.update({
+      where: { id: ob.id },
+      data: {
+        groupId: withGroup.groupId,
+        branchId: withGroup.branchId,
+        materializedRefs: refs,
+        materializedAt: new Date(),
+        materializeError: "",
+        pendingReason: OPENING_PENDING.NONE,
+      },
+    });
+    return withLegacyId(saved);
   } catch (err) {
     // Kutish holatidan CHIQARILADI: sabab endi "guruh yo'q" emas, haqiqiy
     // xato. Shu bilan yozuv repairPending() ko'rish maydoniga o'tadi.
-    ob.pendingReason = "";
-    ob.materializeError = String(err?.message || err).slice(0, 500);
-    await ob.save().catch(() => null);
+    await prisma.openingBalance
+      .update({
+        where: { id: ob.id },
+        data: {
+          groupId: withGroup.groupId,
+          branchId: withGroup.branchId,
+          pendingReason: OPENING_PENDING.NONE,
+          materializeError: String(err?.message || err).slice(0, 500),
+        },
+      })
+      .catch(() => null);
     logger.error(
       { err, student: String(studentId), group: String(groupId) },
       "Guruhga qo'shilgandan keyin boshlang'ich qarzni yozib bo'lmadi",
@@ -506,8 +637,12 @@ export const materializePendingForStudent = async (studentId, groupId) => {
 };
 
 /** Bitta odamning boshlang'ich qoldig'i (profil kartochkasi uchun). */
-export const getForUser = async (userId) =>
-  OpeningBalance.findOne({ user: userId }).lean();
+export const getForUser = async (userId) => {
+  const row = await prisma.openingBalance.findUnique({
+    where: { userId: String(userId) },
+  });
+  return row ? withLegacyId(row) : null;
+};
 
 /** Ro'yxat - owner nazorati uchun (yarim qolganlar birinchi). */
 export const list = async ({ page = 1, limit = 50, pendingOnly = false } = {}) => {
@@ -517,22 +652,27 @@ export const list = async ({ page = 1, limit = 50, pendingOnly = false } = {}) =
   // `finance.opening_balance` ruxsatiga ochilgan, ya'ni filial direktori
   // ham kiradi - filtrsiz u butun markazning boshlang'ich qoldiqlarini
   // (ya'ni boshqa filiallarning qarz/avans summalarini) ko'rardi.
-  const filter = {
+  const where = {
     ...branchFilter(),
     ...(pendingOnly ? { materializedAt: null } : {}),
   };
   const skip = (Math.max(1, page) - 1) * limit;
   const [rows, total] = await Promise.all([
-    OpeningBalance.find(filter)
-      .sort({ materializedAt: 1, createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("user", { firstName: 1, lastName: 1, username: 1, role: 1 })
-      .populate("group", { name: 1 })
-      .lean(),
-    OpeningBalance.countDocuments(filter),
+    prisma.openingBalance.findMany({
+      where,
+      orderBy: [{ materializedAt: "asc" }, { createdAt: "desc" }],
+      skip,
+      take: limit,
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, username: true, role: true },
+        },
+        group: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.openingBalance.count({ where }),
   ]);
-  return { rows, total, page, limit };
+  return { rows: withLegacyIds(rows), total, page, limit };
 };
 
 /** Import ko'rib chiqishi uchun umumiy yig'indi (avans / qarz alohida). */

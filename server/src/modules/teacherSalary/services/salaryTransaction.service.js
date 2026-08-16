@@ -1,9 +1,7 @@
-import SalaryTransaction from "../../../models/salaryTransaction.model.js";
-import TeacherSalary from "../../../models/teacherSalary.model.js";
-import Group from "../../../models/group.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
-import { EXPENSE_KINDS } from "../../../models/approval.model.js";
+import { withLegacyId } from "../../../utils/serialize.js";
+import { EXPENSE_KINDS } from "../../../constants/approvals.js";
 import {
   branchFilter,
   isBranchAllowed,
@@ -25,8 +23,20 @@ import * as journal from "../../journal/services/journal.service.js";
 // so'rovni bajarishda ham AYNAN SHU qoidalar qo'llanadi. Tasdiq paytida
 // qayta chaqiriladi - so'rov berilgandan keyin guruh arxivlangan yoki
 // qoldiq o'zgargan bo'lishi mumkin.
+//
+// MONGO → PRISMA
+//   { salary: id } → { salaryId: id },  { teacher } → { teacherId }
+//   trx.softDelete(by) → update({ isDeleted, deletedAt, deletedBy })
+//   `isDeleted: { $ne: true }` → `isDeleted: false`
+//
+// DIQQAT: TeacherSalary'da `isDeleted` USTUNI YO'Q (u hosila jadval),
+// SalaryTransaction'da esa BOR - shuning uchun filtrlar assimetrik.
+const actorId = (u) => u?.id || u?._id || null;
+
 const validateSalaryPayment = async ({ salaryId, paidAt }) => {
-  const salary = await TeacherSalary.findById(salaryId);
+  const salary = await prisma.teacherSalary.findUnique({
+    where: { id: String(salaryId) },
+  });
   if (!salary) throw new ApiError(404, "Maosh topilmadi");
 
   // GURUHSIZ QATORLAR (markaz darajasi): fiksa oylik (kind:"base"),
@@ -40,11 +50,10 @@ const validateSalaryPayment = async ({ salaryId, paidAt }) => {
   // Guruh BOR bo'lsa tekshiruv avvalgidek qat'iy qoladi (arxivlangan
   // guruhga to'lov yozilmaydi).
   let group = null;
-  if (salary.group) {
-    group = await Group.findById(salary.group, {
-      isActive: 1,
-      isDeleted: 1,
-      branchId: 1,
+  if (salary.groupId) {
+    group = await prisma.group.findUnique({
+      where: { id: salary.groupId },
+      select: { id: true, isActive: true, isDeleted: true, branchId: true, endDate: true },
     });
     assertGroupActive(group);
   }
@@ -78,7 +87,7 @@ const writeSalaryTransaction = async ({
   expenseApprovalId = null,
 }) => {
   // Avval balans atomik oshiriladi (cap sharti bilan), keyin tranzaksiya yoziladi.
-  const updated = await teacherSalaryService.applyPaidDelta(salary._id, amount, {
+  const updated = await teacherSalaryService.applyPaidDelta(salary.id, amount, {
     capToRemaining: true,
   });
   if (!updated) {
@@ -90,27 +99,29 @@ const writeSalaryTransaction = async ({
   }
 
   try {
-    const created = await SalaryTransaction.create({
-      branchId,
-      salary: salary._id,
-      teacher: salary.teacher,
-      group: salary.group,
-      year: salary.year,
-      month: salary.month,
-      amount,
-      method,
-      paidAt: day,
-      note: note || "",
-      createdBy: createdBy || null,
-      expenseApprovalId,
+    const created = await prisma.salaryTransaction.create({
+      data: {
+        branchId,
+        salaryId: salary.id,
+        teacherId: salary.teacherId,
+        groupId: salary.groupId,
+        year: salary.year,
+        month: salary.month,
+        amount,
+        method,
+        paidAt: day,
+        note: note || "",
+        createdById: createdBy ? String(createdBy) : null,
+        expenseApprovalId: expenseApprovalId ? String(expenseApprovalId) : null,
+      },
     });
 
     // JURNAL: maosh - xarajat, pul kassadan chiqdi.
     await journalPosting.postSalary(created, journal, "SalaryTransaction");
-    return created;
+    return withLegacyId(created);
   } catch (err) {
     // Tranzaksiya yozilmasa - balans oshirilgancha qolmasin (rollback)
-    await teacherSalaryService.applyPaidDelta(salary._id, -amount);
+    await teacherSalaryService.applyPaidDelta(salary.id, -amount);
     throw err;
   }
 };
@@ -141,15 +152,16 @@ export const create = async ({ salaryId, amount, method, paidAt, note }, current
   });
 
   if (needsApproval) {
-    const teacher = await User.findById(salary.teacher)
-      .select("firstName lastName")
-      .lean();
+    const teacher = await prisma.user.findUnique({
+      where: { id: salary.teacherId },
+      select: { firstName: true, lastName: true },
+    });
     const approval = await createRequest({
       branchId,
       kind: EXPENSE_KINDS.SALARY_PAYMENT,
       amount,
       threshold,
-      payload: { salaryId: String(salary._id), method, paidAt: day, note: note || "" },
+      payload: { salaryId: String(salary.id), method, paidAt: day, note: note || "" },
       subjectName: teacher
         ? `${teacher.firstName} ${teacher.lastName || ""}`.trim()
         : "O'qituvchi",
@@ -167,7 +179,7 @@ export const create = async ({ salaryId, amount, method, paidAt, note }, current
     amount,
     method,
     note,
-    createdBy: currentUser?._id,
+    createdBy: actorId(currentUser),
   });
 };
 
@@ -180,10 +192,11 @@ export const create = async ({ salaryId, amount, method, paidAt, note }, current
  * Ikkinchi himoya - expenseApprovalId partial unique indeksi.
  */
 export const executeApproved = async (approval) => {
-  const existing = await SalaryTransaction.findOne({
-    expenseApprovalId: approval._id,
+  const approvalId = String(approval.id ?? approval._id);
+  const existing = await prisma.salaryTransaction.findFirst({
+    where: { expenseApprovalId: approvalId },
   });
-  if (existing) return existing;
+  if (existing) return withLegacyId(existing);
 
   const { salaryId, method, paidAt, note } = approval.payload || {};
 
@@ -205,8 +218,8 @@ export const executeApproved = async (approval) => {
     amount: approval.amount,
     method,
     note,
-    createdBy: approval.requestedBy,
-    expenseApprovalId: approval._id,
+    createdBy: approval.requestedById || approval.requestedBy,
+    expenseApprovalId: approvalId,
   });
 };
 
@@ -214,13 +227,14 @@ export const executeApproved = async (approval) => {
 export const remove = async (id, currentUser) => {
   // FILIAL: boshqa filial to'lovini bekor qilib bo'lmaydi (SalaryTransaction'da
   // branchId bor, shuning uchun to'g'ridan-to'g'ri filtr).
-  const trx = await SalaryTransaction.findOne({
-    _id: id,
-    ...branchFilter(),
-    isDeleted: { $ne: true },
+  const trx = await prisma.salaryTransaction.findFirst({
+    where: { id: String(id), ...branchFilter(), isDeleted: false },
   });
   if (!trx) throw new ApiError(404, "Tranzaksiya topilmadi");
-  await trx.softDelete(currentUser?._id);
-  await teacherSalaryService.applyPaidDelta(trx.salary, -trx.amount);
-  return { _id: id };
+  await prisma.salaryTransaction.update({
+    where: { id: trx.id },
+    data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+  });
+  await teacherSalaryService.applyPaidDelta(trx.salaryId, -trx.amount);
+  return { id: trx.id, _id: trx.id };
 };

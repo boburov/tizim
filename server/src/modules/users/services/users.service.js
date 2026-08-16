@@ -1501,7 +1501,7 @@ export const requestHire = async (body, currentUser) => {
   );
   // APPROVAL_KINDS - sof konstantalar to'plami (bazaga bog'liq emas).
   // Approval moduli ko'chirilgach import manzili o'zgaradi, qiymatlar emas.
-  const { APPROVAL_KINDS } = await import("../../../models/approval.model.js");
+  const { APPROVAL_KINDS } = await import("../../../constants/approvals.js");
 
   const username = String(body.username).toLowerCase().trim();
   const phone = body.phone ? normalizePhone(body.phone) : null;

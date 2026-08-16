@@ -11910,3 +11910,121 @@ Endi **env-ga bog'liq filial mantig'ini olib tashlayman** — yangi spetsifikats
 <sub>session `c49e703c` · branch `main` · 22 ta qadam</sub>
 
 ---
+
+## 2026-08-16 13:43 — This session is being continued from a previous conversation that ran 
+
+**So'rov**
+
+> This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+>
+> Summary:
+> 1. **Primary Request and Intent:**
+>
+>    The conversation has three distinct phases of intent:
+>
+>    **(a) Original (Uzbek):** "Filial rahbari ham oziga hodim qosha olsin yani global bolmagan har qanday ishni oz tizimidan qila olishi kerak sen hozr hammasini super adminga berib qoyibsan / uni vaqti bomedi har bir narsani kiritib otirishga" — branch directors must be able to do **any non-global work** in their own branch (hire staff, etc.); the owner has no time to enter everything. Followed by a 6-section spec (Context & Access Control; Multi-Branch Finance & Treasury; Student & Academic; CRM & Lead Management; Master Data Management; Comparison & Analytics Engine) and `/llm-council` to produce a working plan. Later refined to: **"filiial direktori hamma narsa qila olishi kerak defaul holatda"** (director must be able to do everything BY DEFAULT).
+>
+>    **(b) Second spec (48 sections):** Super Admin dashboard + dynamic branch architecture upgrade. Explicitly: DO NOT rebuild from scratch, DO NOT migrate the stack, remove env-base
+> …
+
+**O'zgargan fayllar (14)**
+
+- `server/src/helpers/correlationCache.js` — yaratildi/qayta yozildi
+- `server/src/constants/payrollAudit.js` — yaratildi/qayta yozildi
+- `server/src/modules/staffPayroll/services/payrollAudit.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/finance/services/financeTxn.helper.js` — yaratildi/qayta yozildi
+- `server/src/modules/studentFreeze/services/studentFreeze.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/users/services/users.service.js` — yaratildi/qayta yozildi
+- `server/tests/usersPrisma.test.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/constants/calendar.js` — tahrirlandi
+- `server/src/helpers/botStatus.helper.js` — yaratildi/qayta yozildi
+- `server/src/helpers/cascadeDelete.helper.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/modules/groups/services/teacherGroupPeriod.service.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/helpers/selfSalary.guard.js` — tahrirlandi
+- `server/tests/groupPeriodsPrisma.test.js` — yaratildi/qayta yozildi
+- `server/MIGRATION.md` — tahrirlandi
+
+**Buyruqlar (60)**
+
+```sh
+for f in src/helpers/membership.helper.js src/helpers/studentCompletion.helper.js src/helpers/userRelations.helper.js; do node --check "$f" && echo "OK $f"; don…
+grep -rn "userRelations.helper\|membership.helper\|studentCompletion.helper" src --include=*.js | grep -v "^src/helpers/"
+grep -rn --include='*.js' "userRelations.helper\|membership.helper\|studentCompletion.helper" src | grep -v "^src/helpers/"
+wc -l src/modules/users/services/users.service.js src/modules/groups/services/groups.service.js 2>/dev/null; echo "---- helpers still on mongoose ----"; grep -r…
+echo "=== users.service.js imports ==="; sed -n '1,60p' src/modules/users/services/users.service.js
+echo "=== users module files ==="; find src/modules/users -type f | sort; echo; echo "=== grep mongoose usage in users module ==="; grep -rn --include='*.js' "\…
+for f in src/helpers/branchContext.helper.js src/helpers/roles.helper.js src/helpers/userProfile.helper.js src/helpers/period.helper.js src/helpers/branchAccess…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== runFinanceTxn callers ==="; grep -rln --include='*.js' "runFinanceTxn" src echo; echo "=== dependency modu…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== assertTargetInScope / assertCanAssignBranch ==="; grep -n "assertTargetInScope" -A 40 src/helpers/branchAc…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== ALL files still importing models/ or mongoose ===" grep -rl --include='*.js' "from \"\(\.\./\)*models/\|fr…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== getActiveFreezeMap / getActiveFrozenStudentIds ===" grep -n "getActiveFreezeMap\|getActiveFrozenStudentIds…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== PayrollAuditLog ==="; grep -n "^model PayrollAuditLog" -A 32 prisma/schema.prisma echo; echo "=== correlat…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== importers of payrollAuditLog.model.js ==="; grep -rn --include='*.js' "payrollAuditLog.model" src | grep -…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== AttendanceExemption ==="; grep -n "^model AttendanceExemption" -A 25 prisma/schema.prisma echo; echo "=== …
+sed -n '1,60p' src/models/payrollAuditLog.model.js
+cd /Users/shukrullo/Desktop/lc-total/server; ls src/modules/studentFreeze/handlers/ && cat src/modules/studentFreeze/handlers/*.js | head -60; echo "=== client …
+cd /Users/shukrullo/Desktop/lc-total/server; for f in src/modules/users/handlers/*.js; do echo "───── $f"; cat "$f"; done
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== users.service importers ==="; grep -rn --include='*.js' "users/services/users.service" src tests 2>/dev/nu…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== passwordHash handling in migrated code ==="; grep -rn --include='*.js' "passwordHash" src | grep -v "^src/…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== GroupMembership schema ==="; grep -n "^model GroupMembership" -A 30 prisma/schema.prisma echo; echo "=== U…
+cd /Users/shukrullo/Desktop/lc-total echo "=== client homeBranchId usage ==="; grep -rn "homeBranchId" client/src admin_client/src 2>/dev/null | head -20 echo; …
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== APPROVAL_KINDS definition ==="; grep -rn "APPROVAL_KINDS = " -A 20 src/models/approval.model.js | head -30…
+cd /Users/shukrullo/Desktop/lc-total/server grep -n "checkConfigApproval" -A 60 src/modules/expenseApprovals/services/expenseApproval.service.js | head -80
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== RefreshToken ==="; grep -n "^model RefreshToken" -A 18 prisma/schema.prisma echo "=== LeftReason enum ==="…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== exports/imports registry usage of usersService ==="; grep -n "usersService\." src/modules/exports/registry…
+# … yana 35 ta
+```
+
+**Natija**
+
+Blocker helperlarni Prisma'ga o'tkazaman.
+
+Endi `studentFreeze` servisini Prisma'ga o'tkazaman.
+
+Endi `users.service.js` — asosiy ish.
+
+Auth testi hali ham o'tayotganini tekshiraman.
+
+Endi users moduli uchun Prisma testini yozaman.
+
+**USERS tugadi** — 49/49 test o'tdi, `test:auth-prisma` 16/16 saqlandi. Endi **GROUPS**.
+
+Endi `teacherGroupPeriod.service.js` — guruh yaratish/tahrirlashning eng yaqin blokeri.
+
+Ko'chirilgan guruh-qatlami o'qish yo'llari uchun test yozaman.
+
+Test ikkita haqiqiy muammoni topdi. Tekshiraman.
+
+Ikkita muammo aniqlandi — biri meniki, biri **eski koddagi jimgina xato**.
+
+## STEP 14 — Migratsiya hisoboti
+
+### USERS — ✅ TUGADI
+
+**Oldin:** `users.service.js` 1385 qator, 17 eksport, to'liq Mongoose. `mongoose.Types.ObjectId`, `populate`, `lean`, `aggregate` — hech biri ishlamasdi (Mongo ulanishi olib tashlangan).
+
+**Keyin:** to'liq Prisma. Barcha 17 eksport ishlaydi.
+
+**Ko'chirilgan fayllar:**
+
+| Fayl | Qator |
+|---|---|
+| `modules/users/services/users.service.js` | 1385 |
+| `modules/studentFreeze/services/studentFreeze.service.js` | 178 |
+| `modules/staffPayroll/services/payrollAudit.service.js` | 119 |
+| `helpers/userRelations.helper.js` | 203 |
+| `helpers/studentCompletion.helper.js` | 56 |
+| `helpers/membership.helper.js` | 58 |
+| `helpers/correlationCache.js` | 43 |
+| `modules/finance/services/financeTxn.helper.js` | 51 |
+| `constants/payrollAudit.js` | yangi |
+
+**Test:** `npm run test:users-prisma` — **49/49**, haqiqiy Postgres ustida. Filial izolyatsiyasi (jumladan qidiruv+filial birga), parol maxfiyligi, imtiyoz oshirish, arxiv/tiklash, hard-delete cascade. `test:auth-prisma` 16/16 saqlandi.
+
+**Blokerlar (users uchun qolgan):** `requestHire` → `expenseApproval.createRequest` hali Mongoose. `createStaff` ning **asosiy yo'li ishlaydi** (`checkC
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 97 ta qadam</sub>
+
+---

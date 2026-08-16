@@ -25,7 +25,7 @@ import {
   branchFilter,
   userBranchCondition,
 } from "../../../helpers/branchContext.helper.js";
-import { OPENING_MAX_AMOUNT } from "../../../models/openingBalance.model.js";
+import { OPENING_MAX_AMOUNT } from "../../../constants/openingBalance.js";
 import * as openingBalanceService from "../../openingBalance/services/openingBalance.service.js";
 import { OPENING_WARN_AMOUNT } from "../../openingBalance/services/openingBalance.service.js";
 import { ROW_STATUS } from "../services/importEngine.service.js";

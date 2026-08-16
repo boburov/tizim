@@ -198,7 +198,7 @@ export const requestDiscount = async ({ op, discountId, body }, currentUser) => 
   const approvalService = await import(
     "../../expenseApprovals/services/expenseApproval.service.js"
   );
-  const { APPROVAL_KINDS } = await import("../../../models/approval.model.js");
+  const { APPROVAL_KINDS } = await import("../../../constants/approvals.js");
 
   let student;
   let group;

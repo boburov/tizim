@@ -1,10 +1,14 @@
-import Approval, {
+// Lug'at (holat/kategoriya/tur) endi bazadan mustaqil konstantalarda -
+// Mongoose model fayli o'chirilganda ular qolishi kerak.
+import {
   APPROVAL_STATUSES,
   APPROVAL_CATEGORIES,
   APPROVAL_KINDS,
   EXPENSE_KINDS,
   resolveCategory,
-} from "../../../models/approval.model.js";
+} from "../../../constants/approvals.js";
+// Modelning O'ZI hali ko'chirilmagan (yozish yo'llari Mongoose'da).
+import Approval from "../../../models/approval.model.js";
 import prisma from "../../../config/prisma.js";
 import { withLegacyId, withPopulatedShape } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";

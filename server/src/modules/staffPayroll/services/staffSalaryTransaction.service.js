@@ -1,7 +1,7 @@
 import StaffPayroll from "../../../models/staffPayroll.model.js";
 import StaffSalaryTransaction from "../../../models/staffSalaryTransaction.model.js";
 import ApiError from "../../../utils/ApiError.js";
-import { APPROVAL_KINDS } from "../../../models/approval.model.js";
+import { APPROVAL_KINDS } from "../../../constants/approvals.js";
 import { parseLocalDay, isFutureLocalDay } from "../../../helpers/attendance.helper.js";
 import { isBranchAllowed } from "../../../helpers/branchContext.helper.js";
 import {

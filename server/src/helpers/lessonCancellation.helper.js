@@ -1,4 +1,4 @@
-import LessonCancellation from "../models/lessonCancellation.model.js";
+import prisma from "../config/prisma.js";
 
 // BEKOR QILINGAN DARSLARNI HISOBGA OLISH.
 //
@@ -18,15 +18,18 @@ import LessonCancellation from "../models/lessonCancellation.model.js";
  */
 export const loadCancelledLessonKeys = async (groupId, from, to) => {
   if (!groupId) return new Set();
-  const rows = await LessonCancellation.find(
-    {
-      group: groupId,
-      date: { $gte: from, $lte: to },
-      billable: { $ne: true },
-      isDeleted: { $ne: true },
+  // PRISMA: `group` → `groupId` (ustun), `$gte/$lte` → `gte/lte`,
+  // `billable: { $ne: true }` → `billable: false` (ustunda `@default(false)`,
+  // NULL holat yo'q).
+  const rows = await prisma.lessonCancellation.findMany({
+    where: {
+      groupId: String(groupId),
+      date: { gte: from, lte: to },
+      billable: false,
+      isDeleted: false,
     },
-    { dateKey: 1, slot: 1 },
-  ).lean();
+    select: { dateKey: true, slot: true },
+  });
 
   const set = new Set();
   for (const r of rows) {

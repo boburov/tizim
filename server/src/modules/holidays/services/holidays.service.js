@@ -1,8 +1,9 @@
 import env from "../../../config/env.js";
-import Holiday, { HOLIDAY_AUDIENCES } from "../../../models/holiday.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
+import { HOLIDAY_AUDIENCES } from "../../../constants/calendar.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import * as notificationsService from "../../notifications/services/notifications.service.js";
 import {
   dateKeyOf,
@@ -10,7 +11,19 @@ import {
   localTodayMidnight,
 } from "../../../helpers/attendance.helper.js";
 
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// ─────────────────────────────────────────────────────────────────
+// MONGO → PRISMA
+//
+// Bu servis PUL YO'LIDA turadi: `holidayKeySetForRange()` ni davomat,
+// o'quvchi to'lovi (proratsiya) VA o'qituvchining soatbay maoshi
+// chaqiradi. Bayram kuni dars kuni sanalmaydi, ya'ni bu yerdagi har
+// bir xato to'g'ridan-to'g'ri hisoblangan summani o'zgartiradi.
+//
+// Shuning uchun sana mantig'iga (recurring/one-time, oy oshib ketish
+// qo'riqlovi, kesh TTL) UMUMAN tegilmadi - faqat so'rovlar almashdi.
+// ─────────────────────────────────────────────────────────────────
+
+const CREATED_BY = { select: { id: true, firstName: true, lastName: true } };
 
 export const list = async ({
   search,
@@ -20,41 +33,48 @@ export const list = async ({
   page = 1,
   limit = 100,
 }) => {
-  const filter = {};
-  if (!includeInactive) filter.isActive = true;
-  if (audience) filter.audience = audience;
+  const where = {};
+  if (!includeInactive) where.isActive = true;
+  if (audience) where.audience = audience;
   if (search && search.trim()) {
-    filter.name = { $regex: escapeRegex(search.trim()), $options: "i" };
+    // RegExp KERAK EMAS: `contains` xom satrni qidiradi va Prisma LIKE
+    // maxsus belgilarini o'zi ekranlaydi (eski `escapeRegex` olib tashlandi).
+    where.name = { contains: search.trim(), mode: "insensitive" };
   }
   if (!includePast) {
     // One-time bayramlardan o'tganlarini chiqarib tashlash
     const currentYear = new Date().getUTCFullYear();
-    filter.$or = [
+    where.OR = [
       { isRecurring: true },
-      { isRecurring: false, year: { $gte: currentYear } },
+      { isRecurring: false, year: { gte: currentYear } },
     ];
   }
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Holiday.find(filter)
-      .sort({ month: 1, day: 1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("createdBy", { firstName: 1, lastName: 1 }),
-    Holiday.countDocuments(filter),
+    prisma.holiday.findMany({
+      where,
+      orderBy: [{ month: "asc" }, { day: "asc" }],
+      skip,
+      take: limit,
+      include: { createdBy: CREATED_BY },
+    }),
+    prisma.holiday.count({ where }),
   ]);
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
-export const getById = async (id) => {
-  const doc = await Holiday.findById(id).populate("createdBy", {
-    firstName: 1,
-    lastName: 1,
+// Ichki o'qish: XOM Prisma yozuvi (update/softRemove shundan foydalanadi).
+const loadHoliday = async (id) => {
+  const doc = await prisma.holiday.findUnique({
+    where: { id: String(id) },
+    include: { createdBy: CREATED_BY },
   });
   if (!doc) throw new ApiError(404, "Bayram topilmadi");
   return doc;
 };
+
+export const getById = async (id) => withLegacyId(await loadHoliday(id));
 
 const validateBody = (body) => {
   if (body.audience && !HOLIDAY_AUDIENCES.includes(body.audience)) {
@@ -96,55 +116,73 @@ export const create = async (body, currentUser) => {
     throw new ApiError(400, "Bir martalik bayram uchun to'g'ri yil kerak");
   }
 
-  const doc = await Holiday.create({
-    name: trimmed,
-    isRecurring,
-    month: Number(body.month),
-    day: Number(body.day),
-    year,
-    message: String(body.message),
-    audience: body.audience || "all",
-    createdBy: currentUser?._id || null,
+  const doc = await prisma.holiday.create({
+    data: {
+      name: trimmed,
+      isRecurring,
+      month: Number(body.month),
+      day: Number(body.day),
+      year,
+      message: String(body.message),
+      audience: body.audience || "all",
+      createdById: currentUser?.id || currentUser?._id || null,
+    },
+    include: { createdBy: CREATED_BY },
   });
   invalidateHolidayCache();
-  return doc;
+  return withLegacyId(doc);
 };
 
 export const update = async (id, body) => {
-  const doc = await getById(id);
+  const doc = await loadHoliday(id);
   validateBody(body);
 
-  if (body.name !== undefined) doc.name = String(body.name).trim();
-  if (body.message !== undefined) doc.message = String(body.message);
-  if (body.audience !== undefined) doc.audience = body.audience;
-  if (body.month !== undefined) doc.month = Number(body.month);
-  if (body.day !== undefined) doc.day = Number(body.day);
-  if (body.isActive !== undefined) doc.isActive = !!body.isActive;
+  // Mongoose'da hujjat mutatsiya qilinib `save()` chaqirilardi. Prisma'da
+  // o'zgarishlar `data` ga yig'iladi. `next` - "saqlangandan keyingi holat":
+  // pastdagi `isRecurring` qoidasi AYNI chaqiruvda kelgan yangi qiymatga
+  // tayanishi kerak, eski yozuvdagiga emas.
+  const data = {};
+  if (body.name !== undefined) data.name = String(body.name).trim();
+  if (body.message !== undefined) data.message = String(body.message);
+  if (body.audience !== undefined) data.audience = body.audience;
+  if (body.month !== undefined) data.month = Number(body.month);
+  if (body.day !== undefined) data.day = Number(body.day);
+  if (body.isActive !== undefined) data.isActive = !!body.isActive;
 
-  if (body.isRecurring !== undefined) {
-    doc.isRecurring = !!body.isRecurring;
-  }
-  if (doc.isRecurring) {
-    doc.year = null;
+  if (body.isRecurring !== undefined) data.isRecurring = !!body.isRecurring;
+
+  const nextIsRecurring =
+    body.isRecurring !== undefined ? !!body.isRecurring : doc.isRecurring;
+
+  if (nextIsRecurring) {
+    // Har yilgi bayramda aniq yil ma'nosiz - tozalanadi.
+    data.year = null;
   } else if (body.year !== undefined) {
     const y = Number(body.year);
     if (!y || y < 2000 || y > 2100) {
       throw new ApiError(400, "Yil 2000-2100 oralig'ida bo'lishi kerak");
     }
-    doc.year = y;
+    data.year = y;
   }
 
-  await doc.save();
+  const saved = await prisma.holiday.update({
+    where: { id: doc.id },
+    data,
+    include: { createdBy: CREATED_BY },
+  });
   invalidateHolidayCache();
-  return doc;
+  return withLegacyId(saved);
 };
 
 export const softRemove = async (id) => {
-  const doc = await getById(id);
-  doc.isActive = false;
-  await doc.save();
+  const doc = await loadHoliday(id);
+  const saved = await prisma.holiday.update({
+    where: { id: doc.id },
+    data: { isActive: false },
+    include: { createdBy: CREATED_BY },
+  });
   invalidateHolidayCache();
-  return doc;
+  return withLegacyId(saved);
 };
 
 // Ikki instant bir xil MAHALLIY (Asia/Tashkent) kalendar kuniga tegishlimi.
@@ -165,17 +203,18 @@ export const getTodayHolidays = async (now = new Date()) => {
   const day = local.getUTCDate();
   const year = local.getUTCFullYear();
 
-  const all = await Holiday.find({
-    isActive: true,
-    month,
-    day,
+  const all = await prisma.holiday.findMany({
+    where: { isActive: true, month, day },
   });
 
-  return all.filter((h) => h.isRecurring || h.year === year);
+  return withLegacyIds(all.filter((h) => h.isRecurring || h.year === year));
 };
 
 export const markSent = async (id, now = new Date()) => {
-  await Holiday.updateOne({ _id: id }, { $set: { lastSentAt: now } });
+  await prisma.holiday.update({
+    where: { id: String(id) },
+    data: { lastSentAt: now },
+  });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,15 +238,22 @@ const birthdayTsForYear = (year, bMonth, bDay) => {
 // eng uzog'igacha tartiblab qaytaradi. "Bugun" Asia/Tashkent mahalliy kuni.
 // Ro'yxat har kuni o'zgaradi (bugungi kunga nisbatan qolgan kunlar hisoblanadi).
 export const listTeacherBirthdays = async (now = new Date()) => {
-  const teachers = await User.find(
-    {
+  const teachers = await prisma.user.findMany({
+    where: {
       role: ROLES.TEACHER,
       isActive: true,
-      isDeleted: { $ne: true },
-      birthDate: { $ne: null },
+      isDeleted: false,
+      birthDate: { not: null },
     },
-    { firstName: 1, lastName: 1, phone: 1, username: 1, birthDate: 1 },
-  ).lean();
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      username: true,
+      birthDate: true,
+    },
+  });
 
   const today = localTodayMidnight(now);
   const todayTs = today.getTime();
@@ -227,7 +273,10 @@ export const listTeacherBirthdays = async (now = new Date()) => {
 
     const daysUntil = Math.round((nextTs - todayTs) / DAY_MS);
     return {
-      _id: t._id,
+      // `_id` ATAYLAB saqlanadi - client shu nom bo'yicha o'qiydi
+      // (javob chegarasidagi moslik qatlami, ichki kalit emas).
+      id: t.id,
+      _id: t.id,
       firstName: t.firstName,
       lastName: t.lastName,
       phone: t.phone || null,
@@ -263,11 +312,14 @@ export const congratulateTeacher = async (
   { channels, message, title },
   currentUser,
 ) => {
-  const teacher = await User.findOne({
-    _id: teacherId,
-    role: ROLES.TEACHER,
-    isActive: true,
-    isDeleted: { $ne: true },
+  const teacher = await prisma.user.findFirst({
+    where: {
+      id: String(teacherId),
+      role: ROLES.TEACHER,
+      isActive: true,
+      isDeleted: false,
+    },
+    select: { id: true, firstName: true, lastName: true },
   });
   if (!teacher) throw new ApiError(404, "O'qituvchi topilmadi");
 
@@ -314,10 +366,10 @@ const loadActiveHolidays = async (audiences) => {
   ) {
     return _holidayCache.holidays;
   }
-  const holidays = await Holiday.find({
-    isActive: true,
-    audience: { $in: audiences },
-  }).lean();
+  const holidays = await prisma.holiday.findMany({
+    where: { isActive: true, audience: { in: audiences } },
+    select: { isRecurring: true, year: true, month: true, day: true },
+  });
   _holidayCache = {
     audiencesKey: key,
     holidays,

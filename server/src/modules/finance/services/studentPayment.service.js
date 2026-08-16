@@ -1,16 +1,8 @@
-import mongoose from "mongoose";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import GroupFee from "../../../models/groupFee.model.js";
-import Discount from "../../../models/discount.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import Group from "../../../models/group.model.js";
-import User from "../../../models/user.model.js";
-import DebtWriteOff from "../../../models/debtWriteOff.model.js";
+import { Prisma } from "@prisma/client";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import {
   branchFilter,
-  branchGroupFilter,
   userBranchCondition,
   resolveBranchFromGroup,
 } from "../../../helpers/branchContext.helper.js";
@@ -25,6 +17,7 @@ import {
   toUtcMidnight,
 } from "../../../helpers/attendance.helper.js";
 import { holidayKeySetForRange } from "../../holidays/services/holidays.service.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import {
   loadCancelledLessonKeys,
   isCancelledSession,
@@ -34,18 +27,56 @@ import {
   isFrozenOn,
 } from "../../../helpers/studentFreeze.helper.js";
 
-const safeStudentProjection = {
-  firstName: 1,
-  lastName: 1,
-  username: 1,
-  phone: 1,
+// ═══════════════════════════════════════════════════════════════════════
+// O'QUVCHI TO'LOVI (billing) - eng nozik moliyaviy fayl.
+//
+// MONGO → PRISMA
+//   { student: id } / { group: id }  → { studentId } / { groupId }
+//   { payment: id }                  → { paymentId }
+//   { membership: id }               → { membershipId }
+//   { writtenOff: { $ne: true } }    → { writtenOff: false }
+//   $expr: { $gt: [a, b] }           → { a: { gt: prisma.model.fields.b } }
+//   session                          → tx (Prisma tranzaksiya klienti)
+//   err.code 11000                   → err.code "P2002"
+//
+// `isDeleted` FILTRLARI OLIB TASHLANDI: StudentPayment'da bunday ustun
+// UMUMAN YO'Q (Mongoose modelida ham softDelete plagini yo'q edi - fayl
+// izohi buni ochiq aytadi). Eski `{ $ne: true }` sharti hamma qatorga
+// to'g'ri kelardi, ya'ni natija o'zgarmaydi.
+//
+// ATOMIKLIK: Mongo `paidAmount`/`status` ni AGGREGATION UPDATE PIPELINE
+// bilan yozardi - ya'ni status BAZADAGI JORIY paidAmount dan bitta amalda
+// keltirib chiqarilardi ("o'qi → hisobla → saqla" poygasi yo'q). Postgres'da:
+//   • applyPaidDelta  → BITTA xom `UPDATE` (shartli cap ham shu yerda);
+//   • recalc/recalcStatus → `$transaction` + `SELECT ... FOR UPDATE`.
+// Batafsil sabab: teacherSalary.service.js boshidagi izoh.
+//
+// PUL TURI: barcha summalar `double precision` (Mongo'da float64) →
+// Prisma oddiy `number` beradi. Decimal/BigInt konvertatsiyasi YO'Q.
+// ═══════════════════════════════════════════════════════════════════════
+
+const SAFE_STUDENT_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  username: true,
+  phone: true,
 };
 
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
-  return new mongoose.Types.ObjectId(String(id));
+// Guruh jadvali RELATION - `getClassDaysInRange` uni talab qiladi.
+// Unutilsa massiv bo'sh keladi, dars soni 0 bo'lib qarz JIMGINA nolga tushardi.
+const GROUP_FOR_BILLING = {
+  id: true,
+  startDate: true,
+  endDate: true,
+  entryBilling: true,
+  schedule: {
+    select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
+  },
 };
+
+const db = (tx) => tx || prisma;
+const actorId = (u) => u?.id || u?._id || null;
 
 // Oy oralig'iga tegishli o'quvchi+guruh a'zolik davrlarini yuklaydi.
 // Rejoin (bir oyda ketib qayta qo'shilish) bo'lsa bir nechta davr qaytadi -
@@ -53,16 +84,16 @@ const toObjectId = (id) => {
 const loadMembershipPeriods = async (student, group, year, month) => {
   const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
-  const rows = await GroupMembership.find(
-    {
-      student,
-      group,
-      isDeleted: { $ne: true },
-      joinedAt: { $lte: monthEnd },
-      $or: [{ leftAt: null }, { leftAt: { $gt: monthStart } }],
+  const rows = await prisma.groupMembership.findMany({
+    where: {
+      studentId: String(student),
+      groupId: String(group),
+      isDeleted: false,
+      joinedAt: { lte: monthEnd },
+      OR: [{ leftAt: null }, { leftAt: { gt: monthStart } }],
     },
-    { joinedAt: 1, leftAt: 1 },
-  ).lean();
+    select: { joinedAt: true, leftAt: true },
+  });
   return rows.map((r) => ({ joinedAt: r.joinedAt, leftAt: r.leftAt || null }));
 };
 
@@ -83,7 +114,7 @@ const loadMonthLessonDates = async (groupDoc, year, month) => {
     // BEKOR QILINGAN DARSLAR: markaz aybi bilan o'tmagan dars uchun o'quvchi
     // to'lamaydi. Holiday'dan farqi - u FAQAT shu guruhga tegishli
     // (o'qituvchi kasal bo'ldi, xona band, svet o'chdi).
-    loadCancelledLessonKeys(groupDoc?._id, monthStart, monthEnd),
+    loadCancelledLessonKeys(groupDoc?.id ?? groupDoc?._id, monthStart, monthEnd),
   ]);
 
   return getClassDaysInRange(groupDoc, monthStart, monthEnd, holidaySet)
@@ -122,23 +153,26 @@ const countElapsedLessons = (lessonDates, periods, asOf, freezeWindows = []) => 
 // Guruh jadvali bo'lmasa (yoki oyda dars yo'q bo'lsa) eski kalendar-kun
 // proratsiyasiga qaytadi - shunda jadvalsiz guruhlarda billing yo'qolib qolmaydi.
 const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = null, periods = null }) => {
+  const studentId = String(student);
+  const groupId = String(group);
+
   const [feeDoc, discounts, groupDoc, freezeWindows] = await Promise.all([
-    GroupFee.findOne({ group, year, month }),
-    Discount.find({
-      student,
-      group,
-      isActive: true,
-      isDeleted: { $ne: true },
-      $or: [{ scope: "permanent" }, { scope: "monthly", year, month }],
+    prisma.groupFee.findUnique({
+      where: { groupId_year_month: { groupId, year, month } },
+      select: { amount: true },
     }),
-    Group.findById(group, {
-      schedule: 1,
-      startDate: 1,
-      endDate: 1,
-      entryBilling: 1,
-    }).lean(),
+    prisma.discount.findMany({
+      where: {
+        studentId,
+        groupId,
+        isActive: true,
+        isDeleted: false,
+        OR: [{ scope: "permanent" }, { scope: "monthly", year, month }],
+      },
+    }),
+    prisma.group.findUnique({ where: { id: groupId }, select: GROUP_FOR_BILLING }),
     // Muzlatish o'quvchi darajasida (barcha guruhlarga taalluqli).
-    loadFreezeWindows({ student }),
+    loadFreezeWindows(studentId),
   ]);
 
   const baseFee = feeDoc ? feeDoc.amount : 0;
@@ -244,71 +278,103 @@ const buildSnapshot = async ({ student, group, year, month, joinedAt, leftAt = n
   return { ...snap, fullExpectedAmount: snap.expectedAmount };
 };
 
-// paidAmount ifodasidan status'ni hisoblaydigan update-pipeline $set bosqichi.
-// Atomik yoziladi - "o'qi → hisobla → save" oralig'idagi poyga (lost update) yo'q.
-const paidStatusStage = (newPaidExpr) => ({
-  $set: {
-    paidAmount: newPaidExpr,
-    status: {
-      $switch: {
-        branches: [
-          { case: { $lte: [newPaidExpr, 0] }, then: "unpaid" },
-          { case: { $lt: [newPaidExpr, "$expectedAmount"] }, then: "partial" },
-        ],
-        default: "paid",
-      },
-    },
-  },
+// `fullExpectedAmount` - HISOB natijasi, USTUN EMAS.
+//
+// Mongoose sxema tashqarisidagi maydonni jimgina tashlab yuborardi;
+// Prisma esa "Unknown argument" bilan yiqiladi. Shuning uchun yozishdan
+// oldin ochiq ajratib olinadi.
+const toPaymentColumns = ({ baseFee, prorationFactor, discountApplied, expectedAmount }) => ({
+  baseFee,
+  prorationFactor,
+  discountApplied,
+  expectedAmount,
 });
 
 // paidAmount ni atomik delta bilan o'zgartiradi ($inc semantikasi) va statusni
 // shu yozuvning DB'dagi joriy qiymatlaridan keltirib chiqaradi. Parallel
 // tranzaksiyalar kommutativ qo'shiladi - hech biri yo'qolmaydi.
 // capToRemaining=true bo'lsa: yangi paidAmount expectedAmount dan oshadigan bo'lsa
-// hujjat YANGILANMAYDI (null qaytadi) - plan qoldig'idan ortiq to'lovni shartli-atomik
+// qator YANGILANMAYDI (null qaytadi) - plan qoldig'idan ortiq to'lovni shartli-atomik
 // to'sish (parallel double-click ham capdan o'tmaydi).
-// session berilsa, yozuv shu MongoDB tranzaksiyasi ichida bajariladi (to'lov
-// qabul qilish/bekor qilishda PaymentTransaction bilan birga atomik bo'lsin).
+// tx berilsa, yozuv shu tranzaksiya ichida bajariladi (to'lov qabul qilish/bekor
+// qilishda PaymentTransaction bilan birga atomik bo'lsin).
+//
+// SQL'da o'ng tomondagi `"paidAmount"` ESKI qiymatni beradi - Mongo'dagi
+// `{ $add: ["$paidAmount", delta] }` bilan aynan bir xil semantika.
 export const applyPaidDelta = async (
   paymentId,
   delta,
-  { session, capToRemaining = false } = {},
+  { tx, capToRemaining = false } = {},
 ) => {
-  const newPaid = { $add: [{ $ifNull: ["$paidAmount", 0] }, delta] };
-  const filter = { _id: paymentId };
-  if (capToRemaining) filter.$expr = { $lte: [newPaid, "$expectedAmount"] };
-  return StudentPayment.findOneAndUpdate(filter, [paidStatusStage(newPaid)], {
-    new: true,
-    session: session || undefined,
-  });
+  const client = db(tx);
+  const id = String(paymentId);
+  const d = Number(delta) || 0;
+
+  const setClause = Prisma.sql`
+    SET "paidAmount" = COALESCE("paidAmount", 0) + ${d}::double precision,
+        "status"     = CASE
+          WHEN COALESCE("paidAmount", 0) + ${d}::double precision <= 0
+            THEN 'unpaid'::"PayStatus"
+          WHEN COALESCE("paidAmount", 0) + ${d}::double precision < "expectedAmount"
+            THEN 'partial'::"PayStatus"
+          ELSE 'paid'::"PayStatus"
+        END,
+        -- Prisma'ning @updatedAt KLIENT tomonida ishlaydi; xom SQL uni
+        -- chetlab o'tadi, shuning uchun ochiq yoziladi.
+        "updatedAt"  = NOW()
+  `;
+
+  const affected = capToRemaining
+    ? await client.$executeRaw`
+        UPDATE "student_payments" ${setClause}
+        WHERE "id" = ${id}
+          AND COALESCE("paidAmount", 0) + ${d}::double precision <= "expectedAmount"
+      `
+    : await client.$executeRaw`
+        UPDATE "student_payments" ${setClause}
+        WHERE "id" = ${id}
+      `;
+
+  if (affected === 0) return null;
+  return client.studentPayment.findUnique({ where: { id } });
 };
 
 // Faol (o'chirilmagan) tranzaksiyalar yig'indisidan paidAmount/status ni tiklaydi
-// (repair/recalc yo'li). Yozish atomik pipeline orqali - stale save yo'q.
+// (repair/recalc yo'li). Qator qulflanadi - stale save yo'q.
 export const recalcStatus = async (paymentId) => {
-  const payment = await StudentPayment.findById(paymentId);
-  if (!payment) return null;
-  const agg = await PaymentTransaction.aggregate([
-    { $match: { payment: payment._id, isDeleted: { $ne: true } } },
-    { $group: { _id: null, total: { $sum: "$amount" } } },
-  ]);
-  const paidAmount = agg.length ? agg[0].total : 0;
-  return StudentPayment.findByIdAndUpdate(paymentId, [paidStatusStage(paidAmount)], {
-    new: true,
+  const id = String(paymentId);
+  const agg = await prisma.paymentTransaction.aggregate({
+    where: { paymentId: id, isDeleted: false },
+    _sum: { amount: true },
+  });
+  const paidAmount = agg._sum.amount ?? 0;
+
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw`
+      SELECT "expectedAmount" FROM "student_payments" WHERE "id" = ${id} FOR UPDATE
+    `;
+    if (!rows.length) return null;
+    const expected = Number(rows[0].expectedAmount) || 0;
+    return tx.studentPayment.update({
+      where: { id },
+      data: { paidAmount, status: deriveStatus(paidAmount, expected) },
+    });
   });
 };
 
 // Snapshot (fee/proratsiya/chegirma) ni qayta hisoblab, statusni ham yangilaydi.
-// Yozish atomik pipeline orqali: status DB'dagi JORIY paidAmount'dan keltirib
-// chiqariladi - hisob davomida kelib tushgan parallel to'lov statusni buzmaydi.
-// session berilsa, ochiq MongoDB tranzaksiyasi ichida o'qib-yozadi.
-export const recalc = async (paymentId, { session } = {}) => {
-  const payment = await StudentPayment.findById(paymentId).session(session || null);
+// Status DB'dagi JORIY paidAmount'dan keltirib chiqariladi (qator qulflanadi) -
+// hisob davomida kelib tushgan parallel to'lov statusni buzmaydi.
+// tx berilsa, ochiq tranzaksiya ichida o'qib-yozadi.
+export const recalc = async (paymentId, { tx } = {}) => {
+  const client = db(tx);
+  const id = String(paymentId);
+  const payment = await client.studentPayment.findUnique({ where: { id } });
   if (!payment) return null;
 
   // Yomon qarz (write-off) MUZLATILGAN: expected/status qayta hisoblanmaydi,
   // aks holda kunlik accrual recalc yopilgan qarzni qayta ochib yuborardi.
-  if (payment.writtenOff) return payment;
+  if (payment.writtenOff) return withLegacyId(payment);
 
   // BOSHLANG'ICH QARZ ham MUZLATILGAN - shu funksiya YAGONA himoya nuqtasi.
   //
@@ -318,21 +384,21 @@ export const recalc = async (paymentId, { session } = {}) => {
   // JIMGINA YO'QOLARDI. Bu funksiyaga recalcForGroupMonth, recalcForStudent,
   // recalcForStudentScope va kunlik accrueMonth job'i - hammasi kelib
   // taqaladi, shuning uchun to'siq aynan shu yerda turibdi.
-  if (payment.isOpening) return payment;
+  if (payment.isOpening) return withLegacyId(payment);
 
   // Shu oydagi BARCHA a'zolik davrlari (rejoin holatida bir nechta) bo'yicha
   // hisoblaymiz - bitta membership ref'iga tayanib qolmaymiz, aks holda
   // ketib-qaytgan o'quvchining ikkinchi davri billing'dan tushib qolardi.
   const periods = await loadMembershipPeriods(
-    payment.student,
-    payment.group,
+    payment.studentId,
+    payment.groupId,
     payment.year,
     payment.month,
   );
 
   const snap = await buildSnapshot({
-    student: payment.student,
-    group: payment.group,
+    student: payment.studentId,
+    group: payment.groupId,
     year: payment.year,
     month: payment.month,
     // Har doim haqiqiy davrlar massivini uzatamiz: bo'sh bo'lsa (o'quvchi shu oyda
@@ -340,57 +406,57 @@ export const recalc = async (paymentId, { session } = {}) => {
     periods,
   });
 
-  const paidExpr = { $ifNull: ["$paidAmount", 0] };
-  const updated = await StudentPayment.findByIdAndUpdate(
-    paymentId,
-    [
-      {
-        $set: {
-          baseFee: snap.baseFee,
-          prorationFactor: snap.prorationFactor,
-          discountApplied: snap.discountApplied,
-          expectedAmount: snap.expectedAmount,
-          status: {
-            $switch: {
-              branches: [
-                { case: { $lte: [paidExpr, 0] }, then: "unpaid" },
-                { case: { $lt: [paidExpr, snap.expectedAmount] }, then: "partial" },
-              ],
-              default: "paid",
-            },
-          },
-          recalculatedAt: new Date(),
-        },
+  // Qatorni qulflab, statusni JORIY paidAmount dan keltirib chiqaramiz.
+  const runUpdate = async (c) => {
+    const rows = await c.$queryRaw`
+      SELECT "paidAmount" FROM "student_payments" WHERE "id" = ${id} FOR UPDATE
+    `;
+    if (!rows.length) return null;
+    const paid = Number(rows[0].paidAmount) || 0;
+    return c.studentPayment.update({
+      where: { id },
+      data: {
+        ...toPaymentColumns(snap),
+        status: deriveStatus(paid, snap.expectedAmount),
+        recalculatedAt: new Date(),
       },
-    ],
-    { new: true, session: session || undefined },
-  );
+    });
+  };
+
+  // Chaqiruvchi allaqachon tranzaksiya ichida bo'lsa yangisini ochib
+  // bo'lmaydi (Prisma ichma-ich tranzaksiyani qo'llamaydi) - o'sha
+  // klientda ishlaymiz, qulf baribir o'sha tranzaksiyaga tegishli.
+  const updated = tx ? await runUpdate(tx) : await prisma.$transaction(runUpdate);
 
   // Ortiqcha to'lovni depozitga qaytarish. MUHIM: taqqoslash accrued expected'ga
   // emas, TO'LIQ-OY obligatsiyasiga (fullExpectedAmount) nisbatan - shunda dars-asosli
   // accrual paytida avans (oldindan to'lov) har kuni depozitga ko'chib ketmaydi;
-  // faqat butun oy narxidan ORTIQ to'langan qism qaytadi. Faqat sessiyasiz
-  // (recompute kaskadi) - yaratish (session) oqimida emas.
+  // faqat butun oy narxidan ORTIQ to'langan qism qaytadi. Faqat tranzaksiyasiz
+  // (recompute kaskadi) - yaratish (tx) oqimida emas.
   // Dinamik import: deposit.service → studentPayment.service siklini oldini oladi.
   const fullExpected = snap.fullExpectedAmount ?? snap.expectedAmount;
-  if (!session && updated && (updated.paidAmount || 0) > fullExpected) {
+  if (!tx && updated && (updated.paidAmount || 0) > fullExpected) {
     try {
       const depositService = await import("../../deposits/services/deposit.service.js");
-      await depositService.reconcileDepositOverpay(updated._id, {
+      await depositService.reconcileDepositOverpay(updated.id, {
         capAmount: fullExpected,
       });
     } catch (err) {
       logger.warn({ err }, "Depozit ortiqcha qoplama qayta hisoblanmadi");
     }
   }
-  return updated;
+  return updated ? withLegacyId(updated) : null;
 };
 
 // Guruh+oy bo'yicha barcha to'lovlarni qayta hisoblaydi (fee o'zgarganda).
 export const recalcForGroupMonth = async (group, year, month) => {
-  const payments = await StudentPayment.find({ group, year, month }, { _id: 1 });
+  const payments = await prisma.studentPayment.findMany({
+    where: { groupId: String(group), year, month },
+    select: { id: true },
+  });
   for (const p of payments) {
-    await recalc(p._id);
+    // eslint-disable-next-line no-await-in-loop
+    await recalc(p.id);
   }
   return payments.length;
 };
@@ -398,14 +464,15 @@ export const recalcForGroupMonth = async (group, year, month) => {
 // O'quvchi+guruh chegirmasi o'zgarganda tegishli oylarni qayta hisoblaydi.
 // monthly chegirma → faqat shu oy; permanent → barcha mavjud oylar.
 export const recalcForStudentScope = async (student, group, { scope, year, month } = {}) => {
-  const filter = { student, group };
+  const where = { studentId: String(student), groupId: String(group) };
   if (scope === "monthly" && year && month) {
-    filter.year = year;
-    filter.month = month;
+    where.year = year;
+    where.month = month;
   }
-  const payments = await StudentPayment.find(filter, { _id: 1 });
+  const payments = await prisma.studentPayment.findMany({ where, select: { id: true } });
   for (const p of payments) {
-    await recalc(p._id);
+    // eslint-disable-next-line no-await-in-loop
+    await recalc(p.id);
   }
   return payments.length;
 };
@@ -416,10 +483,10 @@ export const recalcForStudentScope = async (student, group, { scope, year, month
 // to'langan davrni "men keyinroq qo'shilganman" deb o'chirib bo'lmaydi.
 export const earliestPaidMonthBefore = async (student, group, { year, month }) => {
   const beforeIdx = year * 12 + (month - 1);
-  const paid = await StudentPayment.find(
-    { student, group, paidAmount: { $gt: 0 } },
-    { year: 1, month: 1 },
-  ).lean();
+  const paid = await prisma.studentPayment.findMany({
+    where: { studentId: String(student), groupId: String(group), paidAmount: { gt: 0 } },
+    select: { year: true, month: true },
+  });
   let best = null;
   let bestIdx = Infinity;
   for (const p of paid) {
@@ -434,9 +501,13 @@ export const earliestPaidMonthBefore = async (student, group, { year, month }) =
 
 // O'quvchining tegishli barcha guruh/oy to'lovlarini qayta hisoblaydi.
 export const recalcForStudent = async (student) => {
-  const payments = await StudentPayment.find({ student }, { _id: 1 });
+  const payments = await prisma.studentPayment.findMany({
+    where: { studentId: String(student) },
+    select: { id: true },
+  });
   for (const p of payments) {
-    await recalc(p._id);
+    // eslint-disable-next-line no-await-in-loop
+    await recalc(p.id);
   }
   return payments.length;
 };
@@ -445,32 +516,41 @@ export const recalcForStudent = async (student) => {
 // bir kunga oldinga suradi (o'tib bo'lgan yangi dars(lar) qarzga qo'shiladi).
 // Kunlik job chaqiradi. Bitta yozuvdagi xato butun jarayonni to'xtatmaydi.
 export const accrueMonth = async (year, month) => {
-  const payments = await StudentPayment.find(
-    { year, month, isDeleted: { $ne: true } },
-    { _id: 1 },
-  );
+  const payments = await prisma.studentPayment.findMany({
+    where: { year, month },
+    select: { id: true },
+  });
   let recalculated = 0;
   for (const p of payments) {
     try {
-      await recalc(p._id);
+      // eslint-disable-next-line no-await-in-loop
+      await recalc(p.id);
       recalculated += 1;
     } catch (err) {
-      logger.warn({ err, payment: p._id }, "Kunlik accrual recalc xatosi");
+      logger.warn({ err, payment: p.id }, "Kunlik accrual recalc xatosi");
     }
   }
   return { total: payments.length, recalculated };
+};
+
+// USTUNNI USTUNGA solishtirish: Mongo `$expr: { $gt: ["$expectedAmount",
+// "$paidAmount"] }` → Prisma "field reference".
+const OUTSTANDING = {
+  expectedAmount: { gt: prisma.studentPayment.fields.paidAmount },
 };
 
 // O'quvchining shu guruhda FAOL qarzi (biror oyda expected>paid, write-off
 // qilinmagan) bormi. Hisobdan chiqarilgan (writtenOff) qarz faol qarz emas.
 export const hasOutstandingDebtInGroup = async (student, group) =>
   Boolean(
-    await StudentPayment.exists({
-      student,
-      group,
-      isDeleted: { $ne: true },
-      writtenOff: { $ne: true },
-      $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
+    await prisma.studentPayment.findFirst({
+      where: {
+        studentId: String(student),
+        groupId: String(group),
+        writtenOff: false,
+        ...OUTSTANDING,
+      },
+      select: { id: true },
     }),
   );
 
@@ -478,19 +558,19 @@ export const hasOutstandingDebtInGroup = async (student, group) =>
 // { total, items:[{ paymentId, year, month, amount }] }. Write-off qilinganlar
 // chiqarib tashlanadi. Chiqarish modalidagi summa va write-off shu funksiyaga tayanadi.
 export const getOutstandingBreakdownInGroup = async (student, group) => {
-  const payments = await StudentPayment.find(
-    {
-      student,
-      group,
-      isDeleted: { $ne: true },
-      writtenOff: { $ne: true },
-      $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
+  const payments = await prisma.studentPayment.findMany({
+    where: {
+      studentId: String(student),
+      groupId: String(group),
+      writtenOff: false,
+      ...OUTSTANDING,
     },
-    { year: 1, month: 1, expectedAmount: 1, paidAmount: 1 },
-  ).sort({ year: 1, month: 1 });
+    select: { id: true, year: true, month: true, expectedAmount: true, paidAmount: true },
+    orderBy: [{ year: "asc" }, { month: "asc" }],
+  });
 
   const items = payments.map((p) => ({
-    paymentId: p._id,
+    paymentId: p.id,
     year: p.year,
     month: p.month,
     amount: Math.max(0, (p.expectedAmount || 0) - (p.paidAmount || 0)),
@@ -509,117 +589,152 @@ export const writeOffDebtInGroup = async (
   group,
   { membershipId = null, currentUser = null, reasonTitle = "" } = {},
 ) => {
-  const { total, items } = await getOutstandingBreakdownInGroup(student, group);
+  const studentId = String(student);
+  const groupId = String(group);
+
+  const { total, items } = await getOutstandingBreakdownInGroup(studentId, groupId);
   if (total <= 0) return null;
 
-  const now = new Date();
-  await Promise.all(
-    items.map((it) =>
-      StudentPayment.updateOne(
-        { _id: it.paymentId },
-        { $set: { writtenOff: true, writeOffAmount: it.amount, writeOffAt: now } },
-      ),
-    ),
-  );
-
   const [studentDoc, groupDoc] = await Promise.all([
-    User.findById(student, { firstName: 1, lastName: 1 }).lean(),
-    Group.findById(group, { name: 1 }).lean(),
+    prisma.user.findUnique({
+      where: { id: studentId },
+      select: { firstName: true, lastName: true },
+    }),
+    prisma.group.findUnique({ where: { id: groupId }, select: { name: true } }),
   ]);
   const studentName = studentDoc
     ? `${studentDoc.firstName || ""} ${studentDoc.lastName || ""}`.trim()
     : "";
 
-  const writeOff = await DebtWriteOff.create({
-    student,
-    group,
-    membership: membershipId,
-    amount: total,
-    breakdown: items.map((it) => ({
-      payment: it.paymentId,
-      year: it.year,
-      month: it.month,
-      amount: it.amount,
-    })),
-    reasonTitle: reasonTitle || "",
-    studentName,
-    groupName: groupDoc?.name || "",
-    createdBy: currentUser?._id || null,
+  const now = new Date();
+
+  // ATOMIKLIK - HAQIQIY YAXSHILANISH: Mongo variantida to'lov qatorlari
+  // va audit yozuvi ALOHIDA yozilardi. Ikkinchisi yiqilsa qarz "yopilgan"
+  // bo'lib qolar, lekin uni KIM va NEGA yopgani hech qayerda qolmasdi -
+  // hisobotda sababsiz yo'qolgan pul. Endi ikkalasi bitta tranzaksiyada.
+  const writeOff = await prisma.$transaction(async (tx) => {
+    await Promise.all(
+      items.map((it) =>
+        tx.studentPayment.update({
+          where: { id: it.paymentId },
+          data: { writtenOff: true, writeOffAmount: it.amount, writeOffAt: now },
+        }),
+      ),
+    );
+
+    return tx.debtWriteOff.create({
+      data: {
+        studentId,
+        groupId,
+        membershipId: membershipId ? String(membershipId) : null,
+        amount: total,
+        // Mongo'da bu EMBEDDED massiv edi; Prisma'da alohida jadval
+        // (DebtWriteOffBreakdown) - ichma-ich `create` bilan yoziladi.
+        breakdown: {
+          create: items.map((it) => ({
+            paymentId: it.paymentId,
+            year: it.year,
+            month: it.month,
+            amount: it.amount,
+          })),
+        },
+        reasonTitle: reasonTitle || "",
+        studentName,
+        groupName: groupDoc?.name || "",
+        createdById: actorId(currentUser),
+      },
+      include: { breakdown: true },
+    });
   });
 
-  return { amount: total, writeOff };
+  return { amount: total, writeOff: withLegacyId(writeOff) };
 };
 
 // Bitta a'zolik uchun (o'quvchi guruhga qo'shilganda) shu oy to'lovini yaratadi.
-// session berilsa, ochiq MongoDB tranzaksiyasi ichida o'qib-yozadi (avans spill
-// paytida PaymentTransaction bilan birga atomik bo'lsin).
-export const ensurePaymentForMembership = async (membership, year, month, { session } = {}) => {
+// tx berilsa, ochiq tranzaksiya ichida o'qib-yozadi (avans spill paytida
+// PaymentTransaction bilan birga atomik bo'lsin).
+export const ensurePaymentForMembership = async (membership, year, month, { tx } = {}) => {
   if (!membership) return null;
+  const client = db(tx);
+  const studentId = String(membership.studentId ?? membership.student);
+  const groupId = String(membership.groupId ?? membership.group);
+  const membershipId = String(membership.id ?? membership._id);
+
   // isOpening:false - boshlang'ich qarz qatori shu oyda yonma-yon turgan
   // bo'lishi mumkin. Uni "plan allaqachon bor" deb qabul qilsak, o'quvchining
   // HAQIQIY oylik plani umuman yaratilmay qolardi (recalc uni muzlatilgan
   // deb darhol qaytaradi) - ya'ni oy bepul bo'lib ketardi.
-  const exists = await StudentPayment.findOne({
-    student: membership.student,
-    group: membership.group,
-    year,
-    month,
-    isOpening: false,
-  }).session(session || null);
+  const exists = await client.studentPayment.findUnique({
+    where: {
+      studentId_groupId_year_month_isOpening: {
+        studentId,
+        groupId,
+        year,
+        month,
+        isOpening: false,
+      },
+    },
+  });
   if (exists) {
     // Rejoin: shu oyda to'lov allaqachon bor (eski a'zolikniki). Uni joriy
     // a'zolikka ulab, barcha davrlar bo'yicha qayta hisoblaymiz - aks holda
     // yangi davr kunlari billing'ga kirmay qolardi.
-    if (String(exists.membership) !== String(membership._id)) {
-      exists.membership = membership._id;
-      await exists.save({ session: session || undefined });
+    if (String(exists.membershipId) !== membershipId) {
+      await client.studentPayment.update({
+        where: { id: exists.id },
+        data: { membershipId },
+      });
     }
-    return recalc(exists._id, { session });
+    return recalc(exists.id, { tx });
   }
 
   const snap = await buildSnapshot({
-    student: membership.student,
-    group: membership.group,
+    student: studentId,
+    group: groupId,
     year,
     month,
     joinedAt: membership.joinedAt,
     leftAt: membership.leftAt || null,
   });
 
-  // FILIAL: guruhdan meros. Bu funksiya Agenda job'laridan ham chaqiriladi
+  // FILIAL: guruhdan meros. Bu funksiya fon vazifalaridan ham chaqiriladi
   // (u yerda foydalanuvchi konteksti YO'Q), shuning uchun filial guruhdan
   // olinadi - kontekstga bog'liq bo'lmagan yagona to'g'ri manba.
-  const branchId = await resolveBranchFromGroup(membership.group);
+  const branchId = await resolveBranchFromGroup(groupId);
 
   try {
-    const docs = await StudentPayment.create(
-      [
-        {
-          branchId,
-          student: membership.student,
-          group: membership.group,
-          membership: membership._id,
-          year,
-          month,
-          ...snap,
-          paidAmount: 0,
-          status: deriveStatus(0, snap.expectedAmount),
-          recalculatedAt: new Date(),
-        },
-      ],
-      { session: session || undefined },
-    );
-    return docs[0];
-  } catch (err) {
-    // Unique index poyga holati (parallel generatsiya) - mavjudni qaytaramiz
-    if (err?.code === 11000) {
-      return StudentPayment.findOne({
-        student: membership.student,
-        group: membership.group,
+    const created = await client.studentPayment.create({
+      data: {
+        branchId,
+        studentId,
+        groupId,
+        membershipId,
         year,
         month,
-        isOpening: false,
-      }).session(session || null);
+        // `fullExpectedAmount` ustun EMAS - ajratib olinadi.
+        ...toPaymentColumns(snap),
+        paidAmount: 0,
+        status: deriveStatus(0, snap.expectedAmount),
+        recalculatedAt: new Date(),
+      },
+    });
+    return withLegacyId(created);
+  } catch (err) {
+    // Unique indeks poyga holati (parallel generatsiya) - mavjudni qaytaramiz.
+    // (studentId, groupId, year, month, isOpening) - Mongo 11000 → Prisma P2002.
+    if (err?.code === "P2002") {
+      const again = await client.studentPayment.findUnique({
+        where: {
+          studentId_groupId_year_month_isOpening: {
+            studentId,
+            groupId,
+            year,
+            month,
+            isOpening: false,
+          },
+        },
+      });
+      return again ? withLegacyId(again) : null;
     }
     throw err;
   }
@@ -627,34 +742,45 @@ export const ensurePaymentForMembership = async (membership, year, month, { sess
 
 // Berilgan oy uchun barcha faol a'zoliklarga to'lov yaratadi (job + regenerate).
 export const generateMonth = async (year, month) => {
-  const activeGroupIds = await Group.find(
-    { isActive: true, isDeleted: { $ne: true } },
-    { _id: 1 },
-  );
-  const ids = activeGroupIds.map((g) => g._id);
+  const activeGroups = await prisma.group.findMany({
+    where: { isActive: true, isDeleted: false },
+    select: { id: true },
+  });
+  const ids = activeGroups.map((g) => g.id);
 
   // Faol a'zolar + shu OY ICHIDA ketganlar (leftAt exclusive: oy boshidan keyin
   // ketgan bo'lsa, oy boshida hali a'zo edi - prorated to'lov yozuvi tegishli).
   // Aks holda kechiktirilgan regenerate oy o'rtasida ketganlarning haqini tashlab ketardi.
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
-  const memberships = await GroupMembership.find({
-    group: { $in: ids },
-    isDeleted: { $ne: true },
-    $or: [{ leftAt: null }, { leftAt: { $gt: monthStart } }],
-  });
+  const memberships = ids.length
+    ? await prisma.groupMembership.findMany({
+        where: {
+          groupId: { in: ids },
+          isDeleted: false,
+          OR: [{ leftAt: null }, { leftAt: { gt: monthStart } }],
+        },
+      })
+    : [];
 
   let created = 0;
   for (const m of memberships) {
     // isOpening:false - boshlang'ich qarz qatori oylik planning o'rnini
     // BOSA OLMAYDI (ensurePaymentForMembership'dagi bilan bir xil sabab).
-    const existed = await StudentPayment.findOne({
-      student: m.student,
-      group: m.group,
-      year,
-      month,
-      isOpening: false,
+    // eslint-disable-next-line no-await-in-loop
+    const existed = await prisma.studentPayment.findUnique({
+      where: {
+        studentId_groupId_year_month_isOpening: {
+          studentId: m.studentId,
+          groupId: m.groupId,
+          year,
+          month,
+          isOpening: false,
+        },
+      },
+      select: { id: true },
     });
     if (existed) continue;
+    // eslint-disable-next-line no-await-in-loop
     await ensurePaymentForMembership(m, year, month);
     created += 1;
   }
@@ -666,22 +792,24 @@ export const generateMonth = async (year, month) => {
 export const obligations = async ({ groupId, year, month }) => {
   // Write-off qilingan (yomon qarz) yozuvlar FAOL qarzdan chiqarib tashlanadi -
   // ular endi undiriladigan qarz emas, alohida "Yomon qarzlar" bo'limida ko'rinadi.
-  const filter = {
-    year: Number(year),
-    isDeleted: { $ne: true },
-    writtenOff: { $ne: true },
-  };
-  if (month) filter.month = Number(month);
-  if (groupId) filter.group = toObjectId(groupId);
+  const where = { year: Number(year), writtenOff: false };
+  if (month) where.month = Number(month);
+  if (groupId) where.groupId = String(groupId);
 
-  const items = await StudentPayment.find(filter)
-    .populate("student", safeStudentProjection)
-    .populate("group", { name: 1 })
-    .sort({ month: 1, createdAt: -1 });
+  const items = await prisma.studentPayment.findMany({
+    where,
+    include: {
+      student: { select: SAFE_STUDENT_SELECT },
+      group: { select: { id: true, name: true } },
+    },
+    orderBy: [{ month: "asc" }, { createdAt: "desc" }],
+  });
 
-  return items
-    .map((p) => ({ ...p.toJSON(), remaining: Math.max(0, p.expectedAmount - p.paidAmount) }))
-    .filter((p) => p.remaining > 0);
+  return withLegacyIds(
+    items
+      .map((p) => ({ ...p, remaining: Math.max(0, p.expectedAmount - p.paidAmount) }))
+      .filter((p) => p.remaining > 0),
+  );
 };
 
 export const list = async ({
@@ -694,108 +822,114 @@ export const list = async ({
   limit = 50,
 }) => {
   // FILIAL: StudentPayment'da branchId bor (guruhdan meros).
-  const filter = { ...branchFilter(), isDeleted: { $ne: true } };
-  if (groupId) filter.group = toObjectId(groupId);
-  if (year) filter.year = Number(year);
-  if (month) filter.month = Number(month);
-  if (status) filter.status = status;
+  const where = { ...branchFilter() };
+  if (groupId) where.groupId = String(groupId);
+  if (year) where.year = Number(year);
+  if (month) where.month = Number(month);
+  if (status) where.status = status;
 
-  // Ism/username bo'yicha qidiruv: mos o'quvchilarni topib, filtrga qo'shamiz.
-  // Bu paginatsiya (skip/limit) va total ham qidiruvni hisobga olishini ta'minlaydi.
+  // Ism/username bo'yicha qidiruv - DB darajasida (paginatsiya va total ham
+  // qidiruvni hisobga oladi).
+  //
+  // FARQ (ataylab): Mongo varianti `filter.student` ni qidiruv natijasi bilan
+  // BOSIB KETARDI - guruh+qidiruv birga ishlatilsa filtr yo'qolardi. Prisma'da
+  // ikkala shart AND bilan birlashadi (kesishma), ya'ni faqat toraytiradi.
   if (search && search.trim()) {
-    const s = search.trim();
-    const rx = new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    const matchedStudents = await User.find(
-      {
-        role: "student",
-        $or: [{ firstName: rx }, { lastName: rx }, { username: rx }],
-      },
-      { _id: 1 },
-    );
-    filter.student = { $in: matchedStudents.map((u) => u._id) };
+    const q = search.trim();
+    where.student = {
+      role: "student",
+      OR: [
+        { firstName: { contains: q, mode: "insensitive" } },
+        { lastName: { contains: q, mode: "insensitive" } },
+        { username: { contains: q, mode: "insensitive" } },
+      ],
+    };
   }
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    StudentPayment.find(filter)
-      .populate("student", safeStudentProjection)
-      .populate("group", { name: 1 })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    StudentPayment.countDocuments(filter),
+    prisma.studentPayment.findMany({
+      where,
+      include: {
+        student: { select: SAFE_STUDENT_SELECT },
+        group: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.studentPayment.count({ where }),
   ]);
 
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 export const getById = async (id) => {
-  const payment = await StudentPayment.findById(id)
-    .populate("student", safeStudentProjection)
-    .populate("group", { name: 1 })
-    .populate("membership", { joinedAt: 1 });
+  const payment = await prisma.studentPayment.findUnique({
+    where: { id: String(id) },
+    include: {
+      student: { select: SAFE_STUDENT_SELECT },
+      group: { select: { id: true, name: true } },
+      membership: { select: { id: true, joinedAt: true } },
+    },
+  });
   if (!payment) throw new ApiError(404, "To'lov topilmadi");
 
-  const transactions = await PaymentTransaction.find({
-    payment: payment._id,
-    isDeleted: { $ne: true },
-  }).sort({ paidAt: -1, createdAt: -1 });
+  const transactions = await prisma.paymentTransaction.findMany({
+    where: { paymentId: payment.id, isDeleted: false },
+    orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+  });
 
-  return { ...payment.toJSON(), transactions };
+  return withLegacyId({ ...payment, transactions });
 };
 
 // Bitta o'quvchining barcha oylardagi to'lovlari + har biriga tegishli
 // tranzaksiyalar (to'lovlar tarixi sahifasi uchun). Eng yangi oy yuqorida.
 export const historyByStudent = async (studentId) => {
-  const sid = toObjectId(studentId);
+  const sid = String(studentId);
   // FILIAL: boshqa filial o'quvchisining ismi ham ochilmasin (404 - mavjudligini
-  // ham oshkor qilmaymiz). $and ishlatiladi: userBranchCondition o'zi $or beradi.
+  // ham oshkor qilmaymiz). AND ishlatiladi: userBranchCondition o'zi OR beradi.
   const branchCond = userBranchCondition();
-  const student = await User.findOne(
-    branchCond ? { _id: sid, $and: [branchCond] } : { _id: sid },
-    safeStudentProjection,
-  ).lean();
+  const student = await prisma.user.findFirst({
+    where: { id: sid, ...(branchCond ? { AND: [branchCond] } : {}) },
+    select: SAFE_STUDENT_SELECT,
+  });
   if (!student) throw new ApiError(404, "O'quvchi topilmadi");
 
   // FILIAL: o'quvchi boshqa filialda ham to'lagan bo'lsa, u yerdagi
   // to'lovlari shu filial ko'rinishiga chiqmasin.
-  const payments = await StudentPayment.find({
-    student: sid,
-    ...branchFilter(),
-    isDeleted: { $ne: true },
-  })
-    .populate("group", { name: 1 })
-    .sort({ year: -1, month: -1 })
-    .lean();
+  const payments = await prisma.studentPayment.findMany({
+    where: { studentId: sid, ...branchFilter() },
+    include: { group: { select: { id: true, name: true } } },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+  });
 
-  const ids = payments.map((p) => p._id);
+  const ids = payments.map((p) => p.id);
   const txs = ids.length
-    ? await PaymentTransaction.find({
-        payment: { $in: ids },
-        isDeleted: { $ne: true },
+    ? await prisma.paymentTransaction.findMany({
+        where: { paymentId: { in: ids }, isDeleted: false },
+        orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
       })
-        .sort({ paidAt: -1, createdAt: -1 })
-        .lean()
     : [];
 
   const txByPayment = new Map();
   for (const t of txs) {
-    const key = String(t.payment);
+    const key = String(t.paymentId);
     if (!txByPayment.has(key)) txByPayment.set(key, []);
     txByPayment.get(key).push(t);
   }
 
   const items = payments.map((p) => ({
     ...p,
-    transactions: txByPayment.get(String(p._id)) || [],
+    transactions: txByPayment.get(String(p.id)) || [],
   }));
 
   const totalExpected = items.reduce((s, p) => s + (p.expectedAmount || 0), 0);
   const totalPaid = items.reduce((s, p) => s + (p.paidAmount || 0), 0);
 
   return {
-    student,
-    items,
+    student: withLegacyId(student),
+    items: withLegacyIds(items),
     summary: {
       months: items.length,
       totalExpected,

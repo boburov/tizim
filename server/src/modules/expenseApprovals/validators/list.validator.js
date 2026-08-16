@@ -3,7 +3,7 @@ import {
   ALL_APPROVAL_STATUSES,
   ALL_APPROVAL_KINDS,
   ALL_APPROVAL_CATEGORIES,
-} from "../../../models/approval.model.js";
+} from "../../../constants/approvals.js";
 
 // Saralash OQ RO'YXAT bilan cheklangan: query'dan kelgan matnni to'g'ridan
 // to'g'ri .sort() ga uzatish mumkin emas (ixtiyoriy maydon bo'yicha

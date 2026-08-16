@@ -1,4 +1,4 @@
-import { APPROVAL_KINDS } from "../models/approval.model.js";
+import { APPROVAL_KINDS } from "./approvals.js";
 
 // DELEGATSIYA MATRITSASI - filial rahbari qaysi SOZLAMA amalini o'zi hal
 // qila oladi, qaysinisi owner tasdig'iga tushadi.

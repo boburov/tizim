@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { OPENING_MAX_AMOUNT } from "../../../models/openingBalance.model.js";
+import { OPENING_MAX_AMOUNT } from "../../../constants/openingBalance.js";
 
 /**
  * BOSHLANG'ICH QOLDIQ SUMMASI - qayta ishlatiladigan bo'lak.

@@ -1,6 +1,6 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
 import * as service from "../services/expenseApproval.service.js";
-import { APPROVAL_CATEGORIES } from "../../../models/approval.model.js";
+import { APPROVAL_CATEGORIES } from "../../../constants/approvals.js";
 
 const approve = asyncHandler(async (req, res) => {
   const data = await service.approve(

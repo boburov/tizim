@@ -1,25 +1,47 @@
-import mongoose from "mongoose";
-import GroupFee from "../../../models/groupFee.model.js";
-import Group from "../../../models/group.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
 import logger from "../../../config/logger.js";
 import { localTodayMidnight } from "../../../helpers/attendance.helper.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import * as studentPaymentService from "./studentPayment.service.js";
 import * as teacherSalaryService from "../../teacherSalary/services/teacherSalary.service.js";
 
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
-  return new mongoose.Types.ObjectId(String(id));
-};
+// ═════════════════════════════════════════════════════════════════
+// GURUHNING OYLIK NARXI (GroupFee).
+//
+// MONGO → PRISMA
+//   { group: id }  → { groupId: id }
+//   findOneAndUpdate(..., { $setOnInsert }, { upsert: true })
+//                  → prisma.groupFee.upsert({ where: <compound>, create, update })
+//   err.code 11000 → err.code "P2002"
+//
+// IDEMPOTENTLIK: `@@unique([groupId, year, month])` - HAQIQIY (qisman
+// emas) unique indeks, shuning uchun Prisma'ning tabiiy `upsert` i
+// ishlatiladi. Bir guruh-oy uchun ikkinchi narx qatori bazada
+// yaratilishi MUMKIN EMAS.
+//
+// `session` → `tx`: chaqiruvchi ochiq tranzaksiya klientini uzatishi
+// mumkin. Berilmasa oddiy klient - imzo o'zgarmadi.
+// ═════════════════════════════════════════════════════════════════
+
+const db = (tx) => tx || prisma;
+
+const actorId = (u) => u?.id || u?._id || null;
+
+const feeKey = (groupId, year, month) => ({
+  groupId_year_month: { groupId: String(groupId), year, month },
+});
 
 // O'tgan oy to'lovini topadi (carry-forward uchun)
-const prevMonthAmount = async (group, year, month) => {
+const prevMonthAmount = async (group, year, month, tx) => {
   const prevYear = month === 1 ? year - 1 : year;
   const prevMonth = month === 1 ? 12 : month - 1;
-  const prev = await GroupFee.findOne({ group, year: prevYear, month: prevMonth });
+  const prev = await db(tx).groupFee.findUnique({
+    where: feeKey(group, prevYear, prevMonth),
+    select: { amount: true },
+  });
   return prev ? prev.amount : 0;
 };
 
@@ -56,26 +78,36 @@ const inheritedCourseAmount = async (group, year, month) => {
 };
 
 // Guruh+oy uchun to'lov yozuvi mavjudligini ta'minlaydi (carry-forward bilan).
-// session berilsa, ochiq MongoDB tranzaksiyasi ichida o'qib-yozadi.
-export const ensureGroupFee = async (group, year, month, { session } = {}) => {
-  const existing = await GroupFee.findOne({ group, year, month }).session(session || null);
-  if (existing) return existing;
+// tx berilsa, ochiq tranzaksiya ichida o'qib-yozadi.
+export const ensureGroupFee = async (group, year, month, { tx } = {}) => {
+  const client = db(tx);
+  const groupId = String(group);
+
+  const existing = await client.groupFee.findUnique({ where: feeKey(groupId, year, month) });
+  if (existing) return withLegacyId(existing);
 
   // MEROS TARTIBI: o'tgan oy tarifi -> KURS narxi -> 0.
   //
   // O'tgan oy USTUN: guruhga qo'lda qo'yilgan narx katalog narxidan
   // muhimroq (u aniq bu guruh uchun qabul qilingan qaror).
-  let amount = await prevMonthAmount(group, year, month);
-  if (!amount) amount = await inheritedCourseAmount(group, year, month);
+  let amount = await prevMonthAmount(groupId, year, month, tx);
+  if (!amount) amount = await inheritedCourseAmount(groupId, year, month);
+
   try {
-    return await GroupFee.findOneAndUpdate(
-      { group, year, month },
-      { $setOnInsert: { group, year, month, amount, source: "auto" } },
-      { upsert: true, new: true, session: session || undefined },
-    );
+    // `update: {}` - Mongo'dagi `$setOnInsert` ning aynan ekvivalenti:
+    // qator allaqachon bo'lsa HECH NARSA o'zgartirilmaydi (qo'lda
+    // qo'yilgan narx avtomatik meros bilan bosib ketilmasin).
+    const row = await client.groupFee.upsert({
+      where: feeKey(groupId, year, month),
+      create: { groupId, year, month, amount, source: "auto" },
+      update: {},
+    });
+    return withLegacyId(row);
   } catch (err) {
-    if (err?.code === 11000) {
-      return GroupFee.findOne({ group, year, month }).session(session || null);
+    // POYGA: ikki jarayon bir vaqtda yaratmoqchi bo'ldi.
+    if (err?.code === "P2002") {
+      const again = await client.groupFee.findUnique({ where: feeKey(groupId, year, month) });
+      return again ? withLegacyId(again) : null;
     }
     throw err;
   }
@@ -92,9 +124,10 @@ export const ensureGroupFee = async (group, year, month, { session } = {}) => {
 // savoliga yon ta'sirsiz javob berish uchun aynan mos.
 export const nearestFeeAmount = async (group, year, month) => {
   const idx = year * 12 + (month - 1);
-  const fees = await GroupFee.find({ group })
-    .select({ year: 1, month: 1, amount: 1 })
-    .lean();
+  const fees = await prisma.groupFee.findMany({
+    where: { groupId: String(group) },
+    select: { year: true, month: true, amount: true },
+  });
   if (!fees.length) return 0;
   let priorBest = null; // <= idx ichida eng yaqin (o'sha vaqtdagi tarif)
   let earliest = null; // hammasi kelajakda bo'lsa - eng erta tarif
@@ -113,17 +146,23 @@ export const nearestFeeAmount = async (group, year, month) => {
 // Berilgan oy uchun GroupFee mavjudligini ta'minlaydi; bo'lmasa eng yaqin mavjud
 // tarif summasi bilan yaratadi (carry-forward emas - o'tmishga backfill).
 export const ensureGroupFeeBackfill = async (group, year, month) => {
-  const existing = await GroupFee.findOne({ group, year, month });
-  if (existing) return existing;
-  const amount = await nearestFeeAmount(group, year, month);
+  const groupId = String(group);
+  const existing = await prisma.groupFee.findUnique({ where: feeKey(groupId, year, month) });
+  if (existing) return withLegacyId(existing);
+
+  const amount = await nearestFeeAmount(groupId, year, month);
   try {
-    return await GroupFee.findOneAndUpdate(
-      { group, year, month },
-      { $setOnInsert: { group, year, month, amount, source: "auto" } },
-      { upsert: true, new: true },
-    );
+    const row = await prisma.groupFee.upsert({
+      where: feeKey(groupId, year, month),
+      create: { groupId, year, month, amount, source: "auto" },
+      update: {},
+    });
+    return withLegacyId(row);
   } catch (err) {
-    if (err?.code === 11000) return GroupFee.findOne({ group, year, month });
+    if (err?.code === "P2002") {
+      const again = await prisma.groupFee.findUnique({ where: feeKey(groupId, year, month) });
+      return again ? withLegacyId(again) : null;
+    }
     throw err;
   }
 };
@@ -132,26 +171,35 @@ export const ensureGroupFeeBackfill = async (group, year, month) => {
 export const list = async ({ year, month, search }) => {
   // FILIAL: guruhlar filtrlansa, ularning narxlari ham avtomatik cheklanadi
   // (fees quyida aynan shu guruh ID'lari bo'yicha olinadi).
-  const match = { ...branchFilter(), isActive: true, isDeleted: { $ne: true } };
+  const where = { ...branchFilter(), isActive: true, isDeleted: false };
   if (search && search.trim()) {
-    match.name = { $regex: search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+    where.name = { contains: search.trim(), mode: "insensitive" };
   }
-  const groups = await Group.find(match, { name: 1 }).sort({ name: 1 });
-
-  const fees = await GroupFee.find({
-    group: { $in: groups.map((g) => g._id) },
-    year: Number(year),
-    month: Number(month),
+  const groups = await prisma.group.findMany({
+    where,
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
   });
-  const byGroup = new Map(fees.map((f) => [String(f.group), f]));
+
+  const fees = groups.length
+    ? await prisma.groupFee.findMany({
+        where: {
+          groupId: { in: groups.map((g) => g.id) },
+          year: Number(year),
+          month: Number(month),
+        },
+      })
+    : [];
+  const byGroup = new Map(fees.map((f) => [String(f.groupId), f]));
 
   return groups.map((g) => {
-    const fee = byGroup.get(String(g._id));
+    const fee = byGroup.get(String(g.id));
     return {
-      group: { _id: g._id, name: g.name },
+      // Client `row.group._id` o'qiydi - moslik saqlanadi.
+      group: { id: g.id, _id: g.id, name: g.name },
       year: Number(year),
       month: Number(month),
-      feeId: fee ? fee._id : null,
+      feeId: fee ? fee.id : null,
       amount: fee ? fee.amount : null,
       source: fee ? fee.source : null,
     };
@@ -161,14 +209,23 @@ export const list = async ({ year, month, search }) => {
 // Bitta guruhning barcha oylik to'lovlari (sub-sahifa). Joriy oyni ta'minlaydi.
 export const byGroup = async (groupId) => {
   // FILIAL: boshqa filial guruhining narx tarixi ochilmasin.
-  const group = await Group.findOne({ _id: groupId, ...branchFilter() }, { name: 1 });
+  const group = await prisma.group.findFirst({
+    where: { id: String(groupId), ...branchFilter() },
+    select: { id: true, name: true },
+  });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
   const today = localTodayMidnight();
-  await ensureGroupFee(group._id, today.getUTCFullYear(), today.getUTCMonth() + 1);
+  await ensureGroupFee(group.id, today.getUTCFullYear(), today.getUTCMonth() + 1);
 
-  const fees = await GroupFee.find({ group: groupId }).sort({ year: -1, month: -1 });
-  return { group: { _id: group._id, name: group.name }, fees };
+  const fees = await prisma.groupFee.findMany({
+    where: { groupId: group.id },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+  });
+  return {
+    group: { id: group.id, _id: group.id, name: group.name },
+    fees: withLegacyIds(fees),
+  };
 };
 
 // Guruh+oy to'lovini o'rnatadi (upsert). Narx faqat shu (yil, oy) ga ta'sir qiladi -
@@ -176,27 +233,40 @@ export const byGroup = async (groupId) => {
 export const upsert = async ({ groupId, year, month, amount }, currentUser) => {
   // FILIAL: bu YOZUV amali - boshqa filial guruhining narxini o'zgartirish
   // butun o'quvchi to'lovlari va o'qituvchi maoshini qayta hisoblardi.
-  const group = await Group.findOne({ _id: groupId, ...branchFilter() });
+  const group = await prisma.group.findFirst({
+    where: { id: String(groupId), ...branchFilter() },
+    select: { id: true, name: true, isActive: true, isDeleted: true, endDate: true },
+  });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
   assertGroupActive(group);
 
-  const fee = await GroupFee.findOneAndUpdate(
-    { group: groupId, year, month },
-    {
-      $set: { amount, source: "manual", updatedBy: currentUser?._id || null },
-      $setOnInsert: { group: groupId, year, month, createdBy: currentUser?._id || null },
+  const by = actorId(currentUser);
+  const fee = await prisma.groupFee.upsert({
+    where: feeKey(group.id, year, month),
+    create: {
+      groupId: group.id,
+      year,
+      month,
+      amount,
+      source: "manual",
+      createdById: by,
+      updatedById: by,
     },
-    { upsert: true, new: true },
-  );
+    update: { amount, source: "manual", updatedById: by },
+  });
 
-  // Avval o'quvchilar (billed manbai), keyin o'qituvchi foiz maoshi
-  await studentPaymentService.recalcForGroupMonth(groupId, year, month);
+  // Avval o'quvchilar (billed manbai), keyin o'qituvchi foiz maoshi.
+  //
+  // O'QUVCHI QAYTA HISOBI BEST-EFFORT EMAS: narx o'zgardi-yu, o'quvchi
+  // qarzi eski summada qolsa - kirim hisoboti yolg'on bo'lardi. Xato
+  // yuqoriga qaytadi va chaqiruvchi 500 oladi.
+  await studentPaymentService.recalcForGroupMonth(group.id, year, month);
   try {
-    await teacherSalaryService.recalcForGroupMonth(groupId, year, month);
+    await teacherSalaryService.recalcForGroupMonth(group.id, year, month);
   } catch (err) {
     logger.warn({ err }, "Guruh to'lovi o'zgarishida o'qituvchi maoshi qayta hisoblanmadi");
   }
-  return fee;
+  return withLegacyId(fee);
 };
 
 // --- GURUH NARXI TASDIG'I (owner tasdig'i talab qilinganda) ---
@@ -221,29 +291,35 @@ export const requestGroupFee = async ({ groupId, year, month, amount, requestNot
   const approvalService = await import(
     "../../expenseApprovals/services/expenseApproval.service.js"
   );
-  const { APPROVAL_KINDS } = await import("../../../models/approval.model.js");
+  const { APPROVAL_KINDS } = await import("../../../constants/approvals.js");
 
   // Filial ko'lami so'rov paytida ham tekshiriladi - direktor boshqa filial
   // guruhiga so'rov yubora olmasin.
-  const group = await Group.findOne({ _id: groupId, ...branchFilter() });
+  const group = await prisma.group.findFirst({
+    where: { id: String(groupId), ...branchFilter() },
+    select: { id: true, name: true, branchId: true, isActive: true, isDeleted: true, endDate: true },
+  });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
   assertGroupActive(group);
 
   // Owner "qanchadan qanchaga" ekanini ko'rishi uchun eski narx snapshot'i.
-  const existing = await GroupFee.findOne({ group: groupId, year, month }).lean();
+  const existing = await prisma.groupFee.findUnique({
+    where: feeKey(group.id, year, month),
+    select: { amount: true },
+  });
 
   return approvalService.createRequest({
     branchId: group.branchId,
     kind: APPROVAL_KINDS.GROUP_FEE_SET,
     payload: {
-      groupId: String(groupId),
+      groupId: String(group.id),
       year,
       month,
       amount,
       previousAmount: existing ? existing.amount : null,
     },
     // Bitta guruh-oy uchun bitta kutilayotgan so'rov.
-    subjectKey: `group_fee:${String(groupId)}:${year}:${month}`,
+    subjectKey: `group_fee:${String(group.id)}:${year}:${month}`,
     subjectName: group.name || "",
     contextName: `${month}/${year}`,
     requestNote,
@@ -267,33 +343,39 @@ export const executeApprovedGroupFee = async (approval) => {
   const { runWithBranchContext } = await import("../../../helpers/branchContext.helper.js");
   const p = approval?.payload || {};
   const branchId = String(approval.branchId);
+  const requesterId = approval?.requestedById || approval?.requestedBy || null;
 
   return runWithBranchContext(
     {
       branchId,
       allowedBranchIds: [branchId],
       canSeeAllBranches: false,
-      userId: String(approval.requestedBy || ""),
+      userId: String(requesterId || ""),
     },
     () =>
       upsert(
         { groupId: p.groupId, year: p.year, month: p.month, amount: p.amount },
-        { _id: approval?.requestedBy || null },
+        { id: requesterId, _id: requesterId },
       ),
   );
 };
 
 // Berilgan oy uchun barcha faol guruhlarga to'lov yozuvini ta'minlaydi (carry-forward).
 export const generateMonth = async (year, month) => {
-  const groups = await Group.find(
-    { isActive: true, isDeleted: { $ne: true } },
-    { _id: 1 },
-  );
+  const groups = await prisma.group.findMany({
+    where: { isActive: true, isDeleted: false },
+    select: { id: true },
+  });
   let created = 0;
   for (const g of groups) {
-    const existed = await GroupFee.findOne({ group: g._id, year, month });
+    // eslint-disable-next-line no-await-in-loop
+    const existed = await prisma.groupFee.findUnique({
+      where: feeKey(g.id, year, month),
+      select: { id: true },
+    });
     if (existed) continue;
-    await ensureGroupFee(g._id, year, month);
+    // eslint-disable-next-line no-await-in-loop
+    await ensureGroupFee(g.id, year, month);
     created += 1;
   }
   return { groups: groups.length, created };

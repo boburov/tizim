@@ -30,6 +30,18 @@ import {
 // verify/backfill topib tuzatadi. Bu ATAYLAB tanlangan murosaga -
 // jurnal "eventual consistent", operatsion yozuv esa darhol.
 
+// ─────────────────────────────────────────────────────────────────
+// MONGO → PRISMA MOSLIK
+//
+// Manba yozuvi Prisma'dan kelsa `id` / `createdById`, ko'chirilmagan
+// chaqiruvchidan kelsa `_id` / `createdBy` bo'ladi. Faqat bittasiga
+// tayanish JIMGINA `undefined` berardi: jurnal yozuvi yaratilaverardi,
+// lekin u QAYSI to'lovga tegishli ekani (`refId`) yo'qolardi - ya'ni
+// storno va tekshiruv uchun izsiz qolardi.
+// ─────────────────────────────────────────────────────────────────
+const refIdOf = (doc) => doc?.id ?? doc?._id ?? null;
+const creatorOf = (doc) => doc?.createdById ?? doc?.createdBy ?? null;
+
 const safePost = async (label, fn) => {
   try {
     return await fn();
@@ -65,8 +77,8 @@ export const postPayment = async (trx, journal) =>
         { accountKind: ACCOUNT_KINDS.REVENUE, credit: trx.amount },
       ],
       refModel: "PaymentTransaction",
-      refId: trx._id,
-      createdBy: trx.createdBy || null,
+      refId: refIdOf(trx),
+      createdBy: creatorOf(trx),
     }),
   );
 
@@ -90,8 +102,8 @@ export const postDepositTopup = async (txn, journal) =>
         { accountKind: ACCOUNT_KINDS.DEPOSIT, credit: txn.amount },
       ],
       refModel: "DepositTransaction",
-      refId: txn._id,
-      createdBy: txn.createdBy || null,
+      refId: refIdOf(txn),
+      createdBy: creatorOf(txn),
     }),
   );
 
@@ -113,8 +125,8 @@ export const postDepositWithdraw = async (txn, journal) =>
         { accountKind: accountForMethod(txn.method), credit: txn.amount },
       ],
       refModel: "DepositTransaction",
-      refId: txn._id,
-      createdBy: txn.createdBy || null,
+      refId: refIdOf(txn),
+      createdBy: creatorOf(txn),
     }),
   );
 
@@ -139,8 +151,8 @@ export const postDepositApply = async (trx, journal) =>
         { accountKind: ACCOUNT_KINDS.REVENUE, credit: trx.amount },
       ],
       refModel: "PaymentTransaction",
-      refId: trx._id,
-      createdBy: trx.createdBy || null,
+      refId: refIdOf(trx),
+      createdBy: creatorOf(trx),
     }),
   );
 
@@ -168,8 +180,8 @@ export const postExpense = async (expense, journal) => {
         { accountKind: accountForMethod(expense.method), credit: expense.amount },
       ],
       refModel: "Expense",
-      refId: expense._id,
-      createdBy: expense.createdBy || null,
+      refId: refIdOf(expense),
+      createdBy: creatorOf(expense),
     }),
   );
 };
@@ -197,8 +209,8 @@ export const postSalary = async (txn, journal, refModel) => {
         { accountKind: accountForMethod(txn.method), credit: txn.amount },
       ],
       refModel,
-      refId: txn._id,
-      createdBy: txn.createdBy || null,
+      refId: refIdOf(txn),
+      createdBy: creatorOf(txn),
     }),
   );
 };

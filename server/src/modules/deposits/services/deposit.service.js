@@ -1,9 +1,4 @@
-import mongoose from "mongoose";
-import StudentDeposit from "../../../models/studentDeposit.model.js";
-import DepositTransaction from "../../../models/depositTransaction.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -11,10 +6,10 @@ import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.h
 import {
   resolveBranchFromUser,
   branchFilter,
-  branchMatchStage,
   branchUserFilter,
 } from "../../../helpers/branchContext.helper.js";
-import { EXPENSE_KINDS } from "../../../models/approval.model.js";
+import { EXPENSE_KINDS } from "../../../constants/approvals.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import {
   checkExpenseLimit,
   createRequest,
@@ -23,59 +18,101 @@ import * as studentPaymentService from "../../finance/services/studentPayment.se
 import * as journalPosting from "../../../helpers/journalPosting.helper.js";
 import * as journal from "../../journal/services/journal.service.js";
 
-const safeStudentProjection = { firstName: 1, lastName: 1, username: 1, phone: 1 };
+// ═══════════════════════════════════════════════════════════════════════
+// O'QUVCHI DEPOZITI (oldindan to'lov / garov).
+//
+// MONGO → PRISMA
+//   { student: id }        → { studentId: id }
+//   { deposit: id }        → { depositId: id }
+//   { payment: id }        → { paymentId: id }
+//   $inc: { balance: d }   → { balance: { increment: d } }  (shartsiz)
+//                          → xom `UPDATE ... WHERE balance >= -d` (shartli)
+//   session                → tx
+//   err.code 11000         → err.code "P2002"
+//
+// BALANS ATOMIKLIGI: yechishda `balance >= -delta` sharti YOZUV BILAN
+// BIR AMALDA bajarilishi SHART. Mongo buni `findOneAndUpdate(filter, $inc)`
+// bilan qilardi. Prisma'ning `update({ increment })` da `where` faqat
+// unique maydonlarni qabul qiladi, ya'ni shartni u yerga qo'yib bo'lmaydi;
+// `updateMany` esa yangilangan qatorni qaytarmaydi. Shuning uchun shartli
+// yo'l xom SQL bilan yozilgan - `RETURNING` orqali yangi balans darhol
+// olinadi va "o'qi → tekshir → yoz" poygasi umuman paydo bo'lmaydi.
+//
+// `StudentDeposit.studentId` UNIQUE - shuning uchun hisob ochish
+// `upsert` bilan: ikki parallel to'ldirish ikkita hisob yaratib,
+// o'quvchi pulining yarmini "ko'rinmas" qilib qo'ya olmaydi.
+// ═══════════════════════════════════════════════════════════════════════
 
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
-  return new mongoose.Types.ObjectId(String(id));
+const SAFE_STUDENT_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  username: true,
+  phone: true,
 };
 
+const db = (tx) => tx || prisma;
+const actorId = (u) => u?.id || u?._id || null;
+
 const ensureStudent = async (studentId) => {
-  const student = await User.findOne({
-    _id: studentId,
-    role: ROLES.STUDENT,
-    isDeleted: { $ne: true },
+  const student = await prisma.user.findFirst({
+    where: { id: String(studentId), role: ROLES.STUDENT, isDeleted: false },
+    select: { id: true, firstName: true, lastName: true, homeBranchId: true },
   });
   if (!student) throw new ApiError(400, "O'quvchi topilmadi");
   return student;
 };
 
 // O'quvchining depozit hisobi (yo'q bo'lsa yaratiladi).
-// session berilsa, ochiq MongoDB tranzaksiyasi ichida o'qib-yozadi.
-export const getOrCreate = async (student, { session } = {}) => {
-  const sid = toObjectId(student);
-  const existing = await StudentDeposit.findOne({ student: sid }).session(session || null);
-  if (existing) return existing;
-  try {
-    const docs = await StudentDeposit.create([{ student: sid, balance: 0 }], {
-      session: session || undefined,
-    });
-    return docs[0];
-  } catch (err) {
-    if (err?.code === 11000) {
-      return StudentDeposit.findOne({ student: sid }).session(session || null);
-    }
-    throw err;
-  }
+// tx berilsa, ochiq tranzaksiya ichida o'qib-yozadi.
+export const getOrCreate = async (student, { tx } = {}) => {
+  const studentId = String(student);
+  const client = db(tx);
+  // `studentId` unique bo'lgani uchun upsert POYGAGA CHIDAMLI:
+  // findFirst → create ketma-ketligi ikki parallel to'ldirishda
+  // ikkita hisob yaratib, balansni bo'lib yuborardi.
+  return client.studentDeposit.upsert({
+    where: { studentId },
+    create: { studentId, balance: 0 },
+    update: {},
+  });
 };
 
 export const balanceFor = async (student) => {
-  const dep = await StudentDeposit.findOne({ student: toObjectId(student) });
+  const dep = await prisma.studentDeposit.findUnique({
+    where: { studentId: String(student) },
+    select: { balance: true },
+  });
   return dep?.balance || 0;
 };
 
-// Balansni atomik o'zgartiradi. delta<0 (yechish) bo'lsa balance yetarli bo'lishi
-// shart - aks holda hujjat yangilanmaydi (null) → chaqiruvchi xato beradi.
-// session berilsa, ochiq MongoDB tranzaksiyasi ichida yoziladi.
-const applyBalanceDelta = async (depositId, delta, { session } = {}) => {
-  const filter = { _id: depositId };
-  if (delta < 0) filter.balance = { $gte: -delta };
-  return StudentDeposit.findOneAndUpdate(
-    filter,
-    { $inc: { balance: delta } },
-    { new: true, session: session || undefined },
-  );
+// Balansni atomik o'zgartiradi. delta<0 (yechish) bo'lsa balans yetarli bo'lishi
+// shart - aks holda qator yangilanmaydi (null) → chaqiruvchi xato beradi.
+// tx berilsa, ochiq tranzaksiya ichida yoziladi.
+const applyBalanceDelta = async (depositId, delta, { tx } = {}) => {
+  const client = db(tx);
+  const id = String(depositId);
+  const d = Number(delta) || 0;
+
+  // Kamaytirish: shart va yozuv BITTA amalda. `RETURNING` yangi balansni
+  // beradi, ya'ni qo'shimcha o'qish (va u bilan birga poyga) shart emas.
+  if (d < 0) {
+    const rows = await client.$queryRaw`
+      UPDATE "student_deposits"
+      SET "balance" = "balance" + ${d}::double precision,
+          "updatedAt" = NOW()
+      WHERE "id" = ${id}
+        AND "balance" >= ${-d}::double precision
+      RETURNING "id", "studentId", "balance"
+    `;
+    return rows.length ? rows[0] : null;
+  }
+
+  // Oshirish: shart yo'q, Prisma'ning atomik `increment` i yetarli.
+  return client.studentDeposit.update({
+    where: { id },
+    data: { balance: { increment: d } },
+  });
 };
 
 // --- DEPOZIT QO'SHISH / YECHISH ---
@@ -89,7 +126,7 @@ export const topup = async (
   { amount, method, paidAt, note, isOpening = false },
   currentUser,
 ) => {
-  // FILIAL: o'quvchining filiali (ensureStudent allaqachon hujjatni oladi).
+  // FILIAL: o'quvchining filiali (ensureStudent allaqachon yozuvni oladi).
   const student = await ensureStudent(studentId);
   const amt = Number(amount);
   if (!amt || amt <= 0) throw new ApiError(400, "Summa noto'g'ri");
@@ -99,20 +136,22 @@ export const topup = async (
     throw new ApiError(400, "Sana kelajakda bo'lishi mumkin emas");
   }
 
-  const deposit = await getOrCreate(studentId);
-  const updated = await applyBalanceDelta(deposit._id, amt);
-  const txn = await DepositTransaction.create({
-    branchId: student.homeBranchId || null,
-    student: deposit.student,
-    deposit: deposit._id,
-    type: "topup",
-    amount: amt,
-    method: method || "cash",
-    balanceAfter: updated.balance,
-    note: note || "",
-    isOpening: Boolean(isOpening),
-    paidAt: day,
-    createdBy: currentUser?._id || null,
+  const deposit = await getOrCreate(student.id);
+  const updated = await applyBalanceDelta(deposit.id, amt);
+  const txn = await prisma.depositTransaction.create({
+    data: {
+      branchId: student.homeBranchId || null,
+      studentId: deposit.studentId,
+      depositId: deposit.id,
+      type: "topup",
+      amount: amt,
+      method: method || "cash",
+      balanceAfter: updated.balance,
+      note: note || "",
+      isOpening: Boolean(isOpening),
+      paidAt: day,
+      createdById: actorId(currentUser),
+    },
   });
 
   // JURNAL: pul kassaga kirdi, lekin DAROMAD EMAS - o'quvchining
@@ -120,12 +159,13 @@ export const topup = async (
   await journalPosting.postDepositTopup(txn, journal);
 
   // Pul qo'yilishi bilan mavjud qarzlarni darhol qoplaymiz (eng eskisidan).
-  await autoApply(studentId);
+  await autoApply(student.id);
   // txn - chaqiruvchi audit izini yozishi uchun (openingBalance.service.js
-  // materializedRefs). Depozit hujjati esa avvalgidek qaytadi.
-  const fresh = await getOrCreate(studentId);
-  fresh.$lastTransactionId = txn._id;
-  return fresh;
+  // materializedRefs). Depozit yozuvi esa avvalgidek qaytadi.
+  const fresh = await getOrCreate(student.id);
+  const out = withLegacyId(fresh);
+  out.$lastTransactionId = txn.id;
+  return out;
 };
 
 // Yechish uchun umumiy tekshiruvlar. To'g'ridan-to'g'ri yo'lda ham,
@@ -154,33 +194,35 @@ const writeWithdraw = async ({
   expenseApprovalId = null,
 }) => {
   const deposit = await getOrCreate(studentId);
-  const updated = await applyBalanceDelta(deposit._id, -amt);
+  const updated = await applyBalanceDelta(deposit.id, -amt);
   if (!updated) {
     throw new ApiError(400, `To'lovda yetarli mablag' yo'q (balans: ${deposit.balance} so'm)`);
   }
   try {
-    const txn = await DepositTransaction.create({
-      branchId: student.homeBranchId || null,
-      student: deposit.student,
-      deposit: deposit._id,
-      type: "withdraw",
-      amount: amt,
-      method: method || "cash",
-      balanceAfter: updated.balance,
-      note: note || "",
-      paidAt: day,
-      createdBy: createdBy || null,
-      expenseApprovalId,
+    const txn = await prisma.depositTransaction.create({
+      data: {
+        branchId: student.homeBranchId || null,
+        studentId: deposit.studentId,
+        depositId: deposit.id,
+        type: "withdraw",
+        amount: amt,
+        method: method || "cash",
+        balanceAfter: updated.balance,
+        note: note || "",
+        paidAt: day,
+        createdById: createdBy ? String(createdBy) : null,
+        expenseApprovalId: expenseApprovalId ? String(expenseApprovalId) : null,
+      },
     });
 
     // JURNAL: majburiyat kamaydi, pul kassadan chiqdi.
     await journalPosting.postDepositWithdraw(txn, journal);
   } catch (err) {
     // Yozuv yaratilmasa balans kamaytirilgancha qolmasin (rollback).
-    await applyBalanceDelta(deposit._id, amt);
+    await applyBalanceDelta(deposit.id, amt);
     throw err;
   }
-  return getOrCreate(studentId);
+  return withLegacyId(await getOrCreate(studentId));
 };
 
 export const withdraw = async (studentId, { amount, method, paidAt, note }, currentUser) => {
@@ -200,7 +242,7 @@ export const withdraw = async (studentId, { amount, method, paidAt, note }, curr
       amount: amt,
       threshold,
       payload: {
-        studentId: String(studentId),
+        studentId: String(student.id),
         method: method || "cash",
         paidAt: day,
         note: note || "",
@@ -213,25 +255,30 @@ export const withdraw = async (studentId, { amount, method, paidAt, note }, curr
   }
 
   return writeWithdraw({
-    studentId,
+    studentId: student.id,
     student,
     amt,
     day,
     method,
     note,
-    createdBy: currentUser?._id,
+    createdBy: actorId(currentUser),
   });
 };
 
 /**
  * TASDIQLANGAN yechishni bajaradi (expenseApproval.service'dan chaqiriladi).
  * Avval mavjud tranzaksiya tekshiriladi - aynan bir marta kafolati.
+ *
+ * QISMAN UNIQUE INDEKS: (expenseApprovalId) WHERE expenseApprovalId IS NOT NULL.
+ * Ya'ni bir tasdiq bo'yicha ikkinchi yechish BAZADA ham to'siladi - pastdagi
+ * tekshiruv faqat tez yo'l, haqiqiy kafolat indeksda.
  */
 export const executeApprovedWithdraw = async (approval) => {
-  const existing = await DepositTransaction.findOne({
-    expenseApprovalId: approval._id,
+  const approvalId = String(approval.id ?? approval._id);
+  const existing = await prisma.depositTransaction.findFirst({
+    where: { expenseApprovalId: approvalId },
   });
-  if (existing) return existing;
+  if (existing) return withLegacyId(existing);
 
   const { studentId, method, paidAt, note } = approval.payload || {};
 
@@ -242,17 +289,20 @@ export const executeApprovedWithdraw = async (approval) => {
   });
 
   await writeWithdraw({
-    studentId,
+    studentId: student.id,
     student,
     amt,
     day,
     method,
     note,
-    createdBy: approval.requestedBy,
-    expenseApprovalId: approval._id,
+    createdBy: approval.requestedById || approval.requestedBy,
+    expenseApprovalId: approvalId,
   });
 
-  return DepositTransaction.findOne({ expenseApprovalId: approval._id });
+  const created = await prisma.depositTransaction.findFirst({
+    where: { expenseApprovalId: approvalId },
+  });
+  return created ? withLegacyId(created) : null;
 };
 
 // --- QOPLAMA (depozit → oylik plan) ---
@@ -266,33 +316,35 @@ const applyToPayment = async (deposit, payment, amount, currentUser) => {
   if (amt <= 0) return 0;
 
   // Avval balansni atomik kamaytiramiz (yetmasa null).
-  const balUpd = await applyBalanceDelta(deposit._id, -amt);
+  const balUpd = await applyBalanceDelta(deposit.id, -amt);
   if (!balUpd) return 0;
 
   // Planga qo'llaymiz (cap qoldiqqacha). Agar muvaffaqiyatsiz bo'lsa balansni qaytaramiz.
-  const planUpd = await studentPaymentService.applyPaidDelta(payment._id, amt, {
+  const planUpd = await studentPaymentService.applyPaidDelta(payment.id, amt, {
     capToRemaining: true,
   });
   if (!planUpd) {
-    await applyBalanceDelta(deposit._id, amt); // rollback
+    await applyBalanceDelta(deposit.id, amt); // rollback
     return 0;
   }
 
   try {
-    const applied = await PaymentTransaction.create({
-      // FILIAL: oylik plandan meros.
-      branchId: payment.branchId,
-      payment: payment._id,
-      student: payment.student,
-      group: payment.group,
-      year: payment.year,
-      month: payment.month,
-      amount: amt,
-      source: "deposit",
-      method: "cash",
-      paidAt: localTodayMidnight(),
-      note: "To'lovdan qoplandi",
-      createdBy: currentUser?._id || null,
+    const applied = await prisma.paymentTransaction.create({
+      data: {
+        // FILIAL: oylik plandan meros.
+        branchId: payment.branchId,
+        paymentId: payment.id,
+        studentId: payment.studentId,
+        groupId: payment.groupId,
+        year: payment.year,
+        month: payment.month,
+        amount: amt,
+        source: "deposit",
+        method: "cash",
+        paidAt: localTodayMidnight(),
+        note: "To'lovdan qoplandi",
+        createdById: actorId(currentUser),
+      },
     });
 
     // JURNAL: PUL HARAKATI YO'Q - depozit majburiyati daromadga
@@ -300,11 +352,16 @@ const applyToPayment = async (deposit, payment, amount, currentUser) => {
     await journalPosting.postDepositApply(applied, journal);
   } catch (err) {
     // Tranzaksiya yozilmasa - plan va balansni qaytaramiz.
-    await studentPaymentService.applyPaidDelta(payment._id, -amt);
-    await applyBalanceDelta(deposit._id, amt);
+    await studentPaymentService.applyPaidDelta(payment.id, -amt);
+    await applyBalanceDelta(deposit.id, amt);
     throw err;
   }
   return amt;
+};
+
+// Qoldiq (expected>paid) planlar sharti - ustunni ustunga solishtirish.
+const OUTSTANDING = {
+  expectedAmount: { gt: prisma.studentPayment.fields.paidAmount },
 };
 
 // O'quvchi depozitidan barcha qoldiq planlarni ENG ESKISIDAN boshlab qoplaydi.
@@ -312,19 +369,19 @@ export const autoApply = async (studentId, currentUser) => {
   const deposit = await getOrCreate(studentId);
   if ((deposit.balance || 0) <= 0) return { applied: 0 };
 
-  // Qoldiq (expected>paid) planlar, eng eski oy avval. Yomon qarz (write-off)
-  // yopilgan - depozitdan qoplanmaydi.
-  const plans = await StudentPayment.find({
-    student: deposit.student,
-    isDeleted: { $ne: true },
-    writtenOff: { $ne: true },
-    $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
-  }).sort({ year: 1, month: 1, createdAt: 1 });
+  // Qoldiq planlar, eng eski oy avval. Yomon qarz (write-off) yopilgan -
+  // depozitdan qoplanmaydi.
+  const plans = await prisma.studentPayment.findMany({
+    where: { studentId: deposit.studentId, writtenOff: false, ...OUTSTANDING },
+    orderBy: [{ year: "asc" }, { month: "asc" }, { createdAt: "asc" }],
+  });
 
   let applied = 0;
   for (const plan of plans) {
-    const fresh = await StudentDeposit.findById(deposit._id);
+    // eslint-disable-next-line no-await-in-loop
+    const fresh = await prisma.studentDeposit.findUnique({ where: { id: deposit.id } });
     if ((fresh?.balance || 0) <= 0) break;
+    // eslint-disable-next-line no-await-in-loop
     const used = await applyToPayment(fresh, plan, fresh.balance, currentUser);
     applied += used;
   }
@@ -333,16 +390,17 @@ export const autoApply = async (studentId, currentUser) => {
 
 // Berilgan oyda plani bor + depoziti bor o'quvchilarga autoApply (oylik job hook).
 export const autoApplyForMonth = async (year, month) => {
-  const studentIds = await StudentPayment.distinct("student", {
-    year,
-    month,
-    isDeleted: { $ne: true },
-    writtenOff: { $ne: true },
-    $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
+  const rows = await prisma.studentPayment.findMany({
+    where: { year, month, writtenOff: false, ...OUTSTANDING },
+    select: { studentId: true },
+    distinct: ["studentId"],
   });
+  const studentIds = rows.map((r) => r.studentId);
+
   let applied = 0;
   for (const sid of studentIds) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       const r = await autoApply(sid);
       applied += r.applied;
     } catch (err) {
@@ -355,62 +413,69 @@ export const autoApplyForMonth = async (year, month) => {
 // Bir refund yozuvi: plan.paidAmount -= take, balans += take, refund ledger yozuvi.
 const refundOverpayChunk = async (deposit, planId, take, note) => {
   await studentPaymentService.applyPaidDelta(planId, -take);
-  const balUpd = await applyBalanceDelta(deposit._id, take);
+  const balUpd = await applyBalanceDelta(deposit.id, take);
   if (!balUpd) throw new ApiError(500, "To'lovga qaytarib bo'lmadi");
-  await DepositTransaction.create({
-    // FILIAL: bu yerda o'quvchi hujjati yuklanmagan - qidirib olamiz.
-    branchId: await resolveBranchFromUser(deposit.student),
-    student: deposit.student,
-    deposit: deposit._id,
-    type: "refund",
-    amount: take,
-    balanceAfter: balUpd.balance,
-    note,
-    paidAt: localTodayMidnight(),
+  await prisma.depositTransaction.create({
+    data: {
+      // FILIAL: bu yerda o'quvchi yozuvi yuklanmagan - qidirib olamiz.
+      branchId: await resolveBranchFromUser(deposit.studentId),
+      studentId: deposit.studentId,
+      depositId: deposit.id,
+      type: "refund",
+      amount: take,
+      balanceAfter: balUpd.balance,
+      note,
+      paidAt: localTodayMidnight(),
+    },
   });
 };
 
 // Plan kamayganda (expected<paid) ortiqcha to'lovni depozitga qaytaradi.
-// recalc'dan KEYIN best-effort chaqiriladi (atomik pipeline'dan tashqarida).
+// recalc'dan KEYIN best-effort chaqiriladi.
 // Avval DEPOZIT-qoplama tranzaksiyalari (faqat kerakli ulush - qisman reverse,
 // fantom pul yaratmaymiz), yetmasa qolgan ortiqcha to'g'ridan-to'g'ri to'lov ham
-// depozitga qaytadi (memory qoidasi: "overpay depozitga qaytadi").
+// depozitga qaytadi (qoida: "overpay depozitga qaytadi").
 // capAmount berilsa - ortiqcha to'lov shu chegaraga nisbatan o'lchanadi (dars-asosli
 // accrual'da TO'LIQ-OY obligatsiyasi), aks holda plan.expectedAmount ga nisbatan.
 // Bu avansni (butun oy narxigacha to'langan) depozitga qaytarmaslik uchun kerak.
 export const reconcileDepositOverpay = async (paymentId, { capAmount } = {}) => {
-  const plan = await StudentPayment.findById(paymentId);
+  const plan = await prisma.studentPayment.findUnique({ where: { id: String(paymentId) } });
   if (!plan) return;
   const cap = capAmount != null ? capAmount : plan.expectedAmount || 0;
-  let excess = (plan.paidAmount || 0) - cap;
+  const excess = (plan.paidAmount || 0) - cap;
   if (excess <= 0) return;
 
-  const deposit = await getOrCreate(plan.student);
+  const deposit = await getOrCreate(plan.studentId);
   let reversed = 0;
 
   // 1) Depozit-qoplama tranzaksiyalarini qisman reverse qilamiz (eng yangidan).
-  const depositTxns = await PaymentTransaction.find({
-    payment: plan._id,
-    source: "deposit",
-    isDeleted: { $ne: true },
-  }).sort({ createdAt: -1 });
+  const depositTxns = await prisma.paymentTransaction.findMany({
+    where: { paymentId: plan.id, source: "deposit", isDeleted: false },
+    orderBy: { createdAt: "desc" },
+  });
 
   for (const txn of depositTxns) {
     if (reversed >= excess) break;
     const take = Math.min(txn.amount, excess - reversed);
     if (take >= txn.amount) {
       // Butun tranzaksiya - o'chiramiz.
-      txn.isDeleted = true;
-      txn.deletedAt = new Date();
-      await txn.save();
+      // eslint-disable-next-line no-await-in-loop
+      await prisma.paymentTransaction.update({
+        where: { id: txn.id },
+        data: { isDeleted: true, deletedAt: new Date() },
+      });
     } else {
       // Qisman - faqat ortiqcha ulushni yechamiz, qolgani qoplama bo'lib qoladi.
-      txn.amount -= take;
-      await txn.save();
+      // eslint-disable-next-line no-await-in-loop
+      await prisma.paymentTransaction.update({
+        where: { id: txn.id },
+        data: { amount: { decrement: take } },
+      });
     }
+    // eslint-disable-next-line no-await-in-loop
     await refundOverpayChunk(
       deposit,
-      plan._id,
+      plan.id,
       take,
       "Oylik to'lov kamayishi - to'lovga qaytarildi",
     );
@@ -422,7 +487,7 @@ export const reconcileDepositOverpay = async (paymentId, { capAmount } = {}) => 
   if (directExcess > 0) {
     await refundOverpayChunk(
       deposit,
-      plan._id,
+      plan.id,
       directExcess,
       "Ortiqcha to'lov - to'lovga qaytarildi",
     );
@@ -431,111 +496,114 @@ export const reconcileDepositOverpay = async (paymentId, { capAmount } = {}) => 
 
 // Depozit-qoplama PaymentTransaction o'chirilganda pul NAQDGA emas, DEPOZITGA
 // qaytadi (transaction.service.remove chaqiradi). Balans += + refund yozuvi.
-// session berilsa, qoplamani bekor qilgan MongoDB tranzaksiyasi ichida atomik
-// bajariladi - aks holda tashqi abort/retry'da depozit ikki marta kreditlanardi.
-export const refundToDeposit = async (
-  studentId,
-  amount,
-  { session, note } = {},
-) => {
-  const deposit = await getOrCreate(studentId, { session });
-  const upd = await applyBalanceDelta(deposit._id, amount, { session });
+// tx berilsa, qoplamani bekor qilgan tranzaksiya ichida atomik bajariladi -
+// aks holda tashqi abort/retry'da depozit ikki marta kreditlanardi.
+export const refundToDeposit = async (studentId, amount, { tx, note } = {}) => {
+  const client = db(tx);
+  const deposit = await getOrCreate(studentId, { tx });
+  const upd = await applyBalanceDelta(deposit.id, amount, { tx });
   if (!upd) throw new ApiError(500, "To'lovga qaytarib bo'lmadi");
-  await DepositTransaction.create(
-    [
-      {
-        branchId: await resolveBranchFromUser(deposit.student),
-        student: deposit.student,
-        deposit: deposit._id,
-        type: "refund",
-        amount,
-        balanceAfter: upd.balance,
-        note: note || "To'lov bekor qilindi - to'lovga qaytarildi",
-        paidAt: localTodayMidnight(),
-      },
-    ],
-    { session: session || undefined },
-  );
+  await client.depositTransaction.create({
+    data: {
+      branchId: await resolveBranchFromUser(deposit.studentId),
+      studentId: deposit.studentId,
+      depositId: deposit.id,
+      type: "refund",
+      amount,
+      balanceAfter: upd.balance,
+      note: note || "To'lov bekor qilindi - to'lovga qaytarildi",
+      paidAt: localTodayMidnight(),
+    },
+  });
 };
 
 // --- DEPOZIT TRANZAKSIYASINI BEKOR QILISH (topup/withdraw) ---
 
 export const removeDepositTxn = async (id, currentUser) => {
-  const txn = await DepositTransaction.findOne({ _id: id, isDeleted: { $ne: true } });
+  const txn = await prisma.depositTransaction.findFirst({
+    where: { id: String(id), isDeleted: false },
+  });
   if (!txn) throw new ApiError(404, "Tranzaksiya topilmadi");
   if (txn.type === "refund") {
     throw new ApiError(400, "Qaytarim tranzaksiyasini o'chirib bo'lmaydi");
   }
 
-  const deposit = await getOrCreate(txn.student);
+  const deposit = await getOrCreate(txn.studentId);
   if (txn.type === "topup") {
     // Pul kelmagan deb hisoblaymiz - balansdan ayiramiz (agar qoplanmagan bo'lsa).
-    const balUpd = await applyBalanceDelta(deposit._id, -txn.amount);
+    const balUpd = await applyBalanceDelta(deposit.id, -txn.amount);
     if (!balUpd) {
       throw new ApiError(400, "Bu pul allaqachon qoplangan - tranzaksiyani o'chirib bo'lmaydi");
     }
   } else {
     // withdraw bekor - pul qaytib keldi.
-    await applyBalanceDelta(deposit._id, txn.amount);
+    await applyBalanceDelta(deposit.id, txn.amount);
   }
-  txn.isDeleted = true;
-  txn.deletedAt = new Date();
-  txn.deletedBy = currentUser?._id || null;
-  await txn.save();
-  return { _id: txn._id };
+  await prisma.depositTransaction.update({
+    where: { id: txn.id },
+    data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+  });
+  return { id: txn.id, _id: txn.id };
 };
 
 // --- O'QISH / HISOBOTLAR ---
 
 // O'quvchining depozit summary'si (balans + jami kirim/chiqim/qoplangan).
 export const summaryFor = async (studentId) => {
-  const sid = toObjectId(studentId);
-  const student = await User.findById(sid, safeStudentProjection).lean();
+  const sid = String(studentId);
+  const student = await prisma.user.findUnique({
+    where: { id: sid },
+    select: SAFE_STUDENT_SELECT,
+  });
   if (!student) throw new ApiError(404, "O'quvchi topilmadi");
   const deposit = await getOrCreate(sid);
 
-  const [ledger] = await DepositTransaction.aggregate([
-    { $match: { student: sid, isDeleted: { $ne: true } } },
-    {
-      $group: {
-        _id: "$type",
-        total: { $sum: "$amount" },
-      },
-    },
-  ]).then((rows) => [Object.fromEntries(rows.map((r) => [r._id, r.total]))]);
-
-  const [appliedAgg] = await PaymentTransaction.aggregate([
-    { $match: { student: sid, source: "deposit", isDeleted: { $ne: true } } },
-    { $group: { _id: null, total: { $sum: "$amount" } } },
+  const [ledgerRows, appliedAgg] = await Promise.all([
+    prisma.depositTransaction.groupBy({
+      by: ["type"],
+      where: { studentId: sid, isDeleted: false },
+      _sum: { amount: true },
+    }),
+    prisma.paymentTransaction.aggregate({
+      where: { studentId: sid, source: "deposit", isDeleted: false },
+      _sum: { amount: true },
+    }),
   ]);
 
+  const ledger = Object.fromEntries(
+    ledgerRows.map((r) => [r.type, r._sum.amount ?? 0]),
+  );
+
   return {
-    student,
+    student: withLegacyId(student),
     balance: deposit.balance || 0,
-    totalTopup: ledger?.topup || 0,
-    totalWithdraw: ledger?.withdraw || 0,
-    totalRefund: ledger?.refund || 0,
-    totalApplied: appliedAgg?.total || 0,
+    totalTopup: ledger.topup || 0,
+    totalWithdraw: ledger.withdraw || 0,
+    totalRefund: ledger.refund || 0,
+    totalApplied: appliedAgg._sum.amount ?? 0,
   };
 };
 
 // O'quvchi depozit tarixi: ledger (topup/withdraw/refund) + qoplamalar (apply),
 // sana bo'yicha birlashtirilgan (eng yangisi yuqorida).
 export const historyFor = async (studentId) => {
-  const sid = toObjectId(studentId);
+  const sid = String(studentId);
   const [ledger, applies] = await Promise.all([
-    DepositTransaction.find({ student: sid, isDeleted: { $ne: true } })
-      .sort({ paidAt: -1, createdAt: -1 })
-      .lean(),
-    PaymentTransaction.find({ student: sid, source: "deposit", isDeleted: { $ne: true } })
-      .populate("group", { name: 1 })
-      .sort({ paidAt: -1, createdAt: -1 })
-      .lean(),
+    prisma.depositTransaction.findMany({
+      where: { studentId: sid, isDeleted: false },
+      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+    }),
+    prisma.paymentTransaction.findMany({
+      where: { studentId: sid, source: "deposit", isDeleted: false },
+      include: { group: { select: { id: true, name: true } } },
+      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+    }),
   ]);
 
   const rows = [
     ...ledger.map((t) => ({
-      _id: t._id,
+      id: t.id,
+      _id: t.id,
       kind: t.type, // topup | withdraw | refund
       amount: t.amount,
       method: t.method,
@@ -545,11 +613,12 @@ export const historyFor = async (studentId) => {
       removable: t.type !== "refund",
     })),
     ...applies.map((t) => ({
-      _id: t._id,
+      id: t.id,
+      _id: t.id,
       kind: "apply", // depozit → oylik to'lov (daromad)
       amount: t.amount,
       paidAt: t.paidAt,
-      group: t.group,
+      group: t.group ? withLegacyId(t.group) : null,
       year: t.year,
       month: t.month,
       note: t.note,
@@ -568,25 +637,26 @@ export const list = async ({ studentId, from, to, type, page = 1, limit = 50 }) 
   // `branchId: null` yozuvlar (filialga biriktirilmagan o'quvchi) aniq
   // filial tanlanganda KO'RINMAYDI - fail-closed. Ular owner'ning "barcha
   // filiallar" ko'rinishida chiqadi, chunki u yerda filtr umuman qo'yilmaydi.
-  const filter = { ...branchFilter(), isDeleted: { $ne: true } };
-  if (studentId) filter.student = toObjectId(studentId);
-  if (type) filter.type = type;
+  const where = { ...branchFilter(), isDeleted: false };
+  if (studentId) where.studentId = String(studentId);
+  if (type) where.type = type;
   if (from || to) {
-    filter.paidAt = {};
-    if (from) filter.paidAt.$gte = parseLocalDay(from);
-    if (to) filter.paidAt.$lte = parseLocalDay(to);
+    where.paidAt = {};
+    if (from) where.paidAt.gte = parseLocalDay(from);
+    if (to) where.paidAt.lte = parseLocalDay(to);
   }
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    DepositTransaction.find(filter)
-      .populate("student", safeStudentProjection)
-      .sort({ paidAt: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    DepositTransaction.countDocuments(filter),
+    prisma.depositTransaction.findMany({
+      where,
+      include: { student: { select: SAFE_STUDENT_SELECT } },
+      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+      skip,
+      take: limit,
+    }),
+    prisma.depositTransaction.count({ where }),
   ]);
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 // Owner sahifa tab2: hisobotlar. Jami ushlangan balans + davr bo'yicha kirim/chiqim/
@@ -595,40 +665,38 @@ export const report = async ({ from, to } = {}) => {
   const range = {};
   if (from || to) {
     range.paidAt = {};
-    if (from) range.paidAt.$gte = parseLocalDay(from);
-    if (to) range.paidAt.$lte = parseLocalDay(to);
+    if (from) range.paidAt.gte = parseLocalDay(from);
+    if (to) range.paidAt.lte = parseLocalDay(to);
   }
 
   // FILIAL KO'LAMI - uchala manba UCH XIL yo'l bilan filialga bog'langan:
   //
-  //   DepositTransaction  -> o'zida `branchId` bor          -> branchMatchStage
-  //   PaymentTransaction  -> o'zida `branchId` bor (required) -> branchMatchStage
+  //   DepositTransaction  -> o'zida `branchId` bor            -> branchFilter
+  //   PaymentTransaction  -> o'zida `branchId` bor (required) -> branchFilter
   //   StudentDeposit      -> `branchId` YO'Q, o'quvchiga tegishli -> branchUserFilter
   //
-  // DIQQAT: aggregate() da mongoose hook'lari ISHLAMAYDI, shuning uchun
-  // $match bosqichi QO'LDA qo'yiladi (branchContext.helper.js:88-104).
   // Ilgari bu yerda filtr umuman yo'q edi va hisobot butun markazning
   // pulini bitta filial soni sifatida ko'rsatardi.
-  const studentScope = await branchUserFilter("student");
+  const studentScope = await branchUserFilter("studentId");
 
   const [ledgerRows, appliedAgg, balances] = await Promise.all([
-    DepositTransaction.aggregate([
-      ...branchMatchStage(),
-      { $match: { isDeleted: { $ne: true }, ...range } },
-      { $group: { _id: "$type", total: { $sum: "$amount" } } },
-    ]),
-    PaymentTransaction.aggregate([
-      ...branchMatchStage(),
-      { $match: { source: "deposit", isDeleted: { $ne: true }, ...range } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]),
-    StudentDeposit.find({ ...studentScope, balance: { $gt: 0 } })
-      .populate("student", safeStudentProjection)
-      .sort({ balance: -1 })
-      .lean(),
+    prisma.depositTransaction.groupBy({
+      by: ["type"],
+      where: { ...branchFilter(), isDeleted: false, ...range },
+      _sum: { amount: true },
+    }),
+    prisma.paymentTransaction.aggregate({
+      where: { ...branchFilter(), source: "deposit", isDeleted: false, ...range },
+      _sum: { amount: true },
+    }),
+    prisma.studentDeposit.findMany({
+      where: { ...studentScope, balance: { gt: 0 } },
+      include: { student: { select: SAFE_STUDENT_SELECT } },
+      orderBy: { balance: "desc" },
+    }),
   ]);
 
-  const ledger = Object.fromEntries(ledgerRows.map((r) => [r._id, r.total]));
+  const ledger = Object.fromEntries(ledgerRows.map((r) => [r.type, r._sum.amount ?? 0]));
   const heldTotal = balances.reduce((s, d) => s + (d.balance || 0), 0);
 
   return {
@@ -636,7 +704,10 @@ export const report = async ({ from, to } = {}) => {
     totalTopup: ledger.topup || 0,
     totalWithdraw: ledger.withdraw || 0,
     totalRefund: ledger.refund || 0,
-    totalApplied: appliedAgg[0]?.total || 0,
-    balances: balances.map((d) => ({ student: d.student, balance: d.balance })),
+    totalApplied: appliedAgg._sum.amount ?? 0,
+    balances: balances.map((d) => ({
+      student: d.student ? withLegacyId(d.student) : null,
+      balance: d.balance,
+    })),
   };
 };

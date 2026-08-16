@@ -77,7 +77,8 @@
     "test:ledger": "node tests/ledger.test.js",
     "test:auth-prisma": "node tests/authPrisma.test.js",
     "test:users-prisma": "node tests/usersPrisma.test.js",
-    "test:group-periods": "node tests/groupPeriodsPrisma.test.js"
+    "test:group-periods": "node tests/groupPeriodsPrisma.test.js",
+    "test:salary-chain": "node tests/salaryChainPrisma.test.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

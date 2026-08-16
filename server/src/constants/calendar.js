@@ -36,3 +36,15 @@ export const monthNameUz = (month) => MONTH_NAMES_UZ[(month - 1 + 12) % 12];
  * bir xil bo'lishi shart - ular to'g'ridan-to'g'ri bazaga yoziladi.
  */
 export const GROUP_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+/**
+ * BAYRAM AUDITORIYASI - kimga tegishli.
+ *
+ * `models/holiday.model.js` dan ko'chirildi (model fayllari migratsiya
+ * oxirida o'chiriladi). Qiymatlar `prisma/schema.prisma` dagi
+ * `enum HolidayAudience` bilan AYNAN bir xil bo'lishi shart.
+ *
+ * DIQQAT: davomat va to'lov hisobi `["all", "students"]` ni so'raydi -
+ * o'qituvchilarga atalgan bayram dars kunini bekor qilmaydi.
+ */
+export const HOLIDAY_AUDIENCES = ["all", "students", "teachers"];

@@ -1,10 +1,9 @@
-import mongoose from "mongoose";
-import LessonCancellation from "../../../models/lessonCancellation.model.js";
-import Group from "../../../models/group.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { parseLocalDay, dateKeyOf } from "../../../helpers/attendance.helper.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import * as financePaymentService from "../../finance/services/studentPayment.service.js";
 import * as teacherSalaryService from "../../teacherSalary/services/teacherSalary.service.js";
 
@@ -14,19 +13,24 @@ import * as teacherSalaryService from "../../teacherSalary/services/teacherSalar
 // soatbay maoshi dars soniga bog'liq), shuning uchun o'sha oy DARHOL qayta
 // hisoblanadi. Tungi job'ni kutish "nega qarz o'zgarmadi?" degan savolni
 // tug'dirardi.
-
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
-  return new mongoose.Types.ObjectId(String(id));
-};
+//
+// ─────────────────────────────────────────────────────────────────
+// MONGO → PRISMA
+//   { group: id }                → { groupId: id }
+//   doc.softDelete(by)           → update({ isDeleted, deletedAt, deletedBy })
+//   err.code === 11000           → err.code === "P2002"   ← MUHIM
+//
+// TAKRORLANISH KODI: Mongo dublikat kalitni `11000` bilan qaytarardi,
+// Postgres/Prisma esa `P2002` bilan. Eski tekshiruvni qoldirish
+// 409 o'rniga xom 500 berardi - qisman unique indeks o'z ishini
+// qilardi-yu, foydalanuvchi sababni ko'rmasdi.
+// ─────────────────────────────────────────────────────────────────
 
 const assertGroup = async (groupId) => {
-  const group = await Group.findOne({
-    _id: toObjectId(groupId),
-    ...branchFilter(),
-    isDeleted: { $ne: true },
-  }).lean();
+  const group = await prisma.group.findFirst({
+    where: { id: String(groupId), ...branchFilter(), isDeleted: false },
+    select: { id: true, name: true },
+  });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
   return group;
 };
@@ -46,27 +50,30 @@ const recomputeMonth = async (groupId, date) => {
 };
 
 export const create = async (body, currentUser) => {
-  await assertGroup(body.group);
+  const group = await assertGroup(body.group);
   const date = parseLocalDay(body.date);
   if (!date) throw new ApiError(400, "Sana noto'g'ri");
 
   try {
-    const doc = await LessonCancellation.create({
-      group: toObjectId(body.group),
-      date,
-      dateKey: dateKeyOf(date),
-      slot: body.slot || "",
-      reason: body.reason || "other",
-      note: body.note || "",
-      // Ko'chirilgan (makeup) bo'lsa dars baribir o'tiladi -> pul o'zgarmaydi.
-      billable: Boolean(body.makeupDate) || Boolean(body.billable),
-      makeupDate: body.makeupDate ? parseLocalDay(body.makeupDate) : null,
-      createdBy: currentUser?._id || null,
+    const doc = await prisma.lessonCancellation.create({
+      data: {
+        groupId: group.id,
+        date,
+        dateKey: dateKeyOf(date),
+        slot: body.slot || "",
+        reason: body.reason || "other",
+        note: body.note || "",
+        // Ko'chirilgan (makeup) bo'lsa dars baribir o'tiladi -> pul o'zgarmaydi.
+        billable: Boolean(body.makeupDate) || Boolean(body.billable),
+        makeupDate: body.makeupDate ? parseLocalDay(body.makeupDate) : null,
+        createdById: currentUser?.id || currentUser?._id || null,
+      },
     });
-    await recomputeMonth(doc.group, date);
-    return doc;
+    await recomputeMonth(doc.groupId, date);
+    return withLegacyId(doc);
   } catch (err) {
-    if (err?.code === 11000) {
+    // Qisman unique indeks: (groupId, dateKey, slot) WHERE isDeleted = false.
+    if (err?.code === "P2002") {
       throw new ApiError(409, "Bu dars allaqachon bekor qilingan deb belgilangan");
     }
     throw err;
@@ -74,31 +81,42 @@ export const create = async (body, currentUser) => {
 };
 
 export const list = async ({ groupId, year, month }) => {
-  const filter = { isDeleted: { $ne: true } };
-  if (groupId) filter.group = toObjectId(groupId);
+  const where = { isDeleted: false };
+  if (groupId) where.groupId = String(groupId);
   if (year && month) {
-    filter.date = {
-      $gte: new Date(Date.UTC(Number(year), Number(month) - 1, 1)),
-      $lte: new Date(Date.UTC(Number(year), Number(month), 0, 23, 59, 59, 999)),
+    where.date = {
+      gte: new Date(Date.UTC(Number(year), Number(month) - 1, 1)),
+      lte: new Date(Date.UTC(Number(year), Number(month), 0, 23, 59, 59, 999)),
     };
   }
-  return LessonCancellation.find(filter)
-    .populate("group", { name: 1 })
-    .populate("createdBy", { firstName: 1, lastName: 1 })
-    .sort({ date: -1 })
-    .lean();
+  const rows = await prisma.lessonCancellation.findMany({
+    where,
+    include: {
+      group: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { date: "desc" },
+  });
+  return withLegacyIds(rows);
 };
 
 export const remove = async (id, currentUser) => {
-  const doc = await LessonCancellation.findOne({
-    _id: toObjectId(id),
-    isDeleted: { $ne: true },
+  const doc = await prisma.lessonCancellation.findFirst({
+    where: { id: String(id), isDeleted: false },
+    select: { id: true, groupId: true, date: true },
   });
   if (!doc) throw new ApiError(404, "Yozuv topilmadi");
-  await assertGroup(doc.group);
+  await assertGroup(doc.groupId);
 
-  await doc.softDelete(currentUser?._id);
+  await prisma.lessonCancellation.update({
+    where: { id: doc.id },
+    data: {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: currentUser?.id || currentUser?._id || null,
+    },
+  });
   // Bekor qilish olib tashlandi -> dars qaytadi -> qarz va maosh oshadi.
-  await recomputeMonth(doc.group, doc.date);
+  await recomputeMonth(doc.groupId, doc.date);
   return { ok: true };
 };
