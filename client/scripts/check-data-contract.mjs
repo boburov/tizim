@@ -37,9 +37,10 @@ console.log("\n1) fromQuery — TanStack holatlari");
 eq("yuklanmoqda", fromQuery({ isLoading: true, fetchStatus: "fetching" }).status, S.LOADING);
 eq("enabled:false (idle)", fromQuery({ fetchStatus: "idle", data: undefined }).status, S.IDLE);
 eq("tarmoq xatosi -> error", fromQuery({ isError: true, error: { response: { status: 500 } }, fetchStatus: "idle" }).status, S.ERROR);
-eq("404 -> ulanmagan", fromQuery({ isError: true, error: { response: { status: 404 } }, fetchStatus: "idle" }).status, S.NOT_CONNECTED);
-eq("501 -> ulanmagan", fromQuery({ isError: true, error: { response: { status: 501 } }, fetchStatus: "idle" }).status, S.NOT_CONNECTED);
-eq("404 lekin o'chirilgan -> error", fromQuery({ isError: true, error: { response: { status: 404 } }, fetchStatus: "idle" }, { notConnectedOn: [] }).status, S.ERROR);
+eq("501 -> ulanmagan (server kontrakti)", fromQuery({ isError: true, error: { response: { status: 501 } }, fetchStatus: "idle" }).status, S.NOT_CONNECTED);
+// 404 = noto'g'ri manzil. Uni "ulanmagan" deb ko'rsatish xatoni YASHIRARDI.
+eq("404 -> XATO (yashirilmaydi)", fromQuery({ isError: true, error: { response: { status: 404 } }, fetchStatus: "idle" }).status, S.ERROR);
+eq("404 ochiq ruxsat berilsa -> ulanmagan", fromQuery({ isError: true, error: { response: { status: 404 } }, fetchStatus: "idle" }, { notConnectedOn: [404, 501] }).status, S.NOT_CONNECTED);
 eq("bo'sh massiv -> empty", fromQuery({ data: [], fetchStatus: "idle" }).status, S.EMPTY);
 eq("ma'lumot bor -> ready", fromQuery({ data: { a: 1 }, fetchStatus: "idle" }).status, S.READY);
 eq("emptyWhen shartli", fromQuery({ data: { buckets: [] }, fetchStatus: "idle" }, { emptyWhen: (d) => !d?.buckets?.length }).status, S.EMPTY);

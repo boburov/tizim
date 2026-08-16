@@ -13,7 +13,6 @@ import DashboardSection, {
 import { narrow } from "@/shared/components/dashboard/dataStatus";
 
 // Hooks
-import useObjectState from "@/shared/hooks/useObjectState";
 import { useOverviewData } from "../../../hooks/useExecutiveData";
 
 // Local components
@@ -36,13 +35,16 @@ import { DRILLDOWN, userHref } from "../../../navigation/drilldown";
  * halol yo'nalish.
  */
 const TeamPage = () => {
-  const now = new Date();
-  const period = useObjectState({
-    year: now.getFullYear(),
-    month: now.getMonth() + 1,
-  });
-
-  const overview = useOverviewData({ year: period.year, month: period.month });
+  // DAVR TANLAGICHI YO'Q va bu ATAYLAB.
+  //
+  // Bu sahifadagi ikkala ko'rsatkich ham (o'qituvchilar soni, guruhlar
+  // soni) JORIY holat - ular davrga bog'liq emas. Tanlagich qo'yilsa
+  // u hech narsani o'zgartirmasdi, lekin foydalanuvchi raqamlarni
+  // tanlangan oyga tegishli deb o'qirdi: "martda 12 o'qituvchi bo'lgan"
+  // degan yolg'on xulosa.
+  //
+  // Maosh kesimi qo'shilganda (u DAVRGA bog'liq) tanlagich qaytadi.
+  const overview = useOverviewData({});
   const o = overview.data;
 
   const topTeachers = narrow(overview, (d) => d?.topTeachers);
@@ -51,8 +53,7 @@ const TeamPage = () => {
     <div className="space-y-6">
       <ExecutivePageHeader
         title="Jamoa"
-        hint="O'qituvchilar va xodimlar kesimi."
-        period={period}
+        hint="O'qituvchilar va xodimlarning joriy holati."
       />
 
       <KpiGrid cols={2}>

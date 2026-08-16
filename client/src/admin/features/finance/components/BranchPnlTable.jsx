@@ -5,23 +5,35 @@ import { formatMoney } from "@/shared/utils/formatMoney";
 /**
  * FILIALLAR KESIMI JADVALI - SOF PREZENTATSION.
  *
- * `rows` shakli (server `/branch-analytics/pnl` javobidan):
- *   { branchId, branchName, income, expense, net }
+ * `rows` shakli SERVERDAN olingan (`branchPnl.service.js`, `pnl()`):
+ *   { branchId, name, code, revenue, expense, shortage, net, margin }
  *
- * YO'Q MAYDON KO'RSATILMAYDI. Masalan `net` kelmasa u O'RNIDA
- * `income - expense` HISOBLANMAYDI: serverdagi sof foyda ta'rifi
- * boshqa bo'lishi mumkin (ichki o'tkazmalar, amortizatsiya), va
- * mijozda qayta hisoblash ikki xil raqam paydo qilardi.
+ * ⚠ ILGARI BU YERDA `{ branchName, income }` YOZILGAN EDI - bunday
+ * maydonlar serverda YO'Q, ya'ni jadval hamma qatorda "—" ko'rsatardi.
+ * Bundan ham yomoni: hook butun KONVERTNI (`{items, totals, ...}`)
+ * uzatardi va `rows.map is not a function` bilan BUTUN ILOVA qulardi.
+ * Ikkalasi ham tuzatildi (qarang `useExecutiveData.js`, useBranchPnlData).
+ *
+ * KAMOMAD (`shortage`) ALOHIDA USTUN. Serverdagi izohga ko'ra u
+ * xarajat EMAS, YO'QOTISH: xarajatga qo'shib yuborilsa "xarajat oshdi"
+ * bo'lib ko'rinardi va sababi yashirinardi.
+ *
+ * YO'Q MAYDON KO'RSATILMAYDI. `net` kelmasa u O'RNIDA
+ * `revenue - expense` HISOBLANMAYDI: serverdagi ta'rif markaz
+ * xarajatlarini QAMRAMAYDI (u yerdagi izohga qarang), mijozda qayta
+ * hisoblash esa ikki xil raqam paydo qilardi.
  */
 const BranchPnlTable = ({ rows = [] }) => (
   <div className="overflow-x-auto rounded-md border">
-    <table className="w-full min-w-[520px] text-sm">
+    <table className="w-full min-w-[680px] text-sm">
       <thead>
         <tr className="border-b bg-muted/50 text-left">
           <Th>Filial</Th>
-          <Th align="right">Kirim</Th>
-          <Th align="right">Chiqim</Th>
+          <Th align="right">Daromad</Th>
+          <Th align="right">Xarajat</Th>
+          <Th align="right">Kamomad</Th>
           <Th align="right">Sof</Th>
+          <Th align="right">Marja</Th>
         </tr>
       </thead>
       <tbody>
@@ -38,10 +50,11 @@ const BranchPnlTable = ({ rows = [] }) => (
                   filial ma'lumotini ochardi. Bo'lim sarlavhasidagi
                   "Filiallar" havolasi ro'yxatga olib boradi. */}
               <td className="px-3 py-2.5 font-medium text-foreground">
-                {r.branchName || "—"}
+                {r.name || "—"}
               </td>
-              <Td value={r.income} />
+              <Td value={r.revenue} />
               <Td value={r.expense} />
+              <Td value={r.shortage} />
               <td
                 className={cn(
                   "px-3 py-2.5 text-right tabular-nums font-medium",
@@ -53,6 +66,11 @@ const BranchPnlTable = ({ rows = [] }) => (
                 )}
               >
                 {net === null ? "—" : formatMoney(net)}
+              </td>
+              {/* Marja - FOIZ, so'm emas. Server daromad nol bo'lganda
+                  `null` qaytaradi ("0%" EMAS: bo'linma aniqlanmagan). */}
+              <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
+                {typeof r.margin === "number" ? `${r.margin}%` : "—"}
               </td>
             </tr>
           );

@@ -540,7 +540,55 @@ filialni ko'radi". Ularsiz "hammasini rad et" ham testdan o'tib ketardi.
 
 ---
 
-## 8. Deploy talabi: Node ≥ 22.12
+## 8. Ko'chirilmagan modul — HTTP kontrakti (501)
+
+Mongo ulanishi olib tashlangan, `src/models/*` esa hali joyida. Ko'chirilmagan
+modulga so'rov kelganda Mongoose standart holatda **10 soniya buferda kutardi**,
+keyin `MongooseError: buffering timed out` bilan yiqilardi va `errorHandler`
+uni **500** qilib qaytarardi.
+
+Ikki tomonlama noto'g'ri edi:
+
+| | Ilgari | Endi |
+|---|---|---|
+| Tezlik | 10 000 ms osiladi | **2–26 ms** |
+| Kod | `500` "server buzilgan" | `501 MODULE_NOT_MIGRATED` |
+| Mijoz | qizil xato, "qayta urinib ko'ring" | xotirjam "Manba ulanmagan" |
+
+**Yechim:** `config/legacyMongoose.js` → `mongoose.set("bufferCommands", false)`
+(boot'da, marshrutlar import qilinishidan oldin) + `errorHandler` ulanish
+xatosini tanib **501** qaytaradi.
+
+**NEGA MARSHRUT RO'YXATI EMAS.** "Qaysi modul ko'chirilmagan" degan qo'lda
+yozilgan ro'yxat ikki tomonlama xato bo'lardi:
+
+- Statik importlar bo'yicha aniqlash **haddan tashqari keng**: `/admin-dashboard`
+  `retention.service.js` orqali `user.model.js` ni import qiladi, lekin
+  `getOverview` uni hech qachon **chaqirmaydi** — endpoint mukammal ishlaydi
+  (200). Import zararsiz; faqat **so'rov bajarish** osiladi. Ro'yxatga tayansak
+  ishlab turgan endpointni o'ldirardik.
+- Qo'lda yozilgan ro'yxat **eskiradi**: modul ko'chgach kimdir uni o'chirishni
+  unutsa, ishlaydigan endpoint 501 bo'lib turaverardi.
+
+Bu yerdagi yondashuv **haqiqatga** tayanadi: so'rov chinakam bajarilsa va
+ulanish bo'lmasa — 501. Modul Prisma'ga ko'chgach Mongoose chaqiruvi qolmaydi
+va 501 **o'z-o'zidan** yo'qoladi.
+
+### Hozir 501 qaytaradiganlar (rahbariyat paneli chaqiradigan)
+
+| Endpoint | Sabab |
+|---|---|
+| `/ai/insights`, `/ai/briefing` | `insights.find()` — Mongoose |
+| `/branch-analytics/pnl` | `journalentries.aggregate()` — Mongoose |
+| `/finance-report/*` | `expense.model.js` — Mongoose |
+
+Test: `npm run test:dashboard-contract` (32 tekshiruv). U **501 ni ham, 200 ni
+ham** qabul qiladi — modul ko'chganda test yiqilmasligi kerak, aks holda uni
+ko'chirgan odam testni ham "tuzatishga" majbur bo'lardi.
+
+---
+
+## 9. Deploy talabi: Node ≥ 22.12
 
 `pg-boss@12` **Node 22.12+** talab qiladi (`engines`). VPS'da eskiroq Node
 bo'lsa `provision.sh` ichidagi `npm ci` shu bosqichda yiqiladi.
@@ -557,7 +605,7 @@ dagi moslashtiruvchi qatlam shunga moslanishi kerak bo'ladi.
 
 ---
 
-## 9. Qanday ishga tushirish
+## 10. Qanday ishga tushirish
 
 ```bash
 # 1) PostgreSQL va baza
@@ -578,7 +626,13 @@ npm run test:salary-chain     #  31  o'qituvchi maoshi + jurnal
 npm run test:groups-chain     #  32  guruh, jadval versiyalash
 npm run test:staff-payroll    #  47  xodim oyligi + filial qo'riqchisi
 npm run test:invariants       #  44  validatsiya invariantlari (servis + CHECK)
+npm run test:dashboard-contract  # 32  klient↔server kontrakti (server ISHLAB TURSIN)
 ```
+
+`test:dashboard-contract` boshqalardan FARQ QILADI: u haqiqiy HTTP so'rov
+yuboradi, ya'ni `npm run dev` ishlab turishi shart. U qiymatlarni emas,
+KONTRAKTNI tekshiradi (maydon bor, turi to'g'ri, konvert kutilgan shaklda) —
+qiymatlar har bazada boshqacha.
 
 Testlar **bir-biriga bog'liq emas** va o'zidan keyin tozalanadi, shuning
 uchun istalgan tartibda ishlatsa bo'ladi. Ular MOCK EMAS — haqiqiy

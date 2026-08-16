@@ -16,9 +16,20 @@ import { cn } from "@/shared/utils/cn";
 const AttendanceBreakdown = ({ gauge }) => {
   const rate = gauge?.rate;
   const rows = [
+    // RANGLAR BIR-BIRIDAN AJRALIB TURISHI SHART. `chart-2` va `chart-3`
+    // brend palitrasidan hosila va bir-biriga juda yaqin bo'lishi
+    // mumkin - segmentli chiziqda ular qo'shilib ketardi.
+    //
+    // "Kechikkan" - to'liq shaffofligi kamaytirilgan primary (oraliq
+    // holat), "Kelmagan" - status rangi (bu HOLAT, shuning uchun
+    // status rangi o'rinli; `dark:` varianti bilan).
     { label: "Kelgan", value: gauge?.present, className: "bg-primary" },
-    { label: "Kechikkan", value: gauge?.late, className: "bg-chart-3" },
-    { label: "Kelmagan", value: gauge?.absent, className: "bg-chart-2" },
+    { label: "Kechikkan", value: gauge?.late, className: "bg-primary/45" },
+    {
+      label: "Kelmagan",
+      value: gauge?.absent,
+      className: "bg-rose-500 dark:bg-rose-400",
+    },
   ];
 
   // MAXRAJ SERVERDAN (`gauge.total`), qayta hisoblanmaydi.

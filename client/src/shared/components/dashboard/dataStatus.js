@@ -70,30 +70,31 @@ export const isEmptyResult = (value) => {
 };
 
 /**
- * Endpoint HALI YO'Q ekanini bildiruvchi HTTP kodlari.
+ * "Bu modul hali mavjud emas" degan HTTP kodi.
  *
  * ═══════════════════════════════════════════════════════════════════
- * NEGA JAVOBDAN ANIQLANADI, ro'yxatdan emas
+ * FAQAT 501. 404 ATAYLAB KIRITILMAGAN.
  *
- * Boshida "qaysi manba ulangan" degan ro'yxatni klientda saqlash
- * o'ylangan edi. U ikki tomonlama noto'g'ri bo'lardi:
+ * Server bu kontraktni ochiq beradi: ko'chirilmagan modul
+ * `501 MODULE_NOT_MIGRATED` qaytaradi (server: `config/legacyMongoose.js`
+ * + `middleware/errorHandler.js`). Ilgari u 10 soniya osilib, keyin
+ * 500 berardi - endi darhol 501.
  *
- *   • Backend modul ko'chib, endpoint TIRILGANDA klient hamon
- *     "ulanmagan" deb turaveradi - kimdir ro'yxatni yangilashni
- *     eslamaguncha. Ishlab turgan ma'lumot yashirin qoladi.
- *   • Aksincha, ro'yxatda "ulangan" deb yozilgan endpoint hali
- *     yo'q bo'lsa - foydalanuvchi tarmoq xatosini ko'radi va uni
- *     o'z internetidan deb o'ylaydi.
+ * 404 ESA XATO BELGISI, "ulanmagan" emas:
  *
- * 404 - marshrut umuman mount qilinmagan (ko'chirilmagan modul).
- * 501 - server ochiq aytadi: "amalga oshirilmagan".
+ *   Marshrut umuman mount qilinmagan bo'lsa Express 404 beradi. Bu
+ *   deyarli har doim MIJOZ TOMONIDAGI xato - noto'g'ri yozilgan
+ *   manzil. Aynan shunday bo'lgan: rahbariyat qobig'i `/finance-report`
+ *   ni chaqirardi, haqiqiy marshrutlar esa `/finance-report/summary`,
+ *   `/trend`, `/ledger`. 404 ni "manba ulanmagan" deb ko'rsatish bu
+ *   xatoni XOTIRJAM holat qilib YASHIRARDI - hech kim tuzatmasdi.
  *
- * DIQQAT: bu FAQAT dashboard AGREGAT endpointlari uchun to'g'ri.
- * `/students/:id` kabi yakka yozuv so'rovida 404 "bunday o'quvchi
- * yo'q" degani - shuning uchun `notConnectedOn: []` bilan o'chiriladi.
+ *   Endi u ochiq XATO bo'lib chiqadi.
+ *
+ * Kerak bo'lsa chaqiruvchi ochiq yozadi: `notConnectedOn: [404, 501]`.
  * ═══════════════════════════════════════════════════════════════════
  */
-export const MISSING_ENDPOINT_CODES = Object.freeze([404, 501]);
+export const MISSING_ENDPOINT_CODES = Object.freeze([501]);
 
 /**
  * TanStack Query natijasini holat + qiymatga aylantiradi.
@@ -106,7 +107,7 @@ export const MISSING_ENDPOINT_CODES = Object.freeze([404, 501]);
  * @param {object} query   TanStack `useQuery` natijasi
  * @param {object} [opts]
  * @param {boolean} [opts.connected=true]  majburiy "ulanmagan" belgisi
- * @param {number[]} [opts.notConnectedOn] "endpoint yo'q" deb hisoblanadigan kodlar
+ * @param {number[]} [opts.notConnectedOn] "modul mavjud emas" kodlari (standart: [501])
  * @param {Function} [opts.select]         `query.data` dan kerakli bo'lakni olish
  * @param {Function} [opts.emptyWhen]      maxsus "bo'sh" sharti
  * @returns {{status: string, data: any, error: any, refetch: Function}}

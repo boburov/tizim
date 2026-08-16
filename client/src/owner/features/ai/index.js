@@ -29,3 +29,16 @@ export {
   useDismissInsightMutation,
   useRecomputeMutation,
 } from "./hooks/useInsightMutations";
+
+// TAVSIYA AMALINI MANZILGA AYLANTIRISH.
+//
+// `ACTION_ROUTES` jadvali (dashboard.utils.js) 30 ga yaqin
+// `key -> /owner/...` juftligini saqlaydi. Rahbariyat qobig'i ham
+// aynan shu jadvalga muhtoj: uning tavsiya kartalari ham o'sha
+// operatsion sahifalarga olib boradi.
+//
+// JADVAL IKKILANTIRILMAYDI - ikki nusxa vaqt o'tib ajralib ketardi
+// va bir panelda ishlaydigan havola ikkinchisida 404 berardi.
+// Shuning uchun SOF FUNKSIYA public API orqali ochiladi (ma'lumot
+// olish mantig'i emas, faqat marshrut xaritasi).
+export { actionHref } from "./utils/dashboard.utils";

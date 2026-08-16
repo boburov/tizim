@@ -81,7 +81,8 @@
     "test:salary-chain": "node tests/salaryChainPrisma.test.js",
     "test:groups-chain": "node tests/groupsChainPrisma.test.js",
     "test:staff-payroll": "node tests/staffPayrollPrisma.test.js",
-    "test:invariants": "node tests/invariantsPrisma.test.js"
+    "test:invariants": "node tests/invariantsPrisma.test.js",
+    "test:dashboard-contract": "node tests/dashboardContract.test.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

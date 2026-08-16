@@ -68,7 +68,6 @@ const KpiTile = ({
   className = "",
 }) => {
   const format = formatter || (isMoney ? formatMoney : undefined);
-  const interactive = Boolean(to || onClick);
 
   /**
    * QIYMAT HAQIQIY SON BO'LMASA - HOLAT `ready` BO'LSA HAM RAQAM CHIQMAYDI.
@@ -95,6 +94,26 @@ const KpiTile = ({
   const missingValue = typeof value !== "number" || !Number.isFinite(value);
   const effectiveStatus =
     status === DATA_STATUS.READY && missingValue ? DATA_STATUS.EMPTY : status;
+
+  /**
+   * XATO HOLATIDA PLITA HAVOLA BO'LMAYDI.
+   *
+   * `DataState` xato holatida "Qaytadan urinish" TUGMASINI chizadi.
+   * Plita `<Link>` (ya'ni `<a>`) ichiga o'ralgan bo'lsa, natija
+   * `<a>` ichidagi `<button>` bo'lardi:
+   *   • yaroqsiz HTML - brauzer DOM'ni qayta joylashtiradi;
+   *   • bosilganda NAVIGATSIYA bo'lardi, qayta urinish EMAS -
+   *     ya'ni tugma o'zi va'da qilgan ishni qilmasdi.
+   *
+   * Xato holatida asosiy amal - qayta urinish. Drill-down bo'lim
+   * sarlavhasidagi havola orqali baribir ochiq qoladi.
+   *
+   * Qolgan holatlarda (bo'sh, ulanmagan) havola SAQLANADI: "bu yerda
+   * ma'lumot yo'q" degan holatda operatsion sahifaga o'tish hamon
+   * mantiqiy.
+   */
+  const retryable = effectiveStatus === DATA_STATUS.ERROR && Boolean(onRetry);
+  const interactive = Boolean(to || onClick) && !retryable;
 
   const hasDelta =
     effectiveStatus === DATA_STATUS.READY &&
@@ -176,7 +195,7 @@ const KpiTile = ({
     </div>
   );
 
-  if (to) {
+  if (to && interactive) {
     return (
       <Link
         to={to}
@@ -186,7 +205,7 @@ const KpiTile = ({
       </Link>
     );
   }
-  if (onClick) {
+  if (onClick && interactive) {
     return (
       <button
         type="button"

@@ -95,8 +95,19 @@ Rules that follow from this, and why:
   `null` when no lesson was scheduled - that is "not measured", not "0%".
 - `not_connected` is **separate from** `empty`. "No payments this month" is a
   business fact; "the payments module is not migrated yet" is a technical state.
-  It is detected from the response (404/501), **not** from a hardcoded list - so
-  a section lights up on its own once its endpoint ships.
+  It is detected from **HTTP 501 only** (`MODULE_NOT_MIGRATED`, the server's
+  contract - see server `config/legacyMongoose.js`), never a hardcoded list, so a
+  section lights up on its own once its endpoint ships.
+- **404 is an error, not `not_connected`.** A 404 means the route is not mounted,
+  which is almost always a wrong URL on our side. Treating it as a calm
+  "not connected" state hid exactly that bug once (`/finance-report` instead of
+  `/finance-report/summary`). Opt in per call with `notConnectedOn: [404, 501]`
+  if a specific endpoint really needs it.
+- **Never re-derive the endpoint contract from a filename.** Read the route file,
+  the zod validator and the service signature. `/branch-analytics/pnl` takes
+  `from`/`to` (not `year`/`month`) and returns `{ items, totals }` (not an array);
+  guessing produced both a silently-ignored filter and an app-crashing
+  `rows.map is not a function`.
 - Use `narrow(source, selector, { emptyWhen })` when one response feeds several
   blocks and a sub-field can be missing while the request itself succeeded.
 - **Do not re-compute on the client what the server already computes**

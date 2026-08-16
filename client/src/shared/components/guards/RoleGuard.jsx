@@ -8,7 +8,7 @@ import useAuth from "@/shared/hooks/useAuth";
 import AccessDenied from "./AccessDenied";
 
 // Constants
-import { ROLE_HOME } from "@/shared/constants/roles";
+import { ROLES, ROLE_HOME } from "@/shared/constants/roles";
 
 const RoleGuard = ({ roles, children }) => {
   const { pathname } = useLocation();
@@ -31,9 +31,33 @@ const RoleGuard = ({ roles, children }) => {
     Boolean(homePath) &&
     allowed.some((r) => homePath === `/${r}` || homePath.startsWith(`/${r}/`));
 
+  // TO'RTINCHI YO'L - RAHBARIYAT QOBIG'I (`/admin`).
+  //
+  // `/admin` ROL EMAS, owner panelining ikkinchi qarashi (qarang
+  // `admin/index.js`): uning HAMMA drill-down manzili `/owner/*` ga
+  // ketadi. Ya'ni `defaultPath = "/admin"` bo'lgan foydalanuvchi
+  // owner bo'limiga TEGISHLI.
+  //
+  // BUSIZ IKKI TUGUNLI CHEKSIZ HALQA yopilardi:
+  //   /admin -> ruxsat yo'q -> PermissionGuard fallback -> /owner
+  //   /owner -> RoleGuard rad etadi -> homePath ("/admin") ga -> /admin
+  //   ... va hokazo.
+  //
+  // Bu "bezarar sekinlik" emas: har qadam `history.replaceState()`
+  // chaqiradi va WebKit 10 soniyada 100 tadan keyin SecurityError otib
+  // butun ilovani yiqitadi (shu fayldagi pastki izohga qarang -
+  // Telegram mini ilova aynan shundan qulagan).
+  const isExecutiveHome =
+    Boolean(homePath) &&
+    (homePath === "/admin" || homePath.startsWith("/admin/")) &&
+    allowed.includes(ROLES.OWNER);
+
   const isAllowed =
     Boolean(role) &&
-    (allowed.includes(role) || allowed.includes(roleType) || sectionMatchesHome);
+    (allowed.includes(role) ||
+      allowed.includes(roleType) ||
+      sectionMatchesHome ||
+      isExecutiveHome);
 
   if (!isAllowed) {
     // Landing sahifa serverdagi rol sozlamasidan (defaultPath) keladi.

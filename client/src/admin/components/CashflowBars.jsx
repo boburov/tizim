@@ -1,4 +1,5 @@
 // Utils
+import { cn } from "@/shared/utils/cn";
 import { formatMoneyShort } from "@/shared/utils/formatMoney";
 
 /**
@@ -85,7 +86,16 @@ const CashflowBars = ({ buckets = [] }) => {
         />
       </div>
 
-      <div className="mt-4 flex flex-1 items-end gap-1.5 sm:gap-2">
+      {/* KICHIK EKRAN: 31 kunlik oyda har ustunga 360px da ~4px joy
+          qoladi va yorliqlar ustma-ust tushadi. Grafikni siqish
+          o'rniga O'Z KONTEYNERIDA suriladi - sahifaning o'zi
+          gorizontal scroll bo'lib ketmaydi.
+          `min-w` bucket soniga qarab: 12 oylik ko'rinish siqilmaydi. */}
+      <div className="hidden-scrollbar mt-4 flex-1 overflow-x-auto">
+        <div
+          className="flex h-full items-end gap-1.5 sm:gap-2"
+          style={{ minWidth: buckets.length > 14 ? `${buckets.length * 18}px` : undefined }}
+        >
         {buckets.map((b, i) => {
           const income = Number(b.income) || 0;
           const expense = Number(b.expense) || 0;
@@ -97,7 +107,19 @@ const CashflowBars = ({ buckets = [] }) => {
               className="group relative flex h-full min-w-0 flex-1 flex-col items-center justify-end"
             >
               {has && (
-                <div className="pointer-events-none absolute -top-1 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-[10px] text-popover-foreground opacity-0 shadow transition group-hover:opacity-100">
+                // Chekkadagi ustunlarda tooltip markazga QARAB siljiydi -
+                // aks holda u konteynerdan chiqib, gorizontal scroll
+                // paydo qilardi (birinchi va oxirgi ustunda).
+                <div
+                  className={cn(
+                    "pointer-events-none absolute -top-1 z-10 -translate-y-full whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-[10px] text-popover-foreground opacity-0 shadow transition group-hover:opacity-100",
+                    i === 0
+                      ? "left-0"
+                      : i === buckets.length - 1
+                        ? "right-0"
+                        : "left-1/2 -translate-x-1/2",
+                  )}
+                >
                   <span className="text-primary">{formatMoneyShort(income)}</span>
                   {" / "}
                   <span className="text-rose-600 dark:text-rose-400">
@@ -117,6 +139,7 @@ const CashflowBars = ({ buckets = [] }) => {
             </div>
           );
         })}
+        </div>
       </div>
 
       <div className="mt-3 flex gap-4 text-xs text-muted-foreground">

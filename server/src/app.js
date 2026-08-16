@@ -6,11 +6,17 @@ import compression from "compression";
 import cookieParser from "cookie-parser";
 
 import env, { isProd } from "./config/env.js";
+import { configureLegacyMongoose } from "./config/legacyMongoose.js";
 import apiRouter from "./routes/index.js";
 import notFound from "./middleware/notFound.js";
 import errorHandler from "./middleware/errorHandler.js";
 import { generalLimiter } from "./middleware/rateLimiter.js";
 import auditLog from "./middleware/auditLog.middleware.js";
+
+// Ko'chirilmagan modullar Mongo'ni kutib 10 soniya osilmasin - darhol
+// yiqilsin va `errorHandler` uni 501 ga aylantirsin. Marshrutlar
+// import qilinishidan OLDIN chaqirilishi shart.
+configureLegacyMongoose();
 
 const app = express();
 

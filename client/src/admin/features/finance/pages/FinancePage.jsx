@@ -44,7 +44,14 @@ const FinancePage = () => {
   const params = { year: period.year, month: period.month };
 
   const overview = useOverviewData(params);
-  const cashflow = useCashflowData({ range: period.range });
+  // Uchala manba ham AYNI davrni oladi - sahifadagi oy tanlagichi
+  // endi hamma blokka ta'sir qiladi.
+  const cashflow = useCashflowData({
+    range: period.range,
+    year: period.year,
+    month: period.month,
+  });
+  // P&L `from`/`to` sanalarini kutadi - o'girish hookda (u yerdagi izoh).
   const pnl = useBranchPnlData(params);
 
   const o = overview.data;
@@ -116,8 +123,8 @@ const FinancePage = () => {
       <DashboardSection
         title="Filiallar kesimi"
         hint="Qaysi filial qancha keltirdi"
-        to={DRILLDOWN.branches}
-        toLabel="Filiallar"
+        to={DRILLDOWN.branchAnalytics}
+        toLabel="Filial tahlili"
       >
         <DataState
           status={pnl.status}

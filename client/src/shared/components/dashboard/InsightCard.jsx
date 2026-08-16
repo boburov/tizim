@@ -18,24 +18,37 @@ import { formatMoneyShort } from "@/shared/utils/formatMoney";
  * talabdan olingan. HECH BIR MAYDON MAJBURIY EMAS - yo'q maydon
  * KO'RSATILMAYDI, o'ylab topilmaydi.
  *
+ * MAYDONLAR SERVER MODELIDAN OLINGAN — `server/src/models/insight.model.js`
+ * (taxmin emas, o'qib tekshirilgan):
+ *
  *   {
- *     id:            string,
+ *     _id:           ObjectId,        // `id` EMAS (Mongo hujjati)
  *     stance:        "risk" | "opportunity",
  *     severity:      "high" | "medium" | "low",
- *     title:         string,          // "7 o'quvchi ketish arafasida"
- *     reason:        string,          // nega shunday deb o'ylanmoqda
- *     confidence:    number,          // 0..100  — YO'Q BO'LSA CHIQMAYDI
- *     expectedImpact:{ amount?: number, label?: string },
- *     recommendedAction: { label: string, href?: string },
+ *     title:         string,
+ *     narration:     string | null,   // matnli tushuntirish (`reason` EMAS)
+ *     factors:       [{ key, label, value, unit }],  // narration bo'lmasa
+ *     confidence:    number,          // ⚠ [0, 1] — FOIZ EMAS
+ *     expectedImpact:{ amount, currency, label },
+ *     recommendedActions: [{ key, label, dueInDays }],  // ⚠ MASSIV
  *     subjectLabel:  string,
- *     subjectHref:   string,          // drill-down manzili
- *     createdAt:     string | Date,
+ *     subjectHref:   string | null,
+ *     generatedAt / createdAt: Date,
  *   }
  *
- * ISHONCH DARAJASI HAQIDA: `confidence` bo'lmasa karta uni umuman
- * ko'rsatmaydi. ATAYLAB standart qiymat yo'q - "100%" ham, "—" ham
- * yozilmaydi. Ishonch darajasi modelning o'z bahosi; uni interfeys
- * to'qib chiqarsa, butun tavsiya tizimiga bo'lgan ishonch yo'qoladi.
+ * ═══════════════════════════════════════════════════════════════════
+ * ISHONCH DARAJASI — IKKI QOIDA, IKKALASI HAM MODELDAN
+ *
+ * 1) MIQYOS. `confidence` [0, 1] oralig'ida (model: `min: 0, max: 1`).
+ *    Ilgari bu yerda `Math.round(insight.confidence)` yozilgan edi:
+ *    haqiqiy 0.87 ekranda "Ishonch 1%", 0.4 esa "Ishonch 0%" bo'lib
+ *    chiqardi. Ya'ni karta o'zi taqiqlagan narsani qilardi - raqam
+ *    TO'QIB CHIQARARDI. Foizga o'girish SHU YERDA bo'ladi.
+ *
+ * 2) OSTONA. Modelda ochiq yozilgan: "UI qoidasi: < 0.4 bo'lsa ball
+ *    ko'rsatilmaydi". Ikki oylik ma'lumot asosida "87%" ko'rsatish
+ *    yolg'on aniqlik. Kodbazadagi mavjud komponentlar (AiStudentsAtRisk,
+ *    AiTopTeachers, AiRiskBadge) ayni ostonaga tayanadi.
  * ═══════════════════════════════════════════════════════════════════
  *
  * RANGLAR `ai/utils/dashboard.utils.js` dagi LEVEL_STYLES bilan bir
@@ -72,6 +85,12 @@ const TONE = {
   },
 };
 
+/**
+ * Ishonch ostonasi - serverdagi `confidenceFloor` standarti bilan bir xil
+ * (`schema.prisma`: `confidenceFloor Float @default(0.4)`).
+ */
+const CONFIDENCE_FLOOR = 0.4;
+
 const toneOf = (insight) =>
   insight?.stance === "opportunity"
     ? TONE.opportunity
@@ -90,7 +109,24 @@ const relativeUz = (dateLike) => {
   return `${Math.round(hours / 24)} kun oldin`;
 };
 
-const InsightCard = ({ insight, onDismiss, className = "" }) => {
+const InsightCard = ({
+  insight,
+  /**
+   * Tavsiya amalini MANZILGA aylantiradi: `(action, insight) => href|null`.
+   *
+   * NEGA PROP: server `recommendedActions[].key` (masalan "call_debtors")
+   * beradi, HAVOLA EMAS. Kalitni manzilga aylantiruvchi jadval
+   * `owner/features/ai/utils/dashboard.utils.js` ichida - u FEATURE'ning
+   * ichki fayli va `shared` komponent undan import qila olmaydi (FSD).
+   *
+   * Berilmasa karta `subjectHref` ga tushadi, u ham bo'lmasa amal
+   * ODDIY MATN bo'lib qoladi. Ishlamaydigan havola 404 ga olib boradi
+   * va butun ekranga ishonchni yo'qotadi.
+   */
+  resolveActionHref,
+  onDismiss,
+  className = "",
+}) => {
   if (!insight) return null;
 
   const tone = toneOf(insight);
@@ -100,13 +136,36 @@ const InsightCard = ({ insight, onDismiss, className = "" }) => {
   const amount = insight.expectedImpact?.amount;
   const hasAmount = typeof amount === "number" && Number.isFinite(amount) && amount !== 0;
 
+  // [0,1] -> foiz, 0.4 ostonasi bilan. Oraliqdan tashqari qiymat
+  // KO'RSATILMAYDI: u shakl buzilgani belgisi, uni "tuzatib" chiqarish
+  // yana o'sha to'qib chiqarish bo'lardi.
+  const raw = insight.confidence;
   const confidence =
-    typeof insight.confidence === "number" && Number.isFinite(insight.confidence)
-      ? Math.round(insight.confidence)
+    typeof raw === "number" && Number.isFinite(raw) && raw >= CONFIDENCE_FLOOR && raw <= 1
+      ? Math.round(raw * 100)
       : null;
 
-  const action = insight.recommendedAction;
-  const created = relativeUz(insight.createdAt);
+  // Server MASSIV yuboradi. Birinchisi - asosiy amal (server ularni
+  // muhimlik bo'yicha tartiblaydi).
+  const action = insight.recommendedActions?.[0] || insight.recommendedAction || null;
+
+  // Tushuntirish: avval matnli `narration`, bo'lmasa omillar ro'yxati.
+  // `reason` degan maydon serverda YO'Q edi - karta hech qachon
+  // sabab ko'rsatmasdi.
+  const explanation =
+    insight.narration ||
+    (insight.factors?.length
+      ? insight.factors
+          .map((f) => [f.label, f.value != null ? `${f.value}${f.unit || ""}` : null]
+            .filter(Boolean).join(": "))
+          .join(" · ")
+      : null);
+
+  // Amal manzili: chaqiruvchining jadvalidan -> subyekt sahifasi -> yo'q.
+  const actionHref =
+    (action && resolveActionHref?.(action, insight)) || insight.subjectHref || null;
+
+  const created = relativeUz(insight.generatedAt || insight.createdAt);
 
   return (
     <article
@@ -164,9 +223,9 @@ const InsightCard = ({ insight, onDismiss, className = "" }) => {
         </p>
       )}
 
-      {insight.reason && (
+      {explanation && (
         <p className="mt-1 pl-2 text-sm leading-relaxed text-muted-foreground">
-          {insight.reason}
+          {explanation}
         </p>
       )}
 
@@ -178,9 +237,9 @@ const InsightCard = ({ insight, onDismiss, className = "" }) => {
 
       <footer className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pl-2 pt-4">
         {action?.label &&
-          (action.href ? (
+          (actionHref ? (
             <Link
-              to={action.href}
+              to={actionHref}
               className="group inline-flex items-center gap-1 text-sm font-medium text-primary"
             >
               {action.label}

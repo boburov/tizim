@@ -18,6 +18,8 @@ import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
 
 // Navigation
 import { DRILLDOWN } from "../../../navigation/drilldown";
+// Tavsiya amalining manzili - jadval operatsion panelda (ikkilantirilmaydi).
+import { ownerActionHref } from "@/owner";
 
 /**
  * TAVSIYALAR OQIMI.
@@ -82,7 +84,11 @@ const InsightsPage = () => {
           {(items) => (
             <div className="grid gap-3 lg:grid-cols-2">
               {items.map((i) => (
-                <InsightCard key={i.id} insight={i} />
+                <InsightCard
+                  key={i._id || i.id}
+                  insight={i}
+                  resolveActionHref={ownerActionHref}
+                />
               ))}
             </div>
           )}
@@ -112,7 +118,11 @@ const InsightsPage = () => {
           {(items) => (
             <div className="grid gap-3 lg:grid-cols-2">
               {items.map((i) => (
-                <InsightCard key={i.id} insight={i} />
+                <InsightCard
+                  key={i._id || i.id}
+                  insight={i}
+                  resolveActionHref={ownerActionHref}
+                />
               ))}
             </div>
           )}

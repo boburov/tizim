@@ -69,7 +69,14 @@ const ExecutiveHeader = () => {
     <header className="sticky top-0 z-30 border-b bg-card">
       {/* ── 1-QATOR: KONTEKST ── */}
       <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center gap-2 px-3 sm:gap-3 sm:px-5">
-        <Link to="/admin" className="flex min-w-0 shrink-0 items-center gap-2">
+        {/* `aria-label` SHART: `sm` dan pastda markaz nomi yashiriladi
+            va havolada faqat bo'sh `alt` li rasm qoladi - ekran o'quvchi
+            uni "havola" deb o'qib, qayerga olib borishini aytolmasdi. */}
+        <Link
+          to="/admin"
+          aria-label="Rahbariyat — bosh sahifa"
+          className="flex min-w-0 shrink-0 items-center gap-2"
+        >
           <img
             src={APP_LOGO}
             width={24}

@@ -371,9 +371,32 @@ const MONTH_SHORT = [
   "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek",
 ];
 
-export const getCashflow = async ({ range = "month" } = {}) => {
+/**
+ * `year` / `month` QO'SHILDI (orqaga mos: berilmasa - joriy davr).
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * NEGA: rahbariyat paneli sahifa darajasida oy tanlagichiga ega va u
+ * `overview` ni boshqaradi. Cashflow esa davrni QABUL QILMAS edi va
+ * har doim BUGUNGI oyni ko'rsatardi.
+ *
+ * Natijada bir ekranda ikki ziddiyat turardi: "Bu oy tushum:
+ * 12 000 000" (mart tanlangan) va yonidagi grafikda avgustning
+ * ustunlari. Foydalanuvchi ikkalasini bir davrga tegishli deb
+ * o'qiydi - ko'z shunday ishlaydi.
+ *
+ * Muqobil yechim "grafik joriy davrni ko'rsatadi" deb yozib qo'yish
+ * edi, lekin izoh ziddiyatni yo'qotmaydi - u faqat uni oqlaydi.
+ *
+ * QAMROV: faqat `range="month"` va `range="year"` uchun ma'noli.
+ * `range="week"` da hafta ATAYLAB joriy haftaligicha qoladi - o'tgan
+ * oyning "qaysi haftasi" degan savolga javob yo'q.
+ * ═══════════════════════════════════════════════════════════════════
+ */
+export const getCashflow = async ({ range = "month", year, month } = {}) => {
   const now = new Date();
-  const y = now.getUTCFullYear();
+  // Tanlangan yil/oy bo'lmasa - joriy (avvalgi xatti-harakat).
+  const y = Number.isInteger(year) ? year : now.getUTCFullYear();
+  const mIndex = Number.isInteger(month) ? month - 1 : now.getUTCMonth();
 
   if (range === "year") {
     const start = new Date(Date.UTC(y, 0, 1, 0, 0, 0, 0));
@@ -399,16 +422,19 @@ export const getCashflow = async ({ range = "month" } = {}) => {
   let start;
   let end;
   if (range === "week") {
-    // Joriy hafta (Dushanba -> Yakshanba)
+    // JORIY hafta (Dushanba -> Yakshanba). `year`/`month` bu yerda
+    // ATAYLAB e'tiborga olinmaydi - "mart oyining haftasi" degan
+    // tushuncha yo'q, qaysi biri ekani noaniq bo'lardi.
+    const ny = now.getUTCFullYear();
     const dow = now.getUTCDay() || 7; // Yak=7
-    start = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate() - (dow - 1), 0, 0, 0, 0));
+    start = new Date(Date.UTC(ny, now.getUTCMonth(), now.getUTCDate() - (dow - 1), 0, 0, 0, 0));
     end = new Date(
-      Date.UTC(y, now.getUTCMonth(), now.getUTCDate() - (dow - 1) + 6, 23, 59, 59, 999),
+      Date.UTC(ny, now.getUTCMonth(), now.getUTCDate() - (dow - 1) + 6, 23, 59, 59, 999),
     );
   } else {
-    // Joriy oy
-    start = new Date(Date.UTC(y, now.getUTCMonth(), 1, 0, 0, 0, 0));
-    end = new Date(Date.UTC(y, now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+    // Tanlangan oy (berilmasa - joriy).
+    start = new Date(Date.UTC(y, mIndex, 1, 0, 0, 0, 0));
+    end = new Date(Date.UTC(y, mIndex + 1, 0, 23, 59, 59, 999));
   }
 
   const [income, salaryExpense, opexExpense] = await Promise.all([

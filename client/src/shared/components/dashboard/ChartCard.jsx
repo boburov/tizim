@@ -81,14 +81,23 @@ const ChartCard = ({
       <div className="flex shrink-0 items-center gap-2">
         {actions}
 
+        {/* `role="tablist"` EMAS: bu tab emas, FILTR. Tab paneli
+            boshqa KONTENTGA almashtiradi va o'q tugmalari bilan
+            yuriladi; bu esa bir xil grafikning davrini o'zgartiradi.
+            Noto'g'ri rol ekran o'quvchiga mavjud bo'lmagan navigatsiya
+            haqida xabar berardi. To'g'risi - `aria-pressed` li
+            tugmalar guruhi. */}
         {ranges?.length > 0 && (
-          <div className="flex rounded-lg bg-muted p-0.5" role="tablist">
+          <div
+            className="flex rounded-lg bg-muted p-0.5"
+            role="group"
+            aria-label="Davr"
+          >
             {ranges.map((r) => (
               <button
                 key={r.value}
                 type="button"
-                role="tab"
-                aria-selected={range === r.value}
+                aria-pressed={range === r.value}
                 onClick={() => onRangeChange?.(r.value)}
                 className={cn(
                   "rounded-md px-3 py-1 text-xs font-medium transition",

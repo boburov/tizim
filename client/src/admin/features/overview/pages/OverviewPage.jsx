@@ -30,6 +30,8 @@ import CashflowBars from "../../../components/CashflowBars";
 
 // Navigation
 import { DRILLDOWN } from "../../../navigation/drilldown";
+// Tavsiya amalining manzili - jadval operatsion panelda (ikkilantirilmaydi).
+import { ownerActionHref } from "@/owner";
 
 /**
  * UMUMIY KO'RINISH - ertalabki birinchi ekran.
@@ -54,7 +56,14 @@ const OverviewPage = () => {
   const params = { year: period.year, month: period.month };
 
   const overview = useOverviewData(params);
-  const cashflow = useCashflowData({ range: period.range });
+  // DAVR GRAFIKKA HAM UZATILADI. Busiz sarlavhada mart tanlansa ham
+  // grafik AVGUSTni chizardi va yonidagi "Bu oy tushum" KPI'si bilan
+  // ziddiyatga tushardi - ko'z ularni bir davrga tegishli deb o'qiydi.
+  const cashflow = useCashflowData({
+    range: period.range,
+    year: period.year,
+    month: period.month,
+  });
   const insights = useInsightsData({ limit: 4, status: "open" });
 
   // `overview.data` FAQAT `ready` da mavjud. `?.` ATAYLAB: qolgan
@@ -119,9 +128,13 @@ const OverviewPage = () => {
           error={overview.error}
           onRetry={overview.refetch}
           to={DRILLDOWN.students}
+          // Izoh IKKALA sanoq ham bo'lgandagina chiqadi. Ilgari
+          // `?? 0` yozilgan edi: ketganlar soni kelmasa "0 ketgan"
+          // deb ko'rsatardi - bu server aytmagan da'vo.
           hint={
-            typeof o?.newStudentsThisMonth === "number"
-              ? `${o.newStudentsThisMonth} yangi, ${o.lostStudentsThisMonth ?? 0} ketgan`
+            typeof o?.newStudentsThisMonth === "number" &&
+            typeof o?.lostStudentsThisMonth === "number"
+              ? `${o.newStudentsThisMonth} yangi, ${o.lostStudentsThisMonth} ketgan`
               : undefined
           }
         />
@@ -182,7 +195,11 @@ const OverviewPage = () => {
               {(items) => (
                 <div className="space-y-3">
                   {items.slice(0, 4).map((insight) => (
-                    <InsightCard key={insight.id} insight={insight} />
+                    <InsightCard
+                      key={insight._id || insight.id}
+                      insight={insight}
+                      resolveActionHref={ownerActionHref}
+                    />
                   ))}
                 </div>
               )}

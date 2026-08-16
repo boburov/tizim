@@ -16,21 +16,27 @@ import { executiveAPI } from "../api/executive.api";
  * boshqa backend, prop orqali statik qiymat) - FAQAT shu fayl
  * o'zgaradi. Komponentlar TEGILMAYDI.
  *
- * Aynan shuning uchun bu yerda hech qanday JSX yo'q va shu yerda
- * hech qanday sonli hisob-kitob YO'Q: adapter faqat shakl o'zgartiradi.
+ * SHAKLNI OCHISH HAM SHU YERDA. Server konvertlari har xil:
+ *   /admin-dashboard/*      -> { success, data }
+ *   /ai/insights            -> { success, data: [...], meta }
+ *   /branch-analytics/pnl   -> { success, data: { items, totals, ... } }
+ *
+ * Komponent bularning birortasini ham bilmasligi kerak - u faqat
+ * o'ziga kerakli SHAKLNI oladi (massiv yoki obyekt). Aks holda har
+ * jadval o'z konvertini ochib yurardi va bittasi adashsa `rows.map is
+ * not a function` bilan butun sahifa qulardi (aynan shunday bo'lgan).
  * ═══════════════════════════════════════════════════════════════════
  *
  * `retry: false` — DASHBOARD UCHUN ATAYLAB.
  * Standart TanStack uch marta qayta uradi. Ko'chirilmagan endpoint
- * uchun bu 404 ni uch marta olib, "manba ulanmagan" xabarini bir
+ * uchun bu 501 ni uch marta olib, "manba ulanmagan" xabarini bir
  * necha soniyaga kechiktiradi va ekran shu vaqt davomida yuklanayotgan
- * bo'lib turadi. Rahbariyat ekranida bitta ko'rsatkich uchun kutish
- * butun sahifani sekin ko'rsatadi.
+ * bo'lib turadi.
  */
 
 const BASE = { retry: false, refetchOnWindowFocus: false };
 
-/** Umumiy ko'rsatkichlar (tushum, o'quvchi, davomat, qarzdorlik). */
+/** Umumiy ko'rsatkichlar (tushum, o'quvchi, davomat). `?year&month` */
 export const useOverviewData = (params) => {
   const query = useQuery({
     ...BASE,
@@ -40,22 +46,29 @@ export const useOverviewData = (params) => {
   return fromQuery(query);
 };
 
-/** Pul oqimi (kirim/chiqim ustunlari). */
-export const useCashflowData = (params) => {
+/**
+ * Pul oqimi. `?range&year&month`
+ *
+ * DAVR UZATILISHI SHART. Server `year`/`month` ni endi qabul qiladi;
+ * berilmasa JORIY oyni qaytaradi va sahifadagi oy tanlagichi bilan
+ * ziddiyat paydo bo'lardi ("Bu oy tushum: mart" + avgust ustunlari).
+ */
+export const useCashflowData = ({ range, year, month } = {}) => {
+  const params = { range, year, month };
   const query = useQuery({
     ...BASE,
     queryKey: qk.adminDashboard.cashflow(params),
     queryFn: () => executiveAPI.cashflow(params).then((r) => r.data.data),
   });
   return fromQuery(query, {
-    // Javob `{ buckets: [...] }` - bo'shlikni ustunlar bo'yicha
+    // Javob `{ range, buckets }` - bo'shlikni USTUNLAR bo'yicha
     // o'lchaymiz. Aks holda `{ buckets: [] }` obyekti "bo'sh emas"
     // bo'lib chiqib, grafik bo'sh maydon chizardi.
     emptyWhen: (d) => !d?.buckets?.length,
   });
 };
 
-/** O'quvchilar oqimi (qo'shilgan / ketgan). */
+/** O'quvchilar oqimi. `?months` (nechta oy orqaga). Oy tanlaganidan MUSTAQIL. */
 export const useStudentFlowData = (params) => {
   const query = useQuery({
     ...BASE,
@@ -66,20 +79,19 @@ export const useStudentFlowData = (params) => {
 };
 
 /**
- * AI tavsiyalari.
+ * AI tavsiyalari. `?page&limit&status&...`
  *
- * `/ai/*` moduli hali Mongoose'da (server/MIGRATION.md §2) va 404
- * qaytaradi -> `fromQuery` uni avtomatik `not_connected` ga aylantiradi.
- * Modul ko'chgach BU YERGA HECH NARSA QO'SHILMAYDI: endpoint javob
- * bera boshlashi bilan ekran o'zi jonlanadi.
+ * Konvert: `{ success, data: [...], meta: { page, limit, total, pages } }`
+ * Bu yerda `r.data.data` MASSIV beradi (qolgan endpointlarda obyekt) -
+ * shuning uchun `select` kerak emas, lekin himoya sifatida qoldirilgan.
+ *
+ * `/ai/*` moduli hali Mongoose'da va 501 qaytaradi -> `fromQuery` uni
+ * avtomatik `not_connected` ga aylantiradi. Modul ko'chgach BU YERGA
+ * HECH NARSA QO'SHILMAYDI.
  */
 export const useInsightsData = (params) => {
   const query = useQuery({
     ...BASE,
-    // `qk.ai.insights()` PREFIKS (parametr olmaydi) - ro'yxat uchun
-    // `qk.ai.list(params)`. Prefiksni kalit sifatida ishlatish barcha
-    // insight so'rovlarini bitta keshga tiqib, filtrlar bir-birini
-    // ustiga yozib yuborardi.
     queryKey: qk.ai.list(params),
     queryFn: () => executiveAPI.insights(params).then((r) => r.data.data),
   });
@@ -98,12 +110,70 @@ export const useBriefingData = (params) => {
   return fromQuery(query);
 };
 
-/** Filial bo'yicha foyda/zarar. */
-export const useBranchPnlData = (params) => {
+/**
+ * Filiallar bo'yicha foyda/zarar.
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * IKKI TUZATISH (ikkalasi ham jimgina buzilgan edi):
+ *
+ * 1) PARAMETRLAR. Endpoint `from`/`to` SANALARINI kutadi
+ *    (`pnlSchema`), `year`/`month` NI EMAS. Ilgari `{year, month}`
+ *    yuborilardi va zod ularni jimgina tashlab yuborardi - natijada
+ *    "Avgust 2026" sarlavhasi ostida BUTUN TARIX summasi chiqardi.
+ *    Endi oy chegaralari sanaga aylantiriladi.
+ *
+ * 2) SHAKL. Javob `{ consolidated, from, to, items, totals }` -
+ *    KONVERT, massiv emas. Ilgari butun konvert jadvalga uzatilardi
+ *    va `rows.map is not a function` bilan BUTUN ILOVA qularďi.
+ * ═══════════════════════════════════════════════════════════════════
+ */
+export const useBranchPnlData = ({ year, month, consolidated } = {}) => {
+  // Oyning [birinchi kun, oxirgi kun] chegarasi - UTC yarim tunlarda.
+  // Server `z.coerce.date()` bilan qabul qiladi, ya'ni ISO satr kifoya.
+  const hasPeriod = Number.isInteger(year) && Number.isInteger(month);
+  const from = hasPeriod
+    ? new Date(Date.UTC(year, month - 1, 1)).toISOString()
+    : undefined;
+  const to = hasPeriod
+    ? new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)).toISOString()
+    : undefined;
+
+  const params = { from, to, consolidated };
+
   const query = useQuery({
     ...BASE,
     queryKey: qk.branchAnalytics.pnl(params),
     queryFn: () => executiveAPI.branchPnl(params).then((r) => r.data.data),
   });
-  return fromQuery(query);
+
+  return fromQuery(query, {
+    // Jadval FAQAT qatorlarni oladi - konvertni emas.
+    select: (d) => d?.items,
+    emptyWhen: (items) => !items?.length,
+  });
+};
+
+/**
+ * P&L yig'indilari (`totals`) - jadvaldan ALOHIDA manba.
+ *
+ * Bir so'rovdan ikki blok oziqlanadi, lekin ular alohida holatga ega
+ * bo'lishi kerak: qatorlar bo'sh bo'lsa ham yig'indi 0 emas, YO'Q.
+ */
+export const useBranchPnlTotals = ({ year, month, consolidated } = {}) => {
+  const hasPeriod = Number.isInteger(year) && Number.isInteger(month);
+  const params = {
+    from: hasPeriod ? new Date(Date.UTC(year, month - 1, 1)).toISOString() : undefined,
+    to: hasPeriod
+      ? new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)).toISOString()
+      : undefined,
+    consolidated,
+  };
+
+  const query = useQuery({
+    ...BASE,
+    queryKey: qk.branchAnalytics.pnl(params),
+    queryFn: () => executiveAPI.branchPnl(params).then((r) => r.data.data),
+  });
+
+  return fromQuery(query, { select: (d) => d?.totals });
 };
