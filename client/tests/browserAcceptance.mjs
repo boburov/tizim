@@ -110,6 +110,23 @@ check("bo'lim tablari ko'rinadi", navLinks.length >= 3, navLinks.map(t => t.trim
 const kpiCount = await page.locator("main .tabular-nums").count();
 check("KPI plitalari render bo'ldi", kpiCount > 0, `${kpiCount} raqamli element`);
 
+// XATO TOASTI CHIQMASLIGI KERAK.
+//
+// Bu tekshiruv HAQIQIY XATODAN keyin qo'shildi: `/ai/insights` 501
+// qaytarganda global `QueryCache.onError` qizil toast chiqarardi
+// ("Bu bo'lim PostgreSQL'ga hali ko'chirilmagan"), holbuki kartaning
+// O'ZI allaqachon xotirjam "Manba ulanmagan" holatini ko'rsatib
+// turardi. Bir holat ikki joyda, ikki xil ohangda - ishlab turgan
+// tizim buzuqdek ko'rinardi.
+//
+// Testning oldingi versiyasi buni O'TKAZIB YUBORGAN: u konsol
+// xatolarini va 500 javoblarni tekshirardi, TOASTNI emas.
+const toastText = await page
+  .locator("[data-sonner-toast]")
+  .allInnerTexts()
+  .catch(() => []);
+check("xato toasti YO'Q", toastText.length === 0, toastText.join(" | ").slice(0, 120));
+
 // Gorizontal toshib ketish
 const overflow = await page.evaluate(() =>
   document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -125,24 +142,36 @@ console.log("\n2) filial tanlagich");
 // API'dan filial sonini so'rash SINALDI va TASHLANDI: u brauzerdagi
 // token kalitini taxmin qilishni talab qilardi va noto'g'ri kalit
 // 401 berib, konsol xatolari tekshiruvini ham buzardi.
-// MATN bo'yicha qidirish ISHLAMAYDI: badge filial KODINI ko'rsatadi
-// ("MAIN"), nomini emas - va kod har markazda boshqacha. Shuning uchun
-// IKONKA bo'yicha topamiz (Building2 = bitta filial, Layers = "barcha").
+// FILIAL KONTEKSTI SHARTLI ko'rsatiladi va bu ATAYLAB.
+//
+// `BranchBadge` yakka markaz rejimida `if (!multiBranch) return null`
+// qiladi - "filial tushunchasi umuman yo'q" (komponent izohi). Ya'ni
+// badge YO'QLIGI ham to'g'ri holat.
+//
+// Test shuning uchun MODENI aniqlaydi va shunga qarab kutadi. Ilgari
+// bu yerda "badge har doim bo'lishi kerak" deb yozilgan edi va u
+// yakka markazli bazada yiqilardi - testning o'z xatosi, ilovaniki
+// emas.
+//
+// Matn bo'yicha qidirish ham ISHLAMAYDI: badge filial KODINI
+// ko'rsatadi ("MAIN"), nomini emas.
 const shellHeader = page.locator("header").first();
-const badge = shellHeader
-  .locator('[class*="lucide-building"], [class*="lucide-layers"]')
-  .first();
-check("filial konteksti header'da KO'RINADI", (await badge.count()) > 0);
-if (await badge.count()) {
-  await badge.click().catch(() => {});
+const badge = shellHeader.locator('[class*="lucide-building"], [class*="lucide-layers"]');
+const badgeCount = await badge.count();
+
+if (badgeCount > 0) {
+  ok("ko'p filialli rejim: filial konteksti header'da ko'rinadi");
+  await badge.first().click().catch(() => {});
   await page.waitForTimeout(700);
   const menuItems = await page.locator('[role="menuitem"]').count();
   if (menuItems > 0) {
-    ok("ko'p filialli rejim: menyu ochildi", `${menuItems} variant`);
+    ok("filial menyusi ochiladi", `${menuItems} variant`);
     await page.keyboard.press("Escape");
   } else {
-    ok("bitta filialli rejim: menyu ochilmaydi (ataylab)", "BranchBadge izohiga mos");
+    ok("bitta filial: badge bosilmaydigan yorliq (ataylab)");
   }
+} else {
+  ok("yakka markaz rejimi: filial badge'i YO'Q (ataylab)", "BranchBadge: !multiBranch -> null");
 }
 
 // ══ 3) /admin/moliya — P&L HAQIQIY MA'LUMOT ════════════════════
@@ -181,6 +210,13 @@ check("AI 501 qaytardi (500 EMAS)", aiReq.every((r) => r.status === 501), aiReq.
 const aiText = await page.locator("main").innerText();
 check("ekranda 'Manba ulanmagan' ko'rinadi", /Manba ulanmagan/i.test(aiText));
 check("SOXTA raqam yo'q ('0 ta xavf' kabi)", !/\b0 ta (xavf|tavsiya)\b/i.test(aiText));
+
+const aiToasts = await page.locator("[data-sonner-toast]").allInnerTexts().catch(() => []);
+check(
+  "501 uchun QIZIL TOAST chiqmaydi (holat kartada ko'rsatiladi)",
+  aiToasts.length === 0,
+  aiToasts.join(" | ").slice(0, 120),
+);
 
 // ══ 5) DRILL-DOWN + BACK ═══════════════════════════════════════
 console.log("\n5) drill-down va brauzer Back");

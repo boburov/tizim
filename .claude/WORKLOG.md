@@ -12513,3 +12513,141 @@ Konstantalarni modeldan ajrataman (avvalgi to'lqinlardagi naqsh):
 <sub>session `c49e703c` · branch `main` · 109 ta qadam</sub>
 
 ---
+
+## 2026-08-17 00:50 — # FINALIZATION PHASE — BRANCH ANALYTICS → AI → FULL MIGRATION # # CURR
+
+**So'rov**
+
+> # FINALIZATION PHASE — BRANCH ANALYTICS → AI → FULL MIGRATION
+> #
+> # CURRENT PROJECT STATE
+> #
+> # Stack:
+> # - Node.js
+> # - PostgreSQL
+> # - Prisma
+> # - React / Next.js client
+> #
+> # IMPORTANT:
+> # MongoDB/Mongoose migration is already substantially complete.
+> # DO NOT restart the migration.
+> # DO NOT redesign the frontend.
+> # DO NOT create mock data.
+> #
+> # The Executive Dashboard and Operational Dashboard shells are already built.
+> #
+> # Executive:
+> #   /admin
+> #   - no sidebar
+> #   - top navigation
+> #   - executive analytics
+> #
+> # Operational:
+> #   /admin/* and existing operational routes
+> #   - sidebar
+> #   - normal application navigation
+> #
+> # The client ↔ server contract has already been audited.
+> #
+> # Current verified behavior:
+> #
+> # 200 → real data
+> # 501 MODULE_NOT_MIGRATED → "Source not connected"
+> # 500 → actual server error
+> #
+> # DO NOT BREAK THIS CONTRACT.
+> #
+> # ================================================================
+> # CURRENT MIGRATION STATUS
+> # ================================================================
+> #
+> # Already migrated and tested:
+> #
+> # users                 ✅
+> # groups                ✅
+> # salary chain          ✅
+> # teacher compensation  ✅
+> # teacher salary        ✅
+> # group fee             ✅
+> # student
+> …
+
+**O'zgargan fayllar (2)**
+
+- `server/tests/branchAnalyticsPrisma.test.js` — yaratildi/qayta yozildi
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/browser.mjs` — yaratildi/qayta yozildi
+
+**Buyruqlar (46)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total echo "═══ BRAUZER VOSITASI BORMI (Phase G) ═══" for t in playwright puppeteer chromedriver; do ls client/node_modules/$t se…
+cd /Users/shukrullo/Desktop/lc-total echo "═══ playwright qayerda ═══" ls -d client/node_modules/playwright* server/node_modules/playwright* 2>/dev/null echo "─…
+ls ~/.npm/_npx/*/node_modules/ 2>/dev/null | head -20 echo "─── global ───" npm root -g 2>/dev/null && ls $(npm root -g) 2>/dev/null | grep -i playwright echo "…
+PW=/Users/shukrullo/.npm/_npx/e41f203b7505f1fb/node_modules cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ branchAnalytics — qolgan Mongoose ═══" for f in $(grep -rl "^import mongoose\|from \"\(\.\./\)*models/" sr…
+cd /Users/shukrullo/Desktop/lc-total/server grep -n "Branch\.\|CashTransfer\.\|Shift\.\|aggregate\|\.find(\|countDocuments" src/modules/branchAnalytics/services…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '74,100p;133,200p' src/modules/branchAnalytics/services/branchAlerts.service.js
+cd /Users/shukrullo/Desktop/lc-total/server python3 - <<'PY' import io p="src/modules/branchAnalytics/services/branchAlerts.service.js"; s=io.open(p,encoding="u…
+cd /Users/shukrullo/Desktop/lc-total/server grep -n "aggregate(\|\.find(\|countDocuments\|distinct" src/modules/branchAnalytics/services/branchMetrics.service.j…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '50,100p' src/modules/branchAnalytics/services/branchMetrics.service.js
+cd /Users/shukrullo/Desktop/lc-total/server python3 - <<'PY' import io p="src/modules/branchAnalytics/services/branchMetrics.service.js"; s=io.open(p,encoding="…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '293,302p' src/modules/branchAnalytics/services/branchMetrics.service.js python3 -c " import io p='src/module…
+cd /Users/shukrullo/Desktop/lc-total/server grep -n "User\.\|Group\.\|GroupMembership\.\|StudentDeposit\.\|Branch\.\|session\|startSession\|toObjectId" src/modu…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '55,120p' src/modules/branchAnalytics/services/studentTransfer.service.js
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '125,217p' src/modules/branchAnalytics/services/studentTransfer.service.js
+cd /Users/shukrullo/Desktop/lc-total/server python3 - <<'PY' import io, re p="src/modules/branchAnalytics/services/studentTransfer.service.js"; s=io.open(p,enco…
+cd /Users/shukrullo/Desktop/lc-total/server python3 - <<'PY' import io p="src/modules/branchAnalytics/services/studentTransfer.service.js"; s=io.open(p,encoding…
+cd /Users/shukrullo/Desktop/lc-total/server lsof -ti:5000 | xargs kill -9 2>/dev/null; pkill -f nodemon 2>/dev/null; sleep 2 (npm run dev > /private/tmp/claude-…
+cd /Users/shukrullo/Desktop/lc-total/server node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('package.json','utf8'));j.scripts['test:branch-an…
+cd /Users/shukrullo/Desktop/lc-total/server tail -25 src/modules/branchAnalytics/services/branchAlerts.service.js
+cd /Users/shukrullo/Desktop/lc-total/server python3 - <<'PY' import io p="tests/branchAnalyticsPrisma.test.js"; s=io.open(p,encoding="utf-8").read() s = s.repla…
+cd /Users/shukrullo/Desktop/lc-total/server T=0; F=0 for t in test:auth-prisma test:users-prisma test:group-periods test:salary-chain test:groups-chain test:sta…
+cd /Users/shukrullo/Desktop/lc-total && git add -A && git commit -q -m "$(cat <<'EOF' feat(migration): branchAnalytics to'liq Prisma'ga (Phase A) branchMetrics …
+D=/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/subagents/workflows/wf_eef1d6ca-e9a node -e "const fs…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ AI o'qiydigan modellar Prisma'da bormi ═══" for m in AiConfig AiRanking AiReport AiRun AiUsageLog Attendan…
+# … yana 21 ta
+```
+
+**Natija**
+
+Katta ish. Avval haqiqiy holatni va Phase G uchun brauzer vositasi bor-yo'qligini aniqlayman — buni oxirida emas, hozir bilishim kerak.
+
+Playwright bor ko'rinadi — bu Phase G uchun hal qiluvchi. Aniq tekshiraman:
+
+Brauzerlar global keshda bor, `playwright` paketi esa loyihada yo'q. Topib ishlataman:
+
+Playwright topildi va brauzerlar keshda bor — **Phase G haqiqiy brauzerda bajariladi**. Tekshiraman:
+
+Playwright ishlaydi — Phase G haqiqiy brauzerda bo'ladi. Endi **Phase A**. AI auditi (27 fayl) fonda ishlasin, men branchAnalytics bilan boshlayman:
+
+**Phase A** — branchAnalytics. Talab qilganingizdek, avval haqiqiy bog'liqlik grafigini ko'raman:
+
+Uchalasi ham faqat **ko'chirilgan** modellarga bog'liq — yo'l ochiq. `branchAlerts` dan boshlayman:
+
+Endi `branchMetrics` — bu yerda aggregation quvurlari bor:
+
+Endi oxirgisi — `studentTransfer`, bu **pul ko'chiradigan** yo'l:
+
+Endi `transfer` — pul ko'chiradi. Uni atomik qilaman (`cashTransfer` dagi kabi):
+
+**Phase A tugadi.** Tirik tekshiruv va filial xavfsizligi:
+
+Barcha oltitasi tirik. Endi talab qilingan **adversarial filial testi**:
+
+`evaluate()` massiv emas, obyekt qaytarar ekan — mening taxminim. Haqiqiy shaklni ko'ray:
+
+**Phase A tugadi — 17/17.** Regressiya va commit, so'ng Phase B:
+
+**Phase B** — AI. Bog'liqlik xaritasi tayyor bo'lishi kerak, tekshiraman:
+
+AI 54 fayl, 12 285 qator va 23 ta modelni o'qiydi — jumladan hali ko'chirilmagan `attendance`, `grade`, `feedback`. Hal qiluvchi savol: **Prisma modellari bormi?**
+
+Hammasi mavjud — AI ko'chirilishi mumkin. Lekin sizning qoidangiz aniq: AI faqat **haqiqiy tahlil mavjud bo'lgandagina** ochilishi kerak. Ya'ni o'qish yo'li yetarli emas, generator ham kerak. Hajmni aniqlayman:
+
+10 127 qator. Ko'r-ko'rona ko'chirish xavfli bo'lardi — haqiqiy Mongo so'rovlari sonini o'lcha
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 60 ta qadam</sub>
+
+---

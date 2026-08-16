@@ -93,6 +93,18 @@ const cleanup = async () => {
     await prisma.discount.deleteMany({ where: { studentId: { in: uids } } });
     await prisma.studentPayment.deleteMany({ where: { studentId: { in: uids } } });
     await prisma.groupMembership.deleteMany({ where: { studentId: { in: uids } } });
+    // XOM SQL BILAN YOZILGANLAR. Bu test ataylab servisni aylanib
+    // o'tib, to'g'ridan-to'g'ri INSERT qiladi (CHECK cheklovlarini
+    // sinash uchun) - shuning uchun ular Prisma yo'lidan o'chmaydi va
+    // ochiq sanab o'tilishi SHART.
+    //
+    // Busiz `user.deleteMany` FK bilan yiqilardi
+    // (`opening_balances_userId_fkey`) va BUTUN cleanup to'xtardi -
+    // natijada har yugurishdan keyin yetim FILIAL qolardi. Ular esa
+    // ilovada "Filialni tanlang" ekranini majburiy qilib, brauzer
+    // testini yiqitardi. Sabab shu yerda edi.
+    await prisma.openingBalance.deleteMany({ where: { userId: { in: uids } } });
+    await prisma.studentFreeze.deleteMany({ where: { studentId: { in: uids } } });
   }
   if (rules.length) await prisma.kpiRule.deleteMany({ where: { id: { in: rules } } });
   if (groups.length) {
@@ -104,7 +116,15 @@ const cleanup = async () => {
   if (courses.length) await prisma.course.deleteMany({ where: { id: { in: courses } } });
   if (uids.length) await prisma.user.deleteMany({ where: { id: { in: uids } } });
   if (branches.length) {
+    // Hisoblarga jurnal qatorlari ishora qilishi mumkin - avval ular.
+    await prisma.journalLine.deleteMany({
+      where: { account: { branchId: { in: branches } } },
+    });
+    await prisma.journalEntry.deleteMany({ where: { branchId: { in: branches } } });
     await prisma.account.deleteMany({ where: { branchId: { in: branches } } });
+    await prisma.expenseCategory.deleteMany({ where: { branchId: { in: branches } } });
+    await prisma.leadRoutingRule.deleteMany({ where: { branchId: { in: branches } } });
+    await prisma.cashTransfer.deleteMany({ where: { fromBranchId: { in: branches } } });
     await prisma.branch.deleteMany({ where: { id: { in: branches } } });
   }
 };
@@ -575,7 +595,17 @@ run()
     R.fail += 1;
   })
   .finally(async () => {
-    await cleanup().catch((e) => console.error("tozalash xatosi:", e.message));
+    // TOZALASH XATOSI JIM QOLMASLIGI KERAK.
+    //
+    // Ilgari u faqat `console.error` bilan yozilardi va test baribir
+    // "0 yiqildi" deb tugardi - natijada bazada yetim yozuvlar
+    // to'planib borardi va buni HECH KIM ko'rmasdi. Endi u testni
+    // yiqitadi: iflos baza keyingi yugurishlarni buzadi.
+    await cleanup().catch((e) => {
+      console.error(`\n  ❌ TOZALASH YIQILDI: ${e.message.split("\n").slice(-1)[0]}`);
+      console.error("     (bazada yetim yozuv qoldi - keyingi testlarga ta'sir qiladi)");
+      R.fail += 1;
+    });
     await prisma.$disconnect();
     process.exit(R.fail ? 1 : 0);
   });

@@ -71,10 +71,42 @@ export const isMongoUnavailable = (err) => {
 
   const name = err.name || "";
   const msg = String(err.message || "");
+  const stack = String(err.stack || "");
 
   // Driver darajasidagi aniq turlar.
   if (name === "MongoNotConnectedError") return true;
   if (name === "MongoServerSelectionError") return true;
+
+  // ═══════════════════════════════════════════════════════════════
+  // MONGOOSE ICHIDAN KELGAN HAR QANDAY XATO - ko'chirilmagan yo'l.
+  //
+  // Ulanish xatolaridan TASHQARI, yarim ko'chirilgan holat SINXRON
+  // xatolarni ham tug'diradi. Aniq misol:
+  //
+  //   "Arguments must be aggregate pipeline operators"
+  //   at Aggregate.append (node_modules/mongoose/lib/aggregate.js)
+  //   at historicalCollectionRate (modules/ai/signals/finance.signal.js)
+  //
+  // Sababi: `branchMatchStage()` endi PRISMA shaklini qaytaradi, AI
+  // kodi esa uni hamon Mongo `$match` bosqichi deb quvurga qo'shadi.
+  // Bu ulanishga umuman yetib bormaydi - Mongoose uni quvur tuzish
+  // paytidayoq rad etadi.
+  //
+  // NEGA BU 500 EMAS: Mongo ULANMAGAN (`bufferCommands: false`,
+  // `mongoose.connect` hech qayerda chaqirilmaydi). Bunday holatda
+  // Mongoose ICHIDAN kelgan xato ta'rif bo'yicha "bu kod yo'li hali
+  // ko'chirilmagan" degani - server nosozligi emas.
+  //
+  // QAMROV QAT'IY CHEKLANGAN: stek AYNAN `node_modules/mongoose/`
+  // ichidan boshlanishi kerak. Ko'chirilgan (Prisma) koddagi haqiqiy
+  // xato bu shartga tushmaydi va 500 bo'lib qolaveradi - foydalanuvchi
+  // talabi shuni aniq belgilaydi ("Never convert genuine 500s into
+  // 501s").
+  //
+  // Modul Prisma'ga ko'chgach Mongoose steki umuman paydo bo'lmaydi
+  // va bu shox o'z-o'zidan ishlamay qoladi.
+  // ═══════════════════════════════════════════════════════════════
+  if (/[/\\]node_modules[/\\]mongoose[/\\]/.test(stack)) return true;
 
   // Matn bo'yicha - Mongoose versiyasiga qarab uch xil ko'rinishda
   // keladi. Uchalasi ham TEKSHIRILGAN, taxmin emas:
