@@ -31,11 +31,20 @@ import ApiError from "../utils/ApiError.js";
  * @throws {ApiError} 403 - ikkalasi bir odam bo'lsa
  */
 export const assertNotSelfSalary = (currentUser, targetTeacherId) => {
-  // Kontekstsiz (seed / job / migratsiya) - tekshirilmaydi.
-  if (!currentUser?._id || !targetTeacherId) return;
+  // AKTYOR ID'si IKKI NOMDA bo'lishi mumkin: `_id` (Mongoose davridan
+  // qolgan chaqiruvchilar, `req.user` da ikkalasi ham bor) va `id`
+  // (ko'chirilgan servislardan keladigan sof Prisma obyektlari).
+  //
+  // FAQAT `_id` ga tayanish XAVFSIZLIK TESHIGI bo'lardi - Prisma
+  // obyektida u yo'q, ya'ni tekshiruv "kontekstsiz" deb JIMGINA
+  // o'tkazib yuborilardi va o'qituvchi o'ziga o'zi stavka qo'ya olardi.
+  const actorRaw = currentUser?.id || currentUser?._id;
 
-  const actor = String(currentUser._id);
-  const target = String(targetTeacherId?._id || targetTeacherId);
+  // Kontekstsiz (seed / job / migratsiya) - tekshirilmaydi.
+  if (!actorRaw || !targetTeacherId) return;
+
+  const actor = String(actorRaw);
+  const target = String(targetTeacherId?.id || targetTeacherId?._id || targetTeacherId);
 
   if (actor === target) {
     throw new ApiError(

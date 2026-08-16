@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GROUP_DAYS } from "../../../models/group.model.js";
+import { GROUP_DAYS } from "../../../constants/calendar.js";
 
 export const TIME_RX = /^([01]\d|2[0-3]):[0-5]\d$/;
 

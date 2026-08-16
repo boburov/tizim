@@ -56,6 +56,14 @@ jadval yangilanadi.
 | `modules/courses` (+ coursePrice) | narx merosi zanjiri |
 | `modules/rooms` | to'liq |
 | `modules/archiveReasons`, `feedbackTypes`, `leadOptions`, `notificationTemplates`, `attendanceSettings` | to'liq |
+| **`modules/users`** | list / stats / CRUD / parol / arxiv / rol / filial / hard-delete — **49/49 test** (`npm run test:users-prisma`) |
+| `modules/studentFreeze` | muzlatish/chiqarish + ro'yxat filtri (users.list shunga tayanadi) |
+| `modules/staffPayroll/payrollAudit` | HR sanasi auditi (`users.update` chaqiradi) |
+| `helpers/userRelations.helper.js` | hard-delete bloklovchilari + cascade |
+| `helpers/membership.helper.js`, `studentCompletion.helper.js` | a'zolik va yakunlash sanasi |
+| `helpers/correlationCache.js`, `botStatus.helper.js`, `cascadeDelete.helper.js` | kesh, Telegram holati, soft-delete cascade |
+| `finance/financeTxn.helper.js` | `runFinanceTxn` → `prisma.$transaction` |
+| `groups/teacherGroupPeriod.service.js` | **o'qish/rezolver yo'llari** — **20/20 test** (`npm run test:group-periods`) |
 
 **Hozir ishlaydi — 22 endpoint (200):**
 `/auth/*`, `/branches` (+compare, stats), `/roles` (+matrix), `/courses`,
@@ -91,18 +99,47 @@ qaytarmaydi. Modulni ko'chirayotganda `...branchMatchStage()` ni
 Quyidagilar **hali Mongoose'da** va shuning uchun **hozircha ishlamaydi**
 (Mongo ulanishi olib tashlangan). Ko'chirish tartibi — bog'liqlik bo'yicha:
 
-**1-to'lqin — poydevor helperlar** ✅ asosiylari bajarildi
-Qolgani: `membership.helper.js` (1 ta so'rov), `roles.helper.js` (6 ta),
-`cascadeDelete.helper.js` (20 ta so'rov, 11 model — eng kattasi).
+**1-to'lqin — poydevor helperlar** ✅ **bajarildi**
+`membership`, `studentCompletion`, `userRelations`, `roles`, `cascadeDelete`,
+`botStatus`, `correlationCache`, `selfSalary.guard` — hammasi Prisma'da.
+Qolgani: `studentFreeze.helper.js` va `lessonCancellation.helper.js` —
+ular davomat/to'lov to'lqiniga tegishli (chaqiruvchilari hali Mongoose'da).
 
 **2-to'lqin — asosiy ma'lumot** — `branches`, `roles`, `courses`, `rooms` ✅
 
-Qolgani: **`users`** (1460 qator) va **`groups`** (2606 qator) ← **KEYINGI QADAM**
+**`users`** ✅ **bajarildi** (1385 qator, 17 eksport, 49 ta test).
 
-> Ikkalasida ham `branchAssignments` bilan ishlash bor. Eslatma:
-> `$pull: { branchAssignments: ... }` endi `user_branch_assignments`
-> jadvali ustidagi `deleteMany`, `Group.teachers` esa ko'p-ko'pga
-> bog'lanish (`connect` / `set` / `disconnect`).
+**`groups`** ⏳ **QISMAN** ← **KEYINGI QADAM**
+
+| Fayl | Holat |
+|---|---|
+| `helpers/botStatus`, `cascadeDelete` | ✅ Prisma |
+| `constants/calendar.js` (`GROUP_DAYS`) | ✅ modeldan ko'chirildi |
+| `groups/validators/common.js` | ✅ konstantaga bog'landi |
+| `groups/teacherGroupPeriod.service.js` | ⚠️ **o'qish yo'llari ✅**, yozish yo'llari bloklangan |
+| `groups/groups.service.js` (1673 qator) | ❌ Mongoose |
+
+> **NEGA yozish yo'llari bloklangan:** `create/update/remove/handover/
+> assignTeacher/unassignTeacher` → `recomputeForRange()` →
+> `teacherSalary.service.js` (hali Mongoose). Uni `try/catch` bilan
+> o'rab yuborish MUMKIN EMAS — maosh qayta hisobi jimgina yo'qolardi.
+>
+> **`groups.service.js` ni ochish uchun kerak bo'lgan zanjir** (taxminan
+> 4300 qator, bog'liqlik tartibida):
+> 1. `teacherSalary/rateResolver.helper.js` (223) + `variableBase.helper.js` (152)
+> 2. `teacherSalary/teacherCompensation.service.js` (357)
+> 3. `teacherSalary/teacherSalary.service.js` (1019) ← eng muhimi
+> 4. `finance/groupFee.service.js` (300)
+> 5. `finance/studentPayment.service.js` (806)
+> 6. `deposits/deposit.service.js` (642)
+> 7. `openingBalance/openingBalance.service.js` (548)
+> 8. `groups/groups.service.js` (1673)
+>
+> Eslatma: `Group.teachers` — ko'p-ko'pga bog'lanish
+> (`connect` / `set` / `some` / `disconnect`), `Group.schedule` esa endi
+> `GroupScheduleItem[]` relation'i: har bir `Group` so'rovida uni ochiq
+> `include` qilish SHART, aks holda jadval to'qnashuvi tekshiruvi jimgina
+> hech nimani tutmay qo'yadi.
 
 **3-to'lqin — o'quv jarayoni**
 `attendance`, `grades`, `assignments`, `holidays`, `lessonCancellations`,
@@ -211,6 +248,27 @@ ya'ni `tokenHash` ham bir xil. `tokenHash` esa unique — natijada
 Bu **Mongo davridan beri bor edi** (u yerda ham `tokenHash: unique`), lekin
 odam tezligida kamdan-kam ko'rinardi; migratsiya testi uni ochib berdi.
 Tuzatish: refresh payload'iga noyob `jti` qo'shildi.
+
+### `cascadeDelete` moliya yozuvlarini YASHIRMASDI
+
+`cascadeDelete.helper.js` guruh yoki o'quvchi o'chirilganda
+`StudentPayment` va `TeacherSalary` ga ham `$set: { isDeleted: true }`
+yozardi. Ikkala modelda softDelete plagini **umuman yo'q** (fayllardagi
+izoh buni ochiq aytadi), Mongoose esa sxemada bo'lmagan maydonni
+jimgina tashlab yuborardi — ya'ni bu qatorlar **hech qachon hech nima
+qilmagan**.
+
+Postgres bunday yozuvni yutmaydi: ustun yo'q → xato. Chaqiruvlar olib
+tashlandi va sabab kodda izohlab qo'yildi. **Xulq-atvor o'zgarmadi** —
+u yozuvlar ilgari ham belgilanmasdi; ular a'zolik/davrlardan qayta
+hisoblanadi (`recalc`), ya'ni summalar o'zi nolga tushadi.
+
+### `leadRouting` — `branchId: undefined`
+
+`ensureMainBranch()` xom Prisma obyekti qaytaradi (`id`), servis esa
+`main._id` o'qirdi → `undefined`. Zaxira yo'lda lidga filial
+biriktirilmay qolardi ("lid hech qachon yo'qolmaydi" invarianti
+buzilardi). Tuzatildi.
 
 ---
 

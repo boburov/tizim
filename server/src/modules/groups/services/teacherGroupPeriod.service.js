@@ -1,9 +1,4 @@
-import mongoose from "mongoose";
-import TeacherGroupPeriod from "../../../models/teacherGroupPeriod.model.js";
-import TeacherSalary from "../../../models/teacherSalary.model.js";
-import SalaryTransaction from "../../../models/salaryTransaction.model.js";
-import Group from "../../../models/group.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import { APPROVAL_KINDS } from "../../../models/approval.model.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
@@ -17,6 +12,40 @@ import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
 import { resolveBranchFromGroup } from "../../../helpers/branchContext.helper.js";
 import { assertNotSelfSalary } from "../../../helpers/selfSalary.guard.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
+
+// ═════════════════════════════════════════════════════════════════
+// MONGO → PRISMA
+//
+//   { teacher: id }              → { teacherId: id }
+//   { group: id }                → { groupId: id }
+//   { isDeleted: { $ne: true } } → { isDeleted: false }
+//   doc.softDelete()             → update({ isDeleted, deletedAt })
+//   Group.teachers massivi       → ko'p-ko'pga bog'lanish (`set`/`some`)
+//   group.schedule embedded      → GroupScheduleItem[] relation
+//
+// `toObjectId()` OLIB TASHLANDI: Prisma kaliti oddiy 24-belgili satr.
+// U ilgari noto'g'ri ID uchun 400 berardi; endi mos kelmagan ID shunchaki
+// hech nimaga to'g'ri kelmaydi va chaqiruvchi 404 qaytaradi.
+//
+// SCHEDULE ESLATMASI: `scheduleActiveOn()` guruh jadvalini kutadi, ya'ni
+// har bir `Group` so'rovida `schedule` ochiq `include` qilinishi SHART.
+// Unutilsa massiv bo'sh kelib, jadval to'qnashuvi tekshiruvi JIMGINA
+// hech nimani tutmay qo'yardi - to'qnashuv esa bazaga yozilib ketardi.
+// ═════════════════════════════════════════════════════════════════
+
+// Jadval bilan birga o'qiladigan guruh maydonlari - bitta manba.
+const GROUP_WITH_SCHEDULE = {
+  id: true,
+  name: true,
+  isActive: true,
+  isDeleted: true,
+  startDate: true,
+  endDate: true,
+  schedule: {
+    select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
+  },
+};
 
 const DAY_LABEL_UZ = {
   mon: "Dushanba",
@@ -61,19 +90,19 @@ export const assertTeacherScheduleFree = async (
   const slots = scheduleActiveOn(incomingSchedule || []);
   if (!slots.length) return;
 
-  const periods = await TeacherGroupPeriod.find(
-    { teacher: toObjectId(teacher), endDate: null, isDeleted: { $ne: true } },
-    { group: 1 },
-  ).lean();
+  const periods = await prisma.teacherGroupPeriod.findMany({
+    where: { teacherId: String(teacher), endDate: null, isDeleted: false },
+    select: { groupId: true },
+  });
   const groupIds = periods
-    .map((p) => p.group)
+    .map((p) => p.groupId)
     .filter((g) => !excludeGroupId || String(g) !== String(excludeGroupId));
   if (!groupIds.length) return;
 
-  const groups = await Group.find(
-    { _id: { $in: groupIds }, isActive: true, isDeleted: { $ne: true } },
-    { name: 1, schedule: 1 },
-  ).lean();
+  const groups = await prisma.group.findMany({
+    where: { id: { in: groupIds }, isActive: true, isDeleted: false },
+    select: { name: true, schedule: GROUP_WITH_SCHEDULE.schedule },
+  });
 
   for (const g of groups) {
     const conflict = findSlotConflict(slots, scheduleActiveOn(g.schedule || []));
@@ -91,56 +120,60 @@ export const assertTeacherScheduleFree = async (
 // kun/vaqtlarda boshqa (o'z boshqa guruhida) darsi bo'lmagan aktiv o'qituvchilar.
 // Band (jadvali to'qnashadigan) o'qituvchilar chiqarib tashlanadi.
 export const listAvailableTeachers = async (groupId) => {
-  const group = await Group.findById(groupId, { schedule: 1 }).lean();
+  const group = await prisma.group.findUnique({
+    where: { id: String(groupId) },
+    select: { id: true, schedule: GROUP_WITH_SCHEDULE.schedule },
+  });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
   const slots = scheduleActiveOn(group.schedule || []);
 
-  const teachers = await User.find(
-    { role: ROLES.TEACHER, isActive: true, isDeleted: { $ne: true } },
-    { firstName: 1, lastName: 1, username: 1 },
-  )
-    .sort({ firstName: 1, lastName: 1 })
-    .lean();
+  const teachers = await prisma.user.findMany({
+    where: { role: ROLES.TEACHER, isActive: true, isDeleted: false },
+    select: { id: true, firstName: true, lastName: true, username: true },
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+  });
 
   // Guruh jadvali bo'sh - to'qnashuv bo'lmaydi, hamma bo'sh.
-  if (!slots.length) return teachers;
+  if (!slots.length) return withLegacyIds(teachers);
 
-  const teacherIds = teachers.map((t) => t._id);
+  const teacherIds = teachers.map((t) => t.id);
   // Har bir o'qituvchining BOSHQA guruhlaridagi ochiq davrlari.
-  const periods = await TeacherGroupPeriod.find(
-    {
-      teacher: { $in: teacherIds },
+  const periods = await prisma.teacherGroupPeriod.findMany({
+    where: {
+      teacherId: { in: teacherIds },
       endDate: null,
-      isDeleted: { $ne: true },
-      group: { $ne: toObjectId(groupId) },
+      isDeleted: false,
+      groupId: { not: String(groupId) },
     },
-    { teacher: 1, group: 1 },
-  ).lean();
+    select: { teacherId: true, groupId: true },
+  });
 
-  const otherGroupIds = [...new Set(periods.map((p) => String(p.group)))];
-  const otherGroups = await Group.find(
-    { _id: { $in: otherGroupIds }, isActive: true, isDeleted: { $ne: true } },
-    { schedule: 1 },
-  ).lean();
+  const otherGroupIds = [...new Set(periods.map((p) => String(p.groupId)))];
+  const otherGroups = await prisma.group.findMany({
+    where: { id: { in: otherGroupIds }, isActive: true, isDeleted: false },
+    select: { id: true, schedule: GROUP_WITH_SCHEDULE.schedule },
+  });
   const schedByGroup = new Map(
-    otherGroups.map((g) => [String(g._id), scheduleActiveOn(g.schedule || [])]),
+    otherGroups.map((g) => [String(g.id), scheduleActiveOn(g.schedule || [])]),
   );
 
   const busyByTeacher = new Map();
   for (const p of periods) {
-    const sched = schedByGroup.get(String(p.group));
+    const sched = schedByGroup.get(String(p.groupId));
     if (!sched?.length) continue;
-    const key = String(p.teacher);
+    const key = String(p.teacherId);
     const arr = busyByTeacher.get(key) || [];
     arr.push(...sched);
     busyByTeacher.set(key, arr);
   }
 
   // Guruh jadvali bilan to'qnashadigan (band) o'qituvchilarni chiqarib tashlaymiz.
-  return teachers.filter((t) => {
-    const busy = busyByTeacher.get(String(t._id));
-    return !busy || !findSlotConflict(slots, busy);
-  });
+  return withLegacyIds(
+    teachers.filter((t) => {
+      const busy = busyByTeacher.get(String(t.id));
+      return !busy || !findSlotConflict(slots, busy);
+    }),
+  );
 };
 
 // Maosh stavkasini turiga qarab normallashtiradi (fixed→foiz 0, percent→fiksa 0).
@@ -149,12 +182,6 @@ const normalizeRate = (salaryType, fixedAmount, percentRate) => ({
   fixedAmount: salaryType === "percent" ? 0 : Number(fixedAmount) || 0,
   percentRate: salaryType === "fixed" ? 0 : Number(percentRate) || 0,
 });
-
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
-  return new mongoose.Types.ObjectId(String(id));
-};
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -203,33 +230,40 @@ const assertWithinGroupBounds = (candidate, group) => {
 // Berilgan sanada (default bugun) guruhda dars berayotgan o'qituvchi id'lari.
 export const activeTeacherIdsForGroup = async (group, onDate = null) => {
   const t = (onDate ? toUtcMidnight(onDate) : localTodayMidnight()).getTime();
-  const rows = await TeacherGroupPeriod.find(
-    { group: toObjectId(group), isDeleted: { $ne: true } },
-    { teacher: 1, startDate: 1, endDate: 1 },
-  ).lean();
+  const rows = await prisma.teacherGroupPeriod.findMany({
+    where: { groupId: String(group), isDeleted: false },
+    select: { teacherId: true, startDate: true, endDate: true },
+  });
   const ids = [];
   for (const r of rows) {
     const s = new Date(r.startDate).getTime();
     const e = r.endDate ? new Date(r.endDate).getTime() : Infinity;
-    if (t >= s && t < e) ids.push(r.teacher);
+    if (t >= s && t < e) ids.push(r.teacherId);
   }
   return ids;
 };
 
 // Berilgan oy bilan kesishadigan (dars bergan) o'qituvchi davrlari - maosh
 // generatsiyasi uchun. Oy [monthStart, monthEnd] bilan overlap.
+//
+// DIQQAT - `teacher` maydoni SAQLANADI: chaqiruvchilar (teacherSalary) uni
+// shu nom bilan o'qiydi. Prisma `teacherId` beradi, shuning uchun natija
+// ochiq moslashtiriladi - aks holda `r.teacher` undefined bo'lib, maosh
+// yozuvi egasiz qolardi.
 export const teacherPeriodsActiveInMonth = async (group, year, month) => {
   const monthStart = new Date(Date.UTC(year, month - 1, 1)).getTime();
   const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)).getTime();
-  const rows = await TeacherGroupPeriod.find(
-    { group: toObjectId(group), isDeleted: { $ne: true } },
-    { teacher: 1, startDate: 1, endDate: 1 },
-  ).lean();
-  return rows.filter((r) => {
-    const s = new Date(r.startDate).getTime();
-    const e = r.endDate ? new Date(r.endDate).getTime() : Infinity;
-    return s <= monthEnd && e > monthStart;
+  const rows = await prisma.teacherGroupPeriod.findMany({
+    where: { groupId: String(group), isDeleted: false },
+    select: { id: true, teacherId: true, startDate: true, endDate: true },
   });
+  return rows
+    .filter((r) => {
+      const s = new Date(r.startDate).getTime();
+      const e = r.endDate ? new Date(r.endDate).getTime() : Infinity;
+      return s <= monthEnd && e > monthStart;
+    })
+    .map((r) => ({ ...r, _id: r.id, teacher: r.teacherId }));
 };
 
 // O'qituvchi+guruhning shu oy bilan kesishadigan MAOSH davrlari (stavka bilan).
@@ -238,62 +272,75 @@ export const teacherPeriodsActiveInMonth = async (group, year, month) => {
 export const periodsForMonth = async (teacher, group, year, month) => {
   const monthStart = new Date(Date.UTC(year, month - 1, 1)).getTime();
   const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)).getTime();
-  const rows = await TeacherGroupPeriod.find(
-    {
-      teacher: toObjectId(teacher),
-      group: toObjectId(group),
-      isDeleted: { $ne: true },
+  const rows = await prisma.teacherGroupPeriod.findMany({
+    where: {
+      teacherId: String(teacher),
+      groupId: String(group),
+      isDeleted: false,
     },
-    {
-      startDate: 1,
-      endDate: 1,
+    select: {
+      id: true,
+      startDate: true,
+      endDate: true,
       // Yangi (ustunlik) stavka maydonlari - rateResolver shularni o'qiydi.
-      variableType: 1,
-      variableRate: 1,
-      percentBase: 1,
+      variableType: true,
+      variableRate: true,
+      percentBase: true,
       // Legacy - eski yozuvlarda stavka shu yerda.
-      salaryType: 1,
-      fixedAmount: 1,
-      percentRate: 1,
+      salaryType: true,
+      fixedAmount: true,
+      percentRate: true,
     },
-  ).lean();
-  return rows.filter((r) => {
-    const s = new Date(r.startDate).getTime();
-    const e = r.endDate ? new Date(r.endDate).getTime() : Infinity;
-    return s <= monthEnd && e > monthStart;
   });
+  return rows
+    .filter((r) => {
+      const s = new Date(r.startDate).getTime();
+      const e = r.endDate ? new Date(r.endDate).getTime() : Infinity;
+      return s <= monthEnd && e > monthStart;
+    })
+    .map((r) => ({ ...r, _id: r.id }));
 };
 
 // Guruhda hozir aktiv o'qituvchilar bo'lgan guruh id'lari (teacher uchun).
 export const activeGroupIdsForTeacher = async (teacher, onDate = null) => {
   const t = (onDate ? toUtcMidnight(onDate) : localTodayMidnight()).getTime();
-  const rows = await TeacherGroupPeriod.find(
-    { teacher: toObjectId(teacher), isDeleted: { $ne: true } },
-    { group: 1, startDate: 1, endDate: 1 },
-  ).lean();
+  const rows = await prisma.teacherGroupPeriod.findMany({
+    where: { teacherId: String(teacher), isDeleted: false },
+    select: { groupId: true, startDate: true, endDate: true },
+  });
   const ids = [];
   for (const r of rows) {
     const s = new Date(r.startDate).getTime();
     const e = r.endDate ? new Date(r.endDate).getTime() : Infinity;
-    if (t >= s && t < e) ids.push(r.group);
+    if (t >= s && t < e) ids.push(r.groupId);
   }
   return ids;
 };
 
-export const listByGroup = async (group) =>
-  TeacherGroupPeriod.find({ group: toObjectId(group), isDeleted: { $ne: true } })
-    .populate("teacher", { firstName: 1, lastName: 1, username: 1 })
-    .sort({ startDate: -1 })
-    .lean();
+export const listByGroup = async (group) => {
+  const rows = await prisma.teacherGroupPeriod.findMany({
+    where: { groupId: String(group), isDeleted: false },
+    include: {
+      teacher: { select: { id: true, firstName: true, lastName: true, username: true } },
+    },
+    orderBy: { startDate: "desc" },
+  });
+  return withLegacyIds(rows);
+};
 
 // --- KESH SINXRONI ---
 
-// Group.teachers[] ni davrlardan HOSILA kesh sifatida yangilaydi (hozir aktivlar).
-// Manba - davrlar; teachers[] faqat so'rov tezligi uchun denormalizatsiya.
+// Group.teachers ni davrlardan HOSILA kesh sifatida yangilaydi (hozir aktivlar).
+// Manba - davrlar; teachers faqat so'rov tezligi uchun denormalizatsiya.
+//
+// Mongo'da bu `$set: { teachers: [...] }` edi. Prisma'da ko'p-ko'pga
+// bog'lanish `set` bilan TO'LIQ almashtiriladi - join jadvalidagi eski
+// qatorlar o'chib, yangilari yoziladi.
 export const syncGroupTeachersCache = async (group) => {
   const ids = await activeTeacherIdsForGroup(group);
-  await Group.findByIdAndUpdate(group, {
-    $set: { teachers: ids.map((id) => toObjectId(id)) },
+  await prisma.group.update({
+    where: { id: String(group) },
+    data: { teachers: { set: ids.map((id) => ({ id: String(id) })) } },
   });
   return ids;
 };
@@ -338,23 +385,41 @@ const recomputeForRange = async (teacher, group, startDate, endDate) => {
       year,
       month,
     );
-    if (sal) await teacherSalaryService.recalc(sal._id);
+    if (sal) await teacherSalaryService.recalc(sal.id || sal._id);
   }
 };
 
 // --- CRUD (invariant-li) ---
 
 const assertTeacher = async (teacher) => {
-  const doc = await User.findOne({ _id: teacher, role: ROLES.TEACHER, isDeleted: { $ne: true } });
+  const doc = await prisma.user.findFirst({
+    where: { id: String(teacher), role: ROLES.TEACHER, isDeleted: false },
+    select: { id: true, firstName: true, lastName: true, hiredAt: true, isActive: true },
+  });
   if (!doc) throw new ApiError(400, "O'qituvchi topilmadi");
   return doc;
 };
 
-const loadScope = async (teacher, group, excludeId) => {
-  const filter = { teacher: toObjectId(teacher), group: toObjectId(group), isDeleted: { $ne: true } };
-  if (excludeId) filter._id = { $ne: toObjectId(excludeId) };
-  return TeacherGroupPeriod.find(filter).lean();
-};
+const loadScope = async (teacher, group, excludeId) =>
+  prisma.teacherGroupPeriod.findMany({
+    where: {
+      teacherId: String(teacher),
+      groupId: String(group),
+      isDeleted: false,
+      ...(excludeId ? { id: { not: String(excludeId) } } : {}),
+    },
+    select: { id: true, startDate: true, endDate: true },
+  });
+
+const loadGroup = (group) =>
+  prisma.group.findUnique({
+    where: { id: String(group) },
+    select: GROUP_WITH_SCHEDULE,
+  });
+
+// `currentUser` Mongoose davridan `_id` bilan keladi, ko'chirilgan
+// chaqiruvchilar esa `id` bilan - ikkalasini ham qabul qilamiz.
+const actorId = (u) => u?.id || u?._id || null;
 
 export const create = async (
   {
@@ -380,7 +445,7 @@ export const create = async (
   currentUser,
 ) => {
   const teacherDoc = await assertTeacher(teacher);
-  const grp = await Group.findById(group);
+  const grp = await loadGroup(group);
   assertGroupActive(grp);
 
   // O'ZIGA O'ZI STAVKA QO'YISH TAQIQI - faqat stavka HAQIQATAN
@@ -413,26 +478,28 @@ export const create = async (
   // O'qituvchining boshqa guruhdagi darsi bilan bir vaqtga tushmasin.
   await assertTeacherScheduleFree(teacher, grp.schedule, group);
 
-  const doc = await TeacherGroupPeriod.create({
-    teacher,
-    group,
-    startDate: candidate.startDate,
-    endDate: candidate.endDate,
-    ...(inheritStandardRate
-      ? { salaryType: null, fixedAmount: null, percentRate: null }
-      : normalizeRate(salaryType, fixedAmount, percentRate)),
-    createdBy: currentUser?._id || null,
-    updatedBy: currentUser?._id || null,
+  const doc = await prisma.teacherGroupPeriod.create({
+    data: {
+      teacherId: String(teacher),
+      groupId: String(group),
+      startDate: candidate.startDate,
+      endDate: candidate.endDate,
+      ...(inheritStandardRate
+        ? { salaryType: null, fixedAmount: null, percentRate: null }
+        : normalizeRate(salaryType, fixedAmount, percentRate)),
+      createdById: actorId(currentUser),
+      updatedById: actorId(currentUser),
+    },
   });
   await syncGroupTeachersCache(group);
   await recomputeForRange(teacher, group, candidate.startDate, candidate.endDate);
-  return doc;
+  return withLegacyId(doc);
 };
 
 export const update = async (id, patch, currentUser) => {
-  const doc = await TeacherGroupPeriod.findById(id);
+  const doc = await prisma.teacherGroupPeriod.findUnique({ where: { id: String(id) } });
   if (!doc || doc.isDeleted) throw new ApiError(404, "Dars berish davri topilmadi");
-  const grp = await Group.findById(doc.group);
+  const grp = await loadGroup(doc.groupId);
   assertGroupActive(grp);
 
   // O'ZIGA O'ZI STAVKA QO'YISH TAQIQI - faqat patch STAVKAGA tegsa.
@@ -443,7 +510,7 @@ export const update = async (id, patch, currentUser) => {
     patch.fixedAmount !== undefined ||
     patch.percentRate !== undefined;
   if (touchesRate) {
-    assertNotSelfSalary(currentUser, doc.teacher);
+    assertNotSelfSalary(currentUser, doc.teacherId);
   }
 
   const next = {
@@ -455,28 +522,32 @@ export const update = async (id, patch, currentUser) => {
           ? toUtcMidnight(patch.endDate)
           : null,
   };
-  const existing = await loadScope(doc.teacher, doc.group, doc._id);
+  const existing = await loadScope(doc.teacherId, doc.groupId, doc.id);
   assertPeriodInvariants(next, existing, "date");
   assertWithinGroupBounds(next, grp);
 
   const oldStart = doc.startDate;
   const oldEnd = doc.endDate;
-  doc.startDate = next.startDate;
-  doc.endDate = next.endDate;
+
+  const data = {
+    startDate: next.startDate,
+    endDate: next.endDate,
+    updatedById: actorId(currentUser),
+  };
   // Maosh stavkasi - berilgan bo'lsa yangilanadi.
   if (patch.salaryType !== undefined) {
-    const rate = normalizeRate(patch.salaryType, patch.fixedAmount, patch.percentRate);
-    doc.salaryType = rate.salaryType;
-    doc.fixedAmount = rate.fixedAmount;
-    doc.percentRate = rate.percentRate;
+    Object.assign(data, normalizeRate(patch.salaryType, patch.fixedAmount, patch.percentRate));
   }
-  doc.updatedBy = currentUser?._id || null;
-  await doc.save();
 
-  await syncGroupTeachersCache(doc.group);
-  await recomputeForRange(doc.teacher, doc.group, oldStart, oldEnd);
-  await recomputeForRange(doc.teacher, doc.group, next.startDate, next.endDate);
-  return doc;
+  const saved = await prisma.teacherGroupPeriod.update({
+    where: { id: doc.id },
+    data,
+  });
+
+  await syncGroupTeachersCache(doc.groupId);
+  await recomputeForRange(doc.teacherId, doc.groupId, oldStart, oldEnd);
+  await recomputeForRange(doc.teacherId, doc.groupId, next.startDate, next.endDate);
+  return withLegacyId(saved);
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -494,10 +565,11 @@ export const update = async (id, patch, currentUser) => {
  * qolgan 10 kunni olgan yangisi 10 kunlik haq oladi. `claimedUntil` kursori
  * bir kunni ikki marta to'lashga yo'l qo'ymaydi.
  *
- * BARCHA TEKSHIRUVLAR YOZISHDAN OLDIN. Sabab: create/update sessiyani qabul
- * qilmaydi, ya'ni haqiqiy tranzaksiya yo'q. Yarim bajarilgan topshirish esa
- * eng yomon holat bo'lardi - guruh o'qituvchisiz qolib ketardi. Shuning uchun
- * avval hammasi quruq tekshiriladi, keyingina yoziladi.
+ * BARCHA TEKSHIRUVLAR YOZISHDAN OLDIN. Sabab avvalgidek: create/update har
+ * biri o'z ichida maosh qayta hisobini yuritadi va ular bitta tranzaksiyaga
+ * o'ralmagan. Yarim bajarilgan topshirish esa eng yomon holat bo'lardi -
+ * guruh o'qituvchisiz qolib ketardi. Shuning uchun avval hammasi quruq
+ * tekshiriladi, keyingina yoziladi.
  */
 export const handover = async (
   { teacher, handoverDate, assignments = [] },
@@ -512,10 +584,10 @@ export const handover = async (
   // ── 1. Topshirish sanasida hali AMALDA bo'lgan davrlar ──
   // Sanadan oldin yopilgan davrda topshiradigan narsa yo'q.
   const cutTs = cutoff.getTime();
-  const allPeriods = await TeacherGroupPeriod.find({
-    teacher: outgoing._id,
-    isDeleted: { $ne: true },
-  }).lean();
+  const allPeriods = await prisma.teacherGroupPeriod.findMany({
+    where: { teacherId: outgoing.id, isDeleted: false },
+    select: { id: true, groupId: true, startDate: true, endDate: true },
+  });
   const live = allPeriods.filter(
     (p) => !p.endDate || new Date(p.endDate).getTime() > cutTs,
   );
@@ -534,10 +606,10 @@ export const handover = async (
     (p) => new Date(p.startDate).getTime() >= cutTs,
   );
   if (notStarted.length) {
-    const names = await Group.find(
-      { _id: { $in: notStarted.map((p) => p.group) } },
-      { name: 1 },
-    ).lean();
+    const names = await prisma.group.findMany({
+      where: { id: { in: notStarted.map((p) => p.groupId) } },
+      select: { name: true },
+    });
     throw new ApiError(
       400,
       `Quyidagi guruhlarda dars davri topshirish sanasidan keyin boshlanadi ` +
@@ -545,18 +617,18 @@ export const handover = async (
     );
   }
 
-  const liveGroupIds = [...new Set(live.map((p) => String(p.group)))];
-  const groups = await Group.find(
-    { _id: { $in: liveGroupIds }, isDeleted: { $ne: true } },
-    { name: 1, schedule: 1, startDate: 1, endDate: 1, isActive: 1 },
-  ).lean();
-  const groupById = new Map(groups.map((g) => [String(g._id), g]));
+  const liveGroupIds = [...new Set(live.map((p) => String(p.groupId)))];
+  const groups = await prisma.group.findMany({
+    where: { id: { in: liveGroupIds }, isDeleted: false },
+    select: GROUP_WITH_SCHEDULE,
+  });
+  const groupById = new Map(groups.map((g) => [String(g.id), g]));
 
   // ── 2. Taqsimotni tekshirish ──
   const targetByGroup = new Map(); // groupId -> assignment
   for (const a of assignments) {
     if (!a?.toTeacher) throw new ApiError(400, "Qabul qiluvchi o'qituvchi ko'rsatilmagan");
-    if (String(a.toTeacher) === String(outgoing._id)) {
+    if (String(a.toTeacher) === String(outgoing.id)) {
       throw new ApiError(400, "Guruhni o'qituvchining o'ziga topshirib bo'lmaydi");
     }
     for (const g of a.groups || []) {
@@ -580,11 +652,11 @@ export const handover = async (
 
   // Qabul qiluvchilar haqiqiy va faol o'qituvchi bo'lsin.
   const targetIds = [...new Set([...targetByGroup.values()].map((a) => String(a.toTeacher)))];
-  const targets = await User.find(
-    { _id: { $in: targetIds }, role: ROLES.TEACHER, isDeleted: { $ne: true } },
-    { firstName: 1, lastName: 1, isActive: 1 },
-  ).lean();
-  const targetById = new Map(targets.map((t) => [String(t._id), t]));
+  const targets = await prisma.user.findMany({
+    where: { id: { in: targetIds }, role: ROLES.TEACHER, isDeleted: false },
+    select: { id: true, firstName: true, lastName: true, isActive: true },
+  });
+  const targetById = new Map(targets.map((t) => [String(t.id), t]));
   for (const id of targetIds) {
     const t = targetById.get(id);
     if (!t) throw new ApiError(400, "Qabul qiluvchi o'qituvchi topilmadi");
@@ -603,8 +675,9 @@ export const handover = async (
     if (targetByGroup.has(gid)) continue;
     const grp = groupById.get(gid);
     if (!grp || grp.isActive === false) continue; // arxiv guruh - muhim emas
+    // eslint-disable-next-line no-await-in-loop
     const activeIds = await activeTeacherIdsForGroup(gid, cutoff);
-    const others = activeIds.filter((id) => String(id) !== String(outgoing._id));
+    const others = activeIds.filter((id) => String(id) !== String(outgoing.id));
     if (!others.length) orphans.push(grp.name);
   }
   if (orphans.length) {
@@ -621,9 +694,11 @@ export const handover = async (
     const candidate = { startDate: cutoff, endDate: null };
     assertWithinGroupBounds(candidate, grp);
     // Qabul qiluvchining shu guruhdagi mavjud davrlari bilan kesishmasin.
+    // eslint-disable-next-line no-await-in-loop
     const existing = await loadScope(a.toTeacher, gid);
     assertPeriodInvariants(candidate, existing, "date");
     // Va boshqa guruhdagi darsi bilan jadval to'qnashuvi bo'lmasin.
+    // eslint-disable-next-line no-await-in-loop
     await assertTeacherScheduleFree(a.toTeacher, grp.schedule, gid);
   }
 
@@ -631,13 +706,15 @@ export const handover = async (
   const closed = [];
   const opened = [];
   for (const p of live) {
-    const gid = String(p.group);
+    const gid = String(p.groupId);
     // Ochiq bo'lmagan, lekin cutoff'dan keyin tugaydigan davr ham cutoff'ga
     // qisqartiriladi - o'qituvchi o'sha kundan keyin dars bermaydi.
-    await update(p._id, { endDate: cutoff }, currentUser);
-    closed.push({ group: gid, period: p._id });
+    // eslint-disable-next-line no-await-in-loop
+    await update(p.id, { endDate: cutoff }, currentUser);
+    closed.push({ group: gid, period: p.id });
   }
   for (const [gid, a] of targetByGroup) {
+    // eslint-disable-next-line no-await-in-loop
     const doc = await create(
       {
         teacher: a.toTeacher,
@@ -655,11 +732,11 @@ export const handover = async (
       },
       currentUser,
     );
-    opened.push({ group: gid, teacher: String(a.toTeacher), period: doc._id });
+    opened.push({ group: gid, teacher: String(a.toTeacher), period: doc.id });
   }
 
   return {
-    teacher: String(outgoing._id),
+    teacher: String(outgoing.id),
     handoverDate: cutoff,
     closed: closed.length,
     opened: opened.length,
@@ -669,19 +746,23 @@ export const handover = async (
 };
 
 export const remove = async (id) => {
-  const doc = await TeacherGroupPeriod.findById(id);
+  const doc = await prisma.teacherGroupPeriod.findUnique({ where: { id: String(id) } });
   if (!doc || doc.isDeleted) throw new ApiError(404, "Dars berish davri topilmadi");
-  assertGroupActive(await Group.findById(doc.group));
+  assertGroupActive(await loadGroup(doc.groupId));
 
   // To'lov qo'riqlovchisi: davr qamragan oylarda maosh to'lovi (tranzaktsiya)
   // bo'lsa - o'chirib bo'lmaydi (avval to'lovlar o'chirilishi kerak).
   const months = monthsSpanned(doc.startDate, doc.endDate);
   if (months.length) {
-    const paid = await SalaryTransaction.findOne({
-      teacher: doc.teacher,
-      group: doc.group,
-      isDeleted: { $ne: true },
-      $or: months,
+    // Mongo `$or: [{year,month},...]` → Prisma `OR: [...]` (shakl bir xil).
+    const paid = await prisma.salaryTransaction.findFirst({
+      where: {
+        teacherId: doc.teacherId,
+        groupId: doc.groupId,
+        isDeleted: false,
+        OR: months,
+      },
+      select: { id: true },
     });
     if (paid) {
       throw new ApiError(
@@ -691,10 +772,14 @@ export const remove = async (id) => {
     }
   }
 
-  await doc.softDelete();
-  await syncGroupTeachersCache(doc.group);
-  await recomputeForRange(doc.teacher, doc.group, doc.startDate, doc.endDate);
-  return { _id: doc._id };
+  // Mongoose plagini bergan `softDelete()` o'rniga ochiq yangilanish.
+  await prisma.teacherGroupPeriod.update({
+    where: { id: doc.id },
+    data: { isDeleted: true, deletedAt: new Date() },
+  });
+  await syncGroupTeachersCache(doc.groupId);
+  await recomputeForRange(doc.teacherId, doc.groupId, doc.startDate, doc.endDate);
+  return { id: doc.id, _id: doc.id };
 };
 
 // --- MAOSH STAVKASI TASDIG'I (owner tasdig'i talab qilinganda) ---
@@ -703,7 +788,7 @@ export const remove = async (id) => {
 // qayta-qayta hisoblanadi. Shuning uchun u chiqim limitiga emas, IKKILIK
 // huquqqa bog'lanadi (approvals.decide_config) - qarang checkConfigApproval.
 //
-// TASDIQLANMAGUNCHA TeacherGroupPeriod YARATILMAYDI. Bu ataylab: davr hujjati
+// TASDIQLANMAGUNCHA TeacherGroupPeriod YARATILMAYDI. Bu ataylab: davr yozuvi
 // mavjud bo'lishining o'zi maosh hisobiga (periodsForMonth -> recalc) darhol
 // kirib ketardi, ya'ni tasdiqlanmagan stavka to'lanadigan summaga aylanardi.
 // So'rov ma'lumoti faqat Approval.payload ichida yashaydi.
@@ -716,7 +801,7 @@ const salaryTermsSubjectKey = (group, teacher) =>
   `salary_terms:${String(group)}:${String(teacher)}`;
 
 /**
- * Maosh stavkasi o'zgarishini TASDIQQA yuboradi (hujjat yaratmaydi).
+ * Maosh stavkasi o'zgarishini TASDIQQA yuboradi (yozuv yaratmaydi).
  *
  * Bu yerda faqat YENGIL tekshiruv bor (guruh/o'qituvchi bor-yo'qligi) - to'liq
  * invariantlar (davrlar kesishuvi, jadval to'qnashuvi, guruh chegaralari)
@@ -731,15 +816,18 @@ export const requestSalaryTerms = async ({ op, group, periodId, body }, currentU
   let teacher;
   let groupId = group;
   if (op === "update") {
-    const period = await TeacherGroupPeriod.findById(periodId).lean();
+    const period = await prisma.teacherGroupPeriod.findUnique({
+      where: { id: String(periodId) },
+      select: { teacherId: true, groupId: true, isDeleted: true },
+    });
     if (!period || period.isDeleted) throw new ApiError(404, "Dars berish davri topilmadi");
-    teacher = period.teacher;
-    groupId = period.group;
+    teacher = period.teacherId;
+    groupId = period.groupId;
   } else {
     teacher = body.teacher;
   }
 
-  const grp = await Group.findById(groupId);
+  const grp = await loadGroup(groupId);
   assertGroupActive(grp);
   const teacherDoc = await assertTeacher(teacher);
 
@@ -789,7 +877,10 @@ export const executeApprovedSalaryTerms = async (approval) => {
   const p = approval?.payload || {};
   // Amalni so'ragan odam nomidan bajariladi (createdBy/updatedBy tarixda
   // tasdiqlovchi emas, so'rovchi bo'lib qolsin).
-  const actor = { _id: approval?.requestedBy || null };
+  // Approval moduli hali ko'chirilmagan - `requestedById`/`requestedBy`
+  // ikkalasi ham bo'lishi mumkin.
+  const requesterId = approval?.requestedById || approval?.requestedBy || null;
+  const actor = { id: requesterId, _id: requesterId };
 
   const rate = {
     salaryType: p.salaryType,
@@ -826,14 +917,20 @@ export const executeApprovedSalaryTerms = async (approval) => {
 
 // O'qituvchini guruhga biriktiradi (ochiq davr ochadi). startDate default bugun.
 export const assignTeacher = async (group, teacher, { startDate } = {}, currentUser) => {
-  const open = await TeacherGroupPeriod.findOne({
-    teacher: toObjectId(teacher),
-    group: toObjectId(group),
-    endDate: null,
-    isDeleted: { $ne: true },
+  const open = await prisma.teacherGroupPeriod.findFirst({
+    where: {
+      teacherId: String(teacher),
+      groupId: String(group),
+      endDate: null,
+      isDeleted: false,
+    },
   });
-  if (open) return open; // allaqachon aktiv
-  const grp = await Group.findById(group);
+  if (open) return withLegacyId(open); // allaqachon aktiv
+
+  const grp = await prisma.group.findUnique({
+    where: { id: String(group) },
+    select: { startDate: true },
+  });
   const start = startDate
     ? toUtcMidnight(startDate)
     : grp?.startDate
@@ -845,38 +942,49 @@ export const assignTeacher = async (group, teacher, { startDate } = {}, currentU
 // Arxivdan chiqarishda: arxiv yopgan davrni qayta ochadi (endDate=null), agar shu
 // scope'da boshqa ochiq davr bo'lmasa (single-open invariant). Maoshni qayta hisoblaydi.
 export const reopenPeriod = async (id, currentUser) => {
-  const doc = await TeacherGroupPeriod.findById(id);
-  if (!doc || doc.isDeleted || doc.endDate === null) return doc || null;
-  const open = await TeacherGroupPeriod.findOne({
-    teacher: doc.teacher,
-    group: doc.group,
-    endDate: null,
-    isDeleted: { $ne: true },
+  const doc = await prisma.teacherGroupPeriod.findUnique({ where: { id: String(id) } });
+  if (!doc || doc.isDeleted || doc.endDate === null) {
+    return doc ? withLegacyId(doc) : null;
+  }
+  const open = await prisma.teacherGroupPeriod.findFirst({
+    where: {
+      teacherId: doc.teacherId,
+      groupId: doc.groupId,
+      endDate: null,
+      isDeleted: false,
+    },
+    select: { id: true },
   });
-  if (open) return doc; // boshqa ochiq davr bor - invariant buzilmasin
-  doc.endDate = null;
-  doc.updatedBy = currentUser?._id || null;
-  await doc.save();
-  await syncGroupTeachersCache(doc.group);
-  await recomputeForRange(doc.teacher, doc.group, doc.startDate, null);
-  return doc;
+  if (open) return withLegacyId(doc); // boshqa ochiq davr bor - invariant buzilmasin
+
+  const saved = await prisma.teacherGroupPeriod.update({
+    where: { id: doc.id },
+    data: { endDate: null, updatedById: actorId(currentUser) },
+  });
+  await syncGroupTeachersCache(doc.groupId);
+  await recomputeForRange(doc.teacherId, doc.groupId, doc.startDate, null);
+  return withLegacyId(saved);
 };
 
 // O'qituvchini guruhdan chiqaradi (ochiq davrni endDate da yopadi). EXCLUSIVE.
 export const unassignTeacher = async (group, teacher, { endDate } = {}, currentUser) => {
-  const open = await TeacherGroupPeriod.findOne({
-    teacher: toObjectId(teacher),
-    group: toObjectId(group),
-    endDate: null,
-    isDeleted: { $ne: true },
+  const open = await prisma.teacherGroupPeriod.findFirst({
+    where: {
+      teacherId: String(teacher),
+      groupId: String(group),
+      endDate: null,
+      isDeleted: false,
+    },
   });
   if (!open) return null;
+
   const end = endDate ? toUtcMidnight(endDate) : localTodayMidnight();
-  open.endDate = end;
-  open.updatedBy = currentUser?._id || null;
-  await open.save();
+  const saved = await prisma.teacherGroupPeriod.update({
+    where: { id: open.id },
+    data: { endDate: end, updatedById: actorId(currentUser) },
+  });
   await syncGroupTeachersCache(group);
   await recomputeForRange(teacher, group, open.startDate, end);
   logger.info({ teacher, group }, "O'qituvchi guruhdan chiqarildi (davr yopildi)");
-  return open;
+  return withLegacyId(saved);
 };
