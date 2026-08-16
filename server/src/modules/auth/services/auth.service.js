@@ -10,6 +10,7 @@ import {
   resolveAllowedBranchIds,
   assertCanAssignBranch,
   ensureMainBranch,
+  isMultiBranch,
 } from "../../../helpers/branchAccess.helper.js";
 import { getActiveBranchId } from "../../../helpers/branchContext.helper.js";
 import { buildUserProfile } from "../../../helpers/userProfile.helper.js";
@@ -17,7 +18,6 @@ import { sha256 } from "../../../utils/hashToken.js";
 import { withLegacyId } from "../../../utils/serialize.js";
 import { normalizePhone, isPhoneLike } from "../../../utils/phone.js";
 import { ROLES } from "../../../constants/roles.js";
-import env from "../../../config/env.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
 import logger from "../../../config/logger.js";
@@ -255,7 +255,9 @@ export const me = async (user, ctx = {}) => {
     // Ko'p filialli rejim (server env). Client shu bayroqqa qarab filial
     // UI'sini butunlay yashiradi - bitta build ikkala rejimda ishlaydi,
     // shuning uchun bu VITE_ o'zgaruvchisi EMAS.
-    multiBranch: env.MULTI_BRANCH,
+    // Ko'p filialli rejim BAZADAN aniqlanadi (env emas) - qarang
+    // helpers/branchAccess.helper.js dagi isMultiBranch().
+    multiBranch: await isMultiBranch(),
     // Markazdagi JAMI filial (foydalanuvchi ko'lamidan qat'i nazar).
     // Yakka rejim yoqilgan-u, bazada bir nechta filial bo'lsa - client
     // ogohlantirish chizig'ini ko'rsatadi: hisobotlar faqat asosiy filialni

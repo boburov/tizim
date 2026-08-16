@@ -102,7 +102,15 @@ export const route = async ({ source } = {}) => {
   );
 
   return {
-    branchId: main._id,
+    // DIQQAT: `main._id` EMAS.
+    //
+    // `ensureMainBranch()` XOM Prisma natijasini qaytaradi (`id`), uni
+    // `withLegacyId` bilan o'ramaydi - `_id` taxallusi faqat JAVOB
+    // chegarasida qo'shiladi. Migratsiyada bu qator `_id` bo'lib
+    // qolgan edi va `branchId: undefined` chiqib, lid yaratish
+    // yiqilardi. Ya'ni "lid hech qachon yo'qolmaydi" invarianti
+    // aynan zaxira yo'lida buzilgan edi.
+    branchId: main.id,
     assigneeId: null,
     matchedBy: "main_branch",
     ruleId: null,

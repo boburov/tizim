@@ -83,8 +83,6 @@ const env = Object.freeze({
   // Standart TRUE - ataylab. Bu o'zgaruvchi eski o'rnatmalarda yo'q, va
   // standart false bo'lsa bir nechta filiali bor markaz upgrade'dan keyin
   // filial UI'sini jimgina yo'qotardi. Yakka markaz buni ochiq e'lon qiladi.
-  MULTI_BRANCH:
-    String(process.env.MULTI_BRANCH || "true").toLowerCase() === "true",
 
   // --- AI NARRATOR (Gemini) ---
   //

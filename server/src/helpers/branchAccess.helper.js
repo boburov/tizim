@@ -2,7 +2,6 @@ import prisma from "../config/prisma.js";
 import ApiError from "../utils/ApiError.js";
 import { PERMISSIONS } from "../constants/permissions.js";
 import { hasPermission } from "./permission.helper.js";
-import env from "../config/env.js";
 import logger from "../config/logger.js";
 
 // Filialga kirish huquqini hisoblash. requireAuth'dan keyin ishlaydi.
@@ -15,8 +14,53 @@ import logger from "../config/logger.js";
 // ni o'zgartiradigan endpoint yo'q.
 let mainBranchIdCache;
 
+// FAOL FILIALLAR SONI KESHI - "ko'p filialli rejim" shu asosda aniqlanadi.
+let multiBranchCache;
+
 export const clearMainBranchCache = () => {
   mainBranchIdCache = undefined;
+  multiBranchCache = undefined;
+};
+
+/**
+ * MARKAZ KO'P FILIALLIMI - BAZADAN aniqlanadi.
+ *
+ * ══════════════════════════════════════════════════════════════════
+ * NEGA ENDI `.env` EMAS
+ * ══════════════════════════════════════════════════════════════════
+ * Ilgari bu `MULTI_BRANCH` muhit o'zgaruvchisi edi va u ikkita jiddiy
+ * muammo tug'dirardi:
+ *
+ *   1. HAQIQAT IKKI JOYDA. Bayroq `false`, bazada esa 3 ta filial —
+ *      tizim ikkitasini JIMGINA muzlatib qo'yardi (o'qilmaydi ham,
+ *      yozilmaydi ham) va hisobotlar noto'g'ri chiqardi. Boot'dagi
+ *      ogohlantirish buni faqat logda aytardi.
+ *
+ *   2. TUZOQ. Bayroq `false` bo'lsa ikkinchi filial ochib bo'lmasdi
+ *      (POST /branches 403), ya'ni "ko'p filialga o'tish" uchun avval
+ *      serverni qayta sozlash kerak edi. Filial — mahsulot qarori,
+ *      deploy qarori emas.
+ *
+ * Endi javob bitta manbadan: FAOL filiallar soni > 1 bo'lsa, markaz
+ * ko'p filialli. Ikkinchi filial ochilgan zahoti rejim o'zi o'zgaradi.
+ *
+ * KESH: har so'rovda kerak bo'ladi, shuning uchun keshlanadi va filial
+ * yaratilgan/o'chirilganda `clearMainBranchCache()` bilan tozalanadi
+ * (branches.service.js allaqachon shunday qiladi).
+ */
+export const isMultiBranch = async () => {
+  if (multiBranchCache !== undefined) return multiBranchCache;
+
+  // `take: 2` — aniq sonini bilish SHART EMAS, "bittami yoki ko'pmi"
+  // yetarli. Minglab filialli bazada ham ikki qator o'qiladi.
+  const rows = await prisma.branch.findMany({
+    where: { isDeleted: false, isActive: true },
+    select: { id: true },
+    take: 2,
+  });
+
+  multiBranchCache = rows.length > 1;
+  return multiBranchCache;
 };
 
 /**
@@ -152,7 +196,12 @@ export const resolveBranchScope = async ({ user, permissions, requestedBranchId 
   const canSeeAll = hasPermission(permissions, PERMISSIONS.BRANCHES_VIEW_ALL);
   const allowedBranchIds = await resolveAllowedBranchIds(user, permissions);
 
-  // YAKKA MARKAZ REJIMI (MULTI_BRANCH=false).
+  // YAKKA MARKAZ REJIMI - markazda BITTA faol filial bor.
+  //
+  // Ilgari bu `MULTI_BRANCH` env bayrog'i edi; endi bazadan aniqlanadi
+  // (isMultiBranch izohiga qarang). Amaliy farq: bayroq bilan ko'p
+  // filialli bazani "yakka" deb e'lon qilish va qolganini muzlatish
+  // MUMKIN edi — endi bunday nomuvofiqlik umuman yuzaga kelmaydi.
   //
   // Hamma narsa ASOSIY filialga qisqartiriladi: markaz bitta joydan iborat
   // ko'rinadi. Client yuborgan filial sarlavhasi e'tiborsiz qoldiriladi -
@@ -163,7 +212,7 @@ export const resolveBranchScope = async ({ user, permissions, requestedBranchId 
   // ya'ni ularning ma'lumoti na o'qiladi, na yoziladi. Bu FAQAT o'qish
   // vaqtidagi ko'lam - bazaga hech narsa yozilmaydi, shuning uchun bayroqni
   // qaytarish hamma narsani joyiga qaytaradi.
-  if (!env.MULTI_BRANCH) {
+  if (!(await isMultiBranch())) {
     const mainId = await resolveMainBranchId();
 
     // Hali birorta filial yo'q (yangi o'rnatma) - tabiiy ko'lamda qolamiz,

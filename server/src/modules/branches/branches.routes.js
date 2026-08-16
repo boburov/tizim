@@ -3,21 +3,18 @@ import requireAuth from "../../middleware/auth.js";
 import requirePermission from "../../middleware/requirePermission.js";
 import validate from "../../middleware/validate.js";
 import { PERMISSIONS } from "../../constants/permissions.js";
-import ApiError from "../../utils/ApiError.js";
-import env from "../../config/env.js";
 
-// YAKKA MARKAZ REJIMI: yangi filial ochishni to'sadi.
+// ESKI `requireMultiBranch` TO'SIG'I OLIB TASHLANDI.
 //
-// UI'da tugma yashiringani YETARLI EMAS - so'rovni qo'lda yuborib
-// "arvoh" filial yaratish va unga ma'lumot yozish mumkin edi.
-const requireMultiBranch = (_req, _res, next) => {
-  if (!env.MULTI_BRANCH) {
-    return next(
-      new ApiError(403, "Yakka markaz rejimida yangi filial ochib bo'lmaydi"),
-    );
-  }
-  next();
-};
+// U `MULTI_BRANCH=false` bo'lganda ikkinchi filial ochishni taqiqlardi
+// va TUZOQ hosil qilardi: "ko'p filialga o'tish" uchun avval serverni
+// qayta sozlab, qayta ishga tushirish kerak edi.
+//
+// Endi rejim BAZADAN aniqlanadi (branchAccess.helper.js: isMultiBranch)
+// va ikkinchi filial ochilgan zahoti markaz o'zi ko'p filialli bo'ladi.
+// Filial ochish - mahsulot qarori, deploy qarori emas.
+//
+// Himoya yo'qolmadi: yozish baribir SYSTEM_ADMIN_ACCESS talab qiladi.
 
 import { listSchema } from "./validators/list.validator.js";
 import { idSchema } from "./validators/id.validator.js";
@@ -70,7 +67,6 @@ router.get(
 router.post(
   "/",
   requireAuth,
-  requireMultiBranch,
   requirePermission(PERMISSIONS.SYSTEM_ADMIN_ACCESS),
   requirePermission(PERMISSIONS.BRANCHES_CREATE),
   validate(createSchema),

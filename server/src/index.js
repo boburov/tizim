@@ -9,56 +9,18 @@ import { closeRedis } from "./config/redis.js";
 import { ensureMainBranch } from "./helpers/branchAccess.helper.js";
 import { reconcile as reconcileStorage } from "./modules/storage/services/storage.service.js";
 
-// MULTI_BRANCH=false, lekin bazada bir nechta filial bor - mos kelmovchilik.
+// ESKI `warnBranchModeMismatch` OLIB TASHLANDI.
 //
-// Ataylab YIQITMAYMIZ: allaqachon ishlab turgan markaz upgrade'dan keyin
-// o'chib qolmasligi kerak. Bazaga ham hech narsa yozilmaydi - bayroq faqat
-// O'QISH ko'lamini o'zgartiradi, ya'ni uni qaytarsangiz hammasi joyiga
-// qaytadi. Lekin hisobotlar shu paytda faqat asosiy filialni qamraydi,
-// shuning uchun ogohlantirish baland bo'lishi kerak.
-const warnBranchModeMismatch = async () => {
-  if (env.MULTI_BRANCH) return;
-
-  const branches = await prisma.branch.findMany({
-    where: { isDeleted: false, isActive: true },
-    select: { name: true, isMain: true },
-  });
-
-  if (!branches.length) return;
-
-  const main = branches.filter((b) => b.isMain);
-  if (main.length !== 1) {
-    logger.warn(
-      { isMainCount: main.length, total: branches.length },
-      "MULTI_BRANCH=false, lekin asosiy filial aniq emas " +
-        "(isMain bitta bo'lishi kerak). Eng eski filial asosiy deb olinadi.",
-    );
-  }
-
-  if (branches.length > 1) {
-    const frozen = branches.filter((b) => !b.isMain).map((b) => b.name);
-    logger.warn(
-      {
-        total: branches.length,
-        main: main[0]?.name || "(eng eski)",
-        frozen,
-      },
-      "MULTI_BRANCH=false, lekin bazada bir nechta filial bor. " +
-        "Faqat ASOSIY filial ko'rinadi; qolganlari muzlatiladi (o'qilmaydi ham, " +
-        "yozilmaydi ham) va hisobotlarga KIRMAYDI. Ma'lumot o'chmaydi - " +
-        "MULTI_BRANCH=true qilsangiz hammasi qaytadi.",
-    );
-  }
-};
+// U `MULTI_BRANCH=false` bo'lsa-yu bazada bir nechta filial bo'lsa
+// ogohlantirardi - ya'ni HAQIQAT IKKI JOYDA turgani uchun kerak edi.
+// Endi rejim bazadan aniqlanadi (isMultiBranch), demak bunday
+// nomuvofiqlik umuman yuzaga kelmaydi va tekshiruv ham keraksiz.
 
 // Fon xizmatlari: joblar, saqlagich hisoblagichi va Telegram bot.
 //
 // HECH BIRI portni ochishni kutib turmaydi - pastdagi izohga qarang.
 // Har biri alohida catch bilan: bittasi yiqilsa qolganlari ishlayveradi.
 const startBackgroundServices = async () => {
-  await warnBranchModeMismatch().catch((err) =>
-    logger.warn({ err }, "Filial rejimini tekshirib bo'lmadi"),
-  );
 
   // SAQLASH HISOBLAGICHI: band hajm atomik hisoblagichda turadi, lekin
   // jarayon joyni band qilib, faylni yozishdan oldin yiqilsa unda "band"
