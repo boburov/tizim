@@ -329,32 +329,53 @@ const run = async () => {
     },
   );
 
-  // ── MAVJUD XATTI-HARAKAT (migratsiya regressiyasi EMAS) ──
+  // ── REGRESSIYA: assignTeacher STANDART STAVKANI MEROS QILADI ──
   //
-  // `assignTeacher` → `create()` ni `inheritStandardRate` BERMASDAN
-  // chaqiradi, `normalizeRate()` esa stavka berilmasa ham
-  // `salaryType:"fixed", fixedAmount:0` yozadi. `rateResolver.hasOwnRate()`
-  // buni USTUNLIK deb biladi va o'qituvchining STANDART shartnomasi
-  // (40% foiz) umuman qaralmaydi - natijada guruh maoshi 0 bo'ladi.
+  // XATO NIMA EDI (Mongo davridan beri, git 9fb01b7): `assignTeacher`
+  // `create()` ni `inheritStandardRate` BERMASDAN chaqirardi,
+  // `normalizeRate()` esa stavka berilmasa ham `salaryType:"fixed",
+  // fixedAmount:0` yozardi. `rateResolver.hasOwnRate()` buni DAVRNING
+  // O'Z STAVKASI deb biladi va o'qituvchining STANDART shartnomasi
+  // (40% foiz) umuman qaralmasdi - guruh maoshi 0 bo'lardi.
   //
-  // Bu Mongo davridan beri shunday (git 9fb01b7 da ham `assignTeacher`
-  // bayroqni bermaydi). Migratsiyada u ATAYLAB o'zgartirilmadi: tuzatish
-  // o'qituvchilarning HAQIQIY maoshini 0 dan real summaga ko'taradi, ya'ni
-  // bu MOLIYAVIY QAROR - alohida e'lon qilinishi kerak.
+  // Ko'zlangan qoida `inheritStandardRate` bayrog'i izohida ochiq
+  // yozilgan: ergonomik biriktirishda o'qituvchi O'Z shartnomasi
+  // bo'yicha olishi kerak. Tuzatish shu bayroqni berishdan iborat.
   //
-  // Test uni "kutilgan" deb emas, KO'RINADIGAN qilib qayd etadi.
+  // BU TEST XATONING QAYTIB KELISHINI TO'SADI: `rateSource` yana
+  // "period_legacy" bo'lib qolsa yoki summa 0 ga tushsa - yiqiladi.
   await mustPass(
-    "[MAVJUD XATO] assignTeacher davri standart stavkani BOSIB KETADI (rateSource=period_legacy, maosh 0)",
+    "assignTeacher davri STANDART stavkani meros qiladi (maosh 0 emas)",
     () => prisma.teacherSalary.findFirst({
       where: { groupId: g1.id, teacherId: t1.id, kind: "group", year: 2025, month: 1 },
-      select: { rateSource: true, expectedAmount: true },
+      select: { rateSource: true, expectedAmount: true, variableType: true },
     }),
     (r) => {
-      if (r.rateSource === "compensation" && r.expectedAmount > 0) {
-        return "XATI TUZATILGAN - bu testni yangilang va o'zgarishni e'lon qiling";
+      if (!r) return "maosh qatori yo'q";
+      if (r.rateSource === "period_legacy") {
+        return "XATO QAYTIB KELDI: davr stavkasi standart shartnomani bosib ketdi";
       }
-      if (r.rateSource !== "period_legacy") return `kutilmagan rateSource=${r.rateSource}`;
-      if (r.expectedAmount !== 0) return `kutilmagan summa=${r.expectedAmount}`;
+      if (r.rateSource !== "compensation") return `kutilmagan rateSource=${r.rateSource}`;
+      if (!(r.expectedAmount > 0)) return `maosh ${r.expectedAmount} - shartnoma qo'llanmadi`;
+      return null;
+    },
+  );
+
+  await mustPass(
+    "assignTeacher davriga stavka YOZILMAYDI (uchala maydon ham null)",
+    // Mexanizmning o'zi: davr stavkasiz bo'lgani uchun rateResolver
+    // standart stavkaga tushadi. Bu tekshiruv yuqoridagi natijaning
+    // SABABINI qadaydi - kimdir `normalizeRate` ni "tuzatib", davrga
+    // yana 0 yozib qo'ysa darhol ko'rinadi.
+    () => prisma.teacherGroupPeriod.findFirst({
+      where: { groupId: g1.id, teacherId: t1.id, isDeleted: false },
+      select: { salaryType: true, fixedAmount: true, percentRate: true },
+    }),
+    (p) => {
+      if (!p) return "davr topilmadi";
+      if (p.salaryType !== null) return `salaryType=${p.salaryType} (null kutilgan)`;
+      if (p.fixedAmount !== null) return `fixedAmount=${p.fixedAmount} (null kutilgan)`;
+      if (p.percentRate !== null) return `percentRate=${p.percentRate} (null kutilgan)`;
       return null;
     },
   );

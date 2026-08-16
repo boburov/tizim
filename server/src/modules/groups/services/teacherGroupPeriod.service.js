@@ -915,7 +915,42 @@ export const executeApprovedSalaryTerms = async (approval) => {
 
 // --- ERGONOMIK ASSIGN / UNASSIGN ---
 
-// O'qituvchini guruhga biriktiradi (ochiq davr ochadi). startDate default bugun.
+/**
+ * O'qituvchini guruhga biriktiradi (ochiq davr ochadi). startDate default bugun.
+ *
+ * ═════════════════════════════════════════════════════════════════
+ * BIZNES-MANTIQ TUZATISHI (ko'chirish emas) — `inheritStandardRate: true`
+ *
+ * XATO NIMA EDI: bu funksiya `create()` ga stavka bermasdi, `normalizeRate()`
+ * esa stavka berilmasa ham `salaryType: "fixed", fixedAmount: 0` YOZARDI.
+ * `rateResolver.hasOwnRate()` uchun `salaryType != null` — DAVRNING O'Z
+ * STAVKASI degani, ya'ni:
+ *
+ *   davr o'z stavkasiga ega  ->  standart stavka UMUMAN qaralmaydi
+ *   (rateResolver.helper.js: segmentPeriod, "Davr o'z stavkasiga ega")
+ *
+ * Natijada guruhga shu yo'l bilan biriktirilgan o'qituvchi, shartnomasi
+ * (TeacherCompensation) bo'lsa ham, o'sha guruhda NOL maoshga qulflanardi
+ * (`rateSource: "period_legacy"`, `expectedAmount: 0`).
+ *
+ * KO'ZLANGAN QOIDA: ierarxiya `inheritStandardRate` bayrog'i izohida
+ * ochiq yozilgan — "guruh boshqa o'qituvchiga topshirilganda yangi
+ * o'qituvchi O'Z shartnomasi bo'yicha olishi kerak". Aynan shu yo'l
+ * o'sha holat: bu ERGONOMIK biriktirish, unga hech kim stavka
+ * bermagan. Guruhga xos alohida stavka kerak bo'lsa, chaqiruvchi
+ * `create()` ni ochiq stavka bilan chaqiradi (teacherPeriod.create
+ * handler'i shunday qiladi) — u yo'l TEGILMAGAN.
+ *
+ * TUZATISH NIMANI O'ZGARTIRADI: bundan keyin biriktirilgan o'qituvchi
+ * standart shartnomasi bo'yicha haqiqiy maosh oladi.
+ *
+ * TUZATISH NIMANI O'ZGARTIRMAYDI: allaqachon yozilgan davrlarda
+ * `salaryType: "fixed", fixedAmount: 0` joyida qoladi va ular baribir
+ * 0 bo'lib turaveradi. Eski ma'lumotni tuzatish ALOHIDA QAROR: u
+ * o'tgan oylarning maoshini 0 dan real summaga ko'taradi (MIGRATION.md,
+ * "Ochiq qarorlar").
+ * ═════════════════════════════════════════════════════════════════
+ */
 export const assignTeacher = async (group, teacher, { startDate } = {}, currentUser) => {
   const open = await prisma.teacherGroupPeriod.findFirst({
     where: {
@@ -936,7 +971,10 @@ export const assignTeacher = async (group, teacher, { startDate } = {}, currentU
     : grp?.startDate
       ? toUtcMidnight(grp.startDate)
       : localTodayMidnight();
-  return create({ group, teacher, startDate: start }, currentUser);
+  return create(
+    { group, teacher, startDate: start, inheritStandardRate: true },
+    currentUser,
+  );
 };
 
 // Arxivdan chiqarishda: arxiv yopgan davrni qayta ochadi (endDate=null), agar shu
