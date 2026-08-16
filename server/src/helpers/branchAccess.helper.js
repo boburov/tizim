@@ -45,8 +45,16 @@ export const clearMainBranchCache = () => {
  * ko'p filialli. Ikkinchi filial ochilgan zahoti rejim o'zi o'zgaradi.
  *
  * KESH: har so'rovda kerak bo'ladi, shuning uchun keshlanadi va filial
- * yaratilgan/o'chirilganda `clearMainBranchCache()` bilan tozalanadi
- * (branches.service.js allaqachon shunday qiladi).
+ * yaratilganda / faolligi o'zgarganda / o'chirilganda
+ * `clearMainBranchCache()` bilan tozalanadi.
+ *
+ * DIQQAT: bu chaqiruvlar `branches.service.js` da (create, update,
+ * softRemove). Ilgari shu izoh "allaqachon shunday qiladi" deb
+ * yozilgan edi, lekin AMALDA chaqiruv yo'q edi - ikkinchi filial
+ * ochilgach ham tizim o'zini yakka markaz deb hisoblab turaverardi
+ * va yangi filial ma'lumoti jimgina muzlab qolardi. Chaqiruvlar
+ * qo'shildi; agar filial yaratadigan yangi yo'l paydo bo'lsa, u ham
+ * keshni tozalashi SHART.
  */
 export const isMultiBranch = async () => {
   if (multiBranchCache !== undefined) return multiBranchCache;

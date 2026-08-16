@@ -34,7 +34,13 @@ export const ROLE_TYPE_LABELS = Object.freeze({
 // yozuv YO'Q - u serverdan (roleMeta.defaultPath) keladi. Shuning uchun
 // to'g'ridan-to'g'ri ROLE_HOME[role] o'rniga resolveHomePath() ishlating.
 export const ROLE_HOME = Object.freeze({
-  owner: "/owner",
+  // EGA -> RAHBARIYAT QOBIG'I. Server ham shu qiymatni beradi
+  // (`Role.defaultPath`), bu yerdagi map faqat ZAXIRA: server javobi
+  // hali kelmagan yoki rol bazada topilmagan holat uchun.
+  //
+  // `RoleGuard` da `/admin` uchun ALOHIDA istisno bor - u rol emas,
+  // owner panelining ikkinchi qarashi (qarang admin/index.js).
+  owner: "/admin",
   teacher: "/teacher",
   student: "/student",
 });

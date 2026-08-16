@@ -31,6 +31,9 @@ export const MODAL = Object.freeze({
   STAFF_ROLE: "staff:role",
   USER_BRANCH: "user:branch",
 
+  // Xonalar (filialning fizik resursi)
+  ROOM_CREATE: "room:create",
+
   // Filiallar
   BRANCH_CREATE: "branch:create",
   BRANCH_EDIT: "branch:edit",

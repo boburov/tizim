@@ -8,8 +8,12 @@ import { z } from "zod";
 // o'chirishni taqiqlaydi - ya'ni yaratilgan filialni HECH QACHON o'chirib
 // bo'lmasdi. Endi avval filialni ochib, direktorni keyin biriktirish mumkin.
 const directorSchema = z.object({
-  firstName: z.string().min(1, "Direktor ismi kerak").max(60),
-  lastName: z.string().min(1, "Direktor familiyasi kerak").max(60),
+  // ISM IXTIYORIY. Tezkor filial ochishda faqat login+parol ma'lum
+  // bo'ladi; bo'sh qolgani servisda ko'rinadigan o'rinbosar bilan
+  // to'ldiriladi ("Direktor <filial nomi>") - qarang branches.service.js.
+  // MAJBURIYLIK LOGIN VA PAROLDA QOLADI: ularsiz hisob ochib bo'lmaydi.
+  firstName: z.string().max(60).optional(),
+  lastName: z.string().max(60).optional(),
   username: z.string().min(3, "Login kamida 3 belgi").max(40),
   password: z.string().min(6, "Parol kamida 6 belgi").max(100),
   phone: z

@@ -4,6 +4,7 @@ import { Outlet } from "react-router-dom";
 // Components
 import ExecutiveHeader from "./ExecutiveHeader";
 import BranchModeBanner from "@/shared/components/layout/BranchModeBanner";
+import CreateModals from "@/shared/components/create/CreateModals";
 
 /**
  * EXECUTIVE QOBIG'I - SIDEBAR YO'Q.
@@ -42,6 +43,12 @@ const ExecutiveLayout = () => (
       <BranchModeBanner />
       <Outlet />
     </main>
+
+    {/* Yaratish modallari - qobiq darajasida. `ExecutiveHeader` dagi
+        tugma ularni ochadi; operatsion panelda ular `AppSidebar` ostida
+        turadi. Ikki qobiq bir vaqtda ekranda bo'lmaydi, ya'ni ikki
+        marta mount qilinmaydi. */}
+    <CreateModals />
   </div>
 );
 

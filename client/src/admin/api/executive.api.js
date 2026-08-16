@@ -59,6 +59,22 @@ export const executiveAPI = {
    * BUTUN TARIX bo'yicha summa chiqardi.
    */
   branchPnl: (params) => http.get("/branch-analytics/pnl", { params }),
+
+  // ── FILIALLAR KESIMI (Prisma, ishlaydi) ──
+  //
+  // Ikkalasi ham `rangeSchema` (?from&to sanalar) va massiv qaytaradi:
+  //   /sales    -> [{ branchId, name, leads, enrolled, conversionPercent,
+  //                   enrolledInRange, avgDaysToConvert, bySource: [...] }]
+  //   /teachers -> [{ branchId, name, teacherCount, activeGroups,
+  //                   groupsPerTeacher, studentsPerTeacher,
+  //                   salaryExpected, salaryShareOfRevenue }]
+  //
+  // RUXSATLAR HAR XIL: /sales -> `leads.read`, /teachers -> `salary.read`.
+  // Shuning uchun ular ALOHIDA so'rov: bittasiga ruxsati bo'lmagan
+  // foydalanuvchi ikkinchisini baribir ko'radi (403 faqat o'z blokini
+  // o'chiradi, butun sahifani emas).
+  branchSales: (params) => http.get("/branch-analytics/sales", { params }),
+  branchTeachers: (params) => http.get("/branch-analytics/teachers", { params }),
 };
 
 // `/finance-report` OLIB TASHLANDI.

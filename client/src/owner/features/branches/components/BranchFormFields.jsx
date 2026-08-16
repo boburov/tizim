@@ -1,6 +1,14 @@
 import InputField from "@/shared/components/ui/input/InputField";
 
 // twoCols - keng modallar uchun (2 ustunli grid), aks holda bitta ustun
+//
+// ⚠ `maxLength` HAR MAYDONDA ANIQ KO'RSATILADI. `Input` standart holatda
+// har qanday matn maydonini 20 belgida KESADI (DEFAULT_MAX_LENGTH), server
+// esa nomga 120, manzilga 300 belgi beradi. Ko'rsatilmagan paytda
+// "Chilonzor filiali (2-bino)" kabi nom jimgina qirqilib, tahrirlash
+// oynasi saqlaganda MAVJUD nomni ham kaltalashtirib yuborardi - hech
+// qanday xato xabari bo'lmasdan. Placeholder'ning o'zi ("Masalan:
+// Chilonzor filiali", 26 belgi) kiritib bo'lmaydigan uzunlikda edi.
 const BranchFormFields = ({
   obj,
   disabled = false,
@@ -12,6 +20,7 @@ const BranchFormFields = ({
       name="name"
       label="Filial nomi"
       placeholder="Masalan: Chilonzor filiali"
+      maxLength={120}
       value={obj.name}
       onChange={(e) => obj.setField("name", e.target.value)}
       required
@@ -30,6 +39,7 @@ const BranchFormFields = ({
       name="address"
       label="Manzil"
       placeholder="Toshkent, Chilonzor 5-kvartal"
+      maxLength={300}
       value={obj.address}
       onChange={(e) => obj.setField("address", e.target.value)}
       className={twoCols ? "sm:col-span-2" : ""}

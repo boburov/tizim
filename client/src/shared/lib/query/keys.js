@@ -39,6 +39,9 @@ export const qk = Object.freeze({
     utilization: () => ["branchAnalytics", "utilization"],
     churn: (params) => ["branchAnalytics", "churn", params],
     alerts: () => ["branchAnalytics", "alerts"],
+    // Filiallar kesimi: sotuv voronkasi va o'qituvchi resursi.
+    sales: (params) => ["branchAnalytics", "sales", params],
+    teachers: (params) => ["branchAnalytics", "teachers", params],
   },
   expenseApprovals: {
     all: () => ["expenseApprovals"],

@@ -5,7 +5,6 @@ import { Plus } from "lucide-react";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import Button from "@/shared/components/ui/button/Button";
 import BranchCard from "../components/BranchCard";
-import BranchCreateModal from "../components/modals/BranchCreateModal";
 import BranchEditModal from "../components/modals/BranchEditModal";
 import BranchDeleteModal from "../components/modals/BranchDeleteModal";
 import BranchFreezeModal from "../components/modals/BranchFreezeModal";
@@ -65,13 +64,9 @@ const BranchesPage = () => {
         ))}
       </div>
 
-      <ModalWrapper
-        name={MODAL.BRANCH_CREATE}
-        title="Yangi filial"
-        className="max-w-2xl"
-      >
-        <BranchCreateModal />
-      </ModalWrapper>
+      {/* `MODAL.BRANCH_CREATE` bu yerda mount QILINMAYDI - u global
+          `CreateModals` da. Ikki marta mount qilinsa bitta `openModal`
+          ikkita dialog ochardi (qarang shared/components/create/CreateModals.jsx). */}
       <ModalWrapper name={MODAL.BRANCH_EDIT} title="Filialni tahrirlash">
         <BranchEditModal />
       </ModalWrapper>

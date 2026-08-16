@@ -1,0 +1,292 @@
+/**
+ * BRAUZER QABUL TESTI — YARATISH TUGMASI + FILIALLAR KESIMI.
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * NEGA ALOHIDA FAYL
+ *
+ * `browserAcceptance.mjs` QOBIQNI tekshiradi (sidebar bor/yo'q,
+ * drill-down, mobil). Bu yerdagi talab esa XATTI-HARAKAT: "ikki marta
+ * bosib o'tirmasin". Uni faqat haqiqiy brauzerda, haqiqiy
+ * `localStorage` bilan tekshirib bo'ladi - build ham, unit test ham
+ * "eslab qoldimi?" degan savolga javob bermaydi.
+ * ═══════════════════════════════════════════════════════════════════
+ */
+const resolvePlaywright = async () => {
+  const { existsSync, readdirSync } = await import("node:fs");
+  const candidates = [];
+  if (process.env.PLAYWRIGHT_PATH) candidates.push(process.env.PLAYWRIGHT_PATH);
+  candidates.push(
+    new URL("../node_modules/playwright/index.mjs", import.meta.url).pathname,
+  );
+  const npx = `${process.env.HOME}/.npm/_npx`;
+  if (existsSync(npx)) {
+    for (const d of readdirSync(npx)) {
+      const p = `${npx}/${d}/node_modules/playwright/index.mjs`;
+      if (existsSync(p)) candidates.push(p);
+    }
+  }
+  for (const c of candidates) if (existsSync(c)) return import(`file://${c}`);
+  console.error(
+    "\nPLAYWRIGHT TOPILMADI - brauzer testi BAJARILMADI.\n" +
+      "O'rnatish: npx playwright install chromium\n",
+  );
+  process.exit(2);
+};
+const { chromium } = await resolvePlaywright();
+
+const APP = process.env.APP_URL || "http://localhost:5173";
+const API = process.env.API_URL || "http://localhost:5000/api";
+
+const R = { pass: 0, fail: 0 };
+const ok = (n, x = "") => { R.pass++; console.log(`  ✅ ${n}${x ? ` — ${x}` : ""}`); };
+const bad = (n, x = "") => { R.fail++; console.log(`  ❌ ${n}${x ? ` — ${x}` : ""}`); };
+const check = (n, cond, x = "") => (cond ? ok(n, x) : bad(n, x));
+
+const browser = await chromium.launch();
+const consoleErrors = [];
+const badRequests = [];
+const allRequests = [];
+
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const page = await ctx.newPage();
+page.on("console", (m) => {
+  if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200));
+});
+page.on("pageerror", (e) => consoleErrors.push("pageerror: " + e.message.slice(0, 200)));
+// MARKAZ REJIMI `/auth/me` javobidan olinadi.
+//
+// Kutilayotgan natija bazaga BOG'LIQ: yakka filialli markazda
+// "Filiallar" bo'limi ATAYLAB ko'rinmaydi (`multiBranchOnly`), ya'ni
+// uni shartsiz talab qilish testning O'Z xatosi bo'lardi.
+let multiBranch = null;
+page.on("response", async (res) => {
+  const u = res.url();
+  if (!u.startsWith(API)) return;
+  allRequests.push({ url: u.replace(API, ""), status: res.status() });
+  if (u.includes("/auth/me") && res.status() === 200) {
+    const body = await res.json().catch(() => null);
+    if (body) multiBranch = body?.data?.multiBranch !== false;
+  }
+  // 501 = MODULE_NOT_MIGRATED - kutilgan shartnoma, server nosozligi emas.
+  if (res.status() >= 500 && res.status() !== 501) {
+    badRequests.push({ url: u.replace(API, ""), status: res.status() });
+  }
+});
+
+console.log("\n═══ YARATISH TUGMASI + FILIALLAR KESIMI ═══\n");
+
+// ══ 0) KIRISH VA EGA UCHUN DEFAULT SAHIFA ══════════════════════
+console.log("0) kirish");
+await page.goto(`${APP}/login`, { waitUntil: "domcontentloaded" });
+await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+await page.fill('input[name="username"]', "owner");
+await page.fill('input[name="password"]', "owner123");
+await page.press('input[name="password"]', "Enter");
+await page
+  .waitForURL((u) => !u.pathname.includes("/login"), { timeout: 20000 })
+  .catch(() => {});
+check("login muvaffaqiyatli", !page.url().includes("/login"), page.url().replace(APP, ""));
+
+// EGA UCHUN DEFAULT - `/admin`.
+// Server `Role.defaultPath` ni birinchi o'qiydi, ya'ni bu tekshiruv
+// BAZADAGI qiymatni ham qamraydi (faqat kod konstantasini emas).
+await page.waitForTimeout(1500);
+check(
+  "ega login qilgach /admin ga tushdi",
+  new URL(page.url()).pathname.startsWith("/admin"),
+  page.url().replace(APP, ""),
+);
+
+// ══ 1) YARATISH TUGMASI — IKKI QISM ════════════════════════════
+console.log("\n1) '+ Yaratish' split tugmasi");
+await page.goto(`${APP}/admin`, { waitUntil: "networkidle" });
+await page.waitForTimeout(1200);
+
+const header = page.locator("header").first();
+const createMain = header.locator('button:has-text("Yaratish")').first();
+const createChevron = header.locator('button[aria-label="Yaratish turini tanlash"]');
+
+check("chap qism (Yaratish) bor", (await createMain.count()) > 0);
+check("o'ng qism (tur tanlash) bor", (await createChevron.count()) === 1);
+
+const faceBefore = (await createMain.innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+check("tugmada FAOL TUR nomi ko'rinadi", /·/.test(faceBefore), faceBefore);
+
+// ── menyu ochilishi va yangi turlar ──
+await createChevron.click();
+await page.waitForTimeout(600);
+const menuLabels = (await page.locator('[role="menuitem"]').allInnerTexts()).map((t) =>
+  t.replace(/\s+/g, " ").trim(),
+);
+check("menyu ochildi", menuLabels.length > 0, `${menuLabels.length} variant`);
+// MATN BO'YICHA QIDIRISH ISHLAMAYDI: "Filial" so'zi `Xodim` va `Xona`
+// yozuvlarining IZOHIDA ham bor, ya'ni `:has-text("Filial")` uchta
+// elementga mos keladi. Shu sababli `data-create-key` ishlatiladi.
+check("XONA varianti bor", (await page.locator('[data-create-key="room"]').count()) === 1,
+  menuLabels.join(" | ").slice(0, 100));
+check("FILIAL varianti bor", (await page.locator('[data-create-key="branch"]').count()) === 1);
+
+// ══ 2) BIR BOSISH: tur tanlangach modal DARHOL ochiladi ════════
+console.log("\n2) tur tanlash -> modal darhol ochiladi");
+await page.locator('[data-create-key="room"]').click();
+await page.waitForTimeout(900);
+
+const roomDialog = page.locator('[role="dialog"]:has-text("Yangi xona")');
+check("Xona tanlangach modal DARHOL ochildi (ikkinchi bosish yo'q)",
+  (await roomDialog.count()) === 1);
+check("modalda 'Xona nomi' maydoni bor",
+  (await roomDialog.locator('input[name="name"]').count()) === 1);
+
+await page.keyboard.press("Escape");
+await page.waitForTimeout(600);
+
+// ══ 3) ESLAB QOLISH: qayta yuklangach ham o'sha tur ════════════
+console.log("\n3) tanlangan tur ESLAB QOLINADI");
+const faceAfter = (await createMain.innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+check("tugma yuzi 'Xona' ga o'zgardi", /Xona/.test(faceAfter), faceAfter);
+
+await page.reload({ waitUntil: "networkidle" });
+await page.waitForTimeout(1500);
+const faceReload = (await page.locator("header").first()
+  .locator('button:has-text("Yaratish")').first()
+  .innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+check("sahifa qayta yuklangach ham 'Xona' (localStorage)", /Xona/.test(faceReload), faceReload);
+
+// ENG MUHIM TEKSHIRUV: chap qismni BIR MARTA bosganda modal ochiladi.
+await page.locator("header").first().locator('button:has-text("Yaratish")').first().click();
+await page.waitForTimeout(900);
+check(
+  "BIR BOSISHDA xona modali ochildi (talabning o'zagi)",
+  (await page.locator('[role="dialog"]:has-text("Yangi xona")').count()) === 1,
+);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(600);
+
+// ══ 4) SODDALASHTIRILGAN FILIAL MODALI ═════════════════════════
+console.log("\n4) filial qo'shish — soddalashtirilgan");
+await page.locator('button[aria-label="Yaratish turini tanlash"]').first().click();
+await page.waitForTimeout(600);
+await page.locator('[data-create-key="branch"]').click();
+await page.waitForTimeout(900);
+
+const branchDialog = page.locator('[role="dialog"]:has-text("Yangi filial")');
+check("filial modali ochildi", (await branchDialog.count()) === 1);
+
+if (await branchDialog.count()) {
+  const names = await branchDialog.locator("input").evaluateAll((els) =>
+    els.map((e) => e.getAttribute("name")).filter(Boolean),
+  );
+  check("faqat 3 ta ko'rinadigan maydon: nom + login + parol",
+    names.length === 3 && names.includes("name") && names.includes("username") && names.includes("password"),
+    names.join(", "));
+
+  // DIREKTOR ISMI SO'RALMAYDI - server bo'sh ismni ko'rinadigan
+  // o'rinbosar bilan to'ldiradi (branches.service.js).
+  check("direktor ISMI so'ralmaydi", !names.includes("dirFirstName"), names.join(", "));
+
+  const dialogText = (await branchDialog.innerText()).replace(/\s+/g, " ");
+  check("'Qo'shimcha' yig'ilgan bo'lim bor", /Qo'shimcha/i.test(dialogText));
+}
+await page.keyboard.press("Escape");
+await page.waitForTimeout(600);
+
+// ══ 5) TIZIM TAHLILI /admin GA KO'CHDI ═════════════════════════
+console.log("\n5) tizim tahlili — rahbariyat qobig'ida");
+const navTexts = (await page
+  .locator('nav[aria-label="Rahbariyat bo\'limlari"] a')
+  .allInnerTexts()).map((t) => t.trim());
+check("navigatsiyada 'Tizim tahlili' bor", navTexts.some((t) => /Tizim tahlili/i.test(t)),
+  navTexts.join(" | "));
+// FILIALLAR BO'LIMI YAKKA MARKAZDA ATAYLAB YO'Q.
+const hasCompareTab = navTexts.some((t) => /^Filiallar$/i.test(t));
+if (multiBranch) {
+  check("ko'p filialli markaz: 'Filiallar' bo'limi bor", hasCompareTab, navTexts.join(" | "));
+} else {
+  check("yakka markaz: 'Filiallar' bo'limi YASHIRILGAN (ataylab)",
+    !hasCompareTab, navTexts.join(" | "));
+}
+
+await page.goto(`${APP}/admin/tahlil`, { waitUntil: "networkidle" });
+await page.waitForTimeout(2000);
+check("/admin/tahlil ochildi (404 emas)",
+  !/topilmadi|not found/i.test(await page.locator("main").innerText()),
+  page.url().replace(APP, ""));
+check("/admin/tahlil da SIDEBAR yo'q",
+  (await page.locator('[data-sidebar="sidebar"]').count()) === 0);
+
+// Operatsion sidebar'dan ESKI yozuv olib tashlanganmi
+await page.goto(`${APP}/owner/dashboard`, { waitUntil: "networkidle" });
+await page.waitForTimeout(1800);
+const sidebarLinks = await page.locator('[data-sidebar="sidebar"] a').allInnerTexts();
+check("operatsion sidebar'da 'Tahlil markazi' YO'Q (ko'chirildi)",
+  !sidebarLinks.some((t) => /Tahlil markazi/i.test(t)),
+  sidebarLinks.map((t) => t.trim()).filter(Boolean).slice(0, 12).join(" | "));
+
+// ══ 6) FILIALLAR KESIMI ════════════════════════════════════════
+console.log("\n6) /admin/filiallar — moliya + o'qituvchi + sotuv");
+await page.goto(`${APP}/admin/filiallar`, { waitUntil: "networkidle" });
+await page.waitForTimeout(2500);
+
+const salesReq = allRequests.filter((r) => r.url.includes("/branch-analytics/sales"));
+const teachReq = allRequests.filter((r) => r.url.includes("/branch-analytics/teachers"));
+const pnlReq = allRequests.filter((r) => r.url.includes("/branch-analytics/pnl"));
+
+check("sotuv so'rovi yuborildi", salesReq.length > 0, salesReq.map((r) => r.status).join(","));
+check("o'qituvchi so'rovi yuborildi", teachReq.length > 0, teachReq.map((r) => r.status).join(","));
+check("moliya (P&L) so'rovi yuborildi", pnlReq.length > 0, pnlReq.map((r) => r.status).join(","));
+check("uchalasi ham 5xx BERMADI",
+  [...salesReq, ...teachReq, ...pnlReq].every((r) => r.status < 500),
+  [...salesReq, ...teachReq, ...pnlReq].map((r) => `${r.status}`).join(","));
+
+const cmpText = (await page.locator("main").innerText()).replace(/\s+/g, " ");
+check("uchala bo'lim sarlavhasi ko'rinadi",
+  /Moliya/.test(cmpText) && /O'qituvchilar/.test(cmpText) && /Sotuv/.test(cmpText));
+
+// Bo'sh bazada jadval o'rniga TO'G'RI bo'sh holat chiqishi kerak -
+// soxta nol EMAS.
+const tables = await page.locator("main table").count();
+const emptyStates = /Ma'lumot yo'q|yozuv yo'q|topilmadi/i.test(cmpText);
+check("jadval YOKI to'g'ri bo'sh holat", tables > 0 || emptyStates,
+  tables ? `${tables} jadval` : "bo'sh holat matni");
+check("'Manba ulanmagan' DEMAYDI (uchalasi ham ko'chirilgan)",
+  !/Manba ulanmagan/i.test(cmpText));
+
+// ══ 7) FILIAL TANLAGICH (checkbox) ═════════════════════════════
+console.log("\n7) filial tanlagich (checkbox)");
+const picker = page.locator('header button:has-text("Barcha filiallar"), main button:has-text("Barcha filiallar")');
+const pickerCount = await picker.count();
+if (pickerCount > 0) {
+  await picker.first().click();
+  await page.waitForTimeout(700);
+  const optionCount = await page.locator('[cmdk-item]').count();
+  check("tanlagich ochildi, variantlar bor", optionCount > 0, `${optionCount} filial`);
+  await page.keyboard.press("Escape");
+} else {
+  // Yakka filialli bazada tanlagich ATAYLAB chiqmaydi
+  // (`hasMultipleBranches`). Bu to'g'ri holat.
+  ok("yakka filialli baza: tanlagich ko'rsatilmaydi (ataylab)");
+}
+
+// ══ 8) TOAST / KONSOL / TOSHIB KETISH ══════════════════════════
+console.log("\n8) yakuniy holat");
+const toasts = await page.locator("[data-sonner-toast]").allInnerTexts().catch(() => []);
+check("xato toasti YO'Q", toasts.length === 0, toasts.join(" | ").slice(0, 120));
+
+const overflow = await page.evaluate(() =>
+  document.documentElement.scrollWidth - document.documentElement.clientWidth);
+check("gorizontal scroll YO'Q (jadval o'z ichida suriladi)", overflow <= 0, `${overflow}px`);
+
+const realErrors = consoleErrors.filter(
+  (e) => !/Download the React DevTools|status of 501|status of 403/i.test(e),
+);
+check("konsol xatolari YO'Q", realErrors.length === 0, realErrors.slice(0, 3).join(" | "));
+check("5xx javob YO'Q", badRequests.length === 0,
+  badRequests.map((r) => `${r.status} ${r.url}`).join(", "));
+
+const byStatus = {};
+for (const r of allRequests) byStatus[r.status] = (byStatus[r.status] || 0) + 1;
+console.log(`  ℹ jami API so'rov: ${allRequests.length} — ${JSON.stringify(byStatus)}`);
+
+await browser.close();
+console.log(`\n=== NATIJA: ${R.pass} o'tdi, ${R.fail} yiqildi ===\n`);
+process.exit(R.fail ? 1 : 0);

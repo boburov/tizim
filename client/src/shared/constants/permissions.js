@@ -2,6 +2,16 @@
 export const PERMISSIONS = Object.freeze({
   // Users
   USERS_READ: "users.read",
+  // `users.create` serverda ANCHADAN BERI bor (server/src/constants/
+  // permissions.js), lekin bu yerda YO'Q edi - va oltita komponent unga
+  // `PERMISSIONS.USERS_CREATE` deb murojaat qilardi. JS bunday
+  // murojaatni `undefined` qilib beradi, xato bermaydi:
+  //   CreatableSelectField: `!createPermission` -> tekshiruv butunlay
+  //   TUSHIB QOLADI, ya'ni "yangi qo'shish" hammaga ochiq ko'rinadi
+  //   (server baribir 403 beradi - foydalanuvchi buni faqat bosgandan
+  //   keyin biladi).
+  // `npm run check:permission-keys` shu turdagi xatoni tutadi.
+  USERS_CREATE: "users.create",
   ARCHIVE_REASONS_MANAGE: "archive_reasons.manage",
 
   // Leads

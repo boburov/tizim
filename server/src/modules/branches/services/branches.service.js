@@ -10,6 +10,7 @@ import {
   assertRoleAssignable,
   assertCanGrantRole,
 } from "../../../helpers/roles.helper.js";
+import { clearMainBranchCache } from "../../../helpers/branchAccess.helper.js";
 
 
 // Foydalanuvchi filialga IKKI yo'l bilan bog'lanadi. Mongo'da bu
@@ -93,6 +94,32 @@ export const create = async (body) => {
       isMain: count === 0,
     },
   });
+
+  // ══════════════════════════════════════════════════════════════
+  // KESHNI TOZALASH - SHARTSIZ.
+  //
+  // `branchAccess.helper.js` FAOL filiallar sonini keshlaydi va
+  // "markaz ko'p filiallimi" degan savolga shu keshdan javob beradi.
+  // Kesh tozalanmasa IKKINCHI FILIAL OCHILGANDAN KEYIN HAM tizim
+  // o'zini yakka markaz deb hisoblab turaverardi, ya'ni:
+  //
+  //   • /auth/me `multiBranch: false` qaytarardi -> filial tanlagichi
+  //     ham, filiallararo bo'limlar ham CHIQMASDI;
+  //   • yakka rejim hamma narsani ASOSIY filialga qisadi, ya'ni
+  //     yangi filialning ma'lumoti na o'qilardi, na yozilardi -
+  //     u JIMGINA muzlab qolardi;
+  //   • holat server qayta ishga tushgunga qadar davom etardi.
+  //
+  // Helper faylidagi izoh "branches.service.js allaqachon shunday
+  // qiladi" deb yozilgan edi, lekin AMALDA bu chaqiruv yo'q edi -
+  // izoh haqiqatdan ajralib ketgan.
+  //
+  // Bu jarayon ichidagi kesh: bir nechta instans ishlayotgan bo'lsa
+  // qolganlari o'z keshini keyingi qayta ishga tushishda yangilaydi.
+  // Bu yerda hal qilinadigan muammo emas, lekin bilib qo'yish kerak.
+  // ══════════════════════════════════════════════════════════════
+  clearMainBranchCache();
+
   return withLegacyId(doc);
 };
 
@@ -139,13 +166,33 @@ export const createWithDirector = async (body, currentUser) => {
   // ── 2-QADAM: filial ──
   const branch = await create(branchBody);
 
+  // ISM IXTIYORIY - TEZKOR FILIAL OCHISH UCHUN.
+  //
+  // Amaliy holat: markaz yangi filial ochayotganda ko'pincha faqat nom,
+  // login va parol ma'lum bo'ladi; direktorning pasport ismi keyinroq
+  // aniqlanadi. Ismni MAJBURIY qilish butun amalni to'xtatib turardi,
+  // holbuki `User.firstName`/`lastName` bazada NOT NULL.
+  //
+  // Shuning uchun bo'sh qolgan ism O'RNI TO'LDIRILADI, lekin JIMGINA
+  // emas - qiymat o'qilganda darhol "bu to'ldirilmagan" deb tushuniladi:
+  //   firstName -> "Direktor"   (lavozim, ism o'rnida)
+  //   lastName  -> filial nomi  (masalan "Chilonzor")
+  // ya'ni ro'yxatda "Direktor Chilonzor" ko'rinadi va uni tahrirlash
+  // kerakligi ko'zga tashlanadi. Tasodifiy identifikator yoki bo'sh
+  // joy qo'yilsa, aksincha, ma'lumot to'liqdek ko'rinardi.
+  //
+  // Bu SERVIS qatlamida, klientda EMAS: import va seed kabi HTTP
+  // validatsiyasini chetlab o'tuvchi yo'llar ham shu qoidaga tushadi.
+  const firstName = String(director.firstName || "").trim() || "Direktor";
+  const lastName = String(director.lastName || "").trim() || branchBody.name.trim();
+
   // ── 3-QADAM: direktor (xato bo'lsa filialni qaytarib olamiz) ──
   try {
     const passwordHash = await hashPassword(director.password);
     const user = await prisma.user.create({
       data: {
-        firstName: director.firstName.trim(),
-        lastName: director.lastName.trim(),
+        firstName,
+        lastName,
         username,
         phone: dirPhone || null,
         passwordHash,
@@ -241,6 +288,13 @@ export const update = async (id, body) => {
   }
 
   const updated = await prisma.branch.update({ where: { id: doc.id }, data });
+
+  // FAOLLIK O'ZGARSA rejim ham o'zgarishi mumkin: ikkitadan bittasi
+  // nofaol qilinsa markaz yana yakka bo'lib qoladi (va aksincha).
+  // Kesh faqat shu holatda tozalanadi - nom yoki manzil tahriri
+  // rejimga ta'sir qilmaydi.
+  if (data.isActive !== undefined) clearMainBranchCache();
+
   return withLegacyId(updated);
 };
 
@@ -352,6 +406,11 @@ export const softRemove = async (id, currentUser) => {
       deletedBy: currentUser?.id || currentUser?._id || null,
     },
   });
+
+  // Filial ro'yxatdan chiqdi - "ko'p filialli" javobi o'zgarishi mumkin
+  // (`isMultiBranch` faqat isDeleted:false + isActive:true larni sanaydi).
+  clearMainBranchCache();
+
   return withLegacyId(removed);
 };
 

@@ -23,7 +23,16 @@ export const ALL_ROLE_TYPES = Object.values(ROLE_TYPES);
 
 // Built-in rolning tipi va standart landing sahifasi.
 export const SYSTEM_ROLE_META = Object.freeze({
-  [ROLES.OWNER]: { roleType: ROLE_TYPES.OWNER, defaultPath: "/owner" },
+  // EGA UCHUN DEFAULT - RAHBARIYAT QOBIG'I (`/admin`), operatsion panel
+  // EMAS. Ega kunni "qanday ketyapti" savolidan boshlaydi, "nima
+  // qilay" dan emas; operatsion panelga o'sha yerdagi tugma orqali
+  // o'tadi. Direktor va resepshin avvalgidek `/owner` da qoladi -
+  // ular kun bo'yi operatsion ish qiladi.
+  //
+  // DIQQAT: bu qiymat `Role.defaultPath` ustuniga seed orqali yoziladi
+  // va `resolveHomePath` AVVAL bazadagi qiymatni o'qiydi. Ya'ni faqat
+  // shu faylni o'zgartirish YETARLI EMAS - seed qayta ishlashi kerak.
+  [ROLES.OWNER]: { roleType: ROLE_TYPES.OWNER, defaultPath: "/admin" },
   [ROLES.TEACHER]: { roleType: ROLE_TYPES.TEACHER, defaultPath: "/teacher" },
   [ROLES.STUDENT]: { roleType: ROLE_TYPES.STUDENT, defaultPath: "/student" },
 });

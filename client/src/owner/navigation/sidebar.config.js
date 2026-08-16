@@ -4,7 +4,6 @@ import {
   Gauge,
   GraduationCap,
   LayoutDashboard,
-  Monitor,
   MessagesSquare,
   ScrollText,
   Settings,
@@ -70,21 +69,19 @@ const ownerSidebar = [
     permissionAnyOf: ["finance.read", "approvals.decide_config"],
   },
 
-  // AI operatsiyalar markazi: YAKKA link, "Bosh sahifa"dan keyin darhol.
-  // Sabab - bu ertalabki birinchi ekran bo'lishi kerak ("bugun nima
-  // qilaman?"), guruh ichiga yashirilsa kundalik odatga aylanmaydi.
+  // TIZIM TAHLILI RAHBARIYAT QOBIG'IGA KO'CHDI (/admin/tahlil).
   //
-  // Vazifalar (/ai/tasks) va hisobotlar (/ai/reports) ATAYLAB bu yerda
-  // YO'Q: `items` qo'shilishi bilan AppSidebar bu yozuvni ochiladigan
-  // guruhga aylantiradi va yakka link bo'lmay qoladi - yuqoridagi
-  // sababning aynan o'zi buziladi. Ularga havola brifing sahifasining
-  // sarlavhasida turadi.
-  {
-    title: "Tahlil markazi",
-    icon: Monitor,
-    url: "/owner/ai",
-    permission: "ai.read",
-  },
+  // Bu yerda yozuv YO'Q - ataylab. Brifing "bugun nima qilaman?" degan
+  // savolga javob beradi, ya'ni u KUZATUV ekrani, ijro ekrani emas:
+  // o'rni sidebar'siz rahbariyat qobig'ida. Ikkala joyda ham turgan
+  // bo'lsa, bitta sahifaga ikki xil manzil paydo bo'lardi va qaysi
+  // biri "asosiy" ekani noaniq qolardi.
+  //
+  // `/owner/ai` MARSHRUTLARI JOYIDA QOLADI: tavsiya kartalaridagi
+  // `ACTION_ROUTES` havolalari va eski xatcho'plar ishlashda davom
+  // etadi (qarang admin/routes/index.jsx). Faqat menyu yozuvi ko'chdi.
+  //
+  // Rahbariyat qobig'iga o'tish yo'li yuqorida - "Rahbariyat" yozuvi.
 
   // LIDLAR: alohida yakka link, "O'quv jarayoni"dan OLDIN.
   //

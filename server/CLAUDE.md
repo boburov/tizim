@@ -178,7 +178,8 @@ npm run prisma:studio    # bazani brauzerda ko'rish
 npm run db:reset         # schema'ni qayta qurish + owner seed
 
 # ── Testlar ──
-npm run test:auth-prisma # ko'chirilgan auth oqimi (haqiqiy Postgres ustida)
+npm run test:auth-prisma  # ko'chirilgan auth oqimi (haqiqiy Postgres ustida)
+npm run test:branch-cross # filiallar kesimi: sotuv voronkasi + o'qituvchi resursi
 ```
 
 Schema o'zgargach `npm run prisma:generate` **shart** - aks holda klient

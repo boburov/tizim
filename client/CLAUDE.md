@@ -116,6 +116,31 @@ Rules that follow from this, and why:
   against `owner/routes/index.jsx`. A 404 from an executive card destroys trust in
   the numbers next to it.
 
+### Creating records: one registry, two shells
+
+`shared/components/create/` is the single source of "what can be created":
+
+- `createRegistry.js` — the item list (`key`, `icon`, `label`, `hint`,
+  `permission`/`permissions`, `modal`, `data`), sliced by permission.
+- `CreateSplitButton.jsx` — a **split** button: the left half opens the
+  remembered type in **one** click, the chevron changes it. The choice is kept
+  in `localStorage` under `create:lastType` and re-validated against
+  permissions on every render (a role change must not leave the button
+  pointing at a modal the user can no longer open).
+- `CreateModals.jsx` — the modals, mounted **once per shell**
+  (`AppSidebar` for `/owner/*`, `ExecutiveLayout` for `/admin`). Never mount a
+  `ModalWrapper` with the same `name` at page level too — one `openModal`
+  would open two dialogs.
+
+Permission keys here must match the **server route**, not the folder name:
+rooms are guarded by `classes.create`, and branch creation needs
+`system.admin_access` **and** `branches.create` (`branches.create` alone would
+be a privilege-escalation path — see the comment in `branches.routes.js`).
+
+> Watch out for `Input`'s `DEFAULT_MAX_LENGTH = 20`: every text field is capped
+> at 20 characters unless `maxLength` is passed explicitly. A branch name
+> silently lost its last characters this way.
+
 ## Feature rules
 
 Each feature has its own **"public API"** (`<feature>/index.js`). External code imports only from this file. Internal working files stay inside.
@@ -311,10 +336,24 @@ The same validation (`validateHsl` in `shared/utils/color.js`) logs a `console.w
 npm run dev                  # on port 5173
 npm run build
 npm run lint
-npm run check:contrast       # WCAG AA on colour tokens
-npm run check:ai-metrics     # AI metric tone logic
-npm run check:data-contract  # dashboard status contract (29 checks)
+npm run check:contrast         # WCAG AA on colour tokens
+npm run check:ai-metrics       # AI metric tone logic
+npm run check:data-contract    # dashboard status contract (29 checks)
+npm run check:permission-keys  # every PERMISSIONS.X resolves to a real key
+
+# Browser acceptance (needs the dev server + API running; Playwright from npx cache)
+npm run test:browser           # shell: sidebar/no-sidebar, drill-down, mobile
+npm run test:browser-create    # create split button + branch cross-section
+npm run test:browser-branch    # create a branch -> multi-branch mode -> compare
 ```
+
+`check:permission-keys` exists because a typo'd key **fails silently**:
+`PERMISSIONS.ROOMS_CREATE` (no such key) is `undefined`, and `has(undefined)`
+returns `true` for the owner but `false` for everyone else — so the developer
+never sees the button disappear for receptionists. In
+`CreatableSelectField` the same `undefined` skips the check entirely, which
+fails the other way. Both shapes shipped in this codebase before the check
+existed.
 
 `check:data-contract` guards `shared/components/dashboard/dataStatus.js`. A bug
 there does not crash - it puts a **confident wrong number** on an executive screen,

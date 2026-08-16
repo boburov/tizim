@@ -17,6 +17,7 @@ import {
 // Components
 import BranchBadge from "@/shared/components/layout/BranchBadge";
 import NotificationBell from "@/shared/components/notification/NotificationBell";
+import CreateSplitButton from "@/shared/components/create/CreateSplitButton";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
@@ -57,12 +58,14 @@ const THEME_ITEMS = [
  * menyu esa bosishni ikki barobar qiladi.
  */
 const ExecutiveHeader = () => {
-  const { user } = useAuth();
+  const { user, multiBranch } = useAuth();
   const { has } = usePermissions();
   const { theme, setTheme } = useTheme();
   const { mutate: logout } = useLogout();
 
-  const items = visibleNav(has);
+  // `multiBranch` - yakka markazda filiallararo bo'lim menyuda
+  // ko'rinmaydi (`multiBranchOnly`).
+  const items = visibleNav(has, { multiBranch });
   const initial = user?.firstName?.[0] || user?.username?.[0] || "?";
 
   return (
@@ -94,6 +97,14 @@ const ExecutiveHeader = () => {
         </span>
 
         <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
+          {/* YARATISH - sidebar'siz qobiqda yozuv qo'shishning YAGONA
+              yo'li. Sidebar bo'lmagach "Yaratish" tugmasi ham yo'qolgan
+              edi va rahbariyat ekranidan hech narsa qo'shib bo'lmasdi:
+              yangi filial ochish uchun operatsion panelga o'tish kerak
+              edi. Tanlangan tur eslab qolinadi, ya'ni bir bosishda
+              ochiladi. */}
+          <CreateSplitButton className="shrink-0" />
+
           <BranchBadge />
 
           {/* OPERATSION PANELGA QAYTISH.

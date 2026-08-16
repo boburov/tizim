@@ -55,6 +55,14 @@ export const DRILLDOWN = Object.freeze({
   cashDesk: `${OWNER}/cash-desk`,
   expenseApprovals: `${OWNER}/expense-approvals`,
 
+  // ── Sotuv (lidlar) ──
+  // `owner/routes/index.jsx:267` — `leads` tabli sahifa, `leads/stats`
+  // esa uning statistika tabi. Kesim sahifasidan RO'YXATGA olib
+  // boriladi: rahbariyat "qaysi lid?" degan savolga tushadi, "yana
+  // bitta statistika" ga emas.
+  leads: `${OWNER}/leads`,
+  leadStats: `${OWNER}/leads/stats`,
+
   // ── Filiallar va tahlil ──
   branches: `${OWNER}/branches`,
   branchAnalytics: `${OWNER}/branch-analytics`,

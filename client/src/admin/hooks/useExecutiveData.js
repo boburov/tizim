@@ -36,6 +36,27 @@ import { executiveAPI } from "../api/executive.api";
 
 const BASE = { retry: false, refetchOnWindowFocus: false };
 
+/**
+ * Oy -> [birinchi kun, oxirgi kun] ISO chegaralari.
+ *
+ * `/branch-analytics/*` endpoint'larining HAMMASI `from`/`to` SANALARINI
+ * kutadi (`rangeSchema`, `pnlSchema`), `year`/`month` NI EMAS. Zod
+ * noma'lum kalitni JIMGINA tashlab yuboradi, ya'ni `{year, month}`
+ * yuborilsa filtr umuman qo'llanmasdi va aniq oy sarlavhasi ostida
+ * BUTUN TARIX summasi chiqardi - bu bir marta sodir bo'lgan.
+ *
+ * Shuning uchun aylantirish BITTA joyda turadi: uchta hook uni
+ * takrorlaganda bittasi adashishi mumkin edi.
+ */
+const monthRange = (year, month) => {
+  const hasPeriod = Number.isInteger(year) && Number.isInteger(month);
+  if (!hasPeriod) return { from: undefined, to: undefined };
+  return {
+    from: new Date(Date.UTC(year, month - 1, 1)).toISOString(),
+    to: new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)).toISOString(),
+  };
+};
+
 /** Umumiy ko'rsatkichlar (tushum, o'quvchi, davomat). `?year&month` */
 export const useOverviewData = (params) => {
   const query = useQuery({
@@ -130,15 +151,7 @@ export const useBriefingData = (params) => {
 export const useBranchPnlData = ({ year, month, consolidated } = {}) => {
   // Oyning [birinchi kun, oxirgi kun] chegarasi - UTC yarim tunlarda.
   // Server `z.coerce.date()` bilan qabul qiladi, ya'ni ISO satr kifoya.
-  const hasPeriod = Number.isInteger(year) && Number.isInteger(month);
-  const from = hasPeriod
-    ? new Date(Date.UTC(year, month - 1, 1)).toISOString()
-    : undefined;
-  const to = hasPeriod
-    ? new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)).toISOString()
-    : undefined;
-
-  const params = { from, to, consolidated };
+  const params = { ...monthRange(year, month), consolidated };
 
   const query = useQuery({
     ...BASE,
@@ -160,14 +173,7 @@ export const useBranchPnlData = ({ year, month, consolidated } = {}) => {
  * bo'lishi kerak: qatorlar bo'sh bo'lsa ham yig'indi 0 emas, YO'Q.
  */
 export const useBranchPnlTotals = ({ year, month, consolidated } = {}) => {
-  const hasPeriod = Number.isInteger(year) && Number.isInteger(month);
-  const params = {
-    from: hasPeriod ? new Date(Date.UTC(year, month - 1, 1)).toISOString() : undefined,
-    to: hasPeriod
-      ? new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)).toISOString()
-      : undefined,
-    consolidated,
-  };
+  const params = { ...monthRange(year, month), consolidated };
 
   const query = useQuery({
     ...BASE,
@@ -176,4 +182,39 @@ export const useBranchPnlTotals = ({ year, month, consolidated } = {}) => {
   });
 
   return fromQuery(query, { select: (d) => d?.totals });
+};
+
+/**
+ * SOTUV VORONKASI filiallar kesimida. `?from&to`
+ *
+ * Javob TO'G'RIDAN-TO'G'RI massiv (`{ success, data: [...] }`), ya'ni
+ * `items` konverti YO'Q - `/branch-analytics/pnl` dan farqi shu.
+ * Taxmin emas: `sales.handler.js` `res.json({ success: true, data })`
+ * bilan servis natijasini o'zi qaytaradi.
+ */
+export const useBranchSalesData = ({ year, month } = {}) => {
+  const params = monthRange(year, month);
+  const query = useQuery({
+    ...BASE,
+    queryKey: qk.branchAnalytics.sales(params),
+    queryFn: () => executiveAPI.branchSales(params).then((r) => r.data.data),
+  });
+  return fromQuery(query, { emptyWhen: (rows) => !rows?.length });
+};
+
+/**
+ * O'QITUVCHI RESURSI filiallar kesimida. `?from&to`
+ *
+ * ALOHIDA SO'ROV: bu endpoint `salary.read` talab qiladi, sotuv esa
+ * `leads.read`. Bitta so'rovga birlashtirilsa, maosh ruxsati yo'q
+ * foydalanuvchi sotuv raqamlarini ham ko'ra olmay qolardi.
+ */
+export const useBranchTeachersData = ({ year, month } = {}) => {
+  const params = monthRange(year, month);
+  const query = useQuery({
+    ...BASE,
+    queryKey: qk.branchAnalytics.teachers(params),
+    queryFn: () => executiveAPI.branchTeachers(params).then((r) => r.data.data),
+  });
+  return fromQuery(query, { emptyWhen: (rows) => !rows?.length });
 };

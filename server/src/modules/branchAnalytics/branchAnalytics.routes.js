@@ -19,6 +19,8 @@ import normalized from "./handlers/normalized.handler.js";
 import transferPreview from "./handlers/transferPreview.handler.js";
 import transfer from "./handlers/transfer.handler.js";
 import alerts from "./handlers/alerts.handler.js";
+import sales from "./handlers/sales.handler.js";
+import teachers from "./handlers/teachers.handler.js";
 
 const router = Router();
 
@@ -68,6 +70,35 @@ router.get(
   requirePermission(PERMISSIONS.FINANCE_READ),
   validate(rangeSchema),
   normalized,
+);
+
+// ── FILIALLAR KESIMI: SOTUV VA O'QITUVCHI ──
+//
+// RUXSATLAR MOS KELUVCHI MODULDAN OLINADI, yangi kalit kiritilmaydi:
+//
+//   /sales    -> `leads.read`   (ma'lumot manbai - lidlar)
+//   /teachers -> `salary.read`  (javobda maosh summasi bor)
+//
+// `/teachers` ni `branches.read` ga bog'lash XATO bo'lardi: filial
+// ro'yxatini ko'ra oladigan har qanday xodim maosh fondini ham
+// ko'rib qolardi. Ruxsat MA'LUMOTGA beriladi, ekranga emas.
+//
+// Ko'lam boshqa endpoint'lardagi kabi `branchFilter()` ostida:
+// filial direktori faqat o'z filialini ko'radi.
+router.get(
+  "/sales",
+  requireAuth,
+  requirePermission(PERMISSIONS.LEADS_READ),
+  validate(rangeSchema),
+  sales,
+);
+
+router.get(
+  "/teachers",
+  requireAuth,
+  requirePermission(PERMISSIONS.SALARY_READ),
+  validate(rangeSchema),
+  teachers,
 );
 
 // ANOMALIYALAR. `branches.read` yetarli - filial rahbari o'z

@@ -12651,3 +12651,180 @@ Hammasi mavjud — AI ko'chirilishi mumkin. Lekin sizning qoidangiz aniq: AI faq
 <sub>session `c49e703c` · branch `main` · 60 ta qadam</sub>
 
 ---
+
+## 2026-08-17 01:19 — bu bo'lim postgresga ulanmagan demoqda amdin qisimda fix qiling
+
+**So'rov**
+
+> bu bo'lim postgresga ulanmagan demoqda amdin qisimda fix qiling
+
+**O'zgargan fayllar (2)**
+
+- `client/src/app/query-client.js` — tahrirlandi
+- `server/src/config/legacyMongoose.js` — tahrirlandi
+
+**Buyruqlar (18)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ global xato toasti qayerda ═══" grep -rn "toast.error" src/shared/api/ src/app/ 2>/dev/null | head -10 ech…
+cd /Users/shukrullo/Desktop/lc-total/client cat src/shared/utils/apiError.js
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ apiErrorToast chaqiruvlari (global) ═══" grep -rn "apiErrorToast\|MutationCache" src/app/ src/shared/api/ …
+cd /Users/shukrullo/Desktop/lc-total/client python3 - <<'PY' import io p="tests/browserAcceptance.mjs"; s=io.open(p,encoding="utf-8").read() # 1) /admin bo'limi…
+cd /Users/shukrullo/Desktop/lc-total/client APP_URL=http://localhost:5174 npm run test:browser 2>&1 | grep -E "^\s+[✅❌]|^[0-9]\)|NATIJA|jami API"
+cd /Users/shukrullo/Desktop/lc-total/client node -e " const s=require('fs').readFileSync('src/app/query-client.js','utf8'); try { new Function('return 0'); } ca…
+cd /Users/shukrullo/Desktop/lc-total/server cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/why.…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '/^const cleanup/,/^};/p' tests/invariantsPrisma.test.js
+cd /Users/shukrullo/Desktop/lc-total/server python3 - <<'PY' import io p="tests/invariantsPrisma.test.js"; s=io.open(p,encoding="utf-8").read() s = s.replace(''…
+cd /Users/shukrullo/Desktop/lc-total/server cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/purg…
+cd /Users/shukrullo/Desktop/lc-total/client cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/badg…
+cd /Users/shukrullo/Desktop/lc-total/client sed -n '35,75p' src/shared/components/layout/BranchBadge.jsx
+cd /Users/shukrullo/Desktop/lc-total/client python3 - <<'PY' import io p="tests/browserAcceptance.mjs"; s=io.open(p,encoding="utf-8").read() start = s.index("//…
+cd /Users/shukrullo/Desktop/lc-total/server T=0; F=0 for t in test:auth-prisma test:users-prisma test:group-periods test:salary-chain test:groups-chain test:sta…
+cd /Users/shukrullo/Desktop/lc-total/server npm run test:dashboard-contract 2>&1 | grep -B 2 -A 2 "❌"
+cd /Users/shukrullo/Desktop/lc-total/server TOK=$(node /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad…
+cd /Users/shukrullo/Desktop/lc-total/server sleep 4 TOK=$(node /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/sc…
+cd /Users/shukrullo/Desktop/lc-total && git add -A && git commit -q -m "$(cat <<'EOF' fix(admin): 501 uchun qizil xato toasti chiqmaydi + AI endi 500 emas 501 B…
+```
+
+**Natija**
+
+Toast xatosi — kartaning o'zi to'g'ri ("Manba ulanmagan"), lekin **global xato toasti** ham chiqyapti. 501 kutilgan holat, xato emas. Manbani topay:
+
+Topildi — `QueryCache.onError` har yiqilgan so'rovda toast chiqaradi, 501 ham shunga tushyapti. 401 uchun istisno bor, 501 uchun yo'q:
+
+Endi tuzataman — 501 komponentda allaqachon "Manba ulanmagan" bo'lib ko'rsatiladi, ustiga qizil toast ikkilanish:
+
+Boshqa toast manbalari bormi — tekshiray:
+
+Yagona manba. Endi brauzer testiga **toast tekshiruvini** qo'shaman — mening testim buni o'tkazib yuborgan edi:
+
+Sahifa yana render bo'lmayapti — tahrirdan keyin. Diagnostika:
+
+Test yugurishlarim yana yetim filial qoldirgan — bu **takrorlanuvchi muammo**. Aniq sababini topay:
+
+`accounts_branchId_fkey` — invariants testining cleanup'i hisoblarni o'chira olmayapti. Ko'ray:
+
+Topildi: 8-bo'lim `opening_balances` ni xom SQL bilan yozadi, cleanup esa uni o'chirmaydi → `user.deleteMany` yiqiladi → **butun cleanup to'xtaydi** va filiallar qoladi. Tuzataman:
+
+Test endi toza tozalayapti. Eski yugurishdan qolgan bittasini qo'lda olib tashlayman:
+
+Toast tuzatildi ✅. Qolgan bitta — badge lokatorimning ishonchsizligi. DOM'ni aniq ko'ray:
+
+`BranchBadge` **umuman render bo'lmayapti** — bitta filialli markazda. Komponentga qarayman:
+
+Tasdiqlandi — `if (!multiBranch) return null`: yakka markaz rejimida filial tushunchasi **ataylab yo'q**. Testim noto'g'ri da'vo qilgan, tuzataman:
+
+**29/29** haqiqiy brauzerda, toast yo'q. To'liq regressiya va commit:
+
+`/ai/briefing` endi **500** qaytaryapti (501 emas) — Phase A dan keyingi regressiya. Sababini topay:
+
+Sabab aniq: Mongoose'ning **sinxron** xatosi (`branchMatchStage()` endi Prisma shaklini qaytaradi, AI kodi esa uni Mongo quvuriga qo'shadi). Bu ulanish xatosi emas, shuning uchun 501 ga tushmagan. Bu ham "
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 21 ta qadam</sub>
+
+---
+
+## 2026-08-17 03:21 — davom eting
+
+**So'rov**
+
+> davom eting
+
+**O'zgargan fayllar (19)**
+
+- `client/src/admin/features/compare/pages/ComparePage.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/admin/navigation/drilldown.js` — tahrirlandi
+- `client/src/admin/features/compare/index.js` — yaratildi/qayta yozildi
+- `client/src/admin/navigation/executiveNav.config.js` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/admin/layout/ExecutiveHeader.jsx` — tahrirlandi
+- `client/src/admin/routes/index.jsx` — tahrirlandi
+- `client/tests/createAndCompareAcceptance.mjs` — yaratildi/qayta yozildi
+- `server/src/modules/branches/services/branches.service.js` — tahrirlandi
+- `server/src/helpers/branchAccess.helper.js` — tahrirlandi
+- `client/src/shared/components/create/CreateSplitButton.jsx` — tahrirlandi
+- `client/tests/branchLifecycleAcceptance.mjs` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/owner/features/branches/components/modals/BranchCreateModal.jsx` — tahrirlandi
+- `client/src/owner/features/branches/components/BranchFormFields.jsx` — tahrirlandi
+- `client/package.json` — tahrirlandi
+- `client/src/shared/components/create/createRegistry.js` — tahrirlandi
+- `client/scripts/check-permission-keys.mjs` — yaratildi/qayta yozildi
+- `client/src/shared/constants/permissions.js` — tahrirlandi
+- `client/CLAUDE.md` — tahrirlandi
+- `server/CLAUDE.md` — tahrirlandi
+
+**Buyruqlar (62)**
+
+```sh
+grep -n "export const narrow" -B 25 -A 30 src/shared/components/dashboard/dataStatus.js; echo "=== chart tokens ==="; grep -rn "chart-1" src/index.css src/style…
+cd /Users/shukrullo/Desktop/lc-total/client && find src -name "dataStatus.js" && grep -n "export const narrow" -A 35 src/shared/components/dashboard/dataStatus.…
+grep -n "path=\"leads\|path=\"leads/" src/owner/routes/index.jsx | head
+grep -n "multiBranch" src/shared/hooks/useAuth.js | head
+npx eslint src/admin src/shared/components/create src/shared/lib/query/keys.js 2>&1 | tail -30; echo "--- BUILD ---"; npm run build 2>&1 | tail -12
+npm run check:data-contract 2>&1 | tail -8; echo "--- contrast ---"; npm run check:contrast 2>&1 | tail -5
+lsof -nP -iTCP:5000 -iTCP:5173 -iTCP:4000 -iTCP:3000 -sTCP:LISTEN 2>/dev/null | head -10; echo "exit=$?"
+for p in sales teachers pnl; do printf "%-10s " "$p"; curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:5000/api/branch-analytics/$p"; done
+wc -l tests/browserAcceptance.mjs && sed -n '1,120p' tests/browserAcceptance.mjs
+sed -n '120,319p' tests/browserAcceptance.mjs
+node tests/createAndCompareAcceptance.mjs 2>&1 | tail -70
+cat > /tmp/dbg.mjs <<'EOF' const { existsSync, readdirSync } = await import("node:fs"); let pw; const npx = `${process.env.HOME}/.npm/_npx`; for (const d of rea…
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "isMultiBranch" -A 30 src/helpers/branchAccess.helper.js | head -45
+grep -n "multiBranchCache\|invalidate\|resetBranchCache\|Cache = undefined" src/helpers/branchAccess.helper.js | head -20; echo "=== usages ==="; grep -rn "rese…
+sed -n '1,50p' src/helpers/branchAccess.helper.js; echo "=== who calls it ==="; grep -rn "clearBranchCache\|$(sed -n '20p' src/helpers/branchAccess.helper.js | …
+sed -n '125,160p' src/helpers/branchAccess.helper.js; echo "=== branches.service imports ==="; grep -n "branchAccess\|clearMain" src/modules/branches/services/b…
+grep -n "export const softRemove\|export const remove\|isActive" src/modules/branches/services/branches.service.js | sed -n '1,40p'
+cd /Users/shukrullo/Desktop/lc-total/client && python3 - <<'PY' import re p="tests/createAndCompareAcceptance.mjs" s=open(p).read() s = s.replace( '''check("XON…
+python3 - <<'PY' p="tests/createAndCompareAcceptance.mjs" s=open(p).read() # capture multiBranch from /auth/me s = s.replace( '''page.on("response", (res) => { …
+grep -n "accessToken\|localStorage" src/shared/api/http.js | head -10; echo "=== users delete route ==="; cd ../server && grep -n "router.delete" src/modules/us…
+sed -n '140,185p' src/modules/users/users.routes.js
+cd /Users/shukrullo/Desktop/lc-total/client && python3 - <<'PY' p="tests/branchLifecycleAcceptance.mjs" s=open(p).read() s=s.replace(''' const token = JSON.pars…
+cd /Users/shukrullo/Desktop/lc-total/server && node -e " import('./src/config/prisma.js').then(async ({default:p})=>{ const b = await p.branch.findMany({ select…
+cd /Users/shukrullo/Desktop/lc-total/client && cat src/shared/components/ui/input/Input.jsx
+python3 - <<'PY' p="src/owner/features/branches/components/modals/BranchCreateModal.jsx" s=open(p).read() s=s.replace(''' name="username" label="Login" placehol…
+# … yana 37 ta
+```
+
+**Natija**
+
+Endi taqqoslash sahifasi:
+
+Endi navigatsiya va marshrutga ulayman:
+
+`multiBranch` keshi filial yaratilganda tozalanmasligi aniqlandi — bu aynan "filial qo'shish → taqqoslash" oqimini buzadi. Tuzatyapman:
+
+Endi menyu elementlariga barqaror test selektori qo'shaman va testni tuzataman:
+
+34 ta tekshiruv o'tdi. Endi eng muhimi — haqiqiy filial yaratib, ko'p filialli rejimga o'tishni va taqqoslashni tekshiraman:
+
+Test filiali bazada qolib ketdi — avval uni tozalayman va nima bo'lganini aniqlayman:
+
+`Input` barcha matn maydonlarini jimgina 20 belgida kesar ekan — filial nomi shu sababli qisqargan. Serverdagi chegaraga moslashtiraman:
+
+Endi qolib ketgan test filialini tozalayman:
+
+Ikki haqiqiy topilma: filial tanlanganida kesim bir qatorga tushadi va foydalanuvchi uchun chiqish yo'li yo'q. Ogohlantirishga amal tugmasi qo'shaman:
+
+Endi butun to'plamni qayta ishga tushiraman — regressiya bor-yo'qligini tekshirish uchun:
+
+Ikkita ruxsat kaliti serverdagi bilan mos emas ekan — tuzatyapman:
+
+Fayl qisman qaytib, sintaksis xatosi bilan qolibdi (`icon: ,`, `compare` yozuvi yo'qolgan). To'liq tiklayman:
+
+Server'da `users.create` bor, klientda yo'q ekan — qo'shaman:
+
+Endi barcha brauzer testlarini oxirgi marta qayta ishga tushiraman:
+
+Hammasi tayyor va tekshirilgan. So'ralgan olti narsa:
+
+**1. Ega uchun default sahifa `/admin`** — server konstantasi + bazadagi `Role.defaultPath` + klient `ROLE_HOME`. Brauzerda tasdiqlandi: login → `/admin`.
+
+**2. Tizim tahlili `/admin` ga ko'chdi** — `/admin/tahlil` (+ `vazifalar`, `hisobotlar`, `hisobotlar/:id`). Sahifa komponentlari `owner/features/ai` da qoldi, faqat marshrut ko'chdi; sidebar'dagi eski yozuv olib tashlandi, `/owner/ai` havolalari ishlashda davom etadi.
+
+**3. "+ Yaratish" split tugmasi** — chap yarim eslab qolingan turni **bir bosishda
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 111 ta qadam</sub>
+
+---

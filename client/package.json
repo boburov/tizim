@@ -10,7 +10,10 @@
     "check:ai-metrics": "node scripts/check-ai-metrics.mjs",
     "preview": "vite preview",
     "check:data-contract": "node scripts/check-data-contract.mjs",
-    "test:browser": "node tests/browserAcceptance.mjs"
+    "check:permission-keys": "node scripts/check-permission-keys.mjs",
+    "test:browser": "node tests/browserAcceptance.mjs",
+    "test:browser-create": "node tests/createAndCompareAcceptance.mjs",
+    "test:browser-branch": "node tests/branchLifecycleAcceptance.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

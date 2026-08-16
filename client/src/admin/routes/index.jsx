@@ -10,6 +10,20 @@ import FinancePage from "../features/finance/pages/FinancePage";
 import AcademicPage from "../features/academic/pages/AcademicPage";
 import TeamPage from "../features/team/pages/TeamPage";
 import InsightsPage from "../features/insights/pages/InsightsPage";
+import ComparePage from "../features/compare/pages/ComparePage";
+// TIZIM TAHLILI - operatsion paneldan KO'CHIRILDI.
+//
+// Sahifalar `owner/features/ai` da QOLADI va o'sha yerdan public API
+// orqali olinadi: ular ishlaydigan kod, ularni ko'chirish yoki
+// ikkilantirish sababsiz xavf bo'lardi. Bu yerda faqat MARSHRUT
+// ko'chadi - ya'ni endi ular sidebar'siz rahbariyat qobig'ida
+// ochiladi.
+import {
+  OperationsCenterPage,
+  ActionCenterPage,
+  AiReportsPage,
+  AiReportDetailPage,
+} from "@/owner/features/ai";
 
 // Components
 import NotFoundPage from "@/shared/components/ui/feedback/NotFoundPage";
@@ -85,11 +99,59 @@ const AdminRoutes = () => (
       }
     />
 
+    {/* FILIALLAR KESIMI. Menyuda yakka markazda ko'rinmaydi
+        (`multiBranchOnly`), lekin MARSHRUT qo'riqlanmaydi-yu o'chirilmaydi
+        ham: bitta filialli markazda sahifa bo'sh emas, o'sha filialning
+        moliya/o'qituvchi/sotuv kesimini ko'rsatadi. */}
+    <Route
+      path="filiallar"
+      element={
+        <PermissionGuard required={PERMISSIONS.BRANCHES_READ} fallback={OPS_HOME}>
+          <ComparePage />
+        </PermissionGuard>
+      }
+    />
+
     <Route
       path="tavsiyalar"
       element={
         <PermissionGuard required={PERMISSIONS.AI_READ} fallback={OPS_HOME}>
           <InsightsPage />
+        </PermissionGuard>
+      }
+    />
+
+    <Route
+      path="tahlil"
+      element={
+        <PermissionGuard required={PERMISSIONS.AI_READ} fallback={OPS_HOME}>
+          <OperationsCenterPage />
+        </PermissionGuard>
+      }
+    />
+    {/* To'liq vazifalar ro'yxati - brifing faqat eng muhimlarini
+        ko'rsatadi. */}
+    <Route
+      path="tahlil/vazifalar"
+      element={
+        <PermissionGuard required={PERMISSIONS.AI_READ} fallback={OPS_HOME}>
+          <ActionCenterPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="tahlil/hisobotlar"
+      element={
+        <PermissionGuard required={PERMISSIONS.AI_READ} fallback={OPS_HOME}>
+          <AiReportsPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="tahlil/hisobotlar/:id"
+      element={
+        <PermissionGuard required={PERMISSIONS.AI_READ} fallback={OPS_HOME}>
+          <AiReportDetailPage />
         </PermissionGuard>
       }
     />
