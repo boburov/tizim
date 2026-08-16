@@ -33,6 +33,7 @@ import * as payments from "../src/modules/finance/services/studentPayment.servic
 import * as txn from "../src/modules/finance/services/transaction.service.js";
 import * as deposits from "../src/modules/deposits/services/deposit.service.js";
 import { runWithBranchContext } from "../src/helpers/branchContext.helper.js";
+import { localTodayMidnight } from "../src/helpers/attendance.helper.js";
 import { ROLES } from "../src/constants/roles.js";
 
 const R = { pass: 0, fail: 0 };
@@ -487,12 +488,18 @@ const run = async () => {
     "handover: t2 ning BARCHA guruhlari t1 ga o'tadi",
     async () => {
       // Topshirish sanasi davr BOSHLANGANIDAN KEYIN bo'lishi shart:
-      // o'qituvchi almashtirish davrlarni "bugun" ochgan, shuning uchun
-      // ertangi kun olinadi (kelajakdagi sana handover uchun ruxsat etilgan).
-      const today = new Date();
-      const cutoff = new Date(
-        Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1),
-      );
+      // o'qituvchi almashtirish davrlarni "bugun" ochgan.
+      //
+      // ⚠ "BUGUN" NI UTC BILAN HISOBLAB BO'LMAYDI. Ilova kunni
+      // MAHALLIY zonada (Asia/Tashkent, UTC+5) belgilaydi
+      // (`localTodayMidnight`). Ilgari bu yerda `getUTCDate() + 1`
+      // yozilgan edi va u kechasi 00:00-05:00 oralig'ida YIQILARDI:
+      // mahalliy sana allaqachon ertaga, UTC esa hali bugun -
+      // "ertangi UTC kun" bilan "bugungi mahalliy kun" AYNAN teng
+      // bo'lib qolardi, tekshiruv esa `>=` (qat'iy emas).
+      //
+      // Shuning uchun kun ilovaning O'Z ta'rifidan olinadi.
+      const cutoff = new Date(localTodayMidnight().getTime() + 24 * 60 * 60 * 1000);
       const res = await inA(() => tgp.handover(
         {
           teacher: t2.id,
@@ -521,7 +528,14 @@ const run = async () => {
     () => inA(() => tgp.handover(
       {
         teacher: t1.id,
-        handoverDate: new Date(Date.now() + 2 * 86400000),
+        // Birinchi handover davrlarni ERTAGA ochdi, shuning uchun bu
+        // yerda undan KEYINGI kun kerak - aks holda tekshiruv
+        // "kelajakda boshlanadigan davr" xatosiga tushib, biz
+        // sinamoqchi bo'lgan qoidaga umuman yetib bormaydi.
+        //
+        // `Date.now()` EMAS: kun ilovaning ta'rifi bo'yicha
+        // (`localTodayMidnight`) olinadi - yuqoridagi izohga qarang.
+        handoverDate: new Date(localTodayMidnight().getTime() + 2 * 86400000),
         assignments: [],
       },
       { id: null },

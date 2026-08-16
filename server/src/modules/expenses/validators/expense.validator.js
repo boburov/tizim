@@ -2,8 +2,8 @@ import { z } from "zod";
 import {
   EXPENSE_METHODS,
   EXPENSE_CURRENCIES,
-} from "../../../models/expense.model.js";
-import { EXPENSE_CATEGORY_KINDS } from "../../../models/expenseCategory.model.js";
+  EXPENSE_CATEGORY_KINDS,
+} from "../../../constants/expenses.js";
 
 const objectId = z.string().min(1);
 const money = z.coerce.number().int().min(1).max(100_000_000_000);

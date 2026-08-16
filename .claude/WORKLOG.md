@@ -12299,3 +12299,127 @@ Barcha manzillarni bitta tekshirilgan joyga yig'aman — sochib yuborilsa yana n
 <sub>session `c49e703c` · branch `main` · 89 ta qadam</sub>
 
 ---
+
+## 2026-08-16 23:09 — # CLIENT ↔ SERVER CONTRACT REPAIR # DASHBOARD / API / PAGINATION / ROU
+
+**So'rov**
+
+> # CLIENT ↔ SERVER CONTRACT REPAIR
+> # DASHBOARD / API / PAGINATION / ROUTING AUDIT
+>
+> We have now completed the Executive Dashboard shell and Operational shell.
+>
+> However, the browser shows server/client integration failures such as:
+>
+>     Failed to load resource:
+>     500 Internal Server Error
+>     /insights
+>
+>     Failed to load resource:
+>     500 Internal Server Error
+>     /pnl
+>
+> There are also reports that:
+>
+> - some frontend requests use incorrect endpoints
+> - some requested endpoints do not exist on the server
+> - some query parameters are incorrect
+> - pagination parameters/contracts are inconsistent
+> - some server responses do not match what the client expects
+>
+> DO NOT add new dashboard features right now.
+>
+> The only goal of this task is:
+>
+>     MAKE THE EXISTING CLIENT ↔ SERVER CONTRACT CORRECT AND STABLE.
+>
+> Do not hide errors.
+> Do not replace failed requests with fake data.
+> Do not use `|| 0` to hide API failures.
+> Do not create fake endpoints just to make the UI green.
+> Do not remove functionality simply because its API is currently broken.
+>
+> ==================================================
+> PHASE 1 — INVENTORY THE REAL BACKEND API
+> ==================================================
+>
+> Inspect the backe
+> …
+
+**O'zgargan fayllar (8)**
+
+- `server/src/config/legacyMongoose.js` — tahrirlandi, yaratildi/qayta yozildi
+- `server/src/middleware/errorHandler.js` — tahrirlandi
+- `server/src/app.js` — tahrirlandi
+- `server/src/modules/adminDashboard/services/adminDashboard.service.js` — tahrirlandi
+- `client/src/admin/api/executive.api.js` — yaratildi/qayta yozildi
+- `client/src/admin/hooks/useExecutiveData.js` — yaratildi/qayta yozildi
+- `client/src/shared/components/guards/RoleGuard.jsx` — tahrirlandi
+- `server/tests/dashboardContract.test.js` — yaratildi/qayta yozildi
+
+**Buyruqlar (48)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ routes/index.js — mount qilingan modullar ═══" cat src/routes/index.js
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ server ishlayaptimi ═══" curl -s -o /dev/null -w "health: %{http_code}\n" http://localhost:5000/api/health…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ autentifikatsiyasiz (kutilgan: 401) ═══" for u in "/ai/insights" "/branch-analytics/pnl" "/admin-dashboard…
+cd /Users/shukrullo/Desktop/lc-total/server cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/toke…
+cd /Users/shukrullo/Desktop/lc-total/server TOK=$(node /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad…
+cd /Users/shukrullo/Desktop/lc-total/server TOK=$(cat /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ financeReport marshrutlari ═══"; grep -n "router\.\(get\|post\|put\|delete\)" src/modules/financeReport/fi…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ financeReport marshrut yo'llari ═══" grep -n "router.get(" -A 3 src/modules/financeReport/financeReport.ro…
+D=/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/subagents/workflows/wf_1d8c8907-c4a node -e " const f…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ Insight modeli — HAQIQIY maydonlar ═══" grep -nE "^\s+(id|title|reason|severity|stance|confidence|expected…
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ mavjud AI kodi confidence ni QANDAY ko'rsatadi ═══" grep -rn "confidence" src/owner/features/ai/ | head -1…
+cd /Users/shukrullo/Desktop/lc-total/client sed -n '60,80p' src/owner/features/ai/components/dashboard/AiStudentsAtRisk.jsx echo "─── ACTION_ROUTES ───"; grep -…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ /branch-analytics/pnl — validator va servis imzosi ═══" sed -n '30,45p' src/modules/branchAnalytics/branch…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ pnl() nima qaytaradi ═══"; sed -n '86,135p' src/modules/branchAnalytics/services/branchPnl.service.js echo…
+cd /Users/shukrullo/Desktop/lc-total/server cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scratchpad/scan…
+F=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/tasks/wp93ot8uf.output node -e ' const o=JSON.parse(require("fs…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ app.js ═══"; cat src/app.js echo; echo "═══ errorHandler ═══"; cat src/middleware/errorHandler.js
+cd /Users/shukrullo/Desktop/lc-total/server pkill -f "nodemon\|node src/index.js" 2>/dev/null; sleep 1 (npm run dev > /private/tmp/claude-501/-Users-shukrullo-D…
+cd /Users/shukrullo/Desktop/lc-total/server sleep 4 TOK=$(cat /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/scr…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ /ai/insights list handler — javob konverti ═══"; cat src/modules/ai/handlers/list.handler.js echo; echo "═…
+cd /Users/shukrullo/Desktop/lc-total/server echo "═══ parsePagination + buildMeta — KANONIK kontrakt ═══"; cat src/utils/pagination.js echo; echo "═══ nechta mo…
+cd /Users/shukrullo/Desktop/lc-total/client echo "═══ klient nima yuboradi ═══" grep -rn "pageSize\|offset:" src/ --include="*.js" --include="*.jsx" | grep -v "…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '374,400p' src/modules/adminDashboard/services/adminDashboard.service.js echo "─── cashflow validator ───"; c…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '396,440p' src/modules/adminDashboard/services/adminDashboard.service.js
+cd /Users/shukrullo/Desktop/lc-total/server cat src/modules/adminDashboard/handlers/cashflow.handler.js echo "─── validator yangilanadi ───" cat > src/modules/a…
+# … yana 23 ta
+```
+
+**Natija**
+
+Avval 500 larning haqiqiy sababini topaman — bu tanqidiy yo'l. Server marshrutlaridan boshlayman.
+
+`/ai` va `/branch-analytics` **mount qilingan** — ya'ni marshrut mavjud, xato ichkarida. Serverni tekshiray:
+
+Server ishlayapti. 500 larni **to'g'ridan-to'g'ri backend'ga urib** takrorlayman:
+
+`000` — so'rov **osilib qolyapti** (Mongoose buferi). 500 aynan shundan: bufer timeout'i. Uzunroq kutib, haqiqiy xatoni olay:
+
+**Ildiz sabab aniqlandi** — kategoriya J. Ikkalasi ham Mongoose, Mongo esa ulanmagan → 10 soniya bufer → 500. Endi `/finance-report` 404 ini va Mongoose holatini ko'ray:
+
+`/finance-report` — kategoriya A (haqiqiy yo'llar `/summary`, `/trend`...). Endi to'liq inventarizatsiya uchun workflow, men esa asosiy tuzatishni loyihalayman:
+
+Tekshiruv juda qimmatli — u allaqachon Phase 3 tasnifining katta qismini bajargan. Endi **haqiqiy javob shakllarini** serverdan olaman:
+
+`confidence` **0..1** ekan va modelda ochiq qoida bor: "< 0.4 bo'lsa ball ko'rsatilmaydi". Mening `InsightCard` im uni foiz deb ko'rsatgan — soxta raqam. Mavjud ishlaydigan kodni ko'ray:
+
+Endi to'liq kontrakt aniq. Asosiy server tuzatishini quraman: qaysi modullar hali Mongoose'ga bog'liqligini **avtomatik** aniqlayman:
+
+Muhim tuzatish: statik skanerlash **haddan tashqari keng** — `/admin-dashboard` ham ro'yxatda, lekin u ishlaydi (model import qilish zararsiz, faqat **so'rov bajarish** osiladi). Shuning uchun ro'yxatga tayanmayman. Tekshiruv natijalarini olay:
+
+22 ta tasdiqlangan topilma. **Phase 4** — 500 larni tuzataman. Yechim: Mongoose buferini o'chirish (10s osilish yo'qoladi) + xatoni **501** ga aylantirish:
+
+Endi asosiy server tuzatishi — osilishni yo'q qilib, xatoni **halol 501** ga aylantiraman:
+
+Osilish yo'q bo'ldi (10s → 0.017s), lekin hali 500. Xatoning yangi shaklini ko'ray:
+
+Xato mat
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 64 ta qadam</sub>
+
+---

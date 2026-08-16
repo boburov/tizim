@@ -1,5 +1,7 @@
-import Shift, { SHIFT_STATUSES } from "../../../models/shift.model.js";
+import prisma from "../../../config/prisma.js";
+import { SHIFT_STATUSES } from "../../../constants/treasury.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import { ACCOUNT_KINDS, ENTRY_KINDS } from "../../../constants/ledger.js";
 import {
   branchFilter,
@@ -16,12 +18,16 @@ import * as journal from "./journal.service.js";
 // Smena yopilmasa, "qancha bo'lishi kerak edi" degan savolga
 // solishtiradigan nuqta bo'lmaydi va kamomad oylab sezilmay qoladi.
 
+const actorId = (u) => u?.id || u?._id || null;
+
 /** Kassirning ochiq smenasi (bo'lmasa null). */
 export const findOpen = (branchId, cashierId) =>
-  Shift.findOne({
-    branchId,
-    cashierId,
-    status: SHIFT_STATUSES.OPEN,
+  prisma.shift.findFirst({
+    where: {
+      branchId: String(branchId),
+      cashierId: String(cashierId),
+      status: SHIFT_STATUSES.OPEN,
+    },
   });
 
 /**
@@ -33,7 +39,7 @@ export const findOpen = (branchId, cashierId) =>
  */
 export const open = async ({ cashierId, note }, currentUser) => {
   const branchId = await resolveBranchForWrite(currentUser, null);
-  const cashier = cashierId || currentUser?._id;
+  const cashier = cashierId || actorId(currentUser);
   if (!cashier) throw new ApiError(400, "Kassir aniqlanmadi");
 
   const existing = await findOpen(branchId, cashier);
@@ -43,18 +49,32 @@ export const open = async ({ cashierId, note }, currentUser) => {
 
   const openingCash = await journal.accountBalance(branchId, ACCOUNT_KINDS.CASH);
 
-  return Shift.create({
-    branchId,
-    cashierId: cashier,
-    openedAt: new Date(),
-    openedBy: currentUser?._id || null,
-    // Manfiy qoldiq (nazariy jihatdan bo'lmasligi kerak) nolga keltiriladi -
-    // model `min: 0` talab qiladi va manfiy ochilish summasi keyingi
-    // hisoblarni chalkashtirardi.
-    openingCash: Math.max(0, openingCash),
-    status: SHIFT_STATUSES.OPEN,
-    varianceNote: note || "",
-  });
+  try {
+    return withLegacyId(
+      await prisma.shift.create({
+        data: {
+          branchId: String(branchId),
+          cashierId: String(cashier),
+          openedAt: new Date(),
+          openedById: actorId(currentUser),
+          // Manfiy qoldiq (nazariy jihatdan bo'lmasligi kerak) nolga
+          // keltiriladi - manfiy ochilish summasi keyingi hisoblarni
+          // chalkashtirardi.
+          openingCash: Math.max(0, openingCash),
+          status: SHIFT_STATUSES.OPEN,
+          varianceNote: note || "",
+        },
+      }),
+    );
+  } catch (err) {
+    // QISMAN UNIQUE: (branchId, cashierId) WHERE status = 'open'.
+    // Yuqoridagi `findOpen` tekshiruvi bilan poyga bo'lsa indeks
+    // ushlaydi - bu ikkinchi qatlam, birinchisining o'rniga emas.
+    if (err?.code === "P2002") {
+      throw new ApiError(409, "Bu kassirning ochiq smenasi allaqachon bor");
+    }
+    throw err;
+  }
 };
 
 /**
@@ -73,7 +93,7 @@ export const open = async ({ cashierId, note }, currentUser) => {
  * FARQ NOL bo'lsa jurnalga HECH NARSA yozilmaydi - bo'sh yozuv shovqin.
  */
 export const close = async (shiftId, { countedCash, note }, currentUser) => {
-  const shift = await Shift.findById(shiftId);
+  const shift = await prisma.shift.findUnique({ where: { id: String(shiftId) } });
   if (!shift) throw new ApiError(404, "Smena topilmadi");
   if (!isBranchAllowed(shift.branchId)) {
     throw new ApiError(403, "Bu smenaga kirish huquqingiz yo'q");
@@ -95,11 +115,31 @@ export const close = async (shiftId, { countedCash, note }, currentUser) => {
   const expected = await journal.accountBalance(shift.branchId, ACCOUNT_KINDS.CASH);
   const variance = counted - expected;
 
-  if (variance !== 0) {
-    const isShortage = variance < 0;
-    const amount = Math.abs(variance);
+  // HOLAT VA JURNAL BITTA TRANZAKSIYADA, holat AVVAL.
+  //
+  // `updateMany` shart bilan (`status: OPEN`) - ikki bir vaqtdagi
+  // yopish IKKI marta kamomad yozardi. Ilgari bu "o'qi, tekshir,
+  // yoz" edi va ikkinchi so'rov birinchisining natijasini ko'rmasdi.
+  const saved = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.shift.updateMany({
+      where: { id: shift.id, status: SHIFT_STATUSES.OPEN },
+      data: {
+        closedAt,
+        closedById: actorId(currentUser),
+        expectedCash: expected,
+        countedCash: counted,
+        variance,
+        ...(note ? { varianceNote: note } : {}),
+        status: SHIFT_STATUSES.CLOSED,
+      },
+    });
+    if (!count) throw new ApiError(409, "Smena allaqachon yopilgan");
 
-    await journal.post({
+    if (variance !== 0) {
+      const isShortage = variance < 0;
+      const amount = Math.abs(variance);
+
+      await journal.post({
       branchId: shift.branchId,
       date: closedAt,
       kind: ENTRY_KINDS.SHIFT_CLOSE,
@@ -115,41 +155,51 @@ export const close = async (shiftId, { countedCash, note }, currentUser) => {
             { accountKind: ACCOUNT_KINDS.CASH, debit: amount },
             { accountKind: ACCOUNT_KINDS.SHORTAGE, credit: amount },
           ],
-      refModel: "Shift",
-      refId: shift._id,
-      createdBy: currentUser?._id || null,
-    });
-  }
+        refModel: "Shift",
+        refId: shift.id,
+        createdBy: actorId(currentUser),
+        tx,
+      });
+    }
 
-  shift.closedAt = closedAt;
-  shift.closedBy = currentUser?._id || null;
-  shift.expectedCash = expected;
-  shift.countedCash = counted;
-  shift.variance = variance;
-  if (note) shift.varianceNote = note;
-  shift.status = SHIFT_STATUSES.CLOSED;
-  await shift.save();
+    return tx.shift.findUnique({ where: { id: shift.id } });
+  });
 
-  return shift;
+  return withLegacyId(saved);
 };
 
 /** Smenalar ro'yxati - filial ko'lami bilan. */
 export const list = async ({ status, cashierId, page = 1, limit = 50 } = {}) => {
-  const filter = { ...branchFilter() };
-  if (status) filter.status = status;
-  if (cashierId) filter.cashierId = cashierId;
+  const where = { ...branchFilter() };
+  if (status) where.status = status;
+  if (cashierId) where.cashierId = String(cashierId);
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Shift.find(filter)
-      .sort({ openedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("cashierId", { firstName: 1, lastName: 1, username: 1 })
-      .populate("branchId", { name: 1, code: 1 })
-      .lean(),
-    Shift.countDocuments(filter),
+    prisma.shift.findMany({
+      where,
+      orderBy: { openedAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        cashier: { select: { id: true, firstName: true, lastName: true, username: true } },
+        branch: { select: { id: true, name: true, code: true } },
+      },
+    }),
+    prisma.shift.count({ where }),
   ]);
 
-  return { items, total, page, limit };
+  // Klient eski populate shaklini kutadi (`s.cashierId?.firstName`).
+  return {
+    items: withLegacyIds(
+      items.map((r) => ({
+        ...r,
+        cashierId: r.cashier || r.cashierId,
+        branchId: r.branch || r.branchId,
+      })),
+    ),
+    total,
+    page,
+    limit,
+  };
 };

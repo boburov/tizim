@@ -332,19 +332,31 @@ export const accountBalance = async (
  * Mongo `$expr: { $ne: [...] }` → Prisma "field reference".
  */
 export const findUnbalanced = async ({ limit = 50 } = {}) => {
-  const rows = await prisma.journalEntry.findMany({
-    where: { totalDebit: { not: prisma.journalEntry.fields.totalCredit } },
-    select: {
-      id: true,
-      branchId: true,
-      date: true,
-      kind: true,
-      memo: true,
-      totalDebit: true,
-      totalCredit: true,
-    },
-    take: limit,
-  });
+  // ═══════════════════════════════════════════════════════════════
+  // XOM SQL - PRISMA MAYDON HAVOLASI `not` BILAN ISHLAMAYDI.
+  //
+  // Ilgari bu yerda shunday yozilgan edi:
+  //   where: { totalDebit: { not: prisma.journalEntry.fields.totalCredit } }
+  //
+  // Prisma maydon havolalarini (`fields.x`) faqat TENGLIK va
+  // taqqoslash operatorlarida qo'llaydi; `not` bilan u
+  // `PrismaClientValidationError` beradi. Natijada `/journal/reconcile`
+  // BUTUNLAY ishlamasdi - 500 qaytarardi.
+  //
+  // Bu jimgina buzilish edi: `reconcile()` jurnalning to'g'riligini
+  // tekshiradigan YAGONA vosita, ya'ni "muvozanat buzilganmi?" degan
+  // savolga javob beradigan joyning O'ZI yiqilgan edi.
+  //
+  // Xom SQL bu yerda O'RINLI (MIGRATION.md §3.2.4): ustunni ustun
+  // bilan solishtirish SQL'ning tabiiy ishi.
+  // ═══════════════════════════════════════════════════════════════
+  const rows = await prisma.$queryRaw`
+    SELECT id, "branchId", date, kind, memo, "totalDebit", "totalCredit"
+    FROM journal_entries
+    WHERE "totalDebit" <> "totalCredit"
+    ORDER BY date DESC
+    LIMIT ${limit}
+  `;
   return withLegacyIds(rows);
 };
 

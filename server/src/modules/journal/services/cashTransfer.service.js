@@ -1,6 +1,7 @@
-import CashTransfer, { TRANSFER_STATUSES } from "../../../models/cashTransfer.model.js";
-import Branch from "../../../models/branch.model.js";
+import prisma from "../../../config/prisma.js";
+import { TRANSFER_STATUSES } from "../../../constants/treasury.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import { ACCOUNT_KINDS, ENTRY_KINDS } from "../../../constants/ledger.js";
 import {
   resolveBranchForWrite,
@@ -50,10 +51,48 @@ import * as journal from "./journal.service.js";
 //   B faqat HAQIQATAN kelgan summani kassaga oladi, A esa farqni
 //   `shortage(A)` ga yozadi: pul A ning javobgarligida yo'qolgan.
 
+const actorId = (u) => u?.id || u?._id || null;
+
 const assertBranchExists = async (id) => {
-  const b = await Branch.findOne({ _id: id, isDeleted: false }).select("_id").lean();
+  const b = await prisma.branch.findFirst({
+    where: { id: String(id), isDeleted: false },
+    select: { id: true },
+  });
   if (!b) throw new ApiError(400, "Filial topilmadi");
   return b;
+};
+
+/**
+ * HOLATNI ATOMIK O'ZGARTIRADI (compare-and-set).
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * BU ENG XAVFLI JOY EDI. Mongo'da naqsh shunday edi:
+ *
+ *   const t = await CashTransfer.findById(id);
+ *   if (t.status !== IN_TRANSIT) throw;    // <- O'QISH
+ *   ... journal.post() x2 ...              // <- PULNI YOZISH
+ *   t.status = RECEIVED; await t.save();   // <- YOZISH
+ *
+ * Ikki `receive` bir vaqtda kelsa IKKALASI ham `in_transit` ni o'qiydi,
+ * IKKALASI ham tekshiruvdan o'tadi va IKKALASI ham jurnal yozuvlarini
+ * yozadi. Natija: `due_from` / `due_to` va kassa IKKI BAROBAR oshadi -
+ * ya'ni yo'qdan pul paydo bo'ladi.
+ *
+ * `updateMany` esa bitta `UPDATE ... WHERE id = ? AND status = ?`
+ * SQL'iga aylanadi: qatorni QULFLAB o'zgartiradi. Ikkinchi so'rov
+ * `count: 0` oladi va hech narsa yozmaydi.
+ *
+ * SHUNING UCHUN HOLAT AVVAL O'ZGARADI, jurnal keyin yoziladi - va
+ * ikkalasi BITTA tranzaksiyada (chaqiruvchi `tx` beradi).
+ * ═══════════════════════════════════════════════════════════════════
+ */
+const claimTransfer = async (tx, id, { from, data, conflict }) => {
+  const { count } = await tx.cashTransfer.updateMany({
+    where: { id: String(id), status: from },
+    data,
+  });
+  if (!count) throw new ApiError(409, conflict);
+  return tx.cashTransfer.findUnique({ where: { id: String(id) } });
 };
 
 /**
@@ -84,34 +123,48 @@ export const send = async ({ toBranchId, amount, note, shiftId }, currentUser) =
   }
 
   const sentAt = new Date();
-  const transfer = await CashTransfer.create({
-    fromBranchId,
-    toBranchId,
-    amount: value,
-    status: TRANSFER_STATUSES.IN_TRANSIT,
-    sentBy: currentUser?._id || null,
-    sentAt,
-    shiftId: shiftId || null,
-    note: note || "",
+
+  // O'TKAZMA VA JURNAL BITTA TRANZAKSIYADA.
+  //
+  // Ilgari ular alohida edi: `create()` o'tgan-u, `post()` yiqilsa
+  // bazada "yo'ldagi pul" yozuvi qolardi, jurnalda esa uning izi
+  // YO'Q edi. Kassa qoldig'i bilan o'tkazmalar ro'yxati bir-biriga
+  // zid bo'lib qolardi va buni faqat `journalVerify` topardi.
+  const transfer = await prisma.$transaction(async (tx) => {
+    const row = await tx.cashTransfer.create({
+      data: {
+        fromBranchId: String(fromBranchId),
+        toBranchId: String(toBranchId),
+        amount: value,
+        status: TRANSFER_STATUSES.IN_TRANSIT,
+        sentById: actorId(currentUser),
+        sentAt,
+        shiftId: shiftId || null,
+        note: note || "",
+      },
+    });
+
+    await journal.post({
+      branchId: fromBranchId,
+      date: sentAt,
+      kind: ENTRY_KINDS.TRANSFER_SEND,
+      memo: `Inkassatsiya jo'natildi: ${value}`,
+      lines: [
+        { accountKind: ACCOUNT_KINDS.TRANSIT, debit: value },
+        { accountKind: ACCOUNT_KINDS.CASH, credit: value },
+      ],
+      refModel: "CashTransfer",
+      refId: row.id,
+      isInternal: true,
+      counterpartyBranchId: toBranchId,
+      createdBy: actorId(currentUser),
+      tx,
+    });
+
+    return row;
   });
 
-  await journal.post({
-    branchId: fromBranchId,
-    date: sentAt,
-    kind: ENTRY_KINDS.TRANSFER_SEND,
-    memo: `Inkassatsiya jo'natildi: ${value}`,
-    lines: [
-      { accountKind: ACCOUNT_KINDS.TRANSIT, debit: value },
-      { accountKind: ACCOUNT_KINDS.CASH, credit: value },
-    ],
-    refModel: "CashTransfer",
-    refId: transfer._id,
-    isInternal: true,
-    counterpartyBranchId: toBranchId,
-    createdBy: currentUser?._id || null,
-  });
-
-  return transfer;
+  return withLegacyId(transfer);
 };
 
 /**
@@ -121,9 +174,13 @@ export const send = async ({ toBranchId, amount, note, shiftId }, currentUser) =
  * deb belgilay olsa, yo'ldagi pul nazorati ma'nosini yo'qotardi.
  */
 export const receive = async (transferId, { countedAmount, note }, currentUser) => {
-  const transfer = await CashTransfer.findById(transferId);
+  const transfer = await prisma.cashTransfer.findUnique({
+    where: { id: String(transferId) },
+  });
   if (!transfer) throw new ApiError(404, "O'tkazma topilmadi");
 
+  // Bu ODDIY tekshiruv - foydalanuvchiga tushunarli xato berish uchun.
+  // HAQIQIY himoya pastdagi `claimTransfer` da (atomik).
   if (transfer.status !== TRANSFER_STATUSES.IN_TRANSIT) {
     throw new ApiError(409, "Bu o'tkazma allaqachon ko'rib chiqilgan");
   }
@@ -165,54 +222,73 @@ export const receive = async (transferId, { countedAmount, note }, currentUser) 
     aLines.push({ accountKind: ACCOUNT_KINDS.SHORTAGE, credit: discrepancy });
   }
 
-  await journal.post({
-    branchId: from,
-    date: receivedAt,
-    kind: ENTRY_KINDS.TRANSFER_RECEIVE,
-    memo: discrepancy
-      ? `Inkassatsiya qabul qilindi (farq ${discrepancy})`
-      : "Inkassatsiya qabul qilindi",
-    lines: aLines,
-    refModel: "CashTransfer",
-    refId: transfer._id,
-    isInternal: true,
-    counterpartyBranchId: to,
-    createdBy: currentUser?._id || null,
-  });
+  // HOLAT AVVAL, PUL KEYIN - hammasi BITTA tranzaksiyada.
+  //
+  // Tartib ataylab shunday: `claimTransfer` qatorni qulflab holatni
+  // o'zgartiradi, ya'ni ikkinchi bir vaqtdagi `receive` shu yerda
+  // to'xtaydi va jurnalga UMUMAN yetib bormaydi. Jurnal yozuvlari
+  // esa o'sha tranzaksiya ichida - biror biri yiqilsa holat ham
+  // qaytariladi (rollback).
+  const saved = await prisma.$transaction(async (tx) => {
+    const claimed = await claimTransfer(tx, transferId, {
+      from: TRANSFER_STATUSES.IN_TRANSIT,
+      data: {
+        countedOnArrival: counted,
+        discrepancy,
+        receivedById: actorId(currentUser),
+        receivedAt,
+        // Farq bo'lsa DISPUTED - hisobotda ajralib tursin va tekshirilsin.
+        status:
+          discrepancy === 0 ? TRANSFER_STATUSES.RECEIVED : TRANSFER_STATUSES.DISPUTED,
+        ...(note ? { discrepancyNote: note } : {}),
+      },
+      conflict: "Bu o'tkazma allaqachon ko'rib chiqilgan",
+    });
 
-  // ── B filial: HAQIQATAN kelgan summa kassaga kiradi ──
-  if (counted > 0) {
     await journal.post({
-      branchId: to,
+      branchId: from,
       date: receivedAt,
       kind: ENTRY_KINDS.TRANSFER_RECEIVE,
-      memo: `Inkassatsiya qabul qilindi: ${counted}`,
-      lines: [
-        { accountKind: ACCOUNT_KINDS.CASH, debit: counted },
-        {
-          accountKind: ACCOUNT_KINDS.DUE_TO,
-          credit: counted,
-          counterpartyBranchId: from,
-        },
-      ],
+      memo: discrepancy
+        ? `Inkassatsiya qabul qilindi (farq ${discrepancy})`
+        : "Inkassatsiya qabul qilindi",
+      lines: aLines,
       refModel: "CashTransfer",
-      refId: transfer._id,
+      refId: claimed.id,
       isInternal: true,
-      counterpartyBranchId: from,
-      createdBy: currentUser?._id || null,
+      counterpartyBranchId: to,
+      createdBy: actorId(currentUser),
+      tx,
     });
-  }
 
-  transfer.countedOnArrival = counted;
-  transfer.discrepancy = discrepancy;
-  transfer.receivedBy = currentUser?._id || null;
-  transfer.receivedAt = receivedAt;
-  // Farq bo'lsa DISPUTED - hisobotda ajralib tursin va tekshirilsin.
-  transfer.status = discrepancy === 0 ? TRANSFER_STATUSES.RECEIVED : TRANSFER_STATUSES.DISPUTED;
-  if (note) transfer.discrepancyNote = note;
-  await transfer.save();
+    // ── B filial: HAQIQATAN kelgan summa kassaga kiradi ──
+    if (counted > 0) {
+      await journal.post({
+        branchId: to,
+        date: receivedAt,
+        kind: ENTRY_KINDS.TRANSFER_RECEIVE,
+        memo: `Inkassatsiya qabul qilindi: ${counted}`,
+        lines: [
+          { accountKind: ACCOUNT_KINDS.CASH, debit: counted },
+          {
+            accountKind: ACCOUNT_KINDS.DUE_TO,
+            credit: counted,
+            counterpartyBranchId: from,
+          },
+        ],
+        refModel: "CashTransfer",
+        refId: claimed.id,
+        isInternal: true,
+        counterpartyBranchId: from,
+        createdBy: actorId(currentUser),
+        tx,
+      });
+    }
 
-  return transfer;
+    return claimed;
+  });
+
+  return withLegacyId(saved);
 };
 
 /**
@@ -221,7 +297,9 @@ export const receive = async (transferId, { countedAmount, note }, currentUser) 
  * Faqat JO'NATUVCHI filial, faqat hali qabul qilinmagan holatda.
  */
 export const cancel = async (transferId, { note }, currentUser) => {
-  const transfer = await CashTransfer.findById(transferId);
+  const transfer = await prisma.cashTransfer.findUnique({
+    where: { id: String(transferId) },
+  });
   if (!transfer) throw new ApiError(404, "O'tkazma topilmadi");
 
   if (transfer.status !== TRANSFER_STATUSES.IN_TRANSIT) {
@@ -232,26 +310,42 @@ export const cancel = async (transferId, { note }, currentUser) => {
   }
 
   const at = new Date();
-  await journal.post({
-    branchId: transfer.fromBranchId,
-    date: at,
-    kind: ENTRY_KINDS.TRANSFER_SEND,
-    memo: "Inkassatsiya bekor qilindi - pul kassaga qaytdi",
-    lines: [
-      { accountKind: ACCOUNT_KINDS.CASH, debit: transfer.amount },
-      { accountKind: ACCOUNT_KINDS.TRANSIT, credit: transfer.amount },
-    ],
-    refModel: "CashTransfer",
-    refId: transfer._id,
-    isInternal: true,
-    counterpartyBranchId: transfer.toBranchId,
-    createdBy: currentUser?._id || null,
+
+  // `receive` bilan bir xil naqsh: holat atomik olinadi, pul o'sha
+  // tranzaksiyada qaytariladi. Aks holda bir vaqtda kelgan
+  // `cancel` + `receive` ikkalasi ham o'tib, pul ham kassaga
+  // qaytarilib, ham qabul qilingan bo'lardi.
+  const saved = await prisma.$transaction(async (tx) => {
+    const claimed = await claimTransfer(tx, transferId, {
+      from: TRANSFER_STATUSES.IN_TRANSIT,
+      data: {
+        status: TRANSFER_STATUSES.CANCELED,
+        ...(note ? { note } : {}),
+      },
+      conflict: "Faqat yo'ldagi o'tkazmani bekor qilish mumkin",
+    });
+
+    await journal.post({
+      branchId: claimed.fromBranchId,
+      date: at,
+      kind: ENTRY_KINDS.TRANSFER_SEND,
+      memo: "Inkassatsiya bekor qilindi - pul kassaga qaytdi",
+      lines: [
+        { accountKind: ACCOUNT_KINDS.CASH, debit: claimed.amount },
+        { accountKind: ACCOUNT_KINDS.TRANSIT, credit: claimed.amount },
+      ],
+      refModel: "CashTransfer",
+      refId: claimed.id,
+      isInternal: true,
+      counterpartyBranchId: claimed.toBranchId,
+      createdBy: actorId(currentUser),
+      tx,
+    });
+
+    return claimed;
   });
 
-  transfer.status = TRANSFER_STATUSES.CANCELED;
-  if (note) transfer.note = note;
-  await transfer.save();
-  return transfer;
+  return withLegacyId(saved);
 };
 
 /**
@@ -262,28 +356,57 @@ export const cancel = async (transferId, { note }, currentUser) => {
  * qabul qiluvchi kutilayotgan pulni umuman ko'rmasdi.
  */
 export const list = async ({ status, page = 1, limit = 50 } = {}) => {
-  const scope = branchFilter("fromBranchId");
+  const scopeFrom = branchFilter("fromBranchId");
   const scopeTo = branchFilter("toBranchId");
 
-  const filter = {};
-  if (Object.keys(scope).length) {
-    filter.$or = [scope, scopeTo];
+  const where = {};
+  if (Object.keys(scopeFrom).length) {
+    where.OR = [scopeFrom, scopeTo];
   }
-  if (status) filter.status = status;
+  if (status) where.status = status;
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    CashTransfer.find(filter)
-      .sort({ sentAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("fromBranchId", { name: 1, code: 1 })
-      .populate("toBranchId", { name: 1, code: 1 })
-      .populate("sentBy", { firstName: 1, lastName: 1 })
-      .populate("receivedBy", { firstName: 1, lastName: 1 })
-      .lean(),
-    CashTransfer.countDocuments(filter),
+    prisma.cashTransfer.findMany({
+      where,
+      orderBy: { sentAt: "desc" },
+      skip,
+      take: limit,
+      // Mongo `.populate("fromBranchId", ...)` maydonning O'ZINI
+      // obyektga almashtirardi. Prisma esa ALOHIDA relation qaytaradi
+      // (`fromBranch`), ustun esa satr bo'lib qoladi. Klient eski
+      // shaklni kutadi (`r.fromBranchId?.name`), shuning uchun javob
+      // chegarasida `withPopulatedShape` bilan qayta tuziladi.
+      include: {
+        fromBranch: { select: { id: true, name: true, code: true } },
+        toBranch: { select: { id: true, name: true, code: true } },
+        sentBy: { select: { id: true, firstName: true, lastName: true } },
+        receivedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.cashTransfer.count({ where }),
   ]);
 
-  return { items, total, page, limit };
+  return {
+    items: withLegacyIds(items.map(toLegacyShape)),
+    total,
+    page,
+    limit,
+  };
 };
+
+/**
+ * Prisma relation'larini ESKI populate shakliga qaytaradi.
+ *
+ * Klient `r.fromBranchId?.name` deb o'qiydi - ya'ni maydonning o'zi
+ * obyekt bo'lishi kerak. Buni javob CHEGARASIDA qilamiz: servis
+ * ichida ustun satr bo'lib qolaveradi (filtrlash va solishtirish
+ * uchun shu kerak).
+ */
+const toLegacyShape = (row) => ({
+  ...row,
+  fromBranchId: row.fromBranch || row.fromBranchId,
+  toBranchId: row.toBranch || row.toBranchId,
+  sentBy: row.sentBy || row.sentById,
+  receivedBy: row.receivedBy || row.receivedById,
+});

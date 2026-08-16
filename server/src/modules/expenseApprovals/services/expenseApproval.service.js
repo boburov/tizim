@@ -7,8 +7,6 @@ import {
   EXPENSE_KINDS,
   resolveCategory,
 } from "../../../constants/approvals.js";
-// Modelning O'ZI hali ko'chirilmagan (yozish yo'llari Mongoose'da).
-import Approval from "../../../models/approval.model.js";
 import prisma from "../../../config/prisma.js";
 import { withLegacyId, withPopulatedShape } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
@@ -200,6 +198,63 @@ export const checkConfigApproval = async ({
   }
 };
 
+
+// ============================================================
+// QAROR YO'LLARINING UMUMIY POYDEVORI
+// ============================================================
+
+const actorId = (u) => u?.id || u?._id || null;
+
+/** So'rovni XOM holda o'qiydi (qaror mantig'i uchun; javob emas). */
+const loadApproval = async (id) => {
+  const doc = await prisma.approval.findUnique({ where: { id: String(id) } });
+  if (!doc) throw new ApiError(404, "So'rov topilmadi");
+  return doc;
+};
+
+/**
+ * ATOMIK HOLAT O'ZGARISHI (compare-and-set).
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * Mongo'da bu `findOneAndUpdate({_id, status: PENDING}, ...)` edi:
+ * bitta so'rov ham tekshiradi, ham yozadi. Ikki owner bir vaqtda
+ * bosgan bo'lsa, ikkinchisi `null` oladi.
+ *
+ * Prisma'da `update()` shart QO'YIB bo'lmaydi - u faqat unique kalit
+ * bo'yicha ishlaydi. Shuning uchun `updateMany` ishlatiladi: u bitta
+ * `UPDATE ... WHERE id = ? AND status = ?` SQL'iga aylanadi va
+ * `{ count }` qaytaradi. `count === 0` degani - holat allaqachon
+ * o'zgargan.
+ *
+ * NEGA "O'QI, KEYIN YOZ" EMAS:
+ *   const a = await findUnique(id);
+ *   if (a.status !== "pending") throw;
+ *   await update(...);          // <- ikki so'rov orasida BOSHQA
+ *                               //    so'rov ham o'tib ketishi mumkin
+ * Bu ikki owner bir vaqtda tasdiqlashiga yo'l ochardi va bajaruvchi
+ * IKKI MARTA ishga tushardi (ya'ni ikki marta to'lov).
+ * ═══════════════════════════════════════════════════════════════════
+ */
+const transition = async (id, { from, data, conflict }) => {
+  const { count } = await prisma.approval.updateMany({
+    where: { id: String(id), status: from },
+    data,
+  });
+  if (!count) throw new ApiError(409, conflict);
+  return prisma.approval.findUnique({ where: { id: String(id) } });
+};
+
+/** Bajarish yiqilganda holatni FAILED qiladi (sabab bilan). */
+const markFailed = async (id, reason) => {
+  await prisma.approval.update({
+    where: { id: String(id) },
+    data: {
+      status: APPROVAL_STATUSES.FAILED,
+      failureReason: String(reason || "").slice(0, 500),
+    },
+  });
+};
+
 /**
  * Tasdiq so'rovini yaratadi. Hech qanday holat o'zgarmaydi - so'rov faqat
  * "buyruq jurnali", haqiqiy ish tasdiqlanganda EXECUTORS ichida bajariladi.
@@ -219,24 +274,66 @@ export const createRequest = async ({
   requestNote,
   currentUser,
 }) => {
+  // ═══════════════════════════════════════════════════════════════
+  // SUMMA INVARIANTI - avval Mongoose modelida edi, ikki joyda:
+  //   `amount: { min: 0 }` (sxema) va pre("validate"):
+  //   "Chiqim so'rovida summa ko'rsatilishi shart" (>= 1, moliyaviy).
+  //
+  // Model o'chishi bilan IKKALASI ham yo'qolardi. Bu MIGRATION.md §6
+  // dagi #27-invariant - u yerda "⏳ modul ko'chmagan" deb belgilangan
+  // edi, endi modul ko'chdi, ya'ni qoida shu yerga ko'chadi.
+  //
+  // NEGA MUHIM: chiqim so'rovining butun ma'nosi LIMIT tekshiruvida.
+  // Summasiz "moliyaviy" so'rov limit bilan solishtirib bo'lmaydigan
+  // bo'lardi va tasdiq oqimini aylanib o'tish yo'li ochilardi.
+  //
+  // Qoida TIRIK ekanining dalili: `groups.service.js` da
+  // `Math.max(1, preview.estimatedDebt)` yozilgan - u AYNAN shu
+  // tekshiruvni qanoatlantirish uchun qo'yilgan.
+  //
+  // SERVISDA, Zod'da emas: `createRequest` ni 29 fayl chaqiradi va
+  // ularning aksariyati HTTP qatlamidan o'tmaydi.
+  // ═══════════════════════════════════════════════════════════════
+  const category = resolveCategory(kind);
+  if (amount !== null && amount !== undefined && Number(amount) < 0) {
+    throw new ApiError(400, "So'rov summasi manfiy bo'lishi mumkin emas");
+  }
+  if (category === APPROVAL_CATEGORIES.FINANCIAL) {
+    if (amount === null || amount === undefined || Number(amount) < 1) {
+      throw new ApiError(400, "Chiqim so'rovida summa ko'rsatilishi shart");
+    }
+  }
+
+  // So'rovchi MAJBURIY: `requestedById` NOT NULL va FK (RESTRICT).
+  // `|| null` yozilsa Prisma tushunarsiz 500 berardi - Mongoose esa
+  // ochiq 400 ValidationError qaytarardi. Xato TURI saqlanadi.
+  const requesterId = currentUser?.id || currentUser?._id;
+  if (!requesterId) throw new ApiError(400, "So'rovchi aniqlanmadi");
+
   try {
-    return await Approval.create({
-      branchId,
-      kind,
-      category: resolveCategory(kind),
-      amount,
-      payload: payload || {},
-      thresholdAtRequest: threshold ?? null,
-      subjectKey: subjectKey || undefined,
-      subjectName: subjectName || "",
-      contextName: contextName || "",
-      requestedBy: currentUser?._id || null,
-      requestNote: requestNote || "",
-      status: APPROVAL_STATUSES.PENDING,
+    return await prisma.approval.create({
+      data: {
+        branchId,
+        kind,
+        category,
+        amount,
+        payload: payload || {},
+        thresholdAtRequest: threshold ?? null,
+        // `undefined` EMAS, `null`. Prisma'da `undefined` "maydonni
+        // umuman yozma" degani va standart qiymat qo'llanardi; qulf
+        // indeksi esa `subjectKey IS NOT NULL` shartiga tayanadi.
+        subjectKey: subjectKey || null,
+        subjectName: subjectName || "",
+        contextName: contextName || "",
+        requestedById: requesterId,
+        requestNote: requestNote || "",
+        status: APPROVAL_STATUSES.PENDING,
+      },
     });
   } catch (err) {
-    // Partial unique indeks (subjectKey + pending) - subyekt qulfi.
-    if (err?.code === 11000) {
+    // Qisman unique indeks (subjectKey + pending) - subyekt qulfi.
+    // Mongo 11000 -> Prisma P2002.
+    if (err?.code === "P2002") {
       throw new ApiError(
         409,
         "Bu obyekt uchun tasdiq kutilayotgan so'rov allaqachon mavjud. Avval o'shani ko'rib chiqing.",
@@ -526,48 +623,37 @@ const assertCanDecide = (approval, permissions) => {
 };
 
 export const reject = async (id, { note } = {}, currentUser, permissions) => {
-  const existing = await Approval.findById(id).lean();
-  if (!existing) throw new ApiError(404, "So'rov topilmadi");
+  const existing = await loadApproval(id);
   assertCanDecide(existing, permissions);
 
-  // Compare-and-set: faqat PENDING'dan REJECTED'ga o'tadi. Ikki owner bir
-  // vaqtda bosgan bo'lsa, ikkinchisi null oladi.
-  const doc = await Approval.findOneAndUpdate(
-    { _id: id, status: APPROVAL_STATUSES.PENDING },
-    {
-      $set: {
-        status: APPROVAL_STATUSES.REJECTED,
-        decidedBy: currentUser?._id || null,
-        decidedAt: new Date(),
-        decisionNote: note || "",
-      },
+  return transition(id, {
+    from: APPROVAL_STATUSES.PENDING,
+    data: {
+      status: APPROVAL_STATUSES.REJECTED,
+      decidedById: actorId(currentUser),
+      decidedAt: new Date(),
+      decisionNote: note || "",
     },
-    { new: true },
-  );
-  if (!doc) throw new ApiError(409, "So'rov allaqachon ko'rib chiqilgan");
-  return doc;
+    conflict: "So'rov allaqachon ko'rib chiqilgan",
+  });
 };
 
 /** So'rovchi o'z so'rovini bekor qiladi. */
 export const cancel = async (id, currentUser) => {
-  const existing = await Approval.findById(id).lean();
-  if (!existing) throw new ApiError(404, "So'rov topilmadi");
-  if (String(existing.requestedBy) !== String(currentUser?._id)) {
+  const existing = await loadApproval(id);
+  // `requestedBy` -> `requestedById` (Prisma ustuni).
+  if (String(existing.requestedById) !== String(actorId(currentUser))) {
     throw new ApiError(403, "Faqat o'z so'rovingizni bekor qila olasiz");
   }
-  const doc = await Approval.findOneAndUpdate(
-    { _id: id, status: APPROVAL_STATUSES.PENDING },
-    {
-      $set: {
-        status: APPROVAL_STATUSES.CANCELED,
-        decidedBy: currentUser?._id || null,
-        decidedAt: new Date(),
-      },
+  return transition(id, {
+    from: APPROVAL_STATUSES.PENDING,
+    data: {
+      status: APPROVAL_STATUSES.CANCELED,
+      decidedById: actorId(currentUser),
+      decidedAt: new Date(),
     },
-    { new: true },
-  );
-  if (!doc) throw new ApiError(409, "So'rov allaqachon ko'rib chiqilgan");
-  return doc;
+    conflict: "So'rov allaqachon ko'rib chiqilgan",
+  });
 };
 
 // ============================================================
@@ -637,33 +723,29 @@ const EXECUTORS = {
  * O'Z SO'ROVINI O'ZI TASDIQLASH TAQIQLANADI.
  */
 export const approve = async (id, { note } = {}, currentUser, permissions) => {
-  const existing = await Approval.findById(id).lean();
-  if (!existing) throw new ApiError(404, "So'rov topilmadi");
+  const existing = await loadApproval(id);
   assertCanDecide(existing, permissions);
 
   // O'ZINI-O'ZI TASDIQLASH TAQIQI: tasdiqning butun ma'nosi shu.
-  if (String(existing.requestedBy) === String(currentUser?._id)) {
+  if (String(existing.requestedById) === String(actorId(currentUser))) {
     throw new ApiError(403, "O'z so'rovingizni o'zingiz tasdiqlay olmaysiz");
   }
 
-  // 1-qatlam: atomik holat o'zgarishi.
-  const approval = await Approval.findOneAndUpdate(
-    { _id: id, status: APPROVAL_STATUSES.PENDING },
-    {
-      $set: {
-        status: APPROVAL_STATUSES.APPROVED,
-        decidedBy: currentUser?._id || null,
-        decidedAt: new Date(),
-        decisionNote: note || "",
-      },
+  // 1-qatlam: atomik holat o'zgarishi (qarang `transition` izohi).
+  const approval = await transition(id, {
+    from: APPROVAL_STATUSES.PENDING,
+    data: {
+      status: APPROVAL_STATUSES.APPROVED,
+      decidedById: actorId(currentUser),
+      decidedAt: new Date(),
+      decisionNote: note || "",
     },
-    { new: true },
-  );
-  if (!approval) throw new ApiError(409, "So'rov allaqachon ko'rib chiqilgan");
+    conflict: "So'rov allaqachon ko'rib chiqilgan",
+  });
 
   const executor = EXECUTORS[approval.kind];
   if (!executor) {
-    await markFailed(approval._id, `Noma'lum so'rov turi: ${approval.kind}`);
+    await markFailed(approval.id, `Noma'lum so'rov turi: ${approval.kind}`);
     throw new ApiError(500, "Bu so'rov turini bajarib bo'lmadi");
   }
 
@@ -672,26 +754,27 @@ export const approve = async (id, { note } = {}, currentUser, permissions) => {
     // unique indeks). Bajaruvchi biznes qoidalarini QAYTA tekshiradi.
     const result = await executor(approval);
 
-    await Approval.updateOne(
-      { _id: approval._id },
-      {
-        $set: {
-          status: APPROVAL_STATUSES.EXECUTED,
-          executedAt: new Date(),
-          resultTransactionId: result?._id || null,
-          failureReason: "",
-        },
+    await prisma.approval.update({
+      where: { id: approval.id },
+      data: {
+        status: APPROVAL_STATUSES.EXECUTED,
+        executedAt: new Date(),
+        // Bajaruvchilar Prisma yozuvini qaytaradi (`id`), lekin
+        // ba'zilari hali `withLegacyId` bilan o'ralgan (`_id`) -
+        // ikkalasi ham qabul qilinadi.
+        resultTransactionId: result?.id || result?._id || null,
+        failureReason: "",
       },
-    );
-    return Approval.findById(approval._id);
+    });
+    return prisma.approval.findUnique({ where: { id: approval.id } });
   } catch (err) {
     // Re-validatsiya yiqildi (balans yetmadi, guruh arxivlandi, o'qituvchi
     // ishdan bo'shadi, davrlar kesishib qoldi) yoki texnik xato.
     // Holatni FAILED qilamiz - owner ko'radi.
     const reason = err?.message || "Noma'lum xato";
-    await markFailed(approval._id, reason);
+    await markFailed(approval.id, reason);
     logger.warn(
-      { approvalId: String(approval._id), kind: approval.kind, reason },
+      { approvalId: String(approval.id), kind: approval.kind, reason },
       "Tasdiqlangan so'rovni bajarib bo'lmadi",
     );
     throw new ApiError(
@@ -740,39 +823,30 @@ export const bulkDecide = async (
   return { succeeded, failed, total: ids.length };
 };
 
-const markFailed = (id, reason) =>
-  Approval.updateOne(
-    { _id: id },
-    { $set: { status: APPROVAL_STATUSES.FAILED, failureReason: String(reason).slice(0, 500) } },
-  );
-
 /**
  * FAILED so'rovni qayta urinish (masalan balans to'ldirilgandan keyin).
  * PENDING'ga qaytaradi, owner qaytadan tasdiqlaydi.
  */
 export const retry = async (id, permissions) => {
-  const existing = await Approval.findById(id).lean();
-  if (!existing) throw new ApiError(404, "So'rov topilmadi");
+  const existing = await loadApproval(id);
   assertCanDecide(existing, permissions);
 
-  let doc;
   try {
-    doc = await Approval.findOneAndUpdate(
-      { _id: id, status: APPROVAL_STATUSES.FAILED },
-      {
-        $set: {
-          status: APPROVAL_STATUSES.PENDING,
-          decidedBy: null,
-          decidedAt: null,
-          failureReason: "",
-        },
+    return await transition(id, {
+      from: APPROVAL_STATUSES.FAILED,
+      data: {
+        status: APPROVAL_STATUSES.PENDING,
+        decidedById: null,
+        decidedAt: null,
+        failureReason: "",
       },
-      { new: true },
-    );
+      conflict: "Faqat xato holatidagi so'rovni qayta urinish mumkin",
+    });
   } catch (err) {
-    // Xato holatda turgan paytda o'sha subyektga YANGI so'rov yaratilgan
-    // bo'lsa, PENDING'ga qaytarish subyekt qulfini buzadi (E11000).
-    if (err?.code === 11000) {
+    // Xato holatda turgan paytda o'sha subyektga YANGI so'rov
+    // yaratilgan bo'lsa, PENDING'ga qaytarish subyekt qulfini
+    // buzadi (Mongo 11000 -> Prisma P2002).
+    if (err?.code === "P2002") {
       throw new ApiError(
         409,
         "Bu obyekt uchun boshqa kutilayotgan so'rov bor. Avval o'shani ko'rib chiqing.",
@@ -780,8 +854,6 @@ export const retry = async (id, permissions) => {
     }
     throw err;
   }
-  if (!doc) throw new ApiError(409, "Faqat xato holatidagi so'rovni qayta urinish mumkin");
-  return doc;
 };
 
 export { APPROVAL_STATUSES, APPROVAL_CATEGORIES, APPROVAL_KINDS, EXPENSE_KINDS };

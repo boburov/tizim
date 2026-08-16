@@ -1,9 +1,4 @@
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import DepositTransaction from "../../../models/depositTransaction.model.js";
-import Expense from "../../../models/expense.model.js";
-import SalaryTransaction from "../../../models/salaryTransaction.model.js";
-import StaffSalaryTransaction from "../../../models/staffSalaryTransaction.model.js";
-import JournalEntry from "../../../models/journalEntry.model.js";
+import prisma from "../../../config/prisma.js";
 
 // JURNAL HAQIQAT BILAN MOS KELADIMI.
 //
@@ -36,55 +31,75 @@ const SOURCES = [
   {
     key: "payment",
     label: "O'quvchi to'lovi (naqd/terminal)",
-    model: PaymentTransaction,
+    table: "paymentTransaction",
     refModel: "PaymentTransaction",
     // source: "deposit" ALOHIDA hisoblanadi (deposit_apply) - u pul
     // harakati emas. Filialsiz yozuv jurnalga tushmaydi.
-    filter: {
-      source: { $ne: "deposit" },
-      isDeleted: { $ne: true },
-      branchId: { $ne: null },
+    // `branchId: { $ne: null }` OLIB TASHLANDI.
+    //
+    // MIGRATION.md qoidasi: "Prisma modelda maydon YO'Q bo'lsa (yoki
+    // shart ma'nosini yo'qotgan bo'lsa) filtr TARJIMA QILINMAYDI,
+    // O'CHIRILADI". `PaymentTransaction.branchId` Postgres'da
+    // NOT NULL - ya'ni "filialsiz to'lov" degan holat MUMKIN EMAS
+    // va uni chiqarib tashlash shartsiz. Mongo'da esa maydon
+    // bo'lmasligi mumkin edi, shuning uchun filtr kerak edi.
+    //
+    // Prisma bunday filtrni jimgina qabul ham qilmaydi -
+    // `PrismaClientValidationError` beradi.
+    where: {
+      source: { not: "deposit" },
+      isDeleted: false,
     },
   },
   {
     key: "deposit_apply",
     label: "Depozitdan qoplash",
-    model: PaymentTransaction,
+    table: "paymentTransaction",
     refModel: "PaymentTransaction",
     entryKind: "deposit_apply",
-    filter: { source: "deposit", isDeleted: { $ne: true }, branchId: { $ne: null } },
+    // `branchId` NOT NULL - filtr o'chirildi (yuqoridagi izoh).
+    where: { source: "deposit", isDeleted: false },
   },
   {
     key: "deposit",
     label: "Depozit kirim/chiqim",
-    model: DepositTransaction,
+    table: "depositTransaction",
     refModel: "DepositTransaction",
-    filter: {
-      type: { $in: ["topup", "withdraw"] },
-      isDeleted: { $ne: true },
-      branchId: { $ne: null },
+    // `branchId` NULLABLE - filialsiz depozit harakati jurnalga
+    // TUSHMAYDI (journal.post branchId talab qiladi), shuning uchun
+    // uni tekshiruvdan chiqarish SHART. Aks holda verify doim
+    // "yetishmayapti" deb qichqirardi.
+    where: {
+      type: { in: ["topup", "withdraw"] },
+      isDeleted: false,
+      branchId: { not: null },
     },
   },
   {
     key: "expense",
     label: "Chiqim",
-    model: Expense,
+    table: "expense",
     refModel: "Expense",
-    filter: { isDeleted: { $ne: true }, branchId: { $ne: null } },
+    // `branchId` NULLABLE: markaz umumiy chiqimi jurnalga tushmaydi
+    // (`journalPosting.postExpense` `branchId` yo'q bo'lsa `null`
+    // qaytaradi) - shuning uchun tekshiruvdan chiqariladi.
+    where: { isDeleted: false, branchId: { not: null } },
   },
   {
     key: "teacher_salary",
     label: "O'qituvchi maoshi",
-    model: SalaryTransaction,
+    table: "salaryTransaction",
     refModel: "SalaryTransaction",
-    filter: { isDeleted: { $ne: true }, branchId: { $ne: null } },
+    // `branchId` NOT NULL - filtr o'chirildi.
+    where: { isDeleted: false },
   },
   {
     key: "staff_salary",
     label: "Xodim maoshi",
-    model: StaffSalaryTransaction,
+    table: "staffSalaryTransaction",
     refModel: "StaffSalaryTransaction",
-    filter: { isDeleted: { $ne: true }, branchId: { $ne: null } },
+    // `branchId` NULLABLE - yuqoridagi izoh.
+    where: { isDeleted: false, branchId: { not: null } },
   },
 ];
 
@@ -94,8 +109,13 @@ const SOURCES = [
  * @returns {{key, label, sourceCount, postedCount, missing: number, missingIds: string[]}}
  */
 const verifySource = async (src, { sampleLimit = 10 } = {}) => {
-  const docs = await src.model.find(src.filter).select("_id").lean();
-  const ids = docs.map((d) => d._id);
+  // `select: { id: true }` - Mongo proyeksiyasi HAR DOIM `_id` ni
+  // qaytarardi, Prisma esa qaytarmaydi. Uni ochiq so'rash SHART.
+  const docs = await prisma[src.table].findMany({
+    where: src.where,
+    select: { id: true },
+  });
+  const ids = docs.map((d) => d.id);
   if (ids.length === 0) {
     return {
       key: src.key,
@@ -107,18 +127,21 @@ const verifySource = async (src, { sampleLimit = 10 } = {}) => {
     };
   }
 
-  const entryFilter = {
+  const entryWhere = {
     refModel: src.refModel,
-    refId: { $in: ids },
+    refId: { in: ids },
     ...(src.entryKind ? { kind: src.entryKind } : {}),
   };
   // deposit_apply va oddiy to'lov BIR XIL refModel ishlatadi, shuning
   // uchun turi ko'rsatilmagan manbada deposit_apply chiqarib tashlanadi.
   if (!src.entryKind && src.refModel === "PaymentTransaction") {
-    entryFilter.kind = { $ne: "deposit_apply" };
+    entryWhere.kind = { not: "deposit_apply" };
   }
 
-  const posted = await JournalEntry.find(entryFilter).select("refId").lean();
+  const posted = await prisma.journalEntry.findMany({
+    where: entryWhere,
+    select: { refId: true },
+  });
   const postedSet = new Set(posted.map((e) => String(e.refId)));
 
   const missingIds = ids
