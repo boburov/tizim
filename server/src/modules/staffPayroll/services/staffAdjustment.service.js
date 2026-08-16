@@ -4,6 +4,7 @@ import { ROLES } from "../../../constants/roles.js";
 import { STAFF_OPENING_KINDS } from "../../../constants/staffPayroll.js";
 import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import { parseLocalDay } from "../../../helpers/attendance.helper.js";
+import { assertUserInBranchScope } from "../../../helpers/branchContext.helper.js";
 import * as payrollService from "./staffPayroll.service.js";
 import * as auditService from "./payrollAudit.service.js";
 
@@ -33,6 +34,10 @@ export const create = async (body, currentUser) => {
     select: { id: true, role: true, homeBranchId: true },
   });
   if (!employee) throw new ApiError(404, "Xodim topilmadi");
+  // FILIAL QO'RIQCHISI - `body.employee` mijozdan keladi (xavfsizlik tuzatishi).
+  // Bu PUL YOZADIGAN yo'l: qo'riqchisiz A filial direktori B filial
+  // xodimiga bonus (yoki jarima) yozib qo'ya olardi.
+  await assertUserInBranchScope(employee.id);
   if (employee.role === ROLES.STUDENT) {
     throw new ApiError(400, "O'quvchiga bonus/jarima yozilmaydi");
   }

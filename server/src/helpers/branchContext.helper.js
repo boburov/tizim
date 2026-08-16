@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import prisma from "../config/prisma.js";
+import ApiError from "../utils/ApiError.js";
 import { ensureMainBranch } from "./branchAccess.helper.js";
 
 // FILIAL KONTEKSTI (request-scoped).
@@ -367,6 +368,50 @@ export const userBranchCondition = () => {
       { branchAssignments: { some: { branchId: { in: allowed } } } },
     ],
   };
+};
+
+/**
+ * XAVFSIZLIK QO'RIQCHISI: berilgan foydalanuvchi joriy filial ko'lamida
+ * ekanini tasdiqlaydi, aks holda 403 bilan yiqiladi.
+ *
+ * NEGA ALOHIDA QO'RIQCHI KERAK: ro'yxat funksiyalari filial shartini
+ * `where` ichiga qo'shadi - begona qator umuman TOPILMAYDI, ya'ni ular
+ * o'z-o'zidan xavfsiz. Lekin `getById(id)`, `historyByEmployee(employeeId)`
+ * kabi yo'llar identifikatorni TO'G'RIDAN-TO'G'RI params/body dan oladi
+ * va hech qanday filtr qo'llamaydi.
+ *
+ * TAHDID MODELI: filial direktori o'z panelida boshqa filial xodimini
+ * KO'RMAYDI, lekin ID ni qo'lda kiritib so'rov yubora oladi. UI da
+ * yashirish himoya emas - tekshiruv SERVER tomonda bo'lishi shart.
+ *
+ * `userBranchCondition()` bilan bir xil mantiqda ishlaydi (homeBranchId
+ * YOKI branchAssignments), shuning uchun ro'yxat nimani ko'rsatsa,
+ * qo'riqchi aynan o'shanga ruxsat beradi - ikki xil qoida bo'lib
+ * qolmaydi.
+ *
+ * KENG RUXSATLILAR AVTOMATIK O'TADI: `userBranchCondition()` Super Admin
+ * (canSeeAllBranches, filial tanlanmagan) va kontekstsiz chaqiruvlar
+ * (job, seed, import) uchun `null` qaytaradi - u holda tekshiruv
+ * o'tkazib yuboriladi.
+ *
+ * @param {string} userId
+ * @param {string} [message] - foydalanuvchiga ko'rinadigan xato matni
+ */
+export const assertUserInBranchScope = async (userId, message) => {
+  const cond = userBranchCondition();
+  if (!cond) return; // Super Admin yoki kontekstsiz - cheklov yo'q.
+  if (!userId) throw new ApiError(403, message || "Bu filial bo'yicha amal bajarib bo'lmaydi");
+
+  const found = await prisma.user.findFirst({
+    where: { AND: [{ id: String(userId) }, cond] },
+    select: { id: true },
+  });
+  if (!found) {
+    // 404 EMAS, 403: yozuv bor yoki yo'qligini oshkor qilmaymiz, lekin
+    // "topilmadi" deyish chaqiruvchini adashtirardi (u ID ni to'g'ri
+    // biladi). Xabar ikkala holatda ham bir xil.
+    throw new ApiError(403, message || "Bu filial bo'yicha amal bajarib bo'lmaydi");
+  }
 };
 
 /**

@@ -183,6 +183,18 @@ export const amendCompensation = async (id, patch, currentUser) => {
   if (patch.note !== undefined) data.note = patch.note;
   if (patch.branchId !== undefined) data.branchId = patch.branchId || null;
 
+  // KPI-ONLY -> FIKSA SUMMA 0. Avval Mongoose `pre("validate")` da edi va
+  // shu yo'lda yo'qolgan: `setCompensation` (yuqorida) koersiyani qiladi,
+  // tuzatish yo'li esa maydonlarni birma-bir yig'ib, uni O'TKAZIB YUBORARDI.
+  //
+  // `{ salaryType: "kpi_only" }` ni yolg'iz yuborish yetarli edi: eski
+  // baseAmount (masalan 3 000 000) joyida qolardi. `computePayroll`
+  // kpi_only segmentini fiksaga qo'shmaydi, lekin `baseAmount` maosh
+  // varaqasiga SNAPSHOT bo'lib tushardi - hujjatda hech qachon
+  // to'lanmaydigan "asosiy maosh" raqami abadiy turib qolardi.
+  const nextType = data.salaryType ?? doc.salaryType;
+  if (nextType === "kpi_only") data.baseAmount = 0;
+
   const saved = await prisma.staffCompensation.update({
     where: { id: doc.id },
     data,

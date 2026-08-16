@@ -4,7 +4,10 @@ import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { loadRoleCatalog } from "../../../helpers/roles.helper.js";
-import { userBranchCondition } from "../../../helpers/branchContext.helper.js";
+import {
+  userBranchCondition,
+  assertUserInBranchScope,
+} from "../../../helpers/branchContext.helper.js";
 import { daysInMonth, deriveStatus } from "../../finance/services/proration.helper.js";
 import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import { rebuildAutoKpi } from "./kpiEngine.service.js";
@@ -528,6 +531,10 @@ export const generateMonth = async (year, month) => {
 export const setLifecycle = async (id, lifecycle, currentUser, { reason = "" } = {}) => {
   const payroll = await prisma.staffPayroll.findUnique({ where: { id: String(id) } });
   if (!payroll) throw new ApiError(404, "Maosh qatori topilmadi");
+  // FILIAL QO'RIQCHISI - `id` params/body dan keladi (xavfsizlik tuzatishi).
+  // Bu yo'l oyni QULFLAYDI/OCHADI va ochilganda darhol qayta hisoblaydi,
+  // ya'ni begona filial maoshini o'zgartira olardi.
+  await assertUserInBranchScope(payroll.employeeId);
 
   // QULFNI OCHISH - sabab MAJBURIY. Yopilgan moliyaviy davrni qayta
   // ochish istisno hodisa; auditda "nega" yozilmasa, keyin tushuntirib
@@ -647,6 +654,11 @@ export const getById = async (id) => {
     },
   });
   if (!payroll) throw new ApiError(404, "Maosh qatori topilmadi");
+  // FILIAL QO'RIQCHISI (xavfsizlik tuzatishi, ko'chirish emas).
+  // `id` to'g'ridan-to'g'ri params dan keladi va hech qanday filtr
+  // qo'llanmaydi - filial direktori boshqa filial xodimining maosh
+  // qatorini ID ni qo'lda kiritib ocha olardi.
+  await assertUserInBranchScope(payroll.employeeId);
 
   const [items, adjustments] = await Promise.all([
     prisma.staffPayrollItem.findMany({
@@ -677,6 +689,8 @@ export const getById = async (id) => {
 
 /** Xodimning maosh tarixi (profil bo'limi uchun). */
 export const historyByEmployee = async (employeeId, { limit = 12 } = {}) => {
+  // FILIAL QO'RIQCHISI - `employeeId` params dan keladi (xavfsizlik tuzatishi).
+  await assertUserInBranchScope(employeeId);
   const items = await prisma.staffPayroll.findMany({
     where: { employeeId: String(employeeId) },
     orderBy: [{ year: "desc" }, { month: "desc" }],

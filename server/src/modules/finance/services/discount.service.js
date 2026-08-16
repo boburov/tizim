@@ -102,7 +102,33 @@ const ensureStudentAndGroup = async (studentId, groupId) => {
   assertGroupActive(group);
 };
 
+/**
+ * CHEGIRMA SHAKLI INVARIANTI - avval Mongoose `pre("validate")` da edi.
+ *
+ *   1. type="percent"  -> value 100 dan oshmaydi
+ *   2. scope="monthly" -> yil va oy MAJBURIY
+ *
+ * 1: 100 dan katta foiz o'quvchi hisobini MANFIY qiladi - markaz unga
+ *    qarzdor bo'lib qoladi. Zod'dagi `value: min(0)` da yuqori chegara
+ *    yo'q, chunki `fixed` turida qiymat so'mda va million bo'lishi normal.
+ *
+ * 2: hook o'chgach bu qoida JIMGINA yo'qolgan edi - servis yil/oyni
+ *    rad etish o'rniga `null` yozib ketardi. Natijada "oylik" chegirma
+ *    hech qaysi oyga tegishli bo'lmasdi: `recalcForStudentScope` uni
+ *    hech qachon topmasdi va chegirma umuman qo'llanmasdi. Yozuv bazada
+ *    turgani uchun operator uni "qo'ydim" deb hisoblardi.
+ */
+const assertDiscountShape = ({ type, value, scope, year, month }) => {
+  if (type === "percent" && Number(value) > 100) {
+    throw new ApiError(400, "Foiz 100 dan oshmasligi kerak");
+  }
+  if (scope === "monthly" && (!year || !month)) {
+    throw new ApiError(400, "Oylik chegirma uchun yil va oy kerak");
+  }
+};
+
 export const create = async (body, currentUser) => {
+  assertDiscountShape(body);
   await ensureStudentAndGroup(body.student, body.group);
 
   // Double-submit himoyasi: aynan bir xil faol chegirma ikki marta yozilmasin
@@ -179,6 +205,16 @@ export const update = async (id, body) => {
     data.year = null;
     data.month = null;
   }
+
+  // Tekshiruv KEYINGI holat ustida: `{ scope: "monthly" }` ni yolg'iz
+  // yuborish mumkin, u holda yil/oy yozuvdagi eski (null) qiymatda qolardi.
+  assertDiscountShape({
+    type: data.type ?? doc.type,
+    value: data.value ?? doc.value,
+    scope: nextScope,
+    year: nextScope === "monthly" ? (data.year ?? doc.year) : null,
+    month: nextScope === "monthly" ? (data.month ?? doc.month) : null,
+  });
 
   const saved = await prisma.discount.update({ where: { id: doc.id }, data });
 

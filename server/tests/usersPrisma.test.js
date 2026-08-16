@@ -699,6 +699,12 @@ const run = async () => {
       await prisma.teacherSalary.create({
         data: {
           branchId: branchA.id, teacherId: teacherA.id,
+          // `kind` ATAYLAB ochiq yoziladi. Sxema standarti "group", guruh
+          // qatori esa guruhsiz bo'lolmaydi (teacher_salaries_kind_group_check) -
+          // avval bu fixture standart tufayli yaroqsiz qator yozayotgan edi.
+          // Bu yerda kerak bo'lgani "moliyaviy iz", markaz darajasidagi
+          // fiksa qator esa aynan guruhsiz bo'ladi.
+          kind: "base",
           year: 2025, month: 1, expectedAmount: 1_500_000, paidAmount: 1_500_000,
         },
       });

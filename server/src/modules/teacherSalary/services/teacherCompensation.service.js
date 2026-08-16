@@ -40,6 +40,50 @@ import * as teacherSalaryService from "./teacherSalary.service.js";
 const actorId = (u) => u?.id || u?._id || null;
 
 /**
+ * STAVKA SHAKLI INVARIANTI - avval Mongoose `pre("validate")` da edi.
+ *
+ * Hook o'chgach uchta qoida BIR YO'LA yo'qolgan edi (qarang: MIGRATION.md,
+ * "Validatsiya invariantlari"):
+ *
+ *   1. baseType="none"     -> baseAmount MAJBURAN 0
+ *   2. variableType="none" -> variableRate MAJBURAN 0
+ *   3. ikkalasi ham "none" -> RAD ETILADI
+ *
+ * 1-2 NORMALIZATSIYA, tekshiruv emas: foydalanuvchi "fiksa yo'q" deb
+ * belgilab, summani ekranda qoldirib ketishi mumkin. Qiymat tozalanmasa
+ * `rateResolver` uni O'QIYDI va o'chirilgan qism baribir maoshga
+ * qo'shilardi - ya'ni "o'chirdim" degan amal jimgina ishlamay qolardi.
+ *
+ * 3 esa ochiq rad etish: ikkala qism ham yo'q stavka har oy 0 so'm maosh
+ * yozib beradi va buni oylar o'tib topish qiyin.
+ *
+ * NEGA SERVISDA (Zod'da emas): stavka HTTP'dan tashqari `imports`
+ * (o'qituvchilar importi) va `auth.registerUser` (ishga olish oqimi)
+ * dan ham yoziladi - ular Zod sxemasini chetlab o'tadi.
+ */
+const applyRateShape = (data) => {
+  if (data.baseType === "none") data.baseAmount = 0;
+  if (data.variableType === "none") data.variableRate = 0;
+  if (data.baseType === "none" && data.variableType === "none") {
+    throw new ApiError(
+      400,
+      "Kamida bitta maosh qismi (fiksa yoki o'zgaruvchi) belgilanishi kerak",
+    );
+  }
+  return data;
+};
+
+// effectiveTo har doim effectiveFrom dan KEYIN. Teng bo'lsa davr uzunligi
+// nol bo'lib qoladi: `rateResolver` uni [from, to) oynasida hech qachon
+// tanlamaydi, ya'ni stavka mavjud bo'lib turib ishlamaydi.
+const assertRange = (effectiveFrom, effectiveTo) => {
+  if (!effectiveTo || !effectiveFrom) return;
+  if (new Date(effectiveTo).getTime() <= new Date(effectiveFrom).getTime()) {
+    throw new ApiError(400, "Tugash sanasi boshlanish sanasidan keyin bo'lishi kerak");
+  }
+};
+
+/**
  * STAVKA DAVRLARI KESISHMASLIGI KERAK.
  *
  * NEGA MAJBURIY: rateResolver har bir kesishgan stavka uchun ALOHIDA
@@ -177,7 +221,7 @@ export const setCompensation = async (body, currentUser) => {
       });
     }
     return tx.teacherCompensation.create({
-      data: {
+      data: applyRateShape({
         teacherId: teacher.id,
         branchId,
         effectiveFrom: from,
@@ -189,7 +233,7 @@ export const setCompensation = async (body, currentUser) => {
         percentBase: body.percentBase || "billed",
         note: body.note || "",
         createdById: actorId(currentUser),
-      },
+      }),
     });
   });
 
@@ -231,6 +275,20 @@ export const amendCompensation = async (id, patch, currentUser) => {
   if (patch.note !== undefined) data.note = patch.note;
 
   const nextFrom = data.effectiveFrom ?? doc.effectiveFrom;
+
+  // SHAKL INVARIANTI KEYINGI HOLAT ustida. `patch` qisman bo'lgani uchun
+  // "baseType=none" ni yolg'iz yuborish mumkin - u holda baseAmount
+  // yozuvda ESKISICHA qolib ketardi. Shuning uchun avval yig'ib, keyin
+  // normalizatsiya qilamiz va natijani `data` ga qaytaramiz.
+  const nextShape = applyRateShape({
+    baseType: data.baseType ?? doc.baseType,
+    baseAmount: data.baseAmount ?? doc.baseAmount,
+    variableType: data.variableType ?? doc.variableType,
+    variableRate: data.variableRate ?? doc.variableRate,
+  });
+  data.baseAmount = nextShape.baseAmount;
+  data.variableRate = nextShape.variableRate;
+  assertRange(nextFrom, doc.effectiveTo);
 
   // KESISHUV QO'RIQCHISI - aynan shu yerda yo'q edi.
   // effectiveFrom orqaga surilsa, yopilgan oldingi davr ustiga tushib

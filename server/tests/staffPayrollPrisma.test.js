@@ -618,6 +618,88 @@ const run = async () => {
     (r) => (r.items.some((p) => p.employeeId === eB.id) ? null : "o'z filiali ko'rinmadi"),
   );
 
+  // ── FILIAL QO'RIQCHISI: ID BILAN KIRISHGA URINISH ────────────────
+  //
+  // `list()` filial shartini `where` ichida qo'llaydi, ya'ni begona qator
+  // umuman TOPILMAYDI. Lekin qolgan yo'llar `employeeId` / `payrollId` ni
+  // TO'G'RIDAN-TO'G'RI params yoki body dan oladi va hech qanday `where`
+  // filtri yo'q - ular uchun qo'riqchi ALOHIDA yozilishi kerak.
+  //
+  // Bu aynan filial direktori ssenariysi: u o'z panelida B filial
+  // xodimini ko'rmaydi, lekin ID ni qo'lda kiritib so'rov yubora oladi.
+  const actorA = { id: null, permissions: ["*"], role: "branch_director" };
+
+  await mustThrow(
+    "QO'RIQCHI: A kontekstida B filial maosh qatorini ID bilan OCHIB BO'LMAYDI",
+    () => inA(() => payroll.getById(bPayroll.id)),
+    "filial",
+  );
+
+  await mustThrow(
+    "QO'RIQCHI: A kontekstida B filial xodimining TARIXI ko'rinmaydi",
+    () => inA(() => payroll.historyByEmployee(eB.id)),
+    "filial",
+  );
+
+  await mustThrow(
+    "QO'RIQCHI: A kontekstida B filial xodimiga BONUS yozib bo'lmaydi",
+    () => inA(() => adjustment.create(
+      { employee: eB.id, kind: "bonus", year: YEAR, month: 1, amount: 100_000, reason: "test" },
+      actorA,
+    )),
+    "filial",
+  );
+
+  await mustThrow(
+    "QO'RIQCHI: A kontekstida B filial xodimining ta'siri o'qilmaydi",
+    () => inA(() => history.getImpact(eB.id)),
+    "filial",
+  );
+
+  await mustThrow(
+    "QO'RIQCHI: A kontekstida B filial xodimiga oy GENERATSIYA qilib bo'lmaydi",
+    () => inA(() => history.generateRange(
+      { employeeId: eB.id, from: `${YEAR}-01`, to: `${YEAR}-01` }, actorA,
+    )),
+    "filial",
+  );
+
+  await mustThrow(
+    "QO'RIQCHI: A kontekstida B filial xodimining oyini QULFLAB bo'lmaydi",
+    () => inA(() => history.setLock(
+      { kind: "payroll", id: bPayroll.id, locked: true }, actorA,
+    )),
+    "filial",
+  );
+
+  await mustPass(
+    "QO'RIQCHI: O'Z filialida barcha yo'llar OCHIQ qoladi",
+    // Qo'riqchi haddan tashqari qattiq bo'lmasligi kerak: shu tekshiruv
+    // bo'lmasa "hammasini rad et" ham testdan o'tib ketardi.
+    async () => {
+      const p1 = await inA(() => payroll.computePayroll(e1.id, YEAR, 1));
+      const byId = await inA(() => payroll.getById(p1.id ?? p1._id));
+      const hist = await inA(() => payroll.historyByEmployee(e1.id));
+      const impact = await inA(() => history.getImpact(e1.id));
+      return { byId, hist, impact };
+    },
+    ({ byId, hist, impact }) => {
+      if (!byId?._id) return "getById o'z filialida yiqildi";
+      if (!hist?.items) return "historyByEmployee o'z filialida yiqildi";
+      if (!impact) return "getImpact o'z filialida yiqildi";
+      return null;
+    },
+  );
+
+  await mustPass(
+    "QO'RIQCHI: Super Admin (canSeeAllBranches) HAMMA filialni ko'radi",
+    () => runWithBranchContext(
+      { branchId: null, allowedBranchIds: [bA.id, bB.id], canSeeAllBranches: true, userId: null },
+      () => payroll.getById(bPayroll.id),
+    ),
+    (r) => (r?._id ? null : "super admin B filial qatorini ocholmadi"),
+  );
+
   // ── 10) OPENING BALANCE ZANJIRI (PHASE 9) ────────────────────────
   console.log("\n10) boshlang'ich qoldiq → staffPayroll zanjiri");
 

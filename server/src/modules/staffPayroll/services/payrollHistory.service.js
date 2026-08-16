@@ -4,6 +4,7 @@ import { withLegacyId } from "../../../utils/serialize.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
+import { assertUserInBranchScope } from "../../../helpers/branchContext.helper.js";
 import * as payrollService from "./staffPayroll.service.js";
 import * as auditService from "./payrollAudit.service.js";
 
@@ -67,6 +68,8 @@ const monthKey = (y, m) => y * 100 + m;
  * bo'lsa - oyna umuman ochilmaydi (ortiqcha bosish).
  */
 export const getImpact = async (employeeId) => {
+  // FILIAL QO'RIQCHISI - `employeeId` mijozdan keladi (xavfsizlik tuzatishi).
+  await assertUserInBranchScope(employeeId);
   const user = await prisma.user.findUnique({
     where: { id: String(employeeId) },
     select: {
@@ -177,6 +180,8 @@ export const setPayrollStart = async (
   payrollStartFrom,
   { currentUser, reason = "", confirm = false } = {},
 ) => {
+  // FILIAL QO'RIQCHISI - `employeeId` mijozdan keladi (xavfsizlik tuzatishi).
+  await assertUserInBranchScope(employeeId);
   const user = await prisma.user.findUnique({
     where: { id: String(employeeId) },
     select: { id: true, payrollStartFrom: true },
@@ -242,6 +247,8 @@ export const setPayrollStart = async (
  * Bu ERP odati: moliyaviy amal ko'r-ko'rona bajarilmaydi.
  */
 export const previewGenerate = async ({ employeeId, from, to }) => {
+  // FILIAL QO'RIQCHISI - `employeeId` mijozdan keladi (xavfsizlik tuzatishi).
+  await assertUserInBranchScope(employeeId);
   const user = await prisma.user.findUnique({
     where: { id: String(employeeId) },
     select: {
@@ -352,6 +359,8 @@ export const previewGenerate = async ({ employeeId, from, to }) => {
  * Shuning uchun uni ikki marta bosish ham xavfsiz va tarixni buzmaydi.
  */
 export const generateRange = async ({ employeeId, from, to }, currentUser) => {
+  // FILIAL QO'RIQCHISI - `employeeId` mijozdan keladi (xavfsizlik tuzatishi).
+  await assertUserInBranchScope(employeeId);
   const user = await prisma.user.findUnique({
     where: { id: String(employeeId) },
     select: { id: true, role: true, payrollStartFrom: true },
@@ -438,6 +447,8 @@ export const generateRange = async ({ employeeId, from, to }, currentUser) => {
  * kirgan/topshirilgan davrlar.
  */
 export const recalcUnlocked = async ({ employeeId, from, to }, currentUser) => {
+  // FILIAL QO'RIQCHISI - `employeeId` mijozdan keladi (xavfsizlik tuzatishi).
+  await assertUserInBranchScope(employeeId);
   const user = await prisma.user.findUnique({
     where: { id: String(employeeId) },
     select: { id: true },
@@ -512,6 +523,8 @@ export const setLock = async ({ kind, id, locked, reason = "" }, currentUser) =>
       select: { id: true, teacherId: true, year: true, month: true, isLocked: true },
     });
     if (!before) throw new ApiError(404, "Maosh qatori topilmadi");
+    // FILIAL QO'RIQCHISI - `id` params dan keladi (xavfsizlik tuzatishi).
+    await assertUserInBranchScope(before.teacherId);
     if (before.isLocked && !locked && !String(reason || "").trim()) {
       throw new ApiError(400, "Qulfni ochish sababini ko'rsating");
     }

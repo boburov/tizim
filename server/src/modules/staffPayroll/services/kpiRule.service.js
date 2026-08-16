@@ -72,6 +72,24 @@ const assertTrigger = (trigger) => {
   }
 };
 
+/**
+ * FOIZ CHEGARASI - avval Mongoose `pre("validate")` da edi.
+ *
+ * `rewardType="percent"` bo'lganda `rewardValue` FOIZ, so'm emas -
+ * 100 dan oshsa xodimga tushum summasidan KO'PROQ mukofot yozilardi.
+ * Zod chegarasi (max 1_000_000_000) so'mli turlar uchun to'g'ri,
+ * shuning uchun foiz sharti alohida.
+ *
+ * Servisda, chunki `update` qisman: `{ rewardType: "percent" }` ni
+ * yolg'iz yuborib, eski so'mli `rewardValue` (masalan 500 000) ni
+ * joyida qoldirish mumkin - o'sha holat ham tutilishi kerak.
+ */
+const assertRewardShape = ({ rewardType, rewardValue }) => {
+  if (rewardType === "percent" && Number(rewardValue) > 100) {
+    throw new ApiError(400, "Foiz stavkasi 100 dan oshmasligi kerak");
+  }
+};
+
 // `body` dan FAQAT ustunlar olinadi.
 //
 // Mongoose sxemadan tashqaridagi maydonni jimgina tashlab yuborardi;
@@ -95,6 +113,7 @@ const ruleColumns = (body) => {
 
 export const create = async (body, currentUser) => {
   assertTrigger(body.trigger);
+  assertRewardShape({ rewardType: body.rewardType, rewardValue: body.rewardValue });
   const rule = await prisma.kpiRule.create({
     data: {
       ...ruleColumns(body),
@@ -111,6 +130,11 @@ export const update = async (id, body, currentUser) => {
   if (body.trigger) assertTrigger(body.trigger);
 
   const rule = await loadRule(id);
+  // Qisman patch: tekshiruv KEYINGI holat ustida bajariladi.
+  assertRewardShape({
+    rewardType: body.rewardType ?? rule.rewardType,
+    rewardValue: body.rewardValue ?? rule.rewardValue,
+  });
   const saved = await prisma.kpiRule.update({
     where: { id: rule.id },
     data: { ...ruleColumns(body), updatedById: actorId(currentUser) },
