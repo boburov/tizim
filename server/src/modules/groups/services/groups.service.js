@@ -1,15 +1,8 @@
-import mongoose from "mongoose";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import User from "../../../models/user.model.js";
-import ArchiveReason from "../../../models/archiveReason.model.js";
-import Course from "../../../models/course.model.js";
-import Room from "../../../models/room.model.js";
+import prisma from "../../../config/prisma.js";
 import { attachBotStatus } from "../../../helpers/botStatus.helper.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import {
   toUtcMidnight,
   localTodayMidnight,
@@ -35,31 +28,80 @@ import * as systemNotificationsService from "../../systemNotifications/services/
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { safeRecomputeStudentCompletion } from "../../../helpers/studentCompletion.helper.js";
 
+// ═══════════════════════════════════════════════════════════════════════
+// GURUH SERVISI - MONGO → PRISMA
+//
+// UCHTA TUB O'ZGARISH (qolgani mexanik):
+//
+// 1) `Group.teachers` — MASSIV emas, KO'P-KO'PGA BOG'LANISH.
+//    `(group.teachers || []).map(String)` endi har element uchun
+//    "[object Object]" berardi va jadval to'qnashuvi tekshiruvi JIMGINA
+//    o'tib ketardi (o'qituvchi ikki joyda band bo'lardi). Shuning uchun
+//    ID'lar `teacherIdsOf()` orqali olinadi, yozish esa `set`/`connect`.
+//
+// 2) `Group.schedule` — EMBEDDED massiv emas, ALOHIDA JADVAL
+//    (GroupScheduleItem). Har bir o'qishda ochiq `include` qilinishi
+//    SHART: unutilsa `scheduleActiveOn()` bo'sh massiv ko'radi va
+//    "guruhda dars yo'q" degan jimgina noto'g'ri natija chiqadi -
+//    soatbay maosh 0 ga tushadi, to'qnashuv tekshiruvi hech nimani
+//    tutmaydi. Yozish - `deleteMany` + `create` (versiya almashtirish).
+//
+// 3) `archivedClosedPeriods` / `archivedClosedMemberships` — SKALYAR
+//    `String[]` (relation EMAS). Ularga `doc._id` yozish `undefined`
+//    beradi va kursni qayta ochganda HECH NARSA tiklanmasdi: o'qituvchi
+//    biriktirilmagan (maosh yo'q), o'quvchilar bitirgan (qarz yo'q),
+//    guruh esa aktiv ko'rinardi.
+//
+// MOLIYAVIY YON TA'SIRLAR: guruh o'zgarishi maosh/to'lov qayta hisobini
+// KELTIRIB CHIQARADI. Qaysi chaqiruv MAJBURIY (xato yuqoriga chiqadi),
+// qaysi biri best-effort (log) ekani AYNAN Mongo variantidagidek qoldi -
+// har biri o'z joyida izohlangan.
+// ═══════════════════════════════════════════════════════════════════════
+
 export const safeUserProjection = {
-  firstName: 1,
-  lastName: 1,
-  username: 1,
-  phone: 1,
-  role: 1,
-  isActive: 1,
+  id: true,
+  firstName: true,
+  lastName: true,
+  username: true,
+  phone: true,
+  role: true,
+  isActive: true,
 };
 
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Jadval qatorlari - `scheduleActiveOn()` va `getClassDaysInRange()` shunga tayanadi.
+const SCHEDULE_SELECT = {
+  select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
+};
 
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) {
-    throw new ApiError(400, "Noto'g'ri identifikator");
-  }
-  return new mongoose.Types.ObjectId(String(id));
+// Guruhni to'liq o'qish uchun standart shakl. `schedule` va `teachers`
+// HAR DOIM shu yerdan keladi - ularni unutish jimgina buzadi (yuqoridagi izoh).
+const GROUP_INCLUDE = {
+  schedule: { ...SCHEDULE_SELECT, orderBy: { effectiveFrom: "asc" } },
+  teachers: { select: safeUserProjection },
+};
+
+const actorId = (u) => u?.id || u?._id || null;
+
+// Ko'p-ko'pga bog'lanishdan ID ro'yxati. Mongo'da bu oddiy massiv edi.
+const teacherIdsOf = (group) => (group?.teachers || []).map((t) => t.id ?? t).map(String);
+
+// Guruh javobini eski (Mongoose) shakliga keltiradi.
+const shapeGroup = (group) => {
+  if (!group) return group;
+  const out = withLegacyId(group);
+  // Client `group.teachers[i]._id` o'qiydi - withLegacyId ichkariga ham kiradi.
+  return out;
 };
 
 // Yozuv amallari uchun: guruh mavjud + aktiv bo'lishi shart. Arxivlangan bo'lsa
 // aniq xabar beradi (avval read-only edi - chalg'ituvchi 404). Read yo'llari
-// (getById/list/restore) Group.findById ni TO'G'RIDAN-TO'G'RI ishlatadi.
+// (getById/list/restore) guruhni TO'G'RIDAN-TO'G'RI o'qiydi.
 // FILIAL KO'LAMI shu YAGONA nuqtada - fayl bo'ylab o'nlab joyda ishlatiladi.
 const ensureGroup = async (groupId) => {
-  const group = await Group.findOne({ _id: groupId, ...branchFilter() });
+  const group = await prisma.group.findFirst({
+    where: { id: String(groupId), ...branchFilter() },
+    include: GROUP_INCLUDE,
+  });
   if (!group || group.isDeleted) throw new ApiError(404, "Guruh topilmadi");
   // Tugagan kurs (isActive=false yoki endDate o'tgan - kunlik job-gacha oyna).
   const ended =
@@ -75,7 +117,18 @@ const ensureGroup = async (groupId) => {
 };
 
 const ensureStudent = async (studentId) => {
-  const user = await User.findById(studentId);
+  const user = await prisma.user.findUnique({
+    where: { id: String(studentId) },
+    select: {
+      id: true,
+      role: true,
+      isActive: true,
+      isDeleted: true,
+      enrolledAt: true,
+      firstName: true,
+      lastName: true,
+    },
+  });
   if (!user || user.role !== ROLES.STUDENT || !user.isActive || user.isDeleted) {
     throw new ApiError(400, "O'quvchi topilmadi");
   }
@@ -89,12 +142,9 @@ const ensureTeachers = async (teacherIds) => {
   if (teacherIds.length > 1) {
     throw new ApiError(400, "Guruhda faqat bitta o'qituvchi bo'lishi mumkin");
   }
-  const ids = teacherIds.map(toObjectId);
-  const count = await User.countDocuments({
-    _id: { $in: ids },
-    role: ROLES.TEACHER,
-    isActive: true,
-    isDeleted: { $ne: true },
+  const ids = teacherIds.map(String);
+  const count = await prisma.user.count({
+    where: { id: { in: ids }, role: ROLES.TEACHER, isActive: true, isDeleted: false },
   });
   if (count !== ids.length) {
     throw new ApiError(400, "Bir yoki bir nechta o'qituvchi noto'g'ri");
@@ -108,16 +158,16 @@ export const list = async ({
   page = 1,
   limit = 20,
 }) => {
-  // FILIAL ko'lami: aggregate pre-hook'lari ishlamaydi, shuning uchun
-  // filtr ochiq qo'shiladi (branchFilter() kontekstdan oladi).
-  const match = {
+  // FILIAL ko'lami - `branchFilter()` allaqachon Prisma shaklini beradi.
+  const where = {
     ...branchFilter(),
     isActive: archived ? false : true,
-    isDeleted: { $ne: true },
+    isDeleted: false,
   };
-  if (teacherId) match.teachers = toObjectId(teacherId);
+  // Ko'p-ko'pga: Mongo'da `{ teachers: id }` edi.
+  if (teacherId) where.teachers = { some: { id: String(teacherId) } };
   if (search && search.trim()) {
-    match.name = { $regex: escapeRegex(search.trim()), $options: "i" };
+    where.name = { contains: search.trim(), mode: "insensitive" };
   }
 
   const skip = (page - 1) * limit;
@@ -127,82 +177,44 @@ export const list = async ({
   const curYear = today.getUTCFullYear();
   const curMonth = today.getUTCMonth() + 1;
 
-  const pipeline = [
-    { $match: match },
-    { $sort: { createdAt: -1 } },
-    { $skip: skip },
-    { $limit: limit },
-    {
-      $lookup: {
-        from: "groupfees",
-        let: { gid: "$_id" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $eq: ["$group", "$$gid"] },
-                  { $eq: ["$year", curYear] },
-                  { $eq: ["$month", curMonth] },
-                ],
-              },
-            },
-          },
-          { $project: { amount: 1 } },
-        ],
-        as: "_fee",
+  // Mongo'da bu uchta `$lookup` bo'lgan aggregation quvuri edi. Prisma'da:
+  //   • o'qituvchilar   → `include`
+  //   • faol o'quvchilar soni → filtrlangan `_count` (bitta so'rovda)
+  //   • joriy oy narxi  → alohida bitta so'rov (N+1 emas: bir marta,
+  //                        sahifadagi barcha guruh ID'lari bo'yicha)
+  const [rows, total] = await Promise.all([
+    prisma.group.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        ...GROUP_INCLUDE,
+        _count: {
+          select: { memberships: { where: { leftAt: null, isDeleted: false } } },
+        },
       },
-    },
-    {
-      $addFields: {
-        monthlyFee: { $ifNull: [{ $arrayElemAt: ["$_fee.amount", 0] }, null] },
-      },
-    },
-    { $project: { _fee: 0 } },
-    {
-      $lookup: {
-        from: "groupmemberships",
-        let: { gid: "$_id" },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $eq: ["$group", "$$gid"] },
-                  { $eq: ["$leftAt", null] },
-                  { $ne: ["$isDeleted", true] },
-                ],
-              },
-            },
-          },
-          { $count: "n" },
-        ],
-        as: "_active",
-      },
-    },
-    {
-      $addFields: {
-        studentsCount: { $ifNull: [{ $arrayElemAt: ["$_active.n", 0] }, 0] },
-      },
-    },
-    { $project: { _active: 0 } },
-    {
-      $lookup: {
-        from: "users",
-        let: { tids: "$teachers" },
-        pipeline: [
-          { $match: { $expr: { $in: ["$_id", "$$tids"] } } },
-          { $project: safeUserProjection },
-        ],
-        as: "teachers",
-      },
-    },
-  ];
-
-  const [items, total] = await Promise.all([
-    Group.aggregate(pipeline),
-    Group.countDocuments(match),
+    }),
+    prisma.group.count({ where }),
   ]);
+
+  const ids = rows.map((g) => g.id);
+  const fees = ids.length
+    ? await prisma.groupFee.findMany({
+        where: { groupId: { in: ids }, year: curYear, month: curMonth },
+        select: { groupId: true, amount: true },
+      })
+    : [];
+  const feeByGroup = new Map(fees.map((f) => [f.groupId, f.amount]));
+
+  const items = rows.map((g) => {
+    const { _count, ...rest } = g;
+    return shapeGroup({
+      ...rest,
+      monthlyFee: feeByGroup.has(g.id) ? feeByGroup.get(g.id) : null,
+      studentsCount: _count.memberships,
+    });
+  });
 
   return { items, total, page, limit };
 };
@@ -218,27 +230,27 @@ const attachTelegram = attachBotStatus;
 export const getById = async (id) => {
   // FILIAL: boshqa filial guruhining to'liq tafsiloti (o'quvchilar, telefon,
   // Telegram ID) ochilib ketmasin. 404 - mavjudligini ham oshkor qilmaymiz.
-  const group = await Group.findOne({ _id: id, ...branchFilter() })
-    .populate("teachers", safeUserProjection);
+  const group = await prisma.group.findFirst({
+    where: { id: String(id), ...branchFilter() },
+    include: GROUP_INCLUDE,
+  });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
-  const memberships = await GroupMembership.find({
-    group: group._id,
-    leftAt: null,
-    isDeleted: { $ne: true },
-  })
-    .populate("student", safeUserProjection)
-    .sort({ joinedAt: 1 });
+  const memberships = await prisma.groupMembership.findMany({
+    where: { groupId: group.id, leftAt: null, isDeleted: false },
+    include: { student: { select: safeUserProjection } },
+    orderBy: { joinedAt: "asc" },
+  });
 
   const students = memberships
     .filter((m) => m.student)
     .map((m) => ({
-      membershipId: m._id,
+      membershipId: m.id,
       joinedAt: m.joinedAt,
-      ...m.student.toJSON(),
+      ...withLegacyId(m.student),
     }));
 
-  const groupJson = group.toJSON();
+  const groupJson = shapeGroup(group);
 
   // Telegram ma'lumotini o'quvchilar va o'qituvchilarga biriktiramiz
   await Promise.all([
@@ -277,6 +289,10 @@ const slotSetKey = (slots) =>
 // saqlab, yangi qatorlarni effectiveFrom (default - bugun) bilan ustiga qo'shamiz.
 // Shunday qilib o'tgan sanalar eski versiya, yangi sanalar yangi versiya bo'yicha
 // hisoblanadi (BUG-4: tarixiy dars soni shishmaydi).
+//
+// `null` QAYTSA - "o'zgarish yo'q", ya'ni chaqiruvchi jadvalga UMUMAN
+// tegmaydi. Bu Prisma'da muhim: `deleteMany + create` bejiz ishga tushsa
+// qatorlarning ID'lari almashib, keraksiz yozuv sodir bo'lardi.
 const mergeScheduleVersion = (existing, incoming, effectiveFromInput) => {
   const incomingClean = normalizeSchedule(incoming, { dropEffective: true });
   const existingArr = existing || [];
@@ -284,7 +300,7 @@ const mergeScheduleVersion = (existing, incoming, effectiveFromInput) => {
   // Joriy (bugun) amaldagi versiya bilan solishtiramiz
   const currentActive = scheduleActiveOn(existingArr);
   if (slotSetKey(currentActive) === slotSetKey(incomingClean)) {
-    return existingArr; // o'zgarish yo'q - tarixga tegmaymiz
+    return null; // o'zgarish yo'q - tarixga tegmaymiz
   }
 
   const effectiveFrom = effectiveFromInput
@@ -294,7 +310,7 @@ const mergeScheduleVersion = (existing, incoming, effectiveFromInput) => {
 
   // Aynan shu effectiveFrom ga ega eski qatorlarni olib tashlaymiz - bir kunda
   // bir necha marta tahrirlansa yangi versiya eskisini ALMASHTIRADI (dublikat
-  // (kun+vaqt+effectiveFrom) bo'lib model rad etmasligi uchun).
+  // (kun+vaqt+effectiveFrom) bo'lib unique indeks rad etmasligi uchun).
   const kept = existingArr.filter((s) => {
     const ts = s.effectiveFrom ? toUtcMidnight(s.effectiveFrom).getTime() : null;
     return ts !== effTs;
@@ -316,7 +332,10 @@ const mergeScheduleVersion = (existing, incoming, effectiveFromInput) => {
 // null = biriktirilmagan (ruxsat etilgan - eski/aralash guruhlar).
 const assertCourseExists = async (courseId) => {
   if (!courseId) return;
-  const course = await Course.findById(courseId).select("isActive").lean();
+  const course = await prisma.course.findUnique({
+    where: { id: String(courseId) },
+    select: { isActive: true },
+  });
   if (!course) throw new ApiError(400, "Kurs topilmadi");
   if (!course.isActive) throw new ApiError(400, "Nofaol kursni biriktirib bo'lmaydi");
 };
@@ -328,9 +347,10 @@ const assertCourseExists = async (courseId) => {
 // ikkala filialning ham utilization raqami yolg'on bo'lardi.
 const assertRoomInBranch = async (roomId, branchId) => {
   if (!roomId) return;
-  const room = await Room.findOne({ _id: roomId, isDeleted: false })
-    .select("branchId isActive name")
-    .lean();
+  const room = await prisma.room.findFirst({
+    where: { id: String(roomId), isDeleted: false },
+    select: { branchId: true, isActive: true, name: true },
+  });
   if (!room) throw new ApiError(400, "Xona topilmadi");
   if (!room.isActive) throw new ApiError(400, "Nofaol xonani biriktirib bo'lmaydi");
   if (String(room.branchId) !== String(branchId)) {
@@ -344,10 +364,10 @@ export const create = async (body, currentUser) => {
   // biriktirib bo'lmaydi (guruh boshlanganda o'qituvchi hali ishga qabul qilinmagan).
   const gStart = body.startDate ? toUtcMidnight(body.startDate) : null;
   if (gStart && body.teachers?.length) {
-    const tDocs = await User.find(
-      { _id: { $in: body.teachers } },
-      { hiredAt: 1, firstName: 1, lastName: 1 },
-    ).lean();
+    const tDocs = await prisma.user.findMany({
+      where: { id: { in: body.teachers.map(String) } },
+      select: { hiredAt: true, firstName: true, lastName: true },
+    });
     for (const t of tDocs) {
       if (t.hiredAt && toUtcMidnight(t.hiredAt).getTime() > gStart.getTime()) {
         const nm = `${t.firstName} ${t.lastName || ""}`.trim();
@@ -360,6 +380,7 @@ export const create = async (body, currentUser) => {
   }
   // Jadval to'qnashuvi: o'qituvchi bir vaqtda ikkita guruhda dars bera olmaydi.
   for (const teacherId of body.teachers || []) {
+    // eslint-disable-next-line no-await-in-loop
     await teacherGroupPeriodService.assertTeacherScheduleFree(
       teacherId,
       body.schedule,
@@ -371,28 +392,32 @@ export const create = async (body, currentUser) => {
   // client formada aniq filialni so'raydi va `branchId` bilan yuboradi.
   const branchId = await resolveBranchForWrite(currentUser, body.branchId);
 
-  // KURS va XONA - Faza 3 da qo'shildi.
+  // KURS va XONA.
   //
   // Kurs GLOBAL katalog, shuning uchun faqat mavjudligi tekshiriladi.
-  // Xona esa FILIAL resursi: u guruh bilan BIR filialda bo'lishi shart,
-  // aks holda A filial guruhi B filialning xonasini "band qilib" qo'yardi
-  // va bandlik hisoboti ikkala filialda ham noto'g'ri chiqardi.
+  // Xona esa FILIAL resursi: u guruh bilan BIR filialda bo'lishi shart.
   await assertCourseExists(body.courseId);
   await assertRoomInBranch(body.roomId, branchId);
 
-  const group = await Group.create({
-    branchId,
-    courseId: body.courseId || null,
-    roomId: body.roomId || null,
-    name: body.name.trim(),
-    schedule: normalizeSchedule(body.schedule, { dropEffective: true }),
-    // teachers[] - davrlardan HOSILA kesh; assignTeacher syncGroupTeachersCache qiladi.
-    teachers: [],
-    startDate: body.startDate ? toUtcMidnight(body.startDate) : null,
-    endDate: body.endDate ? toUtcMidnight(body.endDate) : null,
-    durationMonths: body.durationMonths ?? null,
-    // Berilmasa modeldagi standart ("prorated") qoladi.
-    ...(body.entryBilling ? { entryBilling: body.entryBilling } : {}),
+  const group = await prisma.group.create({
+    data: {
+      branchId,
+      courseId: body.courseId || null,
+      roomId: body.roomId || null,
+      name: body.name.trim(),
+      // Jadval endi ALOHIDA jadval - ichma-ich `create` bilan bitta amalda.
+      schedule: {
+        create: normalizeSchedule(body.schedule, { dropEffective: true }),
+      },
+      // teachers - davrlardan HOSILA kesh; assignTeacher syncGroupTeachersCache qiladi.
+      // Ko'p-ko'pga bog'lanishda "bo'sh" degani - hech kimni ulamaslik.
+      startDate: body.startDate ? toUtcMidnight(body.startDate) : null,
+      endDate: body.endDate ? toUtcMidnight(body.endDate) : null,
+      durationMonths: body.durationMonths ?? null,
+      // Berilmasa sxemadagi standart ("prorated") qoladi.
+      ...(body.entryBilling ? { entryBilling: body.entryBilling } : {}),
+    },
+    include: GROUP_INCLUDE,
   });
 
   const today = localTodayMidnight();
@@ -406,24 +431,25 @@ export const create = async (body, currentUser) => {
   try {
     if (body.monthlyPrice != null) {
       await financeGroupFeeService.upsert({
-        groupId: group._id,
+        groupId: group.id,
         year,
         month,
         amount: body.monthlyPrice,
       });
     } else {
-      await financeGroupFeeService.ensureGroupFee(group._id, year, month);
+      await financeGroupFeeService.ensureGroupFee(group.id, year, month);
     }
   } catch (err) {
     logger.warn({ err }, "Yangi guruh uchun oylik to'lov yaratilmadi");
   }
 
   // O'qituvchilarni dars berish DAVRI sifatida biriktiramiz (manba haqiqati).
-  // assignTeacher ochiq davr ochib, teachers[] keshini sinxronlaydi.
+  // assignTeacher ochiq davr ochib, teachers keshini sinxronlaydi.
   const startDate = group.startDate || today;
   for (const teacherId of body.teachers || []) {
     try {
-      await teacherGroupPeriodService.assignTeacher(group._id, teacherId, { startDate });
+      // eslint-disable-next-line no-await-in-loop
+      await teacherGroupPeriodService.assignTeacher(group.id, teacherId, { startDate });
     } catch (err) {
       // O'QITUVCHISIZ GURUH QOLIB KETMASIN.
       //
@@ -435,15 +461,20 @@ export const create = async (body, currentUser) => {
       // Guruh yaratish - BITTA amal. Biriktirish yiqilsa endigina
       // yaratilgan guruhni butunlay orqaga qaytaramiz (u hali hech qayerda
       // ishlatilmagan: a'zolik ham, davomat ham yo'q) va xatoni AYNAN
-      // sababi bilan qaytaramiz - "ishga olingan sanasi guruh boshlanish
-      // sanasidan keyin" kabi xabarni operator o'qib, tuzata oladi.
+      // sababi bilan qaytaramiz.
       try {
-        await hardDeleteGroupData(group._id);
-        await Group.deleteOne({ _id: group._id });
+        // eslint-disable-next-line no-await-in-loop
+        await hardDeleteGroupData(group.id);
+        // eslint-disable-next-line no-await-in-loop
+        await prisma.groupScheduleItem.deleteMany({ where: { groupId: group.id } });
+        // eslint-disable-next-line no-await-in-loop
+        await prisma.group.update({ where: { id: group.id }, data: { teachers: { set: [] } } });
+        // eslint-disable-next-line no-await-in-loop
+        await prisma.group.delete({ where: { id: group.id } });
       } catch (cleanupErr) {
         // Tozalash yiqilsa ham ASL xatoni yashirmaymiz.
         logger.error(
-          { err: cleanupErr, groupId: String(group._id) },
+          { err: cleanupErr, groupId: String(group.id) },
           "Yiqilgan guruh yaratishni orqaga qaytarib bo'lmadi",
         );
       }
@@ -458,9 +489,10 @@ export const create = async (body, currentUser) => {
     // Maosh yozuvi - IKKILAMCHI: yiqilsa ham guruh yaroqli qoladi, yozuv
     // keyingi hisoblashda o'zi yaratiladi. Shuning uchun bu yerda faqat log.
     try {
+      // eslint-disable-next-line no-await-in-loop
       await teacherSalaryService.ensureSalaryForTeacherGroup(
         teacherId,
-        group._id,
+        group.id,
         year,
         month,
       );
@@ -471,17 +503,25 @@ export const create = async (body, currentUser) => {
 
   // endDate berilgan bo'lsa hayot-tsiklni moslaymiz (o'tgan sana → darhol arxiv).
   if (group.endDate) {
-    await reconcileGroupEnd(await Group.findById(group._id));
+    await reconcileGroupEnd(await loadGroup(group.id));
   }
 
-  return Group.findById(group._id);
+  return shapeGroup(await loadGroup(group.id));
 };
+
+// Ichki: guruhni to'liq shakl bilan o'qish (filial filtri YO'Q - chaqiruvchi
+// allaqachon ko'lamni tekshirgan bo'ladi).
+const loadGroup = (id) =>
+  prisma.group.findUnique({ where: { id: String(id) }, include: GROUP_INCLUDE });
 
 export const update = async (id, body) => {
   // Arxivlangan guruhni ham yuklaymiz - endDate'ni tahrirlab REACTIVATE qilish
   // (kelajakka uzaytirish) shu yo'l orqali bo'ladi.
   // FILIAL: boshqa filial guruhini tahrirlab bo'lmaydi.
-  const group = await Group.findOne({ _id: id, ...branchFilter() });
+  const group = await prisma.group.findFirst({
+    where: { id: String(id), ...branchFilter() },
+    include: GROUP_INCLUDE,
+  });
   if (!group || group.isDeleted) throw new ApiError(404, "Guruh topilmadi");
 
   if (body.teachers !== undefined) await ensureTeachers(body.teachers);
@@ -492,7 +532,8 @@ export const update = async (id, body) => {
   {
     const scheduleForCheck =
       body.schedule !== undefined ? body.schedule : group.schedule;
-    const currentTeacherIds = (group.teachers || []).map(String);
+    // KO'P-KO'PGA: `.map(String)` obyektlar ustida "[object Object]" berardi.
+    const currentTeacherIds = teacherIdsOf(group);
     const toCheck = new Set();
     if (body.schedule !== undefined) {
       currentTeacherIds.forEach((t) => toCheck.add(t));
@@ -504,15 +545,17 @@ export const update = async (id, body) => {
         .forEach((t) => toCheck.add(t));
     }
     for (const teacherId of toCheck) {
+      // eslint-disable-next-line no-await-in-loop
       await teacherGroupPeriodService.assertTeacherScheduleFree(
         teacherId,
         scheduleForCheck,
-        group._id,
+        group.id,
       );
     }
   }
 
-  if (body.name !== undefined) group.name = body.name.trim();
+  const data = {};
+  if (body.name !== undefined) data.name = body.name.trim();
 
   // KURS va XONA. Tekshiruvlar create() dagi bilan AYNI - ular bitta
   // joyda turgani uchun ikki yo'l vaqt o'tib ajralib ketmaydi.
@@ -522,11 +565,11 @@ export const update = async (id, body) => {
   // bo'lishi shart.
   if (body.courseId !== undefined) {
     await assertCourseExists(body.courseId);
-    group.courseId = body.courseId || null;
+    data.courseId = body.courseId || null;
   }
   if (body.roomId !== undefined) {
     await assertRoomInBranch(body.roomId, group.branchId);
-    group.roomId = body.roomId || null;
+    data.roomId = body.roomId || null;
   }
 
   // Versiyalash: client HOZIRGI versiya qatorlarini + bitta "amal qilish sanasi"
@@ -534,47 +577,54 @@ export const update = async (id, body) => {
   // qilsa - eski versiyalar TARIX uchun saqlanib, yangi qatorlar shu sanadan
   // boshlab amal qiladi. Farq bo'lmasa - hech narsa o'zgartirmaymiz.
   if (body.schedule !== undefined) {
-    group.schedule = mergeScheduleVersion(
+    const merged = mergeScheduleVersion(
       group.schedule,
       body.schedule,
       body.scheduleEffectiveFrom,
     );
+    // `null` = o'zgarish yo'q. Jadvalga TEGMAYMIZ: `deleteMany + create`
+    // bejiz ishga tushsa qatorlar qayta yaratilib, keraksiz yozuv bo'lardi.
+    if (merged) {
+      data.schedule = { deleteMany: {}, create: merged };
+    }
   }
 
   if (body.startDate !== undefined) {
-    group.startDate = body.startDate ? toUtcMidnight(body.startDate) : null;
+    data.startDate = body.startDate ? toUtcMidnight(body.startDate) : null;
   }
   if (body.durationMonths !== undefined) {
-    group.durationMonths = body.durationMonths ?? null;
+    data.durationMonths = body.durationMonths ?? null;
   }
   // Kirish siyosati o'zgardimi - joriy oy qarzlarini qayta hisoblash kerak
-  // (quyida, group.save() dan KEYIN). Aks holda o'zgarish keyingi biror
+  // (quyida, saqlashdan KEYIN). Aks holda o'zgarish keyingi biror
   // recalc'gacha kuchga kirmay turardi.
   const entryBillingChanged =
     body.entryBilling !== undefined && body.entryBilling !== group.entryBilling;
   if (body.entryBilling !== undefined) {
-    group.entryBilling = body.entryBilling;
+    data.entryBilling = body.entryBilling;
   }
   if (body.endDate !== undefined) {
     const newEnd = body.endDate ? toUtcMidnight(body.endDate) : null;
-    if (newEnd && group.startDate && newEnd.getTime() < toUtcMidnight(group.startDate).getTime()) {
+    // Yangi startDate shu chaqiruvda kelgan bo'lsa - AYNAN o'shani
+    // solishtiramiz (Mongoose hujjatni joyida mutatsiya qilardi).
+    const nextStart = data.startDate !== undefined ? data.startDate : group.startDate;
+    if (newEnd && nextStart && newEnd.getTime() < toUtcMidnight(nextStart).getTime()) {
       throw new ApiError(400, "Kurs tugash sanasi boshlanish sanasidan oldin bo'lmasin");
     }
-    group.endDate = newEnd;
+    data.endDate = newEnd;
   }
 
-  await group.save();
+  await prisma.group.update({ where: { id: group.id }, data });
 
   // KIRISH SIYOSATI O'ZGARDI - joriy oy qarzlari darhol qayta hisoblanadi.
   //
   // ATAYLAB FAQAT JORIY OY: o'tgan oylar odatda to'langan va yopilgan,
-  // ularni qayta yozish tarixdagi hisob-kitobni buzardi. Kerak bo'lsa
-  // o'sha oyning narxini tahrirlash orqali qo'lda qayta hisoblanadi.
+  // ularni qayta yozish tarixdagi hisob-kitobni buzardi.
   if (entryBillingChanged) {
     const today = localTodayMidnight();
     try {
       await financePaymentService.recalcForGroupMonth(
-        group._id,
+        group.id,
         today.getUTCFullYear(),
         today.getUTCMonth() + 1,
       );
@@ -586,38 +636,43 @@ export const update = async (id, body) => {
   // endDate berilgan bo'lsa hayot-tsiklni moslaymiz (arxiv / reactivate +
   // o'qituvchi davri va o'quvchi a'zoliklari avto yopiladi / ochiladi).
   if (body.endDate !== undefined) {
-    await reconcileGroupEnd(group);
+    await reconcileGroupEnd(await loadGroup(group.id));
   }
 
   // O'qituvchi o'zgarishi - faqat AKTIV guruhda (davrlardan derived maosh).
-  // reconcile'dan KEYIN, group.teachers keshi yangilangach hisoblanadi.
-  if (body.teachers !== undefined && group.isActive) {
-    const fresh = await Group.findById(group._id);
-    const oldIds = (fresh.teachers || []).map(String);
-    const newIds = (body.teachers || []).map(String);
-    const removed = oldIds.filter((t) => !newIds.includes(t));
-    const added = newIds.filter((t) => !oldIds.includes(t));
-    const today = localTodayMidnight();
-    const year = today.getUTCFullYear();
-    const month = today.getUTCMonth() + 1;
-    for (const teacherId of removed) {
-      try {
-        await teacherGroupPeriodService.unassignTeacher(group._id, teacherId, { endDate: today });
-      } catch (err) {
-        logger.warn({ err }, "Chiqarilgan o'qituvchi davri yopilmadi");
+  // reconcile'dan KEYIN, teachers keshi yangilangach hisoblanadi.
+  if (body.teachers !== undefined) {
+    const fresh = await loadGroup(group.id);
+    if (fresh.isActive) {
+      const oldIds = teacherIdsOf(fresh);
+      const newIds = (body.teachers || []).map(String);
+      const removed = oldIds.filter((t) => !newIds.includes(t));
+      const added = newIds.filter((t) => !oldIds.includes(t));
+      const today = localTodayMidnight();
+      const year = today.getUTCFullYear();
+      const month = today.getUTCMonth() + 1;
+      for (const teacherId of removed) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await teacherGroupPeriodService.unassignTeacher(group.id, teacherId, { endDate: today });
+        } catch (err) {
+          logger.warn({ err }, "Chiqarilgan o'qituvchi davri yopilmadi");
+        }
       }
-    }
-    for (const teacherId of added) {
-      try {
-        await teacherGroupPeriodService.assignTeacher(group._id, teacherId, { startDate: today });
-        await teacherSalaryService.ensureSalaryForTeacherGroup(teacherId, group._id, year, month);
-      } catch (err) {
-        logger.warn({ err }, "Qo'shilgan o'qituvchi biriktirilmadi / maosh yaratilmadi");
+      for (const teacherId of added) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await teacherGroupPeriodService.assignTeacher(group.id, teacherId, { startDate: today });
+          // eslint-disable-next-line no-await-in-loop
+          await teacherSalaryService.ensureSalaryForTeacherGroup(teacherId, group.id, year, month);
+        } catch (err) {
+          logger.warn({ err }, "Qo'shilgan o'qituvchi biriktirilmadi / maosh yaratilmadi");
+        }
       }
     }
   }
 
-  return Group.findById(group._id);
+  return shapeGroup(await loadGroup(group.id));
 };
 
 // Guruh tugaganda/arxivlanganda aktiv o'qituvchilarning dars berish davrini yopadi
@@ -626,16 +681,20 @@ export const update = async (id, body) => {
 // davrlarning id'larini qaytaradi (arxivdan chiqarishda aynan shular qayta ochiladi).
 const prorateTeachersOnEnd = async (group, end) => {
   const endExclusive = new Date(toUtcMidnight(end).getTime() + 24 * 60 * 60 * 1000);
-  const activeIds = await teacherGroupPeriodService.activeTeacherIdsForGroup(group._id, end);
+  const activeIds = await teacherGroupPeriodService.activeTeacherIdsForGroup(group.id, end);
   const closedIds = [];
   for (const teacherId of activeIds) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       const closed = await teacherGroupPeriodService.unassignTeacher(
-        group._id,
+        group.id,
         teacherId,
         { endDate: endExclusive },
       );
-      if (closed?._id) closedIds.push(closed._id);
+      // `archivedClosedPeriods` - SKALYAR String[]. `closed._id` Prisma
+      // yozuvida `undefined` bo'lardi va massiv `undefined` bilan to'lib,
+      // arxivdan chiqarishda HECH BIR davr qayta ochilmasdi.
+      if (closed?.id) closedIds.push(String(closed.id));
     } catch (err) {
       logger.warn({ err }, "Guruh tugashida o'qituvchi davri yopilmadi");
     }
@@ -648,20 +707,23 @@ const prorateTeachersOnEnd = async (group, end) => {
 // yopilgan a'zolik id'larini qaytaradi.
 const closeMembershipsOnEnd = async (group, end) => {
   const endExclusive = new Date(toUtcMidnight(end).getTime() + 24 * 60 * 60 * 1000);
-  const open = await GroupMembership.find(
-    { group: group._id, leftAt: null, isDeleted: { $ne: true } },
-    { _id: 1, student: 1 },
-  ).lean();
+  const open = await prisma.groupMembership.findMany({
+    where: { groupId: group.id, leftAt: null, isDeleted: false },
+    select: { id: true, studentId: true },
+  });
   const closedIds = [];
   for (const m of open) {
     try {
-      await GroupMembership.updateOne(
-        { _id: m._id },
-        { $set: { leftAt: endExclusive, leftReason: "graduated" } },
-      );
-      await recalcFinanceOnLeave(group._id, m.student);
-      await safeRecomputeStudentCompletion(m.student);
-      closedIds.push(m._id);
+      // eslint-disable-next-line no-await-in-loop
+      await prisma.groupMembership.update({
+        where: { id: m.id },
+        data: { leftAt: endExclusive, leftReason: "graduated" },
+      });
+      // eslint-disable-next-line no-await-in-loop
+      await recalcFinanceOnLeave(group.id, m.studentId);
+      // eslint-disable-next-line no-await-in-loop
+      await safeRecomputeStudentCompletion(m.studentId);
+      closedIds.push(String(m.id));
     } catch (err) {
       logger.warn({ err }, "Kurs tugashida o'quvchi a'zoligi yopilmadi");
     }
@@ -672,21 +734,25 @@ const closeMembershipsOnEnd = async (group, end) => {
 // Kurs qayta aktivlashganda yopilgan a'zolikni qayta ochadi (leftAt=null), agar
 // shu o'quvchi+guruhda boshqa ochiq a'zolik bo'lmasa (single-open invariant).
 const reopenMembership = async (membershipId) => {
-  const m = await GroupMembership.findById(membershipId);
+  const m = await prisma.groupMembership.findUnique({ where: { id: String(membershipId) } });
   if (!m || m.isDeleted || m.leftAt === null) return;
-  const openExists = await GroupMembership.findOne({
-    group: m.group,
-    student: m.student,
-    leftAt: null,
-    isDeleted: { $ne: true },
+  const openExists = await prisma.groupMembership.findFirst({
+    where: { groupId: m.groupId, studentId: m.studentId, leftAt: null, isDeleted: false },
+    select: { id: true },
   });
   if (openExists) return;
-  m.leftAt = null;
-  m.leftReason = null;
-  m.transferredTo = null;
-  await m.save();
-  await ensureFinanceForMembershipRange(m.group, m);
-  await safeRecomputeStudentCompletion(m.student);
+  const reopened = await prisma.groupMembership.update({
+    where: { id: m.id },
+    data: {
+      leftAt: null,
+      leftReason: null,
+      // `transferredTo` - RELATION; ustun nomi `transferredToId`.
+      // Relation nomini `data` ga yozish `connect/disconnect` degani bo'lardi.
+      transferredToId: null,
+    },
+  });
+  await ensureFinanceForMembershipRange(m.groupId, reopened);
+  await safeRecomputeStudentCompletion(m.studentId);
 };
 
 // Guruh hayot-tsiklini endDate'ga moslaydi (idempotent). Yagona manba: endDate.
@@ -698,6 +764,8 @@ export const reconcileGroupEnd = async (group) => {
   const end = group.endDate ? toUtcMidnight(group.endDate) : null;
   const ended = !!end && end.getTime() <= today.getTime();
 
+  const data = {};
+
   const hadClosed =
     (group.archivedClosedPeriods?.length || 0) +
       (group.archivedClosedMemberships?.length || 0) >
@@ -705,6 +773,7 @@ export const reconcileGroupEnd = async (group) => {
   if (hadClosed) {
     for (const pid of group.archivedClosedPeriods || []) {
       try {
+        // eslint-disable-next-line no-await-in-loop
         await teacherGroupPeriodService.reopenPeriod(pid);
       } catch (err) {
         logger.warn({ err }, "Reactivate: o'qituvchi davri qayta ochilmadi");
@@ -712,62 +781,71 @@ export const reconcileGroupEnd = async (group) => {
     }
     for (const mid of group.archivedClosedMemberships || []) {
       try {
+        // eslint-disable-next-line no-await-in-loop
         await reopenMembership(mid);
       } catch (err) {
         logger.warn({ err }, "Reactivate: o'quvchi a'zoligi qayta ochilmadi");
       }
     }
-    group.archivedClosedPeriods = [];
-    group.archivedClosedMemberships = [];
+    data.archivedClosedPeriods = [];
+    data.archivedClosedMemberships = [];
   }
 
   if (ended) {
-    group.archivedClosedPeriods = await prorateTeachersOnEnd(group, end);
-    group.archivedClosedMemberships = await closeMembershipsOnEnd(group, end);
-    group.isActive = false;
+    data.archivedClosedPeriods = await prorateTeachersOnEnd(group, end);
+    data.archivedClosedMemberships = await closeMembershipsOnEnd(group, end);
+    data.isActive = false;
   } else {
-    group.isActive = true;
+    data.isActive = true;
   }
-  await group.save();
-  return group;
+  const saved = await prisma.group.update({
+    where: { id: group.id },
+    data,
+    include: GROUP_INCLUDE,
+  });
+  return saved;
 };
 
 // Tugash sanasi YETIB KELGAN, lekin hali aktiv guruhlarni avto arxivlaydi (kunlik
 // job + boot catch-up chaqiradi). Idempotent.
 export const processDueGroupEnds = async () => {
   const today = localTodayMidnight();
-  const due = await Group.find({
-    isActive: true,
-    isDeleted: { $ne: true },
-    endDate: { $ne: null, $lte: today },
+  const due = await prisma.group.findMany({
+    where: {
+      isActive: true,
+      isDeleted: false,
+      endDate: { not: null, lte: today },
+    },
+    include: GROUP_INCLUDE,
   });
   let archived = 0;
   for (const group of due) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       await reconcileGroupEnd(group);
       archived += 1;
     } catch (err) {
-      logger.warn({ err, group: group._id }, "Guruh avto-arxivlanmadi");
+      logger.warn({ err, group: group.id }, "Guruh avto-arxivlanmadi");
     }
   }
   return { processed: due.length, archived };
 };
 
-// Butunlay o'chirish (soft cascade) - FAQAT bo'sh guruh (o'quvchisiz, pulsiz).
-// Adashib yaratilgan guruhni tozalash uchun. Tarixi bor guruhni o'chirib bo'lmaydi.
-// Guruhni BUTUNLAY (hard) o'chirish - guruh va unga bog'liq BARCHA yozuvlar
+// Butunlay o'chirish - guruh va unga bog'liq BARCHA yozuvlar
 // (a'zolik, davomat, baho, to'lov, maosh, narx, dars davri...) fizik o'chadi.
 // Tasdiqlash uchun guruh nomini to'g'ri yozish shart (qaytarib bo'lmaydi).
 // MOLIYAVIY IZCHILLIK: o'quvchi/o'qituvchi hard-delete kabi, kirim/chiqim yozuvlari
-// hisobotlardan toza chiqadi (so'rovda agregatlanadi). YAGONA majburiy tuzatuv -
-// depozitdan qoplangan (source:"deposit") to'lovlarni o'quvchi depozitiga qaytarish
-// (aks holda garov izsiz yo'qolardi). Boshqa guruhlar/o'qituvchilar moliyasi o'zaro
-// bog'liq emas, shu sababli qo'shimcha recalc kerak emas.
+// hisobotlardan toza chiqadi. YAGONA majburiy tuzatuv - depozitdan qoplangan
+// (source:"deposit") to'lovlarni o'quvchi depozitiga qaytarish (aks holda garov
+// izsiz yo'qolardi). Boshqa guruhlar/o'qituvchilar moliyasi o'zaro bog'liq emas.
 export const permanentRemove = async (id, currentUser, { confirmName } = {}) => {
   // FILIAL: bu QAYTARIB BO'LMAYDIGAN amal - guruh va uning butun ma'lumoti
   // (davomat, baho, to'lov tarixi) o'chadi. Boshqa filial guruhiga
   // yetib borishi mumkin bo'lgan eng xavfli yo'l shu edi.
-  const group = await Group.findOne({ _id: id, ...branchFilter() });
+  const group = await prisma.group.findFirst({
+    where: { id: String(id), ...branchFilter() },
+    select: { id: true, name: true, isActive: true, endDate: true },
+  });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
   // O'chirish faqat: (a) guruhda AKTIV o'quvchi bo'lmasa (0 ta) YOKI (b) kurs
@@ -778,10 +856,8 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
     toUtcMidnight(group.endDate).getTime() <= localTodayMidnight().getTime();
   const finished = !group.isActive || ended;
   if (!finished) {
-    const activeStudents = await GroupMembership.countDocuments({
-      group: toObjectId(id),
-      leftAt: null,
-      isDeleted: { $ne: true },
+    const activeStudents = await prisma.groupMembership.count({
+      where: { groupId: group.id, leftAt: null, isDeleted: false },
     });
     if (activeStudents > 0) {
       throw new ApiError(
@@ -796,35 +872,46 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
     throw new ApiError(400, "Tasdiqlash uchun guruh nomini to'g'ri kiriting");
   }
 
-  const studentIds = await runFinanceTxn(async (session) => {
+  // Depozit qaytarish + fizik o'chirish BITTA tranzaksiyada. Mongo'da
+  // atomiklik SHARTLI edi (replica set bo'lmasa yo'q) - ya'ni depozit
+  // qaytarilib, guruh o'chmay qolishi MUMKIN edi va o'quvchi pulni ikki
+  // marta olardi. Postgres'da bunday holat yo'q.
+  const studentIds = await runFinanceTxn(async (tx) => {
     // 1) MAJBURIY: depozitdan qoplangan to'lovlarni o'quvchi depozitiga QAYTARAMIZ.
-    const covers = await PaymentTransaction.find(
-      { group: toObjectId(id), source: "deposit", isDeleted: { $ne: true } },
-      { student: 1, amount: 1 },
-    ).session(session || null);
+    const covers = await tx.paymentTransaction.findMany({
+      where: { groupId: group.id, source: "deposit", isDeleted: false },
+      select: { studentId: true, amount: true },
+    });
     const perStudent = new Map();
     for (const c of covers) {
-      if (!c.student) continue;
-      const key = String(c.student);
+      if (!c.studentId) continue;
+      const key = String(c.studentId);
       perStudent.set(key, (perStudent.get(key) || 0) + (c.amount || 0));
     }
     for (const [sid, total] of perStudent) {
       if (total > 0) {
+        // eslint-disable-next-line no-await-in-loop
         await depositService.refundToDeposit(sid, total, {
-          session,
+          tx,
           note: "Guruh o'chirildi - to'lovga qaytarildi",
         });
       }
     }
 
     // 2) Guruhga oid BARCHA yozuvlarni fizik o'chiramiz + guruhning o'zini.
-    const sids = await hardDeleteGroupData(id, { session });
-    await Group.deleteOne({ _id: id }, session ? { session } : undefined);
+    const sids = await hardDeleteGroupData(group.id, { tx });
+    // Jadval qatorlari `onDelete: Cascade` bilan o'zi ketadi, lekin
+    // ko'p-ko'pga bog'lanish (teachers) join jadvalini OCHIQ bo'shatamiz -
+    // aks holda o'chirish FK cheklovi bilan yiqilardi.
+    await tx.group.update({ where: { id: group.id }, data: { teachers: { set: [] } } });
+    await tx.groupScheduleItem.deleteMany({ where: { groupId: group.id } });
+    await tx.group.delete({ where: { id: group.id } });
     return sids;
   });
 
   // A'zolik o'chgani uchun o'quvchilar yakunlash sanasini qayta hisoblaymiz (best-effort).
   for (const sid of studentIds) {
+    // eslint-disable-next-line no-await-in-loop
     await safeRecomputeStudentCompletion(sid);
   }
 
@@ -837,15 +924,15 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
     // bildirishnoma yozilmasa ham o'chirish buzilmasin
   }
 
-  return { _id: id };
+  return { id: group.id, _id: group.id };
 };
 
 // O'chirilgan guruhni qaytarish
 export const restoreDeleted = async (id) => {
-  const group = await Group.findById(id);
+  const group = await prisma.group.findUnique({ where: { id: String(id) } });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
-  await cascadeRestoreGroup(id);
-  return Group.findById(id);
+  await cascadeRestoreGroup(group.id);
+  return shapeGroup(await loadGroup(group.id));
 };
 
 // Membershipning joinedAt oyidan tugash oyigacha (leftAt yoki bugun) har bir oy
@@ -862,13 +949,16 @@ const ensureFinanceForMembershipRange = async (groupId, membership) => {
     const endYear = endRef.getUTCFullYear();
     const endMonth = endRef.getUTCMonth() + 1; // 1-12
 
-    const join = membership.joinedAt;
+    const join = new Date(membership.joinedAt);
     let year = join.getUTCFullYear();
     let month = join.getUTCMonth() + 1; // 1-12
 
     while (year < endYear || (year === endYear && month <= endMonth)) {
+      // eslint-disable-next-line no-await-in-loop
       await financeGroupFeeService.ensureGroupFeeBackfill(groupId, year, month);
+      // eslint-disable-next-line no-await-in-loop
       await financePaymentService.ensurePaymentForMembership(membership, year, month);
+      // eslint-disable-next-line no-await-in-loop
       await teacherSalaryService.recalcForGroupMonth(groupId, year, month);
 
       month += 1;
@@ -887,12 +977,7 @@ const ensureFinanceForMembershipRange = async (groupId, membership) => {
  *
  * NEGA KERAK: joinedAt o'tgan oyga qo'yilsa ensureFinanceForMembershipRange
  * har bir oy uchun QARZ yaratadi - o'quvchi hech qanday ogohlantirishsiz
- * to'satdan 3 oylik qarzdor bo'lib qoladi. Ilgari bu jimgina sodir bo'lardi.
- *
- * Endi UI avval shu funksiyani chaqirib "Bu amal 3 oy uchun 4 200 000 so'm
- * qarz yaratadi. Davom etasizmi?" deb so'raydi va katta summa tasdiqdan o'tadi.
- *
- * @returns {{months: Array, monthCount: number, estimatedDebt: number, isBackdated: boolean}}
+ * to'satdan 3 oylik qarzdor bo'lib qoladi.
  */
 export const previewBackdate = async (groupId, { joinedAt, leftAt } = {}) => {
   const group = await ensureGroup(groupId);
@@ -921,8 +1006,9 @@ export const previewBackdate = async (groupId, { joinedAt, leftAt } = {}) => {
     // Fee hali yaratilmagan bo'lsa o'sha vaqtda amalda bo'lgan eng yaqin
     // tarif bilan taxmin qilamiz - aynan ensureGroupFeeBackfill ishlatadigan
     // qiymat, ya'ni preview haqiqiy natijaga mos keladi.
+    // eslint-disable-next-line no-await-in-loop
     const amount =
-      Number(await financeGroupFeeService.nearestFeeAmount(groupId, year, month)) || 0;
+      Number(await financeGroupFeeService.nearestFeeAmount(group.id, year, month)) || 0;
     const isPast = year * 100 + month < currentKey;
     months.push({ year, month, amount, isPast });
     if (isPast) estimatedDebt += amount;
@@ -971,15 +1057,15 @@ export const requestBackdate = async (groupId, studentId, body, currentUser) => 
     // Limit bilan solishtiriladigan qiymat - YARATILADIGAN QARZ.
     amount: Math.max(1, preview.estimatedDebt),
     payload: {
-      group: String(groupId),
-      student: String(studentId),
+      group: String(group.id),
+      student: String(student.id),
       joinedAt: body.joinedAt,
       leftAt: body.leftAt ?? null,
       previewDebt: preview.estimatedDebt,
       previewMonths: preview.pastMonthCount,
     },
     // Bir o'quvchi + bir guruh uchun bitta kutilayotgan so'rov.
-    subjectKey: `membership_backdate:${String(groupId)}:${String(studentId)}`,
+    subjectKey: `membership_backdate:${String(group.id)}:${String(student.id)}`,
     subjectName: `${student.firstName} ${student.lastName || ""}`.trim(),
     contextName: `${group.name} - ${preview.pastMonthCount} oy, ${preview.estimatedDebt} so'm qarz`,
     requestNote: body.requestNote,
@@ -992,18 +1078,13 @@ export const requestBackdate = async (groupId, studentId, body, currentUser) => 
  *
  * addStudent'ning O'ZINI chaqiradi - ya'ni barcha qo'riqchilar (guruh
  * boshlangan sana, ro'yxatga olingan sana, davrlar kesishuvi) SHU YERDA
- * QAYTA ishlaydi. So'rov va tasdiq orasida holat o'zgargan bo'lsa
- * (o'quvchi allaqachon qo'shilgan, guruh arxivlangan) - approve() so'rovni
- * FAILED qiladi va owner sababni ko'radi.
+ * QAYTA ishlaydi.
  */
 export const executeApprovedBackdate = async (approval) => {
   const p = approval?.payload || {};
   if (!p.group || !p.student) {
     throw new ApiError(400, "So'rovda guruh yoki o'quvchi ko'rsatilmagan");
   }
-  // Tasdiq qo'riqchisi HANDLER qatlamida (servisda emas), shuning uchun bu
-  // yerdan chaqirilganda ikkinchi marta tasdiq so'ralmaydi - qo'shimcha
-  // bayroq kerak emas.
   return addStudent(p.group, p.student, {
     joinedAt: p.joinedAt,
     leftAt: p.leftAt ?? null,
@@ -1043,58 +1124,59 @@ const findSlotConflicts = (slotsA, slotsB) => {
 };
 
 // Berilgan o'quvchilardan qaysilari MAQSAD guruh jadvali bilan bir kun/bir vaqtda
-// to'qnashuvchi (boshqa aktiv guruhdagi) darsga ega ekanini aniqlaydi. Faqat
-// to'qnashuvi bor o'quvchilar qaytadi: { studentId, studentName, conflicts:[{groupName,day,dayLabel,startTime,endTime}] }.
+// to'qnashuvchi (boshqa aktiv guruhdagi) darsga ega ekanini aniqlaydi.
 export const checkStudentsScheduleConflicts = async (groupId, studentIds) => {
   const ids = [...new Set((studentIds || []).map(String))];
   if (!ids.length) return [];
 
-  const group = await Group.findById(groupId, { schedule: 1 }).lean();
+  const group = await prisma.group.findUnique({
+    where: { id: String(groupId) },
+    select: { id: true, schedule: SCHEDULE_SELECT },
+  });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
   const targetSlots = scheduleActiveOn(group.schedule || []);
   // Maqsad guruhning jadvali bo'sh - to'qnashuv bo'lishi mumkin emas.
   if (!targetSlots.length) return [];
 
-  const objIds = ids.map(toObjectId);
   // O'quvchilarning MAQSAD guruhdan boshqa aktiv (tugamagan) a'zoliklari.
-  const mems = await GroupMembership.find(
-    {
-      student: { $in: objIds },
-      group: { $ne: toObjectId(groupId) },
+  const mems = await prisma.groupMembership.findMany({
+    where: {
+      studentId: { in: ids },
+      groupId: { not: group.id },
       leftAt: null,
-      isDeleted: { $ne: true },
+      isDeleted: false,
     },
-    { student: 1, group: 1 },
-  ).lean();
+    select: { studentId: true, groupId: true },
+  });
   if (!mems.length) return [];
 
   // Tegishli guruhlar jadvallari (faqat aktiv guruhlar).
-  const otherGroupIds = [...new Set(mems.map((m) => String(m.group)))];
-  const otherGroups = await Group.find(
-    { _id: { $in: otherGroupIds }, isActive: true, isDeleted: { $ne: true } },
-    { name: 1, schedule: 1 },
-  ).lean();
-  const groupById = new Map(otherGroups.map((g) => [String(g._id), g]));
+  const otherGroupIds = [...new Set(mems.map((m) => String(m.groupId)))];
+  const otherGroups = await prisma.group.findMany({
+    where: { id: { in: otherGroupIds }, isActive: true, isDeleted: false },
+    select: { id: true, name: true, schedule: SCHEDULE_SELECT },
+  });
+  const groupById = new Map(otherGroups.map((g) => [String(g.id), g]));
 
   // O'quvchilar ismlarini birga chiqarish uchun.
-  const users = await User.find(
-    { _id: { $in: objIds } },
-    { firstName: 1, lastName: 1, username: 1 },
-  ).lean();
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, firstName: true, lastName: true, username: true },
+  });
   const nameById = new Map(
     users.map((u) => [
-      String(u._id),
+      String(u.id),
       `${u.firstName} ${u.lastName || ""}`.trim() || `@${u.username}`,
     ]),
   );
 
   const byStudent = new Map();
   for (const m of mems) {
-    const g = groupById.get(String(m.group));
+    const g = groupById.get(String(m.groupId));
     if (!g) continue;
     const hits = findSlotConflicts(targetSlots, scheduleActiveOn(g.schedule || []));
     if (!hits.length) continue;
-    const key = String(m.student);
+    const key = String(m.studentId);
     const arr = byStudent.get(key) || [];
     for (const h of hits) {
       arr.push({
@@ -1119,9 +1201,8 @@ export const checkStudentsScheduleConflicts = async (groupId, studentIds) => {
 
 // Bir nechta o'quvchini bitta guruhga qo'shadi. force=false bo'lsa avval dars
 // to'qnashuvini tekshiradi - to'qnashuv bo'lsa HECH KIM qo'shilmaydi va
-// { requiresConfirmation:true, conflicts } qaytadi (owner "baribir qo'shish"
-// bosganda force=true bilan qayta yuboriladi). Har bir o'quvchi alohida qo'shiladi;
-// bittasi xato bersa (mas. allaqachon guruhda) qolganlari qo'shilaveradi.
+// { requiresConfirmation:true, conflicts } qaytadi. Har bir o'quvchi alohida
+// qo'shiladi; bittasi xato bersa qolganlari qo'shilaveradi.
 export const addStudentsBulk = async (
   groupId,
   studentIds,
@@ -1142,8 +1223,9 @@ export const addStudentsBulk = async (
   const failed = [];
   for (const studentId of ids) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       const membership = await addStudent(groupId, studentId, { joinedAt, leftAt });
-      added.push({ studentId, membershipId: membership._id });
+      added.push({ studentId, membershipId: membership.id });
     } catch (err) {
       failed.push({
         studentId,
@@ -1162,11 +1244,9 @@ export const addStudent = async (
   const group = await ensureGroup(groupId);
   const student = await ensureStudent(studentId);
 
-  const existing = await GroupMembership.findOne({
-    group: groupId,
-    student: studentId,
-    leftAt: null,
-    isDeleted: { $ne: true },
+  const existing = await prisma.groupMembership.findFirst({
+    where: { groupId: group.id, studentId: student.id, leftAt: null, isDeleted: false },
+    select: { id: true },
   });
   if (existing) {
     throw new ApiError(409, "O'quvchi allaqachon shu guruhda");
@@ -1174,9 +1254,6 @@ export const addStudent = async (
 
   // Boshlash sanasi - berilsa o'sha kun, aks holda guruh BOSHLANGAN sana (default):
   // startDate (Dars boshlanish sanasi), u yo'q bo'lsa guruh yaratilgan sanasi.
-  // MUHIM: davomat ham mahalliy "bugun" bilan ishlaydi - UTC ishlatilsa, yarim
-  // tundan keyin (mahalliy 00:00–05:00) joinedAt ertangi/kechagi kunga tushib,
-  // bugungi davomatda o'quvchi ko'rinmay qolardi.
   // MUHIM: guruh o'quvchi ro'yxatga olinishidan OLDIN boshlangan bo'lsa, default
   // sana ro'yxatga olingan kun bo'ladi - aks holda "10-iyulda ro'yxatga olingan,
   // lekin 1-iyuldan o'qiyapti" degan bo'lmagan davr paydo bo'lardi.
@@ -1209,25 +1286,27 @@ export const addStudent = async (
   }
 
   // A'zolik davrlari kesishmasligi + bitta ochiq (tugamagan) bo'lishi shart.
-  const otherMems = await GroupMembership.find(
-    { group: groupId, student: studentId, isDeleted: { $ne: true } },
-    { joinedAt: 1, leftAt: 1 },
-  ).lean();
+  const otherMems = await prisma.groupMembership.findMany({
+    where: { groupId: group.id, studentId: student.id, isDeleted: false },
+    select: { joinedAt: true, leftAt: true },
+  });
   assertPeriodInvariants(
     { startDate: join, endDate: left },
     otherMems.map((m) => ({ startDate: m.joinedAt, endDate: m.leftAt })),
     "date",
   );
 
-  const membership = await GroupMembership.create({
-    group: groupId,
-    student: studentId,
-    joinedAt: join,
-    leftAt: left,
+  const membership = await prisma.groupMembership.create({
+    data: {
+      groupId: group.id,
+      studentId: student.id,
+      joinedAt: join,
+      leftAt: left,
+    },
   });
 
   // joinedAt oyidan tugash oyigacha barcha oylar uchun qarz yoziladi.
-  await ensureFinanceForMembershipRange(groupId, membership);
+  await ensureFinanceForMembershipRange(group.id, membership);
 
   // BOSHLANG'ICH QARZNI YOZIB QO'YISH.
   //
@@ -1238,28 +1317,22 @@ export const addStudent = async (
   //
   // ensureFinanceForMembershipRange'dan KEYIN: ichkarida depozitdan
   // avto-qoplash chaqiriladi va u eng eski qarzdan boshlab yopadi.
-  // Oylik planlar allaqachon yozilgan bo'lsa, bitta o'tishda hammasi
-  // to'g'ri taqsimlanadi.
   //
   // IDEMPOTENT va BEST-EFFORT: ikkinchi guruhda qayta ishlamaydi
-  // (yozuv endi "kutmayapti"), xatosi esa guruhga qo'shishni bekor
-  // qilmaydi - qarang materializePendingForStudent izohi.
-  await openingBalanceService.materializePendingForStudent(studentId, groupId);
+  // (yozuv endi "kutmayapti"), xatosi esa guruhga qo'shishni bekor qilmaydi.
+  await openingBalanceService.materializePendingForStudent(student.id, group.id);
 
-  await safeRecomputeStudentCompletion(studentId);
+  await safeRecomputeStudentCompletion(student.id);
 
-  return membership;
+  return withLegacyId(membership);
 };
 
 // O'quvchining guruhdagi FAOL a'zoligi sanalarini (joinedAt/leftAt) tahrirlaydi.
 // Qulf: joinedAt'ni OLDINGA (kechroq sanaga) surishda, oradagi davrda biror oy
-// to'langan bo'lsa (paidAmount > 0) - rad etiladi. Ya'ni qarz yozilib to'langach,
-// "men keyinroq qo'shilganman" deb o'sha to'langan oyni o'chirib bo'lmaydi.
-// Bitta a'zolik davri (GroupMembership) sanalarini o'zgartirish + moliya kaskadi.
-// Faol davr ham, tarixiy davr ham (id bo'yicha) shu yadrodan o'tadi.
+// to'langan bo'lsa (paidAmount > 0) - rad etiladi.
 const applyMembershipDates = async (membership, { joinedAt, leftAt } = {}) => {
-  const groupId = membership.group;
-  const studentId = membership.student;
+  const groupId = membership.groupId;
+  const studentId = membership.studentId;
 
   const oldJoin = toUtcMidnight(membership.joinedAt);
   const newJoin =
@@ -1273,15 +1346,18 @@ const applyMembershipDates = async (membership, { joinedAt, leftAt } = {}) => {
         ? toUtcMidnight(membership.leftAt)
         : null
       : leftAt
-      ? toUtcMidnight(leftAt)
-      : null;
+        ? toUtcMidnight(leftAt)
+        : null;
 
   if (newLeft && newLeft.getTime() < newJoin.getTime()) {
     throw new ApiError(400, "Tugatgan sana boshlash sanasidan oldin bo'lishi mumkin emas");
   }
 
   // A'zolik boshlanish sanasi guruh boshlangan sanadan oldin bo'lmasin.
-  const groupDoc = await Group.findById(groupId, { startDate: 1, createdAt: 1 }).lean();
+  const groupDoc = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { startDate: true, createdAt: true },
+  });
   if (groupDoc) {
     const groupStart = toUtcMidnight(groupDoc.startDate || groupDoc.createdAt);
     if (newJoin.getTime() < groupStart.getTime()) {
@@ -1293,7 +1369,10 @@ const applyMembershipDates = async (membership, { joinedAt, leftAt } = {}) => {
   }
 
   // A'zolik o'quvchi ro'yxatga olingan sanadan oldin boshlana olmaydi.
-  const studentDoc = await User.findById(studentId, { enrolledAt: 1 }).lean();
+  const studentDoc = await prisma.user.findUnique({
+    where: { id: studentId },
+    select: { enrolledAt: true },
+  });
   if (studentDoc?.enrolledAt) {
     const enrolledStart = toUtcMidnight(studentDoc.enrolledAt);
     if (newJoin.getTime() < enrolledStart.getTime()) {
@@ -1321,19 +1400,25 @@ const applyMembershipDates = async (membership, { joinedAt, leftAt } = {}) => {
   }
 
   // Yangi sanalar boshqa a'zolik davrlari bilan kesishmasligini tekshiramiz.
-  const otherMems = await GroupMembership.find(
-    { group: groupId, student: studentId, _id: { $ne: membership._id }, isDeleted: { $ne: true } },
-    { joinedAt: 1, leftAt: 1 },
-  ).lean();
+  const otherMems = await prisma.groupMembership.findMany({
+    where: {
+      groupId,
+      studentId,
+      id: { not: membership.id },
+      isDeleted: false,
+    },
+    select: { joinedAt: true, leftAt: true },
+  });
   assertPeriodInvariants(
     { startDate: newJoin, endDate: newLeft },
     otherMems.map((m) => ({ startDate: m.joinedAt, endDate: m.leftAt })),
     "date",
   );
 
-  membership.joinedAt = newJoin;
-  membership.leftAt = newLeft;
-  await membership.save();
+  const saved = await prisma.groupMembership.update({
+    where: { id: membership.id },
+    data: { joinedAt: newJoin, leftAt: newLeft },
+  });
 
   // Eski davrda bo'lib, yangi davrga TUSHMAY qolgan oylarni 0 ga tushirish va
   // yangi davr oylarini yaratish uchun shu o'quvchi-guruhning BARCHA to'lovlarini
@@ -1343,11 +1428,11 @@ const applyMembershipDates = async (membership, { joinedAt, leftAt } = {}) => {
   } catch (err) {
     logger.warn({ err }, "A'zolik tahrirlanganda eski to'lovlar qayta hisoblanmadi");
   }
-  await ensureFinanceForMembershipRange(groupId, membership);
+  await ensureFinanceForMembershipRange(groupId, saved);
 
   await safeRecomputeStudentCompletion(studentId);
 
-  return membership;
+  return withLegacyId(saved);
 };
 
 export const updateMembership = async (
@@ -1355,14 +1440,11 @@ export const updateMembership = async (
   studentId,
   { joinedAt, leftAt } = {},
 ) => {
-  await ensureGroup(groupId);
-  await ensureStudent(studentId);
+  const group = await ensureGroup(groupId);
+  const student = await ensureStudent(studentId);
 
-  const membership = await GroupMembership.findOne({
-    group: groupId,
-    student: studentId,
-    leftAt: null,
-    isDeleted: { $ne: true },
+  const membership = await prisma.groupMembership.findFirst({
+    where: { groupId: group.id, studentId: student.id, leftAt: null, isDeleted: false },
   });
   if (!membership) {
     throw new ApiError(404, "O'quvchining ushbu guruhda faol a'zoligi topilmadi");
@@ -1373,15 +1455,17 @@ export const updateMembership = async (
 // O'quvchining guruhdagi BARCHA o'qish davrlari (yopiq + ochiq), eng yangisi yuqorida.
 export const listMemberships = async (groupId, studentId) => {
   // FILIAL: guruh ko'lamda bo'lmasa bo'sh natija.
-  const scope = await branchGroupFilter();
-  return GroupMembership.find({
-    group: groupId,
-    student: studentId,
-    isDeleted: { $ne: true },
-    ...scope,
-  })
-    .sort({ joinedAt: -1 })
-    .lean();
+  const scope = await branchGroupFilter("groupId");
+  const rows = await prisma.groupMembership.findMany({
+    where: {
+      groupId: String(groupId),
+      studentId: String(studentId),
+      isDeleted: false,
+      ...scope,
+    },
+    orderBy: { joinedAt: "desc" },
+  });
+  return withLegacyIds(rows);
 };
 
 // O'qish davrini ID bo'yicha tahrirlash (tarixiy davr ham) - "O'qish davrlari" UI.
@@ -1390,11 +1474,9 @@ export const updateMembershipById = async (
   membershipId,
   { joinedAt, leftAt } = {},
 ) => {
-  await ensureGroup(groupId);
-  const membership = await GroupMembership.findOne({
-    _id: membershipId,
-    group: groupId,
-    isDeleted: { $ne: true },
+  const group = await ensureGroup(groupId);
+  const membership = await prisma.groupMembership.findFirst({
+    where: { id: String(membershipId), groupId: group.id, isDeleted: false },
   });
   if (!membership) throw new ApiError(404, "O'qish davri topilmadi");
   return applyMembershipDates(membership, { joinedAt, leftAt });
@@ -1422,21 +1504,23 @@ const membershipMonths = (joinedAt, leftAt) => {
 
 // O'qish davrini o'chirish - to'lov qo'riqlovchisi bilan (o'qituvchi davri patterni).
 export const removeMembershipById = async (groupId, membershipId) => {
-  await ensureGroup(groupId);
-  const membership = await GroupMembership.findOne({
-    _id: membershipId,
-    group: groupId,
-    isDeleted: { $ne: true },
+  const group = await ensureGroup(groupId);
+  const membership = await prisma.groupMembership.findFirst({
+    where: { id: String(membershipId), groupId: group.id, isDeleted: false },
   });
   if (!membership) throw new ApiError(404, "O'qish davri topilmadi");
 
   const months = membershipMonths(membership.joinedAt, membership.leftAt);
   if (months.length) {
-    const paid = await StudentPayment.findOne({
-      student: membership.student,
-      group: groupId,
-      paidAmount: { $gt: 0 },
-      $or: months,
+    // Mongo `$or: [{year,month},...]` → Prisma `OR: [...]` (shakl bir xil).
+    const paid = await prisma.studentPayment.findFirst({
+      where: {
+        studentId: membership.studentId,
+        groupId: group.id,
+        paidAmount: { gt: 0 },
+        OR: months,
+      },
+      select: { id: true },
     });
     if (paid) {
       throw new ApiError(
@@ -1449,8 +1533,8 @@ export const removeMembershipById = async (groupId, membershipId) => {
   // Qarzli o'quvchining o'qish davrini o'chirib bo'lmaydi - avval qarz to'lansin.
   if (
     await financePaymentService.hasOutstandingDebtInGroup(
-      membership.student,
-      groupId,
+      membership.studentId,
+      group.id,
     )
   ) {
     throw new ApiError(
@@ -1459,14 +1543,17 @@ export const removeMembershipById = async (groupId, membershipId) => {
     );
   }
 
-  await membership.softDelete();
+  await prisma.groupMembership.update({
+    where: { id: membership.id },
+    data: { isDeleted: true, deletedAt: new Date() },
+  });
   try {
-    await financePaymentService.recalcForStudentScope(membership.student, groupId, {});
+    await financePaymentService.recalcForStudentScope(membership.studentId, group.id, {});
   } catch (err) {
     logger.warn({ err }, "O'qish davri o'chirilganda to'lovlar qayta hisoblanmadi");
   }
-  await safeRecomputeStudentCompletion(membership.student);
-  return { _id: membership._id };
+  await safeRecomputeStudentCompletion(membership.studentId);
+  return { id: membership.id, _id: membership.id };
 };
 
 // A'zolik yopilganda (chiqarish/ko'chirish) o'quvchining shu guruhdagi BARCHA oylik
@@ -1492,14 +1579,14 @@ export const removeStudent = async (
   { reasonId, writeOff = false } = {},
   currentUser = null,
 ) => {
-  await ensureGroup(groupId);
+  const group = await ensureGroup(groupId);
 
   // Qarzli o'quvchini chiqarishda: writeOff=false bo'lsa 409 bilan qarz summasini
   // qaytaramiz - frontend "Yomon qarz" tasdiq modalini ko'rsatadi. writeOff=true
   // (admin tasdiqladi) bo'lsa qarz yomon qarz sifatida hisobdan chiqariladi.
   const debt = await financePaymentService.getOutstandingBreakdownInGroup(
     studentId,
-    groupId,
+    group.id,
   );
   if (debt.total > 0 && !writeOff) {
     throw new ApiError(409, "O'quvchida to'lanmagan qarz bor", {
@@ -1513,21 +1600,35 @@ export const removeStudent = async (
   // Dinamik chiqish sababi (ixtiyoriy) - snapshot title bilan birga yozamiz,
   // shunda sabab keyin o'chsa/o'zgarsa ham retention hisoboti buzilmaydi.
   const set = { leftAt, leftReason: "removed" };
+  let leftReasonTitle = "";
   if (reasonId) {
-    const reason = await ArchiveReason.findById(reasonId, { title: 1 }).lean();
+    const reason = await prisma.archiveReason.findUnique({
+      where: { id: String(reasonId) },
+      select: { id: true, title: true },
+    });
     if (!reason) throw new ApiError(400, "Chiqish sababi topilmadi");
-    set.leftReasonDetail = reason._id;
-    set.leftReasonTitle = reason.title;
+    // `leftReasonDetail` - RELATION; ustun `leftReasonDetailId`.
+    set.leftReasonDetailId = reason.id;
+    // `leftReasonTitle` NOT NULL (@default("")) - null yozib bo'lmaydi.
+    set.leftReasonTitle = reason.title || "";
+    leftReasonTitle = set.leftReasonTitle;
   }
 
-  const membership = await GroupMembership.findOneAndUpdate(
-    { group: groupId, student: studentId, leftAt: null, isDeleted: { $ne: true } },
-    { $set: set },
-    { new: true },
-  );
-  if (!membership) {
+  // Mongo `findOneAndUpdate` shartni va yozuvni bitta amalda bajarardi.
+  // Prisma'da `update` faqat unique kalit bo'yicha ishlaydi, shuning uchun
+  // avval faol a'zolikni topamiz. Qisman unique indeks (groupId, studentId)
+  // WHERE leftAt IS NULL kafolatlaydi: bunday qator ko'pi bilan BITTA.
+  const open = await prisma.groupMembership.findFirst({
+    where: { groupId: group.id, studentId: String(studentId), leftAt: null, isDeleted: false },
+    select: { id: true },
+  });
+  if (!open) {
     throw new ApiError(404, "Faol a'zolik topilmadi");
   }
+  const membership = await prisma.groupMembership.update({
+    where: { id: open.id },
+    data: set,
+  });
 
   // Qarzni YOMON QARZ (write-off) sifatida yopamiz: recalcFinanceOnLeave'DAN OLDIN,
   // aks holda leftAt proratsiyasi qarz summasini o'zgartirib yuborardi. Write-off
@@ -1536,39 +1637,43 @@ export const removeStudent = async (
   if (debt.total > 0 && writeOff) {
     writeOffResult = await financePaymentService.writeOffDebtInGroup(
       studentId,
-      groupId,
+      group.id,
       {
-        membershipId: membership._id,
+        membershipId: membership.id,
         currentUser,
-        reasonTitle: set.leftReasonTitle || "",
+        reasonTitle: leftReasonTitle,
       },
     );
   }
 
-  // Ketgan o'quvchi endi to'liq oy uchun hisoblanmasin (C1 tuzatish)
-  await recalcFinanceOnLeave(groupId, studentId);
+  // Ketgan o'quvchi endi to'liq oy uchun hisoblanmasin
+  await recalcFinanceOnLeave(group.id, studentId);
 
   await safeRecomputeStudentCompletion(studentId);
 
-  return { membership, writeOff: writeOffResult };
+  return { membership: withLegacyId(membership), writeOff: writeOffResult };
 };
 
 export const history = async (groupId, { page = 1, limit = 20 } = {}) => {
-  await ensureGroup(groupId);
-  const filter = { group: groupId };
+  const group = await ensureGroup(groupId);
+  const where = { groupId: group.id };
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    GroupMembership.find(filter)
-      .sort({ joinedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("student", safeUserProjection)
-      .populate("transferredTo", { name: 1 }),
-    GroupMembership.countDocuments(filter),
+    prisma.groupMembership.findMany({
+      where,
+      orderBy: { joinedAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        student: { select: safeUserProjection },
+        transferredTo: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.groupMembership.count({ where }),
   ]);
 
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 export const listForTeacher = async (teacherId) => {
@@ -1577,81 +1682,82 @@ export const listForTeacher = async (teacherId) => {
 };
 
 export const findActiveForStudent = async (studentId) => {
-  const membership = await GroupMembership.findOne({
-    student: studentId,
-    leftAt: null,
-    isDeleted: { $ne: true },
-    // FILIAL: o'quvchi boshqa filialda ham guruhda bo'lsa, uning guruhi
-    // shu filial ko'rinishiga chiqib ketmasin.
-    ...(await branchGroupFilter()),
-  })
-    .populate({
-      path: "group",
-      populate: { path: "teachers", select: safeUserProjection },
-    })
-    .sort({ joinedAt: -1 });
+  const membership = await prisma.groupMembership.findFirst({
+    where: {
+      studentId: String(studentId),
+      leftAt: null,
+      isDeleted: false,
+      // FILIAL: o'quvchi boshqa filialda ham guruhda bo'lsa, uning guruhi
+      // shu filial ko'rinishiga chiqib ketmasin.
+      ...(await branchGroupFilter("groupId")),
+    },
+    include: { group: { include: GROUP_INCLUDE } },
+    orderBy: { joinedAt: "desc" },
+  });
 
   if (!membership || !membership.group) return null;
   return {
     joinedAt: membership.joinedAt,
-    group: membership.group,
+    group: shapeGroup(membership.group),
   };
 };
 
 // O'quvchining BARCHA active a'zoliklari (multi-active)
 export const findAllActiveForStudent = async (studentId) => {
-  const memberships = await GroupMembership.find({
-    student: studentId,
-    leftAt: null,
-    isDeleted: { $ne: true },
-    ...(await branchGroupFilter()),
-  })
-    .populate({
-      path: "group",
-      populate: { path: "teachers", select: safeUserProjection },
-    })
-    .sort({ joinedAt: 1 });
+  const memberships = await prisma.groupMembership.findMany({
+    where: {
+      studentId: String(studentId),
+      leftAt: null,
+      isDeleted: false,
+      ...(await branchGroupFilter("groupId")),
+    },
+    include: { group: { include: GROUP_INCLUDE } },
+    orderBy: { joinedAt: "asc" },
+  });
 
   return memberships
     .filter((m) => m.group)
     .map((m) => ({
-      membershipId: m._id,
+      membershipId: m.id,
       joinedAt: m.joinedAt,
-      group: m.group,
+      group: shapeGroup(m.group),
     }));
 };
 
 // Guruhdan chiqarilgan o'quvchiga login qilganda bir marta ko'rsatiladigan
 // xabar. Eng oxirgi "removed" a'zolikni qaytaradi, agar:
 //  • hali ko'rilmagan bo'lsa (removalNoticeSeenAt = null), va
-//  • o'quvchi o'sha guruhga hozir qayta a'zo bo'lmagan bo'lsa (qayta qo'shilgan
-//    bo'lsa xabar ortiqcha).
-// Bittadan ortiq bo'lsa - eng so'nggisi (leftAt bo'yicha) ko'rsatiladi.
+//  • o'quvchi o'sha guruhga hozir qayta a'zo bo'lmagan bo'lsa.
 export const findPendingRemovalNotice = async (studentId) => {
-  const membership = await GroupMembership.findOne({
-    student: studentId,
-    leftReason: "removed",
-    leftAt: { $ne: null },
-    removalNoticeSeenAt: null,
-    isDeleted: { $ne: true },
-  })
-    .populate({ path: "group", select: "name" })
-    .sort({ leftAt: -1 });
+  const membership = await prisma.groupMembership.findFirst({
+    where: {
+      studentId: String(studentId),
+      leftReason: "removed",
+      leftAt: { not: null },
+      removalNoticeSeenAt: null,
+      isDeleted: false,
+    },
+    include: { group: { select: { id: true, name: true } } },
+    orderBy: { leftAt: "desc" },
+  });
 
   if (!membership || !membership.group) return null;
 
   // O'quvchi o'sha guruhga qayta faol a'zo bo'lganmi? Bo'lsa - xabar bermaymiz
   // (ammo seen ham qilmaymiz, chunki bu boshqa a'zolik yozuvi).
-  const rejoined = await GroupMembership.exists({
-    student: studentId,
-    group: membership.group._id,
-    leftAt: null,
-    isDeleted: { $ne: true },
+  const rejoined = await prisma.groupMembership.findFirst({
+    where: {
+      studentId: String(studentId),
+      groupId: membership.group.id,
+      leftAt: null,
+      isDeleted: false,
+    },
+    select: { id: true },
   });
   if (rejoined) return null;
 
   return {
-    membershipId: String(membership._id),
+    membershipId: String(membership.id),
     groupName: membership.group.name,
     reasonTitle: membership.leftReasonTitle || "",
     leftAt: membership.leftAt,
@@ -1662,12 +1768,12 @@ export const findPendingRemovalNotice = async (studentId) => {
 // o'quvchining ko'rilmagan "removed" a'zoliklarini yopadi - shunda qayta
 // login qilinganda modal chiqmaydi.
 export const markRemovalNoticesSeen = async (studentId) => {
-  await GroupMembership.updateMany(
-    {
-      student: studentId,
+  await prisma.groupMembership.updateMany({
+    where: {
+      studentId: String(studentId),
       leftReason: "removed",
       removalNoticeSeenAt: null,
     },
-    { $set: { removalNoticeSeenAt: new Date() } },
-  );
+    data: { removalNoticeSeenAt: new Date() },
+  });
 };

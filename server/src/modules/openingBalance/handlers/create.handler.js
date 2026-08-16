@@ -1,6 +1,6 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
 import ApiError from "../../../utils/ApiError.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import { ROLES } from "../../../constants/roles.js";
 import { assertTargetInScope } from "../../../helpers/branchAccess.helper.js";
 import * as openingBalanceService from "../services/openingBalance.service.js";
@@ -14,12 +14,20 @@ import * as openingBalanceService from "../services/openingBalance.service.js";
  * indeks).
  */
 const create = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.body.user, {
-    role: 1,
-    homeBranchId: 1,
-    branchAssignments: 1,
-    enrolledAt: 1,
-  }).lean();
+  // `branchAssignments` ATAYLAB yuklanadi: assertTargetInScope odamning
+  // filiallarini `homeBranchId` VA `branchAssignments[]` dan yig'adi.
+  // Prisma relation'ni so'ralmasa bermaydi - unutilsa qo'shimcha filialga
+  // biriktirilgan odam "begona" bo'lib ko'rinardi (fail-closed regressiya).
+  const user = await prisma.user.findUnique({
+    where: { id: String(req.body.user) },
+    select: {
+      id: true,
+      role: true,
+      homeBranchId: true,
+      enrolledAt: true,
+      branchAssignments: { select: { branchId: true } },
+    },
+  });
   if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
 
   // FILIAL CHEGARASI: bu route endi owner-only emas
@@ -37,7 +45,7 @@ const create = asyncHandler(async (req, res) => {
 
   const result = await openingBalanceService.create(
     {
-      user: user._id,
+      user: user.id,
       role,
       amount: req.body.amount,
       group: req.body.group || null,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CANCELLATION_REASONS } from "../../../models/lessonCancellation.model.js";
+import { CANCELLATION_REASONS } from "../../../constants/lessonCancellation.js";
 
 const objectId = z.string().min(1);
 

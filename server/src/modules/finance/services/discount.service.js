@@ -1,8 +1,6 @@
-import mongoose from "mongoose";
-import Discount from "../../../models/discount.model.js";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import logger from "../../../config/logger.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
 import { branchGroupFilter } from "../../../helpers/branchContext.helper.js";
@@ -23,38 +21,49 @@ const recalcTeacherForDiscount = async (doc) => {
   }
 };
 
-const toObjectId = (id) => {
-  if (id instanceof mongoose.Types.ObjectId) return id;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Noto'g'ri identifikator");
-  return new mongoose.Types.ObjectId(String(id));
-};
+// MONGO → PRISMA
+//   { student } → { studentId },  { group } → { groupId }
+//   doc.softDelete(by) → update({ isDeleted, deletedAt, deletedBy })
+//
+// DIQQAT - `Discount` da UNIQUE INDEKS YO'Q (na Mongo'da, na Postgres'da).
+// Dublikatdan yagona himoya - pastdagi `create()` ichidagi ochiq tekshiruv.
+// Shuning uchun o'qishda TARTIB ANIQ bo'lishi kerak: `resolveDiscountAmount`
+// foizlarni qo'shib, keyin klamp qiladi, ya'ni bir xil to'plam har doim bir
+// xil natija berishi shart.
+const actorId = (u) => u?.id || u?._id || null;
 
-const studentProjection = { firstName: 1, lastName: 1, username: 1, phone: 1 };
+const STUDENT_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  username: true,
+  phone: true,
+};
 
 export const list = async ({ studentId, groupId, year, month, page = 1, limit = 50 }) => {
   // FILIAL KO'LAMI: Discount'da `branchId` YO'Q - u GURUHGA tegishli,
   // guruh esa filialga (qarang: branchContext.helper.js dagi
   // branchGroupFilter). Ilgari bu filtr yo'q edi va A filial direktori
   // B filialning chegirmalarini ko'rardi.
-  const groupScope = await branchGroupFilter("group");
+  const groupScope = await branchGroupFilter("groupId");
 
-  const filter = { ...groupScope, isDeleted: { $ne: true } };
-  if (studentId) filter.student = toObjectId(studentId);
+  const where = { ...groupScope, isDeleted: false };
+  if (studentId) where.studentId = String(studentId);
 
   if (groupId) {
-    const gid = toObjectId(groupId);
+    const gid = String(groupId);
     // So'ralgan guruh ko'lam ICHIDA ekanini tekshiramiz. Tekshirmasdan
-    // `filter.group = gid` deb yozilsa, guruh ID'sini qo'lda berish
+    // `where.groupId = gid` deb yozilsa, guruh ID'sini qo'lda berish
     // orqali ko'lam butunlay chetlab o'tilardi.
-    const allowed = groupScope.group?.$in;
-    if (allowed && !allowed.some((id) => String(id) === String(gid))) {
+    const allowed = groupScope.groupId?.in;
+    if (allowed && !allowed.some((id) => String(id) === gid)) {
       return { items: [], total: 0, page, limit };
     }
-    filter.group = gid;
+    where.groupId = gid;
   }
   // Oy filtri: o'sha oyga tegishli monthly + barcha permanent
   if (year && month) {
-    filter.$or = [
+    where.OR = [
       { scope: "permanent" },
       { scope: "monthly", year: Number(year), month: Number(month) },
     ];
@@ -62,22 +71,32 @@ export const list = async ({ studentId, groupId, year, month, page = 1, limit = 
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Discount.find(filter)
-      .populate("student", studentProjection)
-      .populate("group", { name: 1 })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    Discount.countDocuments(filter),
+    prisma.discount.findMany({
+      where,
+      include: {
+        student: { select: STUDENT_SELECT },
+        group: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.discount.count({ where }),
   ]);
 
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 const ensureStudentAndGroup = async (studentId, groupId) => {
   const [student, group] = await Promise.all([
-    User.findOne({ _id: studentId, role: ROLES.STUDENT, isDeleted: { $ne: true } }),
-    Group.findOne({ _id: groupId, isDeleted: { $ne: true } }),
+    prisma.user.findFirst({
+      where: { id: String(studentId), role: ROLES.STUDENT, isDeleted: false },
+      select: { id: true },
+    }),
+    prisma.group.findFirst({
+      where: { id: String(groupId), isDeleted: false },
+      select: { id: true, isActive: true, isDeleted: true, endDate: true },
+    }),
   ]);
   if (!student) throw new ApiError(400, "O'quvchi topilmadi");
   assertGroupActive(group);
@@ -88,80 +107,97 @@ export const create = async (body, currentUser) => {
 
   // Double-submit himoyasi: aynan bir xil faol chegirma ikki marta yozilmasin
   // (ikkalasi ham qo'llanib, expected ikki baravar kamayib ketardi).
-  const duplicate = await Discount.findOne({
-    student: body.student,
-    group: body.group,
-    type: body.type,
-    value: body.value,
-    scope: body.scope,
-    year: body.scope === "monthly" ? body.year : null,
-    month: body.scope === "monthly" ? body.month : null,
-    isActive: true,
-    isDeleted: { $ne: true },
+  const scopeYear = body.scope === "monthly" ? body.year : null;
+  const scopeMonth = body.scope === "monthly" ? body.month : null;
+
+  const duplicate = await prisma.discount.findFirst({
+    where: {
+      studentId: String(body.student),
+      groupId: String(body.group),
+      type: body.type,
+      value: body.value,
+      scope: body.scope,
+      year: scopeYear,
+      month: scopeMonth,
+      isActive: true,
+      isDeleted: false,
+    },
+    select: { id: true },
   });
   if (duplicate) {
     throw new ApiError(409, "Xuddi shunday faol chegirma allaqachon mavjud");
   }
 
-  const doc = await Discount.create({
-    student: body.student,
-    group: body.group,
-    type: body.type,
-    value: body.value,
-    scope: body.scope,
-    year: body.scope === "monthly" ? body.year : null,
-    month: body.scope === "monthly" ? body.month : null,
-    reason: body.reason || "",
-    createdBy: currentUser?._id || null,
+  const doc = await prisma.discount.create({
+    data: {
+      studentId: String(body.student),
+      groupId: String(body.group),
+      type: body.type,
+      value: body.value,
+      scope: body.scope,
+      year: scopeYear,
+      month: scopeMonth,
+      reason: body.reason || "",
+      createdById: actorId(currentUser),
+    },
   });
 
-  await studentPaymentService.recalcForStudentScope(doc.student, doc.group, {
+  await studentPaymentService.recalcForStudentScope(doc.studentId, doc.groupId, {
     scope: doc.scope,
     year: doc.year,
     month: doc.month,
   });
-  await recalcTeacherForDiscount(doc);
-  return doc;
+  await recalcTeacherForDiscount({ ...doc, group: doc.groupId });
+  return withLegacyId(doc);
 };
 
 export const update = async (id, body) => {
-  const doc = await Discount.findOne({ _id: id, isDeleted: { $ne: true } });
+  const doc = await prisma.discount.findFirst({
+    where: { id: String(id), isDeleted: false },
+  });
   if (!doc) throw new ApiError(404, "Chegirma topilmadi");
 
-  // Mutatsiyadan OLDINGI qamrov - scope/oy o'zgarsa eski oy(lar) snapshot'ida
+  // Yozishdan OLDINGI qamrov - scope/oy o'zgarsa eski oy(lar) snapshot'ida
   // chegirma "muzlab" qolmasligi uchun ularni ham qayta hisoblaymiz (H4).
   const prevScope = { scope: doc.scope, year: doc.year, month: doc.month };
 
-  if (body.type !== undefined) doc.type = body.type;
-  if (body.value !== undefined) doc.value = body.value;
-  if (body.scope !== undefined) doc.scope = body.scope;
-  if (body.reason !== undefined) doc.reason = body.reason;
-  if (body.isActive !== undefined) doc.isActive = body.isActive;
-  if (doc.scope === "monthly") {
-    if (body.year !== undefined) doc.year = body.year;
-    if (body.month !== undefined) doc.month = body.month;
+  // Mongoose hujjatni joyida mutatsiya qilardi; Prisma'da o'zgarishlar
+  // `data` ga yig'iladi va "keyingi holat" alohida hisoblanadi - pastdagi
+  // scope qoidasi AYNI chaqiruvda kelgan yangi qiymatga tayanishi kerak.
+  const data = {};
+  if (body.type !== undefined) data.type = body.type;
+  if (body.value !== undefined) data.value = body.value;
+  if (body.scope !== undefined) data.scope = body.scope;
+  if (body.reason !== undefined) data.reason = body.reason;
+  if (body.isActive !== undefined) data.isActive = body.isActive;
+
+  const nextScope = body.scope !== undefined ? body.scope : doc.scope;
+  if (nextScope === "monthly") {
+    if (body.year !== undefined) data.year = body.year;
+    if (body.month !== undefined) data.month = body.month;
   } else {
-    doc.year = null;
-    doc.month = null;
+    data.year = null;
+    data.month = null;
   }
-  await doc.save();
+
+  const saved = await prisma.discount.update({ where: { id: doc.id }, data });
 
   const scopeChanged =
-    prevScope.scope !== doc.scope ||
-    prevScope.year !== doc.year ||
-    prevScope.month !== doc.month;
+    prevScope.scope !== saved.scope ||
+    prevScope.year !== saved.year ||
+    prevScope.month !== saved.month;
   if (scopeChanged) {
-    await studentPaymentService.recalcForStudentScope(doc.student, doc.group, prevScope);
-    await recalcTeacherForDiscount({ group: doc.group, ...prevScope });
+    await studentPaymentService.recalcForStudentScope(saved.studentId, saved.groupId, prevScope);
+    await recalcTeacherForDiscount({ group: saved.groupId, ...prevScope });
   }
 
-  await studentPaymentService.recalcForStudentScope(doc.student, doc.group, {
-    scope: doc.scope,
-    year: doc.year,
-    month: doc.month,
+  await studentPaymentService.recalcForStudentScope(saved.studentId, saved.groupId, {
+    scope: saved.scope,
+    year: saved.year,
+    month: saved.month,
   });
-  await recalcTeacherForDiscount(doc);
-  return doc;
+  await recalcTeacherForDiscount({ ...saved, group: saved.groupId });
+  return withLegacyId(saved);
 };
 
 // --- CHEGIRMA TASDIG'I (owner tasdig'i talab qilinganda) ---
@@ -204,10 +240,12 @@ export const requestDiscount = async ({ op, discountId, body }, currentUser) => 
   let group;
   let base = {};
   if (op === "update") {
-    const existing = await Discount.findOne({ _id: discountId, isDeleted: { $ne: true } }).lean();
+    const existing = await prisma.discount.findFirst({
+      where: { id: String(discountId), isDeleted: false },
+    });
     if (!existing) throw new ApiError(404, "Chegirma topilmadi");
-    student = existing.student;
-    group = existing.group;
+    student = existing.studentId;
+    group = existing.groupId;
     // Tahrirda faqat berilgan maydonlar o'zgaradi - qolgani eskisicha.
     base = {
       type: existing.type,
@@ -224,8 +262,8 @@ export const requestDiscount = async ({ op, discountId, body }, currentUser) => 
   await ensureStudentAndGroup(student, group);
 
   const [studentDoc, groupDoc] = await Promise.all([
-    User.findById(student, studentProjection).lean(),
-    Group.findById(group, { name: 1 }).lean(),
+    prisma.user.findUnique({ where: { id: String(student) }, select: STUDENT_SELECT }),
+    prisma.group.findUnique({ where: { id: String(group) }, select: { name: true } }),
   ]);
 
   const payload = {
@@ -264,7 +302,9 @@ export const requestDiscount = async ({ op, discountId, body }, currentUser) => 
  */
 export const executeApprovedDiscount = async (approval) => {
   const p = approval?.payload || {};
-  const actor = { _id: approval?.requestedBy || null };
+  // Approval moduli hali ko'chirilmagan - ikkala nomni ham qabul qilamiz.
+  const requesterId = approval?.requestedById || approval?.requestedBy || null;
+  const actor = { id: requesterId, _id: requesterId };
 
   if (p.op === "create") {
     return create(
@@ -299,14 +339,19 @@ export const executeApprovedDiscount = async (approval) => {
 };
 
 export const remove = async (id, currentUser) => {
-  const doc = await Discount.findOne({ _id: id, isDeleted: { $ne: true } });
+  const doc = await prisma.discount.findFirst({
+    where: { id: String(id), isDeleted: false },
+  });
   if (!doc) throw new ApiError(404, "Chegirma topilmadi");
-  await doc.softDelete(currentUser?._id);
-  await studentPaymentService.recalcForStudentScope(doc.student, doc.group, {
+  await prisma.discount.update({
+    where: { id: doc.id },
+    data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+  });
+  await studentPaymentService.recalcForStudentScope(doc.studentId, doc.groupId, {
     scope: doc.scope,
     year: doc.year,
     month: doc.month,
   });
-  await recalcTeacherForDiscount(doc);
-  return { _id: id };
+  await recalcTeacherForDiscount({ ...doc, group: doc.groupId });
+  return { id: doc.id, _id: doc.id };
 };

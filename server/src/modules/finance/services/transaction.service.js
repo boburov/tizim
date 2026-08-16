@@ -1,8 +1,7 @@
-import mongoose from "mongoose";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import Group from "../../../models/group.model.js";
+import { randomBytes } from "node:crypto";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
 import * as studentPaymentService from "./studentPayment.service.js";
@@ -15,6 +14,19 @@ import * as journal from "../../journal/services/journal.service.js";
 // Bir martada qabul qilinadigan maksimal summa (kassa xatosini cheklash uchun).
 const MAX_PAYMENT_AMOUNT = 50_000_000;
 
+// MONGO → PRISMA
+//   { payment } → { paymentId },  { student } → { studentId }, { group } → { groupId }
+//   err.code 11000 → err.code "P2002"
+//   session → tx
+//   new mongoose.Types.ObjectId() → gen24Hex()  (batch kaliti)
+const actorId = (u) => u?.id || u?._id || null;
+
+// BATCH KALITI. Mongo'da `new ObjectId()` KLIENT tomonida yaratilardi va
+// hech qaysi jadvalga tegishli emas edi - u shunchaki bitta to'lovning
+// bo'laklarini bog'lab turadigan noyob belgi. `batchId` ustuni VarChar(24),
+// shuning uchun bir xil shakldagi 24-belgili hex yaratamiz.
+const gen24Hex = () => randomBytes(12).toString("hex");
+
 // Idempotentlik dublikati - takror so'rovni "yangi pul emas" deb qaytaradi.
 const duplicateResult = (existing) => ({
   allocated: 0,
@@ -26,14 +38,17 @@ const duplicateResult = (existing) => ({
 // guruhdagi boshqa qoldiq oylari (ENG ESKISIDAN). Tanlangan oy to'liq to'langan
 // bo'lsa ham ro'yxatda qoladi (loop ichida 0 ulush bilan o'tib ketiladi).
 const buildAllocationOrder = async (selected) => {
-  const others = await StudentPayment.find({
-    student: selected.student,
-    group: selected.group,
-    _id: { $ne: selected._id },
-    isDeleted: { $ne: true },
-    writtenOff: { $ne: true },
-    $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
-  }).sort({ year: 1, month: 1, createdAt: 1 });
+  const others = await prisma.studentPayment.findMany({
+    where: {
+      studentId: selected.studentId,
+      groupId: selected.groupId,
+      id: { not: selected.id },
+      writtenOff: false,
+      // Ustunni ustunga solishtirish - Mongo `$expr` ekvivalenti.
+      expectedAmount: { gt: prisma.studentPayment.fields.paidAmount },
+    },
+    orderBy: [{ year: "asc" }, { month: "asc" }, { createdAt: "asc" }],
+  });
   return [selected, ...others];
 };
 
@@ -48,15 +63,17 @@ export const create = async (
   currentUser,
 ) => {
   // FILIAL: boshqa filial o'quvchisiga to'lov yozib bo'lmaydi.
-  const payment = await StudentPayment.findOne({
-    _id: paymentId,
-    ...branchFilter(),
+  const payment = await prisma.studentPayment.findFirst({
+    where: { id: String(paymentId), ...branchFilter() },
   });
   if (!payment) throw new ApiError(404, "To'lov topilmadi");
 
   // Arxivlangan guruhga to'lov qabul qilinmaydi (avval arxivdan chiqarish kerak).
   assertGroupActive(
-    await Group.findById(payment.group, { isActive: 1, isDeleted: 1 }),
+    await prisma.group.findUnique({
+      where: { id: payment.groupId },
+      select: { id: true, isActive: true, isDeleted: true, endDate: true },
+    }),
   );
 
   const total = Number(amount);
@@ -75,12 +92,14 @@ export const create = async (
   }
 
   if (idempotencyKey) {
-    const existing = await PaymentTransaction.findOne({ idempotencyKey });
-    if (existing) return duplicateResult(existing);
+    const existing = await prisma.paymentTransaction.findFirst({
+      where: { idempotencyKey },
+    });
+    if (existing) return duplicateResult(withLegacyId(existing));
   }
 
   const order = await buildAllocationOrder(payment);
-  const batchId = new mongoose.Types.ObjectId();
+  const batchId = gen24Hex();
   const transactions = [];
   let left = total;
   // Idempotency kaliti faqat BATCH'ning birinchi yozuviga biriktiriladi.
@@ -96,7 +115,8 @@ export const create = async (
     if (take <= 0) continue;
 
     // Avval balans atomik oshiriladi (cap sharti bilan), keyin tranzaksiya yoziladi.
-    const updated = await studentPaymentService.applyPaidDelta(plan._id, take, {
+    // eslint-disable-next-line no-await-in-loop
+    const updated = await studentPaymentService.applyPaidDelta(plan.id, take, {
       capToRemaining: true,
     });
     // null → parallel so'rov shu oyni allaqachon yopgan; keyingi oyga o'tamiz
@@ -104,26 +124,30 @@ export const create = async (
     if (!updated) continue;
 
     try {
-      const trx = await PaymentTransaction.create({
-        // FILIAL: oylik plandan meros (plan guruhdan olgan).
-        branchId: plan.branchId,
-        payment: plan._id,
-        student: plan.student,
-        group: plan.group,
-        year: plan.year,
-        month: plan.month,
-        amount: take,
-        source: "direct",
-        method,
-        paidAt: day,
-        note: note || "",
-        idempotencyKey: pendingKey,
-        batchId,
-        createdBy: currentUser?._id || null,
+      // eslint-disable-next-line no-await-in-loop
+      const trx = await prisma.paymentTransaction.create({
+        data: {
+          // FILIAL: oylik plandan meros (plan guruhdan olgan).
+          branchId: plan.branchId,
+          paymentId: plan.id,
+          studentId: plan.studentId,
+          groupId: plan.groupId,
+          year: plan.year,
+          month: plan.month,
+          amount: take,
+          source: "direct",
+          method,
+          paidAt: day,
+          note: note || "",
+          idempotencyKey: pendingKey,
+          batchId,
+          createdById: actorId(currentUser),
+        },
       });
       // JURNAL: pul kassaga kirdi (Faza 4).
       // Xato yutiladi - to'lov jurnal tufayli rad etilmasin
       // (helpers/journalPosting.helper.js dagi izoh).
+      // eslint-disable-next-line no-await-in-loop
       await journalPosting.postPayment(trx, journal);
 
       transactions.push(trx);
@@ -131,11 +155,16 @@ export const create = async (
       left -= take;
     } catch (err) {
       // Tranzaksiya yozilmasa - balans oshirilgancha qolmasin (rollback).
-      await studentPaymentService.applyPaidDelta(plan._id, -take);
-      // Parallel takror so'rov unique idempotency indexga urildi - dublikatni qaytaramiz.
-      if (err?.code === 11000 && idempotencyKey) {
-        const existing = await PaymentTransaction.findOne({ idempotencyKey });
-        if (existing) return duplicateResult(existing);
+      // eslint-disable-next-line no-await-in-loop
+      await studentPaymentService.applyPaidDelta(plan.id, -take);
+      // Parallel takror so'rov qisman unique idempotency indeksga urildi -
+      // dublikatni qaytaramiz (Mongo 11000 → Prisma P2002).
+      if (err?.code === "P2002" && idempotencyKey) {
+        // eslint-disable-next-line no-await-in-loop
+        const existing = await prisma.paymentTransaction.findFirst({
+          where: { idempotencyKey },
+        });
+        if (existing) return duplicateResult(withLegacyId(existing));
       }
       throw err;
     }
@@ -146,14 +175,18 @@ export const create = async (
   let depositCredited = 0;
   if (left > 0) {
     await depositService.topup(
-      payment.student,
+      payment.studentId,
       { amount: left, method, paidAt, note: note || "Ortiqcha to'lov - garovga" },
       currentUser,
     );
     depositCredited = left;
   }
 
-  return { allocated: transactions.length, transactions, depositCredited };
+  return {
+    allocated: transactions.length,
+    transactions: withLegacyIds(transactions),
+    depositCredited,
+  };
 };
 
 // Tranzaksiyani bekor qiladi (soft-delete), balansni atomik kamaytiradi.
@@ -165,30 +198,29 @@ export const create = async (
 // bo'lib (isDeleted=true), lekin paidAmount qaytarilmay qolardi - kassadan pul
 // chiqqani holda yozuv "to'langan" ko'rinib, audit izsiz pul yo'qolardi (#1A, #1B).
 export const remove = async (id, currentUser) => {
-  return runFinanceTxn(async (session) => {
+  return runFinanceTxn(async (tx) => {
     // FILIAL: boshqa filial to'lovini bekor qilib bo'lmaydi. Bu amal
     // depozitga pul qaytaradi, ya'ni haqiqiy moliyaviy ta'sirga ega.
-    const trx = await PaymentTransaction.findOne({
-      _id: id,
-      ...branchFilter(),
-      isDeleted: { $ne: true },
-    }).session(session || null);
+    const trx = await tx.paymentTransaction.findFirst({
+      where: { id: String(id), ...branchFilter(), isDeleted: false },
+    });
     if (!trx) throw new ApiError(404, "Tranzaksiya topilmadi");
 
     const batch = trx.batchId
-      ? await PaymentTransaction.find({
-          batchId: trx.batchId,
-          isDeleted: { $ne: true },
-        }).session(session || null)
+      ? await tx.paymentTransaction.findMany({
+          where: { batchId: trx.batchId, isDeleted: false },
+        })
       : [trx];
 
     const removed = [];
     for (const t of batch) {
-      t.isDeleted = true;
-      t.deletedAt = new Date();
-      t.deletedBy = currentUser?._id || null;
-      await t.save({ session: session || undefined });
-      await studentPaymentService.applyPaidDelta(t.payment, -t.amount, { session });
+      // eslint-disable-next-line no-await-in-loop
+      await tx.paymentTransaction.update({
+        where: { id: t.id },
+        data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+      });
+      // eslint-disable-next-line no-await-in-loop
+      await studentPaymentService.applyPaidDelta(t.paymentId, -t.amount, { tx });
 
       // YOMON QARZ TUZATISHI.
       //
@@ -204,24 +236,27 @@ export const remove = async (id, currentUser) => {
       // Bekor qilishni bloklash mumkin emas: write-off'ni qaytarish oqimi
       // yo'q va foydalanuvchi tuzoqqa tushib qolardi. Shuning uchun
       // yo'qotish RAQAMI tuzatiladi.
-      const paymentDoc = await StudentPayment.findById(t.payment)
-        .select({ writtenOff: 1 })
-        .session(session || null);
+      // eslint-disable-next-line no-await-in-loop
+      const paymentDoc = await tx.studentPayment.findUnique({
+        where: { id: t.paymentId },
+        select: { writtenOff: true },
+      });
       if (paymentDoc?.writtenOff) {
-        await StudentPayment.updateOne(
-          { _id: t.payment },
-          { $inc: { writeOffAmount: t.amount } },
-          session ? { session } : undefined,
-        );
+        // eslint-disable-next-line no-await-in-loop
+        await tx.studentPayment.update({
+          where: { id: t.paymentId },
+          data: { writeOffAmount: { increment: t.amount } },
+        });
       }
 
       // Depozitdan qoplangan to'lov bekor qilinsa - pul DEPOZITGA qaytadi (naqdga emas).
       // Refund void bilan bir xil tranzaksiyada - tashqi abort'da double-credit bo'lmasin.
       if (t.source === "deposit") {
-        await depositService.refundToDeposit(t.student, t.amount, { session });
+        // eslint-disable-next-line no-await-in-loop
+        await depositService.refundToDeposit(t.studentId, t.amount, { tx });
       }
-      removed.push(t._id);
+      removed.push(t.id);
     }
-    return { _id: id, removed };
+    return { id: trx.id, _id: trx.id, removed };
   });
 };

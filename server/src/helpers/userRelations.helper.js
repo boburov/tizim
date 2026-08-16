@@ -5,23 +5,36 @@
 // buziladi). Faqat hech qanday biznes ma'lumoti bo'lmagandagina yozuv
 // 100% drop qilinadi.
 //
-// ─────────────────────────────────────────────────────────────────
-// MONGO → PRISMA: NIMA O'ZGARDI VA NIMA O'ZGARMADI
+// ═════════════════════════════════════════════════════════════════
+// MONGO → POSTGRES: O'CHIRISH TARTIBI ENDI MAJBURIY
 //
-// O'ZGARMADI: bloklovchi bog'liqliklar ro'yxati, ularning ma'nosi,
-// o'chirish tartibi va qaytariladigan qiymatlar. Bu fayl PUL bilan
-// ishlaydi, shuning uchun mantiq bir xil qoldi.
+// Mongo'da tashqi kalitlar (FK) YO'Q edi - qatorlarni istalgan
+// tartibda o'chirish mumkin edi va yetim yozuvlar jimgina qolib
+// ketardi. PostgreSQL'da FK bor, ya'ni:
 //
-// O'ZGARDI:
-//   - `{ student: id }` → `{ studentId: id }`. Prisma'da `student` bu
-//     RELATION, `studentId` esa ustun. Eskisini yozib qo'yish xato
-//     bermaydi - u boshqa ma'noga ega bo'lib, jimgina noto'g'ri
-//     natija berardi.
-//   - `Group.teachers` massiv edi, endi ko'p-ko'pga bog'lanish:
-//     `{ teachers: { some: { id } } }` va `disconnect`.
-//   - `.distinct("group")` → `findMany({ distinct, select })`.
-//   - `session` → `tx` (Prisma tranzaksiya klienti).
-// ─────────────────────────────────────────────────────────────────
+//   • BOLA qator OTA'sidan OLDIN o'chirilishi shart, aks holda
+//     `RESTRICT` xato beradi va butun tranzaksiya orqaga qaytadi;
+//   • `SET NULL` bo'lgan bog'lanishlar o'zi tozalanadi;
+//   • `CASCADE` bo'lganlari (refresh_tokens, user_branch_assignments,
+//     group_schedule_items, debt_write_off_breakdown) o'zi ketadi.
+//
+// AYNAN SHU sabab bilan quyidagi ketma-ketlik TASODIFIY EMAS. Eng og'ir
+// ikkita bog'lanish:
+//     payment_transactions.paymentId → student_payments   (RESTRICT)
+//     salary_transactions.salaryId   → teacher_salaries   (RESTRICT)
+// Ya'ni TO'LOVLAR har doim PLAN/MAOSH qatoridan OLDIN o'chiriladi.
+//
+// NIMA QO'SHILDI: Mongo varianti bir nechta jadvalni umuman
+// o'chirmasdi (depozit, muzlatish, boshlang'ich qoldiq, yomon qarz,
+// maosh stavkasi, audit jurnali). U yerda bu "yetim qator" degani edi;
+// Postgres'da esa `RESTRICT` tufayli o'chirishning O'ZI ishlamaydi.
+// Har bir qo'shimcha o'z joyida izohlangan.
+//
+// Boshqa moslashtirishlar: `{ student: id }` → `{ studentId: id }`,
+// `Group.teachers` massiv → ko'p-ko'pga (`some` / `disconnect`),
+// `.distinct("group")` → `findMany({ distinct, select })`,
+// `session` → `tx`.
+// ═════════════════════════════════════════════════════════════════
 import prisma from "../config/prisma.js";
 
 const db = (tx) => tx || prisma;
@@ -58,6 +71,24 @@ const blockingCounters = (client, id) => [
   { label: "O'qituvchi oyliklari", run: () => client.teacherSalary.count({ where: { teacherId: id } }) },
   { label: "Oylik tranzaksiyalari", run: () => client.salaryTransaction.count({ where: { teacherId: id } }) },
   { label: "O'qituvchi guruh davrlari", run: () => client.teacherGroupPeriod.count({ where: { teacherId: id } }) },
+
+  // ── FAQAT POSTGRES SABABLI QO'SHILGANLAR ──
+  //
+  // Bu jadvallardagi FK `RESTRICT`, ustunlari esa NOT NULL - ya'ni
+  // qatorni null'ga tushirib ham bo'lmaydi. Ular hard-delete yo'lida
+  // o'chirilmaydi (mansubligi noaniq yoki audit qiymati bor), demak
+  // ULARNI OLDINDAN, TUSHUNARLI XABAR BILAN to'sish kerak - aks holda
+  // foydalanuvchi tranzaksiya o'rtasidagi xom FK xatosini ko'rardi.
+  { label: "Berilgan topshiriqlar", run: () => client.assignment.count({ where: { senderId: id } }) },
+  { label: "Topshiriq oluvchilari", run: () => client.assignmentRecipient.count({ where: { studentId: id } }) },
+  { label: "Yozilgan baholar", run: () => client.grade.count({ where: { recordedById: id } }) },
+  { label: "Belgilangan yo'qliklar", run: () => client.teacherAbsence.count({ where: { recordedById: id } }) },
+  { label: "Kassa smenalari", run: () => client.shift.count({ where: { cashierId: id } }) },
+  { label: "Tasdiq so'rovlari", run: () => client.approval.count({ where: { requestedById: id } }) },
+  { label: "Xodim oyliklari", run: () => client.staffPayroll.count({ where: { employeeId: id } }) },
+  { label: "Xodim maosh shartnomasi", run: () => client.staffCompensation.count({ where: { employeeId: id } }) },
+  { label: "Xodim maosh to'lovlari", run: () => client.staffSalaryTransaction.count({ where: { employeeId: id } }) },
+  { label: "Xodim KPI biriktiruvlari", run: () => client.staffKpiAssignment.count({ where: { employeeId: id } }) },
 ];
 
 /**
@@ -83,10 +114,18 @@ export const purgeUserResidualData = async (userId, { tx } = {}) => {
   const id = String(userId);
   const client = db(tx);
 
+  // refresh_tokens FK'si CASCADE, lekin ochiq o'chirish arzon va
+  // niyatni ko'rsatib turadi.
   await client.refreshToken.deleteMany({ where: { userId: id } });
   await client.activityLog.deleteMany({ where: { userId: id } });
   await client.notificationRecipient.deleteMany({ where: { userId: id } });
   await client.archiveLog.deleteMany({ where: { userId: id } });
+
+  // MAOSH AUDIT JURNALI - `employeeId` RESTRICT va NOT NULL.
+  // Mongo'da bu jadval umuman tegilmasdi; Postgres'da uni tozalamasdan
+  // foydalanuvchini o'chirib bo'lmaydi. Audit izi shu odamga tegishli
+  // bo'lgani uchun u bilan birga ketadi (odam yo'q - izi ham keraksiz).
+  await client.payrollAuditLog.deleteMany({ where: { employeeId: id } });
 
   // Telegram ulanishini uzamiz (botUser yozuvi telegramId bo'yicha qoladi -
   // shu telefon qayta ro'yxatdan o'tsa, eski chat ID topiladi).
@@ -104,6 +143,8 @@ export const purgeUserResidualData = async (userId, { tx } = {}) => {
  *
  * Moliyaviy recalc uchun ta'sirlangan guruh ID'lari qaytariladi -
  * ular o'chirishdan OLDIN yig'iladi (keyin topib bo'lmaydi).
+ *
+ * TARTIB FK BO'YICHA: bola → ota.
  */
 export const hardDeleteStudentData = async (studentId, { tx } = {}) => {
   const id = String(studentId);
@@ -128,16 +169,33 @@ export const hardDeleteStudentData = async (studentId, { tx } = {}) => {
     ),
   ];
 
+  // ── 1) MOLIYA: eng chuqur bolalardan yuqoriga ──
+  // payment_transactions.paymentId → student_payments  (RESTRICT)
+  await client.paymentTransaction.deleteMany({ where: { studentId: id } });
+  // debt_write_offs.studentId → users (RESTRICT) - yozuvning O'ZI ketishi
+  // shart. Breakdown unga CASCADE bilan bog'langan, o'zi ketadi.
+  await client.debtWriteOff.deleteMany({ where: { studentId: id } });
+  // deposit_transactions.depositId → student_deposits (RESTRICT)
+  await client.depositTransaction.deleteMany({ where: { studentId: id } });
+  await client.studentDeposit.deleteMany({ where: { studentId: id } });
+  await client.studentPayment.deleteMany({ where: { studentId: id } });
+
+  // ── 2) DOMEN ──
   await client.groupMembership.deleteMany({ where: { studentId: id } });
   await client.attendance.deleteMany({ where: { studentId: id } });
   await client.attendanceExemption.deleteMany({ where: { studentId: id } });
   await client.grade.deleteMany({ where: { studentId: id } });
-  await client.studentPayment.deleteMany({ where: { studentId: id } });
-  await client.paymentTransaction.deleteMany({ where: { studentId: id } });
-  await client.studentDeposit.deleteMany({ where: { studentId: id } });
-  await client.depositTransaction.deleteMany({ where: { studentId: id } });
   await client.discount.deleteMany({ where: { studentId: id } });
   await client.feedback.deleteMany({ where: { authorId: id } });
+  // student_freezes.studentId → users (RESTRICT, NOT NULL)
+  await client.studentFreeze.deleteMany({ where: { studentId: id } });
+  // assignment_recipients.studentId → users (RESTRICT, NOT NULL)
+  await client.assignmentRecipient.deleteMany({ where: { studentId: id } });
+  // opening_balances.userId → users (RESTRICT, NOT NULL). Yozuv import
+  // idempotentligining langari edi, lekin odamning O'ZI o'chgach u
+  // hech nimani himoya qilmaydi (qayta import yangi ID yaratadi).
+  await client.openingBalance.deleteMany({ where: { userId: id } });
+
   await client.lead.updateMany({
     where: { studentId: id },
     data: { studentId: null },
@@ -181,11 +239,20 @@ export const hardDeleteTeacherData = async (teacherId, { tx } = {}) => {
     ),
   ];
 
-  // Moliya (chiqim tomoni): maosh hisoblari + maosh to'lovlari.
-  await client.teacherGroupPeriod.deleteMany({ where: { teacherId: id } });
-  await client.teacherSalary.deleteMany({ where: { teacherId: id } });
+  // ── MOLIYA (chiqim tomoni) - TARTIB MUHIM ──
+  // salary_transactions.salaryId → teacher_salaries (RESTRICT):
+  // to'lovlar maosh qatorlaridan OLDIN o'chirilishi SHART.
   await client.salaryTransaction.deleteMany({ where: { teacherId: id } });
-  // HR/domen: davomat, yo'qliklar, o'qituvchi yozgan fikr-mulohazalar.
+  await client.teacherSalary.deleteMany({ where: { teacherId: id } });
+  await client.teacherGroupPeriod.deleteMany({ where: { teacherId: id } });
+  // teacher_compensations.teacherId → users (RESTRICT, NOT NULL).
+  // Mongo'da tegilmasdi; stavka tarixi faqat shu odamga tegishli.
+  await client.teacherCompensation.deleteMany({ where: { teacherId: id } });
+  // opening_balances.userId → users (RESTRICT) - o'qituvchida ham bo'lishi
+  // mumkin (boshlang'ich qoldiq).
+  await client.openingBalance.deleteMany({ where: { userId: id } });
+
+  // ── HR / domen ──
   await client.teacherAttendance.deleteMany({ where: { teacherId: id } });
   await client.teacherAbsence.deleteMany({ where: { teacherId: id } });
   await client.feedback.deleteMany({ where: { authorId: id } });
@@ -205,6 +272,7 @@ export const hardDeleteTeacherData = async (teacherId, { tx } = {}) => {
   // ko'p-ko'pga bog'lanish `disconnect` bilan uziladi - ya'ni join
   // jadvalidagi qator o'chadi. Guruhning O'ZI tegilmaydi.
   for (const gid of groupRows.map((g) => g.id)) {
+    // eslint-disable-next-line no-await-in-loop
     await client.group.update({
       where: { id: gid },
       data: { teachers: { disconnect: { id } } },
@@ -224,6 +292,11 @@ export const hardDeleteTeacherData = async (teacherId, { tx } = {}) => {
  *
  * Ta'sirlangan o'quvchilar (completedAt qayta hisoblash uchun)
  * o'chirishdan OLDIN yig'iladi.
+ *
+ * TARTIB FK BO'YICHA: bola → ota. Xususan:
+ *   payment_transactions → student_payments  (RESTRICT)
+ *   salary_transactions  → teacher_salaries  (RESTRICT)
+ *   debt_write_off_breakdown → debt_write_offs (CASCADE)
  */
 export const hardDeleteGroupData = async (groupId, { tx } = {}) => {
   const id = String(groupId);
@@ -236,21 +309,28 @@ export const hardDeleteGroupData = async (groupId, { tx } = {}) => {
   });
   const studentIds = memberRows.map((r) => String(r.studentId)).filter(Boolean);
 
-  // Domen: a'zoliklar, davomat, baholar, guruh yo'qliklari, fikrlar.
+  // ── MOLIYA (kirim): bolalardan boshlab ──
+  await client.paymentTransaction.deleteMany({ where: { groupId: id } });
+  // debt_write_offs.groupId → groups (RESTRICT): guruh o'chishi uchun
+  // yomon qarz yozuvlari ham ketishi shart (breakdown CASCADE bilan).
+  await client.debtWriteOff.deleteMany({ where: { groupId: id } });
+  await client.studentPayment.deleteMany({ where: { groupId: id } });
+  await client.groupFee.deleteMany({ where: { groupId: id } });
+  await client.discount.deleteMany({ where: { groupId: id } });
+
+  // ── MOLIYA (chiqim) ──
+  await client.salaryTransaction.deleteMany({ where: { groupId: id } });
+  await client.teacherSalary.deleteMany({ where: { groupId: id } });
+  await client.teacherGroupPeriod.deleteMany({ where: { groupId: id } });
+
+  // ── DOMEN ──
   await client.groupMembership.deleteMany({ where: { groupId: id } });
   await client.attendance.deleteMany({ where: { groupId: id } });
   await client.grade.deleteMany({ where: { groupId: id } });
   await client.teacherAbsence.deleteMany({ where: { groupId: id } });
   await client.feedback.deleteMany({ where: { groupId: id } });
-  // Moliya (kirim): oylik narx, to'lov hisoblari, tranzaksiyalar, chegirmalar.
-  await client.groupFee.deleteMany({ where: { groupId: id } });
-  await client.studentPayment.deleteMany({ where: { groupId: id } });
-  await client.paymentTransaction.deleteMany({ where: { groupId: id } });
-  await client.discount.deleteMany({ where: { groupId: id } });
-  // Moliya (chiqim): dars davrlari, maosh hisoblari, maosh to'lovlari.
-  await client.teacherGroupPeriod.deleteMany({ where: { groupId: id } });
-  await client.teacherSalary.deleteMany({ where: { groupId: id } });
-  await client.salaryTransaction.deleteMany({ where: { groupId: id } });
+  // lesson_cancellations.groupId → groups (RESTRICT). Mongo'da tegilmasdi.
+  await client.lessonCancellation.deleteMany({ where: { groupId: id } });
 
   return studentIds;
 };

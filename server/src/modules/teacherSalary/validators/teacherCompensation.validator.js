@@ -3,7 +3,7 @@ import {
   COMP_BASE_TYPES,
   COMP_VARIABLE_TYPES,
   COMP_PERCENT_BASES,
-} from "../../../models/teacherCompensation.model.js";
+} from "../../../constants/compensation.js";
 
 // Maosh stavkasi so'rovlari uchun zod sxemalari.
 // Enum ro'yxatlari MODELDAN olinadi - ikki joyda saqlansa vaqt o'tib

@@ -64,6 +64,13 @@ jadval yangilanadi.
 | `helpers/correlationCache.js`, `botStatus.helper.js`, `cascadeDelete.helper.js` | kesh, Telegram holati, soft-delete cascade |
 | `finance/financeTxn.helper.js` | `runFinanceTxn` → `prisma.$transaction` |
 | `groups/teacherGroupPeriod.service.js` | **o'qish/rezolver yo'llari** — **20/20 test** (`npm run test:group-periods`) |
+| **`modules/teacherSalary`** (butun modul) | rateResolver, variableBase, teacherCompensation, teacherSalary, salaryTransaction, salaryAdjustment — **31/31 test** (`npm run test:salary-chain`) |
+| **`modules/groups`** (butun modul) | groups.service (1673 → 1779), teacherGroupPeriod **yozish yo'llari ham** — **31/31 test** (`npm run test:groups-chain`) |
+| **`modules/finance`** | groupFee, studentPayment, discount, transaction, financeTxn |
+| **`modules/deposits`**, **`modules/openingBalance`** | to'liq |
+| `modules/journal/journal.service.js` | qo'sh yozuv (post/reverse/balances/reconcile) |
+| `modules/holidays`, `modules/lessonCancellations` | pul yo'lidagi tranzitiv blokerlar |
+| `helpers/studentFreeze.helper.js`, `journalPosting.helper.js` | muzlatish oynalari, jurnal postlash |
 
 **Hozir ishlaydi — 22 endpoint (200):**
 `/auth/*`, `/branches` (+compare, stats), `/roles` (+matrix), `/courses`,
@@ -75,8 +82,10 @@ jadval yangilanadi.
 
 Boot'da **0 ta ERROR**, rejalashtiruvchi 26 job bilan ko'tariladi.
 
-**Hozir ishlamaydi:** `/users`, `/groups`, `/leads`, `/holidays`,
-`/expenses`, `/feedback`, `/activity-logs`, `/deposits` va qolgan modullar.
+**Hozir ishlamaydi:** `/leads`, `/expenses`, `/feedback`, `/activity-logs`,
+`/attendance`, `/grades`, `/assignments`, `/staff-payroll`, `/imports`,
+`/exports`, `/ai`, `/branch-analytics`, `/finance-report`, `/ledger`,
+xazina (`shift`, `cashTransfer`, `journalVerify`) va bot.
 
 **Fon xizmatlari** (hammasi `.catch()` bilan o'ralgan — serverni yiqitmaydi):
 `botlocks`, `groups.find` (autoEndGroups), `studentpayments`
@@ -94,7 +103,7 @@ pipeline operators"*) — bu yaxshi, chunki jimgina noto'g'ri natija
 qaytarmaydi. Modulni ko'chirayotganda `...branchMatchStage()` ni
 `AND: [...]` ichiga qo'ying.
 
-### ⏳ Qolgan (43 modul)
+### ⏳ Qolgan (121 fayl)
 
 Quyidagilar **hali Mongoose'da** va shuning uchun **hozircha ishlamaydi**
 (Mongo ulanishi olib tashlangan). Ko'chirish tartibi — bog'liqlik bo'yicha:
@@ -109,37 +118,63 @@ ular davomat/to'lov to'lqiniga tegishli (chaqiruvchilari hali Mongoose'da).
 
 **`users`** ✅ **bajarildi** (1385 qator, 17 eksport, 49 ta test).
 
-**`groups`** ⏳ **QISMAN** ← **KEYINGI QADAM**
+**`groups`** ✅ **bajarildi** (1779 qator, 26 eksport, 31 ta test).
 
-| Fayl | Holat |
+**Moliya/maosh zanjiri (2-to'lqin)** ✅ **bajarildi**
+
+| Modul | Holat |
 |---|---|
-| `helpers/botStatus`, `cascadeDelete` | ✅ Prisma |
-| `constants/calendar.js` (`GROUP_DAYS`) | ✅ modeldan ko'chirildi |
-| `groups/validators/common.js` | ✅ konstantaga bog'landi |
-| `groups/teacherGroupPeriod.service.js` | ⚠️ **o'qish yo'llari ✅**, yozish yo'llari bloklangan |
-| `groups/groups.service.js` (1673 qator) | ❌ Mongoose |
+| `teacherSalary/rateResolver.helper.js` | ✅ |
+| `teacherSalary/variableBase.helper.js` | ✅ |
+| `teacherSalary/teacherCompensation.service.js` | ✅ |
+| `teacherSalary/teacherSalary.service.js` | ✅ |
+| `teacherSalary/salaryTransaction.service.js` | ✅ |
+| `teacherSalary/salaryAdjustment.service.js` | ✅ |
+| `finance/groupFee.service.js` | ✅ |
+| `finance/studentPayment.service.js` | ✅ |
+| `finance/discount.service.js` | ✅ |
+| `finance/services/transaction.service.js` | ✅ |
+| `deposits/deposit.service.js` | ✅ |
+| `openingBalance/openingBalance.service.js` | ✅ |
+| `groups/groups.service.js` | ✅ |
+| `journal/journal.service.js` | ✅ |
 
-> **NEGA yozish yo'llari bloklangan:** `create/update/remove/handover/
-> assignTeacher/unassignTeacher` → `recomputeForRange()` →
-> `teacherSalary.service.js` (hali Mongoose). Uni `try/catch` bilan
-> o'rab yuborish MUMKIN EMAS — maosh qayta hisobi jimgina yo'qolardi.
+### ⚠️ ATOMIK YOZISH: Mongo update-pipeline'ining o'rni
+
+Mongo `paidAmount`/`status`/`overpaidAmount` ni **aggregation update
+pipeline** bilan yozardi — status BAZADAGI joriy `paidAmount` dan bitta
+atomik amalda keltirib chiqarilardi. Prisma'da bunday quvur **yo'q**.
+Ikki vosita bilan almashtirildi:
+
+1. **`applyPaidDelta`** (teacherSalary + studentPayment + depozit balansi)
+   → **bitta xom `UPDATE`**. Faqat shu yerda "shartli-atomik" o'zgartirish
+   kerak (`capToRemaining`: yangi summa qoldiqdan oshsa qator umuman
+   yangilanmasin). SQL'da o'ng tomondagi ustun ESKI qiymatni beradi —
+   Mongo'dagi `"$paidAmount"` bilan aynan bir xil.
+2. **`recalc` / `recalcStatus`** → `$transaction` + `SELECT … FOR UPDATE`.
+   Qator qulflanadi, `paidAmount` o'qiladi, status JS'da hisoblanadi.
+
+> **HECH QACHON** "o'qi → hisobla → saqla" naqshiga tushirmang: u yo'qolgan
+> to'lov (lost update) demakdir.
 >
-> **`groups.service.js` ni ochish uchun kerak bo'lgan zanjir** (taxminan
-> 4300 qator, bog'liqlik tartibida):
-> 1. `teacherSalary/rateResolver.helper.js` (223) + `variableBase.helper.js` (152)
-> 2. `teacherSalary/teacherCompensation.service.js` (357)
-> 3. `teacherSalary/teacherSalary.service.js` (1019) ← eng muhimi
-> 4. `finance/groupFee.service.js` (300)
-> 5. `finance/studentPayment.service.js` (806)
-> 6. `deposits/deposit.service.js` (642)
-> 7. `openingBalance/openingBalance.service.js` (548)
-> 8. `groups/groups.service.js` (1673)
->
-> Eslatma: `Group.teachers` — ko'p-ko'pga bog'lanish
-> (`connect` / `set` / `some` / `disconnect`), `Group.schedule` esa endi
-> `GroupScheduleItem[]` relation'i: har bir `Group` so'rovida uni ochiq
-> `include` qilish SHART, aks holda jadval to'qnashuvi tekshiruvi jimgina
-> hech nimani tutmay qo'yadi.
+> **`updatedAt`**: Prisma'ning `@updatedAt` KLIENT tomonida ishlaydi.
+> Xom SQL uni chetlab o'tadi — `"updatedAt" = NOW()` ochiq yoziladi.
+
+### ⚠️ O'CHIRISH TARTIBI ENDI MAJBURIY
+
+Mongo'da FK yo'q edi — qatorlarni istalgan tartibda o'chirish mumkin edi.
+PostgreSQL'da `RESTRICT` bor, ya'ni **bola ota'sidan oldin** ketishi shart:
+
+```text
+payment_transactions.paymentId → student_payments   (RESTRICT)
+salary_transactions.salaryId   → teacher_salaries   (RESTRICT)
+deposit_transactions.depositId → student_deposits   (RESTRICT)
+```
+
+`helpers/userRelations.helper.js` shu tartibda qayta yozildi va Mongo
+umuman tegmagan jadvallar qo'shildi (depozit, muzlatish, boshlang'ich
+qoldiq, yomon qarz, maosh stavkasi, audit jurnali) — ularsiz o'chirish
+FK xatosi bilan yiqilardi.
 
 **3-to'lqin — o'quv jarayoni**
 `attendance`, `grades`, `assignments`, `holidays`, `lessonCancellations`,
@@ -263,12 +298,47 @@ tashlandi va sabab kodda izohlab qo'yildi. **Xulq-atvor o'zgarmadi** —
 u yozuvlar ilgari ham belgilanmasdi; ular a'zolik/davrlardan qayta
 hisoblanadi (`recalc`), ya'ni summalar o'zi nolga tushadi.
 
+### `assignTeacher` o'qituvchini 0 maoshga qulflaydi (MONGO DAVRIDAN)
+
+`teacherGroupPeriod.assignTeacher()` → `create()` ni `inheritStandardRate`
+BERMASDAN chaqiradi. `normalizeRate()` esa stavka berilmasa ham
+`salaryType:"fixed", fixedAmount:0` yozadi, `rateResolver.hasOwnRate()`
+buni **ustunlik** deb biladi va o'qituvchining STANDART shartnomasi
+(`TeacherCompensation`) umuman qaralmaydi.
+
+Natija: guruh yaratish va o'qituvchi almashtirish orqali biriktirilgan
+o'qituvchining o'sha guruhdagi maoshi **0** bo'lib qoladi
+(`rateSource: "period_legacy"`). `handover` yo'li bayroqni beradi, ya'ni
+u to'g'ri ishlaydi.
+
+Bu **migratsiya regressiyasi EMAS** — `git 9fb01b7` da ham shunday.
+Tuzatish o'qituvchilarning haqiqiy maoshini 0 dan real summaga ko'taradi,
+ya'ni bu **moliyaviy qaror**; migratsiya kommitiga jimgina qo'shilmadi.
+`tests/groupsChainPrisma.test.js` uni "[MAVJUD XATO]" nomi bilan ochiq
+qayd etadi — tuzatilsa test ogohlantirish beradi.
+
 ### `leadRouting` — `branchId: undefined`
 
 `ensureMainBranch()` xom Prisma obyekti qaytaradi (`id`), servis esa
 `main._id` o'qirdi → `undefined`. Zaxira yo'lda lidga filial
 biriktirilmay qolardi ("lid hech qachon yo'qolmaydi" invarianti
 buzilardi). Tuzatildi.
+
+---
+
+## 5b. Ochiq qarorlar (kod emas, siyosat)
+
+Audit topgan, lekin **migratsiyada ataylab hal qilinmagan** masalalar.
+Har biri pul summasini o'zgartiradi, shuning uchun egasining qarori kerak:
+
+| Masala | Nega hozir hal qilinmadi |
+|---|---|
+| `assignTeacher` 0 stavkasi (yuqorida) | Tuzatish maoshni oshiradi — e'lon qilinishi kerak |
+| Foiz maoshi bazasi `isOpening` / `writtenOff` qatorlarni QAMRAB OLADI, `financeReport` esa ularni chiqarib tashlaydi | Ikkisini moslashtirish ish haqini o'zgartiradi. Avval `SUM(...) FILTER (...)` bilan o'lchash kerak |
+| `computeLessonHours` bayramlarni `["all","students"]` bo'yicha oladi — `audience:"students"` bayram O'QITUVCHI soatini ham kamaytiradi | Assimetriya ehtimol kutilmagan, lekin tuzatish har bir soatbay o'qituvchining maoshini o'zgartiradi |
+| Mongoose `pre('validate')` hooklari (≈20 ta) yo'qoldi; bazada CHECK cheklovlari YO'Q | Route'dagi zod faqat HTTP yo'lini qoplaydi; `executeApproved*`, seed va importlar uni chetlab o'tadi. Yagona qaror kerak: CHECK qo'shish, servis qo'riqchisi yoki ataylab qabul qilish |
+| `Discount` da unique indeks yo'q (Mongo'da ham yo'q edi) | Ikki bir xil faol chegirma qo'shilib ketishi mumkin. Qisman unique qo'shish mavjud ma'lumotni buzishi mumkin |
+| `obligations()`, `salary.getById()`, `groups.restoreDeleted()` filial filtri QO'LLAMAYDI | Hammasi mavjud xatti-harakat; o'zgartirish ruxsat siyosati qarori |
 
 ---
 
