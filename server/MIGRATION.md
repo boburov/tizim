@@ -65,10 +65,11 @@ jadval yangilanadi.
 | `finance/financeTxn.helper.js` | `runFinanceTxn` → `prisma.$transaction` |
 | `groups/teacherGroupPeriod.service.js` | **o'qish/rezolver yo'llari** — **20/20 test** (`npm run test:group-periods`) |
 | **`modules/teacherSalary`** (butun modul) | rateResolver, variableBase, teacherCompensation, teacherSalary, salaryTransaction, salaryAdjustment — **31/31 test** (`npm run test:salary-chain`) |
-| **`modules/groups`** (butun modul) | groups.service (1673 → 1779), teacherGroupPeriod **yozish yo'llari ham** — **31/31 test** (`npm run test:groups-chain`) |
+| **`modules/groups`** (butun modul) | groups.service (1673 → 1779), teacherGroupPeriod **yozish yo'llari ham** — **32/32 test** (`npm run test:groups-chain`) |
 | **`modules/finance`** | groupFee, studentPayment, discount, transaction, financeTxn |
 | **`modules/deposits`**, **`modules/openingBalance`** | to'liq |
 | `modules/journal/journal.service.js` | qo'sh yozuv (post/reverse/balances/reconcile) |
+| **`modules/staffPayroll`** (butun modul) | kpiTriggers, kpiRule, kpiEngine, staffPayroll, staffCompensation, staffAdjustment, staffSalaryTransaction, payrollHistory — **47/47 test** (`npm run test:staff-payroll`) |
 | `modules/holidays`, `modules/lessonCancellations` | pul yo'lidagi tranzitiv blokerlar |
 | `helpers/studentFreeze.helper.js`, `journalPosting.helper.js` | muzlatish oynalari, jurnal postlash |
 
@@ -83,7 +84,7 @@ jadval yangilanadi.
 Boot'da **0 ta ERROR**, rejalashtiruvchi 26 job bilan ko'tariladi.
 
 **Hozir ishlamaydi:** `/leads`, `/expenses`, `/feedback`, `/activity-logs`,
-`/attendance`, `/grades`, `/assignments`, `/staff-payroll`, `/imports`,
+`/attendance`, `/grades`, `/assignments`, `/imports`,
 `/exports`, `/ai`, `/branch-analytics`, `/finance-report`, `/ledger`,
 xazina (`shift`, `cashTransfer`, `journalVerify`) va bot.
 
@@ -103,7 +104,7 @@ pipeline operators"*) — bu yaxshi, chunki jimgina noto'g'ri natija
 qaytarmaydi. Modulni ko'chirayotganda `...branchMatchStage()` ni
 `AND: [...]` ichiga qo'ying.
 
-### ⏳ Qolgan (121 fayl)
+### ⏳ Qolgan (110 fayl)
 
 Quyidagilar **hali Mongoose'da** va shuning uchun **hozircha ishlamaydi**
 (Mongo ulanishi olib tashlangan). Ko'chirish tartibi — bog'liqlik bo'yicha:
@@ -138,6 +139,33 @@ ular davomat/to'lov to'lqiniga tegishli (chaqiruvchilari hali Mongoose'da).
 | `openingBalance/openingBalance.service.js` | ✅ |
 | `groups/groups.service.js` | ✅ |
 | `journal/journal.service.js` | ✅ |
+
+**Xodim oyligi (3-to'lqin)** ✅ **bajarildi**
+
+| Modul | Holat |
+|---|---|
+| `staffPayroll/kpiTriggers.js` | ✅ |
+| `staffPayroll/kpiRule.service.js` | ✅ |
+| `staffPayroll/kpiEngine.service.js` | ✅ |
+| `staffPayroll/staffPayroll.service.js` | ✅ |
+| `staffPayroll/staffCompensation.service.js` | ✅ |
+| `staffPayroll/staffAdjustment.service.js` | ✅ |
+| `staffPayroll/staffSalaryTransaction.service.js` | ✅ |
+| `staffPayroll/payrollHistory.service.js` | ✅ |
+| `staffPayroll/payrollAudit.service.js` | ✅ |
+
+**Keyingi to'lqin uchun bog'liqlik tartibi** (qolgan 110 fayl):
+
+| Guruh | Fayl | Nega shu tartibda |
+|---|---|---|
+| 1 | `expenses` (3) + `expenseApprovals` yozish yo'li | `journal.post()` allaqachon Prisma'da; chiqim unga yozadi |
+| 2 | `journal/cashTransfer`, `journalVerify` (3) | Xazina; `accounts` cheklovlari tayyor |
+| 3 | `attendance` (2) + `grades` (2) + `attendanceExemptions` (1) + `teacherAttendance` (1) | Davomat KPI triggerlarini oziqlantiradi |
+| 4 | `assignments`, `feedback`, `activityHistory`, `activityLogs`, `search`, `notifications` (2) | Bir-biriga bog'liq emas, parallel |
+| 5 | `ledger` (1), `financeReport` (1), `branchAnalytics` (4) | Faqat O'QIYDI — yuqoridagilar tugagach |
+| 6 | `imports` (11) | Barcha servislarga yozadi, shuning uchun oxirida |
+| 7 | `ai` (27), `bot` (3), `exports`, `storage` | Mustaqil; `ai` eng katta, lekin pul yo'lida emas |
+| — | `seeds` (25), `jobs` (6), `middleware` (3), `queues` (1) | Chaqiruvchilari bilan birga |
 
 ### ⚠️ ATOMIK YOZISH: Mongo update-pipeline'ining o'rni
 
@@ -298,24 +326,37 @@ tashlandi va sabab kodda izohlab qo'yildi. **Xulq-atvor o'zgarmadi** —
 u yozuvlar ilgari ham belgilanmasdi; ular a'zolik/davrlardan qayta
 hisoblanadi (`recalc`), ya'ni summalar o'zi nolga tushadi.
 
-### `assignTeacher` o'qituvchini 0 maoshga qulflaydi (MONGO DAVRIDAN)
+### `assignTeacher` o'qituvchini 0 maoshga qulflardi (MONGO DAVRIDAN) — ✅ TUZATILDI
 
 `teacherGroupPeriod.assignTeacher()` → `create()` ni `inheritStandardRate`
-BERMASDAN chaqiradi. `normalizeRate()` esa stavka berilmasa ham
+BERMASDAN chaqirardi. `normalizeRate()` esa stavka berilmasa ham
 `salaryType:"fixed", fixedAmount:0` yozadi, `rateResolver.hasOwnRate()`
-buni **ustunlik** deb biladi va o'qituvchining STANDART shartnomasi
-(`TeacherCompensation`) umuman qaralmaydi.
+buni **davrning o'z stavkasi** deb biladi. Ierarxiya bo'yicha davr o'z
+stavkasiga ega bo'lsa standart shartnoma (`TeacherCompensation`) umuman
+qaralmaydi — natijada guruh yaratish va o'qituvchi almashtirish orqali
+biriktirilgan o'qituvchining o'sha guruhdagi maoshi **0** bo'lib qolardi
+(`rateSource: "period_legacy"`). `handover` yo'li bayroqni berardi, ya'ni
+u to'g'ri ishlardi.
 
-Natija: guruh yaratish va o'qituvchi almashtirish orqali biriktirilgan
-o'qituvchining o'sha guruhdagi maoshi **0** bo'lib qoladi
-(`rateSource: "period_legacy"`). `handover` yo'li bayroqni beradi, ya'ni
-u to'g'ri ishlaydi.
+**Ko'zlangan qoida yangi o'ylab topilmadi** — u `inheritStandardRate`
+bayrog'ining o'z izohida allaqachon yozilgan: "guruh boshqa o'qituvchiga
+topshirilganda yangi o'qituvchi O'Z shartnomasi bo'yicha olishi kerak".
+`assignTeacher` aynan o'sha ergonomik yo'l. Tuzatish shu bayroqni
+berishdan iborat; guruhga xos alohida stavka kerak bo'lgan yo'l
+(`create()` ni ochiq stavka bilan chaqirish — `teacherPeriod.create`
+handler'i) **tegilmadi**.
 
-Bu **migratsiya regressiyasi EMAS** — `git 9fb01b7` da ham shunday.
-Tuzatish o'qituvchilarning haqiqiy maoshini 0 dan real summaga ko'taradi,
-ya'ni bu **moliyaviy qaror**; migratsiya kommitiga jimgina qo'shilmadi.
-`tests/groupsChainPrisma.test.js` uni "[MAVJUD XATO]" nomi bilan ochiq
-qayd etadi — tuzatilsa test ogohlantirish beradi.
+Bu **migratsiya regressiyasi EMAS** edi — `git 9fb01b7` da ham shunday.
+Shuning uchun u migratsiya kommitiga jimgina qo'shilmadi, alohida
+biznes-mantiq kommiti bilan tuzatildi (`1c4bd00`).
+
+**QAMROVI: faqat oldinga.** Allaqachon yozilgan davrlarda
+`salaryType:"fixed", fixedAmount:0` joyida qoladi va ular baribir 0
+bo'lib turaveradi — eski ma'lumotni tuzatish alohida qaror (§5b).
+
+Regressiya: `tests/groupsChainPrisma.test.js` ikkita test bilan qadaydi —
+biri natijani (`rateSource="compensation"`, summa > 0), ikkinchisi
+sababini (davrning uchala stavka maydoni ham `null`).
 
 ### `leadRouting` — `branchId: undefined`
 
@@ -333,16 +374,173 @@ Har biri pul summasini o'zgartiradi, shuning uchun egasining qarori kerak:
 
 | Masala | Nega hozir hal qilinmadi |
 |---|---|
-| `assignTeacher` 0 stavkasi (yuqorida) | Tuzatish maoshni oshiradi — e'lon qilinishi kerak |
+| `assignTeacher` bilan yaratilgan ESKI davrlarni tuzatish | Kod tuzatildi, lekin faqat oldinga. Mavjud `salaryType:"fixed", fixedAmount:0` davrlarni `null` ga o'tkazish o'tgan oylarning maoshini 0 dan real summaga ko'taradi — to'langan/qulflangan oylarga tegmaslik kerak |
 | Foiz maoshi bazasi `isOpening` / `writtenOff` qatorlarni QAMRAB OLADI, `financeReport` esa ularni chiqarib tashlaydi | Ikkisini moslashtirish ish haqini o'zgartiradi. Avval `SUM(...) FILTER (...)` bilan o'lchash kerak |
 | `computeLessonHours` bayramlarni `["all","students"]` bo'yicha oladi — `audience:"students"` bayram O'QITUVCHI soatini ham kamaytiradi | Assimetriya ehtimol kutilmagan, lekin tuzatish har bir soatbay o'qituvchining maoshini o'zgartiradi |
-| Mongoose `pre('validate')` hooklari (≈20 ta) yo'qoldi; bazada CHECK cheklovlari YO'Q | Route'dagi zod faqat HTTP yo'lini qoplaydi; `executeApproved*`, seed va importlar uni chetlab o'tadi. Yagona qaror kerak: CHECK qo'shish, servis qo'riqchisi yoki ataylab qabul qilish |
+| `StaffPayroll` da `overpaidAmount` ustuni va `PayStatus.overpaid` YO'Q (egizagi `TeacherSalary` da BOR) | Shartnoma tuzatilib `finalAmount` pasaysa, `paidAmount > finalAmount` bo'lib ortiqcha to'lov hech qayerda qayd etilmaydi. Ustun qo'shish yoki fayl sarlavhasidagi "overpaid" da'vosini olib tashlash — egasining qarori |
 | `Discount` da unique indeks yo'q (Mongo'da ham yo'q edi) | Ikki bir xil faol chegirma qo'shilib ketishi mumkin. Qisman unique qo'shish mavjud ma'lumotni buzishi mumkin |
-| `obligations()`, `salary.getById()`, `groups.restoreDeleted()` filial filtri QO'LLAMAYDI | Hammasi mavjud xatti-harakat; o'zgartirish ruxsat siyosati qarori |
+| `obligations()`, `salary.getById()`, `groups.restoreDeleted()` filial filtri QO'LLAMAYDI | Mavjud xatti-harakat. `staffPayroll` yo'llari `assertUserInBranchScope()` bilan yopildi (§7); bular boshqa modullarda va alohida ko'rib chiqilishi kerak |
+| `staffCompensation.set/amend` da `computePayroll` `try/catch` bilan yutiladi (Mongo davridan) | Shartnoma saqlanadi, joriy oy qatori eskirgan qoladi. Bu hosila kesh (keyingi `generateMonth` tiklaydi), lekin qoida bo'yicha muvaffaqiyatli javob barcha yon ta'sirlar bajarilganini anglatishi kerak |
 
 ---
 
-## 6. Deploy talabi: Node ≥ 22.12
+## 6. Validatsiya invariantlari inventarizatsiyasi
+
+MongoDB'da 19 ta model `pre("validate")` hook'iga ega edi. Mongoose modeli
+ishlatilmay qo'yilishi bilan bu hooklar **jimgina** ishlamay qoladi: kod
+kompilyatsiya bo'ladi, testlar o'tadi, faqat qoida yo'q bo'ladi.
+
+Hooklar **ko'r-ko'rona qayta yaratilmadi.** Har biri uchun avval savol
+berildi: bu qoida baza invariantimi, dastur invariantimi, yoki HTTP
+darajasidagi qulaylikmi? Javob qayerga qo'yilishini belgilaydi.
+
+### Tasnif mezoni
+
+| Turi | Qayerda | Qachon |
+|---|---|---|
+| **BAZA INVARIANTI** | `CHECK` cheklovi | Faqat bitta qatorning ustunlariga bog'liq, tashqi kontekst kerak emas |
+| **DASTUR INVARIANTI** | Servis qatlami | Boshqa jadvalni o'qish yoki normalizatsiya (mutatsiya) kerak |
+| **HTTP VALIDATSIYASI** | Zod | Faqat qulay xato matni; chetlab o'tilsa ham xavf yo'q |
+| **HALI TIRIK** | Mongoose | Model hali Prisma'ga ko'chmagan — hook ishlayveradi |
+
+**NEGA IKKI QATLAM (servis + CHECK):** Zod faqat HTTP yo'lini qoplaydi.
+Importlar (`src/modules/imports/registry/*`), seedlar, joblar,
+`executeApproved*` va ichki servis chaqiruvlari uni **chetlab o'tadi**.
+Shuning uchun muhim qoidalar servisda. CHECK esa oxirgi himoya: xom SQL,
+`psql` va qo'lda yozilgan tuzatish skripti uchun.
+
+### Ro'yxat
+
+| # | Model | Invariant | Tasnif | Amalga oshirilishi | Test | Holat |
+|---|---|---|---|---|---|---|
+| 1 | `journalEntry` | Debet yig'indisi = kredit yig'indisi | DASTUR (ko'p qatorli — CHECK ko'ra olmaydi) | `journal.service.js` → `post()` | salary-chain | ✅ saqlangan |
+| 2 | `journalEntry` | Bitta qatorda debet va kredit birga bo'lmaydi | BAZA | `journal_lines_single_side_check` + `post()` | invariants | ✅ tiklangan (ikki qatlam) |
+| 3 | `journalEntry` | Bo'sh qator (ikkalasi ham 0) bo'lmaydi | BAZA | `journal_lines_nonzero_check` + `post()` | invariants | ✅ tiklangan |
+| 4 | `journalEntry` | Nol summali yozuv yozilmaydi | DASTUR | `post()` | salary-chain | ✅ saqlangan |
+| 5 | `account` | Filiallararo hisob ↔ qarshi filial juftligi | BAZA | `accounts_counterparty_shape_check` | invariants | ✅ tiklangan |
+| 6 | `account` | Filial o'ziga qarzdor bo'lmaydi | BAZA | `accounts_no_self_counterparty_check` | invariants | ✅ tiklangan |
+| 7 | `cashTransfer` | Filial o'ziga pul jo'natmaydi | BAZA | `cash_transfers_distinct_branches_check` | invariants | ✅ tiklangan (model hali Mongoose ostida — kelajakka tayyor) |
+| 8 | `teacherCompensation` | Foiz stavkasi ≤ 100 | BAZA + HTTP | `teacher_compensations_percent_max_check` + zod refine | invariants | ✅ mustahkamlangan |
+| 9 | `teacherCompensation` | `effectiveTo` > `effectiveFrom` | BAZA | `teacher_compensations_range_check` + `assertRange()` | invariants | ✅ tiklangan |
+| 10 | `teacherCompensation` | "none" qismning summasi 0 ga tushadi | DASTUR (mutatsiya) + BAZA | `applyRateShape()` + `..._none_zeroed_check` | invariants | 🔴 **YO'QOLGAN EDI → tiklandi** |
+| 11 | `teacherCompensation` | Ikkala qism ham "none" bo'lmaydi | DASTUR + BAZA | `applyRateShape()` + `..._not_empty_check` | invariants | 🔴 **YO'QOLGAN EDI → tiklandi** |
+| 12 | `teacherSalary` | `kind="group"` guruhsiz, `kind="base"` guruhli bo'lmaydi | BAZA | `teacher_salaries_kind_group_check` | invariants | 🔴 **YO'QOLGAN EDI → tiklandi** |
+| 13 | `staffCompensation` | `kpi_only` → `baseAmount` = 0 | DASTUR (mutatsiya) | `setCompensation` (bor edi) + `amendCompensation` | invariants, staff-payroll | 🟡 **YARIM YO'QOLGAN (`amend` yo'li) → tiklandi** |
+| 14 | `staffCompensation` | `effectiveTo` > `effectiveFrom` | BAZA | `staff_compensations_range_check` | invariants | ✅ saqlangan (servis) + mustahkamlangan |
+| 15 | `kpiRule` | Foizli mukofot ≤ 100 | DASTUR + BAZA | `assertRewardShape()` + `kpi_rules_percent_max_check` | invariants | 🔴 **YO'QOLGAN EDI → tiklandi** |
+| 16 | `discount` | Foiz ≤ 100 | DASTUR + BAZA | `assertDiscountShape()` + `discounts_percent_max_check` | invariants | 🔴 **YO'QOLGAN EDI → tiklandi** |
+| 17 | `discount` | `scope="monthly"` → yil va oy majburiy | DASTUR + BAZA | `assertDiscountShape()` + `discounts_monthly_scope_check` | invariants | 🔴 **JIMGINA YO'QOLGAN EDI → tiklandi** |
+| 18 | `openingBalance` | Summa nolga teng bo'lmagan butun son, ≤ 500 mln | DASTUR + BAZA + HTTP | servis (bor edi) + 3 ta CHECK + zod | invariants, staff-payroll | ✅ saqlangan + mustahkamlangan |
+| 19 | `group` | Jadvalda (kun+vaqt+effectiveFrom) takrorlanmaydi | HTTP | `validators/common.js` → `scheduleArray` | groups-chain | ✅ saqlangan |
+| 20 | `group` | `startTime` < `endTime` | HTTP | `validators/common.js` → `scheduleItem` | groups-chain | ✅ saqlangan |
+| 21 | `holiday` | Bir martalik → yil majburiy; takrorlanuvchi → yil `null` | DASTUR + BAZA | `holidays.service.js` + `holidays_recurring_year_check` | invariants | ✅ saqlangan + mustahkamlangan |
+| 22 | `leadRoutingRule` | `isFallback` ↔ `sourceKey` bir-birini INKOR qiladi | DASTUR + BAZA | `leadRouting.service.js` + `..._fallback_shape_check` | invariants | ✅ saqlangan + mustahkamlangan |
+| 23 | `studentFreeze` | `endDate` ≥ `startDate` | DASTUR + BAZA | `unfreeze()` + `student_freezes_range_check` | invariants | ✅ saqlangan + mustahkamlangan |
+| 24 | `role` | Tizim roli muzlatilmaydi / tipi o'zgarmaydi | DASTUR | `assertNotSystemRole()`, `create` da `isSystem:false` | — | ✅ ekvivalent |
+| 25 | `user` | `role` bo'sh bo'lsa → `student` | BAZA (default) | `User.role @default("student")` | users | ✅ kuchaytirilgan (endi baza standarti) |
+| 26 | `branch` | Delegatsiya matritsasi shakli | DASTUR | `branches.service.js:216` → `validateDelegation()` | — | ✅ saqlangan |
+| 27 | `approval` | `category` `kind` dan HOSILA; moliyaviy so'rovda summa ≥ 1 | HALI TIRIK | Mongoose hook | — | ⏳ modul ko'chmagan |
+| 28 | `attendanceExemption` | `endDate` ≥ `startDate` | HALI TIRIK + BAZA | Mongoose hook + `attendance_exemptions_range_check` | invariants | ⏳ modul ko'chmagan, CHECK tayyor |
+| 29 | `expense` | Valyuta → kurs va asl summa; kapital → amortizatsiya | HALI TIRIK | Mongoose hook | — | ⏳ modul ko'chmagan |
+
+Qo'shimcha: Mongoose **sxemasida** (hook'da emas) turgan cheklovlar ham
+ko'chishda tushib qolgan edi — ular ham baza darajasida edi:
+
+| Model | Invariant | Amalga oshirilishi |
+|---|---|---|
+| `staffPayrollAdjustment` | Summa ≥ 1 (ishora `kind` da) | `..._amount_min_check` |
+| `staffPayrollAdjustment` | Oy 1..12 | `..._month_check` |
+| `staffPayrollAdjustment` | Sabab majburiy, ≤ 500 belgi | `..._reason_len_check` |
+| `staffPayrollAdjustment` | `carriedFromYear`/`Month` **birga** to'ldiriladi | `..._carried_from_pair_check` |
+
+Oxirgisi **yassilash oqibati**: Mongo'da `carriedFrom` bitta ichki obyekt
+edi (yo bor, yo yo'q). Ikkita mustaqil ustunga bo'linganda "yil bor, oy
+yo'q" holati texnik jihatdan mumkin bo'lib qoldi — bunday qator qarz
+qaysi oydan ko'chganini yo'qotadi va zanjir uziladi.
+
+### Yakun
+
+- **Bazaga qo'shilgan cheklovlar:** 27 ta `CHECK`, 14 jadvalda
+  (`20260816090000_validation_invariants`).
+- **Dastur invariantlari (servis qatlami):** `applyRateShape()`,
+  `assertRange()` (teacherCompensation), `assertRewardShape()` (kpiRule),
+  `assertDiscountShape()` (discount), `amendCompensation` dagi `kpi_only`
+  koersiyasi (staffCompensation) — barchasi **qisman patch** ustida ham
+  ishlaydi (tekshiruv keyingi holat bo'yicha, yuborilgan maydonlar
+  bo'yicha emas).
+- **Faqat HTTP darajasida qolganlar:** guruh jadvali qoidalari (19, 20).
+  Guruh jadvali faqat `groups` servisi orqali yoziladi va u zod
+  sxemasidan o'tadi; import yo'li yo'q. Ataylab shunday qoldirildi —
+  massiv ichidagi takrorlanishni `CHECK` ifodalay olmaydi.
+- **Hal qilinmagan:** yo'q. `⏳` bilan belgilangan 3 tasi hali Mongoose
+  ostida **tirik** — ular yo'qolgan emas, moduli ko'chganda ko'chiriladi.
+
+### Migratsiyani qo'llash haqida ogohlantirish
+
+`20260816090000_validation_invariants` **ma'lumot buzuq bo'lsa yiqiladi.**
+Bu kutilgan xatti-harakat: buzilgan moliyaviy qatorni jimgina qabul
+qilgandan ko'ra deploy'ni to'xtatgan yaxshi. Migratsiya yozilishidan oldin
+mavjud baza har bir shart bo'yicha tekshirildi — buzilgan qator topilmadi;
+prod bazada topilsa, xato matnidagi cheklov nomi bo'yicha aybdor qatorlarni
+shu shartning **inkori** bilan qidiring:
+
+```sql
+SELECT * FROM discounts WHERE type = 'percent' AND value > 100;
+```
+
+Cheklov darhol ish berdi: `usersPrisma` testidagi bir fixture sxema
+standarti tufayli `kind='group', groupId=NULL` yaroqsiz qatorini
+yozayotgan ekan (Mongo hook'i ham uni rad etardi).
+
+---
+
+## 7. Filial izolyatsiyasi: `assertUserInBranchScope()`
+
+Ro'yxat funksiyalari filial shartini `where` ichida qo'llaydi — begona
+qator umuman **topilmaydi**, ya'ni ular o'z-o'zidan xavfsiz. Lekin
+identifikatorni `params`/`body` dan to'g'ridan-to'g'ri oladigan yo'llarda
+hech qanday filtr yo'q edi.
+
+**Tahdid modeli:** filial direktori o'z panelida boshqa filial xodimini
+ko'rmaydi, lekin ID ni qo'lda kiritib so'rov yubora oladi. UI da yashirish
+himoya emas — tekshiruv **server tomonda** bo'lishi shart.
+
+```js
+// helpers/branchContext.helper.js
+await assertUserInBranchScope(employeeId);   // aks holda 403
+```
+
+Qo'riqchi `userBranchCondition()` bilan **bir xil mantiqda** ishlaydi
+(`homeBranchId` YOKI `branchAssignments`), shuning uchun ro'yxat nimani
+ko'rsatsa, qo'riqchi aynan o'shanga ruxsat beradi — ikki xil qoida bo'lib
+qolmaydi. Super Admin (`canSeeAllBranches`, filial tanlanmagan) va
+kontekstsiz chaqiruvlar (job, seed, import) uchun `userBranchCondition()`
+`null` qaytaradi va tekshiruv o'tkazib yuboriladi.
+
+404 emas, **403**: yozuv bor-yo'qligini oshkor qilmaymiz, lekin
+"topilmadi" deyish chaqiruvchini adashtirardi (u ID ni to'g'ri biladi).
+
+Yopilgan yo'llar (har biri test bilan qadalgan — tuzatishdan oldin
+**o'tib ketardi**):
+
+| Servis | Funksiya | Nima qilardi |
+|---|---|---|
+| `staffPayroll` | `getById` | Begona filial maosh qatorini to'liq ochardi |
+| `staffPayroll` | `historyByEmployee` | Begona xodimning butun maosh tarixi |
+| `staffPayroll` | `setLifecycle` | Begona oyni qulflash/ochish **va qayta hisoblash** |
+| `staffAdjustment` | `create` | **Begona xodimga bonus/jarima yozish** (pul yozadigan yo'l) |
+| `payrollHistory` | `getImpact`, `setPayrollStart`, `previewGenerate`, `generateRange`, `recalcUnlocked`, `setLock` | O'qish, generatsiya va qulflash |
+
+To'lov yo'li (`staffSalaryTransaction`) allaqachon `isBranchAllowed()`
+bilan himoyalangan edi.
+
+**Qo'riqchi haddan tashqari qattiq emasligi ham qadalgan:** ikki test —
+"o'z filialida barcha yo'llar ochiq qoladi" va "Super Admin hamma
+filialni ko'radi". Ularsiz "hammasini rad et" ham testdan o'tib ketardi.
+
+---
+
+## 8. Deploy talabi: Node ≥ 22.12
 
 `pg-boss@12` **Node 22.12+** talab qiladi (`engines`). VPS'da eskiroq Node
 bo'lsa `provision.sh` ichidagi `npm ci` shu bosqichda yiqiladi.
@@ -359,7 +557,7 @@ dagi moslashtiruvchi qatlam shunga moslanishi kerak bo'ladi.
 
 ---
 
-## 7. Qanday ishga tushirish
+## 9. Qanday ishga tushirish
 
 ```bash
 # 1) PostgreSQL va baza
@@ -372,6 +570,17 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/bayyina?schema=public
 npm run prisma:deploy
 npm run prisma:generate
 
-# 4) Tekshirish
-npm run test:auth-prisma
+# 4) Tekshirish — 239 ta tekshiruv, haqiqiy Postgres ustida
+npm run test:auth-prisma      #  16  login / refresh / parol
+npm run test:users-prisma     #  49  CRUD / arxiv / hard-delete
+npm run test:group-periods    #  20  dars davrlari, stavka rezolveri
+npm run test:salary-chain     #  31  o'qituvchi maoshi + jurnal
+npm run test:groups-chain     #  32  guruh, jadval versiyalash
+npm run test:staff-payroll    #  47  xodim oyligi + filial qo'riqchisi
+npm run test:invariants       #  44  validatsiya invariantlari (servis + CHECK)
 ```
+
+Testlar **bir-biriga bog'liq emas** va o'zidan keyin tozalanadi, shuning
+uchun istalgan tartibda ishlatsa bo'ladi. Ular MOCK EMAS — haqiqiy
+`DATABASE_URL` ustida ishlaydi, ya'ni indeks, FK va CHECK cheklovlari
+ham tekshiriladi.
