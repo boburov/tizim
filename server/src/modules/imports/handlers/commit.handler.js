@@ -1,6 +1,6 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
 import logger from "../../../config/logger.js";
-import ImportJob from "../../../models/importJob.model.js";
+import prisma from "../../../config/prisma.js";
 import { commit } from "../services/importEngine.service.js";
 
 // TASDIQLASH: fayl QAYTA tekshiriladi va to'g'ri qatorlar yoziladi.
@@ -20,11 +20,13 @@ const commitHandler = asyncHandler(async (req, res) => {
   // TARIX. Yozib bo'lmasa import BEKOR QILINMAYDI - pul allaqachon
   // kiritilgan, jurnal esa ikkilamchi. Lekin bu jimgina o'tmasligi kerak.
   try {
-    await ImportJob.create({
-      branchId: req.branchId || null,
+    await prisma.importJob.create({
+      data: {
+      branchId: req.branchId ? String(req.branchId) : null,
       importerKey: req.importer.key,
       fileName: req.file.originalname,
-      user: req.user._id,
+      // `user` -> `userId`: Prisma'da `user` RELATION.
+      userId: String(req.user._id),
       userName: [req.user.firstName, req.user.lastName].filter(Boolean).join(" "),
       total: result.summary.total,
       imported: result.summary.imported,
@@ -32,6 +34,7 @@ const commitHandler = asyncHandler(async (req, res) => {
       duplicate: result.summary.duplicate,
       pending: result.summary.pending,
       durationMs,
+      },
     });
   } catch (err) {
     logger.error({ err, importerKey: req.importer.key }, "Import tarixini yozib bo'lmadi");

@@ -1,9 +1,5 @@
-import mongoose from "mongoose";
-import Attendance from "../../../models/attendance.model.js";
-import AttendanceSettings from "../../../models/attendanceSettings.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import { buildMeta } from "../../../utils/pagination.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -34,11 +30,34 @@ import { correlationCacheInvalidate } from "../../../helpers/correlationCache.js
 // Backward-compat re-export (boshqa modullar shu yerdan import qiladi)
 export { correlationCacheInvalidate };
 
-const STUDENT_PROJECTION = {
-  firstName: 1,
-  lastName: 1,
-  username: 1,
-  phone: 1,
+const STUDENT_SELECT = {
+  // `id` ATAYLAB: Prisma `select` bilan avtomatik kelmaydi (Mongo `_id`
+  // ni doim qaytarardi), klient esa o'quvchini `_id` bo'yicha ochadi.
+  id: true,
+  firstName: true,
+  lastName: true,
+  username: true,
+  phone: true,
+};
+
+// JADVAL ALOHIDA JADVALDA. Mongo'da `schedule` guruh hujjati ichidagi
+// massiv edi va `Group.findOne` bilan o'zi kelardi. Prisma'da u
+// `GroupScheduleItem` - `include` qilinmasa `undefined` bo'lib qoladi va
+// `scheduleActiveOn` bo'sh massiv qaytaradi: HAR KUN "dars kuni emas"
+// bo'lib, davomat umuman belgilanmasdi.
+const GROUP_SELECT = {
+  id: true,
+  name: true,
+  branchId: true,
+  courseId: true,
+  startDate: true,
+  endDate: true,
+  isActive: true,
+  isDeleted: true,
+  teachers: { select: { id: true } },
+  schedule: {
+    select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
+  },
 };
 
 // FILIAL KO'LAMI shu YAGONA nuqtada.
@@ -51,18 +70,22 @@ const STUDENT_PROJECTION = {
 // Boshqa filial guruhi so'ralsa 404 qaytaramiz (403 emas): mavjudligini
 // ham oshkor qilmaymiz.
 const ensureGroup = async (groupId) => {
-  const g = await Group.findOne({ _id: groupId, ...branchFilter() });
+  const g = await prisma.group.findFirst({
+    where: { id: String(groupId), ...branchFilter() },
+    select: GROUP_SELECT,
+  });
   if (!g) throw new ApiError(404, "Guruh topilmadi");
   return g;
 };
 
 // ─── settings ───
+// YAGONA QATOR: `id` ning o'zi "default" (schema'dagi @default).
 const getSettings = async () =>
-  AttendanceSettings.findOneAndUpdate(
-    { _id: "default" },
-    { $setOnInsert: { _id: "default" } },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+  prisma.attendanceSettings.upsert({
+    where: { id: "default" },
+    create: { id: "default" },
+    update: {},
+  });
 
 // ─── single group + date (+ sessiya) ───
 export const listForGroupOnDate = async (groupId, dateInput, slotInput = null) => {
@@ -96,34 +119,41 @@ export const listForGroupOnDate = async (groupId, dateInput, slotInput = null) =
 
   // Active memberships shu sanada - joinedAt kun ichida bo'lsa ham qamrab olish uchun kun oxiri bilan solishtiramiz
   const dayEnd = new Date(date.getTime() + 24 * 60 * 60 * 1000);
-  const memberships = await GroupMembership.find({
-    group: groupId,
-    joinedAt: { $lt: dayEnd },
-    $or: [{ leftAt: null }, { leftAt: { $gt: date } }],
-    isDeleted: { $ne: true },
-  }).populate("student", STUDENT_PROJECTION);
+  const memberships = await prisma.groupMembership.findMany({
+    where: {
+      groupId: String(groupId),
+      joinedAt: { lt: dayEnd },
+      OR: [{ leftAt: null }, { leftAt: { gt: date } }],
+      isDeleted: false,
+    },
+    select: { studentId: true, student: { select: STUDENT_SELECT } },
+  });
 
   const studentIds = memberships
     .filter((m) => m.student)
-    .map((m) => m.student._id);
+    .map((m) => m.student.id);
 
   const dKey = dateKeyOf(date);
   const [attendances, exemptions] = await Promise.all([
-    Attendance.find({
-      group: groupId,
-      student: { $in: studentIds },
-      dateKey: dKey,
-      slot: selectedSlot,
-      isDeleted: { $ne: true },
+    prisma.attendance.findMany({
+      where: {
+        groupId: String(groupId),
+        studentId: { in: studentIds },
+        dateKey: dKey,
+        slot: selectedSlot,
+        isDeleted: false,
+      },
     }),
-    loadExemptionsWithFreezes({ student: { $in: studentIds } }),
+    // Helper endi ANIQ ARGUMENT oladi (massiv) - eski `{student:{$in}}`
+    // shakli Prisma'da jimgina noto'g'ri ishlardi.
+    loadExemptionsWithFreezes(studentIds),
   ]);
 
   const attMap = new Map();
-  for (const a of attendances) attMap.set(String(a.student), a);
+  for (const a of attendances) attMap.set(String(a.studentId), a);
   const exempMap = new Map();
   for (const ex of exemptions) {
-    const key = String(ex.student);
+    const key = String(ex.studentId ?? ex.student);
     if (!exempMap.has(key)) exempMap.set(key, []);
     exempMap.get(key).push(ex);
   }
@@ -131,20 +161,23 @@ export const listForGroupOnDate = async (groupId, dateInput, slotInput = null) =
   const rows = memberships
     .filter((m) => m.student)
     .map((m) => {
-      const sid = String(m.student._id);
+      const sid = String(m.student.id);
       const attendance = attMap.get(sid) || null;
       const studentExemptions = exempMap.get(sid) || [];
       const def = defaultStatusFor(studentExemptions, date, dow);
+      // `toJSON()` EMAS - Prisma oddiy obyekt qaytaradi (Mongoose
+      // hujjati emas). Javobda `_id` QOLADI: klient qatorni shu
+      // bo'yicha ajratadi.
       return {
-        student: m.student.toJSON(),
-        attendance: attendance ? attendance.toJSON() : null,
+        student: withLegacyId(m.student),
+        attendance: attendance ? withLegacyId(attendance) : null,
         defaultStatus: def,
       };
     });
 
   return {
     group: {
-      _id: group._id,
+      _id: group.id,
       name: group.name,
       schedule: group.schedule,
     },
@@ -168,35 +201,22 @@ const validateItem = (item) => {
   // Sababli uchun sabab ixtiyoriy - status tanlanishi yetarli
 };
 
-const runWithSession = async (fn) => {
-  let session;
-  try {
-    session = await mongoose.startSession();
-    session.startTransaction();
-    const result = await fn(session);
-    await session.commitTransaction();
-    session.endSession();
-    return result;
-  } catch (err) {
-    if (session) {
-      try {
-        await session.abortTransaction();
-      } catch {
-        /* noop */
-      }
-      session.endSession();
-    }
-    if (
-      err?.code === 20 ||
-      err?.codeName === "IllegalOperation" ||
-      err?.message?.includes("Transaction") ||
-      err?.message?.includes("replica set")
-    ) {
-      return fn(null);
-    }
-    throw err;
-  }
-};
+/**
+ * TRANZAKSIYA — ENDI HAQIQIY.
+ *
+ * Mongo'da `startSession()` standalone o'rnatmada jimgina atomiklikni
+ * yo'qotardi (tranzaksiya replica set talab qiladi). PostgreSQL'da
+ * `$transaction` har doim haqiqiy: legacy slot ko'chirish + upsertlar
+ * yo hammasi bajariladi, yo hech biri - yarim belgilangan davomat
+ * varag'i qolmaydi.
+ *
+ * Vaqt chegarasi oshirilgan: bitta guruhda 30+ o'quvchi bo'lishi
+ * mumkin va har biri alohida yozuv (find-then-write, pastdagi izohga
+ * qarang) - standart 5 soniya katta guruhda yetmasdi.
+ */
+const runInTransaction = (fn) =>
+  prisma.$transaction(fn, { timeout: 20000 });
+
 
 export const bulkRecord = async (
   groupId,
@@ -212,8 +232,12 @@ export const bulkRecord = async (
 
   // TEACHER bo'lsa, group.teachers ichida bo'lishi shart
   if (currentUser.role === ROLES.TEACHER) {
+    // Mongo'da `teachers` ObjectId MASSIVI edi; Prisma'da `{ id }`
+    // obyektlari (GROUP_SELECT). `String(t)` obyektga qo'llanganda
+    // "[object Object]" berib, HAR DOIM `false` chiqarardi - o'qituvchi
+    // o'z guruhiga ham kira olmasdi.
     const isOwn = (group.teachers || []).some(
-      (t) => String(t) === String(currentUser._id),
+      (t) => String(t.id ?? t) === String(currentUser._id),
     );
     if (!isOwn) {
       throw new ApiError(403, "Bu guruh sizga biriktirilmagan");
@@ -291,14 +315,17 @@ export const bulkRecord = async (
     throw new ApiError(400, "Bir o'quvchi bir necha marta yuborildi");
   }
   const dayEnd = new Date(date.getTime() + 24 * 60 * 60 * 1000);
-  const activeMembers = await GroupMembership.find({
-    group: groupId,
-    student: { $in: studentIds },
-    joinedAt: { $lt: dayEnd },
-    $or: [{ leftAt: null }, { leftAt: { $gt: date } }],
-    isDeleted: { $ne: true },
-  }).select("student");
-  const memberSet = new Set(activeMembers.map((m) => String(m.student)));
+  const activeMembers = await prisma.groupMembership.findMany({
+    where: {
+      groupId: String(groupId),
+      studentId: { in: studentIds.map(String) },
+      joinedAt: { lt: dayEnd },
+      OR: [{ leftAt: null }, { leftAt: { gt: date } }],
+      isDeleted: false,
+    },
+    select: { studentId: true },
+  });
+  const memberSet = new Set(activeMembers.map((m) => String(m.studentId)));
   for (const item of items) {
     if (!memberSet.has(String(item.studentId))) {
       throw new ApiError(
@@ -313,102 +340,103 @@ export const bulkRecord = async (
   // uchun tashqi scope'da e'lon qilamiz.
   const existingMap = new Map();
 
-  const results = await runWithSession(async (session) => {
-    const opts = session ? { session } : {};
-
+  const results = await runInTransaction(async (tx) => {
     // Legacy slot="" → birinchi slotga ko'chirish (BUG-03) - validatsiyadan keyin,
     // upsert'lardan oldin, tranzaksiya ichida (atomik, rad etilsa rollback bo'ladi).
     if (isFirstSlotOfDay) {
-      await Attendance.updateMany(
-        {
-          group: groupId,
-          student: { $in: studentIds },
+      await tx.attendance.updateMany({
+        where: {
+          groupId: String(groupId),
+          studentId: { in: studentIds.map(String) },
           dateKey: dKey,
           slot: "",
-          isDeleted: { $ne: true },
+          isDeleted: false,
         },
-        { $set: { slot: normalizedSlot } },
-        opts,
-      );
+        data: { slot: normalizedSlot },
+      });
     }
 
     // Audit: mavjud yozuvlarni ko'chirishdan KEYIN olamiz - holat o'zgarsa tarixga
     // yozish va birinchi slot ko'chirilgan yozuvni ko'rishi uchun.
     existingMap.clear();
-    const existing = await Attendance.find(
-      {
-        group: groupId,
-        student: { $in: studentIds },
+    const existing = await tx.attendance.findMany({
+      where: {
+        groupId: String(groupId),
+        studentId: { in: studentIds.map(String) },
         dateKey: dKey,
         slot: normalizedSlot,
-        isDeleted: { $ne: true },
+        isDeleted: false,
       },
-      null,
-      opts,
-    );
-    for (const a of existing) existingMap.set(String(a.student), a);
+    });
+    for (const a of existing) existingMap.set(String(a.studentId), a);
 
+    // QISMAN UNIQUE INDEKS: `(groupId, studentId, dateKey, slot)` faqat
+    // `WHERE isDeleted = false` uchun amal qiladi. Prisma `upsert`
+    // bunday indeksni ISHLATA OLMAYDI (u to'liq unique kalit talab
+    // qiladi), shuning uchun find-then-write + P2002 qayta urinish.
     const docs = [];
     for (const item of items) {
       const prev = existingMap.get(String(item.studentId));
       const changed = !prev || prev.status !== item.status;
-      const update = {
-        $set: {
-          status: item.status,
-          reason: item.reason || "",
-          lateMinutes: item.lateMinutes || 0,
-          recordedBy: currentUser._id,
-          recordedAt: new Date(),
-          source,
-          isDeleted: false, // qayta belgilansa - soft-delete bekor qilinadi
-        },
-        $setOnInsert: {
-          group: groupId,
-          student: item.studentId,
-          date,
-          dateKey: dKey,
-          slot: normalizedSlot,
-        },
-      };
+
+      // `$push` o'rni: `history` ustuni `Json`, massiv JS'da yig'iladi.
+      const history = Array.isArray(prev?.history) ? [...prev.history] : [];
       if (changed) {
-        update.$push = {
-          history: {
-            at: new Date(),
-            by: currentUser._id,
-            from: prev ? prev.status : null,
-            to: item.status,
-            source,
-          },
-        };
-      }
-      const filter = {
-        group: groupId,
-        student: item.studentId,
-        dateKey: dKey,
-        slot: normalizedSlot,
-      };
-      let doc;
-      try {
-        doc = await Attendance.findOneAndUpdate(filter, update, {
-          upsert: true,
-          new: true,
-          setDefaultsOnInsert: true,
-          ...opts,
+        history.push({
+          at: new Date(),
+          by: String(currentUser._id),
+          from: prev ? prev.status : null,
+          to: item.status,
+          source,
         });
-      } catch (err) {
-        // Bir vaqtning o'zida birinchi marta saqlanganda unique-index poygasi:
-        // yozuv endi mavjud - upsert'siz qayta urinib ko'ramiz.
-        if (err?.code === 11000) {
-          delete update.$setOnInsert;
-          doc = await Attendance.findOneAndUpdate(filter, update, {
-            new: true,
-            ...opts,
+      }
+
+      const data = {
+        status: item.status,
+        reason: item.reason || "",
+        lateMinutes: item.lateMinutes || 0,
+        recordedById: currentUser._id ? String(currentUser._id) : null,
+        recordedAt: new Date(),
+        source,
+        isDeleted: false, // qayta belgilansa - soft-delete bekor qilinadi
+        history,
+      };
+
+      let doc;
+      if (prev) {
+        doc = await tx.attendance.update({ where: { id: prev.id }, data });
+      } else {
+        try {
+          doc = await tx.attendance.create({
+            data: {
+              groupId: String(groupId),
+              studentId: String(item.studentId),
+              date,
+              dateKey: dKey,
+              slot: normalizedSlot,
+              ...data,
+            },
           });
-        } else {
-          throw err;
+        } catch (err) {
+          // Bir vaqtning o'zida birinchi marta saqlanganda unique-index
+          // poygasi: yozuv endi mavjud - ustiga yozamiz.
+          // Mongo'da bu `11000` edi, Prisma'da `P2002`.
+          if (err?.code !== "P2002") throw err;
+          const again = await tx.attendance.findFirst({
+            where: {
+              groupId: String(groupId),
+              studentId: String(item.studentId),
+              dateKey: dKey,
+              slot: normalizedSlot,
+              isDeleted: false,
+            },
+          });
+          doc = again
+            ? await tx.attendance.update({ where: { id: again.id }, data })
+            : null;
         }
       }
-      docs.push(doc);
+      if (doc) docs.push(doc);
     }
     return docs;
   });
@@ -443,22 +471,27 @@ const notifyConsecutiveAbsences = async ({ group, items, existingMap, dateKey })
   const crossed = [];
   for (const it of candidates) {
     // Faqat shu guruh bo'yicha ketma-ket qoldirish
-    const count = await consecutiveAbsences(it.studentId, group._id);
+    const count = await consecutiveAbsences(it.studentId, group.id);
     if (count === threshold) crossed.push(it.studentId);
   }
   if (crossed.length === 0) return;
 
   const [students, owners, { send }] = await Promise.all([
-    User.find({ _id: { $in: crossed } }, STUDENT_PROJECTION).lean(),
-    User.find(
-      { role: ROLES.OWNER, isActive: true, isDeleted: { $ne: true } },
-      { _id: 1 },
-    ).lean(),
+    prisma.user.findMany({
+      where: { id: { in: crossed.map(String) } },
+      select: STUDENT_SELECT,
+    }),
+    prisma.user.findMany({
+      where: { role: ROLES.OWNER, isActive: true, isDeleted: false },
+      select: { id: true },
+    }),
     import("../../notifications/services/notifications.service.js"),
   ]);
 
-  const recipientSet = new Set(owners.map((o) => String(o._id)));
-  for (const t of group.teachers || []) recipientSet.add(String(t));
+  const recipientSet = new Set(owners.map((o) => String(o.id)));
+  // Mongo'da `teachers` ObjectId MASSIVI edi; Prisma'da `{ id }`
+  // obyektlari (GROUP_SELECT ga qarang).
+  for (const t of group.teachers || []) recipientSet.add(String(t.id ?? t));
   const userIds = [...recipientSet];
   if (userIds.length === 0) return;
 
@@ -472,7 +505,7 @@ const notifyConsecutiveAbsences = async ({ group, items, existingMap, dateKey })
         audience: { type: "auto_system", userIds },
         isAuto: true,
         // Bir o'quvchi-guruh-kun bo'yicha bir marta (qayta belgilashda dublikat bo'lmasin)
-        dedupeKey: `consec:${String(stu._id)}:${String(group._id)}:${dateKey}`,
+        dedupeKey: `consec:${String(stu.id)}:${String(group.id)}:${dateKey}`,
       },
       null,
     );
@@ -506,18 +539,24 @@ const buildStudentClassDays = async (
   // cheklaymiz, aks holda o'qituvchi o'zi o'qitmaydigan guruhlardagi
   // davomatni ham ko'rib qolardi (A-1 cross-group disclosure).
   const membershipFilter = {
-    student: studentId,
-    joinedAt: { $lte: rangeEnd },
-    $or: [{ leftAt: null }, { leftAt: { $gte: rangeStart } }],
-    isDeleted: { $ne: true },
+    studentId: String(studentId),
+    joinedAt: { lte: rangeEnd },
+    OR: [{ leftAt: null }, { leftAt: { gte: rangeStart } }],
+    isDeleted: false,
   };
-  if (scopeGroupIds) membershipFilter.group = { $in: scopeGroupIds };
-  const memberships = await GroupMembership.find(membershipFilter).populate(
-    "group",
-  );
+  // `group` -> `groupId`: Prisma'da `group` RELATION.
+  if (scopeGroupIds) membershipFilter.groupId = { in: scopeGroupIds.map(String) };
+  const memberships = await prisma.groupMembership.findMany({
+    where: membershipFilter,
+    select: {
+      joinedAt: true,
+      leftAt: true,
+      group: { select: GROUP_SELECT },
+    },
+  });
 
   const [exemptions, holidaySet] = await Promise.all([
-    loadExemptionsWithFreezes({ student: studentId }),
+    loadExemptionsWithFreezes(studentId),
     holidayKeySetForRange(rangeStart, rangeEnd),
   ]);
 
@@ -557,16 +596,18 @@ const buildStudentClassDays = async (
       });
 
     groups.push({
-      group: { _id: m.group._id, name: m.group.name, schedule: m.group.schedule },
+      group: { _id: m.group.id, name: m.group.name, schedule: m.group.schedule },
       days,
     });
   }
 
   // Mavjud Attendance yozuvlarini bir martada olamiz
-  const attendances = await Attendance.find({
-    student: studentId,
-    dateKey: { $in: Array.from(dKeys) },
-    isDeleted: { $ne: true },
+  const attendances = await prisma.attendance.findMany({
+    where: {
+      studentId: String(studentId),
+      dateKey: { in: Array.from(dKeys) },
+      isDeleted: false,
+    },
   });
   // group|dateKey -> Map(slot -> att) - slot-fallback (jadval o'zgarishi) uchun
   const byDay = buildAttBySlot(attendances);
@@ -584,7 +625,7 @@ const buildStudentClassDays = async (
         },
         used,
       );
-      d.attendance = att?.toJSON() || null;
+      d.attendance = att ? withLegacyId(att) : null;
     }
   }
 
@@ -675,30 +716,42 @@ export const getGroupMonthly = async (groupId, { year, month }) => {
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
 
-  const memberships = await GroupMembership.find({
-    group: groupId,
-    joinedAt: { $lte: monthEnd },
-    $or: [{ leftAt: null }, { leftAt: { $gte: monthStart } }],
-    isDeleted: { $ne: true },
-  }).populate("student", STUDENT_PROJECTION);
+  const memberships = await prisma.groupMembership.findMany({
+    where: {
+      groupId: String(groupId),
+      joinedAt: { lte: monthEnd },
+      OR: [{ leftAt: null }, { leftAt: { gte: monthStart } }],
+      isDeleted: false,
+    },
+    select: {
+      joinedAt: true,
+      leftAt: true,
+      studentId: true,
+      student: { select: STUDENT_SELECT },
+    },
+  });
 
   const activeMemberships = memberships.filter((m) => m.student);
-  const studentIds = activeMemberships.map((m) => m.student._id);
+  const studentIds = activeMemberships.map((m) => m.student.id);
 
   const [attendances, exemptions] = await Promise.all([
-    Attendance.find({
-      group: groupId,
-      student: { $in: studentIds },
-      dateKey: { $in: Array.from(dateKeys) },
-      isDeleted: { $ne: true },
-    }).lean(),
-    loadExemptionsWithFreezes({ student: { $in: studentIds } }),
+    prisma.attendance.findMany({
+      where: {
+        groupId: String(groupId),
+        studentId: { in: studentIds },
+        dateKey: { in: Array.from(dateKeys) },
+        isDeleted: false,
+      },
+    }),
+    loadExemptionsWithFreezes(studentIds),
   ]);
 
   // student|dateKey -> Map(slot -> att) - slot-fallback (jadval o'zgarishi) uchun
   const attByStudentDay = new Map();
   for (const a of attendances) {
-    const k = `${String(a.student)}|${a.dateKey}`;
+    // `a.student` EMAS, `a.studentId` - yuqoridagi `buildAttBySlot`
+    // bilan bir xil tuzoq.
+    const k = `${String(a.studentId)}|${a.dateKey}`;
     if (!attByStudentDay.has(k)) attByStudentDay.set(k, new Map());
     attByStudentDay.get(k).set(a.slot || "", a);
   }
@@ -716,7 +769,7 @@ export const getGroupMonthly = async (groupId, { year, month }) => {
   // oraliqlarini saqlaymiz va katak shu oraliqlarning birortasiga tushsa - faol.
   const byStudent = new Map();
   for (const m of activeMemberships) {
-    const sid = String(m.student._id);
+    const sid = String(m.student.id);
     if (!byStudent.has(sid)) {
       byStudent.set(sid, { student: m.student, intervals: [] });
     }
@@ -727,7 +780,7 @@ export const getGroupMonthly = async (groupId, { year, month }) => {
   }
 
   const students = Array.from(byStudent.values()).map(({ student, intervals }) => {
-    const sid = String(student._id);
+    const sid = String(student.id);
     const stuExemptions = exempMap.get(sid) || [];
     // Katak (sana) o'quvchining a'zolik oraliqlaridan biriga tushadimi?
     // leftTs EXCLUSIVE (ts < leftTs): chiqilgan kun yarim tuni endi a'zolik emas -
@@ -782,7 +835,7 @@ export const getGroupMonthly = async (groupId, { year, month }) => {
     }
 
     return {
-      student: student.toJSON(),
+      student: withLegacyId(student),
       cells,
     };
   });
@@ -870,7 +923,7 @@ const computeClassDays = ({
     }
     const classDays = getClassDaysInRange(m.group, effFrom, effTo, holidaySet);
     for (const cd of classDays) {
-      const cellKey = `${String(m.group._id)}|${cd.dateKey}|${cd.slot || ""}`;
+      const cellKey = `${String(m.group.id)}|${cd.dateKey}|${cd.slot || ""}`;
       if (seenCells.has(cellKey)) continue;
       seenCells.add(cellKey);
       total += 1;
@@ -878,7 +931,7 @@ const computeClassDays = ({
       const isExemptDefault = def === "exempt";
       if (isExemptDefault) exemptDefault += 1;
       cells.push({
-        groupId: m.group._id,
+        groupId: m.group.id,
         dateKey: cd.dateKey,
         slot: cd.slot || "",
         isFirstSlot: cd.isFirstSlot,
@@ -894,7 +947,11 @@ const computeClassDays = ({
 const buildAttBySlot = (attendances) => {
   const byDay = new Map();
   for (const a of attendances) {
-    const dayKey = `${String(a.group)}|${a.dateKey}`;
+    // `a.group` EMAS, `a.groupId`. Prisma qatorida `group` RELATION
+    // (so'ralmasa `undefined`) - `String(undefined)` "undefined" beradi
+    // va kalit HECH QACHON mos kelmasdi: har bir davomat yozuvi
+    // JIMGINA yo'qolardi (jami darslar to'g'ri, kelgan/kelmagan 0).
+    const dayKey = `${String(a.groupId)}|${a.dateKey}`;
     if (!byDay.has(dayKey)) byDay.set(dayKey, new Map());
     byDay.get(dayKey).set(a.slot || "", a);
   }
@@ -1001,16 +1058,23 @@ export const getStudentSummary = async (
 
   // scopeGroupIds berilsa (o'qituvchi) - faqat shu guruhlar (A-1 fix)
   const membershipFilter = {
-    student: studentId,
-    joinedAt: { $lte: to },
-    $or: [{ leftAt: null }, { leftAt: { $gte: from } }],
-    isDeleted: { $ne: true },
+    studentId: String(studentId),
+    joinedAt: { lte: to },
+    OR: [{ leftAt: null }, { leftAt: { gte: from } }],
+    isDeleted: false,
   };
-  if (scopeGroupIds) membershipFilter.group = { $in: scopeGroupIds };
+  if (scopeGroupIds) membershipFilter.groupId = { in: scopeGroupIds.map(String) };
 
   const [memberships, exemptions, holidaySet] = await Promise.all([
-    GroupMembership.find(membershipFilter).populate("group"),
-    loadExemptionsWithFreezes({ student: studentId }),
+    prisma.groupMembership.findMany({
+      where: membershipFilter,
+      select: {
+        joinedAt: true,
+        leftAt: true,
+        group: { select: GROUP_SELECT },
+      },
+    }),
+    loadExemptionsWithFreezes(studentId),
     holidayKeySetForRange(from, to),
   ]);
 
@@ -1027,11 +1091,13 @@ export const getStudentSummary = async (
   }
 
   const dKeys = Array.from(new Set(cells.map((c) => c.dateKey)));
-  const attendances = await Attendance.find({
-    student: studentId,
-    dateKey: { $in: dKeys },
-    isDeleted: { $ne: true },
-  }).lean();
+  const attendances = await prisma.attendance.findMany({
+    where: {
+      studentId: String(studentId),
+      dateKey: { in: dKeys },
+      isDeleted: false,
+    },
+  });
 
   return summarizeCells({ total, cells, attendances });
 };
@@ -1043,21 +1109,29 @@ export const getGroupSummary = async (groupId, { fromDate, toDate }) => {
   const to = parseLocalDay(toDate);
 
   // Diapazonda active bo'lgan barcha memberships
-  const memberships = await GroupMembership.find({
-    group: groupId,
-    joinedAt: { $lte: to },
-    $or: [{ leftAt: null }, { leftAt: { $gte: from } }],
-    isDeleted: { $ne: true },
-  }).populate("student", STUDENT_PROJECTION);
+  const memberships = await prisma.groupMembership.findMany({
+    where: {
+      groupId: String(groupId),
+      joinedAt: { lte: to },
+      OR: [{ leftAt: null }, { leftAt: { gte: from } }],
+      isDeleted: false,
+    },
+    select: {
+      joinedAt: true,
+      leftAt: true,
+      studentId: true,
+      student: { select: STUDENT_SELECT },
+    },
+  });
 
-  const studentIds = memberships.filter((m) => m.student).map((m) => m.student._id);
+  const studentIds = memberships.filter((m) => m.student).map((m) => m.student.id);
   const [exemptions, holidaySet] = await Promise.all([
-    loadExemptionsWithFreezes({ student: { $in: studentIds } }),
+    loadExemptionsWithFreezes(studentIds),
     holidayKeySetForRange(from, to),
   ]);
   const exempByStudent = new Map();
   for (const ex of exemptions) {
-    const k = String(ex.student);
+    const k = String(ex.studentId ?? ex.student);
     if (!exempByStudent.has(k)) exempByStudent.set(k, []);
     exempByStudent.get(k).push(ex);
   }
@@ -1068,7 +1142,7 @@ export const getGroupSummary = async (groupId, { fromDate, toDate }) => {
   const membershipsByStudent = new Map(); // sid -> { student, intervals: [{joinedAt,leftAt}] }
   for (const m of memberships) {
     if (!m.student) continue;
-    const sid = String(m.student._id);
+    const sid = String(m.student.id);
     if (!membershipsByStudent.has(sid)) {
       membershipsByStudent.set(sid, { student: m.student, intervals: [] });
     }
@@ -1095,15 +1169,17 @@ export const getGroupSummary = async (groupId, { fromDate, toDate }) => {
   }
 
   // Barcha o'quvchilarning attendance yozuvlarini BITTA so'rovda olamiz (N+1 yo'q)
-  const allAttendances = await Attendance.find({
-    group: groupId,
-    student: { $in: studentIds },
-    dateKey: { $in: Array.from(allDKeys) },
-    isDeleted: { $ne: true },
-  }).lean();
+  const allAttendances = await prisma.attendance.findMany({
+    where: {
+      groupId: String(groupId),
+      studentId: { in: studentIds.map(String) },
+      dateKey: { in: Array.from(allDKeys) },
+      isDeleted: false,
+    },
+  });
   const attByStudent = new Map();
   for (const a of allAttendances) {
-    const k = String(a.student);
+    const k = String(a.studentId);
     if (!attByStudent.has(k)) attByStudent.set(k, []);
     attByStudent.get(k).push(a);
   }
@@ -1127,7 +1203,7 @@ export const getGroupSummary = async (groupId, { fromDate, toDate }) => {
       attendances: attByStudent.get(sid) || [],
     });
     perStudent.push({
-      student: student.toJSON(),
+      student: withLegacyId(student),
       summary,
     });
     aggregate.present += summary.present;
@@ -1154,7 +1230,7 @@ export const getTeacherGroupsSummary = async (teacherId, { fromDate, toDate }) =
   const groups = await listForTeacher(teacherId);
   const result = [];
   for (const g of groups) {
-    const summary = await getGroupSummary(g._id, { fromDate, toDate });
+    const summary = await getGroupSummary(g.id, { fromDate, toDate });
     result.push({
       group: { _id: g._id, name: g.name, schedule: g.schedule },
       groupRate: summary.aggregate.groupRate,
@@ -1175,28 +1251,33 @@ export const getDashboardStats = async ({ fromDate, toDate, page = 1, limit = 20
   // FILIAL: dashboard butun tizim guruhlarini olardi - boshqa filial
   // davomati ham hisobga tushardi. Guruh filialga bog'langani uchun
   // branchFilter() shu yerda yetarli.
-  const groups = await Group.find({
-    ...branchFilter(),
-    isActive: true,
-    isDeleted: { $ne: true },
+  const groups = await prisma.group.findMany({
+    where: { ...branchFilter(), isActive: true, isDeleted: false },
+    select: GROUP_SELECT,
   });
-  const groupIds = groups.map((g) => g._id);
+  const groupIds = groups.map((g) => g.id);
 
   // Oraliqda active bo'lgan guruh membershiplari (groupBreakdown + o'quvchilar ro'yxati uchun)
-  const groupMemberships = await GroupMembership.find({
-    group: { $in: groupIds },
-    joinedAt: { $lte: to },
-    $or: [{ leftAt: null }, { leftAt: { $gte: from } }],
-    isDeleted: { $ne: true },
-  }).populate("student", STUDENT_PROJECTION);
+  const groupMemberships = await prisma.groupMembership.findMany({
+    where: {
+      groupId: { in: groupIds },
+      joinedAt: { lte: to },
+      OR: [{ leftAt: null }, { leftAt: { gte: from } }],
+      isDeleted: false,
+    },
+    select: {
+      groupId: true,
+      studentId: true,
+      student: { select: STUDENT_SELECT },
+    },
+  });
 
   const studentIdSet = new Set();
   for (const m of groupMemberships) {
-    if (m.student) studentIdSet.add(String(m.student._id));
+    if (m.student) studentIdSet.add(String(m.student.id));
   }
-  const studentIds = Array.from(studentIdSet).map(
-    (id) => new mongoose.Types.ObjectId(id),
-  );
+  // ID ENDI ODDIY SATR - `new ObjectId(...)` kerak emas.
+  const studentIds = Array.from(studentIdSet);
 
   // Shu o'quvchilarning AKTIV guruhlardagi membershiplari + exemptions + attendances.
   // `group: { $in: groupIds }` bilan cheklaymiz (groupIds = faqat aktiv, o'chirilmagan
@@ -1205,23 +1286,33 @@ export const getDashboardStats = async ({ fromDate, toDate, page = 1, limit = 20
   // kelardi: aggregate.totalClasses ≠ Σ groupBreakdown.totalClasses.
   const [allMemberships, exemptions, attendances, holidaySet] =
     await Promise.all([
-      GroupMembership.find({
-        student: { $in: studentIds },
-        group: { $in: groupIds },
-        joinedAt: { $lte: to },
-        $or: [{ leftAt: null }, { leftAt: { $gte: from } }],
-        isDeleted: { $ne: true },
-      }).populate("group"),
-      loadExemptionsWithFreezes({ student: { $in: studentIds } }),
+      prisma.groupMembership.findMany({
+        where: {
+          studentId: { in: studentIds },
+          groupId: { in: groupIds },
+          joinedAt: { lte: to },
+          OR: [{ leftAt: null }, { leftAt: { gte: from } }],
+          isDeleted: false,
+        },
+        select: {
+          studentId: true,
+          joinedAt: true,
+          leftAt: true,
+          group: { select: GROUP_SELECT },
+        },
+      }),
+      loadExemptionsWithFreezes(studentIds),
       // dateKey bo'yicha filtrlaymiz (date emas) - summary yo'llari bilan bir xil
       // kun semantikasi. Aks holda `date` maydonida vaqt komponenti bo'lgan
       // (seed/legacy) yozuvlar oraliq oxirgi kunida tushib qolib, dashboard
       // ko'rsatkichlari summary bilan ziddiyatga kelardi.
-      Attendance.find({
-        student: { $in: studentIds },
-        dateKey: { $gte: dateKeyOf(from), $lte: dateKeyOf(to) },
-        isDeleted: { $ne: true },
-      }).lean(),
+      prisma.attendance.findMany({
+        where: {
+          studentId: { in: studentIds },
+          dateKey: { gte: dateKeyOf(from), lte: dateKeyOf(to) },
+          isDeleted: false,
+        },
+      }),
       holidayKeySetForRange(from, to),
     ]);
 
@@ -1234,13 +1325,15 @@ export const getDashboardStats = async ({ fromDate, toDate, page = 1, limit = 20
     }
     return map;
   };
-  const membershipsByStudent = groupBy(allMemberships, (m) => String(m.student));
-  const exemptionsByStudent = groupBy(exemptions, (ex) => String(ex.student));
-  const attendancesByStudent = groupBy(attendances, (a) => String(a.student));
+  const membershipsByStudent = groupBy(allMemberships, (m) => String(m.studentId));
+  const exemptionsByStudent = groupBy(exemptions, (ex) =>
+    String(ex.studentId ?? ex.student),
+  );
+  const attendancesByStudent = groupBy(attendances, (a) => String(a.studentId));
 
   const studentDocById = new Map();
   for (const m of groupMemberships) {
-    if (m.student) studentDocById.set(String(m.student._id), m.student);
+    if (m.student) studentDocById.set(String(m.student.id), m.student);
   }
 
   // ── Per-o'quvchi (cross-group) summary - overall + studentList uchun, HAR BIRI BIR MARTA ──
@@ -1279,7 +1372,8 @@ export const getDashboardStats = async ({ fromDate, toDate, page = 1, limit = 20
 
     const doc = studentDocById.get(sid);
     studentRates.set(sid, {
-      student: doc ? doc.toJSON() : { _id: sid },
+      // `toJSON()` EMAS - Prisma oddiy obyekt qaytaradi.
+      student: doc ? withLegacyId(doc) : { _id: sid },
       present: s.present,
       absent: s.absent,
       late: s.late,
@@ -1294,12 +1388,15 @@ export const getDashboardStats = async ({ fromDate, toDate, page = 1, limit = 20
   //  begona guruhlar davomatini aralashtirardi)
   const membershipsByGroup = groupBy(
     groupMemberships.filter((m) => m.student),
-    (m) => String(m.group),
+    // `m.group` EMAS, `m.groupId`: Prisma'da `group` RELATION obyekti
+    // bo'lardi va `String(...)` uni "[object Object]" ga aylantirib,
+    // HAR BIR guruh bo'sh ro'yxat olardi.
+    (m) => String(m.groupId),
   );
   const groupBreakdownAll = [];
 
   for (const g of groups) {
-    const members = membershipsByGroup.get(String(g._id)) || [];
+    const members = membershipsByGroup.get(String(g.id)) || [];
     const gAgg = {
       present: 0,
       absent: 0,
@@ -1311,7 +1408,7 @@ export const getDashboardStats = async ({ fromDate, toDate, page = 1, limit = 20
     };
 
     for (const m of members) {
-      const sid = String(m.student._id);
+      const sid = String(m.student.id);
       // FAQAT shu guruh bo'yicha (getGroupSummary bilan bir xil scope)
       const { total, cells } = computeClassDays({
         memberships: [{ joinedAt: m.joinedAt, leftAt: m.leftAt, group: g }],
@@ -1337,7 +1434,7 @@ export const getDashboardStats = async ({ fromDate, toDate, page = 1, limit = 20
     }
 
     groupBreakdownAll.push({
-      groupId: g._id,
+      groupId: g.id,
       name: g.name,
       groupRate: computeRate(gAgg),
       totalClasses: gAgg.totalClasses,
@@ -1400,17 +1497,19 @@ export const consecutiveAbsences = async (studentId, groupId = null) => {
     dateKey: { $lte: localTodayKey() },
   };
   if (groupId) {
-    filter.group = groupId;
+    // `group` -> `groupId`: Prisma'da `group` RELATION.
+    filter.groupId = String(groupId);
   } else {
     // FILIAL: guruh berilmasa barcha guruhlar bo'yicha yuriladi - filial
     // ko'lamiga cheklaymiz. Attendance'da branchId YO'Q, shuning uchun
     // guruh orqali (branchGroupFilter).
-    Object.assign(filter, await branchGroupFilter());
+    Object.assign(filter, await branchGroupFilter("groupId"));
   }
-  const recent = await Attendance.find(filter)
-    .sort({ dateKey: -1 })
-    .limit(50)
-    .lean();
+  const recent = await prisma.attendance.findMany({
+    where: filter,
+    orderBy: { dateKey: "desc" },
+    take: 50,
+  });
   let count = 0;
   for (const a of recent) {
     if (a.status === "absent") count += 1;

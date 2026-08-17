@@ -1,33 +1,10 @@
-import mongoose from "mongoose";
-import Attendance from "../../../models/attendance.model.js";
-import Grade from "../../../models/grade.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import StudentFreeze from "../../../models/studentFreeze.model.js";
+import prisma from "../../../config/prisma.js";
 import {
   branchMatchStage,
   branchGroupMatchStage,
 } from "../../../helpers/branchContext.helper.js";
 
-// SIGNALS QATLAMI - sof MongoDB aggregation. LLM yo'q, qaror yo'q.
-// Vazifasi: xom hujjatlardan tipli RAQAMLI feature'lar chiqarish.
-//
-// Uchta qat'iy qoida:
-//  1. Har bir aggregate branch* helper bilan BOSHLANADI. Attendance/Grade/
-//     GroupMembership'da branchId YO'Q - ular guruh orqali bog'lanadi,
-//     shuning uchun branchGroupMatchStage(). StudentPayment'da branchId BOR.
-//  2. Hammasi OMMAVIY (bulk): tungi job 500 o'quvchini bitta so'rov bilan
-//     hisoblaydi, o'quvchi boshiga so'rov qilmaydi (N+1 o'ldiradi).
-//  3. Har bir signal namunaviy hujjat ID'larini qaytaradi - "Ishingni
-//     ko'rsat" havolasi shularsiz qurilmaydi.
-
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-// Taqqoslash oynasi: oxirgi 4 hafta vs oldingi 4 hafta.
-// NEGA 28 kun: o'quv jadvali haftalik takrorlanadi, shuning uchun oyning
-// kun soni emas, hafta karrasi olinadi - aks holda 28/31 kunlik oylar
-// turli sondagi darsni qamrab, "pasayish" soxta chiqardi.
 export const WINDOW_DAYS = 28;
 
 const utcMidnight = (d) => {
@@ -42,272 +19,221 @@ export const buildWindows = (now = new Date()) => {
   return { priorStart, recentStart, end };
 };
 
-const toId = (v) => new mongoose.Types.ObjectId(String(v));
-
-/**
- * DAVOMAT signali - ikki oyna bo'yicha ishtirok darajasi.
- *
- * excused/exempt maxrajga KIRMAYDI: sababli qoldirilgan dars "yomon signal"
- * emas (kasallik, ruxsat berilgan). Ularni yomon deb hisoblash kasal
- * bo'lgan o'quvchini xavfli deb belgilardi - bu noto'g'ri va owner
- * ishonchini yo'qotadi.
- *
- * @returns {Promise<Map<string, {recentRate, priorRate, drop, lessons, lateMinutes, absentIds}>>}
- */
 export const attendanceSignal = async (studentIds, windows) => {
   const { priorStart, recentStart, end } = windows;
-  const branchStage = await branchGroupMatchStage();
+  const branchStage = await branchGroupMatchStage("groupId");
 
-  const rows = await Attendance.aggregate([
-    ...branchStage,
-    {
-      $match: {
-        isDeleted: false,
-        student: { $in: studentIds.map(toId) },
-        date: { $gte: priorStart, $lt: end },
-        status: { $in: ["present", "absent"] },
-      },
+  const rows = await prisma.attendance.findMany({
+    where: {
+      AND: branchStage,
+      isDeleted: false,
+      studentId: { in: studentIds.map(String) },
+      date: { gte: priorStart, lt: end },
+      status: { in: ["present", "absent"] },
     },
-    {
-      $group: {
-        _id: {
-          student: "$student",
-          window: {
-            $cond: [{ $gte: ["$date", recentStart] }, "recent", "prior"],
-          },
-        },
-        present: {
-          $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] },
-        },
-        total: { $sum: 1 },
-        lateMinutes: { $sum: "$lateMinutes" },
-        // Faqat SO'NGGI oynadagi qoldirishlar havola uchun kerak.
-        absentIds: {
-          $push: {
-            $cond: [{ $eq: ["$status", "absent"] }, "$_id", "$$REMOVE"],
-          },
-        },
-      },
-    },
-  ]);
+    select: { studentId: true, date: true, status: true, lateMinutes: true, id: true },
+  });
 
   const out = new Map();
   for (const r of rows) {
-    const sid = String(r._id.student);
-    const cur = out.get(sid) || {
-      recentRate: null,
-      priorRate: null,
-      drop: 0,
-      lessons: 0,
-      lateMinutes: 0,
-      absentIds: [],
-    };
-    const rate = r.total > 0 ? r.present / r.total : null;
-    if (r._id.window === "recent") {
-      cur.recentRate = rate;
-      cur.lessons = r.total;
-      cur.lateMinutes = r.lateMinutes || 0;
-      cur.absentIds = (r.absentIds || []).slice(0, 20);
-    } else {
-      cur.priorRate = rate;
+    const sid = r.studentId;
+    if (!out.has(sid)) {
+      out.set(sid, {
+        recentRate: null,
+        priorRate: null,
+        drop: 0,
+        lessons: 0,
+        lateMinutes: 0,
+        absentIds: [],
+        _recentTotal: 0,
+        _recentPresent: 0,
+        _priorTotal: 0,
+        _priorPresent: 0,
+      });
     }
-    out.set(sid, cur);
+    const cur = out.get(sid);
+    const isRecent = r.date >= recentStart;
+
+    if (isRecent) {
+      cur._recentTotal++;
+      if (r.status === "present") cur._recentPresent++;
+      else if (cur.absentIds.length < 20) cur.absentIds.push(r.id);
+      cur.lateMinutes += r.lateMinutes || 0;
+    } else {
+      cur._priorTotal++;
+      if (r.status === "present") cur._priorPresent++;
+    }
   }
 
-  // Nisbiy pasayish. priorRate yo'q (yangi o'quvchi) → pasayish hisoblanmaydi;
-  // uning o'rniga dataDensity ishonchni pasaytiradi. Yangi o'quvchini
-  // "davomati tushdi" deb belgilash - klassik soxta signal.
   for (const v of out.values()) {
+    if (v._recentTotal > 0) {
+      v.recentRate = v._recentPresent / v._recentTotal;
+      v.lessons = v._recentTotal;
+    }
+    if (v._priorTotal > 0) {
+      v.priorRate = v._priorPresent / v._priorTotal;
+    }
     if (v.priorRate != null && v.recentRate != null && v.priorRate > 0) {
       v.drop = Math.max(0, (v.priorRate - v.recentRate) / v.priorRate);
     }
+    delete v._recentTotal;
+    delete v._recentPresent;
+    delete v._priorTotal;
+    delete v._priorPresent;
   }
   return out;
 };
 
-/**
- * KETMA-KET qoldirish - eng so'nggi darslardan boshlab uzluksiz "absent" soni.
- * Davomat foizidan ALOHIDA signal: 80% davomat bilan ham oxirgi 4 darsni
- * ketma-ket qoldirgan o'quvchi ketish arafasida bo'lishi mumkin.
- */
 export const absenceStreakSignal = async (studentIds, windows) => {
-  const branchStage = await branchGroupMatchStage();
+  const branchStage = await branchGroupMatchStage("groupId");
   const since = new Date(windows.end.getTime() - 90 * DAY_MS);
 
-  const rows = await Attendance.aggregate([
-    ...branchStage,
-    {
-      $match: {
-        isDeleted: false,
-        student: { $in: studentIds.map(toId) },
-        date: { $gte: since },
-        status: { $in: ["present", "absent"] },
-      },
+  const rows = await prisma.attendance.findMany({
+    where: {
+      AND: branchStage,
+      isDeleted: false,
+      studentId: { in: studentIds.map(String) },
+      date: { gte: since },
+      status: { in: ["present", "absent"] },
     },
-    { $sort: { date: -1 } },
-    {
-      $group: {
-        _id: "$student",
-        recent: { $push: { status: "$status", id: "$_id" } },
-      },
-    },
-    { $project: { recent: { $slice: ["$recent", 20] } } },
-  ]);
+    orderBy: { date: "desc" },
+    select: { studentId: true, status: true, id: true },
+  });
 
   const out = new Map();
   for (const r of rows) {
-    let streak = 0;
-    const ids = [];
-    for (const rec of r.recent) {
-      if (rec.status !== "absent") break;
-      streak += 1;
-      ids.push(rec.id);
+    const sid = r.studentId;
+    if (!out.has(sid)) {
+      out.set(sid, { streak: 0, ids: [], _broken: false });
     }
-    out.set(String(r._id), { streak, ids });
-  }
-  return out;
-};
-
-/**
- * BAHO trendi - ikki oyna o'rtachasi farqi (1-5 shkalada).
- *
- * NEGA chiziqli regressiya EMAS: qiyalik owner uchun tushunarsiz
- * ("-0.03/kun" hech narsa anglatmaydi), oyna o'rtachasi esa to'g'ridan-
- * to'g'ri gapiriladi: "o'rtacha baho 4.2 dan 3.4 ga tushdi". Tushuntirib
- * bo'lmaydigan signal - ishlatib bo'lmaydigan signal.
- */
-export const gradeSignal = async (studentIds, windows) => {
-  const { priorStart, recentStart, end } = windows;
-  const branchStage = await branchGroupMatchStage();
-
-  const rows = await Grade.aggregate([
-    ...branchStage,
-    {
-      $match: {
-        isDeleted: false,
-        student: { $in: studentIds.map(toId) },
-        date: { $gte: priorStart, $lt: end },
-      },
-    },
-    {
-      $group: {
-        _id: {
-          student: "$student",
-          window: {
-            $cond: [{ $gte: ["$date", recentStart] }, "recent", "prior"],
-          },
-        },
-        avg: { $avg: "$value" },
-        count: { $sum: 1 },
-        ids: { $push: "$_id" },
-      },
-    },
-  ]);
-
-  const out = new Map();
-  for (const r of rows) {
-    const sid = String(r._id.student);
-    const cur = out.get(sid) || {
-      recentAvg: null,
-      priorAvg: null,
-      delta: 0,
-      improvement: 0,
-      count: 0,
-      ids: [],
-    };
-    if (r._id.window === "recent") {
-      cur.recentAvg = r.avg;
-      cur.count = r.count;
-      cur.ids = (r.ids || []).slice(0, 20);
-    } else {
-      cur.priorAvg = r.avg;
+    const cur = out.get(sid);
+    if (!cur._broken && cur.ids.length < 20) {
+      if (r.status === "absent") {
+        cur.streak++;
+        cur.ids.push(r.id);
+      } else {
+        cur._broken = true;
+      }
     }
-    out.set(sid, cur);
   }
 
   for (const v of out.values()) {
-    if (v.priorAvg != null && v.recentAvg != null) {
-      v.delta = Math.max(0, v.priorAvg - v.recentAvg);
-      // O'SISH - pasayishning teskarisi, ALOHIDA maydon.
-      // Nega bitta ishorali (signed) son emas: churn scoring faqat
-      // pasayishni "yomon" deb o'qiydi, "eng tez o'sayotgan o'quvchilar"
-      // esa faqat o'sishni. Bitta maydonni ikki joyda teskari talqin
-      // qilish - klassik ishora xatosi manbai.
-      v.improvement = Math.max(0, v.recentAvg - v.priorAvg);
-    }
+    delete v._broken;
   }
   return out;
 };
 
-/**
- * HAFTA KUNI naqshi - "aynan dushanbalarni qoldiradi" signali.
- *
- * NEGA umumiy davomat foizi YETARLI EMAS: 80% davomatli o'quvchi
- * "yaxshi" ko'rinadi, lekin qoldirgan 20% i bitta kunga to'plangan bo'lsa
- * bu TIZIMLI muammo (ish/transport/boshqa to'garak), tasodifiy kasallik
- * emas. Tizimli muammoni hal qilish mumkin - jadvalni o'zgartirib.
- * Tasodifiylikni esa yo'q.
- *
- * Shu signal "ertaga kim kelmasligi mumkin" ro'yxatini ham beradi:
- * o'quvchining eng yomon kuni ertangi kunga to'g'ri kelsa.
- *
- * @returns {Promise<Map<string, {worstDay, worstRate, overallRate, gap, absences, sampleIds}>>}
- */
+export const gradeSignal = async (studentIds, windows) => {
+  const { priorStart, recentStart, end } = windows;
+  const branchStage = await branchGroupMatchStage("groupId");
+
+  const rows = await prisma.grade.findMany({
+    where: {
+      AND: branchStage,
+      isDeleted: false,
+      studentId: { in: studentIds.map(String) },
+      date: { gte: priorStart, lt: end },
+    },
+    select: { studentId: true, value: true, date: true, id: true },
+  });
+
+  const out = new Map();
+  for (const r of rows) {
+    const sid = r.studentId;
+    if (!out.has(sid)) {
+      out.set(sid, {
+        recentAvg: null,
+        priorAvg: null,
+        delta: 0,
+        improvement: 0,
+        count: 0,
+        ids: [],
+        _recentSum: 0,
+        _recentCount: 0,
+        _priorSum: 0,
+        _priorCount: 0,
+      });
+    }
+    const cur = out.get(sid);
+    const isRecent = r.date >= recentStart;
+
+    if (isRecent) {
+      cur._recentSum += r.value;
+      cur._recentCount++;
+      if (cur.ids.length < 20) cur.ids.push(r.id);
+    } else {
+      cur._priorSum += r.value;
+      cur._priorCount++;
+    }
+  }
+
+  for (const v of out.values()) {
+    if (v._recentCount > 0) {
+      v.recentAvg = v._recentSum / v._recentCount;
+      v.count = v._recentCount;
+    }
+    if (v._priorCount > 0) {
+      v.priorAvg = v._priorSum / v._priorCount;
+    }
+    if (v.priorAvg != null && v.recentAvg != null) {
+      v.delta = Math.max(0, v.priorAvg - v.recentAvg);
+      v.improvement = Math.max(0, v.recentAvg - v.priorAvg);
+    }
+    delete v._recentSum;
+    delete v._recentCount;
+    delete v._priorSum;
+    delete v._priorCount;
+  }
+  return out;
+};
+
 export const weekdayPatternSignal = async (studentIds, windows) => {
-  const branchStage = await branchGroupMatchStage();
-  // 90 kun: har hafta kuni uchun kamida 8-12 kuzatuv beradi. Qisqaroq
-  // oyna naqshni tasodifdan ajratolmaydi.
+  const branchStage = await branchGroupMatchStage("groupId");
   const since = new Date(windows.end.getTime() - 90 * DAY_MS);
 
-  const rows = await Attendance.aggregate([
-    ...branchStage,
-    {
-      $match: {
-        isDeleted: false,
-        student: { $in: studentIds.map(toId) },
-        date: { $gte: since, $lt: windows.end },
-        status: { $in: ["present", "absent"] },
-      },
+  const rows = await prisma.attendance.findMany({
+    where: {
+      AND: branchStage,
+      isDeleted: false,
+      studentId: { in: studentIds.map(String) },
+      date: { gte: since, lt: windows.end },
+      status: { in: ["present", "absent"] },
     },
-    {
-      $group: {
-        // $dayOfWeek: 1=yakshanba ... 7=shanba (Mongo konvensiyasi).
-        // TZ ataylab berilgan: UTC da hisoblanса Toshkent kechqurun
-        // darslari oldingi kunga tushib, naqsh siljib ketardi.
-        _id: {
-          student: "$student",
-          dow: { $dayOfWeek: { date: "$date", timezone: "Asia/Tashkent" } },
-        },
-        total: { $sum: 1 },
-        absent: { $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] } },
-        absentIds: {
-          $push: { $cond: [{ $eq: ["$status", "absent"] }, "$_id", "$$REMOVE"] },
-        },
-      },
-    },
-  ]);
+    select: { studentId: true, dateKey: true, status: true, id: true },
+  });
 
   const byStudent = new Map();
   for (const r of rows) {
-    const sid = String(r._id.student);
+    const sid = r.studentId;
     if (!byStudent.has(sid)) byStudent.set(sid, { days: [], total: 0, absent: 0 });
     const entry = byStudent.get(sid);
-    entry.days.push({
-      dow: r._id.dow,
-      total: r.total,
-      absent: r.absent,
-      rate: r.total > 0 ? r.absent / r.total : 0,
-      ids: (r.absentIds || []).slice(0, 10),
-    });
-    entry.total += r.total;
-    entry.absent += r.absent;
+
+    const [y, m, d] = r.dateKey.split("-");
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    const dow = dt.getUTCDay() + 1;
+
+    let dayEntry = entry.days.find((x) => x.dow === dow);
+    if (!dayEntry) {
+      dayEntry = { dow, total: 0, absent: 0, rate: 0, ids: [] };
+      entry.days.push(dayEntry);
+    }
+
+    dayEntry.total++;
+    entry.total++;
+
+    if (r.status === "absent") {
+      dayEntry.absent++;
+      entry.absent++;
+      if (dayEntry.ids.length < 10) dayEntry.ids.push(r.id);
+    }
   }
 
   const out = new Map();
   for (const [sid, entry] of byStudent) {
+    for (const d of entry.days) {
+      d.rate = d.total > 0 ? d.absent / d.total : 0;
+    }
     const overallRate = entry.total > 0 ? entry.absent / entry.total : 0;
-    // Kamida 4 kuzatuv: 1 tadan 1 ta qoldirish "100% qoldiradi" degan
-    // yolg'on naqsh yasardi.
     const eligible = entry.days.filter((d) => d.total >= 4);
     let worst = null;
     for (const d of eligible) {
@@ -319,8 +245,6 @@ export const weekdayPatternSignal = async (studentIds, windows) => {
       worstTotal: worst?.total ?? 0,
       worstAbsences: worst?.absent ?? 0,
       overallRate,
-      // Naqsh KUCHI: shu kun boshqa kunlardan qanchalik yomonroq.
-      // Aynan shu son "tizimli" va "tasodifiy" ni ajratadi.
       gap: worst ? Math.max(0, worst.rate - overallRate) : 0,
       sampleIds: worst?.ids || [],
     });
@@ -328,188 +252,141 @@ export const weekdayPatternSignal = async (studentIds, windows) => {
   return out;
 };
 
-/**
- * QARZ signali - FAOL qarz (hisobdan chiqarilgani emas).
- *
- * writtenOff=true yozuvlar ATAYLAB chiqarib tashlanadi: bu qarz allaqachon
- * yo'qotish deb tan olingan va uni qayta "xavf" sifatida ko'rsatish
- * o'quvchini abadiy qora ro'yxatda ushlab turardi.
- */
 export const debtSignal = async (studentIds, now) => {
-  const branchStage = branchMatchStage();
-  const rows = await StudentPayment.aggregate([
-    ...branchStage,
-    {
-      $match: {
-        student: { $in: studentIds.map(toId) },
-        writtenOff: false,
-        status: { $in: ["unpaid", "partial"] },
-        $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
-      },
+  const branchStage = branchMatchStage("branchId");
+  const rows = await prisma.studentPayment.findMany({
+    where: {
+      AND: branchStage,
+      studentId: { in: studentIds.map(String) },
+      writtenOff: false,
+      status: { in: ["unpaid", "partial"] },
     },
-    {
-      $group: {
-        _id: "$student",
-        debtAmount: { $sum: { $subtract: ["$expectedAmount", "$paidAmount"] } },
-        periods: { $sum: 1 },
-        // Eng eski to'lanmagan davr - qarz kunlarini shundan hisoblaymiz.
-        oldestYear: { $min: "$year" },
-        ids: { $push: "$_id" },
-      },
+    select: {
+      studentId: true,
+      expectedAmount: true,
+      paidAmount: true,
+      year: true,
+      month: true,
+      id: true,
     },
-  ]);
+  });
 
-  // Eng eski davr oyini alohida olamiz: $min faqat yilni to'g'ri beradi,
-  // (yil, oy) juftligini min qilish uchun alohida bosqich kerak bo'lardi -
-  // buning o'rniga yil bo'yicha filtrlab, oyni JS da topamiz.
+  const filteredRows = rows.filter((r) => r.expectedAmount > r.paidAmount);
+
   const byStudent = new Map();
-  for (const r of rows) {
-    byStudent.set(String(r._id), {
-      debtAmount: r.debtAmount,
-      periods: r.periods,
-      oldestYear: r.oldestYear,
-      ids: (r.ids || []).slice(0, 20),
-      debtDays: 0,
-    });
+  for (const r of filteredRows) {
+    const sid = r.studentId;
+    if (!byStudent.has(sid)) {
+      byStudent.set(sid, {
+        debtAmount: 0,
+        periods: 0,
+        oldestYear: Infinity,
+        oldestMonth: Infinity,
+        ids: [],
+        debtDays: 0,
+      });
+    }
+    const entry = byStudent.get(sid);
+    entry.debtAmount += r.expectedAmount - r.paidAmount;
+    entry.periods++;
+    if (
+      r.year < entry.oldestYear ||
+      (r.year === entry.oldestYear && r.month < entry.oldestMonth)
+    ) {
+      entry.oldestYear = r.year;
+      entry.oldestMonth = r.month;
+    }
+    if (entry.ids.length < 20) entry.ids.push(r.id);
   }
 
-  if (byStudent.size) {
-    const oldest = await StudentPayment.aggregate([
-      ...branchStage,
-      {
-        $match: {
-          student: { $in: [...byStudent.keys()].map(toId) },
-          writtenOff: false,
-          status: { $in: ["unpaid", "partial"] },
-        },
-      },
-      { $sort: { year: 1, month: 1 } },
-      {
-        $group: {
-          _id: "$student",
-          year: { $first: "$year" },
-          month: { $first: "$month" },
-        },
-      },
-    ]);
-    for (const o of oldest) {
-      const entry = byStudent.get(String(o._id));
-      if (!entry) continue;
-      // Davr oxiri = shu oyning oxirgi kuni. Qarz shundan keyin boshlanadi.
-      const periodEnd = new Date(Date.UTC(o.year, o.month, 0));
+  for (const entry of byStudent.values()) {
+    if (entry.oldestYear !== Infinity) {
+      const periodEnd = new Date(Date.UTC(entry.oldestYear, entry.oldestMonth, 0));
       entry.debtDays = Math.max(
         0,
         Math.floor((now.getTime() - periodEnd.getTime()) / DAY_MS),
       );
     }
+    delete entry.oldestMonth;
   }
   return byStudent;
 };
 
-/**
- * GURUH effekti - o'quvchi guruhidagi umumiy ketish darajasi.
- * "Yomon guruh" signali: agar guruhdan 30% ketgan bo'lsa, qolganlar ham
- * xavf ostida (o'qituvchi, jadval yoki muhit muammosi).
- */
 export const groupChurnSignal = async (windows) => {
-  const branchStage = await branchGroupMatchStage();
+  const branchStage = await branchGroupMatchStage("groupId");
   const since = new Date(windows.end.getTime() - 90 * DAY_MS);
 
-  const rows = await GroupMembership.aggregate([
-    ...branchStage,
-    { $match: { isDeleted: false } },
-    {
-      $group: {
-        _id: "$group",
-        total: { $sum: 1 },
-        left: {
-          $sum: {
-            $cond: [
-              {
-                $and: [
-                  { $eq: ["$leftReason", "removed"] },
-                  { $gte: ["$leftAt", since] },
-                ],
-              },
-              1,
-              0,
-            ],
-          },
-        },
-      },
+  const rows = await prisma.groupMembership.findMany({
+    where: {
+      AND: branchStage,
+      isDeleted: false,
     },
-  ]);
+    select: { groupId: true, leftReason: true, leftAt: true },
+  });
 
   const out = new Map();
   for (const r of rows) {
-    out.set(String(r._id), {
-      rate: r.total > 0 ? r.left / r.total : 0,
-      left: r.left,
-      total: r.total,
-    });
+    const gid = r.groupId;
+    if (!out.has(gid)) out.set(gid, { rate: 0, left: 0, total: 0 });
+    const cur = out.get(gid);
+    cur.total++;
+    if (r.leftReason === "removed" && r.leftAt && r.leftAt >= since) {
+      cur.left++;
+    }
+  }
+
+  for (const v of out.values()) {
+    v.rate = v.total > 0 ? v.left / v.total : 0;
   }
   return out;
 };
 
-/**
- * TO'LOV INTIZOMI tarixi - HAQIQIY kechikish, taxmin emas.
- *
- * PaymentTransaction.paidAt saqlanadi, shuning uchun har bir davr uchun
- * "qachon to'landi" ma'lum. Kechikish = oxirgi to'lov sanasi − davr oxiri.
- *
- * NEGA StudentPayment.status YETARLI EMAS: u JOYIDA yangilanadi, shuning
- * uchun to'langandan keyin "kechikkanmi" degan ma'lumot yo'qoladi. Faqat
- * tranzaksiya sanasi tarixni saqlaydi.
- */
 export const paymentDisciplineSignal = async (studentIds, now) => {
-  // MODEL TO'G'RIDAN-TO'G'RI IMPORT QILINADI.
-  //
-  // Ilgari bu yerda `mongoose.models.PaymentTransaction` turardi va model
-  // ro'yxatda bo'lmasa jimgina BO'SH Map qaytarardi. Model esa faqat
-  // boshqa modul (moliya) uni import qilgan bo'lsa ro'yxatga tushardi -
-  // ya'ni HTTP jarayonida ishlardi, alohida job/skript jarayonida esa
-  // YO'Q. Natijada to'lov intizomi signali jimgina o'chib qolardi va
-  // payment_risk balli kechikish TARIXISIZ hisoblanardi - xato hech
-  // qayerda ko'rinmasdi, chunki bo'sh Map ham "hech kim kechiktirmagan"
-  // deb o'qilardi.
-  //
-  // Aylanma import xavfi yo'q: paymentTransaction.model.js faqat mongoose
-  // va softDelete plaginini import qiladi.
-
-  // Oxirgi 12 oy - undan uzoq tarix bugungi xulq-atvorni aks ettirmaydi.
   const since = new Date(now.getTime() - 365 * DAY_MS);
+  const branchStage = branchMatchStage("branchId");
 
-  const rows = await PaymentTransaction.aggregate([
-    ...branchMatchStage(),
-    {
-      $match: {
-        student: { $in: studentIds.map(toId) },
-        paidAt: { $gte: since },
-      },
+  const rows = await prisma.paymentTransaction.findMany({
+    where: {
+      AND: branchStage,
+      studentId: { in: studentIds.map(String) },
+      paidAt: { gte: since },
     },
-    // Har bir (o'quvchi, davr) uchun OXIRGI to'lov sanasi - davr shu sanada
-    // yopilgan hisoblanadi.
-    {
-      $group: {
-        _id: { student: "$student", year: "$year", month: "$month" },
-        lastPaidAt: { $max: "$paidAt" },
-        total: { $sum: "$amount" },
-      },
+    select: {
+      studentId: true,
+      year: true,
+      month: true,
+      paidAt: true,
+      amount: true,
     },
-  ]);
+  });
+
+  const groupMap = new Map();
+  for (const r of rows) {
+    const key = `${r.studentId}-${r.year}-${r.month}`;
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        studentId: r.studentId,
+        year: r.year,
+        month: r.month,
+        lastPaidAt: r.paidAt,
+        total: 0,
+      });
+    }
+    const cur = groupMap.get(key);
+    cur.total += r.amount;
+    if (r.paidAt > cur.lastPaidAt) cur.lastPaidAt = r.paidAt;
+  }
 
   const byStudent = new Map();
-  for (const r of rows) {
-    const sid = String(r._id.student);
+  for (const r of groupMap.values()) {
+    const sid = String(r.studentId);
     if (!byStudent.has(sid)) {
       byStudent.set(sid, { periods: 0, lateCount: 0, totalLateDays: 0 });
     }
     const entry = byStudent.get(sid);
-    // Davr oxiri = shu oyning oxirgi kuni.
-    const periodEnd = new Date(Date.UTC(r._id.year, r._id.month, 0));
+    const periodEnd = new Date(Date.UTC(r.year, r.month, 0));
     const lateDays = Math.floor((r.lastPaidAt - periodEnd) / DAY_MS);
     entry.periods += 1;
-    // 5 kunlik imtiyoz: oy oxirida to'lash normal amaliyot, bu kechikish emas.
     if (lateDays > 5) {
       entry.lateCount += 1;
       entry.totalLateDays += lateDays;
@@ -523,46 +400,54 @@ export const paymentDisciplineSignal = async (studentIds, now) => {
   return byStudent;
 };
 
-/** MUZLATISH tarixi - ilgari muzlatgan o'quvchi qayta ketishga moyilroq. */
 export const freezeSignal = async (studentIds) => {
-  const rows = await StudentFreeze.aggregate([
-    { $match: { student: { $in: studentIds.map(toId) }, isDeleted: false } },
-    { $group: { _id: "$student", count: { $sum: 1 }, ids: { $push: "$_id" } } },
-  ]);
+  const rows = await prisma.studentFreeze.findMany({
+    where: {
+      studentId: { in: studentIds.map(String) },
+      isDeleted: false,
+    },
+    select: { studentId: true, id: true },
+  });
+
   const out = new Map();
   for (const r of rows) {
-    out.set(String(r._id), { count: r.count, ids: (r.ids || []).slice(0, 10) });
+    const sid = r.studentId;
+    if (!out.has(sid)) out.set(sid, { count: 0, ids: [] });
+    const cur = out.get(sid);
+    cur.count++;
+    if (cur.ids.length < 10) cur.ids.push(r.id);
   }
   return out;
 };
 
-/**
- * Barcha o'quvchi signallarini bir marta yig'adi.
- *
- * @param {Array<{_id, firstName, lastName, groupIds, enrolledAt}>} students
- * @returns {Promise<Map<string, object>>} studentId -> signals
- */
 export const collectStudentSignals = async (students, now = new Date()) => {
   const windows = buildWindows(now);
-  const ids = students.map((s) => String(s._id));
+  const ids = students.map((s) => String(s.id || s._id));
   if (!ids.length) return new Map();
 
-  // Parallel: signallar bir-biriga bog'liq emas.
-  const [attendance, streak, grades, debt, groupChurn, freeze, discipline, weekday] =
-    await Promise.all([
-      attendanceSignal(ids, windows),
-      absenceStreakSignal(ids, windows),
-      gradeSignal(ids, windows),
-      debtSignal(ids, now),
-      groupChurnSignal(windows),
-      freezeSignal(ids),
-      paymentDisciplineSignal(ids, now),
-      weekdayPatternSignal(ids, windows),
-    ]);
+  const [
+    attendance,
+    streak,
+    grades,
+    debt,
+    groupChurn,
+    freeze,
+    discipline,
+    weekday,
+  ] = await Promise.all([
+    attendanceSignal(ids, windows),
+    absenceStreakSignal(ids, windows),
+    gradeSignal(ids, windows),
+    debtSignal(ids, now),
+    groupChurnSignal(windows),
+    freezeSignal(ids),
+    paymentDisciplineSignal(ids, now),
+    weekdayPatternSignal(ids, windows),
+  ]);
 
   const out = new Map();
   for (const s of students) {
-    const sid = String(s._id);
+    const sid = String(s.id || s._id);
     const att = attendance.get(sid) || {
       recentRate: null,
       priorRate: null,
@@ -572,7 +457,6 @@ export const collectStudentSignals = async (students, now = new Date()) => {
       absentIds: [],
     };
 
-    // O'quvchi guruhlarining eng yomon churn ko'rsatkichi.
     let worstGroup = { rate: 0, left: 0, total: 0, groupId: null };
     for (const gid of s.groupIds || []) {
       const g = groupChurn.get(String(gid));
@@ -580,7 +464,10 @@ export const collectStudentSignals = async (students, now = new Date()) => {
     }
 
     const enrolledDays = s.enrolledAt
-      ? Math.max(0, Math.floor((now.getTime() - new Date(s.enrolledAt).getTime()) / DAY_MS))
+      ? Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(s.enrolledAt).getTime()) / DAY_MS),
+        )
       : null;
 
     out.set(sid, {

@@ -1,11 +1,15 @@
-import BotUser from "../../models/botUser.model.js";
-import User from "../../models/user.model.js";
+import prisma from "../../config/prisma.js";
 import { normalizePhone } from "../../utils/phone.js";
+
+// BigInt serialization xatolarini oldini olish uchun yordamchi
+const toNumber = (val) => (val != null ? Number(val) : null);
 
 export const upsertFromTelegram = async (from, chatId) => {
   if (!from?.id) return null;
+  
+  const telegramId = BigInt(from.id);
   const update = {
-    chatId,
+    chatId: BigInt(chatId),
     username: from.username ? from.username.toLowerCase() : null,
     firstName: from.first_name || "",
     lastName: from.last_name || "",
@@ -14,51 +18,80 @@ export const upsertFromTelegram = async (from, chatId) => {
     isBlocked: false, // foydalanuvchi qayta yozdi → blok bekor qilinadi
     lastSeenAt: new Date(),
   };
+
   // Bir xil telegramId bir nechta hujjatda bo'lishi mumkin (har biri boshqa user) -
   // hammasi BIR XIL chat bo'lgani uchun chat holatini hammasiga yozamiz.
-  await BotUser.updateMany({ telegramId: from.id }, { $set: update });
+  await prisma.botUser.updateMany({
+    where: { telegramId },
+    data: update,
+  });
+
   // Hech qaysi hujjat bo'lmasa (birinchi /start, hali bog'lanmagan) - bittasini yaratamiz.
-  return BotUser.findOneAndUpdate(
-    { telegramId: from.id },
-    { $set: update, $setOnInsert: { telegramId: from.id } },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+  let botUser = await prisma.botUser.findFirst({
+    where: { telegramId },
+  });
+
+  if (!botUser) {
+    botUser = await prisma.botUser.create({
+      data: {
+        telegramId,
+        ...update,
+      },
+    });
+  }
+
+  // Qaytgan obyektda BigInt larni oddiy songa aylantirib qaytaramiz (moslik uchun)
+  return {
+    ...botUser,
+    telegramId: toNumber(botUser.telegramId),
+    chatId: toNumber(botUser.chatId),
+  };
 };
 
 // Bir xil telegramId barcha hujjatlarini bir xil blok holatiga keltiramiz.
-export const markBlocked = async (telegramId, isBlocked = true) =>
-  BotUser.updateMany({ telegramId }, { $set: { isBlocked } });
+export const markBlocked = async (telegramId, isBlocked = true) => {
+  await prisma.botUser.updateMany({
+    where: { telegramId: BigInt(telegramId) },
+    data: { isBlocked },
+  });
+};
 
 // Telegram contact orqali yuborilgan telefonni User.phone bilan moslashtiradi.
-// KO'P-AKKAUNT: bog'lanish (telegramId, user) juftligi bo'yicha - bitta Telegram
-// bir nechta userga bog'lanaveradi, eski bog'lanishni UZMAYMIZ.
-//
-// BIR RAQAM - BIR NECHTA ODAM: telefon endi takrorlanishi mumkin
-// (qarang: user.model.js phone izohi). Ona ikki farzandini bitta raqamdan
-// yozdirgan bo'lsa, `findOne` ulardan FAQAT BITTASINI bog'lardi va ikkinchi
-// farzandning davomat/to'lov xabarlari hech qayerga bormasdi. Shuning uchun
-// raqamga mos KELGAN HAMMA faol foydalanuvchi bog'lanadi.
-//
-// Qaytariladi: bog'langan foydalanuvchilar ro'yxati (bo'sh bo'lishi mumkin).
 export const linkByPhone = async (telegramId, rawPhone) => {
   const phone = normalizePhone(rawPhone);
   if (!phone) return [];
 
-  const users = await User.find({ phone, isActive: true });
+  const users = await prisma.user.findMany({
+    where: { phone, isActive: true },
+  });
   if (users.length === 0) return [];
 
-  // Shu chat (telegramId) uchun mavjud BotUser dan chatId ni olamiz (bo'lsa).
-  const existing = await BotUser.findOne({ telegramId });
+  const tid = BigInt(telegramId);
+  const existing = await prisma.botUser.findFirst({
+    where: { telegramId: tid },
+  });
 
   for (const user of users) {
-    await BotUser.findOneAndUpdate(
-      { telegramId, user: user._id },
-      {
-        $set: { user: user._id },
-        $setOnInsert: { telegramId, chatId: existing?.chatId ?? telegramId },
-      },
-      { new: true, upsert: true, setDefaultsOnInsert: true },
-    );
+    const found = await prisma.botUser.findFirst({
+      where: { telegramId: tid, userId: String(user.id) },
+    });
+
+    if (found) {
+      // Shunchaki o'zini yangilab qo'yamiz (upsert: update)
+      await prisma.botUser.update({
+        where: { id: found.id },
+        data: { userId: String(user.id) },
+      });
+    } else {
+      // Yaratamiz (upsert: insert)
+      await prisma.botUser.create({
+        data: {
+          telegramId: tid,
+          chatId: existing?.chatId ?? tid,
+          userId: String(user.id),
+        },
+      });
+    }
   }
   return users;
 };
@@ -66,19 +99,26 @@ export const linkByPhone = async (telegramId, rawPhone) => {
 // Bitta Telegram bir nechta userga bog'langan bo'lishi mumkin - oxirgi (eng yangi)
 // bog'langan, aktiv userni qaytaramiz (bot DM buyruqlari uchun).
 export const getLinkedUser = async (telegramId) => {
-  const botUser = await BotUser.findOne({
-    telegramId,
-    user: { $ne: null },
-  })
-    .sort({ updatedAt: -1 })
-    .populate("user");
+  const botUser = await prisma.botUser.findFirst({
+    where: {
+      telegramId: BigInt(telegramId),
+      userId: { not: null },
+    },
+    orderBy: { updatedAt: "desc" },
+    include: { user: true },
+  });
+
   if (!botUser || !botUser.user || !botUser.user.isActive) return null;
   return botUser.user;
 };
 
 // Chatdagi BARCHA bog'lanishlarni uzadi (shu telegramId bo'yicha har bir hujjat).
-export const unlink = async (telegramId) =>
-  BotUser.updateMany({ telegramId }, { $set: { user: null } });
+export const unlink = async (telegramId) => {
+  await prisma.botUser.updateMany({
+    where: { telegramId: BigInt(telegramId) },
+    data: { userId: null },
+  });
+};
 
 const FLOW_TTL_MS = 30 * 60 * 1000;
 
@@ -87,14 +127,23 @@ const FLOW_TTL_MS = 30 * 60 * 1000;
 export const setFlowState = async (telegramId, partial) => {
   const expiresAt = new Date(Date.now() + FLOW_TTL_MS);
   const flowState = { ...partial, expiresAt };
-  return BotUser.updateMany({ telegramId }, { $set: { flowState } });
+  
+  await prisma.botUser.updateMany({
+    where: { telegramId: BigInt(telegramId) },
+    data: { flowState },
+  });
 };
 
 // FlowState olish (expire bo'lsa avto-clear va null qaytadi). Barcha hujjatlarda
 // bir xil bo'lgani uchun istalganidan o'qiymiz.
 export const getFlowState = async (telegramId) => {
-  const bu = await BotUser.findOne({ telegramId });
+  const bu = await prisma.botUser.findFirst({
+    where: { telegramId: BigInt(telegramId) },
+  });
+  
   if (!bu?.flowState) return null;
+  
+  // flowState JSON ustuni, JS obyekt sifatida o'qiladi
   if (
     bu.flowState.expiresAt &&
     new Date(bu.flowState.expiresAt).getTime() < Date.now()
@@ -105,5 +154,9 @@ export const getFlowState = async (telegramId) => {
   return bu.flowState;
 };
 
-export const clearFlowState = async (telegramId) =>
-  BotUser.updateMany({ telegramId }, { $set: { flowState: null } });
+export const clearFlowState = async (telegramId) => {
+  await prisma.botUser.updateMany({
+    where: { telegramId: BigInt(telegramId) },
+    data: { flowState: null }, // Json nullable bo'lsa null qabul qiladi (Prisma.DbNull ham ishlatiladi lekin schema 'Json?' deydi, 'null' yozish mumkin)
+  });
+};

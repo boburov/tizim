@@ -1,6 +1,5 @@
 import env from "../../../config/env.js";
-import User from "../../../models/user.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
+import prisma from "../../../config/prisma.js";
 
 // Xabar matnidagi o'zgaruvchilar (placeholder). Frontend MESSAGE_VARIABLES bilan mos.
 // Eslatma: {qarz} uchun real to'lov ma'lumoti tizimda yo'q - bo'sh qoldiriladi.
@@ -29,14 +28,17 @@ const applyValues = (text, { firstName, lastName, groupName }) => {
 
 // Bitta foydalanuvchining active guruh nomini qaytaradi (yo'q bo'lsa "").
 const resolveGroupName = async (userId) => {
-  const membership = await GroupMembership.findOne({
-    student: userId,
-    leftAt: null,
-    isDeleted: { $ne: true },
-  })
-    .sort({ joinedAt: -1 })
-    .populate({ path: "group", select: "name" })
-    .lean();
+  // `student` → `studentId`: Prisma'da `student` RELATION, filtrlash
+  // uchun `studentId` (skalyar FK) ishlatiladi.
+  const membership = await prisma.groupMembership.findFirst({
+    where: {
+      studentId: String(userId),
+      leftAt: null,
+      isDeleted: false,
+    },
+    orderBy: { joinedAt: "desc" },
+    include: { group: { select: { name: true } } },
+  });
   return membership?.group?.name || "";
 };
 
@@ -49,7 +51,10 @@ export const personalizeManyForUser = async (texts, userId, recipientUser = null
 
   let user = recipientUser;
   if (!user || user.firstName === undefined) {
-    user = await User.findById(userId, { firstName: 1, lastName: 1 }).lean();
+    user = await prisma.user.findUnique({
+      where: { id: String(userId) },
+      select: { firstName: true, lastName: true },
+    });
   }
 
   const needsGroup = texts.some((t) => String(t).includes("{guruh}"));
@@ -78,25 +83,28 @@ export const personalizeBulk = async (text, userIds) => {
     return new Map(ids.map((id) => [id, text]));
   }
 
-  const users = await User.find(
-    { _id: { $in: ids } },
-    { firstName: 1, lastName: 1 },
-  ).lean();
-  const userById = new Map(users.map((u) => [String(u._id), u]));
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  const userById = new Map(users.map((u) => [String(u.id), u]));
 
   let groupByUser = new Map();
   if (String(text).includes("{guruh}")) {
     // Har bir o'quvchining eng so'nggi active guruh nomi.
-    const memberships = await GroupMembership.find(
-      { student: { $in: ids }, leftAt: null, isDeleted: { $ne: true } },
-      { student: 1, group: 1, joinedAt: 1 },
-    )
-      .sort({ joinedAt: -1 })
-      .populate({ path: "group", select: "name" })
-      .lean();
+    // `student` → `studentId`, `group` → `groupId`: Prisma'da skalyar FK.
+    const memberships = await prisma.groupMembership.findMany({
+      where: {
+        studentId: { in: ids },
+        leftAt: null,
+        isDeleted: false,
+      },
+      orderBy: { joinedAt: "desc" },
+      select: { studentId: true, joinedAt: true, group: { select: { name: true } } },
+    });
     for (const m of memberships) {
-      const key = String(m.student);
-      // sort joinedAt:-1 -> birinchi uchragan = eng so'nggi
+      const key = String(m.studentId);
+      // orderBy joinedAt:desc -> birinchi uchragan = eng so'nggi
       if (!groupByUser.has(key)) groupByUser.set(key, m.group?.name || "");
     }
   }

@@ -1,11 +1,6 @@
-import mongoose from "mongoose";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import SalaryTransaction from "../../../models/salaryTransaction.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import Group from "../../../models/group.model.js";
-import Insight from "../../../models/insight.model.js";
-import { branchMatchStage } from "../../../helpers/branchContext.helper.js";
+import { Prisma } from "@prisma/client";
+import prisma from "../../../config/prisma.js";
+import { branchFilter } from "../../../helpers/branchContext.helper.js";
 
 // MOLIYA SIGNALLARI.
 //
@@ -20,7 +15,36 @@ import { branchMatchStage } from "../../../helpers/branchContext.helper.js";
 // xavfi 6% − kutilayotgan yomon qarz".
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const toId = (v) => new mongoose.Types.ObjectId(String(v));
+
+/**
+ * FILIAL KO'LAMI XOM SQL UCHUN.
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * `branchMatchStage()` BU YERDA ISHLATILMAYDI.
+ *
+ * U Mongo quvurida `$match` bosqichi edi va `...branchMatchStage()`
+ * ko'rinishida spread qilinardi. Migratsiyadan keyin u PRISMA shaklini
+ * qaytaradi — eski kod uni hamon quvurga qo'shgani uchun Mongoose
+ * "Arguments must be aggregate pipeline operators" bilan yiqilardi.
+ *
+ * Xom SQL'da `where` obyekti ishlamaydi, shuning uchun u SQL bo'lagiga
+ * aylantiriladi. FAIL-CLOSED: bo'sh ro'yxat `AND FALSE` beradi —
+ * hech qaysi filialga biriktirilmagan xodim hech nima ko'rmaydi.
+ * ═══════════════════════════════════════════════════════════════════
+ */
+const rawBranchClause = () => {
+  const bf = branchFilter();
+  if (!Object.keys(bf).length) return Prisma.empty;
+  const v = bf.branchId;
+  if (typeof v === "string") return Prisma.sql` AND "branchId" = ${v}`;
+  if (v?.in) {
+    if (!v.in.length) return Prisma.sql` AND FALSE`;
+    return Prisma.sql` AND "branchId" IN (${Prisma.join(v.in)})`;
+  }
+  return Prisma.empty;
+};
+
+const num = (v) => Number(v) || 0;
 
 /** (yil, oy) juftligini n oy orqaga/oldinga suradi. */
 export const shiftMonth = (year, month, delta) => {
@@ -42,28 +66,24 @@ export const collectedByMonth = async (months, now) => {
   const since = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months + 1, 1),
   );
-  const rows = await PaymentTransaction.aggregate([
-    ...branchMatchStage(),
-    { $match: { paidAt: { $gte: since } } },
-    {
-      $group: {
-        _id: {
-          year: { $year: "$paidAt" },
-          month: { $month: "$paidAt" },
-        },
-        amount: { $sum: "$amount" },
-        count: { $sum: 1 },
-      },
-    },
-    { $sort: { "_id.year": 1, "_id.month": 1 } },
-  ]);
-  return rows.map((r) => ({
-    year: r._id.year,
-    month: r._id.month,
-    key: monthKey(r._id),
-    amount: r.amount,
-    count: r.count,
-  }));
+  // `$group` sana QISMLARI bo'yicha - Prisma `groupBy` buni bilmaydi
+  // (u faqat butun ustun bo'yicha guruhlaydi), shuning uchun xom SQL.
+  const rows = await prisma.$queryRaw`
+    SELECT
+      EXTRACT(YEAR  FROM "paidAt")::int AS year,
+      EXTRACT(MONTH FROM "paidAt")::int AS month,
+      COALESCE(SUM("amount"), 0)::float AS amount,
+      COUNT(*)::int                     AS count
+    FROM "payment_transactions"
+    WHERE "paidAt" >= ${since}
+    ${rawBranchClause()}
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+  `;
+  return rows.map((r) => {
+    const key = { year: num(r.year), month: num(r.month) };
+    return { ...key, key: monthKey(key), amount: num(r.amount), count: num(r.count) };
+  });
 };
 
 /**
@@ -80,25 +100,23 @@ export const salaryExpenseByMonth = async (months, now) => {
   const since = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months + 1, 1),
   );
-  const rows = await SalaryTransaction.aggregate([
-    ...branchMatchStage(),
-    { $match: { isDeleted: { $ne: true }, paidAt: { $gte: since } } },
-    {
-      $group: {
-        _id: { year: { $year: "$paidAt" }, month: { $month: "$paidAt" } },
-        amount: { $sum: "$amount" },
-        count: { $sum: 1 },
-      },
-    },
-    { $sort: { "_id.year": 1, "_id.month": 1 } },
-  ]);
-  return rows.map((r) => ({
-    year: r._id.year,
-    month: r._id.month,
-    key: monthKey(r._id),
-    amount: r.amount,
-    count: r.count,
-  }));
+  const rows = await prisma.$queryRaw`
+    SELECT
+      EXTRACT(YEAR  FROM "paidAt")::int AS year,
+      EXTRACT(MONTH FROM "paidAt")::int AS month,
+      COALESCE(SUM("amount"), 0)::float AS amount,
+      COUNT(*)::int                     AS count
+    FROM "salary_transactions"
+    WHERE "isDeleted" = false
+      AND "paidAt" >= ${since}
+    ${rawBranchClause()}
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+  `;
+  return rows.map((r) => {
+    const key = { year: num(r.year), month: num(r.month) };
+    return { ...key, key: monthKey(key), amount: num(r.amount), count: num(r.count) };
+  });
 };
 
 /**
@@ -115,64 +133,59 @@ export const overdueSignal = async (now) => {
   const year = now.getUTCFullYear();
   const month = now.getUTCMonth() + 1;
 
-  const rows = await StudentPayment.aggregate([
-    ...branchMatchStage(),
-    {
-      $match: {
-        writtenOff: false,
-        status: { $in: ["unpaid", "partial"] },
-        $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
-        // Faqat TUGAGAN davrlar: (year < joriy) yoki (year = joriy va month < joriy).
-        $or: [{ year: { $lt: year } }, { year, month: { $lt: month } }],
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        amount: { $sum: { $subtract: ["$expectedAmount", "$paidAmount"] } },
-        periods: { $sum: 1 },
-        students: { $addToSet: "$student" },
-        oldestYear: { $min: "$year" },
-        ids: { $push: "$_id" },
-      },
-    },
-  ]);
+  // `$expr: { $gt: [...] }` — IKKI USTUNNI solishtirish. Prisma buni
+  // `where` da qila olmaydi (field reference `not`/`gt` bilan
+  // ishlamaydi), shuning uchun xom SQL.
+  const rows = await prisma.$queryRaw`
+    SELECT
+      COALESCE(SUM("expectedAmount" - "paidAmount"), 0)::float AS amount,
+      COUNT(*)::int                                           AS periods,
+      COUNT(DISTINCT "studentId")::int                        AS students,
+      MIN("year")::int                                        AS "oldestYear",
+      (ARRAY_AGG("id"))[1:20]                                 AS ids
+    FROM "student_payments"
+    WHERE "writtenOff" = false
+      AND "status" IN ('unpaid', 'partial')
+      AND "expectedAmount" > "paidAmount"
+      -- Faqat TUGAGAN davrlar: (year < joriy) yoki (year = joriy va month < joriy).
+      AND ("year" < ${year} OR ("year" = ${year} AND "month" < ${month}))
+    ${rawBranchClause()}
+  `;
 
-  const r = rows[0];
+  const r = rows[0]?.periods ? rows[0] : null;
   if (!r) {
     return { amount: 0, periods: 0, students: 0, maxDebtDays: 0, ids: [] };
   }
 
   // Eng eski to'lanmagan davrni aniq topamiz - $min faqat yilni to'g'ri
   // beradi, (yil, oy) juftligining minimumi uchun saralash kerak.
-  const oldest = await StudentPayment.aggregate([
-    ...branchMatchStage(),
-    {
-      $match: {
-        writtenOff: false,
-        status: { $in: ["unpaid", "partial"] },
-        $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
-        $or: [{ year: { $lt: year } }, { year, month: { $lt: month } }],
-      },
-    },
-    { $sort: { year: 1, month: 1 } },
-    { $limit: 1 },
-    { $project: { year: 1, month: 1 } },
-  ]);
+  const oldest = await prisma.$queryRaw`
+    SELECT "year"::int AS year, "month"::int AS month
+    FROM "student_payments"
+    WHERE "writtenOff" = false
+      AND "status" IN ('unpaid', 'partial')
+      AND "expectedAmount" > "paidAmount"
+      AND ("year" < ${year} OR ("year" = ${year} AND "month" < ${month}))
+    ${rawBranchClause()}
+    ORDER BY "year", "month"
+    LIMIT 1
+  `;
 
   let maxDebtDays = 0;
   if (oldest[0]) {
-    const periodEnd = new Date(Date.UTC(oldest[0].year, oldest[0].month, 0));
+    const periodEnd = new Date(Date.UTC(num(oldest[0].year), num(oldest[0].month), 0));
     maxDebtDays = Math.max(0, Math.floor((now.getTime() - periodEnd.getTime()) / DAY_MS));
   }
 
   return {
-    amount: r.amount || 0,
-    periods: r.periods || 0,
-    students: (r.students || []).length,
+    amount: num(r.amount),
+    periods: num(r.periods),
+    // SQL `COUNT(DISTINCT ...)` — Mongo'dagi `$addToSet` + `.length`
+    // ning to'g'ridan-to'g'ri ekvivalenti (massivni tashib kelmasdan).
+    students: num(r.students),
     maxDebtDays,
-    oldestYear: r.oldestYear,
-    ids: (r.ids || []).slice(0, 20),
+    oldestYear: r.oldestYear === null ? undefined : num(r.oldestYear),
+    ids: (r.ids || []).map(String),
   };
 };
 
@@ -195,46 +208,48 @@ export const revenueForecast = async (branchId, now) => {
   const month = now.getUTCMonth() + 1;
 
   // (a) Joriy oyning kutilgan daromadi - baza.
-  const currentRows = await StudentPayment.aggregate([
-    ...branchMatchStage(),
-    { $match: { year, month, writtenOff: false } },
-    {
-      $group: {
-        _id: null,
-        expected: { $sum: "$expectedAmount" },
-        paid: { $sum: "$paidAmount" },
-        students: { $addToSet: "$student" },
-      },
-    },
-  ]);
-  const current = currentRows[0] || { expected: 0, paid: 0, students: [] };
-  const currentStudents = (current.students || []).map(String);
+  const currentRows = await prisma.$queryRaw`
+    SELECT
+      COALESCE(SUM("expectedAmount"), 0)::float AS expected,
+      COALESCE(SUM("paidAmount"), 0)::float     AS paid,
+      COUNT(DISTINCT "studentId")::int          AS students
+    FROM "student_payments"
+    WHERE "year" = ${year} AND "month" = ${month} AND "writtenOff" = false
+    ${rawBranchClause()}
+  `;
+  const current = currentRows[0] || { expected: 0, paid: 0, students: 0 };
+  const currentStudentCount = num(current.students);
 
   // (b) Hozir faol o'quvchilar (guruh a'zoligi ochiq).
-  const groups = await Group.find({
-    branchId: toId(branchId),
-    isDeleted: false,
-    isActive: true,
-  })
-    .select("_id")
-    .lean();
+  const groups = await prisma.group.findMany({
+    where: { branchId: String(branchId), isDeleted: false, isActive: true },
+    select: { id: true },
+  });
+  // `distinct("student")` o'rni: `distinct: ["studentId"]` + `select`.
   const activeMembers = groups.length
-    ? await GroupMembership.distinct("student", {
-        group: { $in: groups.map((g) => g._id) },
-        leftAt: null,
-        isDeleted: false,
+    ? await prisma.groupMembership.findMany({
+        where: {
+          groupId: { in: groups.map((g) => g.id) },
+          leftAt: null,
+          isDeleted: false,
+        },
+        select: { studentId: true },
+        distinct: ["studentId"],
       })
     : [];
-  const activeIds = new Set(activeMembers.map(String));
+  const activeIds = new Set(activeMembers.map((m) => String(m.studentId)));
 
   // (c) Ketish xavfi - dvigatel hozir hisoblagan ballardan.
-  const churnRows = await Insight.find({
-    branchId: toId(branchId),
-    kind: "student_churn_risk",
-    status: { $in: ["open", "acked"] },
-  })
-    .select("subjectId score expectedImpact.amount")
-    .lean();
+  // `expectedImpact.amount` Mongo'da ichma-ich obyekt edi; Prisma'da u
+  // tekis ustun: `expectedImpactAmount`.
+  const churnRows = await prisma.insight.findMany({
+    where: {
+      branchId: String(branchId),
+      kind: "student_churn_risk",
+      status: { in: ["open", "acked"] },
+    },
+    select: { subjectId: true, score: true, expectedImpactAmount: true },
+  });
 
   let atRisk = 0;
   let riskyStudents = 0;
@@ -244,7 +259,7 @@ export const revenueForecast = async (branchId, now) => {
     if (!activeIds.has(String(r.subjectId))) continue;
     riskyStudents += 1;
     // Kutilayotgan yo'qotish = shu o'quvchining oylik to'lovi × ketish ehtimoli.
-    atRisk += (r.expectedImpact?.amount || 0) * r.score;
+    atRisk += (r.expectedImpactAmount || 0) * r.score;
   }
 
   // (d) Yig'ish darajasi - kutilgan daromadning qanchasi HAQIQATDA keladi.
@@ -252,7 +267,7 @@ export const revenueForecast = async (branchId, now) => {
   // tarixiy uzilishni bashoratga kiritadi.
   const collectionRate = await historicalCollectionRate(now);
 
-  const baseExpected = current.expected || 0;
+  const baseExpected = num(current.expected);
   const forecastGross = Math.max(0, baseExpected - atRisk);
   const forecastNet = forecastGross * collectionRate.rate;
 
@@ -260,8 +275,8 @@ export const revenueForecast = async (branchId, now) => {
 
   return {
     currentExpected: baseExpected,
-    currentPaid: current.paid || 0,
-    currentStudents: currentStudents.length,
+    currentPaid: num(current.paid),
+    currentStudents: currentStudentCount,
     activeStudents: activeIds.size,
     atRisk,
     riskyStudents,
@@ -284,31 +299,29 @@ export const historicalCollectionRate = async (now) => {
   const month = now.getUTCMonth() + 1;
   const periods = [1, 2, 3].map((d) => shiftMonth(year, month, -d));
 
-  const rows = await StudentPayment.aggregate([
-    ...branchMatchStage(),
-    {
-      $match: {
-        writtenOff: false,
-        $or: periods.map((p) => ({ year: p.year, month: p.month })),
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        expected: { $sum: "$expectedAmount" },
-        paid: { $sum: "$paidAmount" },
-      },
-    },
-  ]);
-
+  // `$or: [{year,month}, ...]` -> SQL `(year,month) IN ((..),(..))`.
+  const pairs = Prisma.join(
+    periods.map((p) => Prisma.sql`(${p.year}, ${p.month})`),
+  );
+  const rows = await prisma.$queryRaw`
+    SELECT
+      COALESCE(SUM("expectedAmount"), 0)::float AS expected,
+      COALESCE(SUM("paidAmount"), 0)::float     AS paid
+    FROM "student_payments"
+    WHERE "writtenOff" = false
+      AND ("year", "month") IN (${pairs})
+    ${rawBranchClause()}
+  `;
   const r = rows[0];
   // Ma'lumot yo'q → 1 (neytral). Sun'iy pessimizm ham xato bo'lardi.
-  if (!r || !r.expected) return { rate: 1, months: 0, expected: 0, paid: 0 };
+  const expected = num(r?.expected);
+  if (!expected) return { rate: 1, months: 0, expected: 0, paid: 0 };
+  const paid = num(r?.paid);
   return {
-    rate: Math.max(0, Math.min(1, r.paid / r.expected)),
+    rate: Math.max(0, Math.min(1, paid / expected)),
     months: periods.length,
-    expected: r.expected,
-    paid: r.paid,
+    expected,
+    paid,
   };
 };
 
@@ -319,20 +332,22 @@ export const historicalCollectionRate = async (now) => {
 export const cashflowSignal = async (now) => {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const [inRows, outRows] = await Promise.all([
-    PaymentTransaction.aggregate([
-      ...branchMatchStage(),
-      { $match: { paidAt: { $gte: start } } },
-      { $group: { _id: null, amount: { $sum: "$amount" } } },
-    ]),
-    SalaryTransaction.aggregate([
-      ...branchMatchStage(),
-      { $match: { isDeleted: { $ne: true }, paidAt: { $gte: start } } },
-      { $group: { _id: null, amount: { $sum: "$amount" } } },
-    ]),
+    prisma.$queryRaw`
+      SELECT COALESCE(SUM("amount"), 0)::float AS amount
+      FROM "payment_transactions"
+      WHERE "paidAt" >= ${start}
+      ${rawBranchClause()}
+    `,
+    prisma.$queryRaw`
+      SELECT COALESCE(SUM("amount"), 0)::float AS amount
+      FROM "salary_transactions"
+      WHERE "isDeleted" = false AND "paidAt" >= ${start}
+      ${rawBranchClause()}
+    `,
   ]);
 
-  const inflow = inRows[0]?.amount || 0;
-  const outflow = outRows[0]?.amount || 0;
+  const inflow = num(inRows[0]?.amount);
+  const outflow = num(outRows[0]?.amount);
   // Oyning qancha qismi o'tdi - qoldiqni oy oxiriga proyeksiya qilish uchun.
   const daysInMonth = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0),

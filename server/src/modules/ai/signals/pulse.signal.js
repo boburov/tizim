@@ -1,19 +1,37 @@
-import mongoose from "mongoose";
-import Group, { GROUP_DAYS } from "../../../models/group.model.js";
-import Attendance from "../../../models/attendance.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import SalaryTransaction from "../../../models/salaryTransaction.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import Lead from "../../../models/lead.model.js";
-import Feedback from "../../../models/feedback.model.js";
-import TeacherAttendance from "../../../models/teacherAttendance.model.js";
-import TeacherAbsence from "../../../models/teacherAbsence.model.js";
-import Insight from "../../../models/insight.model.js";
-import {
-  branchMatchStage,
-  branchFilter,
-} from "../../../helpers/branchContext.helper.js";
+import { Prisma } from "@prisma/client";
+import prisma from "../../../config/prisma.js";
+import { GROUP_DAYS } from "../../../constants/calendar.js";
+import { branchFilter } from "../../../helpers/branchContext.helper.js";
+
+const num = (v) => Number(v) || 0;
+
+/**
+ * FILIAL KO'LAMI XOM SQL UCHUN — `finance.signal.js` bilan bir xil.
+ *
+ * `branchMatchStage()` Mongo quvurining `$match` bosqichi edi va endi
+ * PRISMA shaklini qaytaradi, ya'ni quvurga spread qilingan eski kod
+ * "Arguments must be aggregate pipeline operators" bilan yiqilardi.
+ * Xom SQL'da esa `where` obyekti umuman ishlamaydi.
+ *
+ * FAIL-CLOSED: bo'sh ro'yxat `AND FALSE` beradi.
+ */
+const rawBranchClause = () => {
+  const bf = branchFilter();
+  if (!Object.keys(bf).length) return Prisma.empty;
+  const v = bf.branchId;
+  if (typeof v === "string") return Prisma.sql` AND "branchId" = ${v}`;
+  if (v?.in) {
+    if (!v.in.length) return Prisma.sql` AND FALSE`;
+    return Prisma.sql` AND "branchId" IN (${Prisma.join(v.in)})`;
+  }
+  return Prisma.empty;
+};
+
+/** `IN (...)` bo'lagi - bo'sh ro'yxatda `FALSE` (fail-closed). */
+const inIds = (col, ids) =>
+  ids.length
+    ? Prisma.sql`${Prisma.raw(`"${col}"`)} IN (${Prisma.join(ids)})`
+    : Prisma.sql`FALSE`;
 
 // PULS - bitta VAQT ORALIG'I bo'yicha kesim.
 //
@@ -27,7 +45,6 @@ import {
 // Kodbazadagi leftAt/endDate/effectiveFrom naqshi bilan bir xil.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const toId = (v) => new mongoose.Types.ObjectId(String(v));
 
 // Hafta kunlari - DUSHANBADAN boshlab, GROUP_DAYS bilan bir xil tartibda.
 // Bitta manba: ilgari bu ro'yxat todaySnapshot ichida yashiringan edi va
@@ -107,8 +124,11 @@ export const lastMonthWindow = (now = new Date()) => {
  */
 export const periodPulse = async ({ start, end }) => {
   const groupIds = (
-    await Group.find({ ...branchFilter(), isDeleted: false }).select("_id").lean()
-  ).map((g) => g._id);
+    await prisma.group.findMany({
+      where: { ...branchFilter(), isDeleted: false },
+      select: { id: true },
+    })
+  ).map((g) => g.id);
 
   const [
     revenueRows,
@@ -120,164 +140,99 @@ export const periodPulse = async ({ start, end }) => {
     teacherHrRows,
     teacherLessonRows,
   ] = await Promise.all([
-    PaymentTransaction.aggregate([
-      ...branchMatchStage(),
-      { $match: { paidAt: { $gte: start, $lt: end } } },
-      {
-        $group: {
-          _id: null,
-          amount: { $sum: "$amount" },
-          count: { $sum: 1 },
-          cash: { $sum: { $cond: [{ $eq: ["$method", "cash"] }, "$amount", 0] } },
-          card: { $sum: { $cond: [{ $eq: ["$method", "card"] }, "$amount", 0] } },
-        },
-      },
-    ]),
-    SalaryTransaction.aggregate([
-      ...branchMatchStage(),
-      { $match: { isDeleted: { $ne: true }, paidAt: { $gte: start, $lt: end } } },
-      { $group: { _id: null, amount: { $sum: "$amount" }, count: { $sum: 1 } } },
-    ]),
+    // DAROMAD: `$cond` bilan shartli yig'indi -> SQL `FILTER (WHERE ...)`.
+    prisma.$queryRaw`
+      SELECT
+        COALESCE(SUM("amount"), 0)::float                                   AS amount,
+        COUNT(*)::int                                                       AS count,
+        COALESCE(SUM("amount") FILTER (WHERE "method" = 'cash'), 0)::float  AS cash,
+        COALESCE(SUM("amount") FILTER (WHERE "method" = 'card'), 0)::float  AS card
+      FROM "payment_transactions"
+      WHERE "paidAt" >= ${start} AND "paidAt" < ${end}
+      ${rawBranchClause()}
+    `,
+    prisma.$queryRaw`
+      SELECT
+        COALESCE(SUM("amount"), 0)::float AS amount,
+        COUNT(*)::int                     AS count
+      FROM "salary_transactions"
+      WHERE "isDeleted" = false AND "paidAt" >= ${start} AND "paidAt" < ${end}
+      ${rawBranchClause()}
+    `,
+    // DAVOMAT: status bo'yicha guruhlash - `groupBy` yetarli.
     groupIds.length
-      ? Attendance.aggregate([
-          {
-            $match: {
-              group: { $in: groupIds },
-              isDeleted: false,
-              date: { $gte: start, $lt: end },
-            },
+      ? prisma.attendance.groupBy({
+          by: ["status"],
+          where: {
+            groupId: { in: groupIds },
+            isDeleted: false,
+            date: { gte: start, lt: end },
           },
-          {
-            $group: {
-              _id: "$status",
-              count: { $sum: 1 },
-              lateMinutes: { $sum: "$lateMinutes" },
-            },
-          },
-        ])
+          _count: { _all: true },
+          _sum: { lateMinutes: true },
+        })
       : [],
+    // O'QUVCHI OQIMI: bitta qatorda to'rtta shartli sanoq.
     groupIds.length
-      ? GroupMembership.aggregate([
-          { $match: { group: { $in: groupIds }, isDeleted: false } },
-          {
-            $group: {
-              _id: null,
-              joined: {
-                $sum: {
-                  $cond: [
-                    { $and: [{ $gte: ["$joinedAt", start] }, { $lt: ["$joinedAt", end] }] },
-                    1,
-                    0,
-                  ],
-                },
-              },
-              // "removed" - haqiqiy ketish. transferred (ichki ko'chish) va
-              // graduated (muvaffaqiyat) ALOHIDA sanaladi: ularni churn
-              // deb ko'rsatish hisobotni yolg'on qilardi.
-              left: {
-                $sum: {
-                  $cond: [
-                    {
-                      $and: [
-                        { $eq: ["$leftReason", "removed"] },
-                        { $gte: ["$leftAt", start] },
-                        { $lt: ["$leftAt", end] },
-                      ],
-                    },
-                    1,
-                    0,
-                  ],
-                },
-              },
-              graduated: {
-                $sum: {
-                  $cond: [
-                    {
-                      $and: [
-                        { $eq: ["$leftReason", "graduated"] },
-                        { $gte: ["$leftAt", start] },
-                        { $lt: ["$leftAt", end] },
-                      ],
-                    },
-                    1,
-                    0,
-                  ],
-                },
-              },
-              transferred: {
-                $sum: {
-                  $cond: [
-                    {
-                      $and: [
-                        { $eq: ["$leftReason", "transferred"] },
-                        { $gte: ["$leftAt", start] },
-                        { $lt: ["$leftAt", end] },
-                      ],
-                    },
-                    1,
-                    0,
-                  ],
-                },
-              },
-            },
-          },
-        ])
+      ? prisma.$queryRaw`
+          SELECT
+            COUNT(*) FILTER (WHERE "joinedAt" >= ${start} AND "joinedAt" < ${end})::int AS joined,
+            COUNT(*) FILTER (WHERE "leftReason" = 'removed'
+              AND "leftAt" >= ${start} AND "leftAt" < ${end})::int     AS left,
+            COUNT(*) FILTER (WHERE "leftReason" = 'graduated'
+              AND "leftAt" >= ${start} AND "leftAt" < ${end})::int     AS graduated,
+            COUNT(*) FILTER (WHERE "leftReason" = 'transferred'
+              AND "leftAt" >= ${start} AND "leftAt" < ${end})::int     AS transferred
+          FROM "group_memberships"
+          WHERE ${inIds("groupId", groupIds)} AND "isDeleted" = false
+        `
       : [],
-    Lead.aggregate([
-      ...branchMatchStage(),
-      { $match: { createdAt: { $gte: start, $lt: end } } },
-      {
-        $group: {
-          _id: null,
-          created: { $sum: 1 },
-          enrolled: { $sum: { $cond: [{ $eq: ["$status", "enrolled"] }, 1, 0] } },
-          rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
-        },
-      },
-    ]),
-    Feedback.aggregate([
-      {
-        $match: {
-          ...(groupIds.length ? { group: { $in: groupIds } } : {}),
-          createdAt: { $gte: start, $lt: end },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          created: { $sum: 1 },
-          resolved: { $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] } },
-        },
-      },
-    ]),
-    TeacherAttendance.aggregate([
-      {
-        $match: {
-          isDeleted: false,
-          status: "absent",
-          date: { $gte: start, $lt: end },
-        },
-      },
-      { $group: { _id: null, count: { $sum: 1 }, teachers: { $addToSet: "$teacher" } } },
-    ]),
+    prisma.$queryRaw`
+      SELECT
+        COUNT(*)::int                                          AS created,
+        COUNT(*) FILTER (WHERE "status" = 'enrolled')::int      AS enrolled,
+        COUNT(*) FILTER (WHERE "status" = 'rejected')::int      AS rejected
+      FROM "leads"
+      WHERE "createdAt" >= ${start} AND "createdAt" < ${end}
+      ${rawBranchClause()}
+    `,
+    // MUROJAAT: `feedbacks` da `branchId` YO'Q - ko'lam GURUH orqali.
+    prisma.$queryRaw`
+      SELECT
+        COUNT(*)::int                                       AS created,
+        COUNT(*) FILTER (WHERE "status" = 'resolved')::int   AS resolved
+      FROM "feedbacks"
+      WHERE "createdAt" >= ${start} AND "createdAt" < ${end}
+        AND ${groupIds.length ? inIds("groupId", groupIds) : Prisma.sql`TRUE`}
+    `,
+    // `$addToSet: "$teacher"` + `.length` -> `COUNT(DISTINCT ...)`, lekin
+    // pastda ikkala manbaning o'qituvchilari BIRLASHTIRILADI, shuning
+    // uchun ID'lar ro'yxatining o'zi kerak (`ARRAY_AGG(DISTINCT ...)`).
+    prisma.$queryRaw`
+      SELECT
+        COUNT(*)::int                        AS count,
+        ARRAY_AGG(DISTINCT "teacherId")      AS teachers
+      FROM "teacher_attendances"
+      WHERE "isDeleted" = false AND "status" = 'absent'
+        AND "date" >= ${start} AND "date" < ${end}
+    `,
     groupIds.length
-      ? TeacherAbsence.aggregate([
-          {
-            $match: {
-              group: { $in: groupIds },
-              isDeleted: false,
-              date: { $gte: start, $lt: end },
-            },
-          },
-          { $group: { _id: null, count: { $sum: 1 }, teachers: { $addToSet: "$teacher" } } },
-        ])
+      ? prisma.$queryRaw`
+          SELECT
+            COUNT(*)::int                        AS count,
+            ARRAY_AGG(DISTINCT "teacherId")      AS teachers
+          FROM "teacher_absences"
+          WHERE ${inIds("groupId", groupIds)} AND "isDeleted" = false
+            AND "date" >= ${start} AND "date" < ${end}
+        `
       : [],
   ]);
 
   const att = { present: 0, absent: 0, excused: 0, exempt: 0, lateMinutes: 0 };
   for (const r of attendanceRows) {
-    att[r._id] = r.count;
-    att.lateMinutes += r.lateMinutes || 0;
+    // `groupBy` natijasida kalit `_id` emas, ustun nomi (`status`).
+    att[r.status] = r._count._all;
+    att.lateMinutes += r._sum.lateMinutes || 0;
   }
   // MAXRAJ: faqat present + absent. excused/exempt kiritilmaydi - sababli
   // qoldirilgan dars "yomon davomat" emas va uni maxrajga qo'shish
@@ -285,24 +240,39 @@ export const periodPulse = async ({ start, end }) => {
   // student.signal.js va course.signal.js bilan AYNAN BIR XIL.
   const marked = att.present + att.absent;
 
-  const rev = revenueRows[0] || { amount: 0, count: 0, cash: 0, card: 0 };
-  const exp = expenseRows[0] || { amount: 0, count: 0 };
-  const flow = flowRows[0] || { joined: 0, left: 0, graduated: 0, transferred: 0 };
-  const leads = leadRows[0] || { created: 0, enrolled: 0, rejected: 0 };
-  const fb = feedbackRows[0] || { created: 0, resolved: 0 };
-  const thr = teacherHrRows[0] || { count: 0, teachers: [] };
-  const tlr = teacherLessonRows[0] || { count: 0, teachers: [] };
+  const rev = revenueRows[0] || {};
+  const exp = expenseRows[0] || {};
+  const flowRaw = flowRows[0] || {};
+  const leadsRaw = leadRows[0] || {};
+  const fbRaw = feedbackRows[0] || {};
+  const thr = teacherHrRows[0] || {};
+  const tlr = teacherLessonRows[0] || {};
+
+  // Xom SQL sonlarni satr sifatida qaytarishi mumkin (bigint) - hamma
+  // joyda `num()` bilan raqamga keltiriladi.
+  const flow = {
+    joined: num(flowRaw.joined),
+    left: num(flowRaw.left),
+    graduated: num(flowRaw.graduated),
+    transferred: num(flowRaw.transferred),
+  };
+  const leads = {
+    created: num(leadsRaw.created),
+    enrolled: num(leadsRaw.enrolled),
+    rejected: num(leadsRaw.rejected),
+  };
+  const fb = { created: num(fbRaw.created), resolved: num(fbRaw.resolved) };
 
   return {
     window: { start, end },
     revenue: {
-      collected: rev.amount,
-      transactions: rev.count,
-      cash: rev.cash,
-      card: rev.card,
+      collected: num(rev.amount),
+      transactions: num(rev.count),
+      cash: num(rev.cash),
+      card: num(rev.card),
     },
-    expense: { salaryPaid: exp.amount, transactions: exp.count },
-    net: rev.amount - exp.amount,
+    expense: { salaryPaid: num(exp.amount), transactions: num(exp.count) },
+    net: num(rev.amount) - num(exp.amount),
     attendance: {
       ...att,
       marked,
@@ -312,8 +282,8 @@ export const periodPulse = async ({ start, end }) => {
     leads,
     complaints: fb,
     teachers: {
-      hrAbsences: thr.count,
-      missedLessons: tlr.count,
+      hrAbsences: num(thr.count),
+      missedLessons: num(tlr.count),
       affectedTeachers: new Set(
         [...(thr.teachers || []), ...(tlr.teachers || [])].map(String),
       ).size,
@@ -337,13 +307,20 @@ export const todaySnapshot = async (now = new Date()) => {
   const dowIndex = (shifted.getUTCDay() + 6) % 7; // 0 = dushanba
   const todayDay = GROUP_DAYS[dowIndex];
 
-  const groups = await Group.find({
-    ...branchFilter(),
-    isDeleted: false,
-    isActive: true,
-  })
-    .select("_id name schedule startDate")
-    .lean();
+  const groups = await prisma.group.findMany({
+    where: { ...branchFilter(), isDeleted: false, isActive: true },
+    select: {
+      id: true,
+      name: true,
+      startDate: true,
+      // `schedule` ALOHIDA JADVAL: Mongo'da guruh hujjati ichidagi
+      // massiv edi. `select` qilinmasa `undefined` bo'lib, "bugun darsi
+      // bor guruhlar" ro'yxati DOIM bo'sh chiqardi.
+      schedule: {
+        select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
+      },
+    },
+  });
 
   // Bugun darsi bor guruhlar. Jadval VERSIYALANGAN, shuning uchun faqat
   // bugun AMAL QILAYOTGAN slotlar hisoblanadi (effectiveFrom kelajakda
@@ -365,7 +342,7 @@ export const todaySnapshot = async (now = new Date()) => {
       if (!prev || curAt >= prevAt) uniq.set(s.startTime, s);
     }
     scheduledSessions += uniq.size;
-    todayGroups.push({ _id: g._id, name: g.name, slots: [...uniq.keys()].sort() });
+    todayGroups.push({ _id: g.id, name: g.name, slots: [...uniq.keys()].sort() });
   }
 
   const todayGroupIds = todayGroups.map((g) => g._id);
@@ -373,41 +350,52 @@ export const todaySnapshot = async (now = new Date()) => {
   const [markedRows, followUps, dueRows, patternRows] = await Promise.all([
     // Bugun davomat belgilangan guruhlar.
     todayGroupIds.length
-      ? Attendance.aggregate([
-          { $match: { group: { $in: todayGroupIds }, isDeleted: false, dateKey: dayKey } },
-          { $group: { _id: "$group", count: { $sum: 1 } } },
-        ])
+      ? prisma.attendance.groupBy({
+          by: ["groupId"],
+          where: {
+            groupId: { in: todayGroupIds.map(String) },
+            isDeleted: false,
+            dateKey: dayKey,
+          },
+          _count: { _all: true },
+        })
       : [],
     // Bugun (yoki oldin) qayta bog'lanish vaqti kelgan lidlar.
-    Lead.find({
-      ...branchFilter(),
-      followUpAt: { $ne: null, $lt: end },
-      status: { $nin: ["enrolled", "rejected"] },
-    })
-      .select("firstName lastName phone status followUpAt")
-      .sort({ followUpAt: 1 })
-      .limit(20)
-      .lean(),
+    // `followUpAt` NULLABLE, ya'ni `not: null` bu yerda ruxsat etilgan.
+    // `not` va `lt` BIR obyektda birga turadi (Mongo'da kalit qayta
+    // yozilardi, Prisma'da shartlar birlashadi).
+    prisma.lead.findMany({
+      where: {
+        ...branchFilter(),
+        followUpAt: { not: null, lt: end },
+        status: { notIn: ["enrolled", "rejected"] },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        status: true,
+        followUpAt: true,
+      },
+      orderBy: { followUpAt: "asc" },
+      take: 20,
+    }),
     // Joriy oy to'lanmagan to'lovlar (hali muddati o'tmagan ham).
-    StudentPayment.aggregate([
-      ...branchMatchStage(),
-      {
-        $match: {
-          year: now.getUTCFullYear(),
-          month: now.getUTCMonth() + 1,
-          writtenOff: false,
-          status: { $in: ["unpaid", "partial"] },
-          $expr: { $gt: ["$expectedAmount", "$paidAmount"] },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          amount: { $sum: { $subtract: ["$expectedAmount", "$paidAmount"] } },
-          students: { $addToSet: "$student" },
-        },
-      },
-    ]),
+    // `$expr: { $gt: [...] }` — IKKI USTUNNI solishtirish, Prisma
+    // `where` da mumkin emas -> xom SQL.
+    prisma.$queryRaw`
+      SELECT
+        COALESCE(SUM("expectedAmount" - "paidAmount"), 0)::float AS amount,
+        COUNT(DISTINCT "studentId")::int                         AS students
+      FROM "student_payments"
+      WHERE "year" = ${now.getUTCFullYear()}
+        AND "month" = ${now.getUTCMonth() + 1}
+        AND "writtenOff" = false
+        AND "status" IN ('unpaid', 'partial')
+        AND "expectedAmount" > "paidAmount"
+      ${rawBranchClause()}
+    `,
     // BUGUN kelmasligi mumkin bo'lganlar: davomat naqshi insight'i
     // ochiq bo'lgan o'quvchilar, ularning "eng yomon kuni" bugunga
     // to'g'ri kelsa.
@@ -415,16 +403,28 @@ export const todaySnapshot = async (now = new Date()) => {
     // NEGA insight'dan (qayta hisoblashdan emas): naqsh 90 kunlik
     // oynada hisoblangan va kun ichida o'zgarmaydi. Uni har ochilishda
     // qayta hisoblash - bir xil natija uchun og'ir aggregation.
-    Insight.find({
-      ...branchFilter(),
-      kind: "attendance_anomaly",
-      status: { $in: ["open", "acked"] },
-    })
-      .select("subjectId subjectLabel factors expectedImpact.label score")
-      .lean(),
+    // `expectedImpact.label` Mongo'da ichma-ich obyekt edi; Prisma'da
+    // tekis ustun: `expectedImpactLabel`.
+    prisma.insight.findMany({
+      where: {
+        ...branchFilter(),
+        kind: "attendance_anomaly",
+        status: { in: ["open", "acked"] },
+      },
+      select: {
+        subjectId: true,
+        subjectLabel: true,
+        factors: true,
+        expectedImpactLabel: true,
+        score: true,
+      },
+    }),
   ]);
 
-  const markedByGroup = new Map(markedRows.map((r) => [String(r._id), r.count]));
+  // `groupBy` natijasida kalit `_id` emas, ustun nomi (`groupId`).
+  const markedByGroup = new Map(
+    markedRows.map((r) => [String(r.groupId), r._count._all]),
+  );
   const unmarked = todayGroups.filter((g) => !markedByGroup.has(String(g._id)));
 
   // Naqsh insight'ining "naqsh kuchi" faktori qiymati - hafta kuni nomi.
@@ -437,13 +437,16 @@ export const todaySnapshot = async (now = new Date()) => {
     .map((i) => ({
       studentId: i.subjectId,
       name: i.subjectLabel,
-      hint: i.expectedImpact?.label || "",
+      hint: i.expectedImpactLabel || "",
       score: i.score,
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 15);
 
-  const due = dueRows[0] || { amount: 0, students: [] };
+  const dueRow = dueRows[0] || {};
+  // SQL `COUNT(DISTINCT ...)` — Mongo'dagi `$addToSet` + `.length` ning
+  // to'g'ridan-to'g'ri ekvivalenti (massivni tashib kelmasdan).
+  const due = { amount: num(dueRow.amount), students: num(dueRow.students) };
 
   return {
     dayKey,
@@ -455,14 +458,14 @@ export const todaySnapshot = async (now = new Date()) => {
       unmarkedGroups: unmarked.map((g) => ({ _id: g._id, name: g.name, slots: g.slots })),
     },
     followUps: followUps.map((l) => ({
-      _id: l._id,
+      _id: l.id,
       name: `${l.firstName} ${l.lastName || ""}`.trim(),
       phone: l.phone,
       status: l.status,
       followUpAt: l.followUpAt,
       overdue: new Date(l.followUpAt) < start,
     })),
-    paymentsDue: { amount: due.amount, students: (due.students || []).length },
+    paymentsDue: { amount: due.amount, students: due.students },
     likelyAbsent,
   };
 };
@@ -490,36 +493,38 @@ export const attendanceOutlook = async (
   const todayStart = localDayStart(now);
   const patternStart = new Date(todayStart.getTime() - patternWeeks * 7 * DAY_MS);
 
-  const groups = await Group.find({
-    ...branchFilter(),
-    isDeleted: false,
-    isActive: true,
-  })
-    .select("_id schedule startDate")
-    .lean();
+  const groups = await prisma.group.findMany({
+    where: { ...branchFilter(), isDeleted: false, isActive: true },
+    select: {
+      id: true,
+      startDate: true,
+      schedule: {
+        select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
+      },
+    },
+  });
 
-  const groupIds = groups.map((g) => g._id);
+  const groupIds = groups.map((g) => g.id);
 
+  // `$cond` bilan shartli sanoq -> SQL `FILTER (WHERE ...)`.
   const rows = groupIds.length
-    ? await Attendance.aggregate([
-        {
-          $match: {
-            group: { $in: groupIds },
-            isDeleted: false,
-            date: { $gte: patternStart, $lt: todayStart },
-          },
-        },
-        {
-          $group: {
-            _id: "$dateKey",
-            present: { $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] } },
-            absent: { $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] } },
-          },
-        },
-      ])
+    ? await prisma.$queryRaw`
+        SELECT
+          "dateKey"                                            AS "dateKey",
+          COUNT(*) FILTER (WHERE "status" = 'present')::int      AS present,
+          COUNT(*) FILTER (WHERE "status" = 'absent')::int       AS absent
+        FROM "attendances"
+        WHERE ${inIds("groupId", groupIds)}
+          AND "isDeleted" = false
+          AND "date" >= ${patternStart} AND "date" < ${todayStart}
+        GROUP BY "dateKey"
+      `
     : [];
 
-  const byDay = new Map(rows.map((r) => [r._id, r]));
+  // `groupBy` natijasida kalit `_id` emas, ustun nomi (`dateKey`).
+  const byDay = new Map(
+    rows.map((r) => [r.dateKey, { present: num(r.present), absent: num(r.absent) }]),
+  );
 
   // Hafta kuni bo'yicha yig'indi - naqshning o'zi.
   const weekday = WEEKDAY_LABELS_UZ.map((label, i) => ({
@@ -636,4 +641,7 @@ export const attendanceOutlook = async (
   };
 };
 
-export { DAY_MS, toId };
+// `toId` OLIB TASHLANDI: u `new mongoose.Types.ObjectId(...)` edi va
+// Postgres'da kerak emas (birlamchi kalit `VARCHAR(24)` — satrning
+// o'zi). Hech qayerda import qilinmagan.
+export { DAY_MS };

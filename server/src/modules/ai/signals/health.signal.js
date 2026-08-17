@@ -1,8 +1,4 @@
-import User from "../../../models/user.model.js";
-import Lead from "../../../models/lead.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import Insight from "../../../models/insight.model.js";
+import prisma from "../../../config/prisma.js";
 import {
   branchFilter,
   userBranchCondition,
@@ -96,7 +92,10 @@ export const businessHealth = async (now = new Date()) => {
   const win60 = { start: new Date(todayStart.getTime() - 60 * DAY_MS), end: win30.start };
 
   const userCond = userBranchCondition();
-  const withUserBranch = (base) => (userCond ? { $and: [base, userCond] } : base);
+  // `$and` -> `AND`: `userBranchCondition()` endi PRISMA shaklini
+  // qaytaradi va uni `$and` ichiga solish Prisma uchun noma'lum kalit
+  // bo'lardi (xato bermay, filtr JIMGINA qo'llanmasdi).
+  const withUserBranch = (base) => (userCond ? { AND: [base, userCond] } : base);
 
   const [
     pulse30,
@@ -114,14 +113,20 @@ export const businessHealth = async (now = new Date()) => {
     historicalCollectionRate(now),
     overdueSignal(now),
     cashflowSignal(now),
-    User.countDocuments(
-      withUserBranch({ role: "teacher", isActive: true, isDeleted: { $ne: true } }),
-    ),
+    prisma.user.count({
+      where: withUserBranch({
+        role: "teacher",
+        isActive: true,
+        isDeleted: false,
+      }),
+    }),
     activeStudentCount(),
-    Insight.countDocuments({
-      ...branchFilter(),
-      kind: "student_churn_risk",
-      status: { $in: ["open", "acked"] },
+    prisma.insight.count({
+      where: {
+        ...branchFilter(),
+        kind: "student_churn_risk",
+        status: { in: ["open", "acked"] },
+      },
     }),
     openLeadDiscipline(todayStart),
   ]);
@@ -175,24 +180,34 @@ export const businessHealth = async (now = new Date()) => {
 
 /** Filialdagi faol o'quvchilar soni (ochiq guruh a'zoligi bo'yicha). */
 const activeStudentCount = async () => {
-  const groups = await Group.find({ ...branchFilter(), isDeleted: false, isActive: true })
-    .select("_id")
-    .lean();
-  if (!groups.length) return 0;
-  const ids = await GroupMembership.distinct("student", {
-    group: { $in: groups.map((g) => g._id) },
-    leftAt: null,
-    isDeleted: false,
+  const groups = await prisma.group.findMany({
+    where: { ...branchFilter(), isDeleted: false, isActive: true },
+    select: { id: true },
   });
-  return ids.length;
+  if (!groups.length) return 0;
+  // `distinct("student")` o'rni: `distinct: ["studentId"]`.
+  const rows = await prisma.groupMembership.findMany({
+    where: {
+      groupId: { in: groups.map((g) => g.id) },
+      leftAt: null,
+      isDeleted: false,
+    },
+    select: { studentId: true },
+    distinct: ["studentId"],
+  });
+  return rows.length;
 };
 
 /** Ochiq lidlar va ulardan qanchasining bog'lanish muddati o'tgan. */
 const openLeadDiscipline = async (todayStart) => {
-  const base = { ...branchFilter(), status: { $nin: ["enrolled", "rejected"] } };
+  const base = { ...branchFilter(), status: { notIn: ["enrolled", "rejected"] } };
   const [open, overdue] = await Promise.all([
-    Lead.countDocuments(base),
-    Lead.countDocuments({ ...base, followUpAt: { $ne: null, $lt: todayStart } }),
+    prisma.lead.count({ where: base }),
+    // `followUpAt` NULLABLE -> `not: null` ruxsat etilgan; `not` va `lt`
+    // BIR obyektda birga turadi.
+    prisma.lead.count({
+      where: { ...base, followUpAt: { not: null, lt: todayStart } },
+    }),
   ]);
   return { open, overdue };
 };

@@ -1,16 +1,16 @@
-import mongoose from "mongoose";
-import RatingSettings from "../../../models/ratingSettings.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import Group from "../../../models/group.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import { averagesForStudents } from "./grades.service.js";
 import { getStudentSummary as getAttendanceStudentSummary } from "../../attendance/services/attendance.service.js";
 import { branchGroupFilter } from "../../../helpers/branchContext.helper.js";
 
-const STUDENT_PROJECTION = {
-  firstName: 1,
-  lastName: 1,
-  username: 1,
+const STUDENT_SELECT = {
+  // `id` ATAYLAB: Prisma `select` bilan avtomatik kelmaydi.
+  id: true,
+  firstName: true,
+  lastName: true,
+  username: true,
 };
 
 const isoToday = () => new Date().toISOString().slice(0, 10);
@@ -18,31 +18,34 @@ const isoDaysAgo = (days) =>
   new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 
 // ─── Sozlamalar (yagona hujjat) ───
+// YAGONA QATOR: `id` ning o'zi "default" (schema'dagi @default).
 export const getSettings = async () =>
-  RatingSettings.findOneAndUpdate(
-    { _id: "default" },
-    { $setOnInsert: { _id: "default" } },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+  prisma.ratingSettings.upsert({
+    where: { id: "default" },
+    create: { id: "default" },
+    update: {},
+  });
 
 export const updateSettings = async (body) => {
-  const doc = await getSettings();
+  // Qator mavjudligini kafolatlaymiz (birinchi tahrirda ham ishlashi uchun).
+  await getSettings();
+
+  const data = {};
   if (body.gradeWeight !== undefined) {
     const v = Number(body.gradeWeight);
     if (Number.isNaN(v) || v < 0 || v > 1) {
       throw new ApiError(400, "Ball vazni 0 dan 1 gacha bo'lishi kerak");
     }
-    doc.gradeWeight = v;
+    data.gradeWeight = v;
   }
   if (body.attendanceWeight !== undefined) {
     const v = Number(body.attendanceWeight);
     if (Number.isNaN(v) || v < 0 || v > 1) {
       throw new ApiError(400, "Davomat vazni 0 dan 1 gacha bo'lishi kerak");
     }
-    doc.attendanceWeight = v;
+    data.attendanceWeight = v;
   }
-  await doc.save();
-  return doc;
+  return prisma.ratingSettings.update({ where: { id: "default" }, data });
 };
 
 // point = (avgGrade/5*100)*gradeWeight + (attendanceRate)*attendanceWeight
@@ -69,29 +72,34 @@ export const getLeaderboard = async ({
   // FILIAL: reyting boshqa filial o'quvchilarini ARALASHTIRMASLIGI kerak -
   // aks holda direktor begona o'quvchilar ismini va ballarini ko'rardi,
   // va o'z filiali o'quvchisining o'rni ham noto'g'ri chiqardi.
-  const membershipFilter = {
+  // `branchGroupFilter("groupId")` - Prisma'da ustun nomi `groupId`
+  // (`group` bo'lsa relation filtri bo'lib qolardi).
+  const membershipWhere = {
     leftAt: null,
-    isDeleted: { $ne: true },
-    ...(await branchGroupFilter()),
+    isDeleted: false,
+    ...(await branchGroupFilter("groupId")),
   };
   let groupId = null;
   if (scope && scope !== "all") {
-    groupId = new mongoose.Types.ObjectId(String(scope));
-    membershipFilter.group = groupId;
+    // ID endi oddiy satr - `new ObjectId(...)` kerak emas.
+    groupId = String(scope);
+    membershipWhere.groupId = groupId;
   }
-  const memberships = await GroupMembership.find(membershipFilter)
-    .populate("student", STUDENT_PROJECTION)
-    .lean();
+  const memberships = await prisma.groupMembership.findMany({
+    where: membershipWhere,
+    select: { groupId: true, student: { select: STUDENT_SELECT } },
+  });
 
   // O'quvchi -> guruhlar (ko'rsatish uchun) va noyob o'quvchilar
   const studentMap = new Map();
   for (const m of memberships) {
     if (!m.student) continue;
-    const sid = String(m.student._id);
+    const sid = String(m.student.id);
     if (!studentMap.has(sid)) {
-      studentMap.set(sid, { student: m.student, groupIds: [] });
+      // Javobda `_id` QOLADI - klient reyting qatorini shu bilan ochadi.
+      studentMap.set(sid, { student: withLegacyId(m.student), groupIds: [] });
     }
-    studentMap.get(sid).groupIds.push(m.group);
+    studentMap.get(sid).groupIds.push(m.groupId);
   }
   const studentIds = Array.from(studentMap.keys());
   if (studentIds.length === 0) return { settings, items: [] };
@@ -160,23 +168,25 @@ export const getStudentRank = async (studentId, { fromDate, toDate } = {}) => {
   const mine = all.items.find((x) => String(x.student._id) === String(studentId));
 
   // O'quvchining aktiv guruhi (birinchi) ichidagi reyting
-  const membership = await GroupMembership.findOne({
-    student: studentId,
-    leftAt: null,
-    isDeleted: { $ne: true },
-  }).lean();
+  const membership = await prisma.groupMembership.findFirst({
+    where: { studentId: String(studentId), leftAt: null, isDeleted: false },
+    select: { groupId: true },
+  });
 
   let group = null;
   if (membership) {
     const g = await getLeaderboard({
-      scope: String(membership.group),
+      scope: String(membership.groupId),
       fromDate,
       toDate,
       limit: 100000,
     });
-    const groupDoc = await Group.findById(membership.group).select("name").lean();
+    const groupDoc = await prisma.group.findUnique({
+      where: { id: String(membership.groupId) },
+      select: { id: true, name: true },
+    });
     group = {
-      group: groupDoc ? { _id: groupDoc._id, name: groupDoc.name } : null,
+      group: groupDoc ? { _id: groupDoc.id, name: groupDoc.name } : null,
       total: g.items.length,
       me: g.items.find((x) => String(x.student._id) === String(studentId)) || null,
     };

@@ -1,7 +1,5 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
-import Group from "../../../models/group.model.js";
-import Branch from "../../../models/branch.model.js";
-import Role from "../../../models/role.model.js";
+import prisma from "../../../config/prisma.js";
 import { ROLES, ROLE_TYPES } from "../../../constants/roles.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
 
@@ -28,25 +26,22 @@ const optionsHandler = asyncHandler(async (req, res) => {
   const data = {};
 
   if (keys.has("groups")) {
-    const groups = await Group.find({
-      ...branchFilter(),
-      isActive: true,
-      isDeleted: { $ne: true },
-    })
-      .select("name")
-      .sort({ name: 1 })
-      .lean();
+    const groups = await prisma.group.findMany({
+      where: { ...branchFilter(), isActive: true, isDeleted: false },
+      select: { name: true },
+      orderBy: { name: "asc" },
+    });
     data.groups = groups.map((g) => ({ value: g.name, label: g.name }));
   }
 
   if (keys.has("branches")) {
-    const branches = await Branch.find({
-      ...branchFilter("_id"),
-      isDeleted: false,
-    })
-      .select("name")
-      .sort({ name: 1 })
-      .lean();
+    // `branchFilter("_id")` -> `branchFilter("id")`: Prisma'da
+    // birlamchi kalit ustuni `id` deb ataladi.
+    const branches = await prisma.branch.findMany({
+      where: { ...branchFilter("id"), isDeleted: false },
+      select: { name: true },
+      orderBy: { name: "asc" },
+    });
     data.branches = branches.map((b) => ({ value: b.name, label: b.name }));
   }
 
@@ -54,14 +49,17 @@ const optionsHandler = asyncHandler(async (req, res) => {
     // Xodimga biriktirib bo'ladigan rollar: o'quvchi/o'qituvchi tipidagi
     // va muzlatilganlar chiqarib tashlanadi. Owner ham yo'q - uni import
     // orqali yaratish mumkin emas (assertCanGrantRole rad etadi).
-    const roles = await Role.find({
-      isFrozen: { $ne: true },
-      roleType: { $nin: [ROLE_TYPES.STUDENT, ROLE_TYPES.TEACHER, ROLE_TYPES.OWNER] },
-      value: { $ne: ROLES.OWNER },
-    })
-      .select("value label")
-      .sort({ label: 1 })
-      .lean();
+    const roles = await prisma.role.findMany({
+      where: {
+        isFrozen: false,
+        roleType: {
+          notIn: [ROLE_TYPES.STUDENT, ROLE_TYPES.TEACHER, ROLE_TYPES.OWNER],
+        },
+        value: { not: ROLES.OWNER },
+      },
+      select: { value: true, label: true },
+      orderBy: { label: "asc" },
+    });
     data.roles = roles.map((r) => ({ value: r.label || r.value, label: r.label || r.value }));
   }
 

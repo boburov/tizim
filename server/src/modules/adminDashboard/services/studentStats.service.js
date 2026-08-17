@@ -1,4 +1,4 @@
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import { ROLES } from "../../../constants/roles.js";
 
 // === Sana yordamchilari (UTC) ===
@@ -17,10 +17,15 @@ const monthStart = (year, month) =>
   new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
 
 // O'quvchi uchun umumiy bazaviy filtr.
+//
+// `isDeleted` ustuni NOT NULL (default false) -> `{ $ne: true }` oddiy
+// `false` ga aylanadi. `enrolledAt` esa NULLABLE, ya'ni `not: null`
+// bu yerda RUXSAT ETILGAN (ro'yxatga olinmagan o'quvchi statistikaga
+// kirmasligi kerak).
 const BASE_STUDENT_FILTER = {
   role: ROLES.STUDENT,
-  isDeleted: { $ne: true },
-  enrolledAt: { $ne: null },
+  isDeleted: false,
+  enrolledAt: { not: null },
 };
 
 // Hozir o'qiyotganlar: faol + hali yakunlamagan (muddat enrolledAt → bugun).
@@ -33,7 +38,7 @@ const ONGOING_FILTER = {
 // Yakunlaganlar: yakunlash sanasi belgilangan (muddat enrolledAt → completedAt).
 const FINISHED_FILTER = {
   ...BASE_STUDENT_FILTER,
-  completedAt: { $ne: null },
+  completedAt: { not: null },
 };
 
 // Faol o'quvchilar (trend/so'nggi ro'yxat/jami soni uchun) - eski semantika.
@@ -51,30 +56,61 @@ const DURATION_BUCKETS = [
   { key: "12+", label: "1 yildan ortiq", minMonths: 12, maxMonths: null },
 ];
 
+/**
+ * OYLARDAGI FARQ — Mongo `$dateDiff(unit: "month")` bilan AYNAN bir xil.
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * Mongo `$dateDiff` oy birligida KUNNI HISOBGA OLMAYDI: u kesib
+ * o'tilgan oy chegaralarini sanaydi. 31-yanvar → 1-fevral = 1 oy,
+ * 1-yanvar → 31-yanvar = 0 oy.
+ *
+ * Shuning uchun formula ham aynan shunday: (y2-y1)*12 + (m2-m1).
+ * "Kun bo'yicha aniqroq" hisoblash TO'G'RIROQ tuyulishi mumkin, lekin
+ * u kohortalar chegarasini siljitib, o'tgan oyning raqamini bugun
+ * o'zgartirib yuborardi - hisobot esa barqaror bo'lishi kerak.
+ * ═══════════════════════════════════════════════════════════════════
+ */
+const monthDiff = (start, end) => {
+  const a = new Date(start);
+  const b = new Date(end);
+  return (
+    (b.getUTCFullYear() - a.getUTCFullYear()) * 12 +
+    (b.getUTCMonth() - a.getUTCMonth())
+  );
+};
+
 // === Atomic helpers ===
 
 // Oylar bo'yicha yangi ro'yxatga olishlar (enrolledAt) - trend grafigi uchun.
+//
+// Mongo'da bu `$group: { _id: { $year, $month } }` quvuri edi. Prisma
+// `groupBy` sana QISMLARI bo'yicha guruhlay olmaydi (faqat butun ustun),
+// shuning uchun `$queryRaw` — sun'iy ko'p bosqichli qurilma yasashdan
+// ko'ra SQL'ning o'zi to'g'riroq.
 const computeEnrollmentTrend = async (months) => {
   const periods = previousMonths(months);
   const rangeStart = monthStart(periods[0].year, periods[0].month);
 
-  const rows = await User.aggregate([
-    { $match: { ...ACTIVE_STUDENT_FILTER, enrolledAt: { $gte: rangeStart } } },
-    {
-      $group: {
-        _id: {
-          year: { $year: "$enrolledAt" },
-          month: { $month: "$enrolledAt" },
-        },
-        count: { $sum: 1 },
-      },
-    },
-  ]);
+  // Ustun nomlari qo'shtirnoqda: Postgres identifikatorlari registrga
+  // sezgir va `enrolledAt` camelCase.
+  const rows = await prisma.$queryRaw`
+    SELECT
+      EXTRACT(YEAR  FROM "enrolledAt")::int  AS year,
+      EXTRACT(MONTH FROM "enrolledAt")::int  AS month,
+      COUNT(*)::int                          AS count
+    FROM "users"
+    WHERE "role" = ${ROLES.STUDENT}
+      AND "isDeleted" = false
+      AND "isActive"  = true
+      AND "enrolledAt" IS NOT NULL
+      AND "enrolledAt" >= ${rangeStart}
+    GROUP BY 1, 2
+  `;
 
   // Bo'sh oylarni 0 bilan to'ldiramiz (grafikda uzilish bo'lmasligi uchun).
   const map = new Map();
   for (const r of rows) {
-    map.set(`${r._id.year}-${r._id.month}`, r.count);
+    map.set(`${Number(r.year)}-${Number(r.month)}`, Number(r.count));
   }
   return periods.map((p) => ({
     year: p.year,
@@ -84,28 +120,25 @@ const computeEnrollmentTrend = async (months) => {
 };
 
 // Davomiylik (oyda) bo'yicha kohortalar + o'rtacha davomiylik.
-// $dateDiff bilan oylardagi farqni serverda hisoblaymiz. endExpr rejimga qarab:
-// hozir o'qiyotganlar uchun "$$NOW", yakunlaganlar uchun "$completedAt".
-const computeDurationStats = async (filter, endExpr) => {
-  const rows = await User.aggregate([
-    { $match: filter },
-    {
-      $project: {
-        months: {
-          $dateDiff: {
-            startDate: "$enrolledAt",
-            endDate: endExpr,
-            unit: "month",
-          },
-        },
-      },
-    },
-  ]);
+//
+// Mongo'da `$dateDiff` SERVERDA hisoblanardi, lekin quvur baribir HAR
+// BIR o'quvchi uchun bitta qator qaytarardi (`$project`, `$group` emas).
+// Ya'ni tarmoqdan o'tadigan hajm o'zgarmadi - faqat arifmetika JS'ga
+// ko'chdi. `endAt = null` bo'lsa "hozir" olinadi (Mongo'dagi `$$NOW`).
+const computeDurationStats = async (where, useNow) => {
+  const rows = await prisma.user.findMany({
+    where,
+    select: { enrolledAt: true, completedAt: true },
+  });
 
+  const now = new Date();
   const counts = Object.fromEntries(DURATION_BUCKETS.map((b) => [b.key, 0]));
   let totalMonths = 0;
   for (const r of rows) {
-    const m = Math.max(0, r.months || 0);
+    const end = useNow ? now : r.completedAt;
+    // Ikkala sana ham bo'lishi shart - filtr buni kafolatlaydi, lekin
+    // himoya sifatida qoldiramiz (0 oy deb sanaladi).
+    const m = r.enrolledAt && end ? Math.max(0, monthDiff(r.enrolledAt, end)) : 0;
     totalMonths += m;
     const bucket = DURATION_BUCKETS.find(
       (b) => m >= b.minMonths && (b.maxMonths === null || m < b.maxMonths),
@@ -125,22 +158,29 @@ const computeDurationStats = async (filter, endExpr) => {
 };
 
 // Eng so'nggi ro'yxatga olingan o'quvchilar.
-const computeRecentEnrollments = async (limit) => {
-  const items = await User.find(ACTIVE_STUDENT_FILTER)
-    .select("firstName lastName username enrolledAt")
-    .sort({ enrolledAt: -1 })
-    .limit(limit)
-    .lean();
-  return items;
-};
+const computeRecentEnrollments = async (limit) =>
+  prisma.user.findMany({
+    where: ACTIVE_STUDENT_FILTER,
+    // `id` ATAYLAB: Prisma `select` bilan uni avtomatik qaytarmaydi,
+    // klient esa qatorni `_id` bo'yicha ochadi.
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      username: true,
+      enrolledAt: true,
+    },
+    orderBy: { enrolledAt: "desc" },
+    take: limit,
+  });
 
 // === Asosiy: getStudentStats ===
 export const getStudentStats = async ({ months = 12, recentLimit = 8 } = {}) => {
-  const [activeCount, ongoing, finished, enrollmentTrend, recentEnrollments] =
+  const [activeCount, ongoing, finished, enrollmentTrend, recentRows] =
     await Promise.all([
-      User.countDocuments(ACTIVE_STUDENT_FILTER),
-      computeDurationStats(ONGOING_FILTER, "$$NOW"),
-      computeDurationStats(FINISHED_FILTER, "$completedAt"),
+      prisma.user.count({ where: ACTIVE_STUDENT_FILTER }),
+      computeDurationStats(ONGOING_FILTER, true),
+      computeDurationStats(FINISHED_FILTER, false),
       computeEnrollmentTrend(months),
       computeRecentEnrollments(recentLimit),
     ]);
@@ -150,6 +190,7 @@ export const getStudentStats = async ({ months = 12, recentLimit = 8 } = {}) => 
     ongoing,
     finished,
     enrollmentTrend,
-    recentEnrollments,
+    // Javobda `_id` QOLADI - klient ro'yxati shunga tayangan.
+    recentEnrollments: recentRows.map((r) => ({ ...r, _id: r.id })),
   };
 };

@@ -1,5 +1,6 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
-import ImportJob from "../../../models/importJob.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyIds } from "../../../utils/serialize.js";
 import { buildMeta } from "../../../utils/pagination.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
 import { listImporters } from "../registry/index.js";
@@ -25,18 +26,28 @@ const historyList = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: [], meta: buildMeta({ page, limit, total: 0 }) });
   }
 
-  const filter = { ...branchFilter(), importerKey: { $in: allowedKeys } };
+  const filter = { ...branchFilter(), importerKey: { in: allowedKeys } };
 
   const [items, total] = await Promise.all([
-    ImportJob.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean(),
-    ImportJob.countDocuments(filter),
+    prisma.importJob.findMany({
+      where: filter,
+      // `rows` va `results` RO'YXATDA KERAK EMAS va ular eng og'ir
+      // ustunlar (butun fayl mazmuni JSON'da). Mongo versiyasi ularni
+      // ham tortib kelardi - 500 qatorli import tarixida bu bir necha
+      // megabaytlik javob edi.
+      omit: { rows: true, results: true },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.importJob.count({ where: filter }),
   ]);
 
-  res.json({ success: true, data: items, meta: buildMeta({ page, limit, total }) });
+  res.json({
+    success: true,
+    data: withLegacyIds(items),
+    meta: buildMeta({ page, limit, total }),
+  });
 });
 
 export default historyList;

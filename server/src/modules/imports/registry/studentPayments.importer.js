@@ -1,11 +1,7 @@
 import crypto from "node:crypto";
-import mongoose from "mongoose";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 import { ROLES } from "../../../constants/roles.js";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
+import prisma from "../../../config/prisma.js";
 import {
   branchFilter,
   userBranchCondition,
@@ -28,15 +24,6 @@ const METHOD_MAP = {
 
 const dateKey = (d) => d.toISOString().slice(0, 10);
 
-// Takrorlanmas kalit: AYNI qator qayta yuklanganda pul ikki marta
-// yozilmasligini kafolatlaydi (PaymentTransaction.idempotencyKey unique).
-//
-// DIQQAT: qator RAQAMI kalitga ATAYLAB kirmaydi. Aks holda foydalanuvchi
-// fayldan bitta qatorni o'chirib qayta yuklasa, qolgan qatorlarning
-// raqami siljib, kalit o'zgarardi va PUL IKKINCHI MARTA yozilardi.
-// Buning narxi: bir kunda, bir oy uchun, bir xil summadagi ikkita alohida
-// to'lov fayl ichida "takror" deb belgilanadi - ularni bitta qatorga
-// (yig'indi summa bilan) birlashtirish kerak.
 const buildIdempotencyKey = (d) =>
   "imp:sp:" +
   crypto
@@ -63,13 +50,6 @@ const studentPaymentsImporter = {
   sheetName: "To'lovlar",
   permission: PERMISSIONS.FINANCE_PAY,
 
-  // NEGA "Chegirma", "Holat" va "Qoldiq" ustunlari YO'Q:
-  // bu tizimda ular MUSTAQIL kiritiladigan maydon emas, HISOBLANADI.
-  //  • Chegirma - alohida Discount hujjati, u oylik summani qayta hisoblaydi.
-  //  • Holat (to'langan/qisman) - summalardan kelib chiqadi.
-  //  • Qoldiq - expectedAmount - paidAmount.
-  // Ularni faylga qo'shib, keyin e'tiborsiz qoldirish foydalanuvchini
-  // aldardi ("chegirma yozdim, lekin hech narsa o'zgarmadi").
   columns: [
     {
       key: "studentRef",
@@ -145,7 +125,6 @@ const studentPaymentsImporter = {
     },
   ],
 
-  // BIR MARTALIK ommaviy qidiruv - qator bo'yicha DB'ga borilmaydi.
   prepare: async (rawRows) => {
     const refs = new Set();
     const groupNames = new Set();
@@ -154,23 +133,18 @@ const studentPaymentsImporter = {
       if (!isBlank(raw.groupName)) groupNames.add(norm(raw.groupName));
     }
 
-    // FILIAL: userBranchCondition() - o'quvchi homeBranchId yoki
-    // branchAssignments orqali bog'lanadi, oddiy branchFilter yaramaydi.
     const phones = [...refs].map(normalizePhone).filter(Boolean);
     const branchCond = userBranchCondition();
-    const studentFilter = {
-      role: ROLES.STUDENT,
-      isDeleted: { $ne: true },
-      $or: [{ username: { $in: [...refs] } }, { phone: { $in: phones } }],
-    };
-    if (branchCond) studentFilter.$and = [branchCond];
-
-    const students = await User.find(studentFilter, {
-      firstName: 1,
-      lastName: 1,
-      username: 1,
-      phone: 1,
-    }).lean();
+    
+    const students = await prisma.user.findMany({
+      where: {
+        role: ROLES.STUDENT,
+        isDeleted: false,
+        OR: [{ username: { in: [...refs] } }, { phone: { in: phones } }],
+        ...(branchCond ? { AND: [branchCond] } : {})
+      },
+      select: { id: true, firstName: true, lastName: true, username: true, phone: true }
+    });
 
     const studentByRef = new Map();
     for (const s of students) {
@@ -178,58 +152,50 @@ const studentPaymentsImporter = {
       if (s.phone) studentByRef.set(norm(s.phone), s);
     }
 
-    // FILIAL: guruhda branchId bor - oddiy branchFilter yetarli.
-    const groups = await Group.find(
-      { ...branchFilter(), isDeleted: { $ne: true } },
-      { name: 1, isActive: 1, branchId: 1 },
-    ).lean();
+    const groups = await prisma.group.findMany({
+      where: { isDeleted: false, ...branchFilter() },
+      select: { id: true, name: true, isActive: true, branchId: true }
+    });
+    
     const groupByName = new Map();
     for (const g of groups) {
       const k = norm(g.name);
-      // Bir xil nomli ikki guruh bo'lsa - noaniqlik. Belgilab qo'yamiz,
-      // validateRow aniq xato beradi (jimgina birinchisini tanlamaymiz).
       if (groupByName.has(k)) groupByName.set(k, "AMBIGUOUS");
       else groupByName.set(k, g);
     }
 
-    // Oylik to'lov rejalari (obligations). Faylda uchraydigan
-    // o'quvchi+guruh juftliklari uchun bittada yuklaymiz.
-    const studentIds = [...new Set(students.map((s) => String(s._id)))].map(
-      (id) => new mongoose.Types.ObjectId(id),
-    );
-    const groupIds = groups.map((g) => g._id);
+    const studentIds = [...new Set(students.map((s) => String(s.id)))];
+    const groupIds = groups.map((g) => g.id);
     const obligations = studentIds.length
-      ? await StudentPayment.find(
-          {
+      ? await prisma.studentPayment.findMany({
+          where: {
             ...branchFilter(),
-            student: { $in: studentIds },
-            group: { $in: groupIds },
-            isDeleted: { $ne: true },
+            studentId: { in: studentIds },
+            groupId: { in: groupIds },
+            isDeleted: false,
           },
-          { student: 1, group: 1, year: 1, month: 1, expectedAmount: 1, paidAmount: 1, writtenOff: 1 },
-        ).lean()
+          select: { id: true, studentId: true, groupId: true, year: true, month: true, expectedAmount: true, paidAmount: true, writtenOff: true },
+        })
       : [];
 
     const obligationByKey = new Map();
     for (const o of obligations) {
-      obligationByKey.set(`${o.student}|${o.group}|${o.year}|${o.month}`, o);
+      obligationByKey.set(`${o.studentId}|${o.groupId}|${o.year}|${o.month}`, o);
     }
 
     const ctx = { studentByRef, groupByName, obligationByKey, existingKeys: new Set() };
 
-    // MAVJUD tranzaksiyalar: to'liq yechilgan qatorlar uchun kalit hisoblab,
-    // bittada tekshiramiz. Shu tufayli "bu to'lov allaqachon kiritilgan"
-    // xabari ko'rib chiqish bosqichidayoq ko'rinadi.
     const keys = [];
     for (const raw of rawRows) {
       const { errors, data } = studentPaymentsImporter.validateRow(raw, ctx);
       if (!errors.length && data) keys.push(buildIdempotencyKey(data));
     }
+    
     if (keys.length) {
-      const existing = await PaymentTransaction.find(
-        { idempotencyKey: { $in: keys } },
-        { idempotencyKey: 1 },
-      ).lean();
+      const existing = await prisma.paymentTransaction.findMany({
+        where: { idempotencyKey: { in: keys } },
+        select: { idempotencyKey: true },
+      });
       ctx.existingKeys = new Set(existing.map((t) => t.idempotencyKey));
     }
 
@@ -240,7 +206,6 @@ const studentPaymentsImporter = {
     const errors = [];
     const push = (field, message) => errors.push({ field, message });
 
-    // ── O'quvchi ──
     const refRes = asText(raw.studentRef);
     const ref = norm(refRes.value);
     let student = null;
@@ -250,7 +215,6 @@ const studentPaymentsImporter = {
       if (!student) push("O'quvchi ID", "Bunday o'quvchi topilmadi (yoki boshqa filialda)");
     }
 
-    // Ixtiyoriy F.I.O tekshiruvi - noto'g'ri odamga pul yozib yuborilmasin.
     if (student && !isBlank(raw.studentName)) {
       const given = norm(raw.studentName).replace(/\s+/g, " ");
       const actual = norm(`${student.firstName} ${student.lastName || ""}`).replace(/\s+/g, " ");
@@ -260,7 +224,6 @@ const studentPaymentsImporter = {
       }
     }
 
-    // ── Guruh ──
     const groupRes = asText(raw.groupName);
     let group = null;
     if (!groupRes.value) push("Guruh", "Bo'sh");
@@ -275,13 +238,11 @@ const studentPaymentsImporter = {
       }
     }
 
-    // ── Davr ──
     const yearRes = asYear(raw.year);
     if (!yearRes.ok) push("Yil", yearRes.error);
     const monthRes = asMonth(raw.month);
     if (!monthRes.ok) push("Oy", monthRes.error);
 
-    // ── Summa / sana / tur ──
     const amountRes = asMoney(raw.amount, { min: 1, max: 50_000_000 });
     if (!amountRes.ok) push("To'lov summasi", amountRes.error);
 
@@ -294,11 +255,10 @@ const studentPaymentsImporter = {
     const noteRes = asText(raw.note, { max: 300 });
     if (!noteRes.ok) push("Izoh", noteRes.error);
 
-    // ── Oylik reja (obligation) ──
     let obligation = null;
     if (student && group && yearRes.ok && monthRes.ok) {
       obligation = ctx.obligationByKey.get(
-        `${student._id}|${group._id}|${yearRes.value}|${monthRes.value}`,
+        `${student.id}|${group.id}|${yearRes.value}|${monthRes.value}`,
       );
       if (!obligation) {
         push(
@@ -316,11 +276,11 @@ const studentPaymentsImporter = {
     return {
       errors: [],
       data: {
-        studentId: student._id,
+        studentId: student.id,
         studentName: `${student.firstName} ${student.lastName || ""}`.trim(),
-        groupId: group._id,
+        groupId: group.id,
         groupName: group.name,
-        paymentId: obligation._id,
+        paymentId: obligation.id,
         year: yearRes.value,
         month: monthRes.value,
         amount: amountRes.value,
@@ -333,13 +293,6 @@ const studentPaymentsImporter = {
 
   dedupeKey: (data) => (data ? buildIdempotencyKey(data) : null),
 
-  // YOZISH mavjud servis orqali - bu yerda StudentPayment/PaymentTransaction
-  // ga TO'G'RIDAN-TO'G'RI yozilmaydi.
-  //
-  // NEGA: transaction.service.create() shunchaki insert emas - u summani
-  // eng eski qarz oylariga taqsimlaydi, paidAmount ni atomik oshiradi,
-  // holatni qayta hisoblaydi va ortgan pulni depozitga o'tkazadi. Qo'lda
-  // insert qilinsa moliya modeli buzilardi (qoldiq noto'g'ri hisoblanardi).
   commitRow: async (data, _ctx, { currentUser }) => {
     const result = await transactionService.create(
       {

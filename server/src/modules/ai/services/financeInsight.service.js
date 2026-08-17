@@ -1,4 +1,4 @@
-import Branch from "../../../models/branch.model.js";
+import prisma from "../../../config/prisma.js";
 import { collectFinanceSignals } from "../signals/finance.signal.js";
 import {
   buildFactors,
@@ -21,18 +21,6 @@ import {
 } from "./insightWriter.service.js";
 import { resolveConfig } from "./aiConfig.service.js";
 
-// MOLIYA DETEKTORLARI - to'rtta, hammasi FILIAL darajasida:
-//   1. overdue_payments       - muddati o'tgan to'lovlar yig'masi
-//   2. revenue_forecast_drop  - keyingi oy daromadi pasayishi
-//   3. expense_anomaly        - maosh xarajatining g'ayrioddiy sakrashi
-//   4. cashflow_warning       - chiqim kirimdan oshib ketishi
-//
-// Filial darajasidagi insight'da subjectId = branchId. Dedup indeksi
-// (subjectType, subjectId, kind) shu holda ham to'g'ri ishlaydi: filialda
-// har turdan bitta ochiq insight bo'ladi va u har hisoblashda yangilanadi.
-// Shuning uchun "15 ta to'lov kechikkan" har kuni yangi karta yaratmaydi -
-// bitta karta o'z ichidagi sonni yangilaydi.
-
 const FINANCE_KINDS = [
   "overdue_payments",
   "revenue_forecast_drop",
@@ -48,20 +36,9 @@ const monthLabel = (year, month) => {
   return `${names[month - 1]} ${year}`;
 };
 
-/**
- * DETEKTOR 1: muddati o'tgan to'lovlar.
- *
- * Bu BASHORAT EMAS - qayd etilgan fakt. Shuning uchun ishonch yuqori va
- * ball "qanchalik yomon" ni o'lchaydi, "qanchalik ehtimolli" ni emas.
- * Aynan shu sababdan chegaralar summa va muddat bo'yicha, ehtimol
- * bo'yicha emas.
- */
 const detectOverdue = ({ overdue, forecast, thresholds, branchName }) => {
   if (overdue.periods === 0) return null;
 
-  // Muddati o'tgan qarz oylik kutilgan daromadning qanchasi - MUTLAQ
-  // summa emas, ULUSH. 5 mln so'm kichik markazda halokat, kattasida
-  // normal. Ulush ikkalasida ham to'g'ri o'qiladi.
   const monthlyBase = forecast.currentExpected || 1;
   const debtRatio = overdue.amount / monthlyBase;
 
@@ -71,7 +48,6 @@ const detectOverdue = ({ overdue, forecast, thresholds, branchName }) => {
       label: "Muddati o'tgan summa",
       value: overdue.amount,
       unit: "so'm",
-      // Oylik daromadning 30% i qarzda = to'liq signal.
       normalized: norm(debtRatio, 0.3),
       weight: 0.4,
     },
@@ -88,7 +64,6 @@ const detectOverdue = ({ overdue, forecast, thresholds, branchName }) => {
       label: "Eng eski qarz muddati",
       value: overdue.maxDebtDays,
       unit: "kun",
-      // 60 kun = to'liq signal: undan keyin qarz qaytishi ehtimoli keskin tushadi.
       normalized: norm(overdue.maxDebtDays, 60),
       weight: 0.2,
     },
@@ -158,17 +133,7 @@ const detectOverdue = ({ overdue, forecast, thresholds, branchName }) => {
   };
 };
 
-/**
- * DETEKTOR 2: daromad pasayishi bashorati.
- *
- * KOGORTLI ROLL-FORWARD (finance.signal.js dagi izohga qarang): bashorat
- * bugun o'qiyotgan aniq o'quvchilar va ularning ketish ballaridan chiqadi.
- * Shuning uchun "8% pasayadi" degan son TUSHUNTIRILADI: "142 o'quvchidan
- * 11 tasi xavf ostida, ularning oylik to'lovi 3.2 mln so'm".
- */
 const detectForecastDrop = ({ forecast, collected, thresholds, branchName }) => {
-  // Pasayish sezilarli bo'lmasa insight yaratilmaydi: 3% dan kam farq
-  // bashorat xatosi doirasida va uni ko'rsatish soxta signal bo'lardi.
   if (forecast.deltaRatio > -0.03) return null;
   if (!forecast.currentExpected) return null;
 
@@ -180,7 +145,6 @@ const detectForecastDrop = ({ forecast, collected, thresholds, branchName }) => 
       label: "Kutilayotgan pasayish",
       value: Math.round(dropPct * 100),
       unit: "%",
-      // 15% pasayish = to'liq signal.
       normalized: norm(dropPct, 0.15),
       weight: 0.45,
     },
@@ -212,9 +176,6 @@ const detectForecastDrop = ({ forecast, collected, thresholds, branchName }) => 
 
   const score = weightedScore(factors);
 
-  // Ishonch: yig'ish darajasi qancha oy ma'lumotiga tayanadi + tarixiy
-  // daromad qanchalik barqaror. Sakroq daromadli filialda 8% bashorat
-  // ma'nosiz va ishonch shuni aks ettirishi kerak.
   const confidence = sampleConfidence({
     observed: forecast.activeStudents,
     minSample: 10,
@@ -272,22 +233,9 @@ const detectForecastDrop = ({ forecast, collected, thresholds, branchName }) => 
   };
 };
 
-/**
- * DETEKTOR 3: xarajat anomaliyasi.
- *
- * HALOL NOMLASH: bu "jami xarajat" emas, MAOSH xarajati. Kodbazada
- * xarajat kategoriyasi modeli yo'q (ijara/kommunal/marketing yozilmaydi),
- * yozilgan yagona chiqim oqimi - SalaryTransaction. "Marketing +18%"
- * kabi tavsiya berish uchun avval ExpenseCategory modeli kerak.
- * Insight matni ham aynan "maosh xarajati" deydi - owner nimaga
- * qarayotganini aniq bilishi kerak.
- */
 const detectExpenseAnomaly = ({ expense, thresholds, branchName, now }) => {
   if (expense.length < 4) return null;
 
-  // Joriy oy TUGAMAGAN, shuning uchun tugagan oxirgi oy tekshiriladi.
-  // Yarim oy ma'lumotini to'liq oylar bilan taqqoslash har oy boshida
-  // "xarajat keskin tushdi" degan soxta anomaliya berardi.
   const currentKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
   const closed = expense.filter((m) => m.key !== currentKey);
   if (closed.length < 4) return null;
@@ -296,7 +244,6 @@ const detectExpenseAnomaly = ({ expense, thresholds, branchName, now }) => {
   const history = closed.slice(0, -1).map((m) => m.amount);
   const { z, mean, stdev } = zScore(latest.amount, history);
 
-  // |z| > 2 - klassik anomaliya chegarasi. Undan past - normal tebranish.
   if (Math.abs(z) < 2 || mean == null || !stdev) return null;
 
   const delta = latest.amount - mean;
@@ -336,9 +283,6 @@ const detectExpenseAnomaly = ({ expense, thresholds, branchName, now }) => {
     kind: "expense_anomaly",
     subjectLabel: branchName,
     title: `${label} maosh xarajati odatdagidan keskin ${direction}`,
-    // O'sish - kuzatuv, tushish - past ustuvorlik: kamaygan xarajat
-    // muammo bo'lishi shart emas (o'qituvchi kam ishlagan bo'lishi mumkin),
-    // lekin bilish kerak.
     severity: z > 0 ? severityFor(score, thresholds) : "low",
     score,
     confidence,
@@ -375,14 +319,9 @@ const detectExpenseAnomaly = ({ expense, thresholds, branchName, now }) => {
   };
 };
 
-/**
- * DETEKTOR 4: pul oqimi ogohlantirishi.
- * Joriy oyda chiqim kirimga yaqinlashsa yoki oshsa - kassa muammosi.
- */
 const detectCashflowWarning = ({ cashflow, thresholds, branchName }) => {
   if (cashflow.inflow <= 0) return null;
   const ratio = cashflow.outflow / cashflow.inflow;
-  // 80% dan past - normal ish rejimi.
   if (ratio < 0.8) return null;
 
   const factors = buildFactors([
@@ -391,7 +330,6 @@ const detectCashflowWarning = ({ cashflow, thresholds, branchName }) => {
       label: "Chiqim / kirim nisbati",
       value: Math.round(ratio * 100),
       unit: "%",
-      // 130% = to'liq signal (chiqim kirimdan 1.3 barobar ko'p).
       normalized: norm(ratio, 1.3),
       weight: 0.6,
     },
@@ -458,19 +396,14 @@ const detectCashflowWarning = ({ cashflow, thresholds, branchName }) => {
   };
 };
 
-/**
- * Bitta filial uchun moliya insight'larini qayta hisoblaydi.
- *
- * TARTIB MUHIM: bu detektor o'quvchi churn ballaridan foydalanadi
- * (revenueForecast ochiq student_churn_risk insight'larini o'qiydi),
- * shuning uchun orkestrator uni o'quvchi detektoridan KEYIN ishga
- * tushirishi shart. Aks holda bashorat kechagi ballarga tayanadi.
- */
 export const recomputeFinanceInsights = async (branchId, now = new Date()) => {
   const config = await resolveConfig(branchId);
   const thresholds = readMap(config.thresholds, DEFAULT_THRESHOLDS);
 
-  const branch = await Branch.findById(branchId).select("name").lean();
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { name: true },
+  });
   const branchName = branch?.name || "Filial";
 
   const signals = await collectFinanceSignals(branchId, now);
@@ -502,7 +435,6 @@ export const recomputeFinanceInsights = async (branchId, now = new Date()) => {
   for (const { stat, found } of candidates) {
     if (!found) continue;
     await writeIfConfident({
-      // Filial darajasidagi insight - subyekt filialning O'ZI.
       candidate: buildInsight({ branchId, subjectId: branchId, now, ...found }),
       confidenceFloor: config.confidenceFloor,
       stats: stats[stat],
@@ -511,9 +443,6 @@ export const recomputeFinanceInsights = async (branchId, now = new Date()) => {
     stillOpen.add(`${found.kind}`);
   }
 
-  // Yopish: bu yerda subyekt bo'yicha emas, TUR bo'yicha yopiladi -
-  // filialda har turdan bitta insight bo'ladi, shuning uchun "endi
-  // signal bermayotgan turlar" yopilishi kerak.
   const closedKinds = FINANCE_KINDS.filter((k) => !stillOpen.has(k));
   for (const kind of closedKinds) {
     const closed = await closeStale(branchId, [kind], new Set(), now);

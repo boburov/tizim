@@ -13056,3 +13056,601 @@ Endi ikkalasini birga ko'chiraman (ular bog'liq). Avval statuslarni model faylid
 <sub>session `c49e703c` · branch `main` · 66 ta qadam</sub>
 
 ---
+
+## 2026-08-17 13:48 — qolgan qsimimlarini ham to'liq postgres ga otkazib bering
+
+**So'rov**
+
+> qolgan qsimimlarini ham to'liq postgres ga otkazib bering
+
+**O'zgargan fayllar (3)**
+
+- `server/src/modules/adminDashboard/services/studentStats.service.js` — yaratildi/qayta yozildi
+- `server/src/constants/storage.js` — yaratildi/qayta yozildi
+- `server/src/modules/storage/handlers/getSettings.handler.js` — tahrirlandi
+
+**Buyruqlar (40)**
+
+```sh
+python3 - <<'PY' p="src/modules/adminDashboard/services/retention.service.js" s=open(p).read() s=s.replace('''import GroupMembership from "../../../models/group…
+cd /Users/shukrullo/Desktop/lc-total/server && python3 - <<'PY' p="src/modules/adminDashboard/services/retention.service.js" s=open(p).read() s=s.replace('''imp…
+node --check src/modules/adminDashboard/services/studentStats.service.js && sleep 3; TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Ty…
+cd /Users/shukrullo/Desktop/lc-total/server && TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"ow…
+node -e " import('./src/config/prisma.js').then(async({default:p})=>{ const s=await p.user.findMany({where:{role:'student'},select:{username:true,isActive:true,…
+node -e " import('./src/config/prisma.js').then(async({default:p})=>{ const now=new Date(); const enrolled=new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMon…
+node -e " import('./src/config/prisma.js').then(async({default:p})=>{ const r=await p.user.deleteMany({where:{username:'zz_probe_stats'}}); console.log('tozalan…
+grep -n "model StorageSettings" -A 16 prisma/schema.prisma; echo "--- StoredFile ---"; grep -n "model StoredFile" -A 20 prisma/schema.prisma; echo "--- Assignme…
+python3 - <<'PY' p="src/modules/storage/services/storageAdmin.service.js" s=open(p).read() s=s.replace('''import StoredFile from "../../../models/storedFile.mod…
+sleep 3; TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3…
+TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3 -c "impo…
+grep -rn "\.toJSON()\|\.save()\|\.lean()\|\.populate(" src/modules/storage/ src/modules/activityLogs/ src/modules/adminDashboard/ src/modules/search/ src/module…
+python3 - <<'PY' p="src/modules/storage/handlers/updateSettings.handler.js" s=open(p).read() s=s.replace("data: { ...settings.toJSON(), nextRunAt: admin.nextRun…
+grep -n "models/\|\.find(\|\.aggregate(\|\.countDocuments(\|\.findOne(\|\.findById(" src/modules/ledger/services/ledger.service.js | head -20; echo "=== import …
+sed -n '130,180p' src/modules/ledger/services/ledger.service.js
+grep -n "toObjectId\|notDeleted =" -A 4 src/modules/ledger/services/ledger.service.js | head -20; echo "=== 245-330 ==="; sed -n '245,270p' src/modules/ledger/s…
+sed -n '390,420p' src/modules/ledger/services/ledger.service.js; echo "=== maydon nomlari schema'da ==="; for m in StudentPayment PaymentTransaction DepositTran…
+python3 - <<'PY' p="src/modules/ledger/services/ledger.service.js" s=open(p).read() s=s.replace('''import mongoose from "mongoose"; import User from "../../../m…
+grep -n "\.group\b\|p.group\|s.group\|_id" src/modules/ledger/services/ledger.service.js | head -12
+python3 - <<'PY' import re p="src/modules/ledger/services/ledger.service.js" s=open(p).read() # Har bir `select: {` blokiga `id: true` qo'shamiz (hali yo'q bo'l…
+node -e " import('./src/config/prisma.js').then(async({default:p})=>{ const s=await p.user.findFirst({where:{role:'student'},select:{id:true}}); console.log('st…
+sed -n '1,25p' src/modules/grades/services/grades.service.js; echo "=== so'rovlar ==="; grep -n "Grade\.\|User\.\|Group\.\|GroupMembership\.\|RatingSettings\." …
+sed -n '40,80p' src/modules/grades/services/grades.service.js; echo "=== 165-260 ==="; sed -n '165,260p' src/modules/grades/services/grades.service.js
+grep -n "model Grade" -A 26 prisma/schema.prisma; echo "=== runWithSession ==="; grep -rn "runWithSession" src/modules/grades/services/grades.service.js src/hel…
+sed -n '100,120p' src/modules/grades/services/grades.service.js; echo "=== 265-300 ==="; sed -n '265,300p' src/modules/grades/services/grades.service.js; echo "…
+# … yana 15 ta
+```
+
+**Natija**
+
+Davom etaman. Avval rahbariyat panelida ko'rinadigan uchta endpoint — `student-stats`, `retention`, `churned-students`:
+
+`$dateDiff` va `$group` bor — birinchisi JS'da, ikkinchisi raw SQL bilan:
+
+`enrolledAt: null` — filtr to'g'ri ishlayapti. Raw SQL yo'lini vaqtinchalik yozuv bilan tekshiraman:
+
+79% (46/58). Rahbariyat paneli endi to'liq. Keyingisi — `storage` (sozlamalar + fayllar):
+
+Konstantalarni model faylidan chiqarib, servisni ko'chiraman:
+
+83% (48/58). Keyingisi — `ledger` (o'quvchi hisob varaqasi):
+
+`refId` uchun `id` kerak — `select` larga qo'shib, `._id` ni tuzataman:
+
+84% (49/58). Keyingisi — `grades` va reyting:
+
+Endi `grades` servisini ko'chiraman — eng nozik joyi qisman unique indeks (Prisma `upsert` ishlamaydi):
+
+Endi `rating.service.js`:
+
+`grades/rating` 200 berdi, lekin bu yolg'on ijobiy bo'lishi mumkin — u `attendance.service` ga tayanadi. Tekshiraman:
+
+`rating` `attendance.service` ga tayanadi va a'zolik bo'lmagani uchun erta qaytyapti — ya'ni bu yolg'on ijobiy. Zondda buni belgilab qo'yaman:
+
+Yakuniy tekshiruv — regressiya bormi:
+
+86% (51/59), barcha 271 ta mavjud test o'tdi, regressiya yo'q. Bu seansda bajarilgan ish:
+
+## Ko'chirilgan modullar (74% → **86%**)
+
+| Modul | Nozik joyi |
+|---|---|
+| `admin-dashboard/student-stats` | `$dateDiff` → JS (Mongo **kun**ni hisobga olmaydi, faqat oy chegarasini — formula shunga moslandi); `$group` yil/oy bo'yicha → `$queryRaw` + `EXTRACT` |
+| `admin-dashboard/retention` | `teachers` massivi → `{id}` obyektlari; `leftAt` da `not: null` va oraliq **bir obyektda** |
+| `admin-dashboard/churned-students` | `_id` → `id`, populate → `select` |
+| `storage/settings` + `storage/files` | `findOneAndUpdate(upsert)` → `upsert`; `file` → `fileId` |
+| `ledger` | 8 ta jadval, `student/teacher/employee/user` → `...Id`; `refId` 
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 50 ta qadam</sub>
+
+---
+
+## 2026-08-17 14:07 — hamma hatoliklarni to'grlab qolgan qisimlarni ham to'liq postgresqlga 
+
+**So'rov**
+
+> hamma hatoliklarni to'grlab qolgan qisimlarni ham to'liq postgresqlga otkazing prisma bilan
+
+**Buyruqlar (42)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "^export const\|^const .* = async\|^const .* =>" src/modules/attendance/services/attendance.service.js | …
+sed -n '31,70p' src/modules/attendance/services/attendance.service.js; echo "=== 95-135 ==="; sed -n '95,135p' src/modules/attendance/services/attendance.servic…
+grep -n "loadExemptionsWithFreezes" -A 20 src/helpers/studentFreeze.helper.js | head -28
+sed -n '290,350p' src/modules/attendance/services/attendance.service.js
+sed -n '350,430p' src/modules/attendance/services/attendance.service.js
+python3 - <<'PY' p="src/modules/attendance/services/attendance.service.js" s=open(p).read() s=s.replace('''import mongoose from "mongoose"; import Attendance fr…
+python3 - <<'PY' p="src/modules/attendance/services/attendance.service.js" s=open(p).read() # ── runWithSession -> $transaction ── start=s.index("const runWithS…
+grep -n "Attendance\.\|GroupMembership\.\|^\s*Group\.\|[^a-z]Group\.find\|User\.find" src/modules/attendance/services/attendance.service.js
+sed -n '466,485p;530,600p' src/modules/attendance/services/attendance.service.js
+python3 - <<'PY' p="src/modules/attendance/services/attendance.service.js" s=open(p).read() # ── notifyConsecutiveAbsences ── s=s.replace(''' User.find({ _id: {…
+sed -n '708,735p;1040,1095p' src/modules/attendance/services/attendance.service.js
+python3 - <<'PY' import re p="src/modules/attendance/services/attendance.service.js" s=open(p).read() # ── getGroupMonthly ── s=s.replace(''' const memberships …
+sed -n '1155,1172p;1232,1300p;1460,1480p' src/modules/attendance/services/attendance.service.js
+python3 - <<'PY' p="src/modules/attendance/services/attendance.service.js" s=open(p).read() s=s.replace(''' const allAttendances = await Attendance.find({ group…
+grep -n "\$ne\|\$in\|\$or\|\$lte\|\$gte\|\$lt\|_id\|\.student\b\|\.group\b\|toJSON" src/modules/attendance/services/attendance.service.js | grep -v "^\s*[0-9]*:…
+sed -n '165,185p;228,240p;495,505p;610,620p' src/modules/attendance/services/attendance.service.js
+python3 - <<'PY' p="src/modules/attendance/services/attendance.service.js" s=open(p).read() s=s.replace(''' return { student: m.student.toJSON(), attendance: at…
+python3 - <<'PY' import re p="src/modules/attendance/services/attendance.service.js" s=open(p).read() # m.group._id / m.student._id / student._id -> .id (Prisma…
+python3 - <<'PY' p="src/modules/attendance/services/attendance.service.js" s=open(p).read() # 621: `g.group` bu bizning `groups.push({ group: { _id: ... } })` y…
+python3 - <<'PY' p="src/modules/attendance/services/attendance.service.js" s=open(p).read() s=s.replace(''' const membershipsByGroup = groupBy( groupMemberships…
+grep -rn "models/\|mongoose" src/modules/attendance/services/*.js src/modules/grades/services/*.js | grep -v "^.*: *//" | head; echo "--- boshqa fayllar shu ser…
+TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3 -c "impo…
+cat > /tmp/att_fix.mjs <<'EOF' import prisma from "/Users/shukrullo/Desktop/lc-total/server/src/config/prisma.js"; const TAG = "ZZATT"; const branch = await pri…
+python3 -c " import re;s=open('src/modules/attendance/attendance.routes.js').read() print([m for m in re.findall(r'router\.(post|patch|put)\(\s*[\"\']([^\"\']+)…
+grep -n "membershipFilter" -B 6 src/modules/attendance/services/attendance.service.js | head -40
+# … yana 17 ta
+```
+
+**Natija**
+
+Davom etaman. `/attendance` — eng katta va eng muhim fayl (1421 qator), u `grades/rating` ni ham ochadi:
+
+Endi ko'chiraman — importlar, `ensureGroup`, sozlamalar va `bulkRecord`ning yadrosi:
+
+Bazada guruh yo'q — davomatning haqiqiy yo'llarini tekshirish uchun vaqtincha ma'lumot yarataman:
+
+Ro'yxat ishladi (`isClassDay: true` — ya'ni `schedule` include to'g'ri). Endi eng nozik qism — yozish yo'li:
+
+Yozish yo'li to'g'ri ishladi: **1 ta yozuv** (dublikat yo'q) va **2 ta tarix** yozuvi. Endi o'qish yo'llari va bloklangan `rating`:
+
+`present: 0` — lekin biz `present` yozgan edik. Bu jimgina yo'qolish bo'lishi mumkin, tekshiraman:
+
+Topildi — `buildAttBySlot` `a.group` ni o'qiydi, Prisma'da esa `groupId`. Bu **har bir davomat yozuvini jimgina yo'qotardi**:
+
+Davomat to'liq ishlayapti. Test ma'lumotlarini tozalab, umumiy holatni tekshiraman:
+
+Barcha 271 test o'tdi. `MIGRATION.md` ni yangilayman:
+
+88% (52/59), 271 ta test o'tdi, regressiya yo'q.
+
+## Bu seansda ko'chirilganlar
+
+| Modul | Nozik joyi |
+|---|---|
+| `admin-dashboard` ×3 | `$dateDiff` → JS (Mongo **kun**ni sanamaydi, faqat oy chegarasini); `$group` yil/oy → `$queryRaw` + `EXTRACT` |
+| `storage` sozlama + fayllar | `findOneAndUpdate(upsert)` → `upsert`; `file` → `fileId` |
+| `ledger` | 8 jadval; `refId` uchun har `select` ga `id` qo'shildi |
+| `grades` + `rating` | **qisman unique indeks** → `upsert` o'rniga find-then-write + `P2002`; `$push history` → `Json` massiv; `startSession` → haqiqiy `$transaction` |
+| **`attendance`** (1421 qator) | eng kattasi — `schedule` majburiy `include`, `teachers` massivi → `{id}`, tranzaksiya, qisman unique indeks |
+
+## Uchta haqiqiy xato topildi
+
+**1. Davomat jimgina yo'qolardi.** `buildAttBySlot` xarita kalitini `String(a.group)` dan qurardi — Prisma'da bu RELATION, so'ralmasa `undefi
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 51 ta qadam</sub>
+
+---
+
+## 2026-08-17 14:28 — davom eting http://localhost:5173/admin/tahlil bu sahifada ham muamola
+
+**So'rov**
+
+> davom eting  http://localhost:5173/admin/tahlil bu sahifada ham muamolar bor
+
+**Buyruqlar (18)**
+
+```sh
+cat > /tmp/chk.mjs <<'EOF' const { existsSync, readdirSync } = await import("node:fs"); let pw; const npx = `${process.env.HOME}/.npm/_npx`; for (const d of rea…
+grep -n "^import\|models/" src/modules/ai/services/briefing.service.js | head -20; echo "=== briefing so'rovlari ==="; grep -n "Insight\.\|AiRun\.\|AiReport\.\|…
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "^import\|models/" src/modules/ai/services/briefing.service.js | head -20; echo "=== so'rovlar ==="; grep…
+sed -n '280,300p;640,665p' src/modules/ai/services/briefing.service.js; echo "=== Branch ishlatilishi ==="; grep -n "Branch\." src/modules/ai/services/briefing.…
+python3 - <<'PY' p="src/modules/ai/services/briefing.service.js" s=open(p).read() s=s.replace('''import Insight from "../../../models/insight.model.js"; import …
+sed -n '1,45p' src/modules/ai/signals/finance.signal.js
+sed -n '45,200p' src/modules/ai/signals/finance.signal.js
+sed -n '200,300p' src/modules/ai/signals/finance.signal.js
+python3 - <<'PY' p="src/modules/ai/signals/finance.signal.js" s=open(p).read() s=s.replace('''import mongoose from "mongoose"; import StudentPayment from "../..…
+python3 - <<'PY' p="src/modules/ai/signals/finance.signal.js" s=open(p).read() # ── overdueSignal ── s=s.replace(''' const rows = await StudentPayment.aggregate…
+python3 - <<'PY' p="src/modules/ai/signals/finance.signal.js" s=open(p).read() s=s.replace(''' const _unusedGroup = { $group: { _id: null, expected: { $sum: "$e…
+sed -n '320,370p' src/modules/ai/signals/finance.signal.js
+python3 - <<'PY' p="src/modules/ai/signals/finance.signal.js" s=open(p).read() s=s.replace(''' const [inRows, outRows] = await Promise.all([ PaymentTransaction.…
+grep -n "models/\|mongoose\|branchMatchStage\|aggregate(" src/modules/ai/signals/finance.signal.js
+sed -n '1,20p' src/modules/ai/signals/pulse.signal.js; echo "=== aggregate joylari ==="; grep -n "\.aggregate(\|\.find(\|\.countDocuments(\|\.distinct(" src/mod…
+sed -n '105,175p' src/modules/ai/signals/pulse.signal.js
+sleep 3; node tests/migrationProbe.mjs --before /tmp/baseline.json 2>&1 | grep -E "❗|⛔|──|REGRESSIYA"; echo; echo "=== regressiya ==="; for t in branch-cross in…
+python3 - <<'PY' p="MIGRATION.md" s=open(p).read() anchor = "### `attendance` ko'chirilganda topilgan JIMGINA YO'QOLISH" add = """### `/ai` zanjiri — QISMAN ko'…
+```
+
+**Natija**
+
+Avval `/admin/tahlil` dagi muammoni ko'raman:
+
+Sahifaning o'zi to'g'ri ishlayapti (`Manba ulanmagan`, toast yo'q, JS xatosi yo'q) — muammo shundaki, **AI moduli hali ko'chirilmagan**. Uni ko'chiraman:
+
+`/admin/tahlil` zanjiri: `briefing` → `pulse` + `finance` + `health` signallari. Ularni ketma-ket ko'chiraman:
+
+Endi `finance.signal.js` ni to'liq ko'chiraman — 8 ta aggregate raw SQL va `groupBy` ga:
+
+Faqat izohlar qoldi. Endi `pulse` va `health` signallari:
+
+`/admin/tahlil` sahifasining o'zi to'g'ri ishlayapti — brauzerda tekshirdim: "Manba ulanmagan" holati, toast yo'q, JS xatosi yo'q, gorizontal toshish 0px. Muammo sahifada emas: **`/ai` moduli hali ko'chirilmagan**, shuning uchun ko'rsatadigan ma'lumoti yo'q.
+
+## AI zanjirini boshladim
+
+`/admin/tahlil` → `/ai/briefing` → signallar zanjiri. Ikkitasi tugadi:
+
+- **`briefing.service.js`** ✅ — `Insight`, `AiRun`, `Branch` so'rovlari
+- **`finance.signal.js`** ✅ — 8 ta aggregate quvuri ko'chdi:
+  - yil/oy bo'yicha `$group` → `$queryRaw` + `EXTRACT` (Prisma `groupBy` sana **qismlari** bo'yicha guruhlay olmaydi)
+  - `$expr: { $gt: ["$expectedAmount", "$paidAmount"] }` — **ikki ustunni** solishtirish, Prisma `where` da mumkin emas → xom SQL
+  - `$addToSet: "$student"` + `.length` → `COUNT(DISTINCT "studentId")` (massivni tashib kelmasdan)
+  - `expectedImpact.amount` (ichma-ich obyekt) → `expectedImpactAmount` (tekis ustun)
+
+Yo'lda muhim narsa aniqlandi va hujjatga yozdim: **`branchMatchStage()` xom SQL'da ishlamaydi**. U Mongo quvuriga `...spread` qilinardi, endi esa Prisma shaklini qaytaradi — shuning uchun har signal fayliga `rawBranchClause()` kerak, va u **fail-closed** bo'lishi shart (bo'sh ro'yxat → `AND FALSE`), aks holda filialga biriktirilmagan xodim hamma narsani ko'rib qolardi.
+
+## Nega `/ai/briefing` hali ham 501
+
+
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 18 ta qadam</sub>
+
+---
+
+## 2026-08-17 14:37 — backgrouddagi server va clientlarni toxtating
+
+**So'rov**
+
+> backgrouddagi server va clientlarni toxtating
+
+**Buyruqlar (5)**
+
+```sh
+ps aux | grep -Ei "node|vite|nodemon|npm|next|pnpm|yarn" | grep -v grep
+lsof -nP -iTCP -sTCP:LISTEN | head -50
+ps -o pid,ppid,lstart,command -p 18288,75957,75936,77411,77432,53073,53096 2>/dev/null; echo "--- cwd 18288 ---"; lsof -a -p 18288 -d cwd -Fn 2>/dev/null | tail…
+kill 75936 75957 18288 53073 53096 53097 77411 77432 77433 2>/dev/null; sleep 2; ps -p 75936,75957,18288,53073,53096,53097,77411,77432,77433 -o pid,command 2>/d…
+echo "=== qolgan lc-total jarayonlari ==="; ps aux | grep -i "lc-total" | grep -v grep || echo "yo'q"; echo; echo "=== portlar ==="; lsof -nP -iTCP:5000,5173,51…
+```
+
+**Natija**
+
+I'll find and stop the background server/client processes.
+
+lc-total ga tegishli 3 ta daraxt topildi (MinderWeb'ga tegmayman):
+
+<sub>session `1df39bd4` · branch `main` · 5 ta qadam</sub>
+
+---
+
+## 2026-08-17 14:41 — qaysi qisimlar qoldi
+
+**So'rov**
+
+> qaysi qisimlar qoldi
+
+**Buyruqlar (4)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && node tests/migrationProbe.mjs 2>&1 | tail -14
+node /tmp/inv.mjs 2>&1 | tail -45
+node /tmp/inv.mjs 2>&1 | head -12; echo; echo "=== GURUHLAB ==="; node /tmp/inv.mjs 2>&1 | grep -E "^\s+[0-9]" | awk '{ f=$4; if (f ~ /^modules\/ai\//) g="AI"; …
+node /tmp/inv.mjs 2>&1 | head -10; echo; node /tmp/inv.mjs 2>&1 | grep -E "^ +[0-9]" > /tmp/rows.txt; python3 - <<'PY' import re groups={} for line in open("/tm…
+```
+
+**Natija**
+
+Aniq holat — **88% tugadi (52/59 endpoint), 7 tasi qoldi**:
+
+## Foydalanuvchi ko'radigan 7 endpoint
+
+| Bo'lim | Fayl | So'rov | Agg | Nima ishlamaydi |
+|---|---|---|---|---|
+| **AI / Tahlil markazi** | 19 | 98 | 44 | `/admin/tahlil`, brifing, tavsiyalar, hisobotlar |
+| **Bildirishnomalar** | 2 | 32 | 2 | `/notifications` — yuborish va inbox |
+| **Import** | 10 | 31 | 0 | Excel'dan o'quvchi/to'lov yuklash |
+| **Vazifalar** | 1 | 27 | 1 | `/assignments` — matn + fayl |
+| **Murojaatlar** | 1 | 15 | 2 | `/feedback` |
+| **Faoliyat tarixi** | 1 | 14 | 0 | O'quvchi/guruh tarixi |
+
+## Foydalanuvchi ko'rmaydigan, lekin ishlamaydigan
+
+| Bo'lim | Fayl | So'rov | Oqibati |
+|---|---|---|---|
+| **Joblar (fon)** | 6 | 18 | Jadval bo'yicha ishga tushib **yiqiladi** — ertalabki AI hisoboti, dars eslatmalari, davomat eslatmalari |
+| **Telegram bot** | 4 | 19 | Bot orqali kirish va xabar yuborish |
+| **Davomat middleware** | 1 | 6 | `attendanceScope.js` — o'qituvchi ko'lami |
+
+**Jami: 45 fayl, 260 so'rov, 50 aggregate quvuri.** Ishning **~40%i AI modulida**.
+
+---
+
+Ikki narsani aniq aytib qo'yay:
+
+**1.** `attendanceScope.js` ro'yxatda qolgan — u birinchi workflow to'plamida edi, workflow esa yiqildi. `/attendance` endpointlari ishlayapti, lekin bu middleware o'qituvchi so'rovi yo'lida ishlatiladi, ya'ni o'qituvchi hisobidan kirilganda hali 501 berishi mumkin.
+
+**2.** Seedlar (25 fayl, 120 so'rov) bu ro'yxatda **yo'q** va ataylab shunday — ular bir martalik skriptlar, ishlash yo'lida emas. Ko'chirish tugagach `src/models/` (74 fayl) va `mongoose` paketining o'zi ham o'chiriladi.
+
+Tartib bo'yicha taklifim: `attendanceScope` (kichik, xavfsizlik yo'lida) → `feedback` + `activityHistory` (o'rtacha) → `notifications` + `assignments` (katta, lekin aggregate kam) → `imports` → `AI` (eng og'ir, `pu
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 4 ta qadam</sub>
+
+---
+
+## 2026-08-17 15:07 — ushbu endpointlarni fix qiling
+
+**So'rov**
+
+> ushbu endpointlarni fix qiling
+
+**Buyruqlar (27)**
+
+```sh
+python3 - <<'PY' p="src/middleware/attendanceScope.js" s=open(p).read() s=s.replace('''import Group from "../models/group.model.js"; import GroupMembership from…
+cd /Users/shukrullo/Desktop/lc-total/server && python3 - <<'PY' p="src/middleware/attendanceScope.js" s=open(p).read() s=s.replace('''import Group from "../mode…
+sed -n '1,20p' src/modules/feedback/services/feedback.service.js; echo "=== so'rovlar ==="; grep -n "Feedback\.\|User\.\|FeedbackType\." src/modules/feedback/se…
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n '1,18p' src/modules/feedback/services/feedback.service.js && echo "=== so'rovlar ===" && grep -n "Feedback…
+sed -n '20,70p;95,160p' src/modules/feedback/services/feedback.service.js
+sed -n '70,95p;175,300p' src/modules/feedback/services/feedback.service.js
+python3 - <<'PY' p="src/modules/feedback/services/feedback.service.js" s=open(p).read() s=s.replace('''import mongoose from "mongoose"; import Feedback from "..…
+sed -n '14,24p' src/modules/feedback/services/feedback.service.js
+python3 - <<'PY' p="src/modules/feedback/services/feedback.service.js" s=open(p).read() s=s.replace('const GROUP_PROJECTION = { name: 1 };','const GROUP_SELECT …
+python3 - <<'PY' p="src/modules/feedback/services/feedback.service.js" s=open(p).read() LOAD = ''' const doc = await prisma.feedback.findUnique({ where: { id: S…
+python3 - <<'PY' p="src/modules/feedback/services/feedback.service.js" s=open(p).read() s=s.replace(''' if (fromDate || toDate) { range.createdAt = {}; if (from…
+sed -n '345,360p' src/modules/feedback/services/feedback.service.js
+grep -rn "from \"@/modules/feedback\|feedback.service.js\"" src/ --include="*.js" | head -3; echo "--- mongoose eksporti ishlatiladimi ---"; grep -rn "mongoose …
+python3 - <<'PY' p="src/modules/feedback/services/feedback.service.js" s=open(p).read() s=s.replace('''// Mongo session yordamchisi (kelajakda kerak bo'lishi mu…
+sed -n '336,352p' src/modules/feedback/services/feedback.service.js; echo "=== notifyStatusChangeAsync doc maydonlari ==="; grep -n "notifyStatusChangeAsync" -A…
+sed -n '176,200p' src/modules/feedback/services/feedback.service.js
+python3 - <<'PY' p="src/modules/feedback/services/feedback.service.js" s=open(p).read() s=s.replace('''const notifyStatusChangeAsync = async (feedback, action, …
+TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3 -c "impo…
+node tests/migrationProbe.mjs 2>&1 | grep -E "⛔|──" -A 8 | head -12; echo; sed -n '1,15p' src/modules/activityHistory/services/activityHistory.service.js; echo …
+sed -n '65,80p;260,300p;310,355p' src/modules/activityHistory/services/activityHistory.service.js
+python3 - <<'PY' p="src/modules/activityHistory/services/activityHistory.service.js" s=open(p).read() s=s.replace('''import User from "../../../models/user.mode…
+python3 - <<'PY' import re p="src/modules/activityHistory/services/activityHistory.service.js" s=open(p).read() # Ref quruvchilar: Prisma obyektlaridan `_id` sh…
+python3 - <<'PY' import re p="src/modules/activityHistory/services/activityHistory.service.js" s=open(p).read() s=re.sub(r'\$\{(tp|group)\._id\}', r'${\1.id}', …
+grep -n "freezeEvents(\|membershipEvents(\|paymentEvents(\|writeOffEvents(" src/modules/activityHistory/services/activityHistory.service.js | head -10; echo "==…
+node tests/migrationProbe.mjs --before /tmp/baseline.json 2>&1 | grep -E "⛔|──" -A 7 | head -10; echo; echo "=== regressiya ==="; for t in branch-cross invarian…
+# … yana 2 ta
+```
+
+**Natija**
+
+Endi `feedback` (15 so'rov, 2 aggregate):
+
+Murojaat turlari bazada yo'q, shuning uchun yozish yo'lini haqiqiy ma'lumot bilan sinay olmadim (o'qish yo'llari 200). Keyingisi — `activityHistory`:
+
+`activity-history` zondda yo'q edi — qo'shib, o'lchovni to'g'rilayman:
+
+**90% (54/60)**, regressiyasiz. Bu navbatda to'rttasi tugadi:
+
+| Modul | Nozik joyi |
+|---|---|
+| `attendanceScope` middleware | `teachers: id` → `some` relation filtri; `branchAssignments` majburiy `select` — aks holda ikkinchi filialga biriktirilgan o'quvchi "begona" deb rad etilardi |
+| `feedback` | `$lookup` → ikkinchi so'rov; `$regex`+`escapeRegex` → `contains` |
+| `activityHistory` | 9 ta jadval, hammasi `student/group/teacher/user` → `...Id` |
+| `briefing` + `finance.signal` (AI) | 8 aggregate → raw SQL |
+
+## Yo'l-yo'lakay tuzatilgan ikki xato
+
+**1. Murojaat muallifi xabar olmay qolardi.** `notifyStatusChangeAsync` `feedback.author` ni tekshirardi, lekin unga `prisma.update` natijasi keladi — u RELATION'ni o'z ichiga olmaydi (`include` berilmagan). Shart **har doim `false`** chiqib, holat o'zgarganda muallifga bildirishnoma **hech qachon ketmasdi**. `authorId` ga o'zgartirdim.
+
+**2. `export { mongoose }`** — "kelajakda kerak bo'lishi mumkin" deb qoldirilgan, lekin hech qayerda import qilinmagan o'lik eksport. Prisma'ga o'tgach u butun modulni yiqitardi. O'chirdim.
+
+Shuningdek `escapeRegex` ni olib tashladim: Prisma `contains` xom satrni qidiradi va LIKE belgilarini o'zi ekranlaydi, ya'ni eski funksiya endi hech nimadan himoya qilmasdi — faqat qidiruv matnini buzardi ("C++" izlagan odam hech narsa topmasdi).
+
+## Zondni ham tuzatdim
+
+`activity-history` o'lchovda umuman yo'q edi — endi bor (zond o'quvchi ID'sini o'zi topadi). Shu sababdan maxraj 59 dan 60 ga o'zgardi.
+
+## Qolgani — 6 endpoint
+
+`/ai/*` (17
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 30 ta qadam</sub>
+
+---
+
+## 2026-08-17 15:17 — tizim tahlili hali ham ishlamayapti
+
+**So'rov**
+
+> tizim tahlili hali ham ishlamayapti
+
+**O'zgargan fayllar (1)**
+
+- `server/src/constants/ai.js` — yaratildi/qayta yozildi
+
+**Buyruqlar (39)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n '175,270p' src/modules/ai/signals/pulse.signal.js
+sed -n '270,340p' src/modules/ai/signals/pulse.signal.js
+python3 - <<'PY' p="src/modules/ai/signals/pulse.signal.js" s=open(p).read() s=s.replace('''import mongoose from "mongoose"; import Group, { GROUP_DAYS } from "…
+grep -n "Group\.\|Attendance\.\|Lead\.\|StudentPayment\.\|Insight\.\|GroupMembership\." src/modules/ai/signals/pulse.signal.js; echo "=== 380-440 ==="; sed -n '…
+sed -n '305,375p' src/modules/ai/signals/pulse.signal.js
+python3 - <<'PY' p="src/modules/ai/signals/pulse.signal.js" s=open(p).read() GSEL = ''' // `schedule` ALOHIDA JADVAL: Mongo'da guruh hujjati ichidagi // massiv …
+python3 - <<'PY' p="src/modules/ai/signals/pulse.signal.js" s=open(p).read() s=s.replace(''' StudentPayment.aggregate([ ...branchMatchStage(), { $match: { year:…
+sed -n '494,530p' src/modules/ai/signals/pulse.signal.js
+python3 - <<'PY' p="src/modules/ai/signals/pulse.signal.js" s=open(p).read() s=s.replace(''' const groups = await Group.find({ ...branchFilter(), isDeleted: fal…
+grep -n "models/\|mongoose\|branchMatchStage\|\.aggregate(" src/modules/ai/signals/pulse.signal.js | grep -v "// " | head -3; echo "=== health.signal ==="; sed …
+sed -n '44,52p' src/modules/ai/signals/pulse.signal.js; echo "=== toId ishlatiladimi ==="; grep -n "toId(" src/modules/ai/signals/pulse.signal.js | head
+python3 - <<'PY' p="src/modules/ai/signals/pulse.signal.js" s=open(p).read() s=s.replace('''const DAY_MS = 24 * 60 * 60 * 1000; const toId = (v) => new mongoose…
+grep -rn "toId } from.*pulse\|toId }" src/modules/ai/ | head -3; python3 - <<'PY' p="src/modules/ai/signals/pulse.signal.js" s=open(p).read() s=s.replace("expor…
+python3 - <<'PY' p="src/modules/ai/signals/health.signal.js" s=open(p).read() s=s.replace('''import User from "../../../models/user.model.js"; import Lead from …
+python3 - <<'PY' p="src/modules/ai/signals/health.signal.js" s=open(p).read() s=s.replace(''' const withUserBranch = (base) => (userCond ? { $and: [base, userCo…
+grep -n "openCounts" -A 22 src/modules/ai/services/recompute.service.js | head -28; echo "=== AI_ENGINE_VERSION ==="; grep -n "AI_ENGINE_VERSION" src/models/aiC…
+sed -n '97,120p' src/modules/ai/services/recompute.service.js; echo "=== Branch/AiRun ishlatilishi ==="; grep -n "Branch\.\|AiRun\." src/modules/ai/services/rec…
+sed -n '120,140p;210,225p' src/modules/ai/services/recompute.service.js; echo "=== AiRun schema ==="; grep -n "model AiRun" -A 20 prisma/schema.prisma | head -2…
+grep -n "run\." src/modules/ai/services/recompute.service.js | head -10; echo "=== AI_ENGINE_VERSION konstantasi ==="; grep -rn "AI_ENGINE_VERSION" src/ --inclu…
+python3 - <<'PY' p="src/modules/ai/services/recompute.service.js" s=open(p).read() s=s.replace('''import Branch from "../../../models/branch.model.js"; import I…
+python3 - <<'PY' p="src/modules/ai/services/recompute.service.js" s=open(p).read() s=s.replace(''' run.status = "failed"; run.finishedAt = new Date(); run.durat…
+grep -n "models/" src/modules/ai/services/recompute.service.js; sed -n '95,185p' src/modules/ai/services/insightWriter.service.js
+grep -n "expectedImpact\b" -B2 -A6 src/modules/ai/services/insightWriter.service.js | head -20; echo "=== toId ==="; grep -n "toId" src/modules/ai/services/insi…
+python3 - <<'PY' p="src/modules/ai/services/insightWriter.service.js" s=open(p).read() s=s.replace('''import Insight from "../../../models/insight.model.js"; im…
+grep -n "models/\|mongoose" src/modules/ai/services/insightWriter.service.js | head -2; node /tmp/chk.mjs 2>&1 | sed -n '1,20p'
+# … yana 14 ta
+```
+
+**Natija**
+
+Ha — AI zanjiri hali tugamagan. `pulse.signal.js` uni to'sib turibdi, uni tugataman:
+
+Endi `periodPulse` ning barcha 8 aggregate'ini raw SQL'ga o'giraman:
+
+`/ai/briefing` **200 qaytardi**. Brauzerda tekshiraman:
+
+Sahifa jonlandi — KPI'lar, salomatlik balli, brifing chiqdi. Ikki endpoint qoldi: `/ai/insights` va `/ai/reports/latest`:
+
+`/ai/insights` va `/ai/action-center` ham ishladi. Oxirgi biri — hisobotlar:
+
+Barcha AI endpointlari ishladi. Brauzerda yakuniy tekshiruv:
+
+**Tizim tahlili endi ishlayapti.** Brauzerda tasdiqladim: brifing, salomatlik balli, KPI'lar, tavsiyalar — hammasi chiqyapti. Barcha `/ai/*` so'rovlari **200**, JS xatosi yo'q, toast yo'q.
+
+## AI zanjiri to'liq ko'chdi
+
+| Fayl | Nozik joyi |
+|---|---|
+| `pulse.signal.js` | 11 aggregate → `FILTER (WHERE ...)` bilan raw SQL; `$addToSet` → `ARRAY_AGG(DISTINCT)` |
+| `health.signal.js` | `$and` → `AND` — `userBranchCondition()` Prisma shaklini qaytaradi, `$and` ichida u **jimgina e'tiborsiz qolardi** (filial filtri umuman qo'llanmasdi) |
+| `recompute.service.js` | `run.save()` → `update`; `groupBy` ikki ustun bo'yicha |
+| `insightWriter.service.js` | `expectedImpact` obyekti → uchta tekis ustun (yoyish **bitta** nuqtada) |
+| `insight.service.js` | `acknowledgedBy` → `acknowledgedById`; `upsert` owner'ning "ko'rdim" belgisiga tegmaydi |
+| `report.service.js` | `select("-sections")` → `omit`; `findOneAndUpdate(upsert)` → `upsert` (kalit **to'liq** unique, qisman emas) |
+
+Yo'lda ikkita o'lik kod topildi va o'chirildi: `export { toId }` (Mongo ObjectId yasovchi, hech qayerda import qilinmagan) va `export { mongoose }` — ikkalasi ham Prisma'ga o'tgach modulni yiqitardi.
+
+`AI_ENGINE_VERSION` ni model faylidan `constants/ai.js` ga chiqardim (4 ta servis ishlatadi) — model fayllari ko'chirish tugagach o'chiriladi.
+
+
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 40 ta qadam</sub>
+
+---
+
+## 2026-08-17 19:23 — tuzatishda davom eting
+
+**So'rov**
+
+> tuzatishda davom eting
+
+**Buyruqlar (14)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n '1,25p' src/modules/notifications/services/notifications.service.js; echo "=== so'rov joylari ==="; grep -…
+for f in history.list commit jobStatus createRows options; do echo "--- $f ---"; grep -n "models/\|ImportJob\.\|\.find(\|\.create(\|\.countDocuments(" src/modul…
+sed -n '1,45p' src/modules/imports/handlers/history.list.handler.js
+python3 - <<'PY' p="src/modules/imports/handlers/history.list.handler.js" s=open(p).read() s=s.replace('''import ImportJob from "../../../models/importJob.model…
+sed -n '10,20p' src/modules/imports/handlers/jobStatus.handler.js; echo "--- commit ---"; sed -n '15,40p' src/modules/imports/handlers/commit.handler.js; echo "…
+python3 - <<'PY' # ── jobStatus ── p="src/modules/imports/handlers/jobStatus.handler.js" s=open(p).read() s=s.replace('import ImportJob from "../../../models/im…
+sed -n '45,95p' src/modules/imports/handlers/createRows.handler.js
+python3 - <<'PY' import re p="src/modules/imports/handlers/createRows.handler.js" s=open(p).read() s=s.replace('import ImportJob from "../../../models/importJob…
+sleep 3; TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3…
+sed -n '1,20p' src/modules/assignments/services/assignments.service.js; echo "=== so'rovlar ==="; grep -n "Assignment\.\|AssignmentRecipient\.\|User\.\|Group\.\…
+for t in branch-cross invariants users-prisma groups-chain salary-chain staff-payroll expenses-chain branch-analytics; do printf "%-18s " "$t"; npm run "test:$t…
+node -e " import('./src/config/prisma.js').then(async({default:p})=>{ const b=await p.branch.findMany({select:{name:true,isDeleted:true,isActive:true,createdAt:…
+node -e " import('./src/config/prisma.js').then(async({default:p})=>{ const bs=await p.branch.findMany({where:{name:{startsWith:'Test filial '}},select:{id:true…
+python3 - <<'PY' p="MIGRATION.md" s=open(p).read() a=s.index("Oxirgi o'lchov: **54/60") b=s.index("### `/ai` zanjiri") s = s[:a] + """Oxirgi o'lchov: **58/60 (9…
+```
+
+**Natija**
+
+`notifications` 838 qator — uni yarim qoldirish xavfli. Avval `imports` handlerlarini tugataman (kichik fayllar, aniq natija):
+
+Endi qolgan import handlerlari:
+
+97% (58/60). Ikkitasi qoldi — `assignments` (27 so'rov) dan boshlayman:
+
+`assignments` (660 qator, bot integratsiyasi bilan) va `notifications` (838 qator) qoldi. Ularni yarim qoldirmaslik uchun to'xtatib, holatni mustahkamlayman:
+
+4 ta soft-delete qilingan test filiali qolib ketibdi (brauzer testidan) — tozalayman:
+
+**97% (58/60)**, 271 test o'tdi, regressiya yo'q.
+
+## Bu navbatda
+
+**AI moduli to'liq ochildi** — `/admin/tahlil` brauzerda ishlayapti: brifing, salomatlik balli, KPI'lar, tavsiyalar, hisobotlar. Barcha `/ai/*` so'rovlari 200.
+
+**Import handlerlari** ko'chdi — `/imports/history` va `/imports/*/options` ishlayapti.
+
+## Muhim tuzatish
+
+`imports/history` va `jobStatus` da Mongo `{ rows: 0 }` proyeksiyasi bor edi — Prisma'da uning ekvivalenti `omit`. Buni **saqlab qolish shart edi**: `rows` va `results` ustunlarida butun fayl mazmuni JSON'da yotadi. Ularsiz 500 qatorli import tarixi bir necha megabaytlik javob bo'lardi, `jobStatus` esa ochiq parollarni qaytarardi (fayl izohida aynan shu yozilgan).
+
+## Qolgani — 2 endpoint
+
+- `/notifications` — 838 qator, 28 so'rov
+- `/assignments` — 660 qator, 27 so'rov, Telegram bot integratsiyasi bilan
+
+Ularni boshlamadim: kontekstim ikkalasini oxirigacha olib borishga yetmasdi, yarim ko'chirilgan holda qoldirish esa 501 dan yomonroq — endpoint 200 qaytarib, ichida buzuq ma'lumot berardi.
+
+## Zondda ko'rinmaydigan, lekin qolgan ish
+
+| Bo'lim | Fayl | So'rov |
+|---|---|---|
+| joblar (fon) | 6 | 18 — jadval bo'yicha yiqiladi |
+| Telegram bot | 4 | 19 |
+| import **registri** | importerlar + navbat | 23 |
+| AI qolgan signallari | `student`, `teacher`, `lead`, `course`, `g
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 14 ta qadam</sub>
+
+---
+
+## 2026-08-18 00:12 — men boshqa ai ga ushbu topshiriqni bermoqchiman menga toliq explanitio
+
+**So'rov**
+
+> men boshqa ai ga ushbu topshiriqni bermoqchiman menga toliq explanition ptomtini bering tizimni to'liq fix qilish uchun
+
+**O'zgargan fayllar (1)**
+
+- `server/HANDOFF-PROMPT.md` — yaratildi/qayta yozildi
+
+**Buyruqlar (4)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && node /tmp/inv.mjs 2>&1 | tail -40; echo; node /tmp/inv.mjs 2>&1 | tail -1
+echo "=== KO'CHIRILGAN NAMUNALAR (agentga ko'rsatish uchun) ==="; for f in src/modules/rooms/services/rooms.service.js src/modules/ai/signals/finance.signal.js …
+wc -l HANDOFF-PROMPT.md; echo "--- ichidagi yo'llar mavjudmi ---"; for f in src/modules/rooms/services/rooms.service.js src/modules/branchAnalytics/services/bra…
+cd /Users/shukrullo/Desktop/lc-total/client && for s in test:browser test:browser-create; do grep -q "\"$s\"" package.json || echo "YO'Q (client): $s"; done; gr…
+```
+
+**Natija**
+
+Aniq ma'lumot bilan yozishim uchun avval qolgan ishning hozirgi holatini o'lchayman:
+
+Endi to'liq topshiriq matnini yozaman:
+
+Topshiriq tayyor: [HANDOFF-PROMPT.md](server/HANDOFF-PROMPT.md) — 504 qator. Ichidagi **har bir fayl yo'li, npm skripti va selektor mavjudligini tekshirdim**, hech biri taxmin emas.
+
+## Nima kiritilgan
+
+**1. Vaziyat** — sxema tayyor (78 model), 97% tugagan, `501 MODULE_NOT_MIGRATED` shartnomasi qanday ishlashi. Bu muhim: yangi AI 501 ni "xato" deb o'ylab, uni `try/catch` bilan yopib qo'ymasligi kerak.
+
+**2. Qolgan ish** — 31 fayl, 173 so'rov, 32 aggregate. Har biri **aniq yo'l + so'rov soni + qator soni** bilan, beshta guruhga bo'lingan va bog'liqlik tartibi ko'rsatilgan.
+
+**3. Yettita tuzoq** — bularning har biri shu loyihada **haqiqatan yuz bergan** va **xato bermasdan** noto'g'ri natija bergan. Eng qimmatlisi:
+
+> `String(a.group)` → Prisma'da `group` RELATION, so'ralmasa `undefined`. Xarita kaliti `"undefined|2026-08-17"` bo'lib hech qachon mos kelmasdi. Davomat yozuvlari bazada bor edi, hisobotda esa **butunlay yo'qolardi**: "jami 9 dars, kelgan 0".
+
+**4. Filial ko'lami** — `branchMatchStage()` minasi va `rawBranchClause()` ning **fail-closed** bo'lishi shartligi (bo'sh ro'yxat `AND FALSE`, aks holda biriktirilmagan xodim butun markazni ko'radi).
+
+**5. Namuna fayllar** — yozishdan oldin o'qish uchun yettita ko'chirilgan fayl, har biri qaysi naqshni ko'rsatishi bilan.
+
+**6. Tekshirish** — `200 OK` hech nima isbotlamasligi, yolg'on ijobiy misollari (`/search?q=a`), va 271 ta regressiya tekshiruvi ro'yxati.
+
+**7. O'nta qat'iy taqiq** — jumladan eng muhimi: *faylni yarim ko'chirilgan holda qoldirma, u 501 dan yomonroq.*
+
+## Ikkita narsani alohida ta'kidladim
+
+**Yakuniy tozalashni erta qilmaslik** — `src/models/` va `mongoose` ni faqat 60/60 bo'lg
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 5 ta qadam</sub>
+
+---

@@ -1,7 +1,6 @@
-import Branch from "../../../models/branch.model.js";
-import Insight from "../../../models/insight.model.js";
-import AiReport from "../../../models/aiReport.model.js";
-import { AI_ENGINE_VERSION } from "../../../models/aiConfig.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
+import { AI_ENGINE_VERSION } from "../../../constants/ai.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { parsePagination, buildMeta } from "../../../utils/pagination.js";
@@ -414,25 +413,25 @@ const forecastSection = async (branchId, now) => {
  * ko'rsatmasa, u shunchaki fikr generatori bo'lib qoladi.
  */
 const outcomeSection = async ({ start, end }) => {
-  const rows = await Insight.aggregate([
-    {
-      $match: {
-        ...branchFilter(),
-        resolvedAt: { $gte: start, $lt: end },
-      },
-    },
-    { $group: { _id: { outcome: "$outcome", status: "$status" }, count: { $sum: 1 } } },
-  ]);
+  // Guruhlash IKKI ustun bo'yicha - `insights` jadvalining O'Z ustunlari.
+  const rows = await prisma.insight.groupBy({
+    by: ["outcome", "status"],
+    where: { ...branchFilter(), resolvedAt: { gte: start, lt: end } },
+    _count: { _all: true },
+  });
 
   let prevented = 0;
   let occurred = 0;
   let dismissed = 0;
   let doneByOwner = 0;
   for (const r of rows) {
-    if (r._id.outcome === "prevented") prevented += r.count;
-    if (r._id.outcome === "occurred") occurred += r.count;
-    if (r._id.status === "dismissed") dismissed += r.count;
-    if (r._id.status === "done") doneByOwner += r.count;
+    // `groupBy` natijasida kalitlar `_id` emas, USTUN NOMLARI; sanoq
+    // esa `_count` ichida.
+    const c = r._count._all;
+    if (r.outcome === "prevented") prevented += c;
+    if (r.outcome === "occurred") occurred += c;
+    if (r.status === "dismissed") dismissed += c;
+    if (r.status === "done") doneByOwner += c;
   }
 
   const total = prevented + occurred;
@@ -475,23 +474,22 @@ const outcomeSection = async ({ start, end }) => {
 
 /** Hisobot yopilgan paytdagi ochiq insight kesimi. */
 const insightSnapshot = async () => {
-  const rows = await Insight.aggregate([
-    { $match: { ...branchFilter(), status: { $in: ["open", "acked"] } } },
-    {
-      $group: {
-        _id: { severity: "$severity", stance: "$stance" },
-        count: { $sum: 1 },
-        impact: { $sum: "$expectedImpact.amount" },
-      },
-    },
-  ]);
+  // `expectedImpact.amount` Mongo'da ichma-ich obyekt edi; Prisma'da
+  // tekis ustun: `expectedImpactAmount`.
+  const rows = await prisma.insight.groupBy({
+    by: ["severity", "stance"],
+    where: { ...branchFilter(), status: { in: ["open", "acked"] } },
+    _count: { _all: true },
+    _sum: { expectedImpactAmount: true },
+  });
   const snap = { high: 0, medium: 0, opportunities: 0, impactAtRisk: 0 };
   for (const r of rows) {
-    if (r._id.stance === "opportunity") snap.opportunities += r.count;
+    const c = r._count._all;
+    if (r.stance === "opportunity") snap.opportunities += c;
     else {
-      if (r._id.severity === "high") snap.high += r.count;
-      if (r._id.severity === "medium") snap.medium += r.count;
-      snap.impactAtRisk += r.impact || 0;
+      if (r.severity === "high") snap.high += c;
+      if (r.severity === "medium") snap.medium += c;
+      snap.impactAtRisk += r._sum.expectedImpactAmount || 0;
     }
   }
   return snap;
@@ -569,36 +567,45 @@ export const buildReport = async (branchId, period, now = new Date()) => {
 
   // IDEMPOTENT: bir davr uchun bitta hisobot. Job qayta ishga tushsa
   // (restart, retry) mavjud yozuv YANGILANADI, ikkinchisi yaratilmaydi.
-  const saved = await AiReport.findOneAndUpdate(
-    { branchId, period, periodKey: meta.periodKey },
-    { $set: doc },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
-  );
-  return saved;
+  // `(branchId, period, periodKey)` TO'LIQ unique (qisman emas), ya'ni
+  // Prisma `upsert` to'g'ridan-to'g'ri ishlaydi.
+  const saved = await prisma.aiReport.upsert({
+    where: {
+      branchId_period_periodKey: {
+        branchId: String(branchId),
+        period,
+        periodKey: meta.periodKey,
+      },
+    },
+    create: { ...doc, branchId: String(branchId), period, periodKey: meta.periodKey },
+    update: doc,
+  });
+  return withLegacyId(saved);
 };
 
 /** Barcha faol filiallar uchun berilgan davr hisobotini tuzadi. */
 export const buildReportsForAll = async (period, now = new Date()) => {
-  const branches = await Branch.find({ isActive: true, isDeleted: { $ne: true } })
-    .select("_id name")
-    .lean();
+  const branches = await prisma.branch.findMany({
+    where: { isActive: true, isDeleted: false },
+    select: { id: true, name: true },
+  });
 
   const results = [];
   for (const b of branches) {
     try {
       const report = await runWithBranchContext(
         {
-          branchId: String(b._id),
-          allowedBranchIds: [String(b._id)],
+          branchId: String(b.id),
+          allowedBranchIds: [String(b.id)],
           canSeeAllBranches: false,
           userId: null,
         },
-        () => buildReport(b._id, period, now),
+        () => buildReport(b.id, period, now),
       );
-      results.push({ branchId: String(b._id), name: b.name, periodKey: report.periodKey });
+      results.push({ branchId: String(b.id), name: b.name, periodKey: report.periodKey });
     } catch (err) {
       logger.error({ err, branch: b.name, period }, "AI hisobot tuzilmadi");
-      results.push({ branchId: String(b._id), name: b.name, error: err.message });
+      results.push({ branchId: String(b.id), name: b.name, error: err.message });
     }
   }
   return results;
@@ -611,28 +618,35 @@ export const listReports = async (query = {}) => {
   if (query.period) filter.period = query.period;
 
   const [items, total] = await Promise.all([
-    AiReport.find(filter)
+    prisma.aiReport.findMany({
+      where: filter,
       // Ro'yxatda to'liq bo'limlar kerak emas - faqat sarlavha va xulosa.
-      .select("-sections")
-      .sort({ periodStart: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    AiReport.countDocuments(filter),
+      // Prisma'da `select("-sections")` yo'q; `omit` ayni shu ishni
+      // qiladi va qolgan ustunlar ochiq sanab chiqilmaydi.
+      omit: { sections: true },
+      orderBy: { periodStart: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.aiReport.count({ where: filter }),
   ]);
-  return { items, meta: buildMeta({ page, limit, total }) };
+  return { items: withLegacyIds(items), meta: buildMeta({ page, limit, total }) };
 };
 
 /** Bitta hisobot (to'liq bo'limlar bilan). */
 export const getReport = async (id) => {
-  const doc = await AiReport.findOne({ _id: id, ...branchFilter() }).lean();
+  const doc = await prisma.aiReport.findFirst({
+    where: { id: String(id), ...branchFilter() },
+  });
   if (!doc) throw new ApiError(404, "Hisobot topilmadi");
-  return doc;
+  return withLegacyId(doc);
 };
 
 /** Eng oxirgi hisobot - dashboard "so'nggi hisobot" kartasi uchun. */
 export const latestReport = async (period = "daily") => {
-  return AiReport.findOne({ ...branchFilter(), period })
-    .sort({ periodStart: -1 })
-    .lean();
+  const doc = await prisma.aiReport.findFirst({
+    where: { ...branchFilter(), period },
+    orderBy: { periodStart: "desc" },
+  });
+  return doc ? withLegacyId(doc) : null;
 };

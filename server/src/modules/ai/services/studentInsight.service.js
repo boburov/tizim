@@ -1,8 +1,4 @@
-import mongoose from "mongoose";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
+import prisma from "../../../config/prisma.js";
 import { DEFAULT_THRESHOLDS } from "../../../models/aiConfig.model.js";
 import { ROLES } from "../../../constants/roles.js";
 import { branchMatchStage } from "../../../helpers/branchContext.helper.js";
@@ -29,77 +25,67 @@ import { resolveConfig } from "./aiConfig.service.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Prioritet formulasi, upsert va eskirganni yopish mantiqi
-// insightWriter.service.js ga ko'chirildi - u yerda BARCHA domenlar uchun
-// bitta yo'l bor. Ilgari bu yerda turgan nusxa har yangi detektorda
-// takrorlanardi va ertami-kechmi bittasida noto'g'ri qilinardi.
-
-/** Filialdagi faol o'quvchilar + guruhlari + joriy oy to'lovi. */
 const loadStudents = async (branchId) => {
-  const bid = new mongoose.Types.ObjectId(String(branchId));
-
-  // Filialdagi guruhlar → ular orqali a'zoliklar. Foydalanuvchini
-  // homeBranchId bo'yicha emas, GURUH bo'yicha olamiz: o'quvchi boshqa
-  // filialda ro'yxatdan o'tib, shu filialda o'qiyotgan bo'lishi mumkin,
-  // va AI aynan o'qiyotgan joyiga tegishli.
-  const groups = await Group.find({ branchId: bid, isDeleted: false })
-    .select("_id")
-    .lean();
-  const groupIds = groups.map((g) => g._id);
+  const groups = await prisma.group.findMany({
+    where: { branchId: String(branchId), isDeleted: false },
+    select: { id: true },
+  });
+  const groupIds = groups.map((g) => g.id);
   if (!groupIds.length) return [];
 
-  const memberships = await GroupMembership.find({
-    group: { $in: groupIds },
-    leftAt: null,
-    isDeleted: false,
-  })
-    .select("student group")
-    .lean();
+  const memberships = await prisma.groupMembership.findMany({
+    where: { groupId: { in: groupIds }, leftAt: null, isDeleted: false },
+    select: { studentId: true, groupId: true },
+  });
   if (!memberships.length) return [];
 
   const byStudent = new Map();
   for (const m of memberships) {
-    const sid = String(m.student);
+    const sid = String(m.studentId);
     if (!byStudent.has(sid)) byStudent.set(sid, []);
-    byStudent.get(sid).push(m.group);
+    byStudent.get(sid).push(m.groupId);
   }
 
-  const users = await User.find({
-    _id: { $in: [...byStudent.keys()].map((id) => new mongoose.Types.ObjectId(id)) },
-    role: ROLES.STUDENT,
-    isActive: true,
-    isDeleted: false,
-    // Bitirganlar hisobga olinmaydi - ular "ketmagan", o'qishni tugatgan.
-    completedAt: null,
-  })
-    .select("_id firstName lastName enrolledAt")
-    .lean();
+  const users = await prisma.user.findMany({
+    where: {
+      id: { in: [...byStudent.keys()] },
+      role: ROLES.STUDENT,
+      isActive: true,
+      isDeleted: false,
+      completedAt: null,
+    },
+    select: { id: true, firstName: true, lastName: true, enrolledAt: true },
+  });
 
   return users.map((u) => ({
     ...u,
-    groupIds: byStudent.get(String(u._id)) || [],
+    _id: u.id,
+    groupIds: byStudent.get(String(u.id)) || [],
   }));
 };
 
-/** Joriy oy uchun har bir o'quvchidan kutilayotgan to'lov (xavf ostidagi pul). */
 const loadMonthlyValue = async (studentIds, now) => {
   const year = now.getUTCFullYear();
   const month = now.getUTCMonth() + 1;
-  const rows = await StudentPayment.aggregate([
-    ...branchMatchStage(),
-    {
-      $match: {
-        student: { $in: studentIds.map((id) => new mongoose.Types.ObjectId(id)) },
-        year,
-        month,
-      },
+  const rows = await prisma.studentPayment.findMany({
+    where: {
+      AND: branchMatchStage("branchId"),
+      studentId: { in: studentIds.map(String) },
+      year,
+      month,
     },
-    { $group: { _id: "$student", amount: { $sum: "$expectedAmount" } } },
-  ]);
-  return new Map(rows.map((r) => [String(r._id), r.amount || 0]));
+    select: { studentId: true, expectedAmount: true },
+  });
+  
+  const byStudent = new Map();
+  for (const r of rows) {
+    const sid = r.studentId;
+    if (!byStudent.has(sid)) byStudent.set(sid, 0);
+    byStudent.set(sid, byStudent.get(sid) + r.expectedAmount);
+  }
+  return byStudent;
 };
 
-/** Faktorlar ortidagi haqiqiy hujjatlar - "Ishingni ko'rsat" havolalari. */
 const buildSourceRefs = (sid, signals, kinds) => {
   const refs = [];
   if (kinds.includes("attendance") && signals.attendance.absentIds?.length) {
@@ -123,23 +109,12 @@ const buildSourceRefs = (sid, signals, kinds) => {
       model: "StudentPayment",
       ids: signals.debt.ids,
       total: signals.debt.ids.length,
-      // DIQQAT: bu yerda `/owner/students/${sid}?tab=finance` turardi va u
-      // 404 qaytarardi - marshrut jadvalida `students/:id` UMUMAN YO'Q
-      // (`students` ostida faqat statik tablar bor: tolovlar, qarzdorlar,
-      // statistika, chiqib-ketish). O'quvchining to'lov tarixi aslida
-      // alohida sahifada ochiladi.
-      //
-      // Bu xato eng zararli turdagi xato edi: karta ishonchli ko'rinardi,
-      // "Ishingni ko'rsat" tugmasi bor edi, lekin bosilganda owner 404
-      // olardi - ya'ni AI aynan tekshirib bo'lmaydigan da'vo qilib turardi.
-      // Endi havolalar test bilan qulflangan (aiAdvisor.test.js, 17-bo'lim).
       href: `/owner/finance/student-payments/student/${sid}`,
     });
   }
   return refs;
 };
 
-// Mongo $dayOfWeek: 1=yakshanba ... 7=shanba.
 const DOW_LABELS = [
   null,
   "yakshanba",
@@ -151,23 +126,10 @@ const DOW_LABELS = [
   "shanba",
 ];
 
-/**
- * DETEKTOR: tez o'sayotgan o'quvchi (imkoniyat).
- *
- * NEGA KERAK: tizim faqat yomon xabar bergan sahifa bo'lib qolsa, owner
- * uni ochishni to'xtatadi. "Kim yaxshi ishlayapti" ham qaror uchun kerak -
- * bu o'quvchilar guvohnoma/rag'bat uchun nomzod va ular haqida ota-onaga
- * xabar berish eng arzon ushlab qolish (retention) vositasi.
- *
- * XOM BAHO EMAS, O'SISH: 5 ball bilan kelgan o'quvchi "yaxshi", lekin u
- * markazning hissasi emas. 3.1 dan 4.4 ga ko'tarilgan o'quvchi - hissa.
- */
 const detectImproving = ({ subjectLabel, signals, thresholds }) => {
   const { grades, attendance } = signals;
   if (!grades.improvement || grades.improvement < 0.4) return null;
-  // Baho namunasi kichik bo'lsa o'sish tasodifiy bo'lishi mumkin.
   if ((grades.count || 0) < 6) return null;
-  // Davomati past bo'lsa "o'sish" ishonchsiz: kam dars, kam baho.
   if (attendance.recentRate == null || attendance.recentRate < 0.7) return null;
 
   const factors = buildFactors([
@@ -176,7 +138,6 @@ const detectImproving = ({ subjectLabel, signals, thresholds }) => {
       label: "Baho o'sishi",
       value: Number(grades.improvement.toFixed(2)),
       unit: "ball",
-      // 1.5 ball o'sish (1-5 shkalada) = to'liq signal.
       normalized: norm(grades.improvement, 1.5),
       weight: 0.6,
       direction: "good",
@@ -206,8 +167,6 @@ const detectImproving = ({ subjectLabel, signals, thresholds }) => {
     score,
     confidence,
     factors,
-    // Imkoniyat, lekin PUL ta'siri yo'q: bu o'quvchini "ushlab qolish
-    // daromadi" deb hisoblash xavf summalarini shishirardi.
     expectedImpact: {
       amount: 0,
       currency: "UZS",
@@ -241,28 +200,11 @@ const detectImproving = ({ subjectLabel, signals, thresholds }) => {
   };
 };
 
-/**
- * DETEKTOR: g'ayrioddiy davomat naqshi (kuzatuv).
- *
- * "Aynan dushanbalarni qoldiradi" - umumiy davomat foizidan BOSHQA signal.
- * 80% davomatli o'quvchi yaxshi ko'rinadi, lekin qoldirgan 20% i bitta
- * kunga to'plangan bo'lsa bu TIZIMLI muammo (ish, transport, boshqa
- * to'garak) - va tizimli muammoni JADVALNI o'zgartirib hal qilish mumkin.
- * Tasodifiy kasallikni esa yo'q.
- *
- * Shu insight "ertaga kim kelmasligi mumkin" ro'yxatining ham asosi:
- * briefing servisi o'quvchining eng yomon kunini ertangi kun bilan
- * taqqoslaydi.
- */
 const detectAttendancePattern = ({ sid, subjectLabel, signals, thresholds }) => {
   const { weekday, attendance } = signals;
   if (!weekday.worstDay) return null;
-  // Naqsh KUCHI: shu kun boshqa kunlardan qanchalik yomonroq. 15 punktdan
-  // kam farq - tasodif.
   if (weekday.gap < 0.15) return null;
-  // Kamida 2 marta qoldirgan bo'lishi kerak.
   if (weekday.worstAbsences < 2) return null;
-  // Shu kun uchun kamida 4 kuzatuv (signal qatlamida ham filtrlangan).
   if (weekday.worstTotal < 4) return null;
 
   const dayName = DOW_LABELS[weekday.worstDay] || "shu kun";
@@ -272,7 +214,6 @@ const detectAttendancePattern = ({ sid, subjectLabel, signals, thresholds }) => 
       key: "weekdayGap",
       label: "Naqsh kuchi",
       value: dayName,
-      // 40 punkt farq = to'liq signal.
       normalized: norm(weekday.gap, 0.4),
       weight: 0.5,
     },
@@ -343,17 +284,6 @@ const detectAttendancePattern = ({ sid, subjectLabel, signals, thresholds }) => 
   };
 };
 
-/**
- * Bitta filial uchun o'quvchi insight'larini qayta hisoblaydi:
- * ketish xavfi (churn) VA to'lov xavfi.
- *
- * MUHIM: chaqiruvchi buni runWithBranchContext() ichida ishga tushirishi
- * SHART - aks holda branchMatchStage() bo'sh qaytadi va boshqa filial
- * ma'lumoti aralashadi.
- *
- * @param {string} branchId
- * @returns {Promise<object>} churn va payment bo'yicha statistika
- */
 export const recomputeStudentInsights = async (branchId, now = new Date()) => {
   const config = await resolveConfig(branchId);
   const students = await loadStudents(branchId);
@@ -390,17 +320,11 @@ export const recomputeStudentInsights = async (branchId, now = new Date()) => {
     const subjectLabel = `${student.firstName} ${student.lastName}`.trim();
     const base = { branchId, subjectId: student._id, subjectLabel, now };
 
-    // --- 1. KETISH XAVFI ---
     const churn = scoreChurn(signals, config);
 
-    // ISHONCH FILTRI: sayoz ma'lumot ustida ishonchli ko'rinadigan raqam
-    // chiqarish - eng katta mahsulot xavfi. Past ishonchli insight umuman
-    // YARATILMAYDI (UI da yashirilmaydi - bu ikki xil narsa: yaratilmagan
-    // insight Action Center hisobini ham shishirmaydi).
     if (churn.confidence < config.confidenceFloor) {
       stats.churn.skippedLowConfidence += 1;
     } else if (churn.severity !== "low") {
-      // Past xavf insight yaratmaydi - shovqin bo'lardi.
       stillOpen.student_churn_risk.add(sid);
       const expectedImpact = {
         amount,
@@ -427,17 +351,12 @@ export const recomputeStudentInsights = async (branchId, now = new Date()) => {
       stats.churn[res] += 1;
     }
 
-    // --- 2. TO'LOV XAVFI (churn'dan MUSTAQIL) ---
-    // Muntazam qatnaydigan, lekin doim kechikib to'laydigan o'quvchi
-    // yuqoridagi churn filtridan o'tmaydi - lekin pul oqimi uchun muhim.
     const payment = scorePaymentRisk(signals, config);
 
     if (payment.confidence < config.confidenceFloor) {
       stats.payment.skippedLowConfidence += 1;
     } else if (payment.severity !== "low") {
       stillOpen.payment_risk.add(sid);
-      // Bu yerda xavf ostidagi pul = KUTILAYOTGAN QARZ (mavjud qarz +
-      // joriy oy to'lovi), ketish yo'qotishi emas.
       const atRisk = (signals.debt.debtAmount || 0) + amount;
       const expectedImpact = {
         amount: atRisk,
@@ -470,7 +389,6 @@ export const recomputeStudentInsights = async (branchId, now = new Date()) => {
       stats.payment[res] += 1;
     }
 
-    // --- 3. TEZ O'SAYOTGAN O'QUVCHI (imkoniyat) ---
     const improving = detectImproving({ subjectLabel, signals, thresholds });
     if (improving) {
       if (improving.confidence < config.confidenceFloor) {
@@ -482,7 +400,6 @@ export const recomputeStudentInsights = async (branchId, now = new Date()) => {
       }
     }
 
-    // --- 4. DAVOMAT NAQSHI (kuzatuv) ---
     const pattern = detectAttendancePattern({ sid, subjectLabel, signals, thresholds });
     if (pattern) {
       if (pattern.confidence < config.confidenceFloor) {

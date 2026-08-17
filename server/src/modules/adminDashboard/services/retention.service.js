@@ -1,5 +1,4 @@
-import GroupMembership from "../../../models/groupMembership.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 
 // O'quvchilarning guruhlarni tark etishi (churn) tahlili.
 //
@@ -21,25 +20,30 @@ const monthsBetween = (from, to) =>
 
 // leftAt diapazon filtri (ixtiyoriy from/to).
 const buildLeftRange = (fromDate, toDate) => {
-  const range = {
-    leftReason: "removed",
-    leftAt: { $ne: null },
-    isDeleted: { $ne: true },
-  };
-  if (fromDate || toDate) {
-    range.leftAt = {};
-    if (fromDate) range.leftAt.$gte = new Date(fromDate);
-    if (toDate) range.leftAt.$lte = new Date(toDate);
-  }
-  return range;
+  // `leftAt` NULLABLE, ya'ni `not: null` bu yerda RUXSAT ETILGAN.
+  // Oraliq berilsa `not` bilan BIR obyektda birga turadi - Mongo'da
+  // `leftAt` kaliti qayta yozilardi, Prisma'da esa shartlar birlashadi.
+  const leftAt = { not: null };
+  if (fromDate) leftAt.gte = new Date(fromDate);
+  if (toDate) leftAt.lte = new Date(toDate);
+  return { leftReason: "removed", leftAt, isDeleted: false };
 };
 
 // Tark etgan membershiplarni group(+teachers) va student bilan yuklaymiz.
 const loadChurnedMemberships = async (fromDate, toDate) => {
-  const rows = await GroupMembership.find(buildLeftRange(fromDate, toDate))
-    .populate({ path: "group", select: "name teachers" })
-    .populate({ path: "leftReasonDetail", select: "title isActive" })
-    .lean();
+  const rows = await prisma.groupMembership.findMany({
+    where: buildLeftRange(fromDate, toDate),
+    select: {
+      id: true,
+      joinedAt: true,
+      leftAt: true,
+      leftReasonTitle: true,
+      // `teachers` KO'P-KO'PGA bog'lanish: Mongo'da guruh hujjati
+      // ichidagi ObjectId massivi edi, bu yerda alohida jadval.
+      group: { select: { id: true, name: true, teachers: { select: { id: true } } } },
+      leftReasonDetail: { select: { id: true, title: true, isActive: true } },
+    },
+  });
 
   // group o'chirilgan bo'lsa (null) - tashlab yuboramiz.
   return rows.filter((m) => m.group && m.joinedAt && m.leftAt);
@@ -48,17 +52,26 @@ const loadChurnedMemberships = async (fromDate, toDate) => {
 // Chiqib ketgan o'quvchilar ro'yxati (kartaga bosilganda modal'da ko'rsatish uchun).
 // Har bir membership = bitta qator: o'quvchi, guruh, muddat, sabab, chiqqan sana.
 export const getChurnedStudents = async ({ fromDate, toDate } = {}) => {
-  const rows = await GroupMembership.find(buildLeftRange(fromDate, toDate))
-    .populate({ path: "group", select: "name" })
-    .populate({ path: "student", select: "firstName lastName username" })
-    .sort({ leftAt: -1 })
-    .lean();
+  const rows = await prisma.groupMembership.findMany({
+    where: buildLeftRange(fromDate, toDate),
+    select: {
+      id: true,
+      joinedAt: true,
+      leftAt: true,
+      leftReasonTitle: true,
+      group: { select: { name: true } },
+      student: {
+        select: { id: true, firstName: true, lastName: true, username: true },
+      },
+    },
+    orderBy: { leftAt: "desc" },
+  });
 
   return rows
     .filter((m) => m.student && m.joinedAt && m.leftAt)
     .map((m) => ({
-      membershipId: String(m._id),
-      studentId: String(m.student._id),
+      membershipId: String(m.id),
+      studentId: String(m.student.id),
       studentName: `${m.student.firstName} ${m.student.lastName}`,
       username: m.student.username,
       groupName: m.group?.name || "(o'chirilgan)",
@@ -97,8 +110,8 @@ export const getRetentionStats = async ({ fromDate, toDate } = {}) => {
 
     // --- Sabab bo'yicha ---
     const title = m.leftReasonTitle || "Sababsiz";
-    const reasonId = m.leftReasonDetail?._id
-      ? String(m.leftReasonDetail._id)
+    const reasonId = m.leftReasonDetail?.id
+      ? String(m.leftReasonDetail.id)
       : null;
     if (!byReason.has(title)) {
       byReason.set(title, { reasonId, title, count: 0, durations: [] });
@@ -108,12 +121,14 @@ export const getRetentionStats = async ({ fromDate, toDate } = {}) => {
     r.durations.push(months);
 
     // --- O'qituvchi bo'yicha (guruhda bir nechta o'qituvchi bo'lsa har biriga) ---
+    // Mongo'da `teachers` ObjectId MASSIVI edi (element = id), Prisma'da
+    // esa obyektlar massivi (`{ id }`) - shuning uchun `t.id` o'qiladi.
     const teachers = m.group.teachers?.length ? m.group.teachers : [null];
     for (const t of teachers) {
-      const key = t ? String(t) : "none";
+      const key = t ? String(t.id) : "none";
       if (!byTeacher.has(key)) {
         byTeacher.set(key, {
-          teacherId: t ? String(t) : null,
+          teacherId: t ? String(t.id) : null,
           count: 0,
           durations: [],
           reasons: new Map(),
@@ -155,13 +170,15 @@ export const getRetentionStats = async ({ fromDate, toDate } = {}) => {
   // O'qituvchi ismlarini boyitamiz (bitta so'rovda).
   const teacherIds = teacherRows.map((t) => t.teacherId).filter(Boolean);
   const teacherDocs = teacherIds.length
-    ? await User.find(
-        { _id: { $in: teacherIds } },
-        { firstName: 1, lastName: 1 },
-      ).lean()
+    ? await prisma.user.findMany({
+        where: { id: { in: teacherIds } },
+        // `id` ATAYLAB: Prisma `select` bilan uni avtomatik qaytarmaydi,
+        // lekin xarita kaliti sifatida kerak.
+        select: { id: true, firstName: true, lastName: true },
+      })
     : [];
   const nameMap = new Map(
-    teacherDocs.map((u) => [String(u._id), `${u.firstName} ${u.lastName}`]),
+    teacherDocs.map((u) => [String(u.id), `${u.firstName} ${u.lastName}`]),
   );
   const teachers = teacherRows.map((t) => ({
     ...t,

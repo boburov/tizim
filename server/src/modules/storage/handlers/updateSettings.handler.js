@@ -5,7 +5,8 @@ const updateSettings = asyncHandler(async (req, res) => {
   const settings = await admin.updateSettings(req.body);
   res.json({
     success: true,
-    data: { ...settings.toJSON(), nextRunAt: admin.nextRunAt(settings) },
+    // `toJSON()` EMAS - Prisma oddiy obyekt qaytaradi (Mongoose hujjati emas).
+    data: { ...settings, nextRunAt: admin.nextRunAt(settings) },
     message: "Tozalash sozlamalari saqlandi",
   });
 });

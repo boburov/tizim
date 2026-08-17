@@ -1,79 +1,74 @@
-import Lead from "../../../models/lead.model.js";
-import LeadOption from "../../../models/leadOption.model.js";
-import Course from "../../../models/course.model.js";
+import prisma from "../../../config/prisma.js";
 import { branchMatchStage, branchFilter } from "../../../helpers/branchContext.helper.js";
 import { LEAD_PIPELINE } from "../../../constants/leadStatus.js";
 
-// LID SIGNALLARI. Lead'da branchId BOR, shuning uchun oddiy branchMatchStage().
-//
-// CHEKLOV (halol yozilgan): kodbazada QO'NG'IROQ JURNALI yo'q - Lead.notes
-// erkin matn, LeadActivity modeli mavjud emas. Shuning uchun "eng yaxshi
-// qo'ng'iroq vaqti" HISOBLANMAYDI. Uni ko'rsatish - taxminni fakt qilib
-// ko'rsatish bo'lardi. Buning o'rniga hisoblanadigan narsa berilgan:
-// qaysi lid sovib qolgan (followUpAt o'tgan / statusi qotib qolgan) va
-// qaysi lid issiq (sinov darsiga kelgan, lekin hali yozilmagan).
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Sinovga kelgan, lekin yozilmagan lid - eng qimmatli holat. U markazni
-// KO'RGAN va qaytmagan: qaror nuqtasida turgan odam.
 const HOT_STATUSES = ["trial_attended", "trial"];
-// Voronkada turgan (yopilmagan) statuslar.
 const OPEN_STATUSES = LEAD_PIPELINE.filter((s) => s !== "enrolled").concat("recontacted");
 
-/**
- * KONVERSIYA - hafta bo'yicha: yaratilgan lidlarning nechtasi yozildi.
- *
- * KOGORT bo'yicha hisoblanadi (yaratilgan sanasi), "shu haftada
- * yozilganlar" bo'yicha EMAS. Sabab: shu haftada yozilganlarning ko'pi
- * o'tgan oy kelgan lidlar bo'lishi mumkin, va u son marketing samarasini
- * emas, sotuvchining eski bazani ishlatishini o'lchaydi. Kogort esa
- * "shu hafta kelgan lidlarning taqdiri" - marketing kanali sifati.
- *
- * DIQQAT: eng oxirgi kogortlar hali "pishmagan" (lid yozilishga 1-3 hafta
- * kerak bo'ladi), shuning uchun oxirgi 2 hafta taqqoslashdan CHIQARILADI -
- * aks holda konversiya har doim "pasayayotgan" ko'rinadi.
- */
 export const conversionByWeek = async (weeks, now) => {
   const since = new Date(now.getTime() - weeks * 7 * DAY_MS);
-  const rows = await Lead.aggregate([
-    ...branchMatchStage(),
-    { $match: { createdAt: { $gte: since } } },
-    {
-      $group: {
-        // ISO hafta (dushanbadan boshlanadi) - $dateTrunc EMAS: u MongoDB 5.0
-        // talab qiladi, $isoWeek esa 3.6 dan beri bor va kodbazaning qolgan
-        // qismi ham eski operatorlar bilan yozilgan. Vaqt zonasi ataylab
-        // berilgan: UTC da hisoblansa yakshanba kechqurun kelgan lid keyingi
-        // haftaga tushib ketardi.
-        _id: {
-          year: { $isoWeekYear: { date: "$createdAt", timezone: "Asia/Tashkent" } },
-          week: { $isoWeek: { date: "$createdAt", timezone: "Asia/Tashkent" } },
-        },
-        total: { $sum: 1 },
-        enrolled: { $sum: { $cond: [{ $eq: ["$status", "enrolled"] }, 1, 0] } },
-        rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
-        // Kogortni vaqt bo'yicha saralash va "pishganmi" tekshirish uchun.
-        firstAt: { $min: "$createdAt" },
-      },
+  
+  const rows = await prisma.lead.findMany({
+    where: {
+      AND: branchMatchStage("branchId"),
+      createdAt: { gte: since },
     },
-    { $sort: { "_id.year": 1, "_id.week": 1 } },
-  ]);
+    select: { createdAt: true, status: true },
+    orderBy: { createdAt: "asc" },
+  });
 
-  return rows.map((r) => ({
-    weekKey: `${r._id.year}-W${String(r._id.week).padStart(2, "0")}`,
+  const getIsoWeekInfo = (date) => {
+    const target = new Date(date.valueOf());
+    const dayNr = (date.getUTCDay() + 6) % 7;
+    target.setUTCDate(target.getUTCDate() - dayNr + 3);
+    const firstThursday = target.valueOf();
+    target.setUTCMonth(0, 1);
+    if (target.getUTCDay() !== 4) {
+      target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7);
+    }
+    const week = 1 + Math.ceil((firstThursday - target) / 604800000);
+    const year = target.getUTCFullYear();
+    return { year, week };
+  };
+
+  const byWeek = new Map();
+  for (const r of rows) {
+    const localDate = new Date(r.createdAt.getTime() + 5 * 60 * 60 * 1000);
+    const { year, week } = getIsoWeekInfo(localDate);
+    const weekKey = `${year}-W${String(week).padStart(2, "0")}`;
+
+    if (!byWeek.has(weekKey)) {
+      byWeek.set(weekKey, {
+        year,
+        week,
+        weekKey,
+        firstAt: r.createdAt,
+        total: 0,
+        enrolled: 0,
+        rejected: 0,
+      });
+    }
+    const entry = byWeek.get(weekKey);
+    entry.total++;
+    if (r.status === "enrolled") entry.enrolled++;
+    if (r.status === "rejected") entry.rejected++;
+  }
+
+  const result = [...byWeek.values()].map((r) => ({
+    weekKey: r.weekKey,
     weekStart: r.firstAt,
     total: r.total,
     enrolled: r.enrolled,
     rejected: r.rejected,
     rate: r.total > 0 ? r.enrolled / r.total : 0,
   }));
+
+  result.sort((a, b) => a.weekKey.localeCompare(b.weekKey));
+  return result;
 };
 
-/**
- * Konversiyani ikki oynada taqqoslaydi: pishgan kogortlar ichida.
- * "Ripening" oynasi - 14 kun: undan yangi lidlar hali qaror qilmagan.
- */
 export const conversionTrend = (weekly, now, ripenDays = 14) => {
   const cutoff = new Date(now.getTime() - ripenDays * DAY_MS);
   const ripe = weekly.filter((w) => new Date(w.weekStart) < cutoff);
@@ -108,72 +103,85 @@ export const conversionTrend = (weekly, now, ripenDays = 14) => {
   };
 };
 
-/**
- * ISSIQ LIDLAR - sinovga kelgan yoki sinovga yozilgan, hali o'quvchi emas.
- * Har biri uchun "qancha kun kutib turgani" hisoblanadi: 3 kundan keyin
- * bunday lid sovuydi, shuning uchun kun soni prioritetni belgilaydi.
- */
 export const hotLeads = async (now, limit = 25) => {
-  const rows = await Lead.find({
-    ...branchFilter(),
-    status: { $in: HOT_STATUSES },
-  })
-    .select("firstName lastName phone status direction trialDate followUpAt statusHistory updatedAt")
-    .sort({ updatedAt: -1 })
-    .limit(limit)
-    .lean();
+  const rows = await prisma.lead.findMany({
+    where: {
+      ...branchFilter("branchId"),
+      status: { in: HOT_STATUSES },
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      status: true,
+      directionId: true,
+      trialDate: true,
+      followUpAt: true,
+      statusHistory: true,
+      updatedAt: true,
+    },
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+  });
 
   return rows.map((l) => {
-    // Oxirgi status o'zgarishi - "qancha vaqtdan beri shu holatda".
-    const last = l.statusHistory?.length
-      ? l.statusHistory[l.statusHistory.length - 1].at
-      : l.updatedAt;
+    let last = l.updatedAt;
+    let history = l.statusHistory;
+    if (typeof history === "string") {
+      try { history = JSON.parse(history); } catch (e) { history = []; }
+    }
+    if (Array.isArray(history) && history.length > 0) {
+      last = new Date(history[history.length - 1].at);
+    }
+
     const waitingDays = Math.max(
       0,
       Math.floor((now.getTime() - new Date(last).getTime()) / DAY_MS),
     );
     return {
-      _id: l._id,
+      _id: l.id,
       name: `${l.firstName} ${l.lastName || ""}`.trim(),
       phone: l.phone,
       status: l.status,
-      direction: l.direction,
+      direction: l.directionId,
       trialDate: l.trialDate,
       followUpAt: l.followUpAt,
       waitingDays,
-      // Sinov darsiga KELGAN lid - eng issiq. Faqat yozilgan (trial) esa
-      // hali markazni ko'rmagan.
       attended: l.status === "trial_attended",
     };
   });
 };
 
-/**
- * SOVIB QOLGAN LIDLAR - voronkada turgan, lekin harakat yo'q.
- *
- * Ikki mezon: (a) followUpAt vaqti o'tgan, (b) status N kundan beri
- * o'zgarmagan. Ikkinchisi muhimroq - followUpAt ko'p lidda umuman
- * to'ldirilmaydi va faqat unga tayanish ko'pchilik lidni ko'rmaslikka
- * olib kelardi.
- */
 export const staleLeads = async (now, staleDays = 10, limit = 25) => {
   const cutoff = new Date(now.getTime() - staleDays * DAY_MS);
-  const rows = await Lead.find({
-    ...branchFilter(),
-    status: { $in: OPEN_STATUSES },
-    updatedAt: { $lt: cutoff },
-  })
-    .select("firstName lastName phone status direction followUpAt statusHistory updatedAt createdAt")
-    .sort({ updatedAt: 1 })
-    .limit(limit)
-    .lean();
+  
+  const rows = await prisma.lead.findMany({
+    where: {
+      ...branchFilter("branchId"),
+      status: { in: OPEN_STATUSES },
+      updatedAt: { lt: cutoff },
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      status: true,
+      directionId: true,
+      followUpAt: true,
+      updatedAt: true,
+    },
+    orderBy: { updatedAt: "asc" },
+    take: limit,
+  });
 
   return rows.map((l) => ({
-    _id: l._id,
+    _id: l.id,
     name: `${l.firstName} ${l.lastName || ""}`.trim(),
     phone: l.phone,
     status: l.status,
-    direction: l.direction,
+    direction: l.directionId,
     idleDays: Math.max(
       0,
       Math.floor((now.getTime() - new Date(l.updatedAt).getTime()) / DAY_MS),
@@ -182,52 +190,53 @@ export const staleLeads = async (now, staleDays = 10, limit = 25) => {
   }));
 };
 
-/**
- * YO'NALISH bo'yicha talab - "yana bitta IELTS guruhi ochilsinmi?" savolining
- * lid tomoni.
- *
- * Course.leadDirection orqali kursga bog'lanadi. Bog'lanmagan yo'nalishlar
- * ham qaytariladi (courseId: null) - ular jimgina yo'qolmasligi kerak,
- * aks holda talab kam ko'rinadi.
- */
 export const demandByDirection = async (now, days = 30) => {
   const since = new Date(now.getTime() - days * DAY_MS);
-  const rows = await Lead.aggregate([
-    ...branchMatchStage(),
-    { $match: { createdAt: { $gte: since }, direction: { $ne: null } } },
-    {
-      $group: {
-        _id: "$direction",
-        total: { $sum: 1 },
-        enrolled: { $sum: { $cond: [{ $eq: ["$status", "enrolled"] }, 1, 0] } },
-        open: {
-          $sum: { $cond: [{ $in: ["$status", OPEN_STATUSES] }, 1, 0] },
-        },
-        rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
-      },
+  
+  const allRows = await prisma.lead.findMany({
+    where: {
+      AND: branchMatchStage("branchId"),
+      createdAt: { gte: since },
+      directionId: { not: null },
     },
-    { $sort: { total: -1 } },
-  ]);
-  if (!rows.length) return [];
+    select: { directionId: true, status: true },
+  });
+
+  if (!allRows.length) return [];
+
+  const byDir = new Map();
+  for (const r of allRows) {
+    if (!byDir.has(r.directionId)) {
+      byDir.set(r.directionId, { total: 0, enrolled: 0, open: 0, rejected: 0 });
+    }
+    const e = byDir.get(r.directionId);
+    e.total++;
+    if (r.status === "enrolled") e.enrolled++;
+    else if (r.status === "rejected") e.rejected++;
+    else if (OPEN_STATUSES.includes(r.status)) e.open++;
+  }
+
+  const directionIds = [...byDir.keys()];
 
   const [options, courses] = await Promise.all([
-    LeadOption.find({ _id: { $in: rows.map((r) => r._id) } })
-      .select("_id name")
-      .lean(),
-    Course.find({ leadDirection: { $in: rows.map((r) => r._id) } })
-      .select("_id title code leadDirection")
-      .lean(),
+    prisma.leadOption.findMany({
+      where: { id: { in: directionIds } },
+      select: { id: true, name: true },
+    }),
+    prisma.course.findMany({
+      where: { leadDirectionId: { in: directionIds } },
+      select: { id: true, title: true, code: true, leadDirectionId: true },
+    }),
   ]);
 
-  // LeadOption maydoni `name` (title EMAS) - modelga qarang.
-  const titleById = new Map(options.map((o) => [String(o._id), o.name]));
-  const courseByDirection = new Map(courses.map((c) => [String(c.leadDirection), c]));
+  const titleById = new Map(options.map((o) => [o.id, o.name]));
+  const courseByDirection = new Map(courses.map((c) => [c.leadDirectionId, c]));
 
-  return rows.map((r) => {
-    const course = courseByDirection.get(String(r._id)) || null;
+  const result = [...byDir.entries()].map(([dirId, r]) => {
+    const course = courseByDirection.get(dirId) || null;
     return {
-      directionId: r._id,
-      directionTitle: titleById.get(String(r._id)) || "Nomsiz yo'nalish",
+      directionId: dirId,
+      directionTitle: titleById.get(dirId) || "Nomsiz yo'nalish",
       course,
       total: r.total,
       enrolled: r.enrolled,
@@ -236,40 +245,55 @@ export const demandByDirection = async (now, days = 30) => {
       conversionRate: r.total > 0 ? r.enrolled / r.total : 0,
     };
   });
+
+  result.sort((a, b) => b.total - a.total);
+  return result;
 };
 
-/** Manba (source) samaradorligi - marketing tavsiyasi uchun. */
 export const sourcePerformance = async (now, days = 90) => {
   const since = new Date(now.getTime() - days * DAY_MS);
-  const rows = await Lead.aggregate([
-    ...branchMatchStage(),
-    { $match: { createdAt: { $gte: since }, source: { $ne: null } } },
-    {
-      $group: {
-        _id: "$source",
-        total: { $sum: 1 },
-        enrolled: { $sum: { $cond: [{ $eq: ["$status", "enrolled"] }, 1, 0] } },
-      },
+  
+  const allRows = await prisma.lead.findMany({
+    where: {
+      AND: branchMatchStage("branchId"),
+      createdAt: { gte: since },
+      sourceId: { not: null },
     },
-    { $sort: { total: -1 } },
-  ]);
-  if (!rows.length) return [];
+    select: { sourceId: true, status: true },
+  });
 
-  const options = await LeadOption.find({ _id: { $in: rows.map((r) => r._id) } })
-    .select("_id name")
-    .lean();
-  const titleById = new Map(options.map((o) => [String(o._id), o.name]));
+  if (!allRows.length) return [];
 
-  return rows.map((r) => ({
-    sourceId: r._id,
-    title: titleById.get(String(r._id)) || "Nomsiz manba",
+  const bySource = new Map();
+  for (const r of allRows) {
+    if (!bySource.has(r.sourceId)) {
+      bySource.set(r.sourceId, { total: 0, enrolled: 0 });
+    }
+    const e = bySource.get(r.sourceId);
+    e.total++;
+    if (r.status === "enrolled") e.enrolled++;
+  }
+
+  const sourceIds = [...bySource.keys()];
+
+  const options = await prisma.leadOption.findMany({
+    where: { id: { in: sourceIds } },
+    select: { id: true, name: true },
+  });
+  const titleById = new Map(options.map((o) => [o.id, o.name]));
+
+  const result = [...bySource.entries()].map(([sourceId, r]) => ({
+    sourceId,
+    title: titleById.get(sourceId) || "Nomsiz manba",
     total: r.total,
     enrolled: r.enrolled,
     rate: r.total > 0 ? r.enrolled / r.total : 0,
   }));
+
+  result.sort((a, b) => b.total - a.total);
+  return result;
 };
 
-/** Barcha lid signallarini yig'adi. */
 export const collectLeadSignals = async (now = new Date()) => {
   const [weekly, hot, stale, demand, sources] = await Promise.all([
     conversionByWeek(12, now),

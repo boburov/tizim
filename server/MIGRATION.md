@@ -636,23 +636,72 @@ bir yozuv shu sababdan MA'LUMOTGA YETADIGAN parametr bilan yoziladi.
 
 ### Hozir 501 qaytaradiganlar
 
-Oxirgi o'lchov: **43/58 (74%)** ko'chirilgan, 15 qoldi, 0 buzuq.
+Oxirgi o'lchov: **58/60 (97%)** ko'chirilgan, 2 qoldi, 0 buzuq.
 
 | Endpoint | Fayl / so'rov |
 |---|---|
-| `/ai/*` | 25 fayl, 113 so'rov, 45 aggregate — eng kattasi |
-| `/attendance/*` | `attendance.service.js` (1421 qator, 24 so'rov) |
-| `/grades/*`, `/grades/rating/*` | 14 so'rov |
-| `/notifications/*` | 32 so'rov |
-| `/assignments/*` | 27 so'rov |
-| `/feedback/*` | 15 so'rov |
-| `/activity-history/*` | 14 so'rov |
-| `/ledger/*` | 9 so'rov |
-| `/storage/settings`, `/storage/files` | 9 so'rov |
-| `/admin-dashboard/student-stats\|retention\|churned-students` | 7 so'rov |
-| `/imports/*` | 9 fayl, 24 so'rov (+ `queues/importQueue.js`) |
-| joblar | 6 fayl, 18 so'rov — jadval bo'yicha ishga tushib yiqiladi |
-| Telegram bot | `bot/*` + `botAuth` — 15 so'rov |
+| `/notifications/*` | `notifications.service.js` (838 qator, 28 so'rov) + `personalizeBody.helper.js` (4) |
+| `/assignments/*` | `assignments.service.js` (660 qator, 27 so'rov) |
+
+Zondda ko'rinmaydigan, lekin QOLGAN:
+
+| Bo'lim | Fayl | So'rov |
+|---|---|---|
+| joblar | 6 | 18 — jadval bo'yicha ishga tushib yiqiladi |
+| Telegram bot | `bot/*` + `botAuth` | 19 |
+| import registri | `userImportBase`, importerlar, `queues/importQueue.js` | 23 |
+| AI qolgan signallar | `student`, `teacher`, `lead`, `course`, `group` + insight servislari | 60 |
+
+`/imports/history` va `/imports/*/options` ISHLAYDI (handlerlar ko'chdi),
+lekin FAYLNI HAQIQATAN yuklash `registry/` ga tushadi — u hali Mongoose'da.
+
+### `/ai` zanjiri — QISMAN ko'chirilgan
+
+`/admin/tahlil` sahifasi `/ai/briefing` ga tayanadi, u esa quyidagi
+zanjirdan iborat. Tugatish tartibi shu (har biri oldingisiga bog'liq):
+
+| Fayl | So'rov / agg | Holat |
+|---|---|---|
+| `services/briefing.service.js` | 4 / 0 | ✅ |
+| `signals/finance.signal.js` | 11 / 8 | ✅ |
+| `signals/pulse.signal.js` | 13 / 11 | ⏳ **keyingi** |
+| `signals/health.signal.js` | 6 / 0 | ⏳ |
+| `services/recompute.service.js` | 3 / 1 | ⏳ |
+| `services/insightWriter.service.js` | 4 / 0 | ⏳ |
+
+Qolgan signallar (`student`, `teacher`, `lead`, `course`, `group`) va
+`insight` / `report` / `ranking` / `lifecycle` servislari — alohida.
+
+Zanjir tugamaguncha `/ai/briefing` **501 qaytaraveradi va bu TO'G'RI**:
+`briefing` Prisma'ga o'tgan bo'lsa ham, u chaqiradigan `pulse` hali
+Mongoose'da — 501 shartnomasi shuni aynan shunday ko'rsatishi kerak.
+
+#### `branchMatchStage()` xom SQL'da ISHLAMAYDI
+
+Signallarda filial ko'lami `...branchMatchStage()` ko'rinishida Mongo
+quvuriga spread qilinardi. U endi PRISMA shaklini qaytaradi, ya'ni eski
+kod uni quvurga qo'shib *"Arguments must be aggregate pipeline
+operators"* bilan yiqiladi.
+
+Xom SQL'da esa `where` obyekti umuman ishlamaydi. Shuning uchun har bir
+signal faylida `rawBranchClause()` yoziladi (namuna:
+`ai/signals/finance.signal.js`, `financeReport.service.js`). U
+**FAIL-CLOSED**: bo'sh ro'yxat `AND FALSE` beradi — hech qaysi filialga
+biriktirilmagan xodim hech nima ko'rmaydi.
+
+### `attendance` ko'chirilganda topilgan JIMGINA YO'QOLISH
+
+`buildAttBySlot` va `getGroupMonthly` xarita kalitini `String(a.group)` /
+`String(a.student)` dan quradi. Prisma qatorida bu maydonlar RELATION —
+so'ralmasa `undefined`, ya'ni kalit `"undefined|2026-08-17"` bo'lib
+HECH QACHON mos kelmasdi.
+
+Oqibati: davomat yozuvlari bazada bor, lekin hisobotda **butunlay
+yo'qolardi** — "jami darslar: 9, kelgan: 0, kelmagan: 0". Xato ham
+bermasdi, ekran shunchaki "hech kim belgilanmagan" deb ko'rsatardi.
+
+Shu sababdan ko'chirishdan keyin HAR BIR o'qish yo'li haqiqiy yozuv
+bilan tekshirilishi shart — `200 OK` bu yerda hech nima isbotlamaydi.
 
 Seedlar (25 fayl, 120 so'rov) ATAYLAB qoldirilgan — bir martalik
 skriptlar, ishlash yo'lida emas.

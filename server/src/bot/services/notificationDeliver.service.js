@@ -1,4 +1,4 @@
-import BotUser from "../../models/botUser.model.js";
+import prisma from "../../config/prisma.js";
 import logger from "../../config/logger.js";
 import { getBot } from "../config/bot.instance.js";
 import { markBlocked } from "./botUser.service.js";
@@ -53,7 +53,7 @@ export const deliverToChat = async ({ chatId, telegramId }, payload) => {
   const text = formatMessage(payload);
 
   try {
-    await bot.sendMessage(chatId, text);
+    await bot.sendMessage(Number(chatId), text);
     return { ok: true };
   } catch (err) {
     // 429 - rate limit: retry_after kutib bir marta qayta urinamiz
@@ -61,7 +61,7 @@ export const deliverToChat = async ({ chatId, telegramId }, payload) => {
       const wait = Math.min((retryAfterOf(err) || 1) * 1000, 5000);
       await sleep(wait);
       try {
-        await bot.sendMessage(chatId, text);
+        await bot.sendMessage(Number(chatId), text);
         return { ok: true };
       } catch (err2) {
         if (isBlockedError(err2)) {
@@ -73,10 +73,10 @@ export const deliverToChat = async ({ chatId, telegramId }, payload) => {
     }
     if (isBlockedError(err)) {
       if (telegramId) await markBlocked(telegramId, true).catch(() => null);
-      logger.info({ telegramId }, "Foydalanuvchi botni bloklagan");
+      logger.info({ telegramId: String(telegramId) }, "Foydalanuvchi botni bloklagan");
       return { ok: false, reason: "blocked" };
     }
-    logger.warn({ err, chatId }, "Notification yetkazib bo'lmadi");
+    logger.warn({ err, chatId: String(chatId) }, "Notification yetkazib bo'lmadi");
     return { ok: false, reason: reasonOf(err) };
   }
 };
@@ -84,7 +84,9 @@ export const deliverToChat = async ({ chatId, telegramId }, payload) => {
 // Bitta foydalanuvchiga (userId) yetkazish - bog'langan BotUser orqali
 export const deliverToUser = async (userId, payload) => {
   if (!userId) return { ok: false, reason: "no-bot-link" };
-  const bu = await BotUser.findOne({ user: userId }).lean();
+  const bu = await prisma.botUser.findFirst({
+    where: { userId: String(userId) },
+  });
   if (!bu || bu.isBlocked || !bu.chatId) return { ok: false, reason: "no-bot-link" };
   return deliverToChat({ chatId: bu.chatId, telegramId: bu.telegramId }, payload);
 };

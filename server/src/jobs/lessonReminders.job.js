@@ -1,7 +1,5 @@
 import logger from "../config/logger.js";
-import Group from "../models/group.model.js";
-import GroupMembership from "../models/groupMembership.model.js";
-import User from "../models/user.model.js";
+import prisma from "../config/prisma.js";
 import { send as sendNotification } from "../modules/notifications/services/notifications.service.js";
 import { holidayKeySetForRange } from "../modules/holidays/services/holidays.service.js";
 import {
@@ -25,51 +23,20 @@ export const JOB_NAME = "daily.lesson-reminder";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/**
- * ERTALABKI DARS ESLATMASI.
- *
- * Har kuni ertalab bugun darsi bor HAR BIR o'quvchiga bitta xabar
- * yuboradi - platformaga va (bot ulangan bo'lsa) Telegramga. Ikkinchi
- * kanal alohida kod talab qilmaydi: `notifications.service.send()`
- * yozuvni yaratadi, `notificationDeliver` job esa uni botga uzatadi.
- *
- * ─── "BUGUN DARS BOR" NIMANI ANGLATADI ───
- * Bu savolga aniq javob berish uchun beshta shart tekshiriladi va
- * ularning har biri alohida sababga ega:
- *
- *   1. Guruh JADVALIDA shu hafta kuni bor  - getClassDaysInRange
- *      (jadval versiyalarini ham hisobga oladi: o'tgan oy o'chirilgan
- *      kun bugun "tirilib" qolmasin);
- *   2. Bugun BAYRAM emas                    - holidaySet;
- *   3. Sana kurs CHEGARASIDA                - withinCourseBounds
- *      (getClassDaysInRange faqat startDate'ni biladi, endDate'ni emas);
- *   4. Dars BEKOR qilinmagan                - lessonCancellation;
- *   5. O'quvchi MUZLATILMAGAN va faol a'zo  - freeze + membership.
- *
- * Bittasi ham tushib qolsa eslatma yolg'on bo'ladi: o'quvchi bayram
- * kuni yoki bekor qilingan darsga kelib qolardi. Shuning uchun bu
- * yerda "taxminan to'g'ri" yetarli emas.
- *
- * ─── NEGA HAR O'QUVCHIGA BITTA XABAR ───
- * Bir o'quvchi bir kunda ikki guruhda o'qishi mumkin. Guruh bo'yicha
- * yuborilsa u ikkita alohida xabar olardi. Shuning uchun avval
- * o'quvchi bo'yicha yig'iladi, keyin bitta xabarda hammasi ro'yxat
- * bo'lib ketadi.
- *
- * `dedupeKey` kunlik: job qayta ishga tushsa ham (deploy, xatolikdan
- * keyingi urinish) o'quvchi kuniga bittadan ortiq eslatma olmaydi.
- */
 export const runLessonReminders = async () => {
     const today = localTodayMidnight();
     const dayKey = localTodayKey();
     const dow = localDayOfWeek();
     const dayEnd = new Date(today.getTime() + DAY_MS);
 
-    const groups = await Group.find({
-      isActive: true,
-      isDeleted: { $ne: true },
-      "schedule.day": dow,
-    }).lean();
+    const groups = await prisma.group.findMany({
+      where: {
+        isActive: true,
+        isDeleted: false,
+        schedule: { some: { day: dow } },
+      },
+      include: { schedule: true }
+    });
 
     if (!groups.length) {
       logger.info({ dayKey }, "Bugun darsi bor guruh yo'q - eslatma yuborilmadi");
@@ -78,7 +45,6 @@ export const runLessonReminders = async () => {
 
     const holidaySet = await holidayKeySetForRange(today, today);
 
-    // studentId -> [{ group, startTime, endTime }]
     const perStudent = new Map();
 
     for (const group of groups) {
@@ -87,25 +53,23 @@ export const runLessonReminders = async () => {
       const sessions = getClassDaysInRange(group, today, today, holidaySet);
       if (!sessions.length) continue;
 
-      const cancelled = await loadCancelledLessonKeys(group._id, today, today);
+      const cancelled = await loadCancelledLessonKeys(group.id, today, today);
       const live = sessions.filter((s) => !isCancelledSession(cancelled, s));
       if (!live.length) continue;
 
-      // Shu sanada FAOL a'zolar: bugun qo'shilgan ham kiradi (joinedAt
-      // kun ichida bo'lishi mumkin), bugun chiqqan esa kirmaydi.
-      const memberships = await GroupMembership.find(
-        {
-          group: group._id,
-          joinedAt: { $lt: dayEnd },
-          $or: [{ leftAt: null }, { leftAt: { $gt: today } }],
-          isDeleted: { $ne: true },
+      const memberships = await prisma.groupMembership.findMany({
+        where: {
+          groupId: group.id,
+          joinedAt: { lt: dayEnd },
+          OR: [{ leftAt: null }, { leftAt: { gt: today } }],
+          isDeleted: false,
         },
-        { student: 1 },
-      ).lean();
+        select: { studentId: true },
+      });
 
       for (const m of memberships) {
-        if (!m.student) continue;
-        const key = String(m.student);
+        if (!m.studentId) continue;
+        const key = String(m.studentId);
         if (!perStudent.has(key)) perStudent.set(key, []);
         for (const s of live) {
           perStudent.get(key).push({
@@ -124,22 +88,20 @@ export const runLessonReminders = async () => {
 
     const studentIds = [...perStudent.keys()];
 
-    // FAQAT FAOL o'quvchi. Arxivlangan/o'chirilgan odam a'zolikda
-    // qolib ketishi mumkin - unga xabar yuborish xato bo'lardi.
-    const activeStudents = await User.find(
-      {
-        _id: { $in: studentIds },
+    const activeStudents = await prisma.user.findMany({
+      where: {
+        id: { in: studentIds },
         role: ROLES.STUDENT,
         isActive: true,
-        isDeleted: { $ne: true },
+        isDeleted: false,
       },
-      { _id: 1 },
-    ).lean();
-    const activeSet = new Set(activeStudents.map((u) => String(u._id)));
+      select: { id: true },
+    });
+    
+    const activeSet = new Set(activeStudents.map((u) => String(u.id)));
 
-    // Muzlatish oynalari - o'quvchi bo'yicha, bitta so'rovda.
     const freezeByStudent = await loadFreezeWindowsByStudent({
-      student: { $in: studentIds },
+      studentId: { in: studentIds },
     });
     const todayMs = today.getTime();
 
@@ -156,7 +118,6 @@ export const runLessonReminders = async () => {
         continue;
       }
 
-      // Vaqt bo'yicha tartib - o'quvchi kunini shu ketma-ketlikda o'qiydi.
       lessons.sort((a, b) => a.startTime.localeCompare(b.startTime));
       const lines = lessons.map(
         (l) => `• ${l.startTime}–${l.endTime} · ${l.group}`,
@@ -180,7 +141,6 @@ export const runLessonReminders = async () => {
         );
         sent += 1;
       } catch (err) {
-        // Bitta o'quvchi tushib qolsa qolganlari yuborilaversin.
         logger.warn({ err, studentId }, "Dars eslatmasi yuborilmadi");
       }
     }

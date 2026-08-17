@@ -223,7 +223,7 @@ const staffImporter = {
         try {
           await staffCompensationService.setCompensation(
             {
-              employee: user._id,
+              employee: String(user.id || user._id),
               branchId: data.branchId,
               salaryType: data.compensation.salaryType,
               baseAmount: data.compensation.baseAmount,
@@ -234,7 +234,7 @@ const staffImporter = {
           messages.push("Maosh stavkasi belgilandi");
         } catch (err) {
           logger.warn(
-            { err: err?.message, user: String(user._id) },
+            { err: err?.message, user: String(user.id || user._id) },
             "Import: xodim maosh stavkasi belgilanmadi",
           );
           messages.push("DIQQAT: maosh stavkasi belgilanmadi - profildan kiriting");

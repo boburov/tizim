@@ -1,10 +1,6 @@
-import mongoose from "mongoose";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 import { ROLES } from "../../../constants/roles.js";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
-import TeacherSalary from "../../../models/teacherSalary.model.js";
-import SalaryTransaction from "../../../models/salaryTransaction.model.js";
+import prisma from "../../../config/prisma.js";
 import {
   branchFilter,
   userBranchCondition,
@@ -27,9 +23,6 @@ const METHOD_MAP = {
 const norm = (v) => String(v ?? "").trim().toLowerCase();
 const dateKey = (d) => d.toISOString().slice(0, 10);
 
-// SalaryTransaction'da idempotencyKey maydoni YO'Q (u faqat o'quvchi
-// to'lovlarida bor), shuning uchun takrorni mazmuni bo'yicha aniqlaymiz:
-// bir xil maosh + summa + sana = o'sha to'lov.
 const rowKey = (d) => `${d.salaryId}|${d.amount}|${dateKey(d.paidAt)}`;
 
 const teacherSalaryPaymentsImporter = {
@@ -39,13 +32,6 @@ const teacherSalaryPaymentsImporter = {
   sheetName: "Maosh to'lovlari",
   permission: PERMISSIONS.SALARY_PAY,
 
-  // NEGA "Asosiy maosh", "Bonus", "Jarima", "Jami maosh" ustunlari YO'Q:
-  // bu tizimda maosh SUMMASI kiritilmaydi - u hisoblanadi. TeacherSalary
-  // hujjatidagi expectedAmount guruh tushumi, foiz stavkasi va ishlagan
-  // kunlar (proratsiya) asosida recalc() tomonidan chiqariladi. Modelda
-  // bonus/jarima maydonlari umuman mavjud emas.
-  // Shuning uchun bu import maosh TO'LOVLARINI (chiqim) kiritadi -
-  // ya'ni "kimga qancha pul berildi", "maosh qancha bo'lishi kerak"ni emas.
   columns: [
     {
       key: "teacherRef",
@@ -129,19 +115,16 @@ const teacherSalaryPaymentsImporter = {
 
     const phones = [...refs].map(normalizePhone).filter(Boolean);
     const branchCond = userBranchCondition();
-    const teacherFilter = {
-      role: ROLES.TEACHER,
-      isDeleted: { $ne: true },
-      $or: [{ username: { $in: [...refs] } }, { phone: { $in: phones } }],
-    };
-    if (branchCond) teacherFilter.$and = [branchCond];
 
-    const teachers = await User.find(teacherFilter, {
-      firstName: 1,
-      lastName: 1,
-      username: 1,
-      phone: 1,
-    }).lean();
+    const teachers = await prisma.user.findMany({
+      where: {
+        role: ROLES.TEACHER,
+        isDeleted: false,
+        OR: [{ username: { in: [...refs] } }, { phone: { in: phones } }],
+        ...(branchCond ? { AND: [branchCond] } : {}),
+      },
+      select: { id: true, firstName: true, lastName: true, username: true, phone: true }
+    });
 
     const teacherByRef = new Map();
     for (const t of teachers) {
@@ -149,10 +132,11 @@ const teacherSalaryPaymentsImporter = {
       if (t.phone) teacherByRef.set(norm(t.phone), t);
     }
 
-    const groups = await Group.find(
-      { ...branchFilter(), isDeleted: { $ne: true } },
-      { name: 1, isActive: 1, branchId: 1 },
-    ).lean();
+    const groups = await prisma.group.findMany({
+      where: { isDeleted: false, ...branchFilter() },
+      select: { id: true, name: true, isActive: true, branchId: true }
+    });
+
     const groupByName = new Map();
     for (const g of groups) {
       const k = norm(g.name);
@@ -160,34 +144,33 @@ const teacherSalaryPaymentsImporter = {
       else groupByName.set(k, g);
     }
 
-    const teacherIds = [...new Set(teachers.map((t) => String(t._id)))].map(
-      (id) => new mongoose.Types.ObjectId(id),
-    );
+    const teacherIds = [...new Set(teachers.map((t) => String(t.id)))];
+    const groupIds = groups.map((g) => String(g.id));
+    
     const salaries = teacherIds.length
-      ? await TeacherSalary.find(
-          {
+      ? await prisma.teacherSalary.findMany({
+          where: {
             ...branchFilter(),
-            teacher: { $in: teacherIds },
-            group: { $in: groups.map((g) => g._id) },
+            teacherId: { in: teacherIds },
+            groupId: { in: groupIds },
           },
-          { teacher: 1, group: 1, year: 1, month: 1, expectedAmount: 1, paidAmount: 1 },
-        ).lean()
+          select: { id: true, teacherId: true, groupId: true, year: true, month: true, expectedAmount: true, paidAmount: true },
+        })
       : [];
 
     const salaryByKey = new Map();
     for (const s of salaries) {
-      salaryByKey.set(`${s.teacher}|${s.group}|${s.year}|${s.month}`, s);
+      salaryByKey.set(`${s.teacherId}|${s.groupId}|${s.year}|${s.month}`, s);
     }
 
-    // Mavjud maosh to'lovlari - takrorni ko'rib chiqish bosqichida aniqlash uchun.
     const existingKeys = new Set();
     if (salaries.length) {
-      const txs = await SalaryTransaction.find(
-        { salary: { $in: salaries.map((s) => s._id) }, isDeleted: { $ne: true } },
-        { salary: 1, amount: 1, paidAt: 1 },
-      ).lean();
+      const txs = await prisma.salaryTransaction.findMany({
+        where: { salaryId: { in: salaries.map((s) => String(s.id)) }, isDeleted: false },
+        select: { salaryId: true, amount: true, paidAt: true },
+      });
       for (const t of txs) {
-        existingKeys.add(`${t.salary}|${t.amount}|${dateKey(new Date(t.paidAt))}`);
+        existingKeys.add(`${t.salaryId}|${t.amount}|${dateKey(new Date(t.paidAt))}`);
       }
     }
 
@@ -243,11 +226,10 @@ const teacherSalaryPaymentsImporter = {
     const noteRes = asText(raw.note, { max: 300 });
     if (!noteRes.ok) push("Izoh", noteRes.error);
 
-    // ── Maosh hujjati ──
     let salary = null;
     if (teacher && group && yearRes.ok && monthRes.ok) {
       salary = ctx.salaryByKey.get(
-        `${teacher._id}|${group._id}|${yearRes.value}|${monthRes.value}`,
+        `${teacher.id}|${group.id}|${yearRes.value}|${monthRes.value}`,
       );
       if (!salary) {
         push(
@@ -256,9 +238,6 @@ const teacherSalaryPaymentsImporter = {
             "(o'qituvchi o'sha oyda guruhga biriktirilmagan yoki maosh hali hisoblanmagan)",
         );
       } else if (amountRes.ok) {
-        // Qoldiqdan oshgan to'lovni servis baribir rad etadi, lekin uni
-        // KO'RIB CHIQISH bosqichida aytish ancha foydali: foydalanuvchi
-        // faylni tuzatib qayta yuklaydi, yarim import qilib qo'ymaydi.
         const remaining = Math.max(0, (salary.expectedAmount || 0) - (salary.paidAmount || 0));
         if (amountRes.value > remaining) {
           push(
@@ -274,7 +253,7 @@ const teacherSalaryPaymentsImporter = {
     return {
       errors: [],
       data: {
-        salaryId: salary._id,
+        salaryId: salary.id,
         teacherName: `${teacher.firstName} ${teacher.lastName || ""}`.trim(),
         groupName: group.name,
         year: yearRes.value,
@@ -289,11 +268,6 @@ const teacherSalaryPaymentsImporter = {
 
   dedupeKey: (data) => (data ? rowKey(data) : null),
 
-  // Maosh to'lovi CHIQIM - filialning chiqim limitidan oshsa servis
-  // to'lamaydi, "tasdiq kutilmoqda" so'rovi yaratadi. Import buni XATO
-  // deb hisoblamaydi: pul chiqmadi, lekin so'rov yozildi - foydalanuvchi
-  // hisobotda aniq ko'radi. Aks holda import limit nazoratini aylanib
-  // o'tgan bo'lardi.
   commitRow: async (data, _ctx, { currentUser }) => {
     const result = await salaryTransactionService.create(
       {

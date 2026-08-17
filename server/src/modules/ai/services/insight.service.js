@@ -1,5 +1,5 @@
-import mongoose from "mongoose";
-import Insight from "../../../models/insight.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import { parsePagination, buildMeta } from "../../../utils/pagination.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
@@ -16,7 +16,7 @@ export const list = async (query = {}) => {
 
   const filter = { ...branchFilter() };
   if (query.status) filter.status = query.status;
-  else filter.status = { $in: OPEN_STATUSES };
+  else filter.status = { in: OPEN_STATUSES };
   if (query.kind) filter.kind = query.kind;
   if (query.subjectType) filter.subjectType = query.subjectType;
   if (query.severity) filter.severity = query.severity;
@@ -25,16 +25,20 @@ export const list = async (query = {}) => {
   // o'tish shart emas.
   if (query.domain) filter.domain = query.domain;
   if (query.stance) filter.stance = query.stance;
-  if (query.subjectId) {
-    filter.subjectId = new mongoose.Types.ObjectId(String(query.subjectId));
-  }
+  // ID ENDI ODDIY SATR - Postgres birlamchi kaliti `VARCHAR(24)`.
+  if (query.subjectId) filter.subjectId = String(query.subjectId);
 
   const [items, total] = await Promise.all([
-    Insight.find(filter).sort({ priority: -1, generatedAt: -1 }).skip(skip).limit(limit).lean(),
-    Insight.countDocuments(filter),
+    prisma.insight.findMany({
+      where: filter,
+      orderBy: [{ priority: "desc" }, { generatedAt: "desc" }],
+      skip,
+      take: limit,
+    }),
+    prisma.insight.count({ where: filter }),
   ]);
 
-  return { items, meta: buildMeta({ page, limit, total }) };
+  return { items: withLegacyIds(items), meta: buildMeta({ page, limit, total }) };
 };
 
 /**
@@ -45,12 +49,15 @@ export const list = async (query = {}) => {
  */
 export const actionCenter = async (query = {}) => {
   const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
-  const filter = { ...branchFilter(), status: { $in: OPEN_STATUSES } };
+  const filter = { ...branchFilter(), status: { in: OPEN_STATUSES } };
 
-  const items = await Insight.find(filter)
-    .sort({ priority: -1, generatedAt: -1 })
-    .limit(limit * 3)
-    .lean();
+  const items = withLegacyIds(
+    await prisma.insight.findMany({
+      where: filter,
+      orderBy: [{ priority: "desc" }, { generatedAt: "desc" }],
+      take: limit * 3,
+    }),
+  );
 
   const high = [];
   const medium = [];
@@ -70,28 +77,31 @@ export const actionCenter = async (query = {}) => {
     else medium.push(it);
   }
 
-  const totals = await Insight.aggregate([
-    { $match: filter },
-    {
-      $group: {
-        _id: { severity: "$severity", stance: "$stance" },
-        count: { $sum: 1 },
-        impact: { $sum: "$expectedImpact.amount" },
-      },
-    },
-  ]);
+  // Guruhlash IKKI ustun bo'yicha - `insights` jadvalining O'Z
+  // ustunlari, ya'ni `groupBy` yetarli. `expectedImpact.amount` Mongo'da
+  // ichma-ich obyekt edi; Prisma'da tekis `expectedImpactAmount`.
+  const totals = await prisma.insight.groupBy({
+    by: ["severity", "stance"],
+    where: filter,
+    _count: { _all: true },
+    _sum: { expectedImpactAmount: true },
+  });
 
   // Imkoniyatlar xavf sanog'iga QO'SHILMAYDI: "12 ta muammo bor" deb
   // ko'rsatish, holbuki 4 tasi o'sish taklifi, owner'ni behuda
   // vahimaga soladi va sonning o'ziga ishonchni yo'qotadi.
   const summary = { high: 0, medium: 0, low: 0, opportunities: 0, impactAtRisk: 0, upside: 0 };
+  // `groupBy` natijasida kalitlar `_id` emas, USTUN NOMLARI; sanoq va
+  // yig'indi esa `_count` / `_sum` ichida.
   for (const t of totals) {
-    if (t._id.stance === "opportunity") {
-      summary.opportunities += t.count;
-      summary.upside += t.impact || 0;
+    const count = t._count._all;
+    const impact = t._sum.expectedImpactAmount || 0;
+    if (t.stance === "opportunity") {
+      summary.opportunities += count;
+      summary.upside += impact;
     } else {
-      summary[t._id.severity] = (summary[t._id.severity] || 0) + t.count;
-      summary.impactAtRisk += t.impact || 0;
+      summary[t.severity] = (summary[t.severity] || 0) + count;
+      summary.impactAtRisk += impact;
     }
   }
 
@@ -110,21 +120,32 @@ export const actionCenter = async (query = {}) => {
  */
 export const bySubjects = async (subjectIds = []) => {
   if (!subjectIds.length) return {};
-  const ids = subjectIds.map((id) => new mongoose.Types.ObjectId(String(id)));
-  const rows = await Insight.find({
-    ...branchFilter(),
-    subjectId: { $in: ids },
-    status: { $in: OPEN_STATUSES },
-  })
-    .select("subjectId kind severity score confidence priority narration")
-    .sort({ priority: -1 })
-    .lean();
+  const ids = subjectIds.map(String);
+  const rows = await prisma.insight.findMany({
+    where: {
+      ...branchFilter(),
+      subjectId: { in: ids },
+      status: { in: OPEN_STATUSES },
+    },
+    // `id` ATAYLAB: klient tavsiyani `_id` bo'yicha ochadi.
+    select: {
+      id: true,
+      subjectId: true,
+      kind: true,
+      severity: true,
+      score: true,
+      confidence: true,
+      priority: true,
+      narration: true,
+    },
+    orderBy: { priority: "desc" },
+  });
 
   const out = {};
   for (const r of rows) {
     const key = String(r.subjectId);
     if (!out[key]) out[key] = [];
-    out[key].push(r);
+    out[key].push(withLegacyId(r));
   }
   return out;
 };
@@ -143,45 +164,54 @@ export const bySubjects = async (subjectIds = []) => {
  */
 export const byDomain = async (domain, query = {}) => {
   const limit = Math.min(20, Math.max(1, Number(query.limit) || 4));
-  const filter = { ...branchFilter(), domain, status: { $in: OPEN_STATUSES } };
+  const filter = { ...branchFilter(), domain, status: { in: OPEN_STATUSES } };
 
   const [risks, opportunities, totals] = await Promise.all([
-    Insight.find({ ...filter, stance: { $in: ["risk", "watch"] } })
-      .sort({ priority: -1, generatedAt: -1 })
-      .limit(limit)
-      .lean(),
-    Insight.find({ ...filter, stance: "opportunity" })
-      .sort({ priority: -1, generatedAt: -1 })
-      .limit(limit)
-      .lean(),
-    Insight.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: { severity: "$severity", stance: "$stance" },
-          count: { $sum: 1 },
-          impact: { $sum: "$expectedImpact.amount" },
-        },
-      },
-    ]),
+    prisma.insight.findMany({
+      where: { ...filter, stance: { in: ["risk", "watch"] } },
+      orderBy: [{ priority: "desc" }, { generatedAt: "desc" }],
+      take: limit,
+    }),
+    prisma.insight.findMany({
+      where: { ...filter, stance: "opportunity" },
+      orderBy: [{ priority: "desc" }, { generatedAt: "desc" }],
+      take: limit,
+    }),
+    prisma.insight.groupBy({
+      by: ["severity", "stance"],
+      where: filter,
+      _count: { _all: true },
+      _sum: { expectedImpactAmount: true },
+    }),
   ]);
 
   const summary = { high: 0, medium: 0, low: 0, opportunities: 0, impactAtRisk: 0, upside: 0 };
+  // `groupBy` natijasida kalitlar `_id` emas, USTUN NOMLARI; sanoq va
+  // yig'indi esa `_count` / `_sum` ichida.
   for (const t of totals) {
-    if (t._id.stance === "opportunity") {
-      summary.opportunities += t.count;
-      summary.upside += t.impact || 0;
+    const count = t._count._all;
+    const impact = t._sum.expectedImpactAmount || 0;
+    if (t.stance === "opportunity") {
+      summary.opportunities += count;
+      summary.upside += impact;
     } else {
-      summary[t._id.severity] = (summary[t._id.severity] || 0) + t.count;
-      summary.impactAtRisk += t.impact || 0;
+      summary[t.severity] = (summary[t.severity] || 0) + count;
+      summary.impactAtRisk += impact;
     }
   }
 
-  return { domain, risks, opportunities, summary };
+  return {
+    domain,
+    risks: withLegacyIds(risks),
+    opportunities: withLegacyIds(opportunities),
+    summary,
+  };
 };
 
 const findScoped = async (id) => {
-  const doc = await Insight.findOne({ _id: id, ...branchFilter() });
+  const doc = await prisma.insight.findFirst({
+    where: { id: String(id), ...branchFilter() },
+  });
   if (!doc) throw new ApiError(404, "Insight topilmadi");
   return doc;
 };
@@ -189,24 +219,32 @@ const findScoped = async (id) => {
 /** Owner "ko'rdim" deb belgilaydi - qayta hisoblash buni bosib o'tmaydi. */
 export const acknowledge = async (id, user) => {
   const doc = await findScoped(id);
-  doc.status = "acked";
-  doc.acknowledgedBy = user?._id || null;
-  doc.acknowledgedAt = new Date();
-  await doc.save();
-  return doc;
+  // MONGO'DA BU `doc.save()` EDI - Prisma'da faqat o'zgargan maydonlar.
+  return withLegacyId(
+    await prisma.insight.update({
+      where: { id: doc.id },
+      data: {
+        status: "acked",
+        acknowledgedById: user?._id ? String(user._id) : null,
+        acknowledgedAt: new Date(),
+      },
+    }),
+  );
 };
 
 /** Vazifa bajarildi. outcome tungi job tomonidan 30 kundan keyin aniqlanadi. */
 export const resolve = async (id, user) => {
   const doc = await findScoped(id);
-  doc.status = "done";
-  doc.resolvedAt = new Date();
-  if (!doc.acknowledgedBy) {
-    doc.acknowledgedBy = user?._id || null;
-    doc.acknowledgedAt = new Date();
+  const data = { status: "done", resolvedAt: new Date() };
+  // Ilgari "ko'rdim" belgilanmagan bo'lsa - hozir belgilaymiz
+  // (`acknowledgedBy` -> `acknowledgedById`).
+  if (!doc.acknowledgedById) {
+    data.acknowledgedById = user?._id ? String(user._id) : null;
+    data.acknowledgedAt = new Date();
   }
-  await doc.save();
-  return doc;
+  return withLegacyId(
+    await prisma.insight.update({ where: { id: doc.id }, data }),
+  );
 };
 
 /**
@@ -219,10 +257,16 @@ export const dismiss = async (id, reason, user) => {
     throw new ApiError(400, "Rad etish sababini yozing");
   }
   const doc = await findScoped(id);
-  doc.status = "dismissed";
-  doc.dismissReason = String(reason).trim();
-  doc.resolvedAt = new Date();
-  doc.acknowledgedBy = doc.acknowledgedBy || user?._id || null;
-  await doc.save();
-  return doc;
+  return withLegacyId(
+    await prisma.insight.update({
+      where: { id: doc.id },
+      data: {
+        status: "dismissed",
+        dismissReason: String(reason).trim(),
+        resolvedAt: new Date(),
+        acknowledgedById:
+          doc.acknowledgedById || (user?._id ? String(user._id) : null),
+      },
+    }),
+  );
 };

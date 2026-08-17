@@ -1,13 +1,5 @@
-import mongoose from "mongoose";
-import Notification from "../../../models/notification.model.js";
-import NotificationRecipient from "../../../models/notificationRecipient.model.js";
-import NotificationTemplate from "../../../models/notificationTemplate.model.js";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import BotUser from "../../../models/botUser.model.js";
 import prisma from "../../../config/prisma.js";
-import { withLegacyId, withPopulatedShape } from "../../../utils/serialize.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -23,80 +15,50 @@ import { userBranchCondition } from "../../../helpers/branchContext.helper.js";
 
 // OLUVCHILARNI FILIAL BO'YICHA KESISH.
 //
-// Ilgari `resolveAudience` ichidagi HECH BIR User.find'da filial ko'lami
-// yo'q edi: "Barcha o'quvchilar" ni tanlagan filial direktori butun
-// markazning o'quvchilariga xabar yuborardi va preview'da ularning
-// ism-familiyasi bilan telefon raqamini ko'rardi
-// (tests/branchLeak.test.js shu sizishni tutgan edi).
+// `$and` → `AND`: Prisma'da Mongo'dagi `$and` o'rniga `AND` ishlatiladi.
+// Prisma `$and` ni NOMA'LUM KALIT deb jimgina e'tiborsiz qoldiradi —
+// ya'ni filtr umuman qo'llanmaydi va filial sizishi bo'ladi.
 //
-// $and ISHLATILADI, $or emas: userBranchCondition() o'zi $or qaytaradi va
-// uni to'g'ridan-to'g'ri qo'yish filtrdagi boshqa $or ni jimgina bosib
-// ketardi (helper izohida ogohlantirilgan).
-//
-// FON VAZIFALARI (Agenda job) ta'sirlanmaydi: ular request konteksti
+// FON VAZIFALARI (pg-boss job) ta'sirlanmaydi: ular request konteksti
 // tashqarisida ishlaydi, u yerda helper `null` qaytaradi va filtr
 // o'zgarishsiz qoladi.
 const withBranchScope = (filter) => {
   const condition = userBranchCondition();
-  return condition ? { ...filter, $and: [condition] } : filter;
+  return condition ? { AND: [filter, condition] } : filter;
 };
 
 // Bir vaqtning o'zida nechta bot xabari yuborilsin (Telegram ~30/sek global limit)
 const DELIVERY_CONCURRENCY = 20;
 
-const SENDER_PROJECTION = { firstName: 1, lastName: 1, role: 1 };
-
-const runWithSession = async (fn) => {
-  let session;
-  try {
-    session = await mongoose.startSession();
-    session.startTransaction();
-    const result = await fn(session);
-    await session.commitTransaction();
-    session.endSession();
-    return result;
-  } catch (err) {
-    if (session) {
-      try {
-        await session.abortTransaction();
-      } catch {
-        /* noop */
-      }
-      session.endSession();
-    }
-    if (
-      err?.code === 20 ||
-      err?.codeName === "IllegalOperation" ||
-      err?.message?.includes("Transaction") ||
-      err?.message?.includes("replica set")
-    ) {
-      return fn(null);
-    }
-    throw err;
-  }
-};
+const SENDER_SELECT = { id: true, firstName: true, lastName: true, role: true };
 
 // Teacher uchun ruxsat etilgan audience type'lar
 const TEACHER_ALLOWED_AUDIENCE = new Set(["groups", "users", "individual"]);
 
 // Bitta o'qituvchining barcha guruhlari ID'larini qaytaradi
+// `teachers` — M2M relation (GroupTeachers), shuning uchun `some` ishlatiladi.
 const getTeacherGroupIds = async (teacherId) => {
-  const groups = await Group.find(
-    { teachers: teacherId, isActive: true, isDeleted: { $ne: true } },
-    { _id: 1 },
-  );
-  return groups.map((g) => g._id);
+  const groups = await prisma.group.findMany({
+    where: {
+      teachers: { some: { id: String(teacherId) } },
+      isActive: true,
+      isDeleted: false,
+    },
+    select: { id: true },
+  });
+  return groups.map((g) => g.id);
 };
 
 // Bitta o'qituvchining barcha active o'quvchilari ID'larini qaytaradi
 const getTeacherStudentIds = async (teacherId) => {
   const groupIds = await getTeacherGroupIds(teacherId);
   if (!groupIds.length) return [];
-  const memberships = await GroupMembership.find(
-    { group: { $in: groupIds }, leftAt: null, isDeleted: { $ne: true } },
-    { student: 1 },
-  );
-  const set = new Set(memberships.map((m) => String(m.student)));
+  // `group` → `groupId`, `student` → `studentId`: Prisma skalyar FK.
+  const memberships = await prisma.groupMembership.findMany({
+    where: { groupId: { in: groupIds }, leftAt: null, isDeleted: false },
+    select: { studentId: true },
+  });
+  const set = new Set(memberships.map((m) => String(m.studentId)));
   return [...set];
 };
 
@@ -120,65 +82,63 @@ export const resolveAudience = async (audience, currentUser) => {
       if (!isOwner && !isSystem) {
         throw new ApiError(403, "Ruxsat yo'q");
       }
-      const users = await User.find(
-        withBranchScope({
+      const users = await prisma.user.findMany({
+        where: withBranchScope({
           role: ROLES.STUDENT,
           isActive: true,
-          isDeleted: { $ne: true },
+          isDeleted: false,
         }),
-        { _id: 1 },
-      );
-      recipientIds = users.map((u) => u._id);
+        select: { id: true },
+      });
+      recipientIds = users.map((u) => u.id);
       break;
     }
     case "all_teachers": {
       if (!isOwner && !isSystem) {
         throw new ApiError(403, "Ruxsat yo'q");
       }
-      const users = await User.find(
-        withBranchScope({
+      const users = await prisma.user.findMany({
+        where: withBranchScope({
           role: ROLES.TEACHER,
           isActive: true,
-          isDeleted: { $ne: true },
+          isDeleted: false,
         }),
-        { _id: 1 },
-      );
-      recipientIds = users.map((u) => u._id);
+        select: { id: true },
+      });
+      recipientIds = users.map((u) => u.id);
       break;
     }
     case "groups": {
-      const groupIds = (audience.groupIds || []).map(
-        (id) => new mongoose.Types.ObjectId(String(id)),
-      );
+      const groupIds = (audience.groupIds || []).map(String);
       if (groupIds.length === 0) {
         throw new ApiError(400, "Kamida bitta guruh tanlanishi kerak");
       }
       if (isTeacher) {
-        const myGroupIds = (await getTeacherGroupIds(currentUser._id)).map(
-          String,
-        );
-        const allMine = groupIds.every((id) =>
-          myGroupIds.includes(String(id)),
-        );
+        const myGroupIds = (
+          await getTeacherGroupIds(currentUser._id || currentUser.id)
+        ).map(String);
+        const allMine = groupIds.every((id) => myGroupIds.includes(id));
         if (!allMine) {
           throw new ApiError(403, "Faqat o'z guruhlaringizga yubora olasiz");
         }
       }
-      const memberships = await GroupMembership.find(
-        { group: { $in: groupIds }, leftAt: null, isDeleted: { $ne: true } },
-        { student: 1 },
-      );
-      const studentIds = [...new Set(memberships.map((m) => String(m.student)))];
+      const memberships = await prisma.groupMembership.findMany({
+        where: { groupId: { in: groupIds }, leftAt: null, isDeleted: false },
+        select: { studentId: true },
+      });
+      const studentIds = [
+        ...new Set(memberships.map((m) => String(m.studentId))),
+      ];
       // Boshqa branchlar kabi - faqat aktiv, o'chirilmagan o'quvchilar.
-      const activeStudents = await User.find(
-        withBranchScope({
-          _id: { $in: studentIds },
+      const activeStudents = await prisma.user.findMany({
+        where: withBranchScope({
+          id: { in: studentIds },
           isActive: true,
-          isDeleted: { $ne: true },
+          isDeleted: false,
         }),
-        { _id: 1 },
-      );
-      recipientIds = activeStudents.map((u) => u._id);
+        select: { id: true },
+      });
+      recipientIds = activeStudents.map((u) => u.id);
       break;
     }
     case "users":
@@ -190,7 +150,9 @@ export const resolveAudience = async (audience, currentUser) => {
       }
       if (isTeacher) {
         // Teacher faqat o'z guruhi o'quvchilari
-        const myStudents = new Set(await getTeacherStudentIds(currentUser._id));
+        const myStudents = new Set(
+          await getTeacherStudentIds(currentUser._id || currentUser.id),
+        );
         const allMine = userIds.every((id) => myStudents.has(id));
         if (!allMine) {
           throw new ApiError(
@@ -202,15 +164,15 @@ export const resolveAudience = async (audience, currentUser) => {
       // ID'lar OCHIQ berilgani ko'lamdan ozod qilmaydi: aks holda direktor
       // boshqa filial o'quvchisining ID'sini qo'lda kiritib xabar
       // yuborardi (va preview orqali uning telefon raqamini olardi).
-      const users = await User.find(
-        withBranchScope({
-          _id: { $in: userIds },
+      const users = await prisma.user.findMany({
+        where: withBranchScope({
+          id: { in: userIds },
           isActive: true,
-          isDeleted: { $ne: true },
+          isDeleted: false,
         }),
-        { _id: 1 },
-      );
-      recipientIds = users.map((u) => u._id);
+        select: { id: true },
+      });
+      recipientIds = users.map((u) => u.id);
       break;
     }
     case "auto_system": {
@@ -230,20 +192,19 @@ export const resolveAudience = async (audience, currentUser) => {
         recipientIds = [];
         break;
       }
-      const users = await User.find(
-        { _id: { $in: ids }, isActive: true, isDeleted: { $ne: true } },
-        { _id: 1 },
-      );
-      recipientIds = users.map((u) => u._id);
+      const users = await prisma.user.findMany({
+        where: { id: { in: ids }, isActive: true, isDeleted: false },
+        select: { id: true },
+      });
+      recipientIds = users.map((u) => u.id);
       break;
     }
     default:
       throw new ApiError(400, "Noto'g'ri audience turi");
   }
 
-  // Deduplicate
-  const uniqueSet = new Set(recipientIds.map(String));
-  return [...uniqueSet].map((id) => new mongoose.Types.ObjectId(id));
+  // Deduplicate — Prisma oddiy string qaytaradi, ObjectId o'rami kerak emas.
+  return [...new Set(recipientIds.map(String))];
 };
 
 // Jonli preview: tanlangan auditoriya bo'yicha nechta oluvchi chiqishini
@@ -257,21 +218,21 @@ export const previewAudience = async (audience, currentUser) => {
   // yuborardi, lekin botni bloklaganlarga xabar UMUMAN yetmasdi va buni
   // faqat keyin, oluvchilar jadvalidan bilib olardi. Endi ogohlantirish
   // yuborishdan OLDIN chiqadi.
-  const users = await User.find(
-    { _id: { $in: recipientIds } },
-    { firstName: 1, lastName: 1, phone: 1 },
-  ).lean();
+  const users = await prisma.user.findMany({
+    where: { id: { in: recipientIds } },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+  });
   const botMap = await fetchBotStatusMap(recipientIds);
 
   const buckets = { linked: [], blocked: [], not_linked: [] };
   for (const u of users) {
-    const status = botMap.get(String(u._id))?.status || BOT_STATUS.NOT_LINKED;
+    const status = botMap.get(String(u.id))?.status || BOT_STATUS.NOT_LINKED;
     buckets[status].push(u);
   }
 
   const brief = (list) =>
     list.map((u) => ({
-      _id: u._id,
+      _id: u.id,
       firstName: u.firstName,
       lastName: u.lastName,
       phone: u.phone,
@@ -309,28 +270,32 @@ const runPool = async (items, concurrency, worker) => {
 // Bot push - yetkazilmagan oluvchilarga partiyalab, cheklangan parallellik bilan.
 // Idempotent: faqat botDeliveredAt=null bo'lganlarni qayta uradi (job retry xavfsiz).
 export const deliverNotification = async (notificationId) => {
-  const notif = await Notification.findById(notificationId).lean();
+  const notif = await prisma.notification.findUnique({
+    where: { id: String(notificationId) },
+  });
   if (!notif) return;
 
   // Telegram kanali tanlanmagan bo'lsa - bot push qilinmaydi (faqat in-app).
   const channels = notif.channels?.length ? notif.channels : ["inapp", "telegram"];
   if (!channels.includes("telegram")) return;
 
-  const recipients = await NotificationRecipient.find({
-    notification: notificationId,
-    botDeliveredAt: null,
-  })
-    .select("_id user")
-    .lean();
+  const recipients = await prisma.notificationRecipient.findMany({
+    where: {
+      notificationId: String(notificationId),
+      botDeliveredAt: null,
+    },
+    select: { id: true, userId: true },
+  });
   if (recipients.length === 0) return;
 
   // Barcha BotUser'larni BITTA so'rovda olamiz (N+1 yo'q)
-  const userIds = recipients.map((r) => r.user);
-  const botUsers = await BotUser.find(
-    { user: { $in: userIds } },
-    { user: 1, chatId: 1, telegramId: 1, isBlocked: 1 },
-  ).lean();
-  const buByUser = new Map(botUsers.map((b) => [String(b.user), b]));
+  // `user` → `userId`: Prisma'da `user` RELATION, `userId` skalyar FK.
+  const userIds = recipients.map((r) => r.userId);
+  const botUsers = await prisma.botUser.findMany({
+    where: { userId: { in: userIds } },
+    select: { userId: true, chatId: true, telegramId: true, isBlocked: true },
+  });
+  const buByUser = new Map(botUsers.map((b) => [String(b.userId), b]));
 
   const { deliverToChat } = await import(
     "../../../bot/services/notificationDeliver.service.js"
@@ -341,60 +306,63 @@ export const deliverNotification = async (notificationId) => {
   const bodyByUser = await personalizeBulk(notif.body, userIds);
 
   let delivered = 0;
-  const ops = [];
+  const updates = [];
   await runPool(recipients, DELIVERY_CONCURRENCY, async (r) => {
-    const bu = buByUser.get(String(r.user));
+    const bu = buByUser.get(String(r.userId));
     if (!bu || bu.isBlocked || !bu.chatId) {
-      ops.push({
-        updateOne: {
-          filter: { _id: r._id },
-          update: { $set: { botFailedReason: "no-bot-link" } },
-        },
-      });
+      updates.push(
+        prisma.notificationRecipient.update({
+          where: { id: r.id },
+          data: { botFailedReason: "no-bot-link" },
+        }),
+      );
       return;
     }
+    // BigInt → Number: Telegram API raqam kutadi, Postgres BigInt qaytaradi.
     const res = await deliverToChat(
-      { chatId: bu.chatId, telegramId: bu.telegramId },
+      { chatId: Number(bu.chatId), telegramId: Number(bu.telegramId) },
       {
         title: notif.title,
-        body: bodyByUser.get(String(r.user)) ?? notif.body,
+        body: bodyByUser.get(String(r.userId)) ?? notif.body,
         category: notif.category,
       },
     );
     if (res.ok) {
       delivered += 1;
-      ops.push({
-        updateOne: {
-          filter: { _id: r._id },
-          update: { $set: { botDeliveredAt: new Date(), botFailedReason: null } },
-        },
-      });
+      updates.push(
+        prisma.notificationRecipient.update({
+          where: { id: r.id },
+          data: { botDeliveredAt: new Date(), botFailedReason: "" },
+        }),
+      );
     } else if (!res.transient) {
       // transient (bot-not-running / 429) - terminal sifatida saqlamaymiz, keyin retry bo'ladi
-      ops.push({
-        updateOne: {
-          filter: { _id: r._id },
-          update: { $set: { botFailedReason: res.reason } },
-        },
-      });
+      updates.push(
+        prisma.notificationRecipient.update({
+          where: { id: r.id },
+          data: { botFailedReason: res.reason },
+        }),
+      );
     }
   });
 
-  if (ops.length) await NotificationRecipient.bulkWrite(ops, { ordered: false });
+  // Mongoose bulkWrite o'rniga — individual update'lar.
+  // Ordered:false ekvivalenti: allSettled bilan hamma uriniladi.
+  if (updates.length) await Promise.allSettled(updates);
   if (delivered > 0) {
-    await Notification.updateOne(
-      { _id: notificationId },
-      { $inc: { deliveredViaBot: delivered } },
-    );
+    await prisma.notification.update({
+      where: { id: String(notificationId) },
+      data: { deliveredViaBot: { increment: delivered } },
+    });
   }
 };
 
-// Yetkazishni so'rov oqimidan ajratamiz: Agenda job'iga qo'yamiz.
-// Agenda mavjud bo'lmasa (mas. test) - fonда (detached) bajaramiz.
+// Yetkazishni so'rov oqimidan ajratamiz: pg-boss job'iga qo'yamiz.
+// pg-boss mavjud bo'lmasa (mas. test) - fonda (detached) bajaramiz.
 const scheduleDelivery = async (notificationId) => {
   try {
-    const agenda = (await import("../../../config/scheduler.js")).default;
-    await agenda.now("notification.deliver", {
+    const scheduler = (await import("../../../config/scheduler.js")).default;
+    await scheduler.now("notification.deliver", {
       notificationId: String(notificationId),
     });
   } catch (err) {
@@ -415,9 +383,11 @@ export const send = async (body, currentUser) => {
   let finalCategory = body.category || "other";
 
   if (body.templateId) {
-    const tpl = await NotificationTemplate.findById(body.templateId);
+    const tpl = await prisma.notificationTemplate.findUnique({
+      where: { id: String(body.templateId) },
+    });
     if (!tpl) throw new ApiError(400, "Shablon topilmadi");
-    templateRef = tpl._id;
+    templateRef = tpl.id;
     if (!finalBody) finalBody = tpl.body;
     if (finalCategory === "other") finalCategory = "template_based";
   }
@@ -429,8 +399,10 @@ export const send = async (body, currentUser) => {
   // Idempotentlik: dedupeKey berilsa va shunday xabar mavjud bo'lsa - qayta yaratmaymiz
   // (avto job'lar/qayta-urinishlar dublikat bildirishnoma yaratmasligi uchun)
   if (body.dedupeKey) {
-    const existing = await Notification.findOne({ dedupeKey: body.dedupeKey });
-    if (existing) return existing;
+    const existing = await prisma.notification.findFirst({
+      where: { dedupeKey: body.dedupeKey },
+    });
+    if (existing) return withLegacyId(existing);
   }
 
   const senderRole = currentUser
@@ -447,37 +419,58 @@ export const send = async (body, currentUser) => {
   const scheduleAt = body.scheduleAt ? new Date(body.scheduleAt) : null;
   const isScheduled = scheduleAt && scheduleAt.getTime() > Date.now() + 30 * 1000;
 
+  // Audience ma'lumotlari — Prisma'da `audienceType` + `audienceGroups`/`audienceUsers`
+  // M2M relation orqali saqlanadi (Mongo'dagi ichki obyekt o'rniga).
+  const audienceType = body.audience.type;
+  const audienceGroupIds = (body.audience.groupIds || []).map(String);
+  const audienceUserIds = (body.audience.userIds || []).map(String);
+
+  const senderId = currentUser?._id || currentUser?.id || null;
+
   // 1) Notification hujjatini yaratamiz (recipient'larsiz, status'ga qarab).
-  const notification = await Notification.create({
-    sender: currentUser?._id || null,
-    senderRole,
-    title: body.title || "",
-    body: finalBody,
-    category: finalCategory,
-    template: templateRef,
-    audience: body.audience,
-    channels,
-    status: isScheduled ? "scheduled" : "sent",
-    scheduleAt: isScheduled ? scheduleAt : null,
-    recipientsCount: recipientIds.length, // preview snapshot
-    deliveredViaBot: 0,
-    readCount: 0,
-    isAuto: !!body.isAuto,
-    dedupeKey: body.dedupeKey || null,
-    relatedFeedback: body.relatedFeedback || null,
-    sentAt: isScheduled ? scheduleAt : new Date(),
+  // `sender` → `senderId`, `template` → `templateId`: Prisma FK maydon nomlari.
+  const notification = await prisma.notification.create({
+    data: {
+      senderId: senderId ? String(senderId) : null,
+      senderRole,
+      title: body.title || "",
+      body: finalBody,
+      category: finalCategory,
+      templateId: templateRef,
+      audienceType,
+      // M2M connect: guruh/user ID'larini bog'laymiz.
+      ...(audienceGroupIds.length > 0
+        ? { audienceGroups: { connect: audienceGroupIds.map((id) => ({ id })) } }
+        : {}),
+      ...(audienceUserIds.length > 0
+        ? { audienceUsers: { connect: audienceUserIds.map((id) => ({ id })) } }
+        : {}),
+      channels,
+      status: isScheduled ? "scheduled" : "sent",
+      scheduleAt: isScheduled ? scheduleAt : null,
+      recipientsCount: recipientIds.length,
+      deliveredViaBot: 0,
+      readCount: 0,
+      isAuto: !!body.isAuto,
+      dedupeKey: body.dedupeKey || null,
+      relatedFeedbackId: body.relatedFeedback ? String(body.relatedFeedback) : null,
+      sentAt: isScheduled ? scheduleAt : new Date(),
+    },
   });
 
   if (isScheduled) {
     // Recipient'lar va bot push job ishga tushganda materializatsiya qilinadi
     // (shu vaqtga qadar auditoriya o'zgargan bo'lsa - eng so'nggi holat olinadi).
-    await scheduleSend(notification._id, scheduleAt);
-    return notification;
+    await scheduleSend(notification.id, scheduleAt);
+    return withLegacyId(notification);
   }
 
   // Darhol yuborish - recipient'larni yaratamiz va bot push'ni navbatga qo'yamiz.
-  await materializeRecipients(notification._id, recipientIds, channels);
-  return Notification.findById(notification._id);
+  await materializeRecipients(notification.id, recipientIds, channels);
+  const created = await prisma.notification.findUnique({
+    where: { id: notification.id },
+  });
+  return withLegacyId(created);
 };
 
 // Notification uchun recipient hujjatlarini yaratadi va (telegram tanlangan bo'lsa)
@@ -486,13 +479,16 @@ export const send = async (body, currentUser) => {
 const materializeRecipients = async (notificationId, recipientIds, channels) => {
   const wantsInapp = channels.includes("inapp");
   if (recipientIds.length > 0) {
-    const docs = recipientIds.map((uid) => ({
-      notification: notificationId,
-      user: uid,
-      inapp: wantsInapp,
-      readAt: null,
-    }));
-    await NotificationRecipient.insertMany(docs, { ordered: false });
+    // `notification` → `notificationId`, `user` → `userId`: Prisma FK.
+    await prisma.notificationRecipient.createMany({
+      data: recipientIds.map((uid) => ({
+        notificationId: String(notificationId),
+        userId: String(uid),
+        inapp: wantsInapp,
+        readAt: null,
+      })),
+      skipDuplicates: true,
+    });
   }
 
   if (recipientIds.length > 0 && channels.includes("telegram")) {
@@ -500,11 +496,11 @@ const materializeRecipients = async (notificationId, recipientIds, channels) => 
   }
 };
 
-// Rejalashtirilgan yuborishni belgilangan vaqtga Agenda job'iga qo'yadi.
+// Rejalashtirilgan yuborishni belgilangan vaqtga pg-boss job'iga qo'yadi.
 const scheduleSend = async (notificationId, when) => {
   try {
-    const agenda = (await import("../../../config/scheduler.js")).default;
-    await agenda.schedule(when, "notification.send", {
+    const scheduler = (await import("../../../config/scheduler.js")).default;
+    await scheduler.schedule(when, "notification.send", {
       notificationId: String(notificationId),
     });
   } catch (err) {
@@ -516,46 +512,61 @@ const scheduleSend = async (notificationId, when) => {
   }
 };
 
-// Rejalashtirilgan yuborish vaqti kelganda Agenda job tomonidan chaqiriladi:
+// Rejalashtirilgan yuborish vaqti kelganda pg-boss job tomonidan chaqiriladi:
 // auditoriyani QAYTA hisoblaydi (eng so'nggi holat), recipient'larni yaratadi,
 // holatni "sent" ga o'tkazadi va bot push'ni navbatga qo'yadi. Idempotent -
 // status allaqachon "sent" bo'lsa hech nima qilmaydi.
 export const dispatchScheduled = async (notificationId) => {
-  const notif = await Notification.findById(notificationId);
+  const notif = await prisma.notification.findUnique({
+    where: { id: String(notificationId) },
+    include: { audienceGroups: { select: { id: true } }, audienceUsers: { select: { id: true } } },
+  });
   if (!notif || notif.status !== "scheduled") return;
 
-  const sender = notif.sender
-    ? { _id: notif.sender, role: notif.senderRole === "owner" ? ROLES.OWNER : ROLES.TEACHER }
+  // Audience'ni tiklash — Prisma'da alohida maydon/relation'larda saqlangan.
+  const audience = {
+    type: notif.audienceType,
+    groupIds: (notif.audienceGroups || []).map((g) => g.id),
+    userIds: (notif.audienceUsers || []).map((u) => u.id),
+  };
+
+  const sender = notif.senderId
+    ? { _id: notif.senderId, role: notif.senderRole === "owner" ? ROLES.OWNER : ROLES.TEACHER }
     : null;
-  const recipientIds = await resolveAudience(notif.audience, sender);
+  const recipientIds = await resolveAudience(audience, sender);
 
   const channels = notif.channels?.length ? notif.channels : ["inapp", "telegram"];
-  await Notification.updateOne(
-    { _id: notif._id, status: "scheduled" },
-    { $set: { status: "sent", sentAt: new Date(), recipientsCount: recipientIds.length } },
-  );
-  await materializeRecipients(notif._id, recipientIds, channels);
+  // Shartli atomik yangilanish: faqat "scheduled" holatdagini "sent" ga o'tkazamiz.
+  await prisma.notification.updateMany({
+    where: { id: notif.id, status: "scheduled" },
+    data: { status: "sent", sentAt: new Date(), recipientsCount: recipientIds.length },
+  });
+  await materializeRecipients(notif.id, recipientIds, channels);
 };
 
 // Rejalashtirilgan xabarni bekor qilish (hali yuborilmagan bo'lsa).
 export const cancelScheduled = async (notificationId) => {
-  const notif = await Notification.findById(notificationId);
+  const notif = await prisma.notification.findUnique({
+    where: { id: String(notificationId) },
+  });
   if (!notif) throw new ApiError(404, "Xabar topilmadi");
   if (notif.status !== "scheduled") {
     throw new ApiError(400, "Faqat rejalashtirilgan xabarni bekor qilish mumkin");
   }
-  notif.status = "canceled";
-  await notif.save();
+  // Mongoose `doc.save()` o'rniga — Prisma `update`.
+  const updated = await prisma.notification.update({
+    where: { id: notif.id },
+    data: { status: "canceled" },
+  });
   try {
-    const agenda = (await import("../../../config/scheduler.js")).default;
-    await agenda.cancel({
+    const scheduler = (await import("../../../config/scheduler.js")).default;
+    await scheduler.cancel({
       name: "notification.send",
-      "data.notificationId": String(notificationId),
     });
   } catch (err) {
     logger.warn({ err, notificationId }, "Reja job'ini bekor qilishda xato");
   }
-  return notif;
+  return withLegacyId(updated);
 };
 
 export const list = async ({
@@ -569,43 +580,71 @@ export const list = async ({
   page = 1,
   limit = 20,
 }) => {
-  const filter = {};
-  if (senderId) filter.sender = senderId;
-  if (category) filter.category = category;
-  if (channel) filter.channels = channel;
-  if (status) filter.status = status;
+  const where = {};
+  if (senderId) where.senderId = String(senderId);
+  if (category) where.category = category;
+  // `channels` Prisma'da enum massiv — `has` operatori bilan filtrlanadi.
+  if (channel) where.channels = { has: channel };
+  if (status) where.status = status;
   if (search) {
-    const rx = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    filter.$or = [{ title: rx }, { body: rx }];
+    const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Mongo `$regex` → Prisma `contains` + `mode: "insensitive"`.
+    where.OR = [
+      { title: { contains: escaped, mode: "insensitive" } },
+      { body: { contains: escaped, mode: "insensitive" } },
+    ];
   }
   if (fromDate || toDate) {
-    filter.sentAt = {};
-    if (fromDate) filter.sentAt.$gte = new Date(fromDate);
-    if (toDate) filter.sentAt.$lte = new Date(toDate);
+    where.sentAt = {};
+    if (fromDate) where.sentAt.gte = new Date(fromDate);
+    if (toDate) where.sentAt.lte = new Date(toDate);
   }
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Notification.find(filter)
-      .sort({ sentAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("sender", SENDER_PROJECTION)
-      .populate("template", { name: 1, category: 1 }),
-    Notification.countDocuments(filter),
+    prisma.notification.findMany({
+      where,
+      orderBy: { sentAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        sender: { select: SENDER_SELECT },
+        template: { select: { id: true, name: true, category: true } },
+      },
+    }),
+    prisma.notification.count({ where }),
   ]);
-  return { items, total, page, limit };
+
+  // Frontend `item.sender.firstName` va `item.template.name` o'qiydi.
+  // Eski Mongo populate'da `_id` avtomatik qaytardi — Prisma'da `id` bor,
+  // `withLegacyId` chuqur o'tib `_id` qo'shadi.
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 export const getById = async (id) => {
-  const notif = await Notification.findById(id)
-    .populate("sender", SENDER_PROJECTION)
-    .populate("template", { name: 1, body: 1, category: 1 })
-    .populate("audience.groupIds", { name: 1 })
-    .populate("audience.userIds", { firstName: 1, lastName: 1, role: 1 })
-    .populate("relatedFeedback", { message: 1, status: 1 });
+  const notif = await prisma.notification.findUnique({
+    where: { id: String(id) },
+    include: {
+      sender: { select: SENDER_SELECT },
+      template: { select: { id: true, name: true, body: true, category: true } },
+      // Mongo `populate("audience.groupIds")` → Prisma M2M relation.
+      audienceGroups: { select: { id: true, name: true } },
+      audienceUsers: { select: { id: true, firstName: true, lastName: true, role: true } },
+      relatedFeedback: { select: { id: true, message: true, status: true } },
+    },
+  });
   if (!notif) throw new ApiError(404, "Xabar topilmadi");
-  return notif;
+
+  // Frontend `notif.audience.type`, `notif.audience.groupIds[].name`,
+  // `notif.audience.userIds[].firstName` shaklida o'qiydi.
+  // Prisma'da bu alohida maydon/relation — eski shaklni tiklaymiz.
+  const result = withLegacyId(notif);
+  result.audience = {
+    type: notif.audienceType,
+    groupIds: withLegacyIds(notif.audienceGroups || []),
+    userIds: withLegacyIds(notif.audienceUsers || []),
+  };
+  return result;
 };
 
 export const getRecipientList = async (notifId, { page = 1, limit = 50 }) => {
@@ -752,45 +791,54 @@ export const getStats = async ({ fromDate, toDate } = {}) => {
   // Faqat haqiqatan yuborilgan xabarlar statistikaga kiradi.
   // scheduled (hali yuborilmagan, recipientsCount faqat preview) va canceled
   // (umuman yetkazilmagan) yozuvlar totalRecipients va readRate'ni buzadi.
-  const range = { status: "sent" };
+  const where = { status: "sent" };
   if (fromDate || toDate) {
-    range.sentAt = {};
-    if (fromDate) range.sentAt.$gte = new Date(fromDate);
-    if (toDate) range.sentAt.$lte = new Date(toDate);
+    where.sentAt = {};
+    if (fromDate) where.sentAt.gte = new Date(fromDate);
+    if (toDate) where.sentAt.lte = new Date(toDate);
   }
 
+  // Mongo aggregate → Prisma groupBy + aggregate.
+  // `$group {_id: "$category"}` → `groupBy({by: ["category"]})`.
+  // `$group {_id: null}` → `aggregate({_sum, _count})`.
   const [total, byCategory, totals] = await Promise.all([
-    Notification.countDocuments(range),
-    Notification.aggregate([
-      { $match: range },
-      {
-        $group: {
-          _id: "$category",
-          count: { $sum: 1 },
-          recipients: { $sum: "$recipientsCount" },
-          delivered: { $sum: "$deliveredViaBot" },
-          reads: { $sum: "$readCount" },
-        },
+    prisma.notification.count({ where }),
+    prisma.notification.groupBy({
+      by: ["category"],
+      where,
+      _count: { _all: true },
+      _sum: {
+        recipientsCount: true,
+        deliveredViaBot: true,
+        readCount: true,
       },
-      { $sort: { count: -1 } },
-    ]),
-    Notification.aggregate([
-      { $match: range },
-      {
-        $group: {
-          _id: null,
-          totalRecipients: { $sum: "$recipientsCount" },
-          totalDelivered: { $sum: "$deliveredViaBot" },
-          totalReads: { $sum: "$readCount" },
-        },
+      orderBy: { _count: { _all: "desc" } },
+    }),
+    prisma.notification.aggregate({
+      where,
+      _sum: {
+        recipientsCount: true,
+        deliveredViaBot: true,
+        readCount: true,
       },
-    ]),
+    }),
   ]);
 
-  const t = totals[0] || {
-    totalRecipients: 0,
-    totalDelivered: 0,
-    totalReads: 0,
+  // Mongo aggregate shakli: { _id: "...", count, recipients, delivered, reads }
+  // Prisma groupBy shakli: { category, _count: { _all }, _sum: { ... } }
+  // Eski shaklga o'giramiz — klient shunga tayanadi.
+  const byCategoryFormatted = byCategory.map((r) => ({
+    _id: r.category,
+    count: r._count._all,
+    recipients: r._sum.recipientsCount || 0,
+    delivered: r._sum.deliveredViaBot || 0,
+    reads: r._sum.readCount || 0,
+  }));
+
+  const t = {
+    totalRecipients: totals._sum.recipientsCount || 0,
+    totalDelivered: totals._sum.deliveredViaBot || 0,
+    totalReads: totals._sum.readCount || 0,
   };
   const readRate =
     t.totalRecipients > 0
@@ -803,7 +851,7 @@ export const getStats = async ({ fromDate, toDate } = {}) => {
     totalDelivered: t.totalDelivered,
     totalReads: t.totalReads,
     readRate,
-    byCategory,
+    byCategory: byCategoryFormatted,
   };
 };
 
@@ -813,7 +861,9 @@ export const notifyFeedbackStatusChange = async (
   { statusLabel, adminReply, rejectionReason },
   currentUser,
 ) => {
-  if (!feedback?.author || feedback.isAnonymous) return null;
+  // `feedback.author` → `feedback.authorId`: Prisma FK.
+  const authorId = feedback?.authorId || feedback?.author;
+  if (!authorId || feedback.isAnonymous) return null;
 
   const lines = [`Sizning feedback'ingiz holati: ${statusLabel}`];
   if (adminReply) lines.push(`Javob: ${adminReply}`);
@@ -827,9 +877,9 @@ export const notifyFeedbackStatusChange = async (
       category: "feedback_status",
       audience: {
         type: "feedback_author",
-        userIds: [feedback.author],
+        userIds: [String(authorId)],
       },
-      relatedFeedback: feedback._id,
+      relatedFeedback: feedback.id || feedback._id,
       isAuto: true,
     },
     currentUser,

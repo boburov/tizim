@@ -2,7 +2,7 @@ import asyncHandler from "../../../middleware/asyncHandler.js";
 import ApiError from "../../../utils/ApiError.js";
 import env from "../../../config/env.js";
 import logger from "../../../config/logger.js";
-import ImportJob from "../../../models/importJob.model.js";
+import prisma from "../../../config/prisma.js";
 import { isRedisEnabled } from "../../../config/redis.js";
 import { enqueueImport, runImportJob } from "../../../queues/importQueue.js";
 import { MAX_GRID_ROWS } from "../services/importEngine.service.js";
@@ -47,59 +47,65 @@ const createRowsHandler = asyncHandler(async (req, res) => {
     );
   }
 
-  // ISH HUJJATI - navbatga qo'yishdan OLDIN. Redis o'chib qolsa ham
-  // "queued" yozuvi Mongo'da qoladi va yo'qolgan import ko'rinib turadi
+  // ISH YOZUVI - navbatga qo'yishdan OLDIN. Redis o'chib qolsa ham
+  // "queued" qatori BAZADA qoladi va yo'qolgan import ko'rinib turadi
   // (aks holda so'rov jimgina yo'q bo'lardi).
-  const job = await ImportJob.create({
-    branchId: req.branchId || null,
-    importerKey: req.importer.key,
-    fileName: req.body.fileName || "",
-    user: req.user._id,
-    userName: [req.user.firstName, req.user.lastName].filter(Boolean).join(" "),
-    mode: "rows",
-    status: "queued",
-    total: rows.length,
-    rows,
-    scope: {
-      branchId: req.branchId || null,
-      allowedBranchIds: req.allowedBranchIds || [],
-      canSeeAllBranches: Boolean(req.canSeeAllBranches),
-      permissions: req.permissions || [],
+  const job = await prisma.importJob.create({
+    data: {
+      branchId: req.branchId ? String(req.branchId) : null,
+      importerKey: req.importer.key,
+      fileName: req.body.fileName || "",
+      // `user` -> `userId`: Prisma'da `user` RELATION.
+      userId: String(req.user._id),
+      userName: [req.user.firstName, req.user.lastName].filter(Boolean).join(" "),
+      mode: "rows",
+      status: "queued",
+      total: rows.length,
+      rows,
+      scope: {
+        branchId: req.branchId ? String(req.branchId) : null,
+        allowedBranchIds: req.allowedBranchIds || [],
+        canSeeAllBranches: Boolean(req.canSeeAllBranches),
+        permissions: req.permissions || [],
+      },
     },
   });
 
   if (queued) {
     try {
-      await enqueueImport(job._id);
+      await enqueueImport(job.id);
     } catch (err) {
       // Navbatga qo'shib bo'lmadi - ish "queued" holatida osilib
       // qolmasligi kerak, aks holda foydalanuvchi kutib o'tirardi.
-      await ImportJob.findByIdAndUpdate(job._id, {
-        $set: {
-          status: "failed",
-          error: "Navbatga qo'shib bo'lmadi (Redis mavjud emas)",
-          finishedAt: new Date(),
-          rows: [],
-        },
-      }).catch(() => null);
-      logger.error({ err, jobId: String(job._id) }, "Importni navbatga qo'shib bo'lmadi");
+      await prisma.importJob
+        .update({
+          where: { id: job.id },
+          data: {
+            status: "failed",
+            error: "Navbatga qo'shib bo'lmadi (Redis mavjud emas)",
+            finishedAt: new Date(),
+            rows: [],
+          },
+        })
+        .catch(() => null);
+      logger.error({ err, jobId: String(job.id) }, "Importni navbatga qo'shib bo'lmadi");
       throw new ApiError(503, "Navbat xizmati javob bermayapti. Birozdan keyin urinib ko'ring");
     }
 
     return res.status(202).json({
       success: true,
-      data: { jobId: String(job._id), status: "queued", total: rows.length },
+      data: { jobId: String(job.id), status: "queued", total: rows.length },
       message: "Import navbatga qo'yildi",
     });
   }
 
   // ── SINXRON YO'L (Redis yo'q, kichik fayl) ──
-  const result = await runImportJob(job._id);
+  const result = await runImportJob(job.id);
 
   return res.json({
     success: true,
     data: {
-      jobId: String(job._id),
+      jobId: String(job.id),
       status: "completed",
       summary: result?.summary || null,
       rows: result?.rows || [],

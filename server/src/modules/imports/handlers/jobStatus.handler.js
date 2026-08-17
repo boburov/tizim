@@ -1,6 +1,7 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
 import ApiError from "../../../utils/ApiError.js";
-import ImportJob from "../../../models/importJob.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import { hasPermission } from "../../../helpers/permission.helper.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 
@@ -11,8 +12,14 @@ import { PERMISSIONS } from "../../../constants/permissions.js";
  * bu yerda kerak emas (client o'z nusxasini saqlab turibdi).
  */
 const jobStatusHandler = asyncHandler(async (req, res) => {
-  const job = await ImportJob.findById(req.params.jobId, { rows: 0 }).lean();
-  if (!job) throw new ApiError(404, "Import topilmadi");
+  // `rows` QAYTARILMAYDI (yuqoridagi izoh) - Mongo'dagi `{ rows: 0 }`
+  // proyeksiyasining Prisma ekvivalenti `omit`.
+  const jobRow = await prisma.importJob.findUnique({
+    where: { id: String(req.params.jobId) },
+    omit: { rows: true },
+  });
+  if (!jobRow) throw new ApiError(404, "Import topilmadi");
+  const job = withLegacyId(jobRow);
 
   // KO'RISH HUQUQI: o'z importini har kim ko'radi, birovnikini faqat
   // moliya/foydalanuvchi boshqaruvi huquqi borlar. Aks holda bir xodim

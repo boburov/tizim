@@ -1,12 +1,4 @@
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import StudentFreeze from "../../../models/studentFreeze.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import DepositTransaction from "../../../models/depositTransaction.model.js";
-import DebtWriteOff from "../../../models/debtWriteOff.model.js";
-import TeacherGroupPeriod from "../../../models/teacherGroupPeriod.model.js";
-import ArchiveLog from "../../../models/archiveLog.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { assertTargetInScope } from "../../../helpers/branchAccess.helper.js";
 import { ROLES } from "../../../constants/roles.js";
@@ -57,9 +49,9 @@ const makeEvent = ({
 });
 
 const groupRef = (g) =>
-  g ? { _id: g._id, name: g.name } : null;
+  g ? { _id: g.id, name: g.name } : null;
 const userRef = (u) =>
-  u ? { _id: u._id, firstName: u.firstName, lastName: u.lastName } : null;
+  u ? { _id: u.id, firstName: u.firstName, lastName: u.lastName } : null;
 
 // performedBy id'larini (turli manbalardan) bitta so'rovda ism bilan to'ldiradi.
 const resolvePerformers = async (events) => {
@@ -68,11 +60,12 @@ const resolvePerformers = async (events) => {
     if (e.performedBy && typeof e.performedBy !== "object") ids.add(String(e.performedBy));
   }
   if (ids.size === 0) return;
-  const users = await User.find(
-    { _id: { $in: [...ids] } },
-    { firstName: 1, lastName: 1 },
-  ).lean();
-  const map = new Map(users.map((u) => [String(u._id), u]));
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...ids] } },
+    // `id` ATAYLAB: xarita kaliti sifatida kerak.
+    select: { id: true, firstName: true, lastName: true },
+  });
+  const map = new Map(users.map((u) => [String(u.id), u]));
   for (const e of events) {
     if (e.performedBy && typeof e.performedBy !== "object") {
       e.performedBy = userRef(map.get(String(e.performedBy))) || null;
@@ -99,7 +92,7 @@ const membershipEvents = (m, { withStudent = false } = {}) => {
   const s = withStudent ? userRef(m.student) : null;
   out.push(
     makeEvent({
-      id: `mem-join:${m._id}`,
+      id: `mem-join:${m.id}`,
       type: "student_joined_group",
       title: "Guruhga qo'shildi",
       // Guruh/o'quvchi nomi "chip"da ko'rsatiladi - tavsifda takrorlamaymiz.
@@ -112,7 +105,7 @@ const membershipEvents = (m, { withStudent = false } = {}) => {
   if (m.leftAt) {
     out.push(
       makeEvent({
-        id: `mem-left:${m._id}`,
+        id: `mem-left:${m.id}`,
         type: "student_left_group",
         title: LEFT_TITLE[m.leftReason] || "Guruhdan chiqdi",
         description: m.leftReasonTitle || "",
@@ -130,7 +123,7 @@ const freezeEvents = (f, { withStudent = false } = {}) => {
   const s = withStudent ? userRef(f.student) : null;
   const out = [
     makeEvent({
-      id: `freeze:${f._id}`,
+      id: `freeze:${f.id}`,
       type: "student_frozen",
       title: "Muzlatildi",
       description: f.reason || "",
@@ -142,7 +135,7 @@ const freezeEvents = (f, { withStudent = false } = {}) => {
   if (f.endDate) {
     out.push(
       makeEvent({
-        id: `unfreeze:${f._id}`,
+        id: `unfreeze:${f.id}`,
         type: "student_unfrozen",
         title: "Muzlatishdan chiqarildi",
         date: f.endDate,
@@ -163,7 +156,7 @@ const paymentEvent = (t, { withStudent = false } = {}) => {
   const methodLabel = t.source === "deposit" ? "Depozitdan" : t.method === "card" ? "Karta" : "Naqd";
   if (t.isDeleted) {
     return makeEvent({
-      id: `pay-void:${t._id}`,
+      id: `pay-void:${t.id}`,
       type: "payment_cancelled",
       title: "To'lov bekor qilindi",
       description: `${period} · ${methodLabel}`,
@@ -175,7 +168,7 @@ const paymentEvent = (t, { withStudent = false } = {}) => {
     });
   }
   return makeEvent({
-    id: `pay:${t._id}`,
+    id: `pay:${t.id}`,
     type: "payment_received",
     title: "To'lov qabul qilindi",
     description: `${period} · ${methodLabel}`,
@@ -192,7 +185,7 @@ const writeOffEvent = (w, { withStudent = false } = {}) => {
     ? userRef(w.student) || (w.studentName ? { name: w.studentName } : null)
     : null;
   return makeEvent({
-    id: `writeoff:${w._id}`,
+    id: `writeoff:${w.id}`,
     type: "debt_written_off",
     title: "Qarz hisobdan chiqarildi",
     description: w.reasonTitle || w.groupName || "",
@@ -206,7 +199,7 @@ const writeOffEvent = (w, { withStudent = false } = {}) => {
 
 const depositEvent = (d) =>
   makeEvent({
-    id: `deposit:${d._id}`,
+    id: `deposit:${d.id}`,
     type: `deposit_${d.type}`,
     title: DEPOSIT_TITLE[d.type] || "Depozit amali",
     description: d.note || "",
@@ -217,7 +210,7 @@ const depositEvent = (d) =>
 
 const archiveLogEvent = (a) =>
   makeEvent({
-    id: `archivelog:${a._id}`,
+    id: `archivelog:${a.id}`,
     type: a.action === "restore" ? "user_restored" : "user_archived",
     title: a.action === "restore" ? "Arxivdan tiklandi" : "Arxivlandi",
     description: a.reasonTitle || "",
@@ -229,7 +222,7 @@ const archiveLogEvent = (a) =>
 const teacherPeriodEvents = (tp) => {
   const out = [
     makeEvent({
-      id: `tp-start:${tp._id}`,
+      id: `tp-start:${tp.id}`,
       type: "teacher_assigned",
       title: "O'qituvchi biriktirildi",
       description: tp.teacher
@@ -242,7 +235,7 @@ const teacherPeriodEvents = (tp) => {
   if (tp.endDate) {
     out.push(
       makeEvent({
-        id: `tp-end:${tp._id}`,
+        id: `tp-end:${tp.id}`,
         type: "teacher_unassigned",
         title: "O'qituvchi olib tashlandi",
         description: tp.teacher
@@ -261,7 +254,9 @@ export const getStudentTimeline = async (
   studentId,
   { page = 1, limit = 30, scope = null } = {},
 ) => {
-  const student = await User.findById(studentId).lean();
+  const student = await prisma.user.findUnique({
+    where: { id: String(studentId) },
+  });
   if (!student || student.role !== ROLES.STUDENT) {
     throw new ApiError(404, "O'quvchi topilmadi");
   }
@@ -279,20 +274,29 @@ export const getStudentTimeline = async (
 
   const [memberships, freezes, txns, writeOffs, deposits, archiveLogs] =
     await Promise.all([
-      GroupMembership.find({ student: studentId, isDeleted: { $ne: true } })
-        .populate("group", { name: 1 })
-        .lean(),
-      StudentFreeze.find({ student: studentId, isDeleted: { $ne: true } }).lean(),
+      // `student`/`group`/`user` -> `studentId`/`groupId`/`userId`:
+      // Prisma'da nomsiz maydonlar RELATION.
+      prisma.groupMembership.findMany({
+        where: { studentId: String(studentId), isDeleted: false },
+        include: { group: { select: { id: true, name: true } } },
+      }),
+      prisma.studentFreeze.findMany({
+        where: { studentId: String(studentId), isDeleted: false },
+      }),
       // soft-delete qilingan (bekor qilingan) to'lovlar ham kerak - shuning uchun
       // isDeleted filtrlanmaydi.
-      PaymentTransaction.find({ student: studentId })
-        .populate("group", { name: 1 })
-        .lean(),
-      DebtWriteOff.find({ student: studentId })
-        .populate("group", { name: 1 })
-        .lean(),
-      DepositTransaction.find({ student: studentId, isDeleted: { $ne: true } }).lean(),
-      ArchiveLog.find({ user: studentId }).lean(),
+      prisma.paymentTransaction.findMany({
+        where: { studentId: String(studentId) },
+        include: { group: { select: { id: true, name: true } } },
+      }),
+      prisma.debtWriteOff.findMany({
+        where: { studentId: String(studentId) },
+        include: { group: { select: { id: true, name: true } } },
+      }),
+      prisma.depositTransaction.findMany({
+        where: { studentId: String(studentId), isDeleted: false },
+      }),
+      prisma.archiveLog.findMany({ where: { userId: String(studentId) } }),
     ]);
 
   const events = [];
@@ -312,7 +316,7 @@ export const getGroupTimeline = async (
   groupId,
   { page = 1, limit = 30, scope = null } = {},
 ) => {
-  const group = await Group.findById(groupId).lean();
+  const group = await prisma.group.findUnique({ where: { id: String(groupId) } });
   if (!group) throw new ApiError(404, "Guruh topilmadi");
 
   // FILIAL CHEGARASI - o'quvchi timeline'i bilan bir xil sabab.
@@ -326,27 +330,44 @@ export const getGroupTimeline = async (
   }
 
   const [memberships, teacherPeriods, txns, writeOffs] = await Promise.all([
-    GroupMembership.find({ group: groupId, isDeleted: { $ne: true } })
-      .populate("student", { firstName: 1, lastName: 1 })
-      .lean(),
-    TeacherGroupPeriod.find({ group: groupId, isDeleted: { $ne: true } })
-      .populate("teacher", { firstName: 1, lastName: 1 })
-      .lean(),
-    PaymentTransaction.find({ group: groupId })
-      .populate("student", { firstName: 1, lastName: 1 })
-      .lean(),
-    DebtWriteOff.find({ group: groupId })
-      .populate("student", { firstName: 1, lastName: 1 })
-      .lean(),
+    prisma.groupMembership.findMany({
+      where: { groupId: String(groupId), isDeleted: false },
+      include: {
+        student: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.teacherGroupPeriod.findMany({
+      where: { groupId: String(groupId), isDeleted: false },
+      include: {
+        teacher: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.paymentTransaction.findMany({
+      where: { groupId: String(groupId) },
+      include: {
+        student: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.debtWriteOff.findMany({
+      where: { groupId: String(groupId) },
+      include: {
+        student: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
   ]);
 
   // Guruh a'zolarining muzlatish hodisalari (muzlatish guruhga bog'lanmagan,
   // shu sabab a'zo o'quvchilar bo'yicha yig'amiz).
-  const studentIds = [...new Set(memberships.map((m) => m.student?._id).filter(Boolean).map(String))];
+  const studentIds = [
+    ...new Set(memberships.map((m) => m.student?.id).filter(Boolean).map(String)),
+  ];
   const freezes = studentIds.length
-    ? await StudentFreeze.find({ student: { $in: studentIds }, isDeleted: { $ne: true } })
-        .populate("student", { firstName: 1, lastName: 1 })
-        .lean()
+    ? await prisma.studentFreeze.findMany({
+        where: { studentId: { in: studentIds }, isDeleted: false },
+        include: {
+          student: { select: { id: true, firstName: true, lastName: true } },
+        },
+      })
     : [];
 
   const events = [];
@@ -354,7 +375,7 @@ export const getGroupTimeline = async (
 
   events.push(
     makeEvent({
-      id: `group-created:${group._id}`,
+      id: `group-created:${group.id}`,
       type: "group_created",
       title: "Guruh yaratildi",
       description: group.name || "",
@@ -366,7 +387,7 @@ export const getGroupTimeline = async (
   if (group.endDate && new Date(group.endDate).getTime() <= now && !group.isActive) {
     events.push(
       makeEvent({
-        id: `group-ended:${group._id}`,
+        id: `group-ended:${group.id}`,
         type: "group_ended",
         title: "Guruh yakunlandi",
         description: group.name || "",

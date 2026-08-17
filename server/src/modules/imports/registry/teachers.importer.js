@@ -292,7 +292,7 @@ const teachersImporter = {
             {
               allowedBranchIds: ctx.allowedBranchIds,
               canSeeAllBranches: ctx.canSeeAll,
-              userId: currentUser?._id || null,
+              userId: currentUser ? String(currentUser.id || currentUser._id) : null,
             },
           ),
         data,

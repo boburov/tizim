@@ -1,11 +1,11 @@
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
-import StoredFile from "../../../models/storedFile.model.js";
-import Assignment from "../../../models/assignment.model.js";
-import StorageSettings, {
+import prisma from "../../../config/prisma.js";
+import {
   CLEANUP_FREQUENCIES,
   FREQUENCY_DAYS,
-} from "../../../models/storageSettings.model.js";
+} from "../../../constants/storage.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import * as storageService from "./storage.service.js";
 
 const SETTINGS_ID = "default";
@@ -15,35 +15,40 @@ const SETTINGS_ID = "default";
 // Qolgani keyingi yurishda o'chadi - avto-tozalash shoshilinch ish emas.
 const CLEANUP_BATCH = 500;
 
+// YAGONA QATOR: `id` ning o'zi "default" (schema'dagi @default). Mongo'da
+// bu `findOneAndUpdate(..., {upsert:true, setDefaultsOnInsert:true})` edi;
+// Prisma'da `upsert` aynan shuni beradi va yo'q bo'lsa schema
+// standartlari bilan yaratadi.
 export const getSettings = async () =>
-  StorageSettings.findOneAndUpdate(
-    { _id: SETTINGS_ID },
-    { $setOnInsert: { _id: SETTINGS_ID } },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+  prisma.storageSettings.upsert({
+    where: { id: SETTINGS_ID },
+    create: { id: SETTINGS_ID },
+    update: {},
+  });
 
 export const updateSettings = async (body) => {
-  const doc = await getSettings();
+  // Qator mavjudligini kafolatlaymiz (birinchi tahrirda ham ishlashi uchun).
+  await getSettings();
 
+  const data = {};
   if (body.autoCleanupEnabled !== undefined) {
-    doc.autoCleanupEnabled = !!body.autoCleanupEnabled;
+    data.autoCleanupEnabled = !!body.autoCleanupEnabled;
   }
   if (body.frequency !== undefined) {
     if (!CLEANUP_FREQUENCIES.includes(body.frequency)) {
       throw new ApiError(400, "Noto'g'ri chastota");
     }
-    doc.frequency = body.frequency;
+    data.frequency = body.frequency;
   }
   if (body.olderThanDays !== undefined) {
     const v = Number(body.olderThanDays);
     if (!Number.isInteger(v) || v < 1 || v > 3650) {
       throw new ApiError(400, "Muddat 1 kundan 3650 kungacha bo'lishi kerak");
     }
-    doc.olderThanDays = v;
+    data.olderThanDays = v;
   }
 
-  await doc.save();
-  return doc;
+  return prisma.storageSettings.update({ where: { id: SETTINGS_ID }, data });
 };
 
 /** Keyingi avto-yurish sanasi (yoqilmagan bo'lsa null). */
@@ -70,7 +75,7 @@ const isDue = (settings) => {
  * juda oson bo'lardi.
  */
 const buildFilter = ({ all, olderThanDays }) => {
-  const filter = { isDeleted: { $ne: true } };
+  const filter = { isDeleted: false };
 
   if (all) return filter;
 
@@ -78,7 +83,7 @@ const buildFilter = ({ all, olderThanDays }) => {
   if (!Number.isFinite(days) || days < 1) {
     throw new ApiError(400, "Muddat yoki 'hammasi' bayrog'i ko'rsatilishi kerak");
   }
-  filter.createdAt = { $lt: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
+  filter.createdAt = { lt: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
   return filter;
 };
 
@@ -88,12 +93,15 @@ const buildFilter = ({ all, olderThanDays }) => {
  * 340 MB" degani "davom etasizmi?" degan savolni ma'noli qiladi.
  */
 export const previewCleanup = async ({ all = false, olderThanDays } = {}) => {
-  const filter = buildFilter({ all, olderThanDays });
-  const [row] = await StoredFile.aggregate([
-    { $match: filter },
-    { $group: { _id: null, files: { $sum: 1 }, bytes: { $sum: "$size" } } },
-  ]);
-  return { files: row?.files || 0, bytes: row?.bytes || 0 };
+  const where = buildFilter({ all, olderThanDays });
+  // Guruhlashsiz yig'indi - Mongo'dagi `$group: { _id: null }` ning
+  // to'g'ridan-to'g'ri ekvivalenti.
+  const row = await prisma.storedFile.aggregate({
+    where,
+    _count: { _all: true },
+    _sum: { size: true },
+  });
+  return { files: row._count._all || 0, bytes: row._sum.size || 0 };
 };
 
 /**
@@ -107,11 +115,13 @@ export const previewCleanup = async ({ all = false, olderThanDays } = {}) => {
 export const runCleanup = async ({ all = false, olderThanDays, userId } = {}) => {
   const filter = buildFilter({ all, olderThanDays });
 
-  const files = await StoredFile.find(filter)
-    .select({ _id: 1, relPath: 1, size: 1 })
-    .sort({ createdAt: 1 }) // eng eskisidan boshlaymiz
-    .limit(CLEANUP_BATCH)
-    .lean();
+  const files = await prisma.storedFile.findMany({
+    where: filter,
+    // `id` ATAYLAB: `storageService.removeFile` uni o'qiydi.
+    select: { id: true, relPath: true, size: true },
+    orderBy: { createdAt: "asc" }, // eng eskisidan boshlaymiz
+    take: CLEANUP_BATCH,
+  });
 
   let deleted = 0;
   let freedBytes = 0;
@@ -119,26 +129,29 @@ export const runCleanup = async ({ all = false, olderThanDays, userId } = {}) =>
 
   for (const f of files) {
     try {
-      await storageService.removeFile(f, userId);
+      // `removeFile` `_id` ni o'qiydi (Mongo shakli) - shuning uchun
+      // uzatishdan oldin qo'shamiz.
+      await storageService.removeFile(withLegacyId(f), userId);
       deleted += 1;
       freedBytes += f.size || 0;
-      deletedIds.push(f._id);
+      deletedIds.push(f.id);
     } catch (err) {
-      logger.warn({ err, fileId: f._id }, "Faylni tozalashda xato - o'tkazib yuborildi");
+      logger.warn({ err, fileId: f.id }, "Faylni tozalashda xato - o'tkazib yuborildi");
     }
   }
 
   // Vazifadagi havolani ham uzamiz: aks holda tafsilot sahifasida
   // yuklab bo'lmaydigan "Yuklab olish" tugmasi turaverardi.
   if (deletedIds.length) {
-    await Assignment.updateMany(
-      { file: { $in: deletedIds } },
-      { $set: { file: null, fileRemovedAt: new Date() } },
-    );
+    // `file` -> `fileId`: Prisma'da `file` RELATION.
+    await prisma.assignment.updateMany({
+      where: { fileId: { in: deletedIds } },
+      data: { fileId: null, fileRemovedAt: new Date() },
+    });
   }
 
   // Chegaraga tegdikmi - demak yana qolgan bo'lishi mumkin.
-  const remaining = await StoredFile.countDocuments(filter);
+  const remaining = await prisma.storedFile.count({ where: filter });
 
   return { deleted, freedBytes, remaining };
 };
@@ -156,10 +169,14 @@ export const runScheduledCleanup = async () => {
     userId: null,
   });
 
-  settings.lastRunAt = new Date();
-  settings.lastRunDeleted = result.deleted;
-  settings.lastRunFreedBytes = result.freedBytes;
-  await settings.save();
+  await prisma.storageSettings.update({
+    where: { id: SETTINGS_ID },
+    data: {
+      lastRunAt: new Date(),
+      lastRunDeleted: result.deleted,
+      lastRunFreedBytes: result.freedBytes,
+    },
+  });
 
   logger.info(
     { ...result, frequency: settings.frequency },
@@ -170,32 +187,41 @@ export const runScheduledCleanup = async () => {
 
 /** Saqlagichdagi fayllar ro'yxati (admin ko'radi: nima joy egallayapti). */
 export const listFiles = async ({ page, limit, skip, sort = "size" }) => {
-  const filter = { isDeleted: { $ne: true } };
+  const where = { isDeleted: false };
   // Standart tartib - KATTASIDAN kichigiga: "joy qayoqqa ketdi?" degan
   // savolga javob birinchi qatorda turishi kerak.
-  const sortSpec = sort === "date" ? { createdAt: -1 } : { size: -1 };
+  const orderBy = sort === "date" ? { createdAt: "desc" } : { size: "desc" };
 
   const [items, total] = await Promise.all([
-    StoredFile.find(filter)
-      .sort(sortSpec)
-      .skip(skip)
-      .limit(limit)
-      .populate("uploadedBy", { firstName: 1, lastName: 1 })
-      .lean(),
-    StoredFile.countDocuments(filter),
+    prisma.storedFile.findMany({
+      where,
+      orderBy,
+      skip,
+      take: limit,
+      include: {
+        uploadedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.storedFile.count({ where }),
   ]);
 
   // Fayl qaysi vazifaga tegishli - admin kontekstsiz o'chirmasin.
-  const assignments = await Assignment.find(
-    { file: { $in: items.map((f) => f._id) } },
-    { title: 1, file: 1 },
-  ).lean();
-  const byFile = new Map(assignments.map((a) => [String(a.file), a]));
+  const assignments = items.length
+    ? await prisma.assignment.findMany({
+        where: { fileId: { in: items.map((f) => f.id) } },
+        select: { id: true, title: true, fileId: true },
+      })
+    : [];
+  const byFile = new Map(assignments.map((a) => [String(a.fileId), a]));
 
   return {
     items: items.map((f) => ({
-      ...f,
-      assignment: byFile.get(String(f._id)) || null,
+      ...withLegacyId(f),
+      // Javobda `file` kaliti QOLADI (Mongo shakli) - klient shunga
+      // tayangan bo'lishi mumkin.
+      assignment: byFile.get(String(f.id))
+        ? withLegacyId(byFile.get(String(f.id)))
+        : null,
     })),
     total,
   };
@@ -203,14 +229,16 @@ export const listFiles = async ({ page, limit, skip, sort = "size" }) => {
 
 /** Bitta faylni o'chirish (admin qo'lda). */
 export const removeFileById = async (fileId, userId) => {
-  const file = await StoredFile.findById(fileId).lean();
+  const file = await prisma.storedFile.findUnique({
+    where: { id: String(fileId) },
+  });
   if (!file || file.isDeleted) throw new ApiError(404, "Fayl topilmadi");
 
-  await storageService.removeFile(file, userId);
-  await Assignment.updateMany(
-    { file: file._id },
-    { $set: { file: null, fileRemovedAt: new Date() } },
-  );
+  await storageService.removeFile(withLegacyId(file), userId);
+  await prisma.assignment.updateMany({
+    where: { fileId: file.id },
+    data: { fileId: null, fileRemovedAt: new Date() },
+  });
 
-  return { _id: file._id, freedBytes: file.size || 0 };
+  return { _id: file.id, freedBytes: file.size || 0 };
 };

@@ -12,7 +12,9 @@ const getSettings = asyncHandler(async (_req, res) => {
   res.json({
     success: true,
     data: {
-      settings: { ...settings.toJSON(), nextRunAt: admin.nextRunAt(settings) },
+      // `settings.toJSON()` EMAS: u Mongoose hujjatining metodi edi,
+      // Prisma esa oddiy obyekt qaytaradi. Spread yetarli.
+      settings: { ...settings, nextRunAt: admin.nextRunAt(settings) },
       usage,
     },
   });

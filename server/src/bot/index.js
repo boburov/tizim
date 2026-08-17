@@ -1,8 +1,8 @@
 import env from "../config/env.js";
 import logger from "../config/logger.js";
+import prisma from "../config/prisma.js";
 import { createBot, getBot, destroyBot } from "./config/bot.instance.js";
 import { registerHandlers } from "./bot.router.js";
-import BotLock from "../models/botLock.model.js";
 
 const LOCK_ID = "poller";
 const LOCK_TTL_MS = 90 * 1000;
@@ -16,17 +16,32 @@ const acquirePollLock = async () => {
   try {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + LOCK_TTL_MS);
-    const updated = await BotLock.findOneAndUpdate(
-      { _id: LOCK_ID, $or: [{ expiresAt: { $lte: now } }, { holder: HOLDER }] },
-      { $set: { holder: HOLDER, expiresAt } },
-      { new: true },
-    );
-    if (updated) return true;
-    // Hujjat yo'q bo'lsa - yaratamiz; band bo'lsa E11000 -> false
-    await BotLock.create({ _id: LOCK_ID, holder: HOLDER, expiresAt });
-    return true;
+    
+    // updateMany orqali atomik update
+    const res = await prisma.botLock.updateMany({
+      where: {
+        id: LOCK_ID,
+        OR: [
+          { expiresAt: { lte: now } },
+          { holder: HOLDER }
+        ]
+      },
+      data: { holder: HOLDER, expiresAt },
+    });
+    
+    if (res.count > 0) return true;
+    
+    // Hujjat yo'q bo'lsa - yaratamiz; band bo'lsa P2002 xatosi tushadi -> false qaytadi
+    try {
+      await prisma.botLock.create({
+        data: { id: LOCK_ID, holder: HOLDER, expiresAt }
+      });
+      return true;
+    } catch (createErr) {
+      if (createErr.code === "P2002") return false; // boshqa instans ushlab turibdi
+      throw createErr;
+    }
   } catch (err) {
-    if (err?.code === 11000) return false; // boshqa instans ushlab turibdi
     logger.warn({ err }, "Bot lock olishda xato - fail-open (polling yoqiladi)");
     return true;
   }
@@ -81,7 +96,10 @@ export const stopBot = async () => {
     clearInterval(heartbeat);
     heartbeat = null;
   }
-  await BotLock.deleteOne({ _id: LOCK_ID, holder: HOLDER }).catch(() => null);
+  await prisma.botLock.deleteMany({
+    where: { id: LOCK_ID, holder: HOLDER },
+  }).catch(() => null);
+  
   const bot = getBot();
   if (!bot) return;
   await bot.stopPolling({ cancel: true }).catch(() => null);

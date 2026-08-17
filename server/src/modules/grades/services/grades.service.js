@@ -1,7 +1,5 @@
-import mongoose from "mongoose";
-import Grade from "../../../models/grade.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import {
   parseLocalDay,
@@ -10,15 +8,32 @@ import {
   scheduleActiveOn,
 } from "../../../helpers/attendance.helper.js";
 
-const STUDENT_PROJECTION = {
-  firstName: 1,
-  lastName: 1,
-  username: 1,
-  phone: 1,
+const STUDENT_SELECT = {
+  // `id` ATAYLAB: Prisma `select` bilan uni avtomatik qaytarmaydi,
+  // klient esa o'quvchini `_id` bo'yicha ochadi.
+  id: true,
+  firstName: true,
+  lastName: true,
+  username: true,
+  phone: true,
+};
+
+// JADVAL ALOHIDA JADVALDA. Mongo'da `schedule` guruh hujjati ichidagi
+// massiv edi; `include` qilinmasa `sessionsForDay` bo'sh qaytarib,
+// dars sessiyalari YO'QOLARDI.
+const GROUP_WITH_SCHEDULE = {
+  id: true,
+  name: true,
+  schedule: {
+    select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
+  },
 };
 
 const ensureGroup = async (groupId) => {
-  const g = await Group.findById(groupId);
+  const g = await prisma.group.findUnique({
+    where: { id: String(groupId) },
+    select: GROUP_WITH_SCHEDULE,
+  });
   if (!g) throw new ApiError(404, "Guruh topilmadi");
   return g;
 };
@@ -42,12 +57,15 @@ const sessionsForDay = (group, dow, date = null) => {
 // Berilgan sanada guruhning aktiv a'zolari (davomat roster filtri bilan bir xil).
 const activeMembersOn = async (groupId, date) => {
   const dayEnd = new Date(date.getTime() + 24 * 60 * 60 * 1000);
-  return GroupMembership.find({
-    group: groupId,
-    joinedAt: { $lt: dayEnd },
-    $or: [{ leftAt: null }, { leftAt: { $gt: date } }],
-    isDeleted: { $ne: true },
-  }).populate("student", STUDENT_PROJECTION);
+  return prisma.groupMembership.findMany({
+    where: {
+      groupId: String(groupId),
+      joinedAt: { lt: dayEnd },
+      OR: [{ leftAt: null }, { leftAt: { gt: date } }],
+      isDeleted: false,
+    },
+    select: { studentId: true, student: { select: STUDENT_SELECT } },
+  });
 };
 
 // ─── Guruh + sana uchun baholash ro'yxati (mavjud ballar bilan) ───
@@ -63,31 +81,36 @@ export const listForGroupOnDate = async (groupId, dateInput, slotInput = null) =
       : sessions[0]?.slot ?? "";
 
   const memberships = await activeMembersOn(groupId, date);
-  const studentIds = memberships.filter((m) => m.student).map((m) => m.student._id);
+  const studentIds = memberships.filter((m) => m.student).map((m) => m.student.id);
 
   const dKey = dateKeyOf(date);
-  const grades = await Grade.find({
-    group: groupId,
-    student: { $in: studentIds },
-    dateKey: dKey,
-    slot: selectedSlot,
-    isDeleted: { $ne: true },
+  const grades = await prisma.grade.findMany({
+    where: {
+      groupId: String(groupId),
+      studentId: { in: studentIds },
+      dateKey: dKey,
+      slot: selectedSlot,
+      isDeleted: false,
+    },
   });
   const gradeMap = new Map();
-  for (const g of grades) gradeMap.set(String(g.student), g);
+  for (const g of grades) gradeMap.set(String(g.studentId), g);
 
   const rows = memberships
     .filter((m) => m.student)
     .map((m) => {
-      const g = gradeMap.get(String(m.student._id)) || null;
+      const g = gradeMap.get(String(m.student.id)) || null;
+      // `toJSON()` EMAS - Prisma oddiy obyekt qaytaradi (Mongoose
+      // hujjati emas). Javobda `_id` QOLADI: klient o'quvchini shu
+      // bo'yicha ajratadi.
       return {
-        student: m.student.toJSON(),
-        grade: g ? g.toJSON() : null,
+        student: withLegacyId(m.student),
+        grade: g ? withLegacyId(g) : null,
       };
     });
 
   return {
-    group: { _id: group._id, name: group.name, schedule: group.schedule },
+    group: { _id: group.id, name: group.name, schedule: group.schedule },
     date,
     dateKey: dKey,
     sessions,
@@ -105,31 +128,17 @@ const validateItem = (item) => {
   }
 };
 
-const runWithSession = async (fn) => {
-  let session;
-  try {
-    session = await mongoose.startSession();
-    session.startTransaction();
-    const result = await fn(session);
-    await session.commitTransaction();
-    session.endSession();
-    return result;
-  } catch (err) {
-    if (session) {
-      try {
-        await session.abortTransaction();
-      } catch {
-        /* noop */
-      }
-      session.endSession();
-    }
-    // Standalone Mongo (transaction yo'q) - sessiyasiz qayta urinamiz
-    if (err?.code === 20 || err?.codeName === "IllegalOperation") {
-      return fn(null);
-    }
-    throw err;
-  }
-};
+/**
+ * TRANZAKSIYA — ENDI HAQIQIY.
+ *
+ * Mongo'da `startSession()` standalone o'rnatmada jimgina
+ * atomiklikni yo'qotardi (replica set bo'lmasa tranzaksiya
+ * qo'llab-quvvatlanmaydi). PostgreSQL'da `$transaction` har doim
+ * haqiqiy: bir nechta o'quvchining bahosi yo hammasi yoziladi, yo
+ * hech biri - yarim yozilgan varaq qolmaydi.
+ */
+const runInTransaction = (fn) => prisma.$transaction(fn);
+
 
 // ─── Guruh + sana uchun ballarni bulk saqlash (upsert + audit) ───
 export const bulkRecord = async (
@@ -167,14 +176,17 @@ export const bulkRecord = async (
   // Har bir o'quvchi shu sanada guruhning aktiv a'zosi ekanini tekshiramiz
   const studentIds = items.map((it) => it.studentId);
   const dayEnd = new Date(date.getTime() + 24 * 60 * 60 * 1000);
-  const activeMembers = await GroupMembership.find({
-    group: groupId,
-    student: { $in: studentIds },
-    joinedAt: { $lt: dayEnd },
-    $or: [{ leftAt: null }, { leftAt: { $gt: date } }],
-    isDeleted: { $ne: true },
-  }).select("student");
-  const memberSet = new Set(activeMembers.map((m) => String(m.student)));
+  const activeMembers = await prisma.groupMembership.findMany({
+    where: {
+      groupId: String(groupId),
+      studentId: { in: studentIds.map(String) },
+      joinedAt: { lt: dayEnd },
+      OR: [{ leftAt: null }, { leftAt: { gt: date } }],
+      isDeleted: false,
+    },
+    select: { studentId: true },
+  });
+  const memberSet = new Set(activeMembers.map((m) => String(m.studentId)));
   for (const item of items) {
     if (!memberSet.has(String(item.studentId))) {
       throw new ApiError(400, "O'quvchi bu sanada guruhning aktiv a'zosi emas");
@@ -182,77 +194,86 @@ export const bulkRecord = async (
   }
 
   // Audit uchun mavjud ballarni oldindan olamiz
-  const existing = await Grade.find({
-    group: groupId,
-    student: { $in: studentIds },
-    dateKey: dKey,
-    slot: normalizedSlot,
-    isDeleted: { $ne: true },
+  const existing = await prisma.grade.findMany({
+    where: {
+      groupId: String(groupId),
+      studentId: { in: studentIds.map(String) },
+      dateKey: dKey,
+      slot: normalizedSlot,
+      isDeleted: false,
+    },
   });
   const existingMap = new Map();
-  for (const g of existing) existingMap.set(String(g.student), g);
+  for (const g of existing) existingMap.set(String(g.studentId), g);
 
-  const docs = await runWithSession(async (session) => {
-    const opts = session ? { session } : {};
+  // QISMAN UNIQUE INDEKS: `(groupId, studentId, dateKey, slot)` faqat
+  // `WHERE isDeleted = false` uchun amal qiladi. Prisma `upsert` bunday
+  // indeksni ISHLATA OLMAYDI (u to'liq unique kalit talab qiladi),
+  // shuning uchun find-then-write + P2002 qayta urinish.
+  const docs = await runInTransaction(async (tx) => {
     const out = [];
     for (const item of items) {
       const prev = existingMap.get(String(item.studentId));
       const value = Number(item.value);
       const changed = !prev || prev.value !== value;
-      const update = {
-        $set: {
-          value,
-          comment: item.comment || "",
-          recordedBy: currentUser._id,
-          recordedAt: new Date(),
-          source: "teacher",
-          isDeleted: false,
-        },
-        $setOnInsert: {
-          group: groupId,
-          student: item.studentId,
-          date,
-          dateKey: dKey,
-          slot: normalizedSlot,
-        },
-      };
+
+      // `$push` o'rni: `history` ustuni `Json`, massiv JS'da yig'iladi.
+      const history = Array.isArray(prev?.history) ? [...prev.history] : [];
       if (changed) {
-        update.$push = {
-          history: {
-            at: new Date(),
-            by: currentUser._id,
-            from: prev ? prev.value : null,
-            to: value,
-            source: "teacher",
-          },
-        };
-      }
-      const filter = {
-        group: groupId,
-        student: item.studentId,
-        dateKey: dKey,
-        slot: normalizedSlot,
-      };
-      let doc;
-      try {
-        doc = await Grade.findOneAndUpdate(filter, update, {
-          upsert: true,
-          new: true,
-          setDefaultsOnInsert: true,
-          ...opts,
+        history.push({
+          at: new Date(),
+          by: String(currentUser._id),
+          from: prev ? prev.value : null,
+          to: value,
+          source: "teacher",
         });
-      } catch (err) {
-        if (err?.code === 11000) {
-          delete update.$setOnInsert;
-          doc = await Grade.findOneAndUpdate(filter, update, {
-            new: true,
-            ...opts,
+      }
+
+      const data = {
+        value,
+        comment: item.comment || "",
+        recordedById: String(currentUser._id),
+        recordedAt: new Date(),
+        source: "teacher",
+        isDeleted: false,
+        history,
+      };
+
+      let doc;
+      if (prev) {
+        doc = await tx.grade.update({ where: { id: prev.id }, data });
+      } else {
+        try {
+          doc = await tx.grade.create({
+            data: {
+              groupId: String(groupId),
+              studentId: String(item.studentId),
+              date,
+              dateKey: dKey,
+              slot: normalizedSlot,
+              ...data,
+            },
           });
-        } else {
-          throw err;
+        } catch (err) {
+          // POYGA: ikki o'qituvchi bir vaqtda baholasa. Mongo'da bu
+          // `11000` edi, Prisma'da `P2002` - yozuv baribir bor,
+          // ustiga yozamiz.
+          if (err?.code !== "P2002") throw err;
+          const again = await tx.grade.findFirst({
+            where: {
+              groupId: String(groupId),
+              studentId: String(item.studentId),
+              dateKey: dKey,
+              slot: normalizedSlot,
+              isDeleted: false,
+            },
+          });
+          doc = again
+            ? await tx.grade.update({ where: { id: again.id }, data })
+            : null;
         }
       }
-      out.push(doc);
+      if (doc) out.push(doc);
     }
     return out;
   });
@@ -269,13 +290,14 @@ export const getGroupSummary = async (groupId, { fromDate, toDate }) => {
   const fromKey = dateKeyOf(from);
   const toKey = dateKeyOf(to);
 
-  const grades = await Grade.find({
-    group: groupId,
-    dateKey: { $gte: fromKey, $lte: toKey },
-    isDeleted: { $ne: true },
-  })
-    .populate("student", STUDENT_PROJECTION)
-    .lean();
+  const grades = await prisma.grade.findMany({
+    where: {
+      groupId: String(groupId),
+      dateKey: { gte: fromKey, lte: toKey },
+      isDeleted: false,
+    },
+    select: { value: true, student: { select: STUDENT_SELECT } },
+  });
 
   const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   const byStudent = new Map();
@@ -284,7 +306,7 @@ export const getGroupSummary = async (groupId, { fromDate, toDate }) => {
     dist[g.value] = (dist[g.value] || 0) + 1;
     sum += g.value;
     if (!g.student) continue;
-    const sid = String(g.student._id);
+    const sid = String(g.student.id);
     if (!byStudent.has(sid)) {
       byStudent.set(sid, { student: g.student, sum: 0, count: 0 });
     }
@@ -318,17 +340,28 @@ export const getStudentSummary = async (
   studentId,
   { fromDate, toDate, scopeGroupIds } = {},
 ) => {
-  const filter = { student: studentId, isDeleted: { $ne: true } };
+  const where = { studentId: String(studentId), isDeleted: false };
   if (fromDate && toDate) {
-    filter.dateKey = { $gte: dateKeyOf(parseLocalDay(fromDate)), $lte: dateKeyOf(parseLocalDay(toDate)) };
+    where.dateKey = {
+      gte: dateKeyOf(parseLocalDay(fromDate)),
+      lte: dateKeyOf(parseLocalDay(toDate)),
+    };
   }
+  // `group` -> `groupId`: Prisma'da `group` RELATION.
   if (Array.isArray(scopeGroupIds)) {
-    filter.group = { $in: scopeGroupIds };
+    where.groupId = { in: scopeGroupIds.map(String) };
   }
-  const grades = await Grade.find(filter)
-    .populate("group", { name: 1 })
-    .sort({ dateKey: -1 })
-    .lean();
+  const grades = await prisma.grade.findMany({
+    where,
+    select: {
+      id: true,
+      value: true,
+      dateKey: true,
+      comment: true,
+      group: { select: { id: true, name: true } },
+    },
+    orderBy: { dateKey: "desc" },
+  });
 
   const count = grades.length;
   const sum = grades.reduce((acc, g) => acc + g.value, 0);
@@ -337,35 +370,48 @@ export const getStudentSummary = async (
   return {
     average,
     count,
+    // Javobda `_id` QOLADI - klient shunga tayangan.
     recent: grades.slice(0, 20).map((g) => ({
-      _id: g._id,
+      _id: g.id,
       value: g.value,
       dateKey: g.dateKey,
       comment: g.comment || "",
-      group: g.group ? { _id: g.group._id, name: g.group.name } : null,
+      group: g.group ? { _id: g.group.id, name: g.group.name } : null,
     })),
   };
 };
 
 // ─── Reyting uchun: bir nechta o'quvchining o'rtacha balli (xaritada) ───
 export const averagesForStudents = async (studentIds, { fromDate, toDate, groupId } = {}) => {
-  const match = {
-    student: { $in: studentIds.map((id) => new mongoose.Types.ObjectId(String(id))) },
-    isDeleted: { $ne: true },
+  // ID ENDI ODDIY SATR - `new ObjectId(...)` kerak emas (Postgres
+  // birlamchi kaliti `VARCHAR(24)`).
+  const where = {
+    studentId: { in: studentIds.map(String) },
+    isDeleted: false,
   };
-  if (groupId) match.group = new mongoose.Types.ObjectId(String(groupId));
+  if (groupId) where.groupId = String(groupId);
   if (fromDate && toDate) {
-    match.dateKey = { $gte: dateKeyOf(parseLocalDay(fromDate)), $lte: dateKeyOf(parseLocalDay(toDate)) };
+    where.dateKey = {
+      gte: dateKeyOf(parseLocalDay(fromDate)),
+      lte: dateKeyOf(parseLocalDay(toDate)),
+    };
   }
-  const rows = await Grade.aggregate([
-    { $match: match },
-    { $group: { _id: "$student", sum: { $sum: "$value" }, count: { $sum: 1 } } },
-  ]);
+
+  // Guruhlash `grades` jadvalining O'Z ustuni (`studentId`) bo'yicha -
+  // `groupBy` yetarli, raw SQL kerak emas.
+  const rows = await prisma.grade.groupBy({
+    by: ["studentId"],
+    where,
+    _sum: { value: true },
+    _count: { _all: true },
+  });
   const map = new Map();
   for (const r of rows) {
-    map.set(String(r._id), {
-      average: r.count ? Math.round((r.sum / r.count) * 100) / 100 : null,
-      count: r.count,
+    const count = r._count._all;
+    const sum = r._sum.value || 0;
+    map.set(String(r.studentId), {
+      average: count ? Math.round((sum / count) * 100) / 100 : null,
+      count,
     });
   }
   return map;

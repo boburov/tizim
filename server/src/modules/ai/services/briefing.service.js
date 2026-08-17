@@ -1,6 +1,4 @@
-import Insight from "../../../models/insight.model.js";
-import AiRun from "../../../models/aiRun.model.js";
-import Branch from "../../../models/branch.model.js";
+import prisma from "../../../config/prisma.js";
 import { branchFilter, getActiveBranchId } from "../../../helpers/branchContext.helper.js";
 import {
   periodPulse,
@@ -282,17 +280,19 @@ const buildNext = async (branchId, now) => {
  * "yana bir muammo" deb o'qiydi va ikkalasiga ham e'tibor bermay qo'yadi.
  */
 const buildNow = async (limit = 6) => {
-  const filter = { ...branchFilter(), status: { $in: ["open", "acked"] } };
+  const filter = { ...branchFilter(), status: { in: ["open", "acked"] } };
 
   const [risks, opportunities, counts] = await Promise.all([
-    Insight.find({ ...filter, stance: { $in: ["risk", "watch"] } })
-      .sort({ priority: -1, generatedAt: -1 })
-      .limit(limit)
-      .lean(),
-    Insight.find({ ...filter, stance: "opportunity" })
-      .sort({ priority: -1, generatedAt: -1 })
-      .limit(limit)
-      .lean(),
+    prisma.insight.findMany({
+      where: { ...filter, stance: { in: ["risk", "watch"] } },
+      orderBy: [{ priority: "desc" }, { generatedAt: "desc" }],
+      take: limit,
+    }),
+    prisma.insight.findMany({
+      where: { ...filter, stance: "opportunity" },
+      orderBy: [{ priority: "desc" }, { generatedAt: "desc" }],
+      take: limit,
+    }),
     openCounts(),
   ]);
 
@@ -646,10 +646,17 @@ export const buildBriefing = async ({ now = new Date(), actionLimit = 6 } = {}) 
     buildYesterday(now),
     buildToday(now),
     buildNow(actionLimit),
-    AiRun.findOne({ ...branchFilter(), status: "ok" })
-      .sort({ startedAt: -1 })
-      .select("startedAt finishedAt scope trigger durationMs")
-      .lean(),
+    prisma.aiRun.findFirst({
+      where: { ...branchFilter(), status: "ok" },
+      orderBy: { startedAt: "desc" },
+      select: {
+        startedAt: true,
+        finishedAt: true,
+        scope: true,
+        trigger: true,
+        durationMs: true,
+      },
+    }),
     businessHealth(now),
     attendanceOutlook(now),
   ]);
@@ -682,7 +689,10 @@ export const buildBriefing = async ({ now = new Date(), actionLimit = 6 } = {}) 
   });
 
   const branch = branchId
-    ? await Branch.findById(branchId).select("name").lean()
+    ? await prisma.branch.findUnique({
+        where: { id: String(branchId) },
+        select: { name: true },
+      })
     : null;
 
   // `health.raw` MIJOZGA UZATILMAYDI: u ichki hisob materiali (ikkita

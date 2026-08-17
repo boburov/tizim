@@ -1,11 +1,5 @@
-import mongoose from "mongoose";
-import Assignment from "../../../models/assignment.model.js";
-import AssignmentRecipient from "../../../models/assignmentRecipient.model.js";
-import StoredFile from "../../../models/storedFile.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import User from "../../../models/user.model.js";
-import BotUser from "../../../models/botUser.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import {
@@ -21,7 +15,7 @@ import * as storageService from "../../storage/services/storage.service.js";
 // Bir vaqtda nechta bot xabari ketsin (Telegram ~30/sek global chegara).
 const DELIVERY_CONCURRENCY = 20;
 
-const USER_PROJECTION = { firstName: 1, lastName: 1, phone: 1 };
+const USER_SELECT = { id: true, firstName: true, lastName: true, phone: true };
 
 /**
  * Tanlangan guruhlarni tekshiradi va qaytaradi.
@@ -35,13 +29,14 @@ const resolveGroups = async (groupIds, currentUser) => {
   const ids = [...new Set((groupIds || []).map(String))];
   if (!ids.length) throw new ApiError(400, "Kamida bitta guruh tanlanishi kerak");
 
-  const groups = await Group.find({
-    _id: { $in: ids },
-    isDeleted: { $ne: true },
-    ...branchFilter(),
-  })
-    .select({ name: 1, teachers: 1, branchId: 1 })
-    .lean();
+  const groups = await prisma.group.findMany({
+    where: {
+      id: { in: ids },
+      isDeleted: false,
+      ...branchFilter(),
+    },
+    select: { id: true, name: true, branchId: true, teachers: { select: { id: true } } },
+  });
 
   if (groups.length !== ids.length) {
     throw new ApiError(404, "Ba'zi guruhlar topilmadi");
@@ -49,8 +44,9 @@ const resolveGroups = async (groupIds, currentUser) => {
 
   const isTeacher = isTeacherActor(currentUser);
   if (isTeacher) {
+    const currentUserId = currentUser._id || currentUser.id;
     const mine = groups.every((g) =>
-      (g.teachers || []).some((t) => String(t) === String(currentUser._id)),
+      (g.teachers || []).some((t) => String(t.id) === String(currentUserId)),
     );
     if (!mine) {
       throw new ApiError(403, "Faqat o'z guruhlaringizga vazifa yubora olasiz");
@@ -73,51 +69,54 @@ const resolveGroups = async (groupIds, currentUser) => {
 /**
  * Guruh(lar)dagi faol o'quvchilar + ularning bot holati.
  *
- * Qaytadi: [{ studentId, groupId, botUser|null }]
+ * Qaytadi: [{ student, groupId, botUser|null }]
  * Bir o'quvchi ikki guruhda bo'lsa BIR MARTA qaytadi (birinchi guruh
  * bilan) - aks holda unga bir xil vazifa ikki marta borardi.
  */
 const resolveRecipients = async (groups) => {
-  const groupIds = groups.map((g) => g._id);
+  const groupIds = groups.map((g) => g.id);
 
-  const memberships = await GroupMembership.find({
-    group: { $in: groupIds },
-    leftAt: null,
-    isDeleted: { $ne: true },
-  })
-    .select({ student: 1, group: 1 })
-    .lean();
+  const memberships = await prisma.groupMembership.findMany({
+    where: {
+      groupId: { in: groupIds },
+      leftAt: null,
+      isDeleted: false,
+    },
+    select: { studentId: true, groupId: true },
+  });
 
   if (!memberships.length) return [];
 
   // Faqat faol, o'chirilmagan o'quvchilar (boshqa modullar bilan bir xil qoida).
-  const studentIds = [...new Set(memberships.map((m) => String(m.student)))];
-  const students = await User.find({
-    _id: { $in: studentIds },
-    isActive: true,
-    isDeleted: { $ne: true },
-  })
-    .select(USER_PROJECTION)
-    .lean();
-  const studentById = new Map(students.map((s) => [String(s._id), s]));
+  const studentIds = [...new Set(memberships.map((m) => String(m.studentId)))];
+  const students = await prisma.user.findMany({
+    where: {
+      id: { in: studentIds },
+      isActive: true,
+      isDeleted: false,
+    },
+    select: USER_SELECT,
+  });
+  const studentById = new Map(students.map((s) => [String(s.id), s]));
 
   // Bot bog'lanishlari BITTA so'rovda (N+1 yo'q).
-  const botUsers = await BotUser.find({ user: { $in: students.map((s) => s._id) } })
-    .select({ user: 1, chatId: 1, telegramId: 1, isBlocked: 1 })
-    .lean();
-  const botByUser = new Map(botUsers.map((b) => [String(b.user), b]));
+  const botUsers = await prisma.botUser.findMany({
+    where: { userId: { in: students.map((s) => s.id) } },
+    select: { userId: true, chatId: true, telegramId: true, isBlocked: true },
+  });
+  const botByUser = new Map(botUsers.map((b) => [String(b.userId), b]));
 
   const seen = new Set();
   const out = [];
   for (const m of memberships) {
-    const sid = String(m.student);
+    const sid = String(m.studentId);
     if (seen.has(sid)) continue;
     const student = studentById.get(sid);
     if (!student) continue; // nofaol / arxivlangan
     seen.add(sid);
     out.push({
       student,
-      groupId: m.group,
+      groupId: m.groupId,
       botUser: botByUser.get(sid) || null,
     });
   }
@@ -151,7 +150,7 @@ export const preview = async ({ groupIds }, currentUser) => {
 
   const brief = (list) =>
     list.map((r) => ({
-      _id: r.student._id,
+      _id: r.student.id,
       firstName: r.student.firstName,
       lastName: r.student.lastName,
       phone: r.student.phone,
@@ -166,7 +165,7 @@ export const preview = async ({ groupIds }, currentUser) => {
     // foydaliroq - o'qituvchi ularga darsda aytib qo'yishi mumkin.
     blockedStudents: brief(buckets.blocked),
     noBotStudents: brief(buckets.no_bot),
-    groups: groups.map((g) => ({ _id: g._id, name: g.name })),
+    groups: groups.map((g) => ({ _id: g.id, name: g.name })),
   };
 };
 
@@ -202,13 +201,15 @@ export const create = async ({ body, file, currentUser }) => {
     throw new ApiError(400, "Tanlangan guruhlarda faol o'quvchi yo'q");
   }
 
+  const currentUserId = currentUser._id || currentUser.id;
+
   let storedFile = null;
   if (file?.buffer?.length) {
     storedFile = await storageService.saveBuffer({
       buffer: file.buffer,
       originalName: file.originalname,
       mimeType: file.mimetype,
-      userId: currentUser._id,
+      userId: currentUserId,
       purpose: "assignment",
     });
   }
@@ -218,48 +219,52 @@ export const create = async ({ body, file, currentUser }) => {
 
   let assignment;
   try {
-    assignment = await Assignment.create({
-      sender: currentUser._id,
-      title: body.title,
-      body: body.body || "",
-      groups: groups.map((g) => g._id),
-      branchId: groups[0]?.branchId || null,
-      file: storedFile?._id || null,
-      dueDate: body.dueDate || null,
-      recipientsCount: recipients.length,
-      deliveredCount: 0,
-      blockedCount: countOf("blocked"),
-      noBotCount: countOf("no_bot"),
-      failedCount: 0,
-      sentAt: new Date(),
+    assignment = await prisma.assignment.create({
+      data: {
+        senderId: String(currentUserId),
+        title: body.title,
+        body: body.body || "",
+        branchId: groups[0]?.branchId || null,
+        fileId: storedFile?.id || storedFile?._id || null,
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        recipientsCount: recipients.length,
+        deliveredCount: 0,
+        blockedCount: countOf("blocked"),
+        noBotCount: countOf("no_bot"),
+        failedCount: 0,
+        sentAt: new Date(),
+        groups: {
+          connect: groups.map((g) => ({ id: g.id })),
+        },
+      },
     });
   } catch (err) {
     // Vazifa yaratilmasa fayl yetim qoladi - kvotani bekorga yeb turadi.
-    if (storedFile) await storageService.removeFile(storedFile, currentUser._id);
+    if (storedFile) await storageService.removeFile(storedFile, currentUserId);
     throw err;
   }
 
-  await AssignmentRecipient.insertMany(
-    recipients.map((r, i) => ({
-      assignment: assignment._id,
-      student: r.student._id,
-      group: r.groupId,
+  // `assignment` → `assignmentId`, `student` → `studentId`, `group` → `groupId`
+  await prisma.assignmentRecipient.createMany({
+    data: recipients.map((r, i) => ({
+      assignmentId: assignment.id,
+      studentId: String(r.student.id),
+      groupId: String(r.groupId),
       status: statuses[i],
     })),
-    { ordered: false },
-  );
+  });
 
-  await scheduleDelivery(assignment._id);
+  await scheduleDelivery(assignment.id);
 
-  return getById(assignment._id, currentUser);
+  return getById(assignment.id, currentUser);
 };
 
-// Yetkazishni so'rov oqimidan ajratamiz: Agenda job'iga qo'yamiz.
-// Agenda bo'lmasa (masalan test) - fonda (detached) bajaramiz.
+// Yetkazishni so'rov oqimidan ajratamiz: pg-boss job'iga qo'yamiz.
+// pg-boss bo'lmasa (masalan test) - fonda (detached) bajaramiz.
 const scheduleDelivery = async (assignmentId) => {
   try {
-    const agenda = (await import("../../../config/scheduler.js")).default;
-    await agenda.now("assignment.deliver", {
+    const scheduler = (await import("../../../config/scheduler.js")).default;
+    await scheduler.now("assignment.deliver", {
       assignmentId: String(assignmentId),
     });
   } catch (err) {
@@ -275,44 +280,45 @@ const scheduleDelivery = async (assignmentId) => {
  * uriniladi, ya'ni job qayta ishga tushsa dublikat xabar ketmaydi.
  */
 export const deliverAssignment = async (assignmentId) => {
-  const assignment = await Assignment.findById(assignmentId).lean();
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: String(assignmentId) },
+  });
   if (!assignment) return;
 
-  const pending = await AssignmentRecipient.find({
-    assignment: assignmentId,
-    status: "pending",
-  })
-    .select({ _id: 1, student: 1 })
-    .lean();
+  const pending = await prisma.assignmentRecipient.findMany({
+    where: { assignmentId: String(assignmentId), status: "pending" },
+    select: { id: true, studentId: true },
+  });
   if (!pending.length) return;
 
-  const botUsers = await BotUser.find({
-    user: { $in: pending.map((r) => r.student) },
-  })
-    .select({ user: 1, chatId: 1, telegramId: 1, isBlocked: 1 })
-    .lean();
-  const botByUser = new Map(botUsers.map((b) => [String(b.user), b]));
+  const botUsers = await prisma.botUser.findMany({
+    where: { userId: { in: pending.map((r) => r.studentId) } },
+    select: { userId: true, chatId: true, telegramId: true, isBlocked: true },
+  });
+  const botByUser = new Map(botUsers.map((b) => [String(b.userId), b]));
 
   // Fayl bir marta o'qiladi va hamma oluvchiga o'sha bufer ketadi.
   //
   // Fayl diskda topilmasa (qo'lda o'chirilgan, volume ko'chgan) vazifa
   // FAQAT MATN bo'lib ketadi. Xato tashlanmaydi ataylab: job yiqilsa
-  // Agenda uni cheksiz qayta urinardi va o'quvchi matnni ham olmasdi.
+  // pg-boss uni cheksiz qayta urinardi va o'quvchi matnni ham olmasdi.
   let filePayload = null;
-  if (assignment.file) {
-    const doc = await StoredFile.findById(assignment.file).lean();
+  if (assignment.fileId) {
+    const doc = await prisma.storedFile.findUnique({
+      where: { id: assignment.fileId },
+    });
     if (doc && !doc.isDeleted) {
       try {
         filePayload = {
           originalName: doc.originalName,
           mimeType: doc.mimeType,
           telegramFileId: doc.telegramFileId || null,
-          // file_id bo'lsa bufer kerak emas - Telegram nusxani o'zida saqlagan.
+          // telegramFileId bo'lsa bufer kerak emas - Telegram nusxani o'zida saqlagan.
           buffer: doc.telegramFileId ? null : await storageService.readFile(doc),
         };
       } catch (err) {
         logger.error(
-          { err, assignmentId, fileId: doc._id },
+          { err, assignmentId, fileId: doc.id },
           "Biriktirma diskda yo'q - vazifa faqat matn bo'lib ketadi",
         );
       }
@@ -327,22 +333,22 @@ export const deliverAssignment = async (assignmentId) => {
   const counters = { delivered: 0, blocked: 0, failed: 0 };
 
   await runPool(pending, DELIVERY_CONCURRENCY, async (r) => {
-    const bu = botByUser.get(String(r.student));
+    const bu = botByUser.get(String(r.studentId));
     if (!bu || !bu.chatId || bu.isBlocked) {
       // Yaratilgandan keyin bloklagan bo'lishi mumkin - holatni yangilaymiz.
       const status = !bu || !bu.chatId ? "no_bot" : "blocked";
-      ops.push({
-        updateOne: {
-          filter: { _id: r._id },
-          update: { $set: { status, failedReason: status } },
-        },
-      });
+      ops.push(
+        prisma.assignmentRecipient.update({
+          where: { id: r.id },
+          data: { status, failedReason: status },
+        })
+      );
       if (status === "blocked") counters.blocked += 1;
       return;
     }
 
     const res = await deliverAssignmentToChat(
-      { chatId: bu.chatId, telegramId: bu.telegramId },
+      { chatId: Number(bu.chatId), telegramId: Number(bu.telegramId) },
       {
         title: assignment.title,
         body: assignment.body,
@@ -353,34 +359,32 @@ export const deliverAssignment = async (assignmentId) => {
 
     if (res.ok) {
       counters.delivered += 1;
-      // Birinchi muvaffaqiyatli yuborishdan keyin Telegram file_id ni
+      // Birinchi muvaffaqiyatli yuborishdan keyin Telegram telegramFileId ni
       // keshlaymiz: qolgan o'quvchilarga fayl qayta yuklanmaydi.
       if (res.telegramFileId && filePayload && !filePayload.telegramFileId) {
         filePayload.telegramFileId = res.telegramFileId;
         filePayload.buffer = null;
         storageService
-          .cacheTelegramFileId(assignment.file, res.telegramFileId)
+          .cacheTelegramFileId(assignment.fileId, res.telegramFileId)
           .catch(() => null);
       }
-      ops.push({
-        updateOne: {
-          filter: { _id: r._id },
-          update: {
-            $set: { status: "delivered", deliveredAt: new Date(), failedReason: "" },
-          },
-        },
-      });
+      ops.push(
+        prisma.assignmentRecipient.update({
+          where: { id: r.id },
+          data: { status: "delivered", deliveredAt: new Date(), failedReason: "" },
+        })
+      );
       return;
     }
 
     if (res.reason === "blocked") {
       counters.blocked += 1;
-      ops.push({
-        updateOne: {
-          filter: { _id: r._id },
-          update: { $set: { status: "blocked", failedReason: "blocked" } },
-        },
-      });
+      ops.push(
+        prisma.assignmentRecipient.update({
+          where: { id: r.id },
+          data: { status: "blocked", failedReason: "blocked" },
+        })
+      );
       return;
     }
 
@@ -389,159 +393,194 @@ export const deliverAssignment = async (assignmentId) => {
     if (res.transient) return;
 
     counters.failed += 1;
-    ops.push({
-      updateOne: {
-        filter: { _id: r._id },
-        update: { $set: { status: "failed", failedReason: res.reason || "" } },
-      },
-    });
+    ops.push(
+      prisma.assignmentRecipient.update({
+        where: { id: r.id },
+        data: { status: "failed", failedReason: res.reason || "" },
+      })
+    );
   });
 
   if (ops.length) {
-    await AssignmentRecipient.bulkWrite(ops, { ordered: false });
+    await Promise.allSettled(ops);
   }
 
   // Hisoblagichlarni recipient hujjatlaridan QAYTA hisoblaymiz. $inc emas:
   // job qayta ishga tushsa (yoki bir qismi transient bo'lib qolgan bo'lsa)
-  // $inc raqamlarni ikki hisoblab yuborardi.
+  // increment raqamlarni ikki hisoblab yuborardi.
   await recountAssignment(assignmentId);
 };
 
 /** Yetkazish hisoblagichlarini recipient'lardan qayta yig'adi. */
 const recountAssignment = async (assignmentId) => {
-  const rows = await AssignmentRecipient.aggregate([
-    { $match: { assignment: new mongoose.Types.ObjectId(String(assignmentId)) } },
-    { $group: { _id: "$status", n: { $sum: 1 } } },
-  ]);
-  const by = Object.fromEntries(rows.map((r) => [r._id, r.n]));
-  await Assignment.updateOne(
-    { _id: assignmentId },
-    {
-      $set: {
-        deliveredCount: by.delivered || 0,
-        blockedCount: by.blocked || 0,
-        noBotCount: by.no_bot || 0,
-        failedCount: by.failed || 0,
-      },
+  // Aggregate → groupBy
+  const grouped = await prisma.assignmentRecipient.groupBy({
+    by: ["status"],
+    where: { assignmentId: String(assignmentId) },
+    _count: { _all: true },
+  });
+  const by = Object.fromEntries(grouped.map((r) => [r.status, r._count._all]));
+
+  await prisma.assignment.update({
+    where: { id: String(assignmentId) },
+    data: {
+      deliveredCount: by.delivered || 0,
+      blockedCount: by.blocked || 0,
+      noBotCount: by.no_bot || 0,
+      failedCount: by.failed || 0,
     },
-  );
+  });
 };
 
 const scopeFilter = (currentUser) => {
   // O'qituvchi faqat O'ZI yuborganini ko'radi. Owner/xodim - filial
   // ko'lamidagi hammasini.
-  if (isTeacherActor(currentUser)) return { sender: currentUser._id };
+  if (isTeacherActor(currentUser)) return { senderId: String(currentUser._id || currentUser.id) };
   return {};
 };
 
 export const list = async (query, currentUser) => {
   const { page, limit, skip } = query;
-  const filter = {
-    isDeleted: { $ne: true },
+  
+  const where = {
+    isDeleted: false,
     ...branchFilter(),
     ...scopeFilter(currentUser),
   };
-  if (query.groupId) filter.groups = query.groupId;
+  
+  // `groups: groupId` Mongo shakli edi, Prismada bu relations filtri.
+  if (query.groupId) {
+    where.groups = { some: { id: String(query.groupId) } };
+  }
 
   const [items, total] = await Promise.all([
-    Assignment.find(filter)
-      .sort({ sentAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("sender", { firstName: 1, lastName: 1, role: 1 })
-      .populate("groups", { name: 1 })
-      .populate("file", { originalName: 1, size: 1, mimeType: 1 })
-      .lean(),
-    Assignment.countDocuments(filter),
+    prisma.assignment.findMany({
+      where,
+      orderBy: { sentAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        sender: { select: { id: true, firstName: true, lastName: true, role: true } },
+        groups: { select: { id: true, name: true } },
+        file: { select: { id: true, originalName: true, size: true, mimeType: true } },
+      },
+    }),
+    prisma.assignment.count({ where }),
   ]);
 
-  return { items, total };
+  return { items: withLegacyIds(items), total };
 };
 
 export const getById = async (id, currentUser) => {
-  const doc = await Assignment.findOne({
-    _id: id,
-    isDeleted: { $ne: true },
-    ...branchFilter(),
-  })
-    .populate("sender", { firstName: 1, lastName: 1, role: 1 })
-    .populate("groups", { name: 1 })
-    .populate("file", { originalName: 1, size: 1, mimeType: 1 })
-    .lean();
+  const doc = await prisma.assignment.findFirst({
+    where: {
+      id: String(id),
+      isDeleted: false,
+      ...branchFilter(),
+    },
+    include: {
+      sender: { select: { id: true, firstName: true, lastName: true, role: true } },
+      groups: { select: { id: true, name: true } },
+      file: { select: { id: true, originalName: true, size: true, mimeType: true } },
+    },
+  });
 
   if (!doc) throw new ApiError(404, "Vazifa topilmadi");
+  
+  const currentUserId = currentUser._id || currentUser.id;
   if (
     isTeacherActor(currentUser) &&
-    String(doc.sender?._id || doc.sender) !== String(currentUser._id)
+    String(doc.senderId) !== String(currentUserId)
   ) {
     throw new ApiError(403, "Ruxsat yo'q");
   }
-  return doc;
+  
+  return withLegacyId(doc);
 };
 
 /** Har bir o'quvchining yetkazish holati (o'qituvchi ko'radigan jadval). */
 export const getRecipientList = async (assignmentId, { page, limit, skip, status }) => {
-  const filter = { assignment: assignmentId };
-  if (status) filter.status = status;
+  const where = { assignmentId: String(assignmentId) };
+  if (status) where.status = status;
 
   const [items, total] = await Promise.all([
-    AssignmentRecipient.find(filter)
+    prisma.assignmentRecipient.findMany({
+      where,
       // Yetkazilmaganlar TEPADA: o'qituvchi aynan ular bilan ishlashi kerak.
-      .sort({ status: 1, createdAt: 1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("student", USER_PROJECTION)
-      .populate("group", { name: 1 })
-      .lean(),
-    AssignmentRecipient.countDocuments(filter),
+      orderBy: [{ status: "asc" }, { createdAt: "asc" }],
+      skip,
+      take: limit,
+      include: {
+        student: { select: USER_SELECT },
+        group: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.assignmentRecipient.count({ where }),
   ]);
 
-  return { items, total };
+  return { items: withLegacyIds(items), total };
 };
 
 /** Vazifani arxivlaydi va faylni diskdan o'chirib joyni bo'shatadi. */
 export const remove = async (id, currentUser) => {
-  const doc = await Assignment.findOne({
-    _id: id,
-    isDeleted: { $ne: true },
-    ...branchFilter(),
+  const doc = await prisma.assignment.findFirst({
+    where: {
+      id: String(id),
+      isDeleted: false,
+      ...branchFilter(),
+    },
   });
   if (!doc) throw new ApiError(404, "Vazifa topilmadi");
 
+  const currentUserId = currentUser._id || currentUser.id;
+
   if (
     isTeacherActor(currentUser) &&
-    String(doc.sender) !== String(currentUser._id)
+    String(doc.senderId) !== String(currentUserId)
   ) {
     throw new ApiError(403, "Faqat o'z vazifangizni o'chira olasiz");
   }
 
-  if (doc.file) {
-    const storedFile = await StoredFile.findById(doc.file).lean();
+  if (doc.fileId) {
+    const storedFile = await prisma.storedFile.findUnique({ where: { id: doc.fileId } });
     if (storedFile && !storedFile.isDeleted) {
-      await storageService.removeFile(storedFile, currentUser._id);
+      await storageService.removeFile(storedFile, currentUserId);
     }
   }
 
-  await doc.softDelete(currentUser._id);
-  return { _id: doc._id };
+  // softDelete o'rniga update
+  await prisma.assignment.update({
+    where: { id: doc.id },
+    data: {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: String(currentUserId),
+    },
+  });
+  
+  return { _id: doc.id };
 };
 
 /** Biriktirmani yuklab olish uchun tekshiruv + fayl hujjati. */
 export const getDownloadable = async (assignmentId, currentUser, permissions) => {
-  const assignment = await Assignment.findOne({
-    _id: assignmentId,
-    isDeleted: { $ne: true },
-  }).lean();
+  const assignment = await prisma.assignment.findFirst({
+    where: {
+      id: String(assignmentId),
+      isDeleted: false,
+    },
+  });
   if (!assignment) throw new ApiError(404, "Vazifa topilmadi");
-  if (!assignment.file) throw new ApiError(404, "Bu vazifada fayl yo'q");
+  if (!assignment.fileId) throw new ApiError(404, "Bu vazifada fayl yo'q");
 
   await assertCanRead(assignment, currentUser, permissions);
 
-  const storedFile = await StoredFile.findById(assignment.file).lean();
+  const storedFile = await prisma.storedFile.findUnique({
+    where: { id: assignment.fileId },
+  });
   if (!storedFile || storedFile.isDeleted) {
     throw new ApiError(404, "Fayl o'chirilgan");
   }
-  return storedFile;
+  return withLegacyId(storedFile);
 };
 
 /**
@@ -560,12 +599,17 @@ export const getDownloadable = async (assignmentId, currentUser, permissions) =>
  */
 const assertCanRead = async (assignment, currentUser, permissions) => {
   if (!currentUser) throw new ApiError(401, "Avtorizatsiyadan o'tilmagan");
-  if (String(assignment.sender) === String(currentUser._id)) return;
+  
+  const currentUserId = currentUser._id || currentUser.id;
+  if (String(assignment.senderId) === String(currentUserId)) return;
 
   if (isStudentActor(currentUser)) {
-    const mine = await AssignmentRecipient.exists({
-      assignment: assignment._id,
-      student: currentUser._id,
+    const mine = await prisma.assignmentRecipient.findFirst({
+      where: {
+        assignmentId: assignment.id,
+        studentId: String(currentUserId),
+      },
+      select: { id: true },
     });
     if (!mine) throw new ApiError(403, "Ruxsat yo'q");
     return;
@@ -585,33 +629,33 @@ const assertCanRead = async (assignment, currentUser, permissions) => {
 /** O'quvchining o'ziga kelgan vazifalari (platforma ichida). */
 export const listForStudent = async (studentId, { page, limit, skip }) => {
   const [rows, total] = await Promise.all([
-    AssignmentRecipient.find({ student: studentId })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate({
-        path: "assignment",
-        select: {
-          title: 1,
-          body: 1,
-          dueDate: 1,
-          sentAt: 1,
-          file: 1,
-          // Fayl tozalash bilan olib tashlangan bo'lsa o'quvchi buni
-          // ko'rishi kerak - aks holda "fayl bor edi shekilli" degan
-          // savol javobsiz qolardi.
-          fileRemovedAt: 1,
-          sender: 1,
-          isDeleted: 1,
+    prisma.assignmentRecipient.findMany({
+      where: { studentId: String(studentId) },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        assignment: {
+          select: {
+            title: true,
+            body: true,
+            dueDate: true,
+            sentAt: true,
+            fileId: true,
+            // Fayl tozalash bilan olib tashlangan bo'lsa o'quvchi buni
+            // ko'rishi kerak - aks holda "fayl bor edi shekilli" degan
+            // savol javobsiz qolardi.
+            fileRemovedAt: true,
+            senderId: true,
+            isDeleted: true,
+            sender: { select: { id: true, firstName: true, lastName: true } },
+            file: { select: { id: true, originalName: true, size: true, mimeType: true } },
+          },
         },
-        populate: [
-          { path: "sender", select: { firstName: 1, lastName: 1 } },
-          { path: "file", select: { originalName: 1, size: 1, mimeType: 1 } },
-        ],
-      })
-      .populate("group", { name: 1 })
-      .lean(),
-    AssignmentRecipient.countDocuments({ student: studentId }),
+        group: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.assignmentRecipient.count({ where: { studentId: String(studentId) } }),
   ]);
 
   // O'chirilgan vazifa o'quvchi ro'yxatida turmasin (recipient hujjati
@@ -619,11 +663,13 @@ export const listForStudent = async (studentId, { page, limit, skip }) => {
   const items = rows
     .filter((r) => r.assignment && !r.assignment.isDeleted)
     .map((r) => ({
-      _id: r._id,
+      _id: r.id,
       status: r.status,
       readAt: r.readAt,
-      group: r.group,
-      assignment: r.assignment,
+      group: withLegacyId(r.group),
+      // include da o'zimiz tanlagan poliyalarni olganimiz bilan,
+      // serialize qilishda withLegacyId xalaqit qilmaydi
+      assignment: withLegacyId(r.assignment),
     }));
 
   return { items, total };
@@ -637,23 +683,32 @@ export const listForStudent = async (studentId, { page, limit, skip }) => {
  * holatiga umuman qaramaydi - `readAt` bo'yicha hisoblanadi.
  */
 export const unreadCountForStudent = async (studentId) => {
-  const rows = await AssignmentRecipient.find({ student: studentId, readAt: null })
-    .select({ assignment: 1 })
-    .populate({ path: "assignment", select: { isDeleted: 1 } })
-    .lean();
+  // Prisma'da xuddi Mongo'dagi kabi populate filtri o'rniga to'g'ridan-to'g'ri 
+  // bog'langan model fieldiga shart qo'yish mumkin (relation filter).
+  const count = await prisma.assignmentRecipient.count({
+    where: { 
+      studentId: String(studentId), 
+      readAt: null,
+      assignment: { isDeleted: false }
+    }
+  });
 
-  // O'chirilgan vazifa sanoqqa kirmasin - ro'yxatda ham ko'rinmaydi,
-  // aks holda nishon hech qachon nolga tushmasdi.
-  const count = rows.filter((r) => r.assignment && !r.assignment.isDeleted).length;
   return { count };
 };
 
 /** O'quvchi vazifani platformada ochdi. */
 export const markRead = async (recipientId, studentId) => {
-  const updated = await AssignmentRecipient.findOneAndUpdate(
-    { _id: recipientId, student: studentId, readAt: null },
-    { $set: { readAt: new Date() } },
-    { new: true },
-  );
-  return { _id: recipientId, readAt: updated?.readAt || null };
+  // `updateMany` atomik shart uchun.
+  const res = await prisma.assignmentRecipient.updateMany({
+    where: { id: String(recipientId), studentId: String(studentId), readAt: null },
+    data: { readAt: new Date() },
+  });
+  
+  if (res.count === 0) return null; // Avval o'qilgan yoki topilmadi
+  
+  const updated = await prisma.assignmentRecipient.findUnique({
+    where: { id: String(recipientId) }
+  });
+  
+  return { _id: updated.id, readAt: updated.readAt };
 };

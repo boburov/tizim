@@ -1,7 +1,5 @@
-import Branch from "../../../models/branch.model.js";
-import Insight from "../../../models/insight.model.js";
-import AiRun from "../../../models/aiRun.model.js";
-import { AI_ENGINE_VERSION } from "../../../models/aiConfig.model.js";
+import prisma from "../../../config/prisma.js";
+import { AI_ENGINE_VERSION } from "../../../constants/ai.js";
 import logger from "../../../config/logger.js";
 import {
   runWithBranchContext,
@@ -83,25 +81,27 @@ const RUNNERS = {
  * ko'rsatardi, holbuki 4 tasi o'sish taklifi.
  */
 export const openCounts = async () => {
-  const rows = await Insight.aggregate([
-    { $match: { ...branchFilter(), status: { $in: ["open", "acked"] } } },
-    {
-      $group: {
-        _id: { severity: "$severity", stance: "$stance" },
-        count: { $sum: 1 },
-        impact: { $sum: "$expectedImpact.amount" },
-      },
-    },
-  ]);
+  // Guruhlash IKKI ustun bo'yicha - `insights` jadvalining O'Z
+  // ustunlari, ya'ni `groupBy` yetarli (raw SQL kerak emas).
+  // `expectedImpact.amount` Mongo'da ichma-ich obyekt edi; Prisma'da
+  // tekis ustun: `expectedImpactAmount`.
+  const rows = await prisma.insight.groupBy({
+    by: ["severity", "stance"],
+    where: { ...branchFilter(), status: { in: ["open", "acked"] } },
+    _count: { _all: true },
+    _sum: { expectedImpactAmount: true },
+  });
 
   const out = { high: 0, medium: 0, low: 0, opportunities: 0, impactAtRisk: 0, upside: 0 };
   for (const r of rows) {
-    if (r._id.stance === "opportunity") {
-      out.opportunities += r.count;
-      out.upside += r.impact || 0;
+    const count = r._count._all;
+    const impact = r._sum.expectedImpactAmount || 0;
+    if (r.stance === "opportunity") {
+      out.opportunities += count;
+      out.upside += impact;
     } else {
-      out[r._id.severity] = (out[r._id.severity] || 0) + r.count;
-      out.impactAtRisk += r.impact || 0;
+      out[r.severity] = (out[r.severity] || 0) + count;
+      out.impactAtRisk += impact;
     }
   }
   return out;
@@ -121,13 +121,15 @@ export const recomputeBranch = async (
   branchId,
   { scope = "full", trigger = "manual", now = new Date() } = {},
 ) => {
-  const run = await AiRun.create({
-    branchId,
-    trigger,
-    scope,
-    status: "running",
-    startedAt: new Date(),
-    engineVersion: AI_ENGINE_VERSION,
+  const run = await prisma.aiRun.create({
+    data: {
+      branchId: String(branchId),
+      trigger,
+      scope,
+      status: "running",
+      startedAt: new Date(),
+      engineVersion: AI_ENGINE_VERSION,
+    },
   });
 
   try {
@@ -176,24 +178,36 @@ export const recomputeBranch = async (
       },
     );
 
-    run.status = "ok";
-    run.finishedAt = new Date();
-    run.durationMs = run.finishedAt - run.startedAt;
-    run.stats = result.stats;
-    run.openHigh = result.counts.high;
-    run.openMedium = result.counts.medium;
-    run.openOpportunities = result.counts.opportunities;
-    await run.save();
+    // MONGO'DA BU `run.save()` EDI. Prisma'da hujjat obyekti yo'q -
+    // faqat o'zgargan maydonlar yoziladi.
+    const finishedAt = new Date();
+    await prisma.aiRun.update({
+      where: { id: run.id },
+      data: {
+        status: "ok",
+        finishedAt,
+        durationMs: finishedAt - run.startedAt,
+        stats: result.stats,
+        openHigh: result.counts.high,
+        openMedium: result.counts.medium,
+        openOpportunities: result.counts.opportunities,
+      },
+    });
 
-    return { branchId: String(branchId), runId: String(run._id), ...result };
+    return { branchId: String(branchId), runId: String(run.id), ...result };
   } catch (err) {
     // Xato ham YOZILADI: jimgina yiqilgan job eng yomon holat - ochiq
     // insight'lar eskiradi, lekin UI da hammasi yaxshi ko'rinadi.
-    run.status = "failed";
-    run.finishedAt = new Date();
-    run.durationMs = run.finishedAt - run.startedAt;
-    run.error = String(err?.message || err).slice(0, 500);
-    await run.save();
+    const failedAt = new Date();
+    await prisma.aiRun.update({
+      where: { id: run.id },
+      data: {
+        status: "failed",
+        finishedAt: failedAt,
+        durationMs: failedAt - run.startedAt,
+        error: String(err?.message || err).slice(0, 500),
+      },
+    });
     throw err;
   }
 };
@@ -211,14 +225,16 @@ export const recomputeAll = async ({
   trigger = "nightly",
   now = new Date(),
 } = {}) => {
-  const branches = await Branch.find({ isActive: true, isDeleted: { $ne: true } })
-    .select("_id name")
-    .lean();
+  const branches = await prisma.branch.findMany({
+    where: { isActive: true, isDeleted: false },
+    // `id` ATAYLAB: `recomputeBranch(b.id, ...)` uchun kerak.
+    select: { id: true, name: true },
+  });
 
   const results = [];
   for (const b of branches) {
     try {
-      const r = await recomputeBranch(b._id, { scope, trigger, now });
+      const r = await recomputeBranch(b.id, { scope, trigger, now });
       results.push({ ...r, name: b.name });
       logger.info({ branch: b.name, scope, counts: r.counts }, "AI qayta hisoblash tayyor");
     } catch (err) {

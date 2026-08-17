@@ -1,6 +1,5 @@
-import mongoose from "mongoose";
-import Insight from "../../../models/insight.model.js";
-import { AI_ENGINE_VERSION } from "../../../models/aiConfig.model.js";
+import prisma from "../../../config/prisma.js";
+import { AI_ENGINE_VERSION } from "../../../constants/ai.js";
 import { kindMeta, isOpportunity } from "../insightKinds.js";
 import { subjectHref } from "./subjectLink.service.js";
 
@@ -25,7 +24,8 @@ export const fmtMoney = (n) =>
     Math.round(n || 0),
   );
 
-const toId = (v) => new mongoose.Types.ObjectId(String(v));
+// ID ENDI ODDIY SATR - Postgres birlamchi kaliti `VARCHAR(24)`.
+const toId = (v) => String(v);
 
 /**
  * PRIORITET = pul × ehtimol × shoshilinchlik × ishonch.
@@ -104,7 +104,12 @@ export const buildInsight = ({
     factors,
     sourceRefs,
     recommendedActions,
-    expectedImpact,
+    // `expectedImpact` Mongo'da ICHMA-ICH obyekt edi; Prisma'da uchta
+    // TEKIS ustun. Chaqiruvchilar hamon obyekt uzatadi, shuning uchun
+    // yoyish shu YAGONA nuqtada bo'ladi.
+    expectedImpactAmount: expectedImpact?.amount || 0,
+    expectedImpactCurrency: expectedImpact?.currency || "UZS",
+    expectedImpactLabel: expectedImpact?.label || "",
     priority: computePriority({
       amount: expectedImpact?.amount,
       score,
@@ -131,19 +136,24 @@ export const buildInsight = ({
  * @returns {"created"|"updated"}
  */
 export const upsertInsight = async (doc) => {
-  const existing = await Insight.findOne({
-    subjectType: doc.subjectType,
-    subjectId: doc.subjectId,
-    kind: doc.kind,
-    status: { $in: OPEN_STATUSES },
+  const existing = await prisma.insight.findFirst({
+    where: {
+      subjectType: doc.subjectType,
+      subjectId: doc.subjectId,
+      kind: doc.kind,
+      status: { in: OPEN_STATUSES },
+    },
+    select: { id: true },
   });
 
   if (existing) {
-    Object.assign(existing, doc);
-    await existing.save();
+    // `status` va `acknowledgedBy` DOC ICHIDA YO'Q (buildInsight ularni
+    // yozmaydi), shuning uchun `update` ularga tegmaydi - owner
+    // "ko'rdim" belgisi saqlanadi.
+    await prisma.insight.update({ where: { id: existing.id }, data: doc });
     return "updated";
   }
-  await Insight.create(doc);
+  await prisma.insight.create({ data: doc });
   return "created";
 };
 
@@ -160,25 +170,26 @@ export const upsertInsight = async (doc) => {
  */
 export const closeStale = async (branchId, kinds, stillOpen, now = new Date()) => {
   const kindList = Array.isArray(kinds) ? kinds : [kinds];
-  const closable = await Insight.find({
-    branchId: toId(branchId),
-    kind: { $in: kindList },
-    status: { $in: OPEN_STATUSES },
-    subjectId: { $nin: [...stillOpen].map(toId) },
-  }).select("_id");
+  const closable = await prisma.insight.findMany({
+    where: {
+      branchId: toId(branchId),
+      kind: { in: kindList },
+      status: { in: OPEN_STATUSES },
+      subjectId: { notIn: [...stillOpen].map(toId) },
+    },
+    select: { id: true },
+  });
 
   if (!closable.length) return 0;
-  await Insight.updateMany(
-    { _id: { $in: closable.map((d) => d._id) } },
-    {
-      $set: {
-        status: "done",
-        resolvedAt: now,
-        outcome: "prevented",
-        outcomeCheckedAt: now,
-      },
+  await prisma.insight.updateMany({
+    where: { id: { in: closable.map((d) => d.id) } },
+    data: {
+      status: "done",
+      resolvedAt: now,
+      outcome: "prevented",
+      outcomeCheckedAt: now,
     },
-  );
+  });
   return closable.length;
 };
 

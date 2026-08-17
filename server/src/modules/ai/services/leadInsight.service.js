@@ -1,5 +1,4 @@
-import Branch from "../../../models/branch.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
+import prisma from "../../../config/prisma.js";
 import { branchMatchStage } from "../../../helpers/branchContext.helper.js";
 import { collectLeadSignals } from "../signals/lead.signal.js";
 import {
@@ -22,17 +21,6 @@ import {
 } from "./insightWriter.service.js";
 import { resolveConfig } from "./aiConfig.service.js";
 
-// LID DETEKTORLARI:
-//   1. lead_hot              - sinovga kelgan, hali yozilmagan (imkoniyat)
-//   2. lead_stale            - voronkada qotib qolgan (xavf)
-//   3. lead_conversion_drop  - konversiya pasayishi (filial darajasi)
-//
-// CHEGARA (cap) VA UNI KO'RSATISH: har bir lid uchun alohida insight
-// yaratiladi, chunki har biri ALOHIDA harakat talab qiladi ("Azizga
-// qo'ng'iroq qiling"). Lekin 80 ta lid 80 ta karta bo'lsa Action Center
-// o'qilmaydi. Shuning uchun eng shoshilinch N tasi olinadi va CHEGARA
-// insight matnida OCHIQ yoziladi - "yana 43 tasi bor" degan qator
-// bo'lmasa, owner ro'yxatni to'liq deb o'ylardi.
 const PER_KIND_CAP = 10;
 
 const LEAD_KINDS = ["lead_hot", "lead_stale", "lead_conversion_drop"];
@@ -46,34 +34,23 @@ const STATUS_LABELS = {
   rejected: "Rad etilgan",
 };
 
-/**
- * Bir o'quvchining o'rtacha oylik to'lovi - lidning KUTILAYOTGAN
- * QIYMATINI hisoblash uchun. Lid yozilса markaz shu summani oladi,
- * shuning uchun "issiq lidni yo'qotish" ta'siri aynan shu son.
- */
 const averageMonthlyFee = async (now) => {
-  const rows = await StudentPayment.aggregate([
-    ...branchMatchStage(),
-    {
-      $match: {
-        year: now.getUTCFullYear(),
-        month: now.getUTCMonth() + 1,
-        writtenOff: false,
-        expectedAmount: { $gt: 0 },
-      },
+  const rows = await prisma.studentPayment.findMany({
+    where: {
+      AND: branchMatchStage("branchId"),
+      year: now.getUTCFullYear(),
+      month: now.getUTCMonth() + 1,
+      writtenOff: false,
+      expectedAmount: { gt: 0 },
     },
-    { $group: { _id: null, avg: { $avg: "$expectedAmount" }, count: { $sum: 1 } } },
-  ]);
-  return { avg: rows[0]?.avg || 0, count: rows[0]?.count || 0 };
+    select: { expectedAmount: true },
+  });
+
+  if (!rows.length) return { avg: 0, count: 0 };
+  const sum = rows.reduce((a, b) => a + b.expectedAmount, 0);
+  return { avg: sum / rows.length, count: rows.length };
 };
 
-/**
- * DETEKTOR 1: issiq lid.
- *
- * Sinov darsiga KELGAN lid eng qimmatli holat: u markazni ko'rgan,
- * o'qituvchi bilan uchrashgan va qaytmagan. Bu qaror nuqtasi va u
- * TEZ sovuydi - shuning uchun kutish kunlari ballning asosiy omili.
- */
 const detectHotLead = ({ lead, avgFee, thresholds }) => {
   const factors = buildFactors([
     {
@@ -89,7 +66,6 @@ const detectHotLead = ({ lead, avgFee, thresholds }) => {
       label: "Javob kutish muddati",
       value: lead.waitingDays,
       unit: "kun",
-      // 7 kun = to'liq signal: undan keyin lid boshqa markazni topadi.
       normalized: norm(lead.waitingDays, 7),
       weight: 0.4,
     },
@@ -103,10 +79,6 @@ const detectHotLead = ({ lead, avgFee, thresholds }) => {
   ]);
 
   const score = weightedScore(factors);
-  // Ishonch bu yerda "ma'lumot yetarlimi" degan savolga javob: lid
-  // statusi va sanasi QAYD ETILGAN faktlar, taxmin emas. Shuning uchun
-  // yuqori - lekin lid juda uzoq turgan bo'lsa (30+ kun) uning hali ham
-  // "issiq" ekaniga ishonch kamayadi.
   const confidence = sampleConfidence({
     observed: 4,
     minSample: 2,
@@ -127,8 +99,6 @@ const detectHotLead = ({ lead, avgFee, thresholds }) => {
     title: lead.attended
       ? `${lead.name} sinovga keldi, ${lead.waitingDays} kundan beri javob kutmoqda`
       : `${lead.name} sinovga yozilgan — ${lead.waitingDays} kun kutmoqda`,
-    // Imkoniyat, lekin SHOSHILINCH: severity bu yerda "qanchalik tez
-    // harakat kerak" degan ma'noda.
     severity: severityFor(score, thresholds),
     score,
     confidence,
@@ -146,7 +116,6 @@ const detectHotLead = ({ lead, avgFee, thresholds }) => {
       {
         key: "call_lead",
         label: `Qo'ng'iroq qiling: ${lead.phone}`,
-        // Sinovga kelgan lid uchun 1 kun, faqat yozilgan uchun 2 kun.
         dueInDays: lead.attended ? 1 : 2,
       },
     ],
@@ -162,10 +131,6 @@ const detectHotLead = ({ lead, avgFee, thresholds }) => {
   };
 };
 
-/**
- * DETEKTOR 2: sovib qolgan lid.
- * Voronkada turgan, lekin uzoq vaqt harakat yo'q - yo'qotish arafasida.
- */
 const detectStaleLead = ({ lead, avgFee, thresholds }) => {
   const factors = buildFactors([
     {
@@ -173,7 +138,6 @@ const detectStaleLead = ({ lead, avgFee, thresholds }) => {
       label: "Harakatsiz kunlar",
       value: lead.idleDays,
       unit: "kun",
-      // 30 kun = to'liq signal.
       normalized: norm(lead.idleDays, 30),
       weight: 0.6,
     },
@@ -188,8 +152,6 @@ const detectStaleLead = ({ lead, avgFee, thresholds }) => {
       key: "leadStage",
       label: "Voronka bosqichi",
       value: STATUS_LABELS[lead.status] || lead.status,
-      // Voronkada uzoq ketgan lidni yo'qotish og'irroq: sinovga yozilgan
-      // lid "yangi" liddan qimmatroq.
       normalized: ["trial", "trial_attended"].includes(lead.status) ? 1 : 0.4,
       weight: 0.15,
       direction: "neutral",
@@ -242,19 +204,9 @@ const detectStaleLead = ({ lead, avgFee, thresholds }) => {
   };
 };
 
-/**
- * DETEKTOR 3: konversiya pasayishi (filial darajasi).
- *
- * PISHGAN KOGORTLAR ustida hisoblanadi (lead.signal.js dagi izohga
- * qarang): oxirgi 2 hafta chiqarib tashlanadi, aks holda konversiya
- * HAR DOIM "pasayayotgan" ko'rinadi va bu ogohlantirish ma'nosini
- * butunlay yo'qotadi.
- */
 const detectConversionDrop = ({ trend, weekly, avgFee, thresholds, branchName }) => {
   if (trend.recentRate == null || trend.priorRate == null) return null;
-  // 10% dan kam nisbiy pasayish - shovqin.
   if (trend.drop < 0.1) return null;
-  // Namuna juda kichik bo'lsa xulosa chiqarilmaydi.
   if ((trend.recentLeads || 0) < 8) return null;
 
   const factors = buildFactors([
@@ -263,7 +215,6 @@ const detectConversionDrop = ({ trend, weekly, avgFee, thresholds, branchName })
       label: "Konversiya pasayishi",
       value: Math.round(trend.drop * 100),
       unit: "%",
-      // 40% nisbiy pasayish = to'liq signal.
       normalized: norm(trend.drop, 0.4),
       weight: 0.55,
     },
@@ -295,7 +246,6 @@ const detectConversionDrop = ({ trend, weekly, avgFee, thresholds, branchName })
     consistency: consistencyOf(weekly.map((w) => w.rate)),
   });
 
-  // Yo'qotilgan yozilishlar = joriy lid oqimi × konversiya farqi.
   const lostEnrollments = (trend.recentLeads || 0) * (trend.priorRate - trend.recentRate);
   const impact = Math.max(0, Math.round(lostEnrollments * avgFee));
 
@@ -340,12 +290,14 @@ const detectConversionDrop = ({ trend, weekly, avgFee, thresholds, branchName })
   };
 };
 
-/** Bitta filial uchun lid insight'larini qayta hisoblaydi. */
 export const recomputeLeadInsights = async (branchId, now = new Date()) => {
   const config = await resolveConfig(branchId);
   const thresholds = readMap(config.thresholds, DEFAULT_THRESHOLDS);
 
-  const branch = await Branch.findById(branchId).select("name").lean();
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { name: true },
+  });
   const branchName = branch?.name || "Filial";
 
   const [signals, fee] = await Promise.all([
@@ -359,28 +311,17 @@ export const recomputeLeadInsights = async (branchId, now = new Date()) => {
     hot: mkStats(),
     stale: mkStats(),
     conversion: mkStats(),
-    // CHEGARA OCHIQ KO'RSATILADI: job jurnalida ham, insight matnida ham.
     capped: {
       hot: Math.max(0, signals.hot.length - PER_KIND_CAP),
       stale: Math.max(0, signals.stale.length - PER_KIND_CAP),
     },
   };
 
-  // "Hali ham signal berayotganlar" ro'yxati CHEGARADAN OLDIN quriladi -
-  // barcha topilgan lidlardan.
-  //
-  // NEGA MUHIM: agar bu ro'yxat faqat yozilgan (top-10) lidlardan qurilsa,
-  // chegaradan tushib qolgan lidning ochiq insight'i "prevented" deb
-  // yopilardi - ya'ni tizim "muammo hal bo'ldi" deb yolg'on yozardi,
-  // holbuki lid hali ham javob kutmoqda. Yopish faqat lid ro'yxatdan
-  // BUTUNLAY chiqqanda (yozildi yoki rad etildi) sodir bo'lishi kerak.
   const stillOpen = {
     lead_hot: new Set(signals.hot.map((l) => String(l._id))),
     lead_stale: new Set(signals.stale.map((l) => String(l._id))),
   };
 
-  // Eng shoshilinchlar birinchi: issiq lidda uzoq kutgan, sovuqda eng
-  // uzoq harakatsiz turgan.
   const hot = [...signals.hot]
     .sort((a, b) => Number(b.attended) - Number(a.attended) || b.waitingDays - a.waitingDays)
     .slice(0, PER_KIND_CAP);
@@ -394,8 +335,6 @@ export const recomputeLeadInsights = async (branchId, now = new Date()) => {
       candidate: buildInsight({ branchId, now, ...found }),
       confidenceFloor: config.confidenceFloor,
       stats: stats.hot,
-      // stillOpen yuqorida to'liq ro'yxatdan qurilgan - bu yerda
-      // qo'shilmaydi (chegaradan tushganlar ham ochiq qolishi kerak).
       stillOpen: null,
     });
   }
@@ -410,7 +349,6 @@ export const recomputeLeadInsights = async (branchId, now = new Date()) => {
     });
   }
 
-  // Konversiya - filial darajasi, subyekt filialning o'zi.
   const conversion = detectConversionDrop({
     trend: signals.trend,
     weekly: signals.weekly,

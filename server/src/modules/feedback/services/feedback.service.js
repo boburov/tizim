@@ -1,7 +1,5 @@
-import mongoose from "mongoose";
-import Feedback from "../../../models/feedback.model.js";
-import FeedbackType from "../../../models/feedbackType.model.js";
-import Group from "../../../models/group.model.js";
+import prisma from "../../../config/prisma.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import ApiError from "../../../utils/ApiError.js";
 import {
   branchGroupFilter,
@@ -15,21 +13,22 @@ const FEEDBACK_STATUS_LABEL = {
   rejected: "Rad etildi",
 };
 
-const TYPE_PROJECTION = { name: 1, isActive: 1 };
-const GROUP_PROJECTION = { name: 1 };
-const USER_PROJECTION = { firstName: 1, lastName: 1, role: 1 };
-
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// `id` HAR JOYDA ATAYLAB: Prisma `select` bilan uni avtomatik
+// qaytarmaydi (Mongo `_id` ni doim qaytarardi), klient esa yozuvni
+// `_id` bo'yicha ochadi.
+const TYPE_SELECT = { id: true, name: true, isActive: true };
+const GROUP_SELECT = { id: true, name: true };
+const USER_SELECT = { id: true, firstName: true, lastName: true, role: true };
 
 const ensureType = async (typeId) => {
-  const t = await FeedbackType.findById(typeId);
+  const t = await prisma.feedbackType.findUnique({ where: { id: String(typeId) } });
   if (!t) throw new ApiError(400, "Feedback turi topilmadi");
   return t;
 };
 
 const ensureGroup = async (groupId) => {
   if (!groupId) return null;
-  const g = await Group.findById(groupId);
+  const g = await prisma.group.findUnique({ where: { id: String(groupId) } });
   if (!g) throw new ApiError(400, "Guruh topilmadi");
   return g;
 };
@@ -44,16 +43,20 @@ export const submit = async (body, currentUser) => {
     throw new ApiError(400, "Matn kamida 5 belgidan iborat bo'lishi kerak");
   }
 
-  const doc = await Feedback.create({
-    author: isAnonymous ? null : currentUser._id,
-    authorRoleSnapshot: currentUser.role,
-    isAnonymous,
-    type: body.type,
-    group: body.group || null,
-    message,
-    status: "new",
+  // `author`/`type`/`group` -> `authorId`/`typeId`/`groupId`:
+  // Prisma'da nomsiz maydonlar RELATION.
+  const doc = await prisma.feedback.create({
+    data: {
+      authorId: isAnonymous ? null : String(currentUser._id),
+      authorRoleSnapshot: currentUser.role,
+      isAnonymous,
+      typeId: String(body.type),
+      groupId: body.group ? String(body.group) : null,
+      message,
+      status: "new",
+    },
   });
-  return doc;
+  return withLegacyId(doc);
 };
 
 // FILIAL KO'LAMI: Feedback'da `branchId` YO'Q va u IKKI yo'l bilan
@@ -68,18 +71,20 @@ export const submit = async (body, currentUser) => {
 // HECH QAYSISIGA bog'lanmagan yozuv (anonim + guruhsiz) filial
 // direktoriga KO'RINMAYDI - fail-closed, u markaz darajasidagi fikr.
 const feedbackScopeFilter = async () => {
+  // Ustun nomlari `groupId` / `authorId` (`group` / `author` bo'lsa
+  // Prisma ularni RELATION filtri deb o'qib, boshqa ma'no berardi).
   const [groupScope, authorScope] = await Promise.all([
-    branchGroupFilter("group"),
-    branchUserFilter("author"),
+    branchGroupFilter("groupId"),
+    branchUserFilter("authorId"),
   ]);
 
   // Ko'lam cheklanmagan (owner "barcha filiallar") - filtr shart emas.
-  if (!groupScope.group && !authorScope.author) return {};
+  if (!groupScope.groupId && !authorScope.authorId) return {};
 
   const or = [];
-  if (groupScope.group) or.push(groupScope);
-  if (authorScope.author) or.push(authorScope);
-  return { $or: or };
+  if (groupScope.groupId) or.push(groupScope);
+  if (authorScope.authorId) or.push(authorScope);
+  return { OR: or };
 };
 
 export const list = async ({
@@ -92,61 +97,76 @@ export const list = async ({
   limit = 20,
 }) => {
   const filter = { ...(await feedbackScopeFilter()) };
-  if (type) filter.type = type;
+  if (type) filter.typeId = String(type);
   if (status) filter.status = status;
+  // `$regex` + `escapeRegex` O'RNIGA `contains`: u XOM SATRNI qidiradi
+  // va LIKE maxsus belgilarini o'zi ekranlaydi. Eski `escapeRegex` endi
+  // hech nimadan himoya qilmasdi, faqat qidiruv matnini buzardi.
   if (search && search.trim()) {
-    filter.message = { $regex: escapeRegex(search.trim()), $options: "i" };
+    filter.message = { contains: search.trim(), mode: "insensitive" };
   }
   if (fromDate || toDate) {
     filter.createdAt = {};
-    if (fromDate) filter.createdAt.$gte = new Date(fromDate);
-    if (toDate) filter.createdAt.$lte = new Date(toDate);
+    if (fromDate) filter.createdAt.gte = new Date(fromDate);
+    if (toDate) filter.createdAt.lte = new Date(toDate);
   }
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Feedback.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("type", TYPE_PROJECTION)
-      .populate("group", GROUP_PROJECTION)
-      .populate("author", USER_PROJECTION)
-      .populate("repliedBy", USER_PROJECTION),
-    Feedback.countDocuments(filter),
+    prisma.feedback.findMany({
+      where: filter,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        type: { select: TYPE_SELECT },
+        group: { select: GROUP_SELECT },
+        author: { select: USER_SELECT },
+        repliedBy: { select: USER_SELECT },
+      },
+    }),
+    prisma.feedback.count({ where: filter }),
   ]);
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 export const getById = async (id) => {
-  const doc = await Feedback.findById(id)
-    .populate("type", TYPE_PROJECTION)
-    .populate("group", GROUP_PROJECTION)
-    .populate("author", USER_PROJECTION)
-    .populate("repliedBy", USER_PROJECTION)
-    .populate("reviewedBy", USER_PROJECTION)
-    .populate("resolvedBy", USER_PROJECTION);
+  const doc = await prisma.feedback.findUnique({
+    where: { id: String(id) },
+    include: {
+      type: { select: TYPE_SELECT },
+      group: { select: GROUP_SELECT },
+      author: { select: USER_SELECT },
+      repliedBy: { select: USER_SELECT },
+      reviewedBy: { select: USER_SELECT },
+      resolvedBy: { select: USER_SELECT },
+    },
+  });
   if (!doc) throw new ApiError(404, "Feedback topilmadi");
-  return doc;
+  return withLegacyId(doc);
 };
 
 export const getMyFeedback = async (
   userId,
   { page = 1, limit = 20 } = {},
 ) => {
-  const filter = { author: userId };
+  const filter = { authorId: String(userId) };
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    Feedback.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("type", TYPE_PROJECTION)
-      .populate("group", GROUP_PROJECTION)
-      .populate("repliedBy", USER_PROJECTION),
-    Feedback.countDocuments(filter),
+    prisma.feedback.findMany({
+      where: filter,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        type: { select: TYPE_SELECT },
+        group: { select: GROUP_SELECT },
+        repliedBy: { select: USER_SELECT },
+      },
+    }),
+    prisma.feedback.count({ where: filter }),
   ]);
-  return { items, total, page, limit };
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 const assertCanTransition = (currentStatus, nextStatus) => {
@@ -159,7 +179,11 @@ const assertCanTransition = (currentStatus, nextStatus) => {
 };
 
 const notifyStatusChangeAsync = async (feedback, action, currentUser) => {
-  if (!feedback?.author || feedback.isAnonymous) return;
+  // `feedback.author` EMAS, `authorId`: bu funksiyaga `prisma.update`
+  // natijasi keladi va u RELATION'ni o'z ichiga olmaydi (`include`
+  // berilmagan). `author` bo'yicha tekshirilsa shart HAR DOIM `false`
+  // chiqib, muallif holat o'zgarishi haqida XABAR OLMAY qolardi.
+  if (!feedback?.authorId || feedback.isAnonymous) return;
   try {
     const { notifyFeedbackStatusChange } = await import(
       "../../notifications/services/notifications.service.js"
@@ -179,7 +203,7 @@ const notifyStatusChangeAsync = async (feedback, action, currentUser) => {
 };
 
 export const markReviewed = async (id, currentUser) => {
-  const doc = await Feedback.findById(id);
+  const doc = await prisma.feedback.findUnique({ where: { id: String(id) } });
   if (!doc) throw new ApiError(404, "Feedback topilmadi");
   if (doc.status !== "new") {
     throw new ApiError(
@@ -187,64 +211,82 @@ export const markReviewed = async (id, currentUser) => {
       "Faqat 'Yangi' holatdagi feedback'ni ko'rib chiqishga belgilash mumkin",
     );
   }
-  doc.status = "in_review";
-  doc.reviewedBy = currentUser._id;
-  doc.reviewedAt = new Date();
-  await doc.save();
-  await notifyStatusChangeAsync(doc, "in_review", currentUser);
-  return getById(doc._id);
+  // MONGO'DA BU `doc.save()` EDI (hujjatni o'zgartirib qayta yozish).
+  // Prisma'da faqat berilgan maydonlar yangilanadi.
+  const updated = await prisma.feedback.update({
+    where: { id: doc.id },
+    data: {
+      status: "in_review",
+      reviewedById: String(currentUser._id),
+      reviewedAt: new Date(),
+    },
+  });
+  await notifyStatusChangeAsync(updated, "in_review", currentUser);
+  return getById(updated.id);
 };
 
 export const reply = async (id, body, currentUser) => {
-  const doc = await Feedback.findById(id);
+  const doc = await prisma.feedback.findUnique({ where: { id: String(id) } });
   if (!doc) throw new ApiError(404, "Feedback topilmadi");
   const message = String(body.message || "").trim();
   if (!message) throw new ApiError(400, "Javob matni bo'sh bo'lmasligi kerak");
 
-  doc.adminReply = message;
-  doc.repliedBy = currentUser._id;
-  doc.repliedAt = new Date();
-  await doc.save();
-  return getById(doc._id);
+  const updated = await prisma.feedback.update({
+    where: { id: doc.id },
+    data: {
+      adminReply: message,
+      repliedById: String(currentUser._id),
+      repliedAt: new Date(),
+    },
+  });
+  return getById(updated.id);
 };
 
 export const resolve = async (id, body, currentUser) => {
-  const doc = await Feedback.findById(id);
+  const doc = await prisma.feedback.findUnique({ where: { id: String(id) } });
   if (!doc) throw new ApiError(404, "Feedback topilmadi");
   assertCanTransition(doc.status, "resolved");
 
+  const data = {
+    status: "resolved",
+    resolvedById: String(currentUser._id),
+    resolvedAt: new Date(),
+  };
   if (body?.adminReply !== undefined) {
-    doc.adminReply = String(body.adminReply || "").trim();
-    if (doc.adminReply) {
-      doc.repliedBy = currentUser._id;
-      doc.repliedAt = new Date();
+    data.adminReply = String(body.adminReply || "").trim();
+    // Javob matni bo'sh bo'lsa "kim javob berdi" ham yozilmaydi -
+    // Mongo versiyasidagi shart bilan bir xil.
+    if (data.adminReply) {
+      data.repliedById = String(currentUser._id);
+      data.repliedAt = new Date();
     }
   }
-  doc.status = "resolved";
-  doc.resolvedBy = currentUser._id;
-  doc.resolvedAt = new Date();
-  await doc.save();
+  const updated = await prisma.feedback.update({ where: { id: doc.id }, data });
 
-  await notifyStatusChangeAsync(doc, "resolved", currentUser);
-  return getById(doc._id);
+  await notifyStatusChangeAsync(updated, "resolved", currentUser);
+  return getById(updated.id);
 };
 
 export const reject = async (id, body, currentUser) => {
-  const doc = await Feedback.findById(id);
+  const doc = await prisma.feedback.findUnique({ where: { id: String(id) } });
   if (!doc) throw new ApiError(404, "Feedback topilmadi");
   assertCanTransition(doc.status, "rejected");
 
   const reason = String(body?.rejectionReason || "").trim();
   if (!reason) throw new ApiError(400, "Rad etish sababi kerak");
 
-  doc.rejectionReason = reason;
-  doc.status = "rejected";
-  doc.resolvedBy = currentUser._id;
-  doc.resolvedAt = new Date();
-  await doc.save();
+  const updated = await prisma.feedback.update({
+    where: { id: doc.id },
+    data: {
+      rejectionReason: reason,
+      status: "rejected",
+      resolvedById: String(currentUser._id),
+      resolvedAt: new Date(),
+    },
+  });
 
-  await notifyStatusChangeAsync(doc, "rejected", currentUser);
-  return getById(doc._id);
+  await notifyStatusChangeAsync(updated, "rejected", currentUser);
+  return getById(updated.id);
 };
 
 export const getStats = async ({ fromDate, toDate } = {}) => {
@@ -253,46 +295,49 @@ export const getStats = async ({ fromDate, toDate } = {}) => {
   const range = { ...(await feedbackScopeFilter()) };
   if (fromDate || toDate) {
     range.createdAt = {};
-    if (fromDate) range.createdAt.$gte = new Date(fromDate);
-    if (toDate) range.createdAt.$lte = new Date(toDate);
+    if (fromDate) range.createdAt.gte = new Date(fromDate);
+    if (toDate) range.createdAt.lte = new Date(toDate);
   }
 
-  const [total, byStatus, byType] = await Promise.all([
-    Feedback.countDocuments(range),
-    Feedback.aggregate([
-      { $match: range },
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-    ]),
-    Feedback.aggregate([
-      { $match: range },
-      {
-        $group: {
-          _id: "$type",
-          count: { $sum: 1 },
-        },
-      },
-      {
-        $lookup: {
-          from: FeedbackType.collection.name,
-          localField: "_id",
-          foreignField: "_id",
-          as: "type",
-        },
-      },
-      { $unwind: { path: "$type", preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          _id: 0,
-          typeId: "$_id",
-          name: "$type.name",
-          count: 1,
-        },
-      },
-      { $sort: { count: -1 } },
-    ]),
+  const [total, statusRows, typeRows] = await Promise.all([
+    prisma.feedback.count({ where: range }),
+    // Ikkala guruhlash ham `feedbacks` jadvalining O'Z ustuni bo'yicha -
+    // `groupBy` yetarli.
+    prisma.feedback.groupBy({
+      by: ["status"],
+      where: range,
+      _count: { _all: true },
+    }),
+    prisma.feedback.groupBy({
+      by: ["typeId"],
+      where: range,
+      _count: { _all: true },
+      orderBy: { _count: { typeId: "desc" } },
+    }),
   ]);
 
-  return { total, byStatus, byType };
+  // MONGO'DAGI `$lookup` O'RNIGA IKKINCHI SO'ROV. `groupBy` `include`
+  // qabul qilmaydi, lekin bu yerda ehtiyoj ham yo'q: tur soni kichik.
+  const typeIds = typeRows.map((r) => r.typeId).filter(Boolean);
+  const types = typeIds.length
+    ? await prisma.feedbackType.findMany({
+        where: { id: { in: typeIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const typeName = new Map(types.map((t) => [String(t.id), t.name]));
+
+  return {
+    total,
+    // Javob shakli Mongo bilan BIR XIL (`{ _id, count }`) - klient
+    // kartochkalari shunga tayangan.
+    byStatus: statusRows.map((r) => ({ _id: r.status, count: r._count._all })),
+    byType: typeRows.map((r) => ({
+      typeId: r.typeId,
+      name: typeName.get(String(r.typeId)),
+      count: r._count._all,
+    })),
+  };
 };
 
 // Foydalanuvchi o'z feedback'iga kirishi mumkinligi
@@ -301,12 +346,15 @@ export const ensureOwnerOrAuthor = (feedback, user) => {
   if (
     !feedback.isAnonymous &&
     feedback.author &&
-    String(feedback.author._id || feedback.author) === String(user._id)
+    // `author` endi RELATION obyekti (`{ id }`) yoki `authorId` satri.
+    String(feedback.author?.id || feedback.authorId || feedback.author) ===
+      String(user._id)
   ) {
     return true;
   }
   throw new ApiError(403, "Ruxsat yo'q");
 };
 
-// Mongo session yordamchisi (kelajakda kerak bo'lishi mumkin, hozir ishlatilmaydi)
-export { mongoose };
+// `export { mongoose }` OLIB TASHLANDI: u "kelajakda kerak bo'lishi
+// mumkin" deb qoldirilgan edi, lekin hech qayerda import qilinmagan.
+// Prisma'ga o'tgach import ham yo'qoldi va eksport modulni yiqitardi.

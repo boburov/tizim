@@ -1,42 +1,19 @@
-import mongoose from "mongoose";
-import Course from "../../../models/course.model.js";
-import Group from "../../../models/group.model.js";
-import Attendance from "../../../models/attendance.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
+import prisma from "../../../config/prisma.js";
 import { buildWindows } from "./student.signal.js";
 
-// KURS SIGNALLARI - "qaysi kurs ishlayapti, qaysi biri yo'q" savolining
-// deterministik javobi.
-//
-// Kurs filialsiz taksonomiya (Course modelidagi izohga qarang), filial
-// ko'lami GURUH orqali keladi: avval shu filialning guruhlari olinadi,
-// keyin ular kurs bo'yicha guruhlanadi. Shuning uchun bu yerda hech qanday
-// branchMatchStage() chaqirilmaydi - guruh ro'yxati allaqachon filialga
-// filtrlangan holda kiradi va bu KUCHLIROQ kafolat (ID ro'yxati bo'yicha
-// $in kontekstga tayanmaydi).
-//
-// "Kursi belgilanmagan" guruhlar (courseId: null) ALOHIDA qatorga tushadi
-// va jimgina yo'qolmaydi - aks holda migratsiya to'liq bo'lmagan filialda
-// hisobot noto'g'ri, lekin ishonchli ko'rinardi.
-
-const toId = (v) => new mongoose.Types.ObjectId(String(v));
 const UNASSIGNED = "__unassigned__";
 
-/**
- * Filial guruhlarini kurs bo'yicha guruhlaydi.
- * @param {Array} groups - loadGroups() natijasi (faol guruhlar)
- */
 export const groupsByCourse = async (groups) => {
   const courseIds = [
     ...new Set(groups.filter((g) => g.courseId).map((g) => String(g.courseId))),
   ];
   const courses = courseIds.length
-    ? await Course.find({ _id: { $in: courseIds.map(toId) } })
-        .select("_id title code level")
-        .lean()
+    ? await prisma.course.findMany({
+        where: { id: { in: courseIds } },
+        select: { id: true, title: true, code: true, level: true },
+      })
     : [];
-  const courseById = new Map(courses.map((c) => [String(c._id), c]));
+  const courseById = new Map(courses.map((c) => [c.id, c]));
 
   const buckets = new Map();
   for (const g of groups) {
@@ -54,57 +31,36 @@ export const groupsByCourse = async (groups) => {
   return [...buckets.values()];
 };
 
-/**
- * KURS DAVOMATI - ikki oyna bo'yicha ishtirok darajasi.
- *
- * excused/exempt maxrajga kirmaydi - o'quvchi signalidagi bilan bir xil
- * qoida: sababli qoldirilgan dars "yomon signal" emas. Ikki joyda turli
- * qoida bo'lsa, kurs kesimi va o'quvchi kesimi bir-biriga qarama-qarshi
- * raqam ko'rsatardi.
- */
 export const courseAttendance = async (buckets, now) => {
   const windows = buildWindows(now);
-  const allGroupIds = buckets.flatMap((b) => b.groups.map((g) => g._id));
+  const allGroupIds = buckets.flatMap((b) => b.groups.map((g) => String(g.id || g._id)));
   if (!allGroupIds.length) return new Map();
 
-  const rows = await Attendance.aggregate([
-    {
-      $match: {
-        group: { $in: allGroupIds },
-        isDeleted: false,
-        date: { $gte: windows.priorStart, $lt: windows.end },
-        status: { $in: ["present", "absent"] },
-      },
+  const rows = await prisma.attendance.findMany({
+    where: {
+      groupId: { in: allGroupIds },
+      isDeleted: false,
+      date: { gte: windows.priorStart, lt: windows.end },
+      status: { in: ["present", "absent"] },
     },
-    {
-      $group: {
-        _id: {
-          group: "$group",
-          window: {
-            $cond: [{ $gte: ["$date", windows.recentStart] }, "recent", "prior"],
-          },
-        },
-        present: { $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] } },
-        total: { $sum: 1 },
-        absentIds: {
-          $push: { $cond: [{ $eq: ["$status", "absent"] }, "$_id", "$$REMOVE"] },
-        },
-      },
-    },
-  ]);
+    select: { groupId: true, date: true, status: true, id: true },
+  });
 
-  // Guruh darajasidan kurs darajasiga yig'ish: present va total YIG'INDISI
-  // olinadi, guruh foizlarining o'rtachasi EMAS. Sabab: 3 o'quvchilik guruh
-  // va 20 o'quvchilik guruh foizlari teng vaznda bo'lmasligi kerak.
   const byGroup = new Map();
   for (const r of rows) {
-    const gid = String(r._id.group);
+    const gid = r.groupId;
     if (!byGroup.has(gid)) {
-      byGroup.set(gid, { recent: { present: 0, total: 0 }, prior: { present: 0, total: 0 }, absentIds: [] });
+      byGroup.set(gid, {
+        recent: { present: 0, total: 0 },
+        prior: { present: 0, total: 0 },
+        absentIds: [],
+      });
     }
     const e = byGroup.get(gid);
-    e[r._id.window] = { present: r.present, total: r.total };
-    if (r._id.window === "recent") e.absentIds = (r.absentIds || []).slice(0, 20);
+    const window = r.date >= windows.recentStart ? "recent" : "prior";
+    e[window].total++;
+    if (r.status === "present") e[window].present++;
+    else if (window === "recent" && e.absentIds.length < 20) e.absentIds.push(r.id);
   }
 
   const out = new Map();
@@ -115,7 +71,7 @@ export const courseAttendance = async (buckets, now) => {
       absentIds: [],
     };
     for (const g of b.groups) {
-      const e = byGroup.get(String(g._id));
+      const e = byGroup.get(String(g.id || g._id));
       if (!e) continue;
       agg.recent.present += e.recent.present;
       agg.recent.total += e.recent.total;
@@ -132,8 +88,6 @@ export const courseAttendance = async (buckets, now) => {
       recentRate,
       priorRate,
       lessons: agg.recent.total,
-      // NISBIY pasayish (absolyut punkt emas): 90% dan 80% ga tushish
-      // 50% dan 40% ga tushishdan boshqa hodisa, ikkinchisi ancha jiddiy.
       drop:
         priorRate != null && recentRate != null && priorRate > 0
           ? Math.max(0, (priorRate - recentRate) / priorRate)
@@ -144,39 +98,27 @@ export const courseAttendance = async (buckets, now) => {
   return out;
 };
 
-/** KURS BO'YICHA o'quvchi soni va ketish darajasi. */
 export const courseEnrollment = async (buckets, now) => {
-  const allGroupIds = buckets.flatMap((b) => b.groups.map((g) => g._id));
+  const allGroupIds = buckets.flatMap((b) => b.groups.map((g) => String(g.id || g._id)));
   if (!allGroupIds.length) return new Map();
   const since = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-  const rows = await GroupMembership.aggregate([
-    { $match: { group: { $in: allGroupIds }, isDeleted: false } },
-    {
-      $group: {
-        _id: "$group",
-        active: { $sum: { $cond: [{ $eq: ["$leftAt", null] }, 1, 0] } },
-        left: {
-          $sum: {
-            $cond: [
-              {
-                $and: [
-                  { $eq: ["$leftReason", "removed"] },
-                  { $gte: ["$leftAt", since] },
-                ],
-              },
-              1,
-              0,
-            ],
-          },
-        },
-        graduated: {
-          $sum: { $cond: [{ $eq: ["$leftReason", "graduated"] }, 1, 0] },
-        },
-      },
-    },
-  ]);
-  const byGroup = new Map(rows.map((r) => [String(r._id), r]));
+  const rows = await prisma.groupMembership.findMany({
+    where: { groupId: { in: allGroupIds }, isDeleted: false },
+    select: { groupId: true, leftAt: true, leftReason: true },
+  });
+
+  const byGroup = new Map();
+  for (const r of rows) {
+    const gid = r.groupId;
+    if (!byGroup.has(gid)) {
+      byGroup.set(gid, { active: 0, left: 0, graduated: 0 });
+    }
+    const e = byGroup.get(gid);
+    if (!r.leftAt) e.active++;
+    else if (r.leftReason === "removed" && r.leftAt >= since) e.left++;
+    else if (r.leftReason === "graduated") e.graduated++;
+  }
 
   const out = new Map();
   for (const b of buckets) {
@@ -184,7 +126,7 @@ export const courseEnrollment = async (buckets, now) => {
     let left = 0;
     let graduated = 0;
     for (const g of b.groups) {
-      const e = byGroup.get(String(g._id));
+      const e = byGroup.get(String(g.id || g._id));
       if (!e) continue;
       active += e.active;
       left += e.left;
@@ -202,47 +144,40 @@ export const courseEnrollment = async (buckets, now) => {
   return out;
 };
 
-/**
- * KURS DAROMADI - joriy oy kutilgan va to'langan.
- *
- * StudentPayment'da courseId yo'q, shuning uchun guruh orqali bog'lanadi.
- * Bu "qaysi kurs eng foydali" savolining daromad tomoni. XARAJAT tomoni
- * (o'qituvchi maoshi guruh bo'yicha) SalaryTransaction'da bor, lekin u
- * oy oxirida to'lanadi - shuning uchun joriy oy uchun "sof foyda"
- * hisoblash chalg'ituvchi bo'lardi va bu yerda ATAYLAB qilinmaydi.
- */
 export const courseRevenue = async (buckets, now) => {
-  const allGroupIds = buckets.flatMap((b) => b.groups.map((g) => g._id));
+  const allGroupIds = buckets.flatMap((b) => b.groups.map((g) => String(g.id || g._id)));
   if (!allGroupIds.length) return new Map();
 
   const year = now.getUTCFullYear();
   const month = now.getUTCMonth() + 1;
 
-  const rows = await StudentPayment.aggregate([
-    {
-      $match: {
-        group: { $in: allGroupIds },
-        year,
-        month,
-        writtenOff: false,
-      },
+  const rows = await prisma.studentPayment.findMany({
+    where: {
+      groupId: { in: allGroupIds },
+      year,
+      month,
+      writtenOff: false,
     },
-    {
-      $group: {
-        _id: "$group",
-        expected: { $sum: "$expectedAmount" },
-        paid: { $sum: "$paidAmount" },
-      },
-    },
-  ]);
-  const byGroup = new Map(rows.map((r) => [String(r._id), r]));
+    select: { groupId: true, expectedAmount: true, paidAmount: true },
+  });
+
+  const byGroup = new Map();
+  for (const r of rows) {
+    const gid = r.groupId;
+    if (!byGroup.has(gid)) {
+      byGroup.set(gid, { expected: 0, paid: 0 });
+    }
+    const e = byGroup.get(gid);
+    e.expected += r.expectedAmount;
+    e.paid += r.paidAmount;
+  }
 
   const out = new Map();
   for (const b of buckets) {
     let expected = 0;
     let paid = 0;
     for (const g of b.groups) {
-      const e = byGroup.get(String(g._id));
+      const e = byGroup.get(String(g.id || g._id));
       if (!e) continue;
       expected += e.expected;
       paid += e.paid;
@@ -251,13 +186,12 @@ export const courseRevenue = async (buckets, now) => {
       expected,
       paid,
       collectionRate: expected > 0 ? paid / expected : null,
-      revenuePerStudent: 0, // enrollment bilan birlashtirilgandan keyin to'ldiriladi
+      revenuePerStudent: 0,
     });
   }
   return out;
 };
 
-/** Barcha kurs signallarini yig'adi (guruh ro'yxati tashqaridan keladi). */
 export const collectCourseSignals = async (groups, now = new Date()) => {
   const buckets = await groupsByCourse(groups);
   if (!buckets.length) return { buckets: [], signals: new Map() };

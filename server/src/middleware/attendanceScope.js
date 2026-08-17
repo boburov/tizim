@@ -2,9 +2,7 @@ import ApiError from "../utils/ApiError.js";
 import { ROLE_TYPES } from "../constants/roles.js";
 import { PERMISSIONS } from "../constants/permissions.js";
 import { hasPermission } from "../helpers/permission.helper.js";
-import Group from "../models/group.model.js";
-import GroupMembership from "../models/groupMembership.model.js";
-import User from "../models/user.model.js";
+import prisma from "../config/prisma.js";
 
 // DAVOMAT / BAHO KO'LAMI (scope).
 //
@@ -39,10 +37,11 @@ const branchGroupIds = async (req) => {
   if (seesAllBranches(req)) return null;
   const allowed = req.allowedBranchIds || [];
   if (allowed.length === 0) return [];
-  const groups = await Group.find({ branchId: { $in: allowed } })
-    .select("_id")
-    .lean();
-  return groups.map((g) => g._id);
+  const groups = await prisma.group.findMany({
+    where: { branchId: { in: allowed.map(String) } },
+    select: { id: true },
+  });
+  return groups.map((g) => g.id);
 };
 
 // Foydalanuvchi (o'quvchi) qaysi filiallarga tegishli.
@@ -73,9 +72,14 @@ export const requireGroupAccess =
       const groupId = extractGroupId(req);
 
       if (roleType === ROLE_TYPES.TEACHER) {
-        const g = await Group.findById(groupId).select("teachers").lean();
+        const g = await prisma.group.findUnique({
+          where: { id: String(groupId) },
+          // `teachers` KO'P-KO'PGA bog'lanish: Mongo'da guruh hujjati
+          // ichidagi ObjectId massivi edi, Prisma'da esa alohida jadval.
+          select: { teachers: { select: { id: true } } },
+        });
         const isOwn =
-          g && (g.teachers || []).some((t) => String(t) === String(req.user._id));
+          g && (g.teachers || []).some((t) => String(t.id) === String(req.user._id));
         if (isOwn) return next();
         return next(new ApiError(403, "Bu guruh sizga biriktirilmagan"));
       }
@@ -84,7 +88,10 @@ export const requireGroupAccess =
       // requirePermission'da tekshirilgan - bu yerda faqat FILIAL chegarasi.
       if (seesAllBranches(req)) return next();
 
-      const g = await Group.findById(groupId).select("branchId").lean();
+      const g = await prisma.group.findUnique({
+        where: { id: String(groupId) },
+        select: { branchId: true },
+      });
       // Guruh topilmasa ham fail-closed: mavjud emasligini 403 bilan
       // yashiramiz (ID sanab chiqishga yo'l bermaslik uchun).
       if (g && isBranchAllowed(req, g.branchId)) return next();
@@ -118,18 +125,20 @@ export const requireStudentAccess =
       }
 
       if (roleType === ROLE_TYPES.TEACHER) {
-        const groups = await Group.find({ teachers: req.user._id })
-          .select("_id")
-          .lean();
-        const groupIds = groups.map((g) => g._id);
+        // `teachers: id` Mongo'da massivga tegishlilik edi; Prisma'da
+        // bu `some` relation filtri.
+        const groups = await prisma.group.findMany({
+          where: { teachers: { some: { id: String(req.user._id) } } },
+          select: { id: true },
+        });
+        const groupIds = groups.map((g) => g.id);
         if (groupIds.length === 0) {
           return next(new ApiError(403, "Bu o'quvchi sizning guruhlaringizda emas"));
         }
-        const membership = await GroupMembership.findOne({
-          student: sid,
-          group: { $in: groupIds },
-          isDeleted: { $ne: true },
-        }).lean();
+        const membership = await prisma.groupMembership.findFirst({
+          where: { studentId: sid, groupId: { in: groupIds }, isDeleted: false },
+          select: { id: true },
+        });
         if (membership) {
           req.scopeGroupIds = groupIds;
           return next();
@@ -140,9 +149,16 @@ export const requireStudentAccess =
       // XODIM (staff): o'z filialidagi o'quvchi.
       if (seesAllBranches(req)) return next();
 
-      const student = await User.findById(sid)
-        .select("homeBranchId branchAssignments")
-        .lean();
+      // `branchAssignments` ham alohida jadval - `select` shart, aks
+      // holda `userBranchIds` faqat `homeBranchId` ni ko'rib, ikkinchi
+      // filialga biriktirilgan o'quvchini "begona" deb rad etardi.
+      const student = await prisma.user.findUnique({
+        where: { id: sid },
+        select: {
+          homeBranchId: true,
+          branchAssignments: { select: { branchId: true } },
+        },
+      });
       const targetBranchIds = userBranchIds(student);
       const overlap = (req.allowedBranchIds || []).some((id) =>
         targetBranchIds.has(String(id)),

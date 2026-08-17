@@ -1,4 +1,4 @@
-import Branch from "../../../models/branch.model.js";
+import prisma from "../../../config/prisma.js";
 import { collectGroupSignals, DAY_LABELS } from "../signals/group.signal.js";
 import {
   buildFactors,
@@ -18,29 +18,13 @@ import {
 } from "./insightWriter.service.js";
 import { resolveConfig } from "./aiConfig.service.js";
 
-// GURUH DETEKTORLARI:
-//   1. group_underfilled  - guruh medianadan sezilarli kichik (kuzatuv)
-//   2. group_complaints   - shikoyatlar ko'paydi (xavf)
-//   3. slot_opportunity   - bo'sh dars vaqtlari (imkoniyat, filial darajasi)
-//
-// "XONA #4 BO'SH" TALABI HAQIDA: kodbazada Room/Classroom modeli va
-// Group.capacity maydoni YO'Q. Xona nomini o'ylab topib ko'rsatish
-// to'g'ridan-to'g'ri gallyutsinatsiya bo'lardi. Shuning uchun o'sha
-// savolning HISOBLANADIGAN shakli berilgan: DARS VAQTI utilizatsiyasi -
-// "shanba kunlari 2 guruh bor, seshanbada 11 ta". Bu aynan "qachon yana
-// guruh ochish mumkin" degan qarorga xizmat qiladi va har bir raqami
-// Group.schedule dan chiqadi.
-
 const GROUP_KINDS = ["group_underfilled", "group_complaints", "slot_opportunity"];
 
-/** DETEKTOR 1: to'ldirilmagan guruh (filial medianasiga nisbatan). */
 const detectUnderfilled = ({ group, size, median, sampleSize, thresholds }) => {
-  // Taqqoslash uchun namuna yo'q → xulosa yo'q.
   if (sampleSize < 4 || median <= 0) return null;
   if (size.active === 0) return null;
 
   const gap = (median - size.active) / median;
-  // 30% dan kam farq - normal tebranish.
   if (gap < 0.3) return null;
 
   const factors = buildFactors([
@@ -66,7 +50,6 @@ const detectUnderfilled = ({ group, size, median, sampleSize, thresholds }) => {
       label: "60 kunlik sof oqim",
       value: size.netFlow,
       unit: "o'quvchi",
-      // Guruh KICHIK va yana KICHRAYAYOTGAN bo'lsa - jiddiyroq.
       normalized: size.netFlow < 0 ? norm(Math.abs(size.netFlow), 5) : 0,
       weight: 0.25,
       direction: size.netFlow < 0 ? "bad" : "good",
@@ -85,7 +68,6 @@ const detectUnderfilled = ({ group, size, median, sampleSize, thresholds }) => {
     subjectId: group._id,
     subjectLabel: group.name,
     title: `${group.name} — ${size.active} o'quvchi (median ${median})`,
-    // Kuzatuv: guruh yangi ochilgan bo'lishi mumkin, bu aybdorlik emas.
     severity: severityFor(score, thresholds) === "high" ? "medium" : "low",
     score,
     confidence,
@@ -130,20 +112,9 @@ const detectUnderfilled = ({ group, size, median, sampleSize, thresholds }) => {
   };
 };
 
-/**
- * DETEKTOR 2: shikoyatlar ko'paydi.
- *
- * HALOL NOMLASH: bu "o'quvchi qoniqishi pasaydi" EMAS. Feedback -
- * shikoyat qutisi, reyting so'rovnomasi emas (1-5 ball yo'q, javob
- * bermaganlar hisobga olinmaydi). Shikoyat soni o'sishi - O'LCHANGAN
- * FAKT; "qoniqish pasaydi" - o'lchanmagan xulosa. Ikkinchisini aytish
- * uchun so'rovnoma modeli kerak.
- */
 const detectComplaints = ({ group, complaints, thresholds }) => {
   if (!complaints || complaints.recent === 0) return null;
-  // Kamida 2 shikoyat: bitta shikoyat naqsh emas.
   if (complaints.recent < 2) return null;
-  // O'sish bo'lmasa (yoki kamaysa) insight yaratilmaydi.
   if (complaints.delta <= 0) return null;
 
   const factors = buildFactors([
@@ -226,14 +197,6 @@ const detectComplaints = ({ group, complaints, thresholds }) => {
   };
 };
 
-/**
- * DETEKTOR 3: bo'sh dars vaqtlari (imkoniyat).
- *
- * BITTA insight, ko'p slot: filial darajasidagi bitta karta ichida eng
- * bo'sh kunlar faktor sifatida ko'rsatiladi. Har bir slot uchun alohida
- * karta yaratish Action Center'ni 7 ta bir xil kartaga to'ldirardi va
- * hech qanday qo'shimcha ma'no bermasdi.
- */
 const detectSlotOpportunity = ({ slots, thresholds, branchName }) => {
   if (!slots?.busiest || slots.busiest.sessions < 3) return null;
   if (!slots.quiet.length) return null;
@@ -243,8 +206,6 @@ const detectSlotOpportunity = ({ slots, thresholds, branchName }) => {
     slots.weekdaySessions > 0
       ? Math.max(
           0,
-          // Ish kuni o'rtachasi va dam olish kuni o'rtachasi taqqoslanadi
-          // (jami emas): 5 ish kuni va 2 dam olish kuni bor.
           1 - slots.weekendSessions / 2 / (slots.weekdaySessions / 5),
         )
       : 0;
@@ -343,12 +304,14 @@ const detectSlotOpportunity = ({ slots, thresholds, branchName }) => {
   };
 };
 
-/** Bitta filial uchun guruh insight'larini qayta hisoblaydi. */
 export const recomputeGroupInsights = async (branchId, now = new Date()) => {
   const config = await resolveConfig(branchId);
   const thresholds = readMap(config.thresholds, DEFAULT_THRESHOLDS);
 
-  const branch = await Branch.findById(branchId).select("name").lean();
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { name: true },
+  });
   const branchName = branch?.name || "Filial";
 
   const signals = await collectGroupSignals(branchId, now);
@@ -427,7 +390,6 @@ export const recomputeGroupInsights = async (branchId, now = new Date()) => {
     now,
   );
 
-  // Kurs detektori shu guruh ro'yxatini qayta o'qimasligi uchun qaytaramiz.
   return { ...stats, signals };
 };
 

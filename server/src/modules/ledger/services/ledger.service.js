@@ -1,13 +1,4 @@
-import mongoose from "mongoose";
-import User from "../../../models/user.model.js";
-import OpeningBalance from "../../../models/openingBalance.model.js";
-import StudentPayment from "../../../models/studentPayment.model.js";
-import PaymentTransaction from "../../../models/paymentTransaction.model.js";
-import DepositTransaction from "../../../models/depositTransaction.model.js";
-import TeacherSalary from "../../../models/teacherSalary.model.js";
-import SalaryTransaction from "../../../models/salaryTransaction.model.js";
-import StaffPayroll from "../../../models/staffPayroll.model.js";
-import StaffSalaryTransaction from "../../../models/staffSalaryTransaction.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
 import { userBranchCondition } from "../../../helpers/branchContext.helper.js";
@@ -73,9 +64,14 @@ import { partyAmount } from "../../openingBalance/services/openingBalance.servic
  * maoshini yashirib qolgan balans - noto'g'ri balans, va undan kelib
  * chiqib to'langan pul ham noto'g'ri bo'lardi.
  */
-const toObjectId = (id) => new mongoose.Types.ObjectId(String(id));
+// ID ENDI ODDIY SATR. Mongo'da `new ObjectId(...)` shart edi (aks holda
+// solishtirish jimgina moslashmasdi), Postgres'da esa birlamchi kalit
+// `VARCHAR(24)` - satrning o'zi.
+const toId = (id) => String(id);
 
-const notDeleted = { isDeleted: { $ne: true } };
+// `isDeleted` ustuni NOT NULL (default false) -> `{ $ne: true }` oddiy
+// `false` ga aylanadi.
+const notDeleted = { isDeleted: false };
 
 // Qator turlari - UI shu kalitlar bo'yicha ikonka/rang tanlaydi.
 export const LEDGER_TYPES = {
@@ -123,32 +119,35 @@ const openingRow = (ob) => {
     // qarz balansda bor, lekin qarzdorlar ro'yxatida hali yo'q.
     pending: !ob.materializedAt,
     pendingReason: ob.pendingReason || "",
-    refId: String(ob._id),
+    refId: String(ob.id),
   };
 };
 
 // ─────────────────────────────── O'QUVCHI ───────────────────────────────
 
 const studentRows = async (userId) => {
-  const sid = toObjectId(userId);
+  const sid = toId(userId);
 
   const [plans, payments, depositTxns] = await Promise.all([
     // Oylik planlar. isOpening CHIQARIB TASHLANADI - u boshlang'ich
     // qoldiq qatorining materializatsiyasi (yuqoridagi izohga qarang).
-    StudentPayment.find(
-      { student: sid, isOpening: { $ne: true } },
-      {
-        year: 1,
-        month: 1,
-        expectedAmount: 1,
-        writtenOff: 1,
-        writeOffAmount: 1,
-        writeOffAt: 1,
-        group: 1,
+    // `student` -> `studentId`, `group` -> `groupId` (Prisma'da bular
+    // RELATION nomlari, skalyar ustun `...Id` bilan tugaydi).
+    prisma.studentPayment.findMany({
+      where: { studentId: sid, isOpening: false },
+      select: {
+        // `id` ATAYLAB: qator `refId` sifatida ishlatiladi.
+        id: true,
+        year: true,
+        month: true,
+        expectedAmount: true,
+        writtenOff: true,
+        writeOffAmount: true,
+        writeOffAt: true,
+        groupId: true,
+        group: { select: { name: true } },
       },
-    )
-      .populate("group", { name: 1 })
-      .lean(),
+    }),
 
     // To'lovlar. source="deposit" HISOBGA OLINMAYDI (ichki ko'chirish).
     //
@@ -156,22 +155,37 @@ const studentRows = async (userId) => {
     // maydoni keyinroq qo'shilgan va undan oldingi hujjatlarda umuman
     // yo'q. Tenglik bilan qidirilganda o'sha eski to'lovlar tushmay
     // qolib, balans o'quvchi zarariga - to'lamagandek - chiqardi.
-    PaymentTransaction.find(
-      { student: sid, source: { $ne: "deposit" }, ...notDeleted },
-      { amount: 1, paidAt: 1, method: 1, note: 1, year: 1, month: 1 },
-    ).lean(),
+    prisma.paymentTransaction.findMany({
+      where: { studentId: sid, source: { not: "deposit" }, ...notDeleted },
+      select: {
+        id: true,
+        amount: true,
+        paidAt: true,
+        method: true,
+        note: true,
+        year: true,
+        month: true,
+      },
+    }),
 
     // Depozit: faqat HAQIQIY pul harakati (topup/withdraw).
     // isOpening topup ham chiqariladi - u boshlang'ich qoldiq qatori.
-    DepositTransaction.find(
-      {
-        student: sid,
-        type: { $in: ["topup", "withdraw"] },
-        isOpening: { $ne: true },
+    prisma.depositTransaction.findMany({
+      where: {
+        studentId: sid,
+        type: { in: ["topup", "withdraw"] },
+        isOpening: false,
         ...notDeleted,
       },
-      { amount: 1, type: 1, paidAt: 1, method: 1, note: 1 },
-    ).lean(),
+      select: {
+        id: true,
+        amount: true,
+        type: true,
+        paidAt: true,
+        method: true,
+        note: true,
+      },
+    }),
   ]);
 
   const rows = [];
@@ -186,7 +200,7 @@ const studentRows = async (userId) => {
         amount: -p.expectedAmount,
         title: `Oylik to'lov${p.group?.name ? ` - ${p.group.name}` : ""}`,
         note: "",
-        refId: String(p._id),
+        refId: String(p.id),
       });
     }
     // HISOBDAN CHIQARISH (write-off): qarz undirilmaydi deb qaror
@@ -200,7 +214,7 @@ const studentRows = async (userId) => {
         amount: p.writeOffAmount,
         title: "Qarz hisobdan chiqarildi",
         note: "Undirilmaydigan qarz sifatida yopildi",
-        refId: String(p._id),
+        refId: String(p.id),
       });
     }
   }
@@ -213,7 +227,7 @@ const studentRows = async (userId) => {
       amount: t.amount,
       title: t.method === "card" ? "To'lov (karta)" : "To'lov (naqd)",
       note: t.note || "",
-      refId: String(t._id),
+      refId: String(t.id),
     });
   }
 
@@ -226,7 +240,7 @@ const studentRows = async (userId) => {
       amount: isIn ? d.amount : -d.amount,
       title: isIn ? "Depozitga to'ldirish" : "Depozitdan qaytarish",
       note: d.note || "",
-      refId: String(d._id),
+      refId: String(d.id),
     });
   }
 
@@ -243,22 +257,37 @@ const TEACHER_KIND_LABELS = {
 };
 
 const teacherRows = async (userId) => {
-  const tid = toObjectId(userId);
+  const tid = toId(userId);
 
   const [salaries, payouts] = await Promise.all([
     // TeacherSalary'da softDelete YO'Q (model izohiga qarang) - shuning
     // uchun bu yerda isDeleted filtri ham yo'q.
-    TeacherSalary.find(
-      { teacher: tid, isOpening: { $ne: true } },
-      { year: 1, month: 1, expectedAmount: 1, kind: 1, reason: 1, group: 1 },
-    )
-      .populate("group", { name: 1 })
-      .lean(),
+    prisma.teacherSalary.findMany({
+      where: { teacherId: tid, isOpening: false },
+      select: {
+        id: true,
+        year: true,
+        month: true,
+        expectedAmount: true,
+        kind: true,
+        reason: true,
+        groupId: true,
+        group: { select: { name: true } },
+      },
+    }),
 
-    SalaryTransaction.find(
-      { teacher: tid, ...notDeleted },
-      { amount: 1, paidAt: 1, method: 1, note: 1, year: 1, month: 1 },
-    ).lean(),
+    prisma.salaryTransaction.findMany({
+      where: { teacherId: tid, ...notDeleted },
+      select: {
+        id: true,
+        amount: true,
+        paidAt: true,
+        method: true,
+        note: true,
+        year: true,
+        month: true,
+      },
+    }),
   ]);
 
   const rows = [];
@@ -279,7 +308,7 @@ const teacherRows = async (userId) => {
         s.group?.name ? ` - ${s.group.name}` : ""
       }`,
       note: s.reason || "",
-      refId: String(s._id),
+      refId: String(s.id),
     });
   }
 
@@ -291,7 +320,7 @@ const teacherRows = async (userId) => {
       amount: -t.amount,
       title: t.method === "card" ? "Maosh to'landi (karta)" : "Maosh to'landi (naqd)",
       note: t.note || "",
-      refId: String(t._id),
+      refId: String(t.id),
     });
   }
 
@@ -301,24 +330,33 @@ const teacherRows = async (userId) => {
 // ──────────────────────────────── XODIM ────────────────────────────────
 
 const staffRows = async (userId) => {
-  const eid = toObjectId(userId);
+  const eid = toId(userId);
 
   const [payrolls, payouts] = await Promise.all([
-    StaffPayroll.find(
-      { employee: eid },
-      {
-        year: 1,
-        month: 1,
-        finalAmount: 1,
-        openingCreditTotal: 1,
-        openingDebtApplied: 1,
+    prisma.staffPayroll.findMany({
+      where: { employeeId: eid },
+      select: {
+        id: true,
+        year: true,
+        month: true,
+        finalAmount: true,
+        openingCreditTotal: true,
+        openingDebtApplied: true,
       },
-    ).lean(),
+    }),
 
-    StaffSalaryTransaction.find(
-      { employee: eid, ...notDeleted },
-      { amount: 1, paidAt: 1, method: 1, note: 1, year: 1, month: 1 },
-    ).lean(),
+    prisma.staffSalaryTransaction.findMany({
+      where: { employeeId: eid, ...notDeleted },
+      select: {
+        id: true,
+        amount: true,
+        paidAt: true,
+        method: true,
+        note: true,
+        year: true,
+        month: true,
+      },
+    }),
   ]);
 
   const rows = [];
@@ -345,7 +383,7 @@ const staffRows = async (userId) => {
       amount: earned,
       title: "Oylik maosh",
       note: "",
-      refId: String(p._id),
+      refId: String(p.id),
     });
   }
 
@@ -357,7 +395,7 @@ const staffRows = async (userId) => {
       amount: -t.amount,
       title: t.method === "card" ? "Maosh to'landi (karta)" : "Maosh to'landi (naqd)",
       note: t.note || "",
-      refId: String(t._id),
+      refId: String(t.id),
     });
   }
 
@@ -393,22 +431,24 @@ export const statementFor = async (
   // boshqa filialga vaqtincha biriktirilgan bo'lsa) uni o'zidan
   // ajratib qo'yishi mumkin edi.
   const branchCond = ownProfile ? null : userBranchCondition();
-  const uid = toObjectId(userId);
-  const user = await User.findOne(
-    branchCond ? { _id: uid, $and: [branchCond] } : { _id: uid },
-    {
-      firstName: 1,
-      lastName: 1,
-      username: 1,
-      role: 1,
-      hiredAt: 1,
-      enrolledAt: 1,
-      homeBranchId: 1,
+  const uid = toId(userId);
+  const user = await prisma.user.findFirst({
+    where: branchCond ? { id: uid, AND: [branchCond] } : { id: uid },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      username: true,
+      role: true,
+      hiredAt: true,
+      enrolledAt: true,
+      homeBranchId: true,
     },
-  ).lean();
+  });
   if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
 
-  const ob = await OpeningBalance.findOne({ user: uid }).lean();
+  // `user` -> `userId` (Prisma'da `user` RELATION).
+  const ob = await prisma.openingBalance.findFirst({ where: { userId: uid } });
 
   // Rol bo'yicha quruvchi. O'qituvchi ham, o'quvchi ham EMAS bo'lsa
   // (direktor, administrator, buxgalter...) - xodim hisobi.

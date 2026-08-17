@@ -2,12 +2,12 @@ import { PERMISSIONS } from "../../../constants/permissions.js";
 import { ROLES } from "../../../constants/roles.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
 import { toUtcMidnight } from "../../../helpers/attendance.helper.js";
 import * as authService from "../../auth/services/auth.service.js";
 import * as groupsService from "../../groups/services/groups.service.js";
 import { ROW_STATUS } from "../services/importEngine.service.js";
 import { asDate, asEnum, isBlank } from "../services/coerce.service.js";
+import prisma from "../../../config/prisma.js";
 import {
   IDENTITY_COLUMNS,
   OPENING_COLUMN,
@@ -262,7 +262,7 @@ const studentsImporter = {
             {
               allowedBranchIds: ctx.allowedBranchIds,
               canSeeAllBranches: ctx.canSeeAll,
-              userId: currentUser?._id || null,
+              userId: currentUser ? String(currentUser.id || currentUser._id) : null,
             },
           ),
         data,
@@ -273,18 +273,20 @@ const studentsImporter = {
     // ── 2) GURUHGA QO'SHISH ──
     // Bu chaqiruv a'zolik sanasidan bugungacha HAR OY uchun to'lov
     // qatorini quradi (ensureFinanceForMembershipRange).
-    if (data.groupId) {
-      const already = await GroupMembership.findOne({
-        group: data.groupId,
-        student: user._id,
-        leftAt: null,
-        isDeleted: { $ne: true },
-      }).lean();
+      if (data.groupId) {
+        const already = await prisma.groupMembership.findFirst({
+          where: {
+            groupId: String(data.groupId),
+            studentId: String(user.id || user._id),
+            leftAt: null,
+            isDeleted: false,
+          },
+        });
 
-      if (already) {
+        if (already) {
         messages.push("Allaqachon shu guruhda");
       } else {
-        await groupsService.addStudent(data.groupId, user._id, {
+        await groupsService.addStudent(data.groupId, String(user.id || user._id), {
           joinedAt: data.joinedAt,
         });
         messages.push(`"${data.groupName}" guruhiga qo'shildi`);
@@ -318,7 +320,7 @@ const studentsImporter = {
 
     if (!created && !data.groupId && !data.openingBalance) {
       logger.info(
-        { user: String(user._id) },
+        { user: String(user.id || user._id) },
         "Import qatori hech narsa o'zgartirmadi (mavjud o'quvchi, guruh va qoldiq yo'q)",
       );
     }

@@ -1,6 +1,5 @@
 import logger from "../config/logger.js";
-import Group from "../models/group.model.js";
-import User from "../models/user.model.js";
+import prisma from "../config/prisma.js";
 import { listForGroupOnDate } from "../modules/attendance/services/attendance.service.js";
 import { send as sendNotification } from "../modules/notifications/services/notifications.service.js";
 import {
@@ -12,32 +11,33 @@ import { ROLES } from "../constants/roles.js";
 
 export const JOB_NAME = "daily.attendance-unmarked";
 
-// Har kuni kechqurun: bugun dars bo'lgan, lekin davomati to'liq belgilanmagan
-// guruhlar bo'yicha o'qituvchilarga eslatma va egasiga umumiy hisobot yuboradi.
 export default function defineAttendanceReminders(agenda) {
   agenda.define(JOB_NAME, async () => {
     const today = localTodayMidnight();
     const dow = localDayOfWeek();
     const dayKey = localTodayKey();
 
-    const groups = await Group.find({
-      isActive: true,
-      isDeleted: { $ne: true },
-      "schedule.day": dow,
+    const groups = await prisma.group.findMany({
+      where: {
+        isActive: true,
+        isDeleted: false,
+        schedule: { some: { day: dow } },
+      },
+      include: { teachers: { select: { id: true } } }
     });
 
-    const perTeacher = new Map(); // teacherId -> [{ name, unmarked, total }]
+    const perTeacher = new Map();
     const ownerDigest = [];
 
     for (const g of groups) {
       let data;
       try {
-        data = await listForGroupOnDate(g._id, today);
+        data = await listForGroupOnDate(g.id, today);
       } catch (err) {
-        logger.warn({ err, groupId: g._id }, "Guruh davomati o'qilmadi");
+        logger.warn({ err, groupId: g.id }, "Guruh davomati o'qilmadi");
         continue;
       }
-      if (!data.isClassDay) continue; // bayram / kurs oralig'idan tashqari
+      if (!data.isClassDay) continue;
       const total = data.rows.length;
       if (total === 0) continue;
       const unmarked = data.rows.filter((r) => !r.attendance).length;
@@ -45,7 +45,7 @@ export default function defineAttendanceReminders(agenda) {
 
       ownerDigest.push({ name: g.name, unmarked, total });
       for (const t of g.teachers || []) {
-        const k = String(t);
+        const k = String(t.id);
         if (!perTeacher.has(k)) perTeacher.set(k, []);
         perTeacher.get(k).push({ name: g.name, unmarked, total });
       }
@@ -75,10 +75,10 @@ export default function defineAttendanceReminders(agenda) {
     }
 
     if (ownerDigest.length > 0) {
-      const owners = await User.find(
-        { role: ROLES.OWNER, isActive: true, isDeleted: { $ne: true } },
-        { _id: 1 },
-      );
+      const owners = await prisma.user.findMany({
+        where: { role: ROLES.OWNER, isActive: true, isDeleted: false },
+        select: { id: true },
+      });
       if (owners.length) {
         const lines = ownerDigest.map((x) => `• ${x.name}: ${x.unmarked}/${x.total}`);
         try {
@@ -87,7 +87,7 @@ export default function defineAttendanceReminders(agenda) {
               title: "Davomat belgilanmagan guruhlar",
               body: `Bugun ${ownerDigest.length} ta guruhda davomat to'liq belgilanmadi:\n${lines.join("\n")}`,
               category: "attendance",
-              audience: { type: "auto_system", userIds: owners.map((o) => o._id) },
+              audience: { type: "auto_system", userIds: owners.map((o) => String(o.id)) },
               isAuto: true,
               dedupeKey: `att-unmarked-owner:${dayKey}`,
             },
@@ -98,10 +98,5 @@ export default function defineAttendanceReminders(agenda) {
         }
       }
     }
-
-    logger.info(
-      { scanned: groups.length, flagged: ownerDigest.length, sent },
-      "Davomat eslatmalari yuborildi",
-    );
   });
 }

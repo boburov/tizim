@@ -83,7 +83,13 @@ const ENDPOINTS = [
   ["teacher-attendance", "/teacher-attendance?date=2026-08-17"],
   ["attendance-exemptions", "/attendance-exemptions?limit=1"],
   ["lesson-cancellations", "/lesson-cancellations?limit=1"],
+  // ⚠ YOLG'ON IJOBIY XAVFI: `getLeaderboard` faol a'zolik bo'lmasa
+  // ERTA QAYTADI (`studentIds.length === 0`) va Mongoose'ga umuman
+  // yetib bormaydi. Ya'ni bo'sh bazada 200 ko'rsatadi, holbuki
+  // `rating.service` -> `attendance.service` zanjiri hali ko'chmagan.
+  // Bazada faol o'quvchi paydo bo'lgach bu yozuv haqiqatni aytadi.
   ["grades/rating", "/grades/rating/leaderboard"],
+  ["grades/settings", "/grades/rating/settings"],
 
   // ── Aloqa ──
   ["notifications", "/notifications?limit=1"],
@@ -97,6 +103,8 @@ const ENDPOINTS = [
   // `q` UZUN bo'lishi shart: qisqa so'rov Mongoose'ga yetmasdan qaytadi.
   ["search", "/search?q=owner"],
   ["activity-logs", "/activity-logs?limit=1"],
+  // `:studentId` kerak - zond birinchi o'quvchini o'zi topadi (pastda).
+  ["activity-history", "/activity-history/students/__STUDENT__"],
   ["storage/usage", "/storage/usage"],
   ["storage/settings", "/storage/settings"],
   ["storage/files", "/storage/files?limit=1"],
@@ -137,8 +145,18 @@ const main = async () => {
   ).json();
   const branchId = branches?.data?.[0]?._id || branches?.data?.[0]?.id || null;
 
+  // `activity-history` o'quvchi ID'sini talab qiladi. Bittasi topilmasa
+  // yozuv o'tkazib yuboriladi - "o'quvchi yo'q" ko'chirish holati
+  // haqida hech nima demaydi.
+  const students = await (
+    await fetch(`${API}/users?role=student&limit=1`, { headers: auth })
+  ).json().catch(() => null);
+  const studentId = students?.data?.[0]?._id || students?.data?.[0]?.id || null;
+
   const out = [];
-  for (const [name, path] of ENDPOINTS) {
+  for (const [name, rawPath] of ENDPOINTS) {
+    if (rawPath.includes("__STUDENT__") && !studentId) continue;
+    const path = rawPath.replace("__STUDENT__", studentId || "");
     const headers = { ...auth };
     if (NEEDS_BRANCH.has(name) && branchId) headers["x-branch-id"] = branchId;
 
