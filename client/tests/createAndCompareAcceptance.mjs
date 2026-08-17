@@ -42,6 +42,31 @@ const ok = (n, x = "") => { R.pass++; console.log(`  ✅ ${n}${x ? ` — ${x}` :
 const bad = (n, x = "") => { R.fail++; console.log(`  ❌ ${n}${x ? ` — ${x}` : ""}`); };
 const check = (n, cond, x = "") => (cond ? ok(n, x) : bad(n, x));
 
+/**
+ * MAJBURIY FILIAL TANLASH EKRANINI O'TISH.
+ *
+ * Ko'p filialli markazda login'dan keyin BIRINCHI ekran shu bo'ladi
+ * (`shared/components/branch/BranchPicker.jsx`) va uni o'tmasdan hech
+ * qanday sahifaga yetib bo'lmaydi. Yangi brauzer konteksti har safar
+ * bo'sh `localStorage` bilan boshlanadi, ya'ni test HAR ISHGA
+ * TUSHISHDA bu ekranga tushadi.
+ *
+ * "Barcha filiallar" tanlanadi: testlar filiallararo ko'rinishlarni
+ * tekshiradi va bitta filial tanlansa ular ko'lamdan chiqib ketardi.
+ *
+ * Yakka filialli markazda ekran UMUMAN chiqmaydi - u holda bu funksiya
+ * hech nima qilmaydi.
+ */
+const passBranchGate = async (page) => {
+  const gate = page.locator("[data-branch-gate]");
+  if (!(await gate.count())) return false;
+  await gate.locator("button", { hasText: "Barcha filiallar" }).first().click();
+  // `changeBranch` butun so'rov keshini bekor qiladi - sahifa qayta yuklanadi.
+  await page.waitForTimeout(2500);
+  return true;
+};
+
+
 const browser = await chromium.launch();
 const consoleErrors = [];
 const badRequests = [];
@@ -86,6 +111,9 @@ await page
   .waitForURL((u) => !u.pathname.includes("/login"), { timeout: 20000 })
   .catch(() => {});
 check("login muvaffaqiyatli", !page.url().includes("/login"), page.url().replace(APP, ""));
+
+await page.waitForTimeout(1200);
+if (await passBranchGate(page)) ok("majburiy filial tanlash ekrani o'tildi", "Barcha filiallar");
 
 // EGA UCHUN DEFAULT - `/admin`.
 // Server `Role.defaultPath` ni birinchi o'qiydi, ya'ni bu tekshiruv
@@ -253,11 +281,15 @@ check("'Manba ulanmagan' DEMAYDI (uchalasi ham ko'chirilgan)",
 
 // ══ 7) FILIAL TANLAGICH (checkbox) ═════════════════════════════
 console.log("\n7) filial tanlagich (checkbox)");
-const picker = page.locator('header button:has-text("Barcha filiallar"), main button:has-text("Barcha filiallar")');
+// `main` ICHIDA qidiriladi. Sarlavhadagi `BranchBadge` ham "Barcha
+// filiallar" yozuvini ko'rsatadi va DOM'da oldinroq turadi - u
+// bosilganda cmdk emas, oddiy dropdown menyu ochilardi va tekshiruv
+// "0 variant" deb yiqilardi.
+const picker = page.locator('main button:has-text("Barcha filiallar")');
 const pickerCount = await picker.count();
 if (pickerCount > 0) {
   await picker.first().click();
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(900);
   const optionCount = await page.locator('[cmdk-item]').count();
   check("tanlagich ochildi, variantlar bor", optionCount > 0, `${optionCount} filial`);
   await page.keyboard.press("Escape");

@@ -52,6 +52,7 @@ import {
 import BranchSwitcher from "./BranchSwitcher";
 import StorageQuota from "./StorageQuota";
 import SidebarItemBadge from "./SidebarItemBadge";
+import ExecutiveReturnButton from "./ExecutiveReturnButton";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
@@ -213,6 +214,15 @@ const Main = () => {
           <SidebarGroup className="gap-2 pb-0">
             <OwnerCreateMenu />
             <OwnerGlobalSearch />
+            {/* RAHBARIYATGA QAYTISH - eng tepada, menyu ro'yxatidan
+                TASHQARIDA.
+                Yo'l ikki tomonlama bo'lishi kerak: `/admin` sarlavhasida
+                "Operatsion panel" tugmasi bor, teskarisi esa faqat
+                menyudagi bitta qator edi - o'ttizta havola orasida
+                yo'qolib ketardi. Rahbariyat kartasidan drill-down
+                qilgan odam aynan shu yerda "qanday qaytaman?" degan
+                savolga tushardi. */}
+            <ExecutiveReturnButton variant="sidebar" />
           </SidebarGroup>
           <OwnerCreateModals />
           {/* Bildirishnoma qatlamining YAGONA mount nuqtasi: sidebar har

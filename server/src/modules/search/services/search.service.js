@@ -1,70 +1,115 @@
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
-import GroupMembership from "../../../models/groupMembership.model.js";
+import prisma from "../../../config/prisma.js";
 import { ROLES } from "../../../constants/roles.js";
-
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+import { withLegacyIds } from "../../../utils/serialize.js";
 
 // Global qidiruv: bitta so'rov bilan o'quvchi, o'qituvchi va guruhlarni topadi.
 // ⌘K oynasi shu natijalarni ko'rsatadi - foydalanuvchi profil/guruhga to'g'ridan o'tadi.
+//
+// ═══════════════════════════════════════════════════════════════════
+// REGEX O'RNIGA `contains` — VA `escapeRegex` OLIB TASHLANDI.
+//
+// Mongo'da qidiruv `new RegExp(escapeRegex(q), "i")` bilan qurilardi.
+// Prisma'da `contains` XOM SATRNI qidiradi va LIKE maxsus belgilarini
+// o'zi ekranlaydi, ya'ni:
+//   • `escapeRegex` endi hech nimadan himoya qilmaydi - u faqat
+//     foydalanuvchi yozgan matnga teskari chiziqlar qo'shib, qidiruvni
+//     BUZARDI ("C++" izlagan odam hech narsa topmasdi);
+//   • `mode: "insensitive"` regexdagi "i" bayrog'ining o'rnini bosadi.
+//
+// Bundan tashqari `contains` indeksdan foydalana oladi, regex esa yo'q.
+// ═══════════════════════════════════════════════════════════════════
+
 export const globalSearch = async (term, { limit = 5 } = {}) => {
   const q = (term || "").trim();
   if (q.length < 2) return { students: [], teachers: [], groups: [] };
 
-  const rx = new RegExp(escapeRegex(q), "i");
-  const userMatch = {
+  const like = { contains: q, mode: "insensitive" };
+  const userWhere = {
     isActive: true,
-    isDeleted: { $ne: true },
-    $or: [{ firstName: rx }, { lastName: rx }, { phone: rx }, { username: rx }],
+    // `isDeleted` ustuni NOT NULL (default false), ya'ni Mongo'dagi
+    // `{ $ne: true }` bu yerda oddiy `false` ga aylanadi.
+    isDeleted: false,
+    OR: [
+      { firstName: like },
+      { lastName: like },
+      { phone: like },
+      { username: like },
+    ],
+  };
+
+  // `id` ni ATAYLAB ochiq so'raymiz: Prisma `select` bilan uni
+  // avtomatik qaytarmaydi (Mongo `_id` ni doim qaytarardi), javobda
+  // esa `_id` bo'lishi SHART - ⌘K oynasi shu bilan profilga o'tadi.
+  const userSelect = {
+    id: true,
+    firstName: true,
+    lastName: true,
+    phone: true,
   };
 
   const [students, teachers, groups] = await Promise.all([
-    User.find({ ...userMatch, role: ROLES.STUDENT })
-      .select("firstName lastName phone role")
-      .limit(limit)
-      .lean(),
-    User.find({ ...userMatch, role: ROLES.TEACHER })
-      .select("firstName lastName phone role")
-      .limit(limit)
-      .lean(),
-    Group.find({
-      isActive: true,
-      isDeleted: { $ne: true },
-      name: rx,
-    })
-      .select("name")
-      .limit(limit)
-      .lean(),
+    prisma.user.findMany({
+      where: { ...userWhere, role: ROLES.STUDENT },
+      select: userSelect,
+      take: limit,
+    }),
+    prisma.user.findMany({
+      where: { ...userWhere, role: ROLES.TEACHER },
+      select: userSelect,
+      take: limit,
+    }),
+    prisma.group.findMany({
+      where: { isActive: true, isDeleted: false, name: like },
+      select: { id: true, name: true },
+      take: limit,
+    }),
   ]);
 
-  // Guruhlar uchun o'quvchilar sonini ko'rsatamiz (yengil kontekst)
-  const groupIds = groups.map((g) => g._id);
+  // Guruhlar uchun o'quvchilar sonini ko'rsatamiz (yengil kontekst).
+  //
+  // Mongo'da bu `$group: { _id: "$group" }` quvuri edi. Prisma'da
+  // `groupBy` yetarli - guruhlash `group_memberships` jadvalining O'Z
+  // ustuni (`groupId`) bo'yicha, ya'ni JOIN kerak emas.
+  //
+  // DIQQAT: Mongo'dagi `group` maydoni Prisma'da `groupId`. `{ group: ... }`
+  // deb yozilsa Prisma uni RELATION filtri deb o'qiydi va butunlay
+  // boshqa ma'no chiqadi.
+  const groupIds = groups.map((g) => g.id);
   let countMap = new Map();
   if (groupIds.length > 0) {
-    const countRows = await GroupMembership.aggregate([
-      { $match: { group: { $in: groupIds }, leftAt: null } },
-      { $group: { _id: "$group", count: { $sum: 1 } } },
-    ]);
-    countMap = new Map(countRows.map((c) => [String(c._id), c.count]));
+    const countRows = await prisma.groupMembership.groupBy({
+      by: ["groupId"],
+      where: { groupId: { in: groupIds }, leftAt: null, isDeleted: false },
+      _count: { _all: true },
+    });
+    countMap = new Map(
+      countRows.map((c) => [String(c.groupId), c._count._all]),
+    );
   }
 
   return {
-    students: students.map((s) => ({
-      _id: s._id,
-      firstName: s.firstName,
-      lastName: s.lastName,
-      phone: s.phone || null,
-    })),
-    teachers: teachers.map((t) => ({
-      _id: t._id,
-      firstName: t.firstName,
-      lastName: t.lastName,
-      phone: t.phone || null,
-    })),
-    groups: groups.map((g) => ({
-      _id: g._id,
-      name: g.name,
-      studentsCount: countMap.get(String(g._id)) || 0,
-    })),
+    students: withLegacyIds(
+      students.map((s) => ({
+        id: s.id,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        phone: s.phone || null,
+      })),
+    ),
+    teachers: withLegacyIds(
+      teachers.map((t) => ({
+        id: t.id,
+        firstName: t.firstName,
+        lastName: t.lastName,
+        phone: t.phone || null,
+      })),
+    ),
+    groups: withLegacyIds(
+      groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        studentsCount: countMap.get(String(g.id)) || 0,
+      })),
+    ),
   };
 };

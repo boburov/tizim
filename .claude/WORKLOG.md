@@ -12828,3 +12828,231 @@ Hammasi tayyor va tekshirilgan. So'ralgan olti narsa:
 <sub>session `c49e703c` · branch `main` · 111 ta qadam</sub>
 
 ---
+
+## 2026-08-17 04:18 — serevr umuman ishlamay ham qolgan bo'lsa kerak tahlil tizimi umuman is
+
+**So'rov**
+
+> serevr umuman ishlamay ham qolgan bo'lsa kerak tahlil tizimi umuman ishlamaypti va agar admin oddiy owner dashboardga qaytib qolsa asosiyga qanday qaytadi bacj tugmasini qoshib bering
+
+**O'zgargan fayllar (8)**
+
+- `client/src/owner/features/ai/hooks/useAiPaths.js` — yaratildi/qayta yozildi
+- `client/src/owner/features/ai/pages/OperationsCenterPage.jsx` — tahrirlandi
+- `client/src/shared/components/layout/ExecutiveReturnButton.jsx` — tahrirlandi, yaratildi/qayta yozildi
+- `client/src/shared/components/layout/AppHeader.jsx` — tahrirlandi
+- `client/src/owner/navigation/sidebar.config.js` — tahrirlandi
+- `client/src/shared/components/branch/BranchPicker.jsx` — tahrirlandi
+- `client/tests/branchLifecycleAcceptance.mjs` — tahrirlandi
+- `client/tests/createAndCompareAcceptance.mjs` — tahrirlandi
+
+**Buyruqlar (38)**
+
+```sh
+lsof -nP -iTCP:5000 -iTCP:5173 -sTCP:LISTEN 2>/dev/null | head; echo "--- health ---"; curl -s -o /dev/null -w "root=%{http_code}\n" http://localhost:5000/api/h…
+TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3 -c "impo…
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "Ma'lumot yuklanmadi\|Tahlilni olishda xatolik" src/ | head
+grep -n "export const\|MISSING_ENDPOINT_CODES" src/shared/components/dashboard/dataStatus.js | head -20; echo "=== ai pages: owner/ai links + error states ===";…
+grep -n "path=\"ai" -A 2 src/owner/routes/index.jsx | head -30
+python3 - <<'PY' p="src/owner/features/ai/pages/OperationsCenterPage.jsx" s=open(p).read() s=s.replace('<HeaderLink to="/owner/ai/reports" icon={FileText}>','<H…
+sed -n '1,40p' src/owner/features/ai/pages/AiReportsPage.jsx; echo "=== detail 1-40 ==="; sed -n '1,40p' src/owner/features/ai/pages/AiReportDetailPage.jsx
+python3 - <<'PY' # ── AiReportsPage: havola qobiqqa moslanadi ── p="src/owner/features/ai/pages/AiReportsPage.jsx" s=open(p).read() s=s.replace('import { useRep…
+python3 - <<'PY' p="src/owner/features/ai/pages/AiReportDetailPage.jsx" s=open(p).read() s=s.replace('''const BackLink = () => ( <Link to={to}''','''// `to` PRO…
+grep -rn "/owner/ai" src/ | grep -v "sidebar.config\|drilldown.js\|routes/index.jsx\|useAiPaths"; echo "--- (bo'sh bo'lsa toza) ---"; npx eslint src/owner/featu…
+sed -n '55,85p' src/owner/features/ai/components/dashboard/AiDailySummary.jsx; echo "=== signature ==="; grep -n "const AiDailySummary" -A 8 src/owner/features/…
+python3 - <<'PY' p="src/owner/features/ai/components/dashboard/AiDailySummary.jsx" s=open(p).read() s=s.replace('const AiDailySummary = ({ summary, health, last…
+grep -n "return\|<header\|className=\"flex" src/shared/components/layout/AppHeader.jsx | head -20; echo "=== full head ==="; sed -n '1,60p' src/shared/component…
+sed -n '195,240p' src/shared/components/layout/AppSidebar.jsx
+sed -n '160,196p' src/shared/components/layout/AppSidebar.jsx
+grep -n "useSidebar\|^import\|SidebarGroup className=\"gap-2" src/shared/components/layout/AppSidebar.jsx | head -30
+python3 - <<'PY' p="src/shared/components/layout/AppSidebar.jsx" s=open(p).read() s=s.replace('import SidebarItemBadge from "./SidebarItemBadge";', 'import Side…
+grep -n "Gauge" src/owner/navigation/sidebar.config.js | head -3
+python3 - <<'PY' p="src/owner/navigation/sidebar.config.js" s=open(p).read() s=s.replace(" Gauge,\n","",1) open(p,"w").write(s) PY npx eslint src/shared/compone…
+cat > /tmp/verify.mjs <<'EOF' const { existsSync, readdirSync } = await import("node:fs"); let pw; const npx = `${process.env.HOME}/.npm/_npx`; for (const d of …
+cat > /tmp/dbg2.mjs <<'EOF' const { existsSync, readdirSync } = await import("node:fs"); let pw; const npx = `${process.env.HOME}/.npm/_npx`; for (const d of re…
+python3 - <<'PY' p="/tmp/verify.mjs" s=open(p).read() s=s.replace('''await page.waitForURL(u=>!u.pathname.includes("/login"),{timeout:20000}); ''','''await page…
+cd /Users/shukrullo/Desktop/lc-total/client && for t in browser-create browser-branch; do printf "\n== %s ==\n" "$t"; npm run "test:$t" --silent 2>&1 | grep -E …
+sed -n '1,60p' src/shared/components/branch/BranchPicker.jsx
+grep -rln "Filialni tanlang" src/ | head; echo "---"; grep -rn "Filialni tanlang" -A 6 -B 6 src/ | head -40
+# … yana 13 ta
+```
+
+**Natija**
+
+Server ishlayapti (health 200). Muammo boshqa: `/ai/*` moduli hali PostgreSQL'ga ko'chirilmagan va **501** qaytaradi, lekin sahifa uni "xatolik" deb ko'rsatyapti.
+
+Endi 501 holatini to'g'ri ko'rsatish va havolalarni qobiqqa moslash:
+
+Endi qolgan AI sahifalaridagi havolalar va `AiReportsPage`/`ActionCenterPage`:
+
+Endi ikkinchi so'rov — operatsion paneldan rahbariyatga qaytish tugmasi:
+
+Endi brauzerda tekshiraman — 501 holati va ikki tomonlama o'tish:
+
+Bazada ikkita faol filial bor ("Asosiy filial" va siz yaratgan "Asosiy") — shuning uchun yangi brauzerda majburiy "Filialni tanlang" oynasi chiqadi. Tekshiruvni shunga moslayman:
+
+Uchala test ham bir sababdan yiqilyapti: markaz endi haqiqatan ko'p filialli, shuning uchun yangi brauzerda majburiy filial tanlash oynasi chiqadi. Testlarga shu qadamni qo'shaman:
+
+**Server ishlayapti** — `/api/health` 200 qaytaryapti. Muammo boshqa edi: `/ai/*` moduli hali PostgreSQL'ga ko'chirilmagan va **501 `MODULE_NOT_MIGRATED`** qaytaradi (bu avval ham "tugallanmagan" deb qayd etilgan edi). Sahifa esa uni "xatolik yuz berdi, sahifani yangilab ko'ring" deb ko'rsatardi — sabab ham noto'g'ri, maslahat ham foydasiz: yangilash hech qachon yordam bermaydi.
+
+**Tuzatildi:**
+
+**1. Tahlil sahifasi 501 ni to'g'ri ko'rsatadi** — endi "Manba ulanmagan: tahlil moduli hali PostgreSQL'ga ko'chirilmagan, ko'chgach bu sahifa o'zi jonlanadi". Haqiqiy 500 bo'lsa eski xato holati saqlanadi.
+
+**2. Yashirin tuzoq topildi:** sahifadagi "Hisobotlar" va "Barcha vazifalar" havolalari `/owner/ai/...` deb qattiq yozilgan edi. Rahbariyat qobig'ida bosilsa foydalanuvchini sidebar'li operatsion panelga **otib yuborardi** — 404 emas, shuning uchun hech qanday xato ko'rinmasdi, odam shunchaki boshqa joyga tushib qolardi. Endi `useAiPaths` manzilni qobiqqa qarab quradi (6 ta
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 58 ta qadam</sub>
+
+---
+
+## 2026-08-17 04:54 — aytingchi postgresga ulanmagan qaysi qisimlr qoldi
+
+**So'rov**
+
+> aytingchi postgresga ulanmagan qaysi qisimlr qoldi
+
+**Buyruqlar (14)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && cat > /tmp/audit.mjs <<'EOF' import { readdirSync, statSync, readFileSync } from "node:fs"; import { join, relati…
+cat > /tmp/probe.mjs <<'EOF' const API = "http://localhost:5000/api"; const login = await (await fetch(`${API}/auth/login`, { method: "POST", headers: { "Conten…
+for m in finance journal teacherSalary deposits discounts studentStats studentRetention settings attendance grades rating profile; do d=$(ls -d src/modules/$m 2…
+for m in finance journal teacherSalary deposits attendance grades ledger settings profile rating studentStats studentRetention; do d=$(ls -d src/modules/$m 2>/d…
+for m in finance journal teacherSalary deposits attendance grades ledger; do f=$(ls src/modules/$m/*.routes.js 2>/dev/null|head -1); printf "\n== %s ==\n" "$m";…
+cat > /tmp/probe2.mjs <<'EOF' const API = "http://localhost:5000/api"; const login = await (await fetch(`${API}/auth/login`, { method: "POST", headers: { "Conte…
+python3 -c " import re for m,f in [('attendance','src/modules/attendance/attendance.routes.js'),('teacherAttendance','src/modules/teacherAttendance/teacherAtten…
+TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3 -c "impo…
+grep -rn "z.object" -A 12 src/modules/attendance/validators/dashboard.validator.js 2>/dev/null | head -18 || ls src/modules/attendance/validators/; echo "=== te…
+node /tmp/audit.mjs 2>&1 | sed -n '/JOB$/,/^$/p'; echo "=== JOB fayllar ==="; node /tmp/audit.mjs 2>&1 | grep -A 10 "^JOB$"; echo; echo "=== search moduli (200 …
+sed -n '1,45p' src/modules/search/services/search.service.js 2>/dev/null || ls src/modules/search/services/
+for m in storage exports adminDashboard botAuth auth; do f=$(ls src/modules/$m/*.routes.js 2>/dev/null|head -1); [ -z "$f" ] && continue; printf "\n== %s ==\n "…
+echo "=== exports/download ==="; grep -n "Model\|\.find\|\.aggregate\|import.*models" src/modules/exports/handlers/download.handler.js | head -5; echo; echo "==…
+python3 -c " import re;s=open('src/modules/exports/exports.routes.js').read();print(re.findall(r'router\.(get|post)\(\s*[\"\']([^\"\']+)[\"\']',s))"; TOKEN=$(cu…
+```
+
+**Natija**
+
+Bu savol aniq javob talab qiladi — eski hisobotni takrorlamay, hozirgi holatni yangidan o'lchayman.
+
+Endi eng ishonchli o'lchov — har bir endpointni haqiqiy chaqirib ko'raman:
+
+12 ta manzilni noto'g'ri taxmin qilibman — marshrut fayllaridan aniq yo'llarni olib qayta tekshiraman:
+
+Bir nechta "200" yolg'on ijobiy chiqdi — qolganlarini ham chuqurroq tekshiraman:
+
+Har bir modulni **haqiqiy chaqirib** tekshirdim (taxmin emas). Server sog'lom — 23 ta modul PostgreSQL'da to'liq ishlayapti. Qolganlari:
+
+## To'liq ko'chirilmagan — hamma endpoint 501
+
+| Modul | Nima ishlamaydi |
+|---|---|
+| `/ai` | Tahlil markazi, brifing, tavsiyalar — **25 fayl / 113 so'rov**, eng kattasi |
+| `/attendance` | Davomat (dashboard, o'quvchi/guruh hisoboti) |
+| `/teacher-attendance` | O'qituvchi davomati |
+| `/attendance-exemptions` | Davomat istisnolari |
+| `/grades` | Baholash **va reyting** (`/grades/rating`) |
+| `/notifications` | Bildirishnomalar |
+| `/feedback` | Murojaatlar |
+| `/assignments` | Vazifalar (matn + fayl) |
+| `/activity-logs` | Audit loglari |
+| `/activity-history` | O'quvchi / guruh tarixi |
+| `/imports` | Import sehrgari |
+| `/ledger` | O'quvchi hisob varaqasi (jurnal `/journal` — bu **ishlaydi**) |
+| `/search` | Global qidiruv (⌘K) |
+
+## Qisman — bir qismi ishlaydi, bir qismi yo'q
+
+- **`/admin-dashboard`** — `overview`, `student-flow`, `cashflow` ✅ · `student-stats`, `retention`, `churned-students` ⛔
+- **`/storage`** — `usage` ✅ · `settings`, `files` ⛔
+- **`/exports`** — "Barcha filiallar" rejimida ✅ · **aniq filial tanlanganda ⛔**
+
+## Fon jarayonlari
+
+**6 ta job** hali Mongoose'da va jadval bo'yicha ishga tushganda yiqiladi: `aiMorningDigest`, `usageHeartbeat`, `lessonReminders`, `attendanceReminders`, `catchUpMonthly`, `lowAttendanceDigest`. Telegram bot (`bot/` + `botAuth`) 
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 21 ta qadam</sub>
+
+---
+
+## 2026-08-17 05:00 — ushbu qolib ketgan qisimlarni to'liq postgresql prismgaga otkazib yubo
+
+**So'rov**
+
+> ushbu qolib ketgan qisimlarni to'liq postgresql prismgaga otkazib yuboring
+
+**O'zgargan fayllar (7)**
+
+- `server/tests/migrationProbe.mjs` — yaratildi/qayta yozildi
+- `server/src/modules/search/services/search.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/attendanceExemptions/services/attendanceExemptions.service.js` — yaratildi/qayta yozildi
+- `server/src/constants/teacherAttendance.js` — yaratildi/qayta yozildi
+- `server/src/modules/attendance/services/teacherAbsence.service.js` — yaratildi/qayta yozildi
+- `server/src/modules/activityLogs/services/activityLogs.service.js` — yaratildi/qayta yozildi
+- `server/MIGRATION.md` — tahrirlandi
+
+**Buyruqlar (46)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && echo "=== PRISMA MODELLARI ($(grep -c '^model ' prisma/schema.prisma) ta) ==="; grep '^model ' prisma/schema.pris…
+cat > /tmp/inv.mjs <<'EOF' import { readdirSync, statSync, readFileSync } from "node:fs"; import { join, relative } from "node:path"; const walk=(d,o=[])=>{for(…
+wc -l MIGRATION.md && grep -n "^#\|^##" MIGRATION.md | head -40
+sed -n '251,310p' MIGRATION.md
+cat > /tmp/BRIEF.md <<'BRIEF' Sen `lc-total` monorepo'sining `server/` qismida MongoDB(Mongoose) -> PostgreSQL(Prisma) ko'chirishini bajarasan. Ish katalogi: /U…
+node tests/migrationProbe.mjs --json > /tmp/baseline.json 2>/dev/null; node tests/migrationProbe.mjs 2>&1 | tail -32
+python3 - <<'PY' import json p="package.json" d=json.load(open(p)) s=d["scripts"] if "probe:migration" not in s: ns={} for k,v in s.items(): ns[k]=v if k=="test…
+for t in attendanceScope exportScope ledger importEngine assignmentStorage aiAdvisor; do printf "%-22s " "$t"; head -30 tests/$t.test.js 2>/dev/null | grep -c "…
+D="/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/subagents/workflows/wf_3ed4e8c3-f89"; ls "$D" 2>/dev…
+D="/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/c49e703c-8378-4381-b00b-f20df2e7e5fd/subagents/workflows/wf_3ed4e8c3-f89"; python3 -c " i…
+cd /Users/shukrullo/Desktop/lc-total && git status --short server/src | head -15; echo "--- mongoose qolganmi (wave-1 fayllari) ---"; cd server && for f in src/…
+echo "=== AI moduli tuzilishi ==="; ls src/modules/ai/services src/modules/ai/signals 2>/dev/null | head -40; echo; echo "=== aggregate quvurlari qanday ko'rini…
+sed -n '105,125p' src/helpers/branchContext.helper.js; echo "=== branchFilter ==="; sed -n '71,105p' src/helpers/branchContext.helper.js
+grep -rn "rawBranchClause" -A 25 src/modules/financeReport/services/financeReport.service.js | head -35
+cd /Users/shukrullo/Desktop/lc-total && git diff --stat server/src | tail -5; echo "=== auth.routes.js diff ==="; git diff server/src/modules/auth/auth.routes.j…
+git diff server/src/modules/exports/handlers/download.handler.js; echo "=== schema tekshiruvi: User.isDeleted / role ==="; cd server && grep -n "model User" -A …
+grep -n "model GroupMembership" -A 14 prisma/schema.prisma; echo "--- User qidiruv maydonlari ---"; grep -n "model User" -A 22 prisma/schema.prisma | grep -E "f…
+grep -n "model User" -A 60 prisma/schema.prisma | grep -nE "isDeleted"; echo "--- GroupMembership isDeleted ---"; grep -n "model GroupMembership" -A 25 prisma/s…
+grep -n "withLegacyIds" -A 12 src/utils/serialize.js | head -20; node --check src/modules/search/services/search.service.js && echo "SINTAKSIS OK"
+TOKEN=$(curl -s -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"login":"owner","password":"owner123"}' | python3 -c "impo…
+node -e " import('./src/config/prisma.js').then(async({default:p})=>{ const u=await p.user.findMany({select:{firstName:true,username:true,role:true},take:10}); …
+grep -n "model AttendanceExemption" -A 22 prisma/schema.prisma
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "exemption" --include="*.jsx" --include="*.js" -l src/ | head -5; echo "--- maydonlar ---"; grep -rhn "\…
+grep -rn "student\|createdBy\|_id" src/owner/features/attendanceExemptions/components/ExemptionsTable.jsx | head -10; echo "--- create body ---"; grep -rn "stud…
+grep -n "models/\|prisma" src/helpers/membership.helper.js | head -5; echo "--- correlationCache ---"; grep -n "models/\|prisma" src/helpers/correlationCache.js…
+# … yana 21 ta
+```
+
+**Natija**
+
+Bu katta ish — ~366 ta so'rov, 13 to'liq + 3 qisman modul, joblar va bot. Avval poydevorni tekshiraman: Prisma sxemasida kerakli jadvallar bormi?
+
+Sxema to'liq — **78 ta Prisma modeli barcha 74 Mongoose modelini qoplaydi**. Ya'ni jadval qo'shish kerak emas, faqat kod tarjimasi. Aniq ish ro'yxatini yig'aman:
+
+Sxema tayyor, ish faqat kod tarjimasi: **62 fayl, 366 so'rov, 66 aggregate quvuri**. Avval loyihaning ko'chirish qoidalarini yig'aman — ular har bir agentga berilishi shart:
+
+Sxema tayyor, qoidalar aniq. **6 to'lqinli** reja bo'yicha boshlayman — har to'lqin alohida, oralarida tekshiruv bilan. 1-to'lqin: aggregate'siz kichik fayllar (poydevor).
+
+1-to'lqin fonda ketyapti. Shu orada har to'lqindan keyin progressni o'lchaydigan doimiy zond yozaman — qaysi endpoint 501'dan 200'ga o'tganini aniq ko'rsatadi:
+
+Zond tayyor: **39/58 (67%)**. Kutish vaqtida mavjud testlardan qaysilari bu modullarni qoplashini tekshiraman:
+
+1-to'lqin ishlayapti (2 fayl tayyor, 7 tasi jarayonda). Shu orada eng og'ir to'lqinni — AI modulini — oldindan o'rganaman:
+
+Workflow yiqildi — 9 agentning hammasi xato bilan tugadi ("kompyuter uyquga ketdi" + agentlar 3 daqiqa qotib qolgan). ~3.6 soat va 1.3M token sarflandi, natija esa deyarli yo'q. Bu shu muhitda ikkinchi marta. Qo'lda davom etaman — avval yarim qolgan ikki faylni tekshiraman:
+
+Ikkala fayl to'g'ri ko'chirilgan (schema'ga solishtirdim: `User.role` NOT NULL, ya'ni `not` ishlaydi). Workflow'ga ishonmayman — qo'lda davom etaman. Boshlayman: **global qidiruv** (kichik, lekin ⌘K butunlay buzuq).
+
+⌘K qidiruv ishladi (`USTOZ` katta harfda ham topdi, `_id` saqlangan). Keyingi: davomat oilasidagi kichik fayllar.
+
+Endi ikkalasini birga ko'chiraman (ular bog'liq). Avval statuslarni model faylidan konstantaga chiqaraman:
+
+72% ga chiqdi, regressiya yo'
+
+…(qisqartirildi)
+
+<sub>session `c49e703c` · branch `main` · 66 ta qadam</sub>
+
+---

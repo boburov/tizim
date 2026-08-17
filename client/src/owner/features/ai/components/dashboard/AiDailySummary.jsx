@@ -19,7 +19,11 @@ import ScoreRing from "./ScoreRing";
 // MATN UZUNLIGI BACKEND'DA CHEKLANGAN (uch jumla). Bu yerda uni
 // qisqartirmaymiz: kesilgan jumla o'qilmagan jumladan yomonroq.
 
-const AiDailySummary = ({ summary, health, lastRunLabel }) => {
+// `tasksHref` PROP: bu komponent ikki qobiqda ko'rsatiladi
+// (/owner/ai va /admin/tahlil), vazifalar sahifasining manzili esa
+// har birida boshqacha. Qattiq yozilganda rahbariyat qobig'idan
+// bosilgan havola operatsion panelga otib yuborardi (useAiPaths).
+const AiDailySummary = ({ summary, health, lastRunLabel, tasksHref = "/owner/ai/tasks" }) => {
   if (!summary) return null;
 
   const style = levelStyle(summary.level);
@@ -66,7 +70,7 @@ const AiDailySummary = ({ summary, health, lastRunLabel }) => {
               </Link>
             )}
             <Link
-              to="/owner/ai/tasks"
+              to={tasksHref}
               className="text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
             >
               Barcha vazifalar

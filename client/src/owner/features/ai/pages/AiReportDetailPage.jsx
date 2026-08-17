@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { formatDateUz } from "@/shared/utils/formatDate";
 import AiMetricTile from "../components/AiMetricTile";
 import { useReportQuery } from "../hooks/useReportsQuery";
+import useAiPaths from "../hooks/useAiPaths";
 
 // BITTA HISOBOT - bo'limlar tartibi MA'NOGA EGA.
 //
@@ -12,6 +13,7 @@ import { useReportQuery } from "../hooks/useReportsQuery";
 
 const AiReportDetailPage = () => {
   const { id } = useParams();
+  const paths = useAiPaths();
   const { data, isLoading, isError } = useReportQuery(id);
 
   if (isLoading) {
@@ -27,7 +29,7 @@ const AiReportDetailPage = () => {
   if (isError || !data) {
     return (
       <div className="space-y-4">
-        <BackLink />
+        <BackLink to={paths.reports} />
         <div className="rounded-xl border bg-card p-8 text-center">
           <p className="font-medium text-foreground">Hisobot topilmadi</p>
         </div>
@@ -37,7 +39,7 @@ const AiReportDetailPage = () => {
 
   return (
     <div className="space-y-6">
-      <BackLink />
+      <BackLink to={paths.reports} />
 
       <header>
         <h1 className="text-xl font-semibold text-foreground">{data.title}</h1>
@@ -85,9 +87,13 @@ const AiReportDetailPage = () => {
   );
 };
 
-const BackLink = () => (
+// `to` PROP SIFATIDA: bu komponent ikki qobiqda ishlaydi va manzil
+// har birida boshqacha (`useAiPaths`). Ichida `useAiPaths()` chaqirish
+// ham mumkin edi, lekin sahifa uni allaqachon o'qiydi - ikki marta
+// hisoblash ortiqcha.
+const BackLink = ({ to }) => (
   <Link
-    to="/owner/ai/reports"
+    to={to}
     className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
   >
     <ArrowLeft className="size-4" />

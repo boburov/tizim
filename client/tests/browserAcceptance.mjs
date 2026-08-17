@@ -48,6 +48,31 @@ const ok = (n, x = "") => { R.pass++; console.log(`  ✅ ${n}${x ? ` — ${x}` :
 const bad = (n, x = "") => { R.fail++; console.log(`  ❌ ${n}${x ? ` — ${x}` : ""}`); };
 const check = (n, cond, x = "") => (cond ? ok(n, x) : bad(n, x));
 
+/**
+ * MAJBURIY FILIAL TANLASH EKRANINI O'TISH.
+ *
+ * Ko'p filialli markazda login'dan keyin BIRINCHI ekran shu bo'ladi
+ * (`shared/components/branch/BranchPicker.jsx`) va uni o'tmasdan hech
+ * qanday sahifaga yetib bo'lmaydi. Yangi brauzer konteksti har safar
+ * bo'sh `localStorage` bilan boshlanadi, ya'ni test HAR ISHGA
+ * TUSHISHDA bu ekranga tushadi.
+ *
+ * "Barcha filiallar" tanlanadi: testlar filiallararo ko'rinishlarni
+ * tekshiradi va bitta filial tanlansa ular ko'lamdan chiqib ketardi.
+ *
+ * Yakka filialli markazda ekran UMUMAN chiqmaydi - u holda bu funksiya
+ * hech nima qilmaydi.
+ */
+const passBranchGate = async (page) => {
+  const gate = page.locator("[data-branch-gate]");
+  if (!(await gate.count())) return false;
+  await gate.locator("button", { hasText: "Barcha filiallar" }).first().click();
+  // `changeBranch` butun so'rov keshini bekor qiladi - sahifa qayta yuklanadi.
+  await page.waitForTimeout(2500);
+  return true;
+};
+
+
 const browser = await chromium.launch();
 
 // ── Konsol xatolari va tarmoq muammolari YIG'ILADI ──
@@ -92,6 +117,9 @@ await page.waitForURL((u) => !u.pathname.includes("/login"), { timeout: 20000 })
   console.log("     (login-fail.png saqlandi)", (await page.locator("body").innerText()).slice(0, 200));
 });
 check("login muvaffaqiyatli", !page.url().includes("/login"), page.url().replace(APP, ""));
+
+await page.waitForTimeout(1200);
+if (await passBranchGate(page)) ok("majburiy filial tanlash ekrani o'tildi");
 
 // ══ 1) EXECUTIVE — SIDEBAR YO'Q ════════════════════════════════
 console.log("\n1) /admin — rahbariyat qobig'i");

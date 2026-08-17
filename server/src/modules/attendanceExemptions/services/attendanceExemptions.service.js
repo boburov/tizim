@@ -1,15 +1,33 @@
-import AttendanceExemption from "../../../models/attendanceExemption.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
+import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import {
   ensureActiveGroup,
   ensureTeacherOwnsStudent,
 } from "../../../helpers/membership.helper.js";
 import { correlationCacheInvalidate } from "../../../helpers/correlationCache.js";
 
+// DAVOMATDAN OZOD DAVRLARI.
+//
+// ═══════════════════════════════════════════════════════════════════
+// MAYDON NOMI: `student` -> `studentId`
+//
+// Mongo'da bu ObjectId ref bo'lib `student` deb atalardi; Prisma'da
+// skalyar ustun `studentId`, `student` esa RELATION. `{ student: id }`
+// deb yozilsa Prisma uni relation filtri deb o'qiydi va butunlay
+// boshqa ma'no chiqadi.
+//
+// KLIENT SHARTNOMASI O'ZGARMAYDI: forma hamon `{ student }` yuboradi
+// (ExemptionCreateModal), shuning uchun kirishda `body.student`
+// o'qiladi va servis ichida `studentId` ga aylantiriladi.
+// ═══════════════════════════════════════════════════════════════════
+
 const ensureStudent = async (studentId) => {
-  const u = await User.findById(studentId);
+  const u = await prisma.user.findUnique({
+    where: { id: String(studentId) },
+    select: { id: true, role: true },
+  });
   if (!u || u.role !== ROLES.STUDENT) {
     throw new ApiError(400, "O'quvchi topilmadi");
   }
@@ -29,20 +47,26 @@ export const list = async (
     await ensureTeacherOwnsStudent(currentUser._id, studentId);
   }
 
-  const filter = { isDeleted: { $ne: true } };
-  if (studentId) filter.student = studentId;
-  if (isActive !== undefined) filter.isActive = !!isActive;
+  const where = { isDeleted: false };
+  if (studentId) where.studentId = String(studentId);
+  if (isActive !== undefined) where.isActive = !!isActive;
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    AttendanceExemption.find(filter)
-      .sort({ startDate: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("createdBy", { firstName: 1, lastName: 1 }),
-    AttendanceExemption.countDocuments(filter),
+    prisma.attendanceExemption.findMany({
+      where,
+      orderBy: { startDate: "desc" },
+      skip,
+      take: limit,
+      // Mongo `.populate("createdBy", {firstName, lastName})` o'rni.
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.attendanceExemption.count({ where }),
   ]);
-  return { items, total, page, limit };
+
+  return { items: withLegacyIds(items), total, page, limit };
 };
 
 export const create = async (body, currentUser) => {
@@ -53,28 +77,38 @@ export const create = async (body, currentUser) => {
   }
   await ensureActiveGroup(body.student);
 
-  const doc = {
-    student: body.student,
-    startDate: new Date(body.startDate),
-    endDate: body.endDate ? new Date(body.endDate) : null,
-    daysOfWeek: Array.isArray(body.daysOfWeek) ? body.daysOfWeek : [],
-    reason: body.reason || "",
-    isActive: body.isActive !== undefined ? !!body.isActive : true,
-    createdBy: currentUser?._id || null,
-  };
+  const startDate = new Date(body.startDate);
+  const endDate = body.endDate ? new Date(body.endDate) : null;
 
-  if (doc.endDate && doc.startDate > doc.endDate) {
+  // Bu tekshiruv bazadagi `attendance_exemptions_range_check` bilan
+  // BIR XIL qoidani ifodalaydi. Ikkalasi ham kerak: CHECK oxirgi
+  // himoya (import/seed HTTP validatsiyasini chetlab o'tadi), bu esa
+  // foydalanuvchiga TUSHUNARLI xabar beradi.
+  if (endDate && startDate > endDate) {
     throw new ApiError(400, "Tugash sanasi boshlanishidan keyin bo'lishi kerak");
   }
 
-  const created = await AttendanceExemption.create(doc);
+  const created = await prisma.attendanceExemption.create({
+    data: {
+      studentId: String(body.student),
+      startDate,
+      endDate,
+      daysOfWeek: Array.isArray(body.daysOfWeek) ? body.daysOfWeek : [],
+      reason: body.reason || "",
+      isActive: body.isActive !== undefined ? !!body.isActive : true,
+      createdById: currentUser?._id ? String(currentUser._id) : null,
+    },
+  });
+
   // Imtiyoz davomat foiziga ta'sir qiladi → korrelatsiya keshini tozalaymiz
   correlationCacheInvalidate();
-  return created;
+  return withLegacyId(created);
 };
 
 export const getById = async (id) => {
-  const doc = await AttendanceExemption.findById(id);
+  const doc = await prisma.attendanceExemption.findFirst({
+    where: { id: String(id), isDeleted: false },
+  });
   if (!doc) throw new ApiError(404, "Davomatdan ozod davri topilmadi");
   return doc;
 };
@@ -83,35 +117,56 @@ export const update = async (id, body, currentUser) => {
   const doc = await getById(id);
   // O'qituvchi faqat o'z guruhidagi o'quvchining ozod davrini tahrirlay oladi.
   if (currentUser?.role === ROLES.TEACHER) {
-    await ensureTeacherOwnsStudent(currentUser._id, doc.student);
+    await ensureTeacherOwnsStudent(currentUser._id, doc.studentId);
   }
 
-  if (body.startDate !== undefined) doc.startDate = new Date(body.startDate);
+  // MONGO'DA BU `doc.save()` EDI: hujjat o'zgartirilib, keyin butunlay
+  // qayta yozilardi. Prisma'da faqat BERILGAN maydonlar yangilanadi,
+  // shuning uchun tekshiruv uchun "keyingi holat" alohida hisoblanadi -
+  // aks holda faqat `endDate` o'zgartirilganda uni ESKI `startDate`
+  // bilan solishtirish kerakligi ko'zdan qochardi.
+  const data = {};
+  if (body.startDate !== undefined) data.startDate = new Date(body.startDate);
   if (body.endDate !== undefined) {
-    doc.endDate = body.endDate ? new Date(body.endDate) : null;
+    data.endDate = body.endDate ? new Date(body.endDate) : null;
   }
   if (body.daysOfWeek !== undefined) {
-    doc.daysOfWeek = Array.isArray(body.daysOfWeek) ? body.daysOfWeek : [];
+    data.daysOfWeek = Array.isArray(body.daysOfWeek) ? body.daysOfWeek : [];
   }
-  if (body.reason !== undefined) doc.reason = body.reason;
-  if (body.isActive !== undefined) doc.isActive = !!body.isActive;
+  if (body.reason !== undefined) data.reason = body.reason;
+  if (body.isActive !== undefined) data.isActive = !!body.isActive;
 
-  if (doc.endDate && doc.startDate > doc.endDate) {
+  const nextStart = data.startDate ?? doc.startDate;
+  const nextEnd = data.endDate !== undefined ? data.endDate : doc.endDate;
+  if (nextEnd && nextStart > nextEnd) {
     throw new ApiError(400, "Tugash sanasi boshlanishidan keyin bo'lishi kerak");
   }
 
-  await doc.save();
+  const updated = await prisma.attendanceExemption.update({
+    where: { id: doc.id },
+    data,
+  });
   correlationCacheInvalidate();
-  return doc;
+  return withLegacyId(updated);
 };
 
 export const remove = async (id, currentUser) => {
   const doc = await getById(id);
   // O'qituvchi faqat o'z guruhidagi o'quvchining ozod davrini o'chira oladi.
   if (currentUser?.role === ROLES.TEACHER) {
-    await ensureTeacherOwnsStudent(currentUser._id, doc.student);
+    await ensureTeacherOwnsStudent(currentUser._id, doc.studentId);
   }
-  await doc.softDelete();
+
+  // Mongoose plugin'idagi `softDelete()` o'rniga ochiq yozamiz -
+  // plugin Prisma'da yo'q.
+  const removed = await prisma.attendanceExemption.update({
+    where: { id: doc.id },
+    data: {
+      isDeleted: true,
+      deletedAt: new Date(),
+      deletedBy: currentUser?._id ? String(currentUser._id) : null,
+    },
+  });
   correlationCacheInvalidate();
-  return doc;
+  return withLegacyId(removed);
 };

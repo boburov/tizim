@@ -240,6 +240,14 @@ const resolveSoleBranchId = async () => {
  * @returns {Promise<string>}
  * @throws {Error} filial aniqlanmasa
  */
+// ⚠ XATOLAR `ApiError` BO'LISHI SHART, oddiy `Error` + `statusCode` EMAS.
+//
+// `middleware/errorHandler.js` `statusCode` ni FAQAT `err instanceof
+// ApiError` bo'lganda o'qiydi. Oddiy `Error` ga `err.statusCode = 400`
+// qo'yilsa u JIMGINA e'tiborsiz qoladi va foydalanuvchi aniq xabar
+// ("Avval aniq filialni tanlang") o'rniga "Serverda xatolik yuz berdi"
+// degan 500 ni ko'radi - ya'ni to'g'ri yozilgan xabar hech qachon
+// yetib bormasdi. Bu yerdagi to'rtta throw shu sababdan almashtirildi.
 export const resolveBranchForWrite = async (user, requestedBranchId = null) => {
   const ctx = storage.getStore();
 
@@ -251,9 +259,7 @@ export const resolveBranchForWrite = async (user, requestedBranchId = null) => {
   // qo'lda o'zgartirib B filialga yozib qo'yardi.
   if (requestedBranchId) {
     if (!isBranchAllowed(requestedBranchId)) {
-      const err = new Error("Bu filialga yozish huquqingiz yo'q");
-      err.statusCode = 403;
-      throw err;
+      throw new ApiError(403, "Bu filialga yozish huquqingiz yo'q");
     }
     return toObjectId(requestedBranchId);
   }
@@ -278,11 +284,10 @@ export const resolveBranchForWrite = async (user, requestedBranchId = null) => {
   // KUTMAGAN filialga tushib qolardi. Yozish amali doim ANIQ filialga
   // bo'lishi kerak, shuning uchun aniq xato beramiz.
   if (ctx && ctx.canSeeAllBranches) {
-    const err = new Error(
+    throw new ApiError(
+      400,
       "«Barcha filiallar» rejimida yaratib bo'lmaydi. Avval aniq filialni tanlang",
     );
-    err.statusCode = 400;
-    throw err;
   }
 
   // Kontekstsiz (seed/job) - foydalanuvchining asosiy filiali.
@@ -291,9 +296,7 @@ export const resolveBranchForWrite = async (user, requestedBranchId = null) => {
   // Faqat bitta filialga kirishi bo'lsa - o'sha.
   if (ctx?.allowedBranchIds?.length === 1) return toObjectId(ctx.allowedBranchIds[0]);
 
-  const err = new Error("Filial tanlanmagan - yozish uchun aniq filial kerak");
-  err.statusCode = 400;
-  throw err;
+  throw new ApiError(400, "Filial tanlanmagan - yozish uchun aniq filial kerak");
 };
 
 /**
@@ -314,9 +317,7 @@ export const resolveBranchFromGroup = async (groupId) => {
     select: { branchId: true },
   });
   if (!group?.branchId) {
-    const err = new Error("Guruhning filiali aniqlanmadi");
-    err.statusCode = 400;
-    throw err;
+    throw new ApiError(400, "Guruhning filiali aniqlanmadi");
   }
   return group.branchId;
 };

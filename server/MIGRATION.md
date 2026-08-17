@@ -609,11 +609,53 @@ Bu yerdagi yondashuv **haqiqatga** tayanadi: so'rov chinakam bajarilsa va
 ulanish bo'lmasa — 501. Modul Prisma'ga ko'chgach Mongoose chaqiruvi qolmaydi
 va 501 **o'z-o'zidan** yo'qoladi.
 
-### Hozir 501 qaytaradiganlar (rahbariyat paneli chaqiradigan)
+### Holatni QANDAY o'lchash kerak — `npm run probe:migration`
 
-| Endpoint | Sabab |
+**Statik tahlilga (`grep mongoose`) ISHONMANG.** U ikkala yo'nalishda
+ham adashadi va ikkalasi ham sodir bo'lgan:
+
+* import bor, lekin chaqirilmaydi → endpoint 200, statik tahlil
+  "ko'chirilmagan" deydi;
+* import yo'q, lekin boshqa fayl orqali chaqiriladi → 501, statik
+  tahlil "tayyor" deydi.
+
+`tests/migrationProbe.mjs` har bir modulni HAQIQATAN chaqiradi va HTTP
+kodiga qaraydi. Oldingi holat bilan solishtirish:
+
+```bash
+npm run probe:migration -- --json > /tmp/before.json
+# ...ko'chirish...
+npm run probe:migration -- --before /tmp/before.json   # ⬆ YANGI / ⬇ REGRESSIYA
+```
+
+**YOLG'ON IJOBIYDAN EHTIYOT BO'LING.** Endpoint ma'lumotga yetmasdan
+erta qaytishi mumkin. Haqiqiy misol: `/search?q=a` — kod 2 belgidan
+qisqa so'rovni Mongoose'ga umuman yubormaydi, ya'ni 200 qaytarib
+"ishlayapti" bo'lib ko'rinardi; `q=owner` bilan esa 501. Zonddagi har
+bir yozuv shu sababdan MA'LUMOTGA YETADIGAN parametr bilan yoziladi.
+
+### Hozir 501 qaytaradiganlar
+
+Oxirgi o'lchov: **43/58 (74%)** ko'chirilgan, 15 qoldi, 0 buzuq.
+
+| Endpoint | Fayl / so'rov |
 |---|---|
-| `/ai/*` | `insights.find()` — Mongoose |
+| `/ai/*` | 25 fayl, 113 so'rov, 45 aggregate — eng kattasi |
+| `/attendance/*` | `attendance.service.js` (1421 qator, 24 so'rov) |
+| `/grades/*`, `/grades/rating/*` | 14 so'rov |
+| `/notifications/*` | 32 so'rov |
+| `/assignments/*` | 27 so'rov |
+| `/feedback/*` | 15 so'rov |
+| `/activity-history/*` | 14 so'rov |
+| `/ledger/*` | 9 so'rov |
+| `/storage/settings`, `/storage/files` | 9 so'rov |
+| `/admin-dashboard/student-stats\|retention\|churned-students` | 7 so'rov |
+| `/imports/*` | 9 fayl, 24 so'rov (+ `queues/importQueue.js`) |
+| joblar | 6 fayl, 18 so'rov — jadval bo'yicha ishga tushib yiqiladi |
+| Telegram bot | `bot/*` + `botAuth` — 15 so'rov |
+
+Seedlar (25 fayl, 120 so'rov) ATAYLAB qoldirilgan — bir martalik
+skriptlar, ishlash yo'lida emas.
 
 **4-to'lqindan keyin 200 qaytaradiganlar** (ilgari 501 edi):
 `/expenses/*`, `/expense-approvals/*`, `/journal/transfers`,

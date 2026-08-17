@@ -15,13 +15,10 @@
 // To'liq bitta modelga birlashtirish maosh hisobiga ta'sir qilgani uchun ataylab
 // QILINMAGAN (parity + hujjat yondashuvi).
 // ─────────────────────────────────────────────────────────────────────────────
-import TeacherAttendance, {
-  TEACHER_ATTENDANCE_STATUSES,
-} from "../../../models/teacherAttendance.model.js";
-import User from "../../../models/user.model.js";
-import Group from "../../../models/group.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES } from "../../../constants/roles.js";
+import { TEACHER_ATTENDANCE_STATUSES } from "../../../constants/teacherAttendance.js";
 import {
   dateKeyOf,
   dayOfWeekOf,
@@ -34,7 +31,12 @@ import {
   setPresent as setGroupTeacherPresent,
 } from "../../attendance/services/teacherAbsence.service.js";
 
-const TEACHER_PROJECTION = { firstName: 1, lastName: 1, username: 1 };
+const TEACHER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  username: true,
+};
 
 // Shu sanada AMAL QILGAN jadval versiyasi bo'yicha (versiyalash)
 const isClassDayFor = (group, dow, date = null) =>
@@ -45,16 +47,31 @@ const isClassDayFor = (group, dow, date = null) =>
 // "kelmadi" yoziladi; keldi → o'sha guruhlardagi belgilar olib tashlanadi.
 const syncTeacherGroupAbsences = async (teacherId, date, isAbsent, currentUser) => {
   const dow = dayOfWeekOf(date);
-  const groups = await Group.find({
-    teachers: teacherId,
-    isActive: true,
-  }).select("schedule teachers");
+  // `teachers: teacherId` Mongo'da massivga tegishlilik tekshiruvi edi.
+  // Prisma'da bu KO'P-KO'PGA bog'lanish, ya'ni `some` relation filtri.
+  //
+  // `schedule` MAJBURIY `include`: Mongo'da u hujjat ichidagi massiv
+  // edi, Prisma'da esa alohida jadval. So'ralmasa `isClassDayFor` doim
+  // `false` qaytarib, "kelmadi" belgisi HECH QACHON yozilmasdi.
+  const groups = await prisma.group.findMany({
+    where: {
+      teachers: { some: { id: String(teacherId) } },
+      isActive: true,
+      isDeleted: false,
+    },
+    select: {
+      id: true,
+      schedule: {
+        select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
+      },
+    },
+  });
   for (const g of groups) {
     if (isAbsent) {
       if (!isClassDayFor(g, dow, date)) continue; // dars kuni bo'lmasa o'tkazib yuboramiz
-      await setGroupTeacherAbsent(g._id, date, currentUser);
+      await setGroupTeacherAbsent(g.id, date, currentUser);
     } else {
-      await setGroupTeacherPresent(g._id, date);
+      await setGroupTeacherPresent(g.id, date);
     }
   }
 };
@@ -66,16 +83,22 @@ export const listForDate = async (dateInput) => {
   if (!date) throw new ApiError(400, "Sana noto'g'ri");
   const dateKey = dateKeyOf(date);
 
-  const teachers = await User.find({ role: ROLES.TEACHER, isActive: true })
-    .select(TEACHER_PROJECTION)
-    .sort({ firstName: 1, lastName: 1 });
-  const records = await TeacherAttendance.find({ dateKey });
-  const map = new Map(records.map((r) => [String(r.teacher), r]));
+  const teachers = await prisma.user.findMany({
+    where: { role: ROLES.TEACHER, isActive: true, isDeleted: false },
+    select: TEACHER_SELECT,
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+  });
+  const records = await prisma.teacherAttendance.findMany({
+    where: { dateKey, isDeleted: false },
+    select: { teacherId: true, status: true, reason: true },
+  });
+  const map = new Map(records.map((r) => [String(r.teacherId), r]));
 
+  // Javobda `teacher._id` QOLADI - klient jadvali shunga tayangan.
   const rows = teachers.map((t) => {
-    const r = map.get(String(t._id));
+    const r = map.get(String(t.id));
     return {
-      teacher: { _id: t._id, firstName: t.firstName, lastName: t.lastName },
+      teacher: { _id: t.id, firstName: t.firstName, lastName: t.lastName },
       status: r?.status || "present",
       reason: r?.reason || "",
     };
@@ -103,11 +126,10 @@ export const bulkRecord = async (dateInput, items, currentUser) => {
   // Har bir teacherId haqiqiy o'qituvchi ekanini tekshiramiz - ixtiyoriy
   // ObjectId (o'quvchi, yo'q user) uchun davomat yozuvi yaratilmasin.
   const teacherIds = [...new Set(items.map((i) => String(i.teacherId)))];
-  const validTeachers = await User.find(
-    { _id: { $in: teacherIds }, role: ROLES.TEACHER },
-    { _id: 1 },
-  );
-  if (validTeachers.length !== teacherIds.length) {
+  const validCount = await prisma.user.count({
+    where: { id: { in: teacherIds }, role: ROLES.TEACHER },
+  });
+  if (validCount !== teacherIds.length) {
     throw new ApiError(400, "Bir yoki bir nechta o'qituvchi noto'g'ri");
   }
 
@@ -116,24 +138,39 @@ export const bulkRecord = async (dateInput, items, currentUser) => {
   for (const it of items) {
     if (!TEACHER_ATTENDANCE_STATUSES.includes(it.status)) continue;
     if (it.status === "present") {
-      await TeacherAttendance.deleteOne({ teacher: it.teacherId, dateKey });
+      // `deleteMany` - `deleteOne` Prisma'da unique kalit talab qiladi
+      // va yozuv topilmasa OTADI. Bu yerda "yo'q bo'lsa ham mayli"
+      // xulqi kerak (Mongo `deleteOne` shunday edi).
+      await prisma.teacherAttendance.deleteMany({
+        where: { teacherId: String(it.teacherId), dateKey },
+      });
       // Keldi → barcha guruhlardagi "kelmadi" belgilarini olib tashlaymiz
       await syncTeacherGroupAbsences(it.teacherId, date, false, currentUser);
       present += 1;
     } else {
-      await TeacherAttendance.findOneAndUpdate(
-        { teacher: it.teacherId, dateKey },
-        {
-          teacher: it.teacherId,
-          date,
-          dateKey,
-          status: it.status,
-          reason: it.reason || "",
-          recordedBy: currentUser?._id || null,
-          recordedAt: new Date(),
+      // `(teacherId, dateKey)` unique - `upsert` to'g'ridan-to'g'ri
+      // ishlaydi (qisman indeks emas, shuning uchun find-then-write
+      // kerak emas).
+      const payload = {
+        date,
+        status: it.status,
+        reason: it.reason || "",
+        recordedById: currentUser?._id ? String(currentUser._id) : null,
+        recordedAt: new Date(),
+        // Qayta belgilanganda eski "o'chirilgan" holat tiklanadi -
+        // aks holda soft-delete qilingan yozuv ustiga yozilib,
+        // ro'yxatda ko'rinmay qolardi.
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null,
+      };
+      await prisma.teacherAttendance.upsert({
+        where: {
+          teacherId_dateKey: { teacherId: String(it.teacherId), dateKey },
         },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
-      );
+        create: { teacherId: String(it.teacherId), dateKey, ...payload },
+        update: payload,
+      });
       // Kelmadi/sababli → o'qituvchining dars kuni bo'lgan barcha guruhlari "kelmadi"
       await syncTeacherGroupAbsences(it.teacherId, date, true, currentUser);
       marked += 1;

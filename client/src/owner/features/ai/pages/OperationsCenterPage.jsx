@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { FileText, ListTodo, RefreshCw } from "lucide-react";
+import { FileText, ListTodo, PlugZap, RefreshCw } from "lucide-react";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import useModal from "@/shared/hooks/useModal";
 import { MODAL } from "@/shared/constants/modals";
@@ -25,6 +25,8 @@ import AiTopTeachers from "../components/dashboard/AiTopTeachers";
 import AiStudentsAtRisk from "../components/dashboard/AiStudentsAtRisk";
 import AiRecentActivity from "../components/dashboard/AiRecentActivity";
 import { relativeUz } from "../utils/dashboard.utils";
+import useAiPaths from "../hooks/useAiPaths";
+import { MISSING_ENDPOINT_CODES } from "@/shared/components/dashboard/dataStatus";
 
 // AI DASHBOARD - owner uchun ijroiya paneli.
 //
@@ -78,7 +80,18 @@ const HeaderLink = ({ to, icon: Icon, children }) => (
 );
 
 const OperationsCenterPage = () => {
-  const { data, isLoading, isError } = useBriefingQuery();
+  const paths = useAiPaths();
+  const { data, isLoading, isError, error } = useBriefingQuery();
+
+  // 501 = "MODULE_NOT_MIGRATED" - SERVER NOSOZLIGI EMAS.
+  //
+  // Bu modul hali MongoDB'da va PostgreSQL'ga ko'chirilmagan
+  // (server: config/legacyMongoose.js). Uni "xatolik yuz berdi,
+  // sahifani yangilab ko'ring" deb ko'rsatish IKKI marta noto'g'ri:
+  //   • sabab noto'g'ri - tizim buzilgandek ko'rinadi;
+  //   • maslahat foydasiz - yangilash hech qachon yordam bermaydi.
+  // Modul ko'chgach bu shox o'z-o'zidan ishlamay qoladi.
+  const notConnected = MISSING_ENDPOINT_CODES.includes(error?.response?.status);
   const { data: rankings } = useRankingsQuery();
   const { data: latestReport } = useLatestReportQuery("daily");
   const { openModal } = useModal(MODAL.AI_INSIGHT_DISMISS);
@@ -108,10 +121,10 @@ const OperationsCenterPage = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <HeaderLink to="/owner/ai/reports" icon={FileText}>
+          <HeaderLink to={paths.reports} icon={FileText}>
             Hisobotlar
           </HeaderLink>
-          <HeaderLink to="/owner/ai/tasks" icon={ListTodo}>
+          <HeaderLink to={paths.tasks} icon={ListTodo}>
             Barcha vazifalar
           </HeaderLink>
           <button
@@ -126,14 +139,25 @@ const OperationsCenterPage = () => {
         </div>
       </header>
 
-      {isError && (
-        <div className="rounded-xl border bg-card p-8 text-center">
-          <p className="font-medium text-foreground">Ma'lumot yuklanmadi</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Tahlilni olishda xatolik yuz berdi. Sahifani yangilab ko'ring.
-          </p>
-        </div>
-      )}
+      {isError &&
+        (notConnected ? (
+          <div className="rounded-xl border border-dashed bg-card p-8 text-center">
+            <PlugZap className="mx-auto mb-3 size-6 text-muted-foreground" />
+            <p className="font-medium text-foreground">Manba ulanmagan</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+              Tahlil moduli hali PostgreSQL&apos;ga ko&apos;chirilmagan. U
+              ko&apos;chgach bu sahifa o&apos;zi jonlanadi — bu yerda hech
+              narsa sozlash kerak emas.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border bg-card p-8 text-center">
+            <p className="font-medium text-foreground">Ma&apos;lumot yuklanmadi</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Tahlilni olishda xatolik yuz berdi. Sahifani yangilab ko&apos;ring.
+            </p>
+          </div>
+        ))}
 
       {isLoading && <DashboardSkeleton />}
 
@@ -144,6 +168,7 @@ const OperationsCenterPage = () => {
             summary={data.summary}
             health={data.health}
             lastRunLabel={relativeUz(data.lastRun?.at)}
+            tasksHref={paths.tasks}
           />
 
           {/* 2. KPI - qaror uchun oltita raqam, har biri izohi bilan. */}
@@ -160,7 +185,7 @@ const OperationsCenterPage = () => {
             title="Kritik ogohlantirishlar"
             hint="Eng shoshilinchidan boshlab — har birida tayyor harakat"
             count={counts ? counts.high + counts.medium : null}
-            to={risks.length ? "/owner/ai/tasks" : undefined}
+            to={risks.length ? paths.tasks : undefined}
           >
             {risks.length > 0 ? (
               <AiCriticalAlerts items={risks} {...handlers} />
@@ -237,7 +262,7 @@ const OperationsCenterPage = () => {
                   </p>
                 </div>
                 <Link
-                  to={`/owner/ai/reports/${latestReport._id}`}
+                  to={paths.report(latestReport._id)}
                   className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                   To'liq hisobot

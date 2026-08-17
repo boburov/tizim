@@ -1,6 +1,6 @@
 import asyncHandler from "../../../middleware/asyncHandler.js";
 import ApiError from "../../../utils/ApiError.js";
-import Branch from "../../../models/branch.model.js";
+import prisma from "../../../config/prisma.js";
 import { sendXlsx } from "../../../utils/sendXlsx.js";
 import { resolveColumns } from "../registry/index.js";
 import { generateXlsx } from "../services/exports.service.js";
@@ -33,7 +33,13 @@ const resolveBranchLabel = async (req) => {
   if (!req.branchId) {
     return req.canSeeAllBranches ? "Barcha filiallar" : "Biriktirilgan filiallar";
   }
-  const branch = await Branch.findById(req.branchId, { name: 1 }).lean();
+  // Faqat `name` o'qiladi. Prisma `select` bilan `id` AVTOMATIK kelmaydi
+  // (Mongo `_id` ni doim qaytarardi) - bu yerda kerak ham emas, chunki
+  // natija Excel varag'idagi matn.
+  const branch = await prisma.branch.findUnique({
+    where: { id: req.branchId },
+    select: { name: true },
+  });
   return branch?.name || "Noma'lum filial";
 };
 

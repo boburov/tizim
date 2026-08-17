@@ -1,19 +1,20 @@
-import ActivityLog from "../../../models/activityLog.model.js";
-import User from "../../../models/user.model.js";
+import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { describeLog } from "../../../constants/auditActions.js";
 import { branchUserFilter } from "../../../helpers/branchContext.helper.js";
+import { withLegacyId } from "../../../utils/serialize.js";
 
-const USER_PROJECTION = { firstName: 1, lastName: 1, role: 1, username: 1 };
+const USER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  role: true,
+  username: true,
+};
 
 // Middleware endi bu yo'llarni yozmaydi, lekin bazada eski yozuvlar qolgan.
 // Ularni o'qish bosqichida ham chiqarib tashlaymiz (ma'lumot o'chirilmaydi).
 const NOISE_PATHS = ["/api/auth/refresh", "/auth/refresh"];
-
-const withNoiseFilter = (filter) => ({
-  ...filter,
-  path: { $nin: NOISE_PATHS },
-});
 
 // "action" - hosila qiymat, bazada saqlanmaydi. Uni to'g'ridan-to'g'ri
 // filtrlash uchun har bir amal turini bazadagi maydonlarga tarjima qilamiz,
@@ -22,25 +23,78 @@ const LOGIN_PATHS = ["/api/auth/login", "/api/bot-auth/login"];
 const LOGOUT_PATHS = ["/api/auth/logout"];
 
 const ACTION_QUERY = {
-  CREATE: { method: "POST", path: { $nin: [...LOGIN_PATHS, ...LOGOUT_PATHS] } },
-  UPDATE: { method: { $in: ["PATCH", "PUT"] } },
+  CREATE: {
+    method: "POST",
+    path: { notIn: [...LOGIN_PATHS, ...LOGOUT_PATHS] },
+  },
+  UPDATE: { method: { in: ["PATCH", "PUT"] } },
   DELETE: { method: "DELETE" },
-  LOGIN: { path: { $in: LOGIN_PATHS } },
-  LOGOUT: { path: { $in: LOGOUT_PATHS } },
+  LOGIN: { path: { in: LOGIN_PATHS } },
+  LOGOUT: { path: { in: LOGOUT_PATHS } },
 };
 
-// path shartlari to'qnashmasligi uchun $and ichida birlashtiramiz
-const withActionFilter = (filter, action) => {
+/**
+ * `where` ni yig'ish.
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ * `AND` MAJBURIY, SPREAD EMAS.
+ *
+ * Shovqin filtri ham, amal filtri ham `path` bo'yicha shart qo'yadi.
+ * Ular bitta obyektga spread qilinsa `path` kaliti IKKI marta uchraydi
+ * va keyingisi oldingisini JIMGINA bosib ketardi - masalan "LOGIN"
+ * tanlanganda shovqin filtri yo'qolardi.
+ *
+ * Xuddi shu sabab `branchUserFilter` ham `AND` ichida turadi: u
+ * `userId` bo'yicha filtrlaydi va `userId` filtri bilan to'qnashardi
+ * (Mongo versiyasidagi izohga qarang - u yerda ham aynan shu tuzoq
+ * bo'lgan).
+ * ═══════════════════════════════════════════════════════════════════
+ */
+const buildWhere = async ({
+  userId,
+  method,
+  action,
+  resourceType,
+  fromDate,
+  toDate,
+}) => {
+  const and = [];
+
+  // FILIAL KO'LAMI: ActivityLog'da `branchId` YO'Q - yozuv AKTYORGA
+  // (`userId`) tegishli, aktyor esa filialga.
+  //
+  // Ilgari bu yerda hech qanday filtr yo'q edi va A filial direktori
+  // B filial xodimlarining barcha amallarini ko'rardi.
+  //
+  // TIZIM yozuvlari (userId: null) filial direktoriga KO'RINMAYDI -
+  // fail-closed. Markaz darajasidagi audit owner'ning ishi.
+  //
+  // MAYDON NOMI `user` EMAS, `userId`: Prisma'da `user` bu RELATION.
+  const scope = await branchUserFilter("userId");
+  if (Object.keys(scope).length) and.push(scope);
+
+  // Shovqin (refresh) - doim chiqarib tashlanadi.
+  and.push({ path: { notIn: NOISE_PATHS } });
+
+  if (userId) and.push({ userId: String(userId) });
+  if (method) and.push({ method });
+  if (resourceType) and.push({ resourceType });
+
+  if (fromDate || toDate) {
+    const createdAt = {};
+    if (fromDate) createdAt.gte = new Date(fromDate);
+    if (toDate) createdAt.lte = new Date(toDate);
+    and.push({ createdAt });
+  }
+
   const clause = ACTION_QUERY[action];
-  if (!clause) return filter;
-  return { $and: [filter, clause] };
+  if (clause) and.push(clause);
+
+  return { AND: and };
 };
 
-// Mongo hujjatiga semantik maydonlarni qo'shadi (action, description, failed)
-const enrich = (doc) => {
-  const plain = doc.toJSON ? doc.toJSON() : doc;
-  return { ...plain, ...describeLog(plain) };
-};
+// Yozuvga semantik maydonlarni qo'shadi (action, description, failed)
+const enrich = (doc) => ({ ...withLegacyId(doc), ...describeLog(doc) });
 
 export const list = async ({
   userId,
@@ -52,104 +106,115 @@ export const list = async ({
   page = 1,
   limit = 30,
 }) => {
-  // FILIAL KO'LAMI: ActivityLog'da `branchId` YO'Q - yozuv AKTYORGA
-  // (`user`) tegishli, aktyor esa filialga.
-  //
-  // Ilgari bu yerda hech qanday filtr yo'q edi va A filial direktori
-  // B filial xodimlarining barcha amallarini (kim nima o'zgartirgani,
-  // qaysi endpoint'ga borgani) ko'rardi. branchLeak testi buni
-  // ko'rsatmasdi, chunki u ActivityLog yozuvi umuman YARATMASDI -
-  // bo'sh natija "toza" deb hisoblanardi.
-  //
-  // TIZIM yozuvlari (user: null) filial direktoriga KO'RINMAYDI -
-  // fail-closed. Markaz darajasidagi audit owner'ning ishi.
-  const filter = { ...(await branchUserFilter("user")) };
-  if (userId) filter.user = userId;
-  if (method) filter.method = method;
-  if (resourceType) filter.resourceType = resourceType;
-  if (fromDate || toDate) {
-    filter.createdAt = {};
-    if (fromDate) filter.createdAt.$gte = new Date(fromDate);
-    if (toDate) filter.createdAt.$lte = new Date(toDate);
-  }
-
-  const query = withActionFilter(withNoiseFilter(filter), action);
+  const where = await buildWhere({
+    userId,
+    method,
+    action,
+    resourceType,
+    fromDate,
+    toDate,
+  });
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
-    ActivityLog.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("user", USER_PROJECTION),
-    ActivityLog.countDocuments(query),
+    prisma.activityLog.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: { user: { select: USER_SELECT } },
+    }),
+    prisma.activityLog.count({ where }),
   ]);
 
   return { items: items.map(enrich), total, page, limit };
 };
 
 export const getById = async (id) => {
-  const doc = await ActivityLog.findById(id).populate("user", USER_PROJECTION);
+  const doc = await prisma.activityLog.findUnique({
+    where: { id: String(id) },
+    include: { user: { select: USER_SELECT } },
+  });
   if (!doc) throw new ApiError(404, "Log topilmadi");
   return enrich(doc);
 };
 
 export const getStats = async ({ fromDate, toDate } = {}) => {
-  // Ro'yxat bilan AYNI ko'lam. Aggregate'da mongoose hook'lari
-  // ishlamaydi, shuning uchun $match'ga qo'lda qo'shiladi.
-  const match = { ...(await branchUserFilter("user")) };
+  // Ro'yxat bilan AYNI ko'lam (shovqin filtridan tashqari - statistika
+  // xom hisob, Mongo versiyasida ham shunday edi).
+  const and = [];
+  const scope = await branchUserFilter("userId");
+  if (Object.keys(scope).length) and.push(scope);
   if (fromDate || toDate) {
-    match.createdAt = {};
-    if (fromDate) match.createdAt.$gte = new Date(fromDate);
-    if (toDate) match.createdAt.$lte = new Date(toDate);
+    const createdAt = {};
+    if (fromDate) createdAt.gte = new Date(fromDate);
+    if (toDate) createdAt.lte = new Date(toDate);
+    and.push({ createdAt });
   }
+  const where = and.length ? { AND: and } : {};
 
-  const [total, byMethod, byResource, topUsers] = await Promise.all([
-    ActivityLog.countDocuments(match),
-    ActivityLog.aggregate([
-      { $match: match },
-      { $group: { _id: "$method", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ]),
-    ActivityLog.aggregate([
-      { $match: match },
-      { $group: { _id: "$resourceType", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 15 },
-    ]),
-    ActivityLog.aggregate([
-      // DIQQAT - `$and` ISHLATILADI, spread EMAS.
-      //
-      // `{ ...match, user: { $ne: null } }` yozilsa, `user` kaliti IKKI
-      // marta uchraydi va keyingisi FILIAL FILTRINI jimgina bosib
-      // ketardi (branchUserFilter ham aynan `user` bo'yicha filtrlaydi).
-      // Natijada "eng faol foydalanuvchilar" kartochkasi butun markaz
-      // bo'yicha hisoblanardi - ro'yxat toza bo'lsa-da.
-      { $match: { $and: [match, { user: { $ne: null } }] } },
-      { $group: { _id: "$user", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 5 },
-      {
-        $lookup: {
-          from: User.collection.name,
-          localField: "_id",
-          foreignField: "_id",
-          as: "user",
-        },
-      },
-      { $unwind: "$user" },
-      {
-        $project: {
-          _id: 0,
-          userId: "$_id",
-          firstName: "$user.firstName",
-          lastName: "$user.lastName",
-          role: "$user.role",
-          count: 1,
-        },
-      },
-    ]),
+  const [total, byMethodRows, byResourceRows, topRows] = await Promise.all([
+    prisma.activityLog.count({ where }),
+    // Ikkala guruhlash ham `activity_logs` jadvalining O'Z ustunlari
+    // bo'yicha - `groupBy` yetarli, raw SQL kerak emas.
+    prisma.activityLog.groupBy({
+      by: ["method"],
+      where,
+      _count: { _all: true },
+      orderBy: { _count: { method: "desc" } },
+    }),
+    prisma.activityLog.groupBy({
+      by: ["resourceType"],
+      where,
+      _count: { _all: true },
+      orderBy: { _count: { resourceType: "desc" } },
+      take: 15,
+    }),
+    prisma.activityLog.groupBy({
+      by: ["userId"],
+      // `userId: { not: null }` — ustun NULLABLE, ya'ni bu ruxsat
+      // etilgan. TIZIM yozuvlari "eng faol foydalanuvchi" bo'la
+      // olmaydi.
+      where: { AND: [...and, { userId: { not: null } }] },
+      _count: { _all: true },
+      orderBy: { _count: { userId: "desc" } },
+      take: 5,
+    }),
   ]);
 
-  return { total, byMethod, byResource, topUsers };
+  // MONGO'DAGI `$lookup` O'RNIGA IKKINCHI SO'ROV.
+  //
+  // Eng faol beshta foydalanuvchi topilgach ularning ismini olib
+  // kelamiz. `$lookup` ni Prisma'da takrorlash mumkin emas
+  // (`groupBy` `include` qabul qilmaydi), lekin bu yerda ehtiyoj ham
+  // yo'q: qatorlar soni BESHTA bilan cheklangan.
+  const topIds = topRows.map((r) => r.userId).filter(Boolean);
+  const users = topIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: topIds } },
+        select: { id: true, firstName: true, lastName: true, role: true },
+      })
+    : [];
+  const userMap = new Map(users.map((u) => [String(u.id), u]));
+
+  return {
+    total,
+    // Javob shakli Mongo bilan BIR XIL: `{ _id, count }` - klient
+    // jadvallari shunga tayangan.
+    byMethod: byMethodRows.map((r) => ({ _id: r.method, count: r._count._all })),
+    byResource: byResourceRows.map((r) => ({
+      _id: r.resourceType,
+      count: r._count._all,
+    })),
+    topUsers: topRows.map((r) => {
+      const u = userMap.get(String(r.userId));
+      return {
+        userId: r.userId,
+        firstName: u?.firstName || "",
+        lastName: u?.lastName || "",
+        role: u?.role || "",
+        count: r._count._all,
+      };
+    }),
+  };
 };

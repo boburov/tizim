@@ -24,7 +24,18 @@ const BranchPicker = () => {
   const { branches, canSeeAllBranches, changeBranch } = useActiveBranch();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+    // `data-branch-gate` - BARQAROR TEST NISHONI.
+    //
+    // Bu ekran login'dan keyin SHART bo'lib turadi va uni o'tmasdan
+    // hech qanday sahifaga yetib bo'lmaydi. Brauzer testlari uni
+    // sarlavha matni bo'yicha topishga urinardi, matn esa o'zgarishi
+    // mumkin - u holda uchala test to'plami ham bir vaqtda va bir xil
+    // sababdan yiqilardi (aynan shunday bo'ldi: markazga ikkinchi
+    // filial qo'shilishi bilan).
+    <div
+      data-branch-gate=""
+      className="min-h-screen flex items-center justify-center bg-muted/30 p-4"
+    >
       <div className="w-full max-w-lg space-y-6">
         <div className="text-center space-y-2">
           <img

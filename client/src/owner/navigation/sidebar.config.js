@@ -1,7 +1,6 @@
 import {
   BadgeCheck,
   Building2,
-  Gauge,
   GraduationCap,
   LayoutDashboard,
   MessagesSquare,
@@ -33,24 +32,17 @@ const ownerSidebar = [
     permission: "admin_dashboard.read",
   },
 
-  // RAHBARIYAT QOBIG'IGA O'TISH (/admin) - sidebar'siz kesim.
+  // RAHBARIYAT QOBIG'IGA O'TISH (/admin) BU RO'YXATDA EMAS.
   //
-  // NEGA SIDEBAR'DA: `/admin` ning o'zida sidebar YO'Q, ya'ni u yerga
-  // faqat manzilni qo'lda yozib kirish mumkin bo'lardi. Kirish yo'li
-  // ko'rinmasa butun qobiq mavjud bo'lmagandek bo'ladi.
+  // U menyudan CHIQARILDI va sidebar tepasiga, yaratish tugmasi ostiga
+  // ko'chirildi (`ExecutiveReturnButton`, AppSidebar). Sabab: bu qator
+  // qolgan o'ttizta havoladan boshqa ish qiladi - sahifaga emas,
+  // boshqa QOBIQQA olib boradi. Menyu ichida u "yana bitta bo'lim"
+  // bo'lib o'qilardi va aynan kerak bo'lgan paytda - operatsion
+  // sahifada adashib qolgan paytda - ko'zga tashlanmasdi.
   //
-  // ENG YUQORIDA, "Bosh sahifa"dan keyin: bu kunlik ish emas, kunni
-  // BOSHLAYDIGAN ekran. Guruh ichiga yashirilsa odatga aylanmaydi.
-  //
-  // Qaytish yo'li ham bor: `/admin` sarlavhasida "Operatsion panel"
-  // tugmasi (ExecutiveHeader) - ikki qobiq orasida yurish ikki
-  // tomonlama bo'lishi kerak.
-  {
-    title: "Rahbariyat",
-    icon: Gauge,
-    url: "/admin",
-    permission: "admin_dashboard.read",
-  },
+  // Ikki tomonlama yo'l: `/admin` sarlavhasida "Operatsion panel"
+  // tugmasi, bu yerda esa "Rahbariyatga qaytish".
 
   // PANEL ochadigan qator (`sheet`), oddiy havola emas.
   //
@@ -81,7 +73,8 @@ const ownerSidebar = [
   // `ACTION_ROUTES` havolalari va eski xatcho'plar ishlashda davom
   // etadi (qarang admin/routes/index.jsx). Faqat menyu yozuvi ko'chdi.
   //
-  // Rahbariyat qobig'iga o'tish yo'li yuqorida - "Rahbariyat" yozuvi.
+  // Rahbariyat qobig'iga o'tish yo'li sidebar tepasida -
+  // "Rahbariyatga qaytish" tugmasi (menyu ro'yxatidan tashqarida).
 
   // LIDLAR: alohida yakka link, "O'quv jarayoni"dan OLDIN.
   //

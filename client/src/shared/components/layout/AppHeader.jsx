@@ -2,6 +2,7 @@
 import { useSidebar } from "../shadcn/sidebar";
 import NotificationBell from "../notification/NotificationBell";
 import BranchBadge from "./BranchBadge";
+import ExecutiveReturnButton from "./ExecutiveReturnButton";
 import ThemeToggle from "@/shared/components/theme/ThemeToggle";
 
 // Icons
@@ -32,8 +33,13 @@ const AppHeader = () => {
         <span className="font-medium truncate hidden xs:inline">{APP_NAME}</span>
       </div>
 
-      {/* Filial + Tema + Bell */}
+      {/* Rahbariyat + Filial + Tema + Bell.
+          Qaytish tugmasi MOBILDA ayniqsa kerak: sidebar yopiq turadi,
+          ya'ni undagi "Rahbariyat" qatoriga yetib borish uchun avval
+          menyuni ochish kerak edi. Ikonka ko'rinishida - bu qatorda
+          joy tor. */}
       <div className="flex items-center gap-1 min-w-0">
+        <ExecutiveReturnButton variant="compact" />
         <BranchBadge />
         <ThemeToggle variant="switch" className="size-8" />
         <NotificationBell />

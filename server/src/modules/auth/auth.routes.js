@@ -7,7 +7,7 @@ import { PERMISSIONS } from "../../constants/permissions.js";
 import { authLimiter } from "../../middleware/rateLimiter.js";
 import { enforceLimit } from "../../middleware/enforceLimit.js";
 import { ROLES } from "../../constants/roles.js";
-import User from "../../models/user.model.js";
+import prisma from "../../config/prisma.js";
 import { loginSchema } from "./validators/login.validator.js";
 import { registerUserSchema } from "./validators/registerUser.validator.js";
 import { updateProfileSchema } from "./validators/updateProfile.validator.js";
@@ -46,12 +46,16 @@ const limitKeyForRole = (role) =>
 
 const countForRole = (req) => {
   const role = req.body?.role;
-  const filter = { isDeleted: { $ne: true } };
-  return User.countDocuments(
-    role === ROLES.STUDENT
-      ? { ...filter, role: ROLES.STUDENT }
-      : { ...filter, role: { $ne: ROLES.STUDENT } },
-  );
+  // `isDeleted` Postgres'da NOT NULL (default false), shuning uchun
+  // Mongo'dagi `{ $ne: true }` bu yerda oddiy `false` ga aylanadi.
+  // `role` ham NOT NULL, ya'ni `{ not: "student" }` NULL yozuvlarni
+  // tashlab ketmaydi - Mongo bilan bir xil natija.
+  return prisma.user.count({
+    where: {
+      isDeleted: false,
+      role: role === ROLES.STUDENT ? ROLES.STUDENT : { not: ROLES.STUDENT },
+    },
+  });
 };
 
 const enforceUserLimit = (req, res, next) =>

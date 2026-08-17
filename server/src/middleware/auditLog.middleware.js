@@ -1,5 +1,5 @@
 import logger from "../config/logger.js";
-import ActivityLog from "../models/activityLog.model.js";
+import prisma from "../config/prisma.js";
 import {
   sanitize,
   extractResource,
@@ -40,19 +40,23 @@ const auditLog = (req, res, next) => {
         const safeBody = truncateBody(sanitized);
         const resource = extractResource(req.originalUrl || req.path);
 
-        await ActivityLog.create({
-          user: req.user?._id || null,
-          userRole: req.user?.role || "system",
-          actorLabel,
-          method: req.method,
-          path: req.originalUrl || req.path,
-          status: res.statusCode || 0,
-          durationMs: Date.now() - startedAt,
-          ip: req.ip || "",
-          userAgent: req.get("user-agent") || "",
-          body: safeBody,
-          resourceType: resource.type,
-          resourceId: resource.id,
+        await prisma.activityLog.create({
+          data: {
+            // `user` -> `userId`: Prisma'da `user` RELATION.
+            userId: req.user?._id ? String(req.user._id) : null,
+            userRole: req.user?.role || "system",
+            actorLabel,
+            method: req.method,
+            path: req.originalUrl || req.path,
+            status: res.statusCode || 0,
+            durationMs: Date.now() - startedAt,
+            ip: req.ip || "",
+            userAgent: req.get("user-agent") || "",
+            // `body` ustuni `Json?` - `undefined` yozib bo'lmaydi.
+            body: safeBody ?? null,
+            resourceType: resource.type,
+            resourceId: resource.id,
+          },
         });
       } catch (err) {
         logger.warn(

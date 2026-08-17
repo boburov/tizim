@@ -5,6 +5,7 @@ import Pagination from "@/shared/components/ui/pagination/Pagination";
 import { cn } from "@/shared/utils/cn";
 import { formatMoney } from "@/shared/utils/formatMoney";
 import { useReportsQuery } from "../hooks/useReportsQuery";
+import useAiPaths from "../hooks/useAiPaths";
 
 // AI HISOBOTLAR - kunlik / haftalik / oylik.
 //
@@ -19,6 +20,10 @@ const PERIODS = [
 ];
 
 const AiReportsPage = () => {
+  // Havolalar QOBIQQA qarab quriladi - qattiq `/owner/ai/...` yozilsa
+  // rahbariyat qobig'idan bosilganda operatsion panelga otib yuborardi
+  // (useAiPaths izohiga qarang).
+  const paths = useAiPaths();
   const { period, page, setField, setFields } = useObjectState({
     period: "daily",
     page: 1,
@@ -79,7 +84,7 @@ const AiReportsPage = () => {
         {items.map((r) => (
           <Link
             key={r._id}
-            to={`/owner/ai/reports/${r._id}`}
+            to={paths.report(r._id)}
             className="block rounded-xl border bg-card p-5 transition-colors hover:bg-accent/40"
           >
             <div className="flex items-start justify-between gap-3">
