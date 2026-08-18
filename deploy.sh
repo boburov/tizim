@@ -14,6 +14,12 @@ WEB_ROOT="/var/www/tizim.nester.uz"
 WEB_USER="www-data"
 PM2_APP="tizim-api"
 
+# --- Admin panel sozlamalari ---
+ADMIN_SERVER_DIR="$REPO_DIR/admin_server"   # NestJS + Prisma (port 4000)
+ADMIN_CLIENT_DIR="$REPO_DIR/admin_client"   # Vite SPA
+ADMIN_WEB_ROOT="/var/www/nester.uz"         # nester.uz nginx root
+ADMIN_PM2_APP="admin-api"
+
 echo "==> 🚀 Deploy boshlandi: $(date)"
 
 cd "$REPO_DIR"
@@ -45,6 +51,14 @@ if [ ! -d "node_modules" ] || changed "server/package-lock.json"; then
   npm install
 fi
 
+# Prisma: client generatsiya + kutilayotgan migratsiyalarni qo'llash.
+# DIQQAT: npm install'ning postinstall (prisma generate) xavfsizlik (allow-scripts)
+# tufayli ishlamasligi mumkin, shuning uchun bu yerda ATAYLAB qo'lda chaqiramiz.
+# Ikkalasi ham idempotent: yangi migratsiya bo'lmasa hech narsa o'zgarmaydi.
+echo "==> server: prisma generate + migrate deploy..."
+npx prisma generate
+npx prisma migrate deploy
+
 echo "==> pm2 restart $PM2_APP..."
 pm2 restart "$PM2_APP" --update-env
 pm2 save >/dev/null 2>&1 || true
@@ -69,6 +83,52 @@ rm -rf "${WEB_ROOT:?}"/*
 cp -r dist/* "$WEB_ROOT"/
 chown -R "$WEB_USER":"$WEB_USER" "$WEB_ROOT"
 
+# ---------------------------------------------------------------------------
+# 4) ADMIN SERVER (admin_server) — NestJS + Prisma + pm2
+# ---------------------------------------------------------------------------
+echo "==> Admin server yangilanyapti..."
+cd "$ADMIN_SERVER_DIR"
+
+# package-lock o'zgargan bo'lsa yoki node_modules yo'q bo'lsa paket o'rnatamiz
+if [ ! -d "node_modules" ] || changed "admin_server/package-lock.json"; then
+  echo "==> admin_server: npm install..."
+  npm install
+fi
+
+# Prisma: client generatsiya + kutilayotgan migratsiyalarni qo'llash (ikkalasi ham idempotent)
+echo "==> admin_server: prisma generate + migrate deploy..."
+npx prisma generate
+npx prisma migrate deploy
+
+echo "==> admin_server: nest build..."
+npm run build
+
+echo "==> pm2 restart $ADMIN_PM2_APP..."
+pm2 restart "$ADMIN_PM2_APP" --update-env
+pm2 save >/dev/null 2>&1 || true
+
+# ---------------------------------------------------------------------------
+# 5) ADMIN CLIENT (admin_client) — Vite build + nginx
+# ---------------------------------------------------------------------------
+echo "==> Admin client yangilanyapti..."
+cd "$ADMIN_CLIENT_DIR"
+
+if [ ! -d "node_modules" ] || changed "admin_client/package-lock.json"; then
+  echo "==> admin_client: npm install..."
+  npm install
+fi
+
+echo "==> admin_client: npm run build..."
+npm run build
+
+echo "==> $ADMIN_WEB_ROOT ga ko'chirilyapti..."
+mkdir -p "$ADMIN_WEB_ROOT"
+rm -rf "${ADMIN_WEB_ROOT:?}"/*
+cp -r dist/* "$ADMIN_WEB_ROOT"/
+chown -R "$WEB_USER":"$WEB_USER" "$ADMIN_WEB_ROOT"
+
 echo "==> ✅ Tayyor! Commit: ${NEW_COMMIT:0:7}"
-echo "    Server: pm2 $PM2_APP"
-echo "    Client: https://tizim.nester.uz"
+echo "    Server:       pm2 $PM2_APP"
+echo "    Client:       https://tizim.nester.uz"
+echo "    Admin server: pm2 $ADMIN_PM2_APP (port 4000)"
+echo "    Admin client: https://nester.uz"
