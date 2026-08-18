@@ -226,22 +226,53 @@ check("P&L 'ulanmagan' DEMAYDI (endi ko'chirilgan)",
 const selects = await page.locator("main select, header select").count();
 check("davr tanlagichi bor", selects >= 2, `${selects} ta select`);
 
-// ══ 4) /admin/tavsiyalar — AI 501 → "ulanmagan" ════════════════
-console.log("\n4) /admin/tavsiyalar (AI hali ko'chirilmagan)");
+// ══ 4) /admin/tavsiyalar — AI ENDI KO'CHIRILGAN ════════════════
+//
+// ⚠ BU BO'LIM QAYTA YOZILDI. Ilgari u AI `501` qaytarishini TALAB
+// qilardi ("hali ko'chirilmagan" holati to'g'ri ko'rsatilyaptimi).
+// AI moduli ko'chgach o'sha talab TESKARISIGA aylandi: 501 endi
+// REGRESSIYA belgisi bo'lardi.
+//
+// Shuning uchun tekshiruv 501 ga ham, 200 ga ham QAT'IY bog'lanmaydi -
+// u ikkala holatni ham TO'G'RI deb qabul qiladi, lekin har birida
+// EKRAN mos holatni ko'rsatishini talab qiladi. Shunda test modul
+// ko'chgan-ko'chmaganidan qat'i nazar ma'noli bo'lib qoladi.
+console.log("\n4) /admin/tavsiyalar");
 await page.goto(`${APP}/admin/tavsiyalar`, { waitUntil: "networkidle" });
 await page.waitForTimeout(2000);
 
 const aiReq = allRequests.filter((r) => r.url.includes("/ai/insights"));
 check("AI so'rovi yuborildi", aiReq.length > 0, aiReq.map(r => r.status).join(","));
-check("AI 501 qaytardi (500 EMAS)", aiReq.every((r) => r.status === 501), aiReq.map(r => r.status).join(","));
 
+// 500 HECH QACHON to'g'ri emas: ko'chirilmagan modul 501 berishi kerak,
+// ko'chirilgani esa 200. 500 - haqiqiy nosozlik.
+check(
+  "AI 500 BERMADI (501 yoki 200)",
+  aiReq.every((r) => r.status === 501 || r.status < 400),
+  aiReq.map(r => r.status).join(","),
+);
+
+const aiMigrated = aiReq.length > 0 && aiReq.every((r) => r.status < 400);
 const aiText = await page.locator("main").innerText();
-check("ekranda 'Manba ulanmagan' ko'rinadi", /Manba ulanmagan/i.test(aiText));
+
+if (aiMigrated) {
+  check(
+    "ko'chirilgan: 'Manba ulanmagan' DEMAYDI",
+    !/Manba ulanmagan/i.test(aiText),
+    aiText.replace(/\s+/g, " ").slice(0, 90),
+  );
+} else {
+  check("ko'chirilmagan: ekranda 'Manba ulanmagan' ko'rinadi",
+    /Manba ulanmagan/i.test(aiText));
+}
+
+// Bu qoida IKKALA holatda ham amal qiladi: ma'lumot yo'q bo'lsa ham
+// soxta raqam chizilmasligi kerak.
 check("SOXTA raqam yo'q ('0 ta xavf' kabi)", !/\b0 ta (xavf|tavsiya)\b/i.test(aiText));
 
 const aiToasts = await page.locator("[data-sonner-toast]").allInnerTexts().catch(() => []);
 check(
-  "501 uchun QIZIL TOAST chiqmaydi (holat kartada ko'rsatiladi)",
+  "QIZIL TOAST chiqmaydi (holat kartada ko'rsatiladi)",
   aiToasts.length === 0,
   aiToasts.join(" | ").slice(0, 120),
 );

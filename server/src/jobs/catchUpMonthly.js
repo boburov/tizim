@@ -11,7 +11,7 @@ export const catchUpMonthlyGeneration = async () => {
 
   try {
     const paymentCount = await prisma.studentPayment.count({
-      where: { year, month, isDeleted: false },
+      where: { year, month },
     });
     
     if (paymentCount === 0) {

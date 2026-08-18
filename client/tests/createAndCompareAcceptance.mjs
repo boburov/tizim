@@ -236,9 +236,16 @@ if (multiBranch) {
 
 await page.goto(`${APP}/admin/tahlil`, { waitUntil: "networkidle" });
 await page.waitForTimeout(2000);
+// 404 NI MATNDAN QIDIRISH NOTO'G'RI EDI: sahifa ko'chgach ichida
+// mutlaqo qonuniy "Hisobot topilmadi" kabi BO'SH HOLAT matnlari paydo
+// bo'ldi va tekshiruv yolg'on yiqila boshladi.
+//
+// Endi 404 SAHIFANING O'ZI bo'yicha aniqlanadi: `NotFoundPage`
+// sarlavhasi bormi. Bo'sh holat matni unga ta'sir qilmaydi.
+const tahlilHeading = await page.locator("main h1").first().innerText().catch(() => "");
 check("/admin/tahlil ochildi (404 emas)",
-  !/topilmadi|not found/i.test(await page.locator("main").innerText()),
-  page.url().replace(APP, ""));
+  /Tahlil markazi/i.test(tahlilHeading),
+  `${page.url().replace(APP, "")} | h1: ${tahlilHeading.slice(0, 40)}`);
 check("/admin/tahlil da SIDEBAR yo'q",
   (await page.locator('[data-sidebar="sidebar"]').count()) === 0);
 

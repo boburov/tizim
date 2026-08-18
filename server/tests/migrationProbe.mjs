@@ -18,6 +18,19 @@
  * shartnomasi, `config/legacyMongoose.js`).
  * ═══════════════════════════════════════════════════════════════════
  *
+ * ═══════════════════════════════════════════════════════════════════
+ * FAQAT O'QISH YO'LLARINI TEKSHIRISH YETARLI EMAS
+ *
+ * Bo'sh bazada o'qish endpointi ma'lumot QATLAMIGA UMUMAN YETMASDAN
+ * 200 qaytaradi (`findMany` bo'sh massiv beradi, keyingi kod esa
+ * ishlamaydi). Aynan shu tufayli `/ai/*` "ko'chirilgan" bo'lib
+ * ko'rinardi, holbuki BUTUN detektor zanjiri (`aiConfig.service`)
+ * hali Mongoose'da edi va `/ai/recompute` 501 berardi.
+ *
+ * Shuning uchun pastda YOZISH YO'LLARI ham bor: ular ma'lumot
+ * qatlamini haqiqatan ishga soladi.
+ * ═══════════════════════════════════════════════════════════════════
+ *
  * YOLG'ON IJOBIYDAN EHTIYOT BO'LING. Bir endpoint ma'lumotga
  * yetmasdan ERTA QAYTISHI mumkin va 200 beradi. Haqiqiy misol:
  * `/search?q=a` — kod 2 belgidan qisqa so'rovni Mongoose'ga umuman
@@ -119,6 +132,32 @@ const ENDPOINTS = [
 // boshqa kod yo'lidan ketadi va nosozlik yashirinib qoladi).
 const NEEDS_BRANCH = new Set(["exports/download"]);
 
+/**
+ * YOZISH YO'LLARI — ma'lumot qatlamini HAQIQATAN ishga soladi.
+ *
+ * Bularsiz zond o'qish endpointining bo'sh bazadagi 200 iga aldanadi.
+ * Har biri IDEMPOTENT yoki o'zidan keyin tozalanadigan bo'lishi kerak —
+ * zond ishlab turgan bazani buzmasligi shart.
+ */
+const WRITE_PROBES = [
+  {
+    name: "ai/recompute",
+    label: "POST /ai/recompute (butun detektor zanjiri)",
+    // AiRun qatori yoziladi (bu job har kecha baribir shunday qiladi),
+    // insight'lar esa idempotent upsert bilan yangilanadi.
+    run: (auth, branchId) =>
+      fetch(`${API}/ai/recompute`, {
+        method: "POST",
+        headers: {
+          ...auth,
+          "Content-Type": "application/json",
+          ...(branchId ? { "x-branch-id": branchId } : {}),
+        },
+        body: JSON.stringify({}),
+      }),
+  },
+];
+
 const jsonFlag = process.argv.includes("--json");
 const beforeIdx = process.argv.indexOf("--before");
 
@@ -189,6 +228,18 @@ const main = async () => {
       if (r.status >= 400) code = (await r.json().catch(() => ({}))).code || "";
       out.push({ name: "exports/download", path: "POST /exports/:key (+branch)", status: r.status, code });
     } catch { /* tarmoq xatosi - zond o'zi yiqilmasin */ }
+  }
+
+  // ── YOZISH YO'LLARI ──
+  for (const w of WRITE_PROBES) {
+    try {
+      const r = await w.run(auth, branchId);
+      let code = "";
+      if (r.status >= 400) code = (await r.json().catch(() => ({}))).code || "";
+      out.push({ name: w.name, path: w.label, status: r.status, code });
+    } catch (err) {
+      out.push({ name: w.name, path: w.label, status: 0, code: String(err.message).slice(0, 40) });
+    }
   }
 
   if (jsonFlag) {

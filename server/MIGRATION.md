@@ -636,24 +636,42 @@ bir yozuv shu sababdan MA'LUMOTGA YETADIGAN parametr bilan yoziladi.
 
 ### Hozir 501 qaytaradiganlar
 
-Oxirgi o'lchov: **58/60 (97%)** ko'chirilgan, 2 qoldi, 0 buzuq.
+Oxirgi o'lchov: **61/61 (100%)** — ishlash yo'lida Mongoose so'rovi QOLMADI.
 
-| Endpoint | Fayl / so'rov |
-|---|---|
-| `/notifications/*` | `notifications.service.js` (838 qator, 28 so'rov) + `personalizeBody.helper.js` (4) |
-| `/assignments/*` | `assignments.service.js` (660 qator, 27 so'rov) |
+Seedlar (25 fayl) ATAYLAB Mongoose'da qoladi — bir martalik skriptlar.
 
-Zondda ko'rinmaydigan, lekin QOLGAN:
+### ⚠ TASHQI AI KO'CHIRISHIDAN KEYIN TOPILGAN VA TUZATILGAN
 
-| Bo'lim | Fayl | So'rov |
-|---|---|---|
-| joblar | 6 | 18 — jadval bo'yicha ishga tushib yiqiladi |
-| Telegram bot | `bot/*` + `botAuth` | 19 |
-| import registri | `userImportBase`, importerlar, `queues/importQueue.js` | 23 |
-| AI qolgan signallar | `student`, `teacher`, `lead`, `course`, `group` + insight servislari | 60 |
+Ko'chirishning bir qismi tashqi model (Gemini) tomonidan bajarilgan.
+Quyidagilar KEYIN topildi — ular zond 100% ko'rsatib turganda ham
+mavjud edi:
 
-`/imports/history` va `/imports/*/options` ISHLAYDI (handlerlar ko'chdi),
-lekin FAYLNI HAQIQATAN yuklash `registry/` ga tushadi — u hali Mongoose'da.
+1. **`aiConfig.service.js` va `aiBudget.service.js` BUTUNLAY o'tkazib
+   yuborilgan.** `/ai/briefing`, `/ai/insights`, `/ai/reports` 200
+   qaytarardi (bo'sh bazada o'qish yo'li ma'lumot qatlamiga yetmaydi),
+   lekin `/ai/recompute` — ya'ni BUTUN detektor zanjiri — 501 edi.
+   `aiConfig` har bir detektor birinchi o'qiydigan sozlama qatlami.
+
+2. **So'ralmagan `superAdmin` moduli** qo'shilgan va olib tashlandi:
+   - `/super-admin/overview` va `/compare` **500** berardi
+     (`Lead.isDeleted` ustuni mavjud emas);
+   - **filial ko'lami umuman yo'q**: `req.query.branchIds` to'g'ridan-
+     to'g'ri filtrga ketardi, `allowedBranchIds` tekshirilmasdi, bo'sh
+     bo'lsa BARCHA filial. Ruxsat `admin_dashboard.read` — filial
+     direktorida bor. Ya'ni direktor butun tarmoq moliyasini ko'rardi;
+   - `generateActionPlan` **qo'lda yozilgan soxta AI tavsiyasi**
+     qaytarardi (o'ylab topilgan foizlar bilan);
+   - javob shakli `{success, data}` shartnomasini buzardi;
+   - klient marshrutlari `PermissionGuard`siz edi;
+   - `/admin` rahbariyat qobig'ini takrorlardi (u allaqachon shu uchta
+     ekranni to'g'ri ko'lam bilan beradi).
+
+3. **Zondning ko'r nuqtasi.** U faqat GET qilardi. Endi `WRITE_PROBES`
+   bor (`/ai/recompute`) — u ma'lumot qatlamini haqiqatan ishga soladi.
+
+4. **Inventar skriptining ko'r nuqtasi.** `import X, { Y } from` shakli
+   regexga tushmasdi — aynan shu tufayli ikkala AI fayli sanoqdan
+   chetda qolgan edi.
 
 ### `/ai` zanjiri — QISMAN ko'chirilgan
 

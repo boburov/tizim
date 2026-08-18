@@ -1,7 +1,8 @@
-import AiUsageLog, {
+import prisma from "../../../config/prisma.js";
+import {
   usageMonthKey,
   estimateCostUsd,
-} from "../../../models/aiUsageLog.model.js";
+} from "../../../constants/aiUsage.js";
 import { getLimit, isFeatureEnabled, UNLIMITED } from "../../../config/entitlements.js";
 import env from "../../../config/env.js";
 import logger from "../../../config/logger.js";
@@ -59,27 +60,31 @@ export const resolveCallCap = () => {
  *             kamaytirib ko'rsatardi.
  */
 export const monthlyUsage = async (monthKey = usageMonthKey()) => {
-  const [row] = await AiUsageLog.aggregate([
-    { $match: { monthKey } },
-    {
-      $group: {
-        _id: null,
-        calls: { $sum: { $cond: ["$ok", 1, 0] } },
-        failed: { $sum: { $cond: ["$ok", 0, 1] } },
-        costUsd: { $sum: "$costUsd" },
-        inputTokens: { $sum: "$inputTokens" },
-        outputTokens: { $sum: "$outputTokens" },
-      },
-    },
-  ]);
+  // `$cond: ["$ok", 1, 0]` — SHARTLI SANOQ. Prisma `aggregate` buni
+  // qila olmaydi (u faqat butun to'plamni yig'adi), shuning uchun
+  // SQL `FILTER (WHERE ...)`.
+  //
+  // NARX MUVAFFAQIYATSIZ CHAQIRUVDA HAM SANALADI (yuqoridagi izoh):
+  // token sarflangan bo'lsa provayder baribir pul oladi.
+  const [row] = await prisma.$queryRaw`
+    SELECT
+      COUNT(*) FILTER (WHERE "ok")::int            AS calls,
+      COUNT(*) FILTER (WHERE NOT "ok")::int        AS failed,
+      COALESCE(SUM("costUsd"), 0)::float           AS "costUsd",
+      COALESCE(SUM("inputTokens"), 0)::int         AS "inputTokens",
+      COALESCE(SUM("outputTokens"), 0)::int        AS "outputTokens"
+    FROM "ai_usage_logs"
+    WHERE "monthKey" = ${monthKey}
+  `;
 
+  const num = (v) => Number(v) || 0;
   return {
     monthKey,
-    calls: row?.calls || 0,
-    failed: row?.failed || 0,
-    costUsd: Number((row?.costUsd || 0).toFixed(4)),
-    inputTokens: row?.inputTokens || 0,
-    outputTokens: row?.outputTokens || 0,
+    calls: num(row?.calls),
+    failed: num(row?.failed),
+    costUsd: Number(num(row?.costUsd).toFixed(4)),
+    inputTokens: num(row?.inputTokens),
+    outputTokens: num(row?.outputTokens),
   };
 };
 
@@ -140,8 +145,9 @@ export const recordUsage = async ({
   errorCode = "",
 }) => {
   try {
-    await AiUsageLog.create({
-      branchId,
+    await prisma.aiUsageLog.create({
+      data: {
+      branchId: branchId ? String(branchId) : null,
       monthKey: usageMonthKey(),
       provider,
       model,
@@ -155,6 +161,7 @@ export const recordUsage = async ({
       latencyMs,
       ok,
       errorCode,
+      },
     });
   } catch (err) {
     logger.warn({ err: err.message }, "AI usage jurnaliga yozilmadi");
