@@ -120,6 +120,7 @@ import {
   SalaryGroupDetailPage,
 } from "@/owner/features/teacherSalary";
 import { FinanceReportPage, WriteOffsPage } from "@/owner/features/financeReport";
+import { FinanceCommandPage } from "@/owner/features/financeAnalytics";
 import { ProfilePage } from "@/owner/features/profile";
 import { SettingsPage } from "@/owner/features/settings";
 import { StudentStatsPage } from "@/owner/features/studentStats";
@@ -655,8 +656,19 @@ const OwnerRoutes = () => (
       />
     </Route>
 
-    {/* Moliya - bazaviy URL moliyaviy hisob-kitobga yo'naltiriladi */}
-    <Route path="finance" element={<Navigate to="/owner/finance/accounting" replace />} />
+    {/* MOLIYA BOSHQARUV MARKAZI (STEP 6).
+        Bazaviy `/owner/finance` endi shu yerga tushadi — u barcha
+        moliyaviy savolning boshlang'ich nuqtasi.
+
+        ESKI MARSHRUTLAR JOYIDA QOLADI: `/finance/accounting` va
+        boshqalar ishlashda davom etadi. Ular ichida havolalar,
+        xatcho'plar va hisobot eksportlari bor — ularni birdan
+        uzish foydalanuvchini yo'qotib qo'yardi.
+
+        Ruxsat: `finance.read`. Sezgir bo'limlar (foydalilik, pul
+        oqimi, qarzdorlik) sahifa ICHIDA alohida tekshiriladi —
+        server ham aynan shunday qo'riqlaydi. */}
+    <Route path="finance" element={<FinanceCommandPage />} />
 
     {/* Moliyaviy hisob-kitob - umumiy hisobot sahifasi */}
     <Route path="finance/accounting" element={<FinanceReportPage />} />

@@ -301,6 +301,17 @@ const toPaymentColumns = ({ baseFee, prorationFactor, discountApplied, expectedA
 //
 // SQL'da o'ng tomondagi `"paidAmount"` ESKI qiymatni beradi - Mongo'dagi
 // `{ $add: ["$paidAmount", delta] }` bilan aynan bir xil semantika.
+//
+// ── NEGA `::numeric`, `::double precision` EMAS ──
+// Ustun endi `numeric(18,2)` (qarang schema.prisma §2). Agar delta
+// `::double precision` ga kastlansa, Postgres BUTUN ifodani suzuvchi
+// nuqtada hisoblaydi va natijani ustunga qaytarishda yana numeric'ga
+// keltiradi — ya'ni aniqlik AYNAN eng muhim joyda, pul yozilayotganda
+// yo'qoladi. Bu jimgina bo'lardi: bitta to'lovda emas, minglab
+// to'lovdan keyin kassa qoldig'i bilan hisobot farq qila boshlardi.
+// Cap sharti (`<= "expectedAmount"`) ham shu sababdan numeric bo'lishi
+// SHART: turlari har xil bo'lsa taqqoslash float'ga keltiriladi va
+// chegaraviy holatda ("to'liq to'landi") noto'g'ri tomonga og'ardi.
 export const applyPaidDelta = async (
   paymentId,
   delta,
@@ -311,11 +322,11 @@ export const applyPaidDelta = async (
   const d = Number(delta) || 0;
 
   const setClause = Prisma.sql`
-    SET "paidAmount" = COALESCE("paidAmount", 0) + ${d}::double precision,
+    SET "paidAmount" = COALESCE("paidAmount", 0) + ${d}::numeric,
         "status"     = CASE
-          WHEN COALESCE("paidAmount", 0) + ${d}::double precision <= 0
+          WHEN COALESCE("paidAmount", 0) + ${d}::numeric <= 0
             THEN 'unpaid'::"PayStatus"
-          WHEN COALESCE("paidAmount", 0) + ${d}::double precision < "expectedAmount"
+          WHEN COALESCE("paidAmount", 0) + ${d}::numeric < "expectedAmount"
             THEN 'partial'::"PayStatus"
           ELSE 'paid'::"PayStatus"
         END,
@@ -328,7 +339,7 @@ export const applyPaidDelta = async (
     ? await client.$executeRaw`
         UPDATE "student_payments" ${setClause}
         WHERE "id" = ${id}
-          AND COALESCE("paidAmount", 0) + ${d}::double precision <= "expectedAmount"
+          AND COALESCE("paidAmount", 0) + ${d}::numeric <= "expectedAmount"
       `
     : await client.$executeRaw`
         UPDATE "student_payments" ${setClause}

@@ -13,8 +13,8 @@ import {
 import { assertGroupActive } from "../../../helpers/group.helper.js";
 import { parseLocalDay, localTodayMidnight } from "../../../helpers/attendance.helper.js";
 import * as teacherSalaryService from "./teacherSalary.service.js";
-import * as journalPosting from "../../../helpers/journalPosting.helper.js";
-import * as journal from "../../journal/services/journal.service.js";
+import * as financialTx from "../../finance/services/financialTransaction.service.js";
+import { runFinanceTxn } from "../../finance/services/financeTxn.helper.js";
 
 // O'qituvchiga maosh to'lovi (chiqim). Qoldiqdan (expected - paid) ORTIQ to'lashga
 // yo'l qo'yilmaydi - cheklov shartli-atomik update bilan tekshiriladi, shuning
@@ -86,20 +86,33 @@ const writeSalaryTransaction = async ({
   createdBy,
   expenseApprovalId = null,
 }) => {
-  // Avval balans atomik oshiriladi (cap sharti bilan), keyin tranzaksiya yoziladi.
-  const updated = await teacherSalaryService.applyPaidDelta(salary.id, amount, {
-    capToRemaining: true,
-  });
-  if (!updated) {
-    const remaining = Math.max(0, (salary.expectedAmount || 0) - (salary.paidAmount || 0));
-    throw new ApiError(
-      400,
-      `To'lov qoldiqdan oshib ketadi (qoldiq: ${remaining} so'm)`,
-    );
-  }
+  // ── ATOMIK: balans + tranzaksiya + jurnal + audit BITTA amalda ──
+  //
+  // Ilgari rollback QO'LDA edi (`catch { applyPaidDelta(-amount) }`) va
+  // qaytarishning o'zi yiqilsa maosh "to'langan" bo'lib qolardi.
+  // Endi tranzaksiya buni kafolatlaydi.
+  //
+  // Jurnal yozuvi ENDI "Maosh" kategoriyasiga va o'qituvchiga
+  // bog'lanadi (Faza 7) — ilgari u nomsiz `expense` edi va chiqim
+  // kategoriyalari hisobotida markazning eng katta xarajati
+  // KO'RINMASDI.
+  const created = await runFinanceTxn(async (tx) => {
+    const updated = await teacherSalaryService.applyPaidDelta(salary.id, amount, {
+      capToRemaining: true,
+      tx,
+    });
+    if (!updated) {
+      const remaining = Math.max(
+        0,
+        (salary.expectedAmount || 0) - (salary.paidAmount || 0),
+      );
+      throw new ApiError(
+        400,
+        `To'lov qoldiqdan oshib ketadi (qoldiq: ${remaining} so'm)`,
+      );
+    }
 
-  try {
-    const created = await prisma.salaryTransaction.create({
+    const row = await tx.salaryTransaction.create({
       data: {
         branchId,
         salaryId: salary.id,
@@ -116,14 +129,15 @@ const writeSalaryTransaction = async ({
       },
     });
 
-    // JURNAL: maosh - xarajat, pul kassadan chiqdi.
-    await journalPosting.postSalary(created, journal, "SalaryTransaction");
-    return withLegacyId(created);
-  } catch (err) {
-    // Tranzaksiya yozilmasa - balans oshirilgancha qolmasin (rollback)
-    await teacherSalaryService.applyPaidDelta(salary.id, -amount);
-    throw err;
-  }
+    await financialTx.postTeacherPayroll(
+      { salaryTransactionId: row.id },
+      createdBy ? { id: createdBy } : null,
+      { tx },
+    );
+    return row;
+  });
+
+  return withLegacyId(created);
 };
 
 export const create = async ({ salaryId, amount, method, paidAt, note }, currentUser) => {

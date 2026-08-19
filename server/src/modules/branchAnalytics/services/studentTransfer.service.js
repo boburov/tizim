@@ -6,6 +6,19 @@ import { isBranchAllowed } from "../../../helpers/branchContext.helper.js";
 import { assertTargetInScope } from "../../../helpers/branchAccess.helper.js";
 import * as journal from "../../journal/services/journal.service.js";
 
+// ─────────────────────────────────────────────────────────────────────
+// NEGA BU MODUL `financialTransaction.service.js` NI ISHLATMAYDI
+//
+// O'quvchini boshqa filialga ko'chirishda uning DEPOZITI ham ko'chadi.
+// Bu markaziy servisdagi amal emas: pul markazdan chiqmaydi, faqat
+// "qaysi filial kassasida turgani" o'zgaradi — shuning uchun
+// filiallararo JUFT yozuv (chiquvchi + kiruvchi).
+//
+// Bu hodisa TAKRORLANADI (bir o'quvchi bir necha marta ko'chirilishi
+// mumkin) — aynan shu sabab (refModel, refId) idempotentlik kaliti
+// bo'la olmaydi. Qarang FINANCE-ARCHITECTURE.md, "STEP 4 ilovasi".
+// ─────────────────────────────────────────────────────────────────────
+
 // O'QUVCHINI FILIALLARARO KO'CHIRISH.
 //
 // ══════════════════════════════════════════════════════════════════

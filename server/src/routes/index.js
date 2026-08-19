@@ -35,6 +35,8 @@ import teacherSalaryRouter from "../modules/teacherSalary/teacherSalary.routes.j
 import staffPayrollRouter from "../modules/staffPayroll/staffPayroll.routes.js";
 import expensesRouter from "../modules/expenses/expenses.routes.js";
 import financeReportRouter from "../modules/financeReport/financeReport.routes.js";
+import financeAnalyticsRouter from "../modules/financeAnalytics/financeAnalytics.routes.js";
+import financeOpsRouter from "../modules/financeOps/financeOps.routes.js";
 import ledgerRouter from "../modules/ledger/ledger.routes.js";
 import openingBalanceRouter from "../modules/openingBalance/openingBalance.routes.js";
 import expenseApprovalsRouter from "../modules/expenseApprovals/expenseApprovals.routes.js";
@@ -117,6 +119,10 @@ router.use("/staff-payroll", staffPayrollRouter);
 // u /teacher-salary da qoladi; hisobot ikkalasini qo'shib ko'rsatadi.
 router.use("/expenses", expensesRouter);
 router.use("/finance-report", financeReportRouter);
+// MOLIYA TAHLILI (STEP 5) — faqat o'qish qatlami.
+router.use("/finance-analytics", financeAnalyticsRouter);
+// MOLIYAVIY AMALLAR (STEP 6) — qaytarim / o'tkazma / egasining puli.
+router.use("/finance-ops", financeOpsRouter);
 // SHAXSIY MOLIYAVIY TARIX. Rolga qarab ajratilgan modullardan (o'quvchi
 // to'lovi / o'qituvchi maoshi / xodim oyligi) BIRLASHGAN ko'rinish
 // quradi: boshlang'ich qoldiq → tranzaksiyalar → joriy balans.

@@ -1,8 +1,6 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
-import Role from "../models/role.model.js";
-import Permission from "../models/permission.model.js";
 import {
   BRANCH_LOCAL_PERMISSIONS,
   OWNER_ONLY_PERMISSIONS,
@@ -42,7 +40,15 @@ const ROLE_VALUE = "director";
 const migrate = async () => {
   await connectDB();
 
-  const role = await Role.findOne({ value: ROLE_VALUE });
+  // MONGO → PRISMA
+  //   Role.findOne({value})       → prisma.role.findUnique({where:{value}})
+  //   role.permissions = [ids]    → permissions: { set: [{id}] }  (M:N relation)
+  //   role.save()                 → prisma.role.update(...)
+  //   Permission.find().lean()    → prisma.permission.findMany()
+  const role = await prisma.role.findUnique({
+    where: { value: ROLE_VALUE },
+    include: { permissions: { select: { id: true } } },
+  });
   if (!role) {
     logger.warn(
       `"${ROLE_VALUE}" roli topilmadi - avval "npm run seed:permissions" ni ishga tushiring`,
@@ -53,9 +59,9 @@ const migrate = async () => {
 
   // Kalit -> ObjectId xaritasi. Katalogda yo'q kalit jimgina tushib
   // qoladi (seed hali yurgizilmagan bo'lishi mumkin).
-  const perms = await Permission.find({}).select("_id key").lean();
-  const idByKey = new Map(perms.map((p) => [p.key, String(p._id)]));
-  const keyById = new Map(perms.map((p) => [String(p._id), p.key]));
+  const perms = await prisma.permission.findMany({ select: { id: true, key: true } });
+  const idByKey = new Map(perms.map((p) => [p.key, p.id]));
+  const keyById = new Map(perms.map((p) => [p.id, p.key]));
 
   const missingInCatalog = BRANCH_LOCAL_PERMISSIONS.filter((k) => !idByKey.has(k));
   if (missingInCatalog.length) {
@@ -64,7 +70,7 @@ const migrate = async () => {
     );
   }
 
-  const before = new Set((role.permissions || []).map(String));
+  const before = new Set((role.permissions || []).map((p) => p.id));
 
   const wanted = new Set(
     BRANCH_LOCAL_PERMISSIONS.map((k) => idByKey.get(k)).filter(Boolean),
@@ -89,9 +95,19 @@ const migrate = async () => {
   // olib tashlamasligi kerak.
   const next = [...new Set([...before, ...wanted])].filter((id) => !forbidden.has(id));
 
-  role.permissions = next;
-  role.permissionsVersion = (role.permissionsVersion || 0) + 1;
-  await role.save();
+  // `set` — bog'lanishni BUTUNLAY almashtiradi (Mongo'dagi
+  // `role.permissions = next` bilan aynan bir xil semantika).
+  //
+  // `permissionsVersion` oshirilishi MUHIM: `permission.helper.js`
+  // keshi shu raqamga qaraydi, aks holda ishlab turgan server eski
+  // ruxsatlar bilan qolib ketardi.
+  await prisma.role.update({
+    where: { id: role.id },
+    data: {
+      permissions: { set: next.map((id) => ({ id })) },
+      permissionsVersion: (role.permissionsVersion || 0) + 1,
+    },
+  });
 
   if (added.length) {
     logger.info(

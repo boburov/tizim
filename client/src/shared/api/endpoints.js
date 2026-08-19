@@ -339,6 +339,50 @@ export const ENDPOINTS = Object.freeze({
   },
 
   // Moliyaviy hisob-kitob (umumiy hisobotlar)
+  // MOLIYA TAHLILI (STEP 5) — faqat o'qish. Barcha raqam serverdan
+  // keladi: frontend hech qanday moliyaviy hisob-kitob qilmaydi.
+  financeAnalytics: {
+    summary: "/finance-analytics/summary",
+    alerts: "/finance-analytics/alerts",
+
+    revenueTrend: "/finance-analytics/revenue/trend",
+    revenueBy: (by) => `/finance-analytics/revenue/by/${by}`,
+    paymentMethods: "/finance-analytics/payment-methods",
+    refunds: "/finance-analytics/refunds",
+    discounts: "/finance-analytics/discounts",
+
+    expenseTrend: "/finance-analytics/expenses/trend",
+    expenseBreakdown: "/finance-analytics/expenses/breakdown",
+    costStructure: "/finance-analytics/expenses/cost-structure",
+    recurring: "/finance-analytics/expenses/recurring",
+    budget: "/finance-analytics/budget",
+
+    cashFlow: "/finance-analytics/cash-flow",
+    accounts: "/finance-analytics/cash-flow/accounts",
+    cashTrend: "/finance-analytics/cash-flow/trend",
+
+    receivables: "/finance-analytics/receivables",
+    receivablesBy: (by) => `/finance-analytics/receivables/by/${by}`,
+
+    teachers: "/finance-analytics/teachers",
+    directions: "/finance-analytics/directions",
+    groups: "/finance-analytics/groups",
+    rooms: "/finance-analytics/rooms",
+    branches: "/finance-analytics/branches",
+    // Bitta jurnal yozuvi tafsiloti — tahlildan hujjatgacha kuzatish.
+    entries: "/finance-analytics/entries",
+    entry: (id) => `/finance-analytics/entries/${id}`,
+  },
+
+  // MOLIYAVIY AMALLAR (STEP 6) — yozish.
+  financeOps: {
+    refunds: "/finance-ops/refunds",
+    transfers: "/finance-ops/transfers",
+    ownerCapital: "/finance-ops/owner-capital",
+    budgets: "/finance-ops/budgets",
+    budgetById: (id) => `/finance-ops/budgets/${id}`,
+  },
+
   financeReport: {
     summary: "/finance-report/summary",
     trend: "/finance-report/trend",

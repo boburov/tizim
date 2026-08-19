@@ -341,6 +341,38 @@ export const qk = Object.freeze({
   },
 
   // Moliyaviy hisob-kitob (umumiy hisobotlar)
+  // MOLIYA TAHLILI. Kalitga FILTR to'liq kiradi — davr yoki filial
+  // o'zgarganda react-query yangi so'rov yuborishi kerak.
+  financeAnalytics: {
+    all: () => ["financeAnalytics"],
+    summary: (f) => ["financeAnalytics", "summary", f],
+    alerts: (f) => ["financeAnalytics", "alerts", f],
+    revenueTrend: (f) => ["financeAnalytics", "revenueTrend", f],
+    revenueBy: (by, f) => ["financeAnalytics", "revenueBy", by, f],
+    paymentMethods: (f) => ["financeAnalytics", "paymentMethods", f],
+    refunds: (f) => ["financeAnalytics", "refunds", f],
+    discounts: (f) => ["financeAnalytics", "discounts", f],
+    expenseTrend: (f) => ["financeAnalytics", "expenseTrend", f],
+    expenseBreakdown: (f) => ["financeAnalytics", "expenseBreakdown", f],
+    costStructure: (f) => ["financeAnalytics", "costStructure", f],
+    recurring: (f) => ["financeAnalytics", "recurring", f],
+    budget: (f) => ["financeAnalytics", "budget", f],
+    cashFlow: (f) => ["financeAnalytics", "cashFlow", f],
+    accounts: (f) => ["financeAnalytics", "accounts", f],
+    cashTrend: (f) => ["financeAnalytics", "cashTrend", f],
+    receivables: (f) => ["financeAnalytics", "receivables", f],
+    receivablesBy: (by, f) => ["financeAnalytics", "receivablesBy", by, f],
+    teachers: (f) => ["financeAnalytics", "teachers", f],
+    directions: (f) => ["financeAnalytics", "directions", f],
+    groups: (f) => ["financeAnalytics", "groups", f],
+    rooms: (f) => ["financeAnalytics", "rooms", f],
+    branches: (f) => ["financeAnalytics", "branches", f],
+    entries: (f) => ["financeAnalytics", "entries", f],
+    entry: (id) => ["financeAnalytics", "entry", id],
+    budgets: (f) => ["financeAnalytics", "budgets", f],
+    budgetOne: (id) => ["financeAnalytics", "budgetOne", id],
+  },
+
   financeReport: {
     all: () => ["financeReport"],
     summary: (params) => ["financeReport", "summary", params],

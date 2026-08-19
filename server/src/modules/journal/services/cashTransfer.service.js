@@ -10,6 +10,22 @@ import {
 } from "../../../helpers/branchContext.helper.js";
 import * as journal from "./journal.service.js";
 
+// ─────────────────────────────────────────────────────────────────────
+// NEGA BU MODUL `financialTransaction.service.js` NI ISHLATMAYDI
+//
+// Bu — TEKSHIRILGAN QAROR, e'tibordan chetda qolgan joy emas
+// (qarang FINANCE-ARCHITECTURE.md, "STEP 4 ilovasi").
+//
+// Inkassatsiya markaziy servisdagi biror amalning dublikati EMAS: u
+// FILIALLARARO pul ko'chirish (yo'ldagi pul, due_from/due_to) va
+// bitta harakat IKKI filial jurnalida iz qoldiradi.
+//
+// Idempotentlik bu yerda `claimTransfer()` orqali: shartli
+// `updateMany` ikkinchi urinishda count=0 beradi va jurnal umuman
+// yozilmaydi. `reconcile()` esa due_from/due_to juftligini tekshirib
+// turadi.
+// ─────────────────────────────────────────────────────────────────────
+
 // INKASSATSIYA - filial kassasidan markazga (yoki boshqa filialga) pul.
 //
 // ══════════════════════════════════════════════════════════════════

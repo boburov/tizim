@@ -8,8 +8,7 @@ import * as studentPaymentService from "./studentPayment.service.js";
 import * as depositService from "../../deposits/services/deposit.service.js";
 import { runFinanceTxn } from "./financeTxn.helper.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
-import * as journalPosting from "../../../helpers/journalPosting.helper.js";
-import * as journal from "../../journal/services/journal.service.js";
+import * as financialTx from "./financialTransaction.service.js";
 
 // Bir martada qabul qilinadigan maksimal summa (kassa xatosini cheklash uchun).
 const MAX_PAYMENT_AMOUNT = 50_000_000;
@@ -37,8 +36,8 @@ const duplicateResult = (existing) => ({
 // To'lovni taqsimlash tartibi: avval TANLANGAN oy, keyin shu o'quvchining shu
 // guruhdagi boshqa qoldiq oylari (ENG ESKISIDAN). Tanlangan oy to'liq to'langan
 // bo'lsa ham ro'yxatda qoladi (loop ichida 0 ulush bilan o'tib ketiladi).
-const buildAllocationOrder = async (selected) => {
-  const others = await prisma.studentPayment.findMany({
+const buildAllocationOrder = async (selected, tx = null) => {
+  const others = await (tx || prisma).studentPayment.findMany({
     where: {
       studentId: selected.studentId,
       groupId: selected.groupId,
@@ -98,89 +97,127 @@ export const create = async (
     if (existing) return duplicateResult(withLegacyId(existing));
   }
 
-  const order = await buildAllocationOrder(payment);
+  // ══════════════════════════════════════════════════════════════════
+  // BUTUN SO'ROV — BITTA TRANZAKSIYA
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // Ilgari har ULUSH alohida tranzaksiyada edi, ortiqcha pulni
+  // depozitga o'tkazish esa yana boshqasida. Ya'ni so'rov quyidagi
+  // holatda tugashi MUMKIN edi:
+  //
+  //     1-ulush        ✅ kommit
+  //     2-ulush        ✅ kommit
+  //     ortiqcha→depozit ❌ xato
+  //     so'rov          ❌ xato qaytardi
+  //
+  // Foydalanuvchi "to'lov o'tmadi" degan javob oladi, lekin pulning
+  // bir qismi ALLAQACHON yozilgan bo'ladi. Keyin u qayta uradi va
+  // to'lov IKKI MARTA tushadi. Moliyaviy tizimda bu qabul qilinmaydi.
+  //
+  // ENDI: taqsimlash ham, ortiqchani depozitga o'tkazish ham BITTA
+  // tranzaksiyada. Yo hammasi, yo hech narsa.
+  //
+  // NEGA `depositService.topup` GA `tx` UZATILADI: Prisma'da ichma-ich
+  // interaktiv tranzaksiya yo'q — u o'zi `runFinanceTxn` ochsa,
+  // ALOHIDA ulanishda ochilardi va tashqi rollback unga ta'sir
+  // qilmasdi (aynan yopmoqchi bo'lgan tuynuk), ustiga ikkalasi bir xil
+  // depozit qatorini qulflab, o'zini-o'zi bloklab qo'yardi.
   const batchId = gen24Hex();
-  const transactions = [];
-  let left = total;
-  // Idempotency kaliti faqat BATCH'ning birinchi yozuviga biriktiriladi.
-  let pendingKey = idempotencyKey || null;
+  let outcome;
+  try {
+    outcome = await runFinanceTxn(async (tx) => {
+      // Taqsimlash tartibi TRANZAKSIYA ICHIDA o'qiladi — barcha
+      // qatorlar bitta izchil suratdan olinadi.
+      const order = await buildAllocationOrder(payment, tx);
+      const transactions = [];
+      let left = total;
+      // Idempotency kaliti faqat BATCH'ning birinchi yozuviga biriktiriladi.
+      let pendingKey = idempotencyKey || null;
 
-  for (const plan of order) {
-    if (left <= 0) break;
-    // Yomon qarz (write-off) yopilgan - to'lov unga taqsimlanmaydi (ortgan pul
-    // boshqa oylarga yoki depozitga tushadi).
-    if (plan.writtenOff) continue;
-    const remaining = Math.max(0, (plan.expectedAmount || 0) - (plan.paidAmount || 0));
-    const take = Math.min(left, remaining);
-    if (take <= 0) continue;
+      for (const plan of order) {
+        if (left <= 0) break;
+        // Yomon qarz (write-off) yopilgan - to'lov unga taqsimlanmaydi
+        // (ortgan pul boshqa oylarga yoki depozitga tushadi).
+        if (plan.writtenOff) continue;
+        const remaining = Math.max(
+          0,
+          (plan.expectedAmount || 0) - (plan.paidAmount || 0),
+        );
+        const take = Math.min(left, remaining);
+        if (take <= 0) continue;
 
-    // Avval balans atomik oshiriladi (cap sharti bilan), keyin tranzaksiya yoziladi.
-    // eslint-disable-next-line no-await-in-loop
-    const updated = await studentPaymentService.applyPaidDelta(plan.id, take, {
-      capToRemaining: true,
-    });
-    // null → parallel so'rov shu oyni allaqachon yopgan; keyingi oyga o'tamiz
-    // (qolgan pul oxirida depozitga tushadi, autoApply qoldig'ini qoplaydi).
-    if (!updated) continue;
-
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      const trx = await prisma.paymentTransaction.create({
-        data: {
-          // FILIAL: oylik plandan meros (plan guruhdan olgan).
-          branchId: plan.branchId,
-          paymentId: plan.id,
-          studentId: plan.studentId,
-          groupId: plan.groupId,
-          year: plan.year,
-          month: plan.month,
-          amount: take,
-          source: "direct",
-          method,
-          paidAt: day,
-          note: note || "",
-          idempotencyKey: pendingKey,
-          batchId,
-          createdById: actorId(currentUser),
-        },
-      });
-      // JURNAL: pul kassaga kirdi (Faza 4).
-      // Xato yutiladi - to'lov jurnal tufayli rad etilmasin
-      // (helpers/journalPosting.helper.js dagi izoh).
-      // eslint-disable-next-line no-await-in-loop
-      await journalPosting.postPayment(trx, journal);
-
-      transactions.push(trx);
-      pendingKey = null;
-      left -= take;
-    } catch (err) {
-      // Tranzaksiya yozilmasa - balans oshirilgancha qolmasin (rollback).
-      // eslint-disable-next-line no-await-in-loop
-      await studentPaymentService.applyPaidDelta(plan.id, -take);
-      // Parallel takror so'rov qisman unique idempotency indeksga urildi -
-      // dublikatni qaytaramiz (Mongo 11000 → Prisma P2002).
-      if (err?.code === "P2002" && idempotencyKey) {
+        // Balans shartli-atomik oshiriladi. null → parallel so'rov shu
+        // oyni allaqachon yopgan; keyingi oyga o'tamiz.
         // eslint-disable-next-line no-await-in-loop
-        const existing = await prisma.paymentTransaction.findFirst({
-          where: { idempotencyKey },
+        const updated = await studentPaymentService.applyPaidDelta(plan.id, take, {
+          capToRemaining: true,
+          tx,
         });
-        if (existing) return duplicateResult(withLegacyId(existing));
+        if (!updated) continue;
+
+        // eslint-disable-next-line no-await-in-loop
+        const created = await tx.paymentTransaction.create({
+          data: {
+            // FILIAL: oylik plandan meros (plan guruhdan olgan).
+            branchId: plan.branchId,
+            paymentId: plan.id,
+            studentId: plan.studentId,
+            groupId: plan.groupId,
+            year: plan.year,
+            month: plan.month,
+            amount: take,
+            source: "direct",
+            method,
+            paidAt: day,
+            note: note || "",
+            idempotencyKey: pendingKey,
+            batchId,
+            createdById: actorId(currentUser),
+          },
+        });
+
+        // JURNAL + AUDIT + o'lchovlar — markaziy servis orqali.
+        // eslint-disable-next-line no-await-in-loop
+        await financialTx.postStudentPayment(
+          { paymentTransactionId: created.id },
+          currentUser,
+          { tx },
+        );
+
+        transactions.push(created);
+        pendingKey = null;
+        left -= take;
       }
-      throw err;
+
+      // Barcha qarzdan ortgan summa GAROV bo'lib depozitga tushadi
+      // (topup → autoApply boshqa guruhlardagi qoldiqni ham eng
+      // eskisidan qoplaydi, qolgani balansda qoladi).
+      let depositCredited = 0;
+      if (left > 0) {
+        await depositService.topup(
+          payment.studentId,
+          { amount: left, method, paidAt, note: note || "Ortiqcha to'lov - garovga" },
+          currentUser,
+          { tx },
+        );
+        depositCredited = left;
+      }
+
+      return { transactions, depositCredited };
+    });
+  } catch (err) {
+    // Parallel takror so'rov qisman unique idempotency indeksga urildi -
+    // dublikatni qaytaramiz (Mongo 11000 → Prisma P2002).
+    if (err?.code === "P2002" && idempotencyKey) {
+      const existing = await prisma.paymentTransaction.findFirst({
+        where: { idempotencyKey },
+      });
+      if (existing) return duplicateResult(withLegacyId(existing));
     }
+    throw err;
   }
 
-  // Barcha qarzdan ortgan summa GAROV bo'lib depozitga tushadi (topup → autoApply
-  // boshqa guruhlardagi qoldiqni ham eng eskisidan qoplaydi, qolgani balansda qoladi).
-  let depositCredited = 0;
-  if (left > 0) {
-    await depositService.topup(
-      payment.studentId,
-      { amount: left, method, paidAt, note: note || "Ortiqcha to'lov - garovga" },
-      currentUser,
-    );
-    depositCredited = left;
-  }
+  const { transactions, depositCredited } = outcome;
 
   return {
     allocated: transactions.length,

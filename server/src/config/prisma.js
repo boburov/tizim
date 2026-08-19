@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import env from "./env.js";
 import logger from "./logger.js";
 
@@ -36,15 +36,97 @@ const createClient = () =>
         : [{ emit: "event", level: "error" }],
   });
 
-const prisma = globalForPrisma.__prisma ?? createClient();
+// ═══════════════════════════════════════════════════════════════════════════
+// DECIMAL → SON NORMALIZATSIYASI
+//
+// Pul ustunlari `numeric(18,2)` (qarang schema.prisma §2) va Prisma ularni
+// `Decimal` OBYEKTI qilib qaytaradi. Bu JavaScript'da o'ta xavfli:
+//
+//     total = a.amount + b.amount        // "700000" + "300000" = "700000300000"
+//
+// `+` operatori obyektni satrga keltiradi va xato HECH QANDAY ogohlantirish
+// bermaydi — yig'indi shunchaki bema'ni kattalashadi. Bu butun kod bo'ylab
+// 26 ta faylda, har bir hisobotda va har bir maosh hisobida bo'lishi mumkin
+// edi.
+//
+// NEGA HAR BIR FAYLNI TUZATISH EMAS: unutilgan BITTA joy yetarli va uni
+// test ushlamasligi mumkin (natija xato emas, shunchaki NOTO'G'RI son).
+// Shuning uchun to'siq BITTA joyda — klient chegarasida.
+//
+// NIMA YUTAMIZ: bazada aniq `numeric`, ya'ni SAQLASH va SQL `SUM()` /
+// `AVG()` — mutlaqo aniq (aynan shu yerda eng katta yig'indilar hisoblanadi).
+// JS tomonida esa butun so'mlar bilan ishlaymiz: `double` 2^53 (≈9·10^15)
+// gacha butun sonni va ular ustidagi +/− ni ANIQ bajaradi, real summalar
+// esa 10^7–10^9 atrofida.
+//
+// KO'PAYTIRISH/BO'LISH (foiz, proratsiya, ulush) uchun esa `utils/money.js`
+// — u Decimal ustida ishlaydi va yaxlitlash yo'qotishini oldini oladi.
+//
+// DIQQAT: `$queryRaw` BU KENGAYTMADAN O'TMAYDI (u model amali emas).
+// Xom so'rov natijasidagi `numeric` ustunlar Decimal bo'lib qoladi —
+// shuning uchun mavjud kod ularni allaqachon `Number(r.debit)` bilan
+// o'raydi (masalan branchPnl.service.js). Yangi xom so'rovlarda ham
+// shunday qilinishi SHART.
+// ═══════════════════════════════════════════════════════════════════════════
+// DIQQAT: `v.constructor.name === "Decimal"` TEKSHIRUVI ISHLAMAYDI.
+// Prisma o'z ichidagi decimal.js ni MINIFIKATSIYA qiladi va sinf nomi
+// `i` ga aylanadi. Nomga tayangan tekshiruv jimgina `false` qaytarib,
+// butun normalizatsiyani o'chirib qo'yadi — natijada `a + b` satr
+// biriktirishga aylanadi ("700000" + "300000" = "700000300000").
+// Shuning uchun decimal.js ning O'Z statik metodi ishlatiladi.
+const isDecimal = (v) =>
+  v !== null &&
+  typeof v === "object" &&
+  (Prisma.Decimal.isDecimal(v) ||
+    // Zaxira: xom SQL natijasi boshqa nusxadan kelishi mumkin.
+    (typeof v.toNumber === "function" &&
+      typeof v.toFixed === "function" &&
+      typeof v.isNaN === "function" &&
+      Array.isArray(v.d)));
 
-if (!globalForPrisma.__prisma) {
-  prisma.$on("error", (e) => logger.error({ prisma: e }, "Prisma xatosi"));
+const normalizeDecimals = (value) => {
+  if (value === null || value === undefined) return value;
+  if (isDecimal(value)) return value.toNumber();
+  // Date/Buffer kabi sinf nusxalariga KIRMAYMIZ — ularni qayta qurish
+  // buzadi (serialize.js dagi izohga qarang).
+  if (Array.isArray(value)) return value.map(normalizeDecimals);
+  if (typeof value !== "object") return value;
+  if (value instanceof Date || Buffer.isBuffer(value)) return value;
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
+
+  const out = {};
+  for (const [k, v] of Object.entries(value)) out[k] = normalizeDecimals(v);
+  return out;
+};
+
+const withDecimalNormalization = (client) =>
+  client.$extends({
+    name: "decimal-to-number",
+    query: {
+      $allModels: {
+        async $allOperations({ args, query }) {
+          return normalizeDecimals(await query(args));
+        },
+      },
+    },
+  });
+
+const base = globalForPrisma.__prismaBase ?? createClient();
+
+if (!globalForPrisma.__prismaBase) {
+  base.$on("error", (e) => logger.error({ prisma: e }, "Prisma xatosi"));
   if (env.NODE_ENV === "development") {
-    prisma.$on("warn", (e) => logger.warn({ prisma: e }, "Prisma ogohlantirishi"));
+    base.$on("warn", (e) => logger.warn({ prisma: e }, "Prisma ogohlantirishi"));
   }
-  globalForPrisma.__prisma = prisma;
+  globalForPrisma.__prismaBase = base;
 }
+
+// Kengaytirilgan klient ham keshlanadi: `$extends` HAR CHAQIRUVDA yangi
+// proxy yaratadi va uni modul darajasida qayta yaratish nodemon
+// qayta yuklashlarida proxy zanjirini o'stirib borardi.
+const prisma = globalForPrisma.__prisma ?? withDecimalNormalization(base);
+if (!globalForPrisma.__prisma) globalForPrisma.__prisma = prisma;
 
 // ─────────────────────────────────────────────────────────────────────────
 // MONGO'DAN QOLGAN FARQ: TTL indekslari.

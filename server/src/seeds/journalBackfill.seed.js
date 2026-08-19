@@ -1,44 +1,42 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
-import PaymentTransaction from "../models/paymentTransaction.model.js";
-import DepositTransaction from "../models/depositTransaction.model.js";
-import Expense from "../models/expense.model.js";
-import SalaryTransaction from "../models/salaryTransaction.model.js";
-import StaffSalaryTransaction from "../models/staffSalaryTransaction.model.js";
-import JournalEntry from "../models/journalEntry.model.js";
 import * as journal from "../modules/journal/services/journal.service.js";
-import * as posting from "../helpers/journalPosting.helper.js";
+import * as financialTx from "../modules/finance/services/financialTransaction.service.js";
 
 // MIGRATSIYA: mavjud pul yozuvlarini JURNALGA ko'chirish.
 //
 // ══════════════════════════════════════════════════════════════════
 // NEGA KERAK
 // ══════════════════════════════════════════════════════════════════
-// Jurnal (Faza 4) bo'sh holatda ishga tushdi. Ulanish qo'shilgach FAQAT
-// YANGI to'lovlar unga tushadi - eski yillik tarix esa yo'q. Natijada
-// "kassada qancha pul bor" savoliga jurnal NOL javob berardi, aslida
-// kassada millionlab so'm bo'lsa ham.
+// Jurnal bo'sh holatda ishga tushdi. Ulanish qo'shilgach FAQAT YANGI
+// to'lovlar unga tushadi - eski tarix esa yo'q. Natijada "kassada
+// qancha pul bor" savoliga jurnal NOL javob berardi, aslida kassada
+// millionlab so'm bo'lsa ham.
 //
 // Bu skript butun tarixni qayta o'ynatadi.
 //
 // ══════════════════════════════════════════════════════════════════
-// IDEMPOTENT
+// MONGOOSE → PRISMA (va nima soddalashdi)
 // ══════════════════════════════════════════════════════════════════
-// Har bir hujjat uchun jurnalda `refModel` + `refId` bo'yicha yozuv
-// bor-yo'qligi tekshiriladi. Bor bo'lsa - o'tkazib yuboriladi.
-// Shuning uchun skriptni istalgancha qayta yugurtirish mumkin: u faqat
-// YETISHMAYOTGANLARINI qo'shadi.
+// Eski nusxa Mongoose modellarini o'qir edi va HAR HUJJAT UCHUN
+// "bu allaqachon yozilganmi?" deb jurnaldan qidirardi (`alreadyPosted`).
+// U mo'rt edi: `PaymentTransaction` ham to'lov, ham depozitdan qoplash
+// uchun ishlatilgani sababli `kind` bo'yicha qo'shimcha istisno
+// yozilgan edi va bitta yangi yozuv turi qo'shilsa jimgina buzilardi.
 //
-// Bu xususiyat ataylab: birinchi yugurish yarim yo'lda uzilsa
-// (ulanish, xotira), ikkinchisi qolganini davom ettiradi.
+// ENDI KERAK EMAS: har yozuvning `postingKey` i bor va u DB darajasida
+// unique (qarang 20260819120000_journal_posting_key). Servis takroriy
+// urinishda mavjud yozuvni qaytaradi. Ya'ni idempotentlik skript
+// mantiqiga emas, INDEKSGA tayanadi — skriptni istalgancha qayta
+// yugurtirish mumkin.
 //
 // ══════════════════════════════════════════════════════════════════
 // TARTIB MUHIM
 // ══════════════════════════════════════════════════════════════════
 // Depozitga to'ldirish QOPLASHDAN oldin yozilishi kerak - aks holda
-// oraliq holatda depozit hisobi manfiy ko'rinardi. Sana bo'yicha
-// saralash buni ta'minlaydi.
+// oraliq holatda depozit hisobi manfiy ko'rinardi. Manbalar tartibi
+// va har biri ichida sana bo'yicha saralash buni ta'minlaydi.
 //
 // ISHLATISH:
 //   npm run migrate:journal-backfill
@@ -46,177 +44,128 @@ import * as posting from "../helpers/journalPosting.helper.js";
 
 const isDry = process.argv.includes("--dry");
 
-/** Shu hujjat allaqachon jurnalga tushganmi. */
-const alreadyPosted = async (refModel, refId, kind = null) => {
-  const filter = { refModel, refId };
-  if (kind) filter.kind = kind;
-  // To'lov va depozitdan qoplash BIR XIL refModel'da - turini
-  // ko'rsatmaganda qoplash yozuvlari chiqarib tashlanadi.
-  else if (refModel === "PaymentTransaction") filter.kind = { $ne: "deposit_apply" };
-
-  return Boolean(await JournalEntry.exists(filter));
-};
-
-const runSource = async ({ label, model, filter, refModel, sort, post, kind }) => {
-  const docs = await model.find(filter).sort(sort || { createdAt: 1 }).lean();
-
+const runSource = async ({ label, rows, post }) => {
   let posted = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const doc of docs) {
-    if (await alreadyPosted(refModel, doc._id, kind)) {
-      skipped += 1;
-      continue;
-    }
+  for (const row of rows) {
     if (isDry) {
       posted += 1;
       continue;
     }
-    const entry = await post(doc);
-    // postingHelper xatoni YUTADI va null qaytaradi (u yerda sabab
-    // izohlangan). Migratsiyada esa buni SANASHIMIZ kerak - aks holda
-    // "hammasi ko'chdi" degan yolg'on natija chiqardi.
-    if (entry) posted += 1;
-    else failed += 1;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await post(row);
+      if (res?.duplicate) skipped += 1;
+      else if (res?.skipped || !res?.entry) skipped += 1;
+      else posted += 1;
+    } catch (err) {
+      failed += 1;
+      logger.warn({ err: err?.message, id: row.id, label }, "Yozib bo'lmadi");
+    }
   }
 
-  logger.info(
-    `${label}: ${docs.length} ta hujjat | ko'chirildi ${posted} | avvaldan bor ${skipped}` +
-      (failed ? ` | XATO ${failed}` : ""),
-  );
-
-  return { label, total: docs.length, posted, skipped, failed };
+  logger.info({ label, posted, skipped, failed, total: rows.length }, "Manba ko'chirildi");
+  return { posted, skipped, failed };
 };
 
-const migrate = async () => {
+const seed = async () => {
   await connectDB();
-
   if (isDry) logger.info("QURUQ YURISH (--dry): hech narsa yozilmaydi");
 
-  const notDeleted = { isDeleted: { $ne: true } };
-  const withBranch = { branchId: { $ne: null } };
+  const byDate = (f) => [{ [f]: "asc" }, { id: "asc" }];
+  const totals = { posted: 0, skipped: 0, failed: 0 };
+  const add = (r) => {
+    totals.posted += r.posted;
+    totals.skipped += r.skipped;
+    totals.failed += r.failed;
+  };
 
-  const results = [];
-
-  // ── 1) DEPOZITGA TO'LDIRISH (birinchi - qoplash undan keyin) ──
-  results.push(
-    await runSource({
-      label: "Depozitga to'ldirish",
-      model: DepositTransaction,
-      filter: { type: "topup", ...notDeleted, ...withBranch },
-      refModel: "DepositTransaction",
-      sort: { paidAt: 1, createdAt: 1 },
-      post: (d) => posting.postDepositTopup(d, journal),
+  // 1) DEPOZITGA TO'LDIRISH — qoplashdan OLDIN bo'lishi shart.
+  add(await runSource({
+    label: "deposit_in",
+    rows: await prisma.depositTransaction.findMany({
+      where: { type: "topup", isDeleted: false, branchId: { not: null } },
+      orderBy: byDate("paidAt"),
     }),
-  );
+    post: (d) => financialTx.postDepositTopup({ depositTransactionId: d.id }, null),
+  }));
 
-  // ── 2) DEPOZITDAN YECHISH ──
-  results.push(
-    await runSource({
-      label: "Depozitdan yechish",
-      model: DepositTransaction,
-      filter: { type: "withdraw", ...notDeleted, ...withBranch },
-      refModel: "DepositTransaction",
-      sort: { paidAt: 1, createdAt: 1 },
-      post: (d) => posting.postDepositWithdraw(d, journal),
+  // 2) DEPOZITDAN QAYTARISH
+  add(await runSource({
+    label: "deposit_out",
+    rows: await prisma.depositTransaction.findMany({
+      where: { type: "withdraw", isDeleted: false, branchId: { not: null } },
+      orderBy: byDate("paidAt"),
     }),
-  );
+    post: (d) => financialTx.postDepositWithdraw({ depositTransactionId: d.id }, null),
+  }));
 
-  // ── 3) O'QUVCHI TO'LOVI (naqd/terminal kirimi) ──
-  results.push(
-    await runSource({
-      label: "O'quvchi to'lovi",
-      model: PaymentTransaction,
-      filter: { source: { $ne: "deposit" }, ...notDeleted, ...withBranch },
-      refModel: "PaymentTransaction",
-      sort: { paidAt: 1, createdAt: 1 },
-      post: (d) => posting.postPayment(d, journal),
+  // 3) O'QUVCHI TO'LOVI (depozitdan qoplanganlar BUNDAN TASHQARI)
+  add(await runSource({
+    label: "payment",
+    rows: await prisma.paymentTransaction.findMany({
+      where: { isDeleted: false, source: { not: "deposit" } },
+      orderBy: byDate("paidAt"),
     }),
-  );
+    post: (d) => financialTx.postStudentPayment({ paymentTransactionId: d.id }, null),
+  }));
 
-  // ── 4) DEPOZITDAN QOPLASH (pul harakati yo'q) ──
-  results.push(
-    await runSource({
-      label: "Depozitdan qoplash",
-      model: PaymentTransaction,
-      filter: { source: "deposit", ...notDeleted, ...withBranch },
-      refModel: "PaymentTransaction",
-      kind: "deposit_apply",
-      sort: { paidAt: 1, createdAt: 1 },
-      post: (d) => posting.postDepositApply(d, journal),
+  // 4) DEPOZITDAN OYLIKKA QOPLASH
+  add(await runSource({
+    label: "deposit_apply",
+    rows: await prisma.paymentTransaction.findMany({
+      where: { isDeleted: false, source: "deposit" },
+      orderBy: byDate("paidAt"),
     }),
-  );
+    post: (d) => financialTx.postDepositApply({ paymentTransactionId: d.id }, null),
+  }));
 
-  // ── 5) CHIQIMLAR ──
-  results.push(
-    await runSource({
-      label: "Chiqimlar",
-      model: Expense,
-      filter: { ...notDeleted, ...withBranch },
-      refModel: "Expense",
-      sort: { spentAt: 1, createdAt: 1 },
-      post: (d) => posting.postExpense(d, journal),
+  // 5) CHIQIM (filialsizlar jurnalga tushmaydi — qarang postExpense)
+  add(await runSource({
+    label: "expense",
+    rows: await prisma.expense.findMany({
+      where: { isDeleted: false, branchId: { not: null } },
+      orderBy: byDate("spentAt"),
     }),
-  );
+    post: (d) => financialTx.postExpense({ expenseId: d.id }, null),
+  }));
 
-  // ── 6) O'QITUVCHI MAOSHI ──
-  results.push(
-    await runSource({
-      label: "O'qituvchi maoshi",
-      model: SalaryTransaction,
-      filter: { ...notDeleted, ...withBranch },
-      refModel: "SalaryTransaction",
-      sort: { paidAt: 1, createdAt: 1 },
-      post: (d) => posting.postSalary(d, journal, "SalaryTransaction"),
+  // 6) O'QITUVCHI MAOSHI
+  add(await runSource({
+    label: "salary_teacher",
+    rows: await prisma.salaryTransaction.findMany({
+      where: { isDeleted: false },
+      orderBy: byDate("paidAt"),
     }),
-  );
+    post: (d) => financialTx.postTeacherPayroll({ salaryTransactionId: d.id }, null),
+  }));
 
-  // ── 7) XODIM MAOSHI ──
-  results.push(
-    await runSource({
-      label: "Xodim maoshi",
-      model: StaffSalaryTransaction,
-      filter: { ...notDeleted, ...withBranch },
-      refModel: "StaffSalaryTransaction",
-      sort: { paidAt: 1, createdAt: 1 },
-      post: (d) => posting.postSalary(d, journal, "StaffSalaryTransaction"),
+  // 7) XODIM MAOSHI
+  add(await runSource({
+    label: "salary_staff",
+    rows: await prisma.staffSalaryTransaction.findMany({
+      where: { isDeleted: false },
+      orderBy: byDate("paidAt"),
     }),
-  );
+    post: (d) => financialTx.postStaffPayroll({ staffSalaryTransactionId: d.id }, null),
+  }));
 
-  const totalPosted = results.reduce((s, r) => s + r.posted, 0);
-  const totalFailed = results.reduce((s, r) => s + r.failed, 0);
-
-  logger.info(
-    `YAKUN: ${totalPosted} ta yozuv ${isDry ? "ko'chirilishi kerak" : "ko'chirildi"}` +
-      (totalFailed ? `, ${totalFailed} ta XATO` : ""),
-  );
+  logger.info(totals, "Jurnal backfill yakunlandi");
 
   if (!isDry) {
-    // Muvozanat va filiallararo tenglikni darhol tekshiramiz.
-    const rec = await journal.reconcile();
-    if (rec.ok) {
-      logger.info("Tekshiruv: jurnal muvozanatda, filiallararo balans teng");
-    } else {
-      logger.error(
-        {
-          unbalanced: rec.unbalancedEntries.length,
-          interBranch: rec.interBranch.mismatches,
-        },
-        "TEKSHIRUV YIQILDI - jurnalda nomuvozanat bor",
-      );
-    }
+    // TEKSHIRUV: ko'chirishdan keyin jurnal muvozanatda bo'lishi SHART.
+    const check = await journal.reconcile();
+    if (check.ok) logger.info("Tekshiruv: jurnal muvozanatda ✓");
+    else logger.error({ check }, "TEKSHIRUV YIQILDI — jurnal nomuvozanat");
   }
 
   await disconnectDB();
 };
 
-migrate().catch(async (err) => {
-  logger.error({ err }, "Backfill yiqildi");
-  try {
-    await disconnectDB();
-  } catch {
-    /* ulanmagan bo'lsa e'tiborsiz */
-  }
+seed().catch(async (err) => {
+  logger.error({ err }, "Jurnal backfill xatosi");
+  await disconnectDB();
   process.exit(1);
 });

@@ -1,0 +1,174 @@
+import prisma from "../../../config/prisma.js";
+import { Prisma } from "@prisma/client";
+import { parseRange, branchClause, autoGranularity, truncExpr } from "./analyticsFilter.js";
+import { n } from "./metrics.js";
+import { TREASURY_KINDS, FINANCING_ENTRY_KINDS } from "../../../constants/ledger.js";
+
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * PUL OQIMI (cash flow) — Faza 11
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * ── FOYDA ≠ PUL ──
+ * Bu hisobotning butun mavjudlik sababi shu. Ular boshqacha:
+ *   • qarzga o'qiyotgan o'quvchi FOYDA beradi, PUL bermaydi
+ *   • egasining investitsiyasi PUL beradi, FOYDA bermaydi
+ *   • depozitga qo'yilgan pul KASSAGA tushadi, lekin hali DAROMAD emas
+ * Shuning uchun pul oqimi FAQAT xazina hisoblari harakatidan
+ * hisoblanadi — daromad/xarajat hisoblariga umuman qaralmaydi.
+ *
+ * ── UCH BO'LIM ──
+ *   OPERATSION      — to'lov, depozit, chiqim, maosh
+ *   MOLIYALASHTIRISH — egasining puli (investitsiya / yechish)
+ *   ICHKI           — hisoblar/filiallar orasidagi ko'chirish
+ *
+ * Ichki ko'chirish YIG'INDIDA NOLGA teng bo'ladi (bir hisobdan chiqib,
+ * ikkinchisiga kiradi) — lekin ALOHIDA ko'rsatiladi, chunki bitta
+ * hisob kesimida u haqiqiy harakat.
+ */
+
+const TREASURY_FILTER = Prisma.sql`l."accountKind"::text IN (${Prisma.join(TREASURY_KINDS)})`;
+
+/** Berilgan sanagacha bo'lgan xazina qoldig'i. */
+const balanceAt = async (date, branchId, accountKind) => {
+  const bc = branchClause('e."branchId"', branchId);
+  const acc = accountKind
+    ? Prisma.sql`AND l."accountKind"::text = ${accountKind}`
+    : Prisma.empty;
+  const rows = await prisma.$queryRaw`
+    SELECT COALESCE(SUM(l.debit - l.credit), 0) AS balance
+    FROM journal_lines l
+    JOIN journal_entries e ON e.id = l."entryId"
+    WHERE ${TREASURY_FILTER} AND e.date < ${date} ${bc} ${acc}
+  `;
+  return n(rows[0]?.balance);
+};
+
+export const getCashFlow = async (filters = {}) => {
+  const range = parseRange(filters);
+  const branchId = filters.branchId || null;
+  const accountKind = filters.accountKind || null;
+  const bc = branchClause('e."branchId"', branchId);
+  const acc = accountKind ? Prisma.sql`AND l."accountKind"::text = ${accountKind}` : Prisma.empty;
+
+  const opening = await balanceAt(range.from, branchId, accountKind);
+
+  const rows = await prisma.$queryRaw`
+    SELECT e.kind::text AS "kind",
+      COALESCE(SUM(l.debit), 0)  AS "inflow",
+      COALESCE(SUM(l.credit), 0) AS "outflow"
+    FROM journal_lines l
+    JOIN journal_entries e ON e.id = l."entryId"
+    WHERE ${TREASURY_FILTER}
+      AND e.date >= ${range.from} AND e.date <= ${range.to}
+      ${bc} ${acc}
+    GROUP BY e.kind
+  `;
+
+  const FINANCING = new Set(FINANCING_ENTRY_KINDS);
+  const INTERNAL = new Set(["account_transfer", "transfer_send", "transfer_receive", "inter_branch"]);
+
+  const buckets = {
+    operating: { inflow: 0, outflow: 0, byKind: [] },
+    financing: { inflow: 0, outflow: 0, byKind: [] },
+    internal: { inflow: 0, outflow: 0, byKind: [] },
+  };
+  for (const r of rows) {
+    const inflow = n(r.inflow);
+    const outflow = n(r.outflow);
+    const bucket = FINANCING.has(r.kind) ? "financing" : INTERNAL.has(r.kind) ? "internal" : "operating";
+    buckets[bucket].inflow += inflow;
+    buckets[bucket].outflow += outflow;
+    buckets[bucket].byKind.push({ kind: r.kind, inflow, outflow, net: inflow - outflow });
+  }
+
+  const net = (b) => b.inflow - b.outflow;
+  const closing = opening + net(buckets.operating) + net(buckets.financing) + net(buckets.internal);
+
+  return {
+    period: { from: range.from, to: range.to },
+    accountKind: accountKind || "all",
+    openingBalance: opening,
+    operating: { ...buckets.operating, net: net(buckets.operating) },
+    financing: {
+      ...buckets.financing,
+      net: net(buckets.financing),
+      note: "Egasining puli — DAROMAD/XARAJAT EMAS (Faza 13)",
+    },
+    internal: {
+      ...buckets.internal,
+      net: net(buckets.internal),
+      note: "Ichki ko'chirish — umumiy qoldiqni o'zgartirmaydi",
+    },
+    netChange: closing - opening,
+    closingBalance: closing,
+  };
+};
+
+/** HISOB KESIMIDAGI QOLDIQLAR — "Kassa" ko'rinishi (Faza 3). */
+export const getAccountBalances = async (filters = {}) => {
+  const range = parseRange(filters);
+  const branchId = filters.branchId || null;
+  const bc = branchClause('e."branchId"', branchId);
+
+  const rows = await prisma.$queryRaw`
+    SELECT l."accountKind"::text AS "accountKind", e."branchId" AS "branchId",
+      COALESCE(SUM(CASE WHEN e.date <= ${range.to} THEN l.debit - l.credit ELSE 0 END), 0) AS "balance",
+      COALESCE(SUM(CASE WHEN e.date >= ${range.from} AND e.date <= ${range.to} THEN l.debit ELSE 0 END), 0) AS "inflow",
+      COALESCE(SUM(CASE WHEN e.date >= ${range.from} AND e.date <= ${range.to} THEN l.credit ELSE 0 END), 0) AS "outflow"
+    FROM journal_lines l
+    JOIN journal_entries e ON e.id = l."entryId"
+    WHERE ${TREASURY_FILTER} AND e.date <= ${range.to} ${bc}
+    GROUP BY l."accountKind", e."branchId"
+    ORDER BY "balance" DESC
+  `;
+
+  const branchIds = [...new Set(rows.map((r) => r.branchId).filter(Boolean))];
+  const branches = branchIds.length
+    ? await prisma.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true, name: true } })
+    : [];
+  const bn = new Map(branches.map((b) => [b.id, b.name]));
+
+  return rows.map((r) => ({
+    accountKind: r.accountKind,
+    branchId: r.branchId,
+    branchName: bn.get(String(r.branchId)) || "",
+    balance: n(r.balance),
+    inflow: n(r.inflow),
+    outflow: n(r.outflow),
+    periodChange: n(r.inflow) - n(r.outflow),
+  }));
+};
+
+/** PUL QOLDIG'I DINAMIKASI — davr ichidagi kunlik/oylik o'zgarish. */
+export const getCashTrend = async (filters = {}) => {
+  const range = parseRange(filters);
+  const granularity = filters.granularity || autoGranularity(range);
+  const branchId = filters.branchId || null;
+  const bc = branchClause('e."branchId"', branchId);
+  const bucket = truncExpr(granularity);
+
+  const opening = await balanceAt(range.from, branchId, null);
+  const rows = await prisma.$queryRaw`
+    SELECT ${bucket} AS "bucket",
+      COALESCE(SUM(l.debit - l.credit), 0) AS "change"
+    FROM journal_lines l
+    JOIN journal_entries e ON e.id = l."entryId"
+    WHERE ${TREASURY_FILTER} AND e.date >= ${range.from} AND e.date <= ${range.to} ${bc}
+    GROUP BY ${bucket}
+    ORDER BY "bucket" ASC
+  `;
+
+  // Yugurib boruvchi qoldiq JS'da — bu O(bucket) amal, O(qatorlar) emas
+  // (bucketlar soni ko'pi bilan bir necha o'nlab).
+  let running = opening;
+  return {
+    granularity,
+    openingBalance: opening,
+    points: rows.map((r) => {
+      const change = n(r.change);
+      running += change;
+      return { date: r.bucket, change, balance: running };
+    }),
+  };
+};

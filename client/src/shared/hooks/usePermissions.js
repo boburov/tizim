@@ -10,6 +10,22 @@ import useAuth from "@/shared/hooks/useAuth";
 // qilardi. Foydalanuvchi huquqi bor amalni bajara olmay qolardi.
 const PERMISSION_IMPLIES = {
   "leads.manage": ["leads.create", "leads.update"],
+
+  // ── MOLIYA KALITLARI QAYTA NOMLANGANDA ──
+  // Serverda `expenses.create` / `expenses.manage` `finance.*` nomlariga
+  // ko'chdi va eski kalitlar yangilarini QAMRAB oladi. Bu ro'yxat o'sha
+  // moslikni takrorlaydi — aks holda `expenses.create` bor xodimda
+  // "Chiqim qo'shish" tugmasi YASHIRINARDI, holbuki server so'rovni
+  // qabul qilardi.
+  "expenses.create": ["finance.create_expense"],
+  "expenses.manage": ["finance.manage_expense", "finance.create_expense"],
+  "finance.manage": ["finance.manage_accounts", "finance.manage_refunds"],
+  "finance.pay": ["finance.manage_transfers"],
+
+  // DIQQAT: `view_*` kalitlari ATAYLAB YO'Q. Serverda ham `finance.read`
+  // ularni qamramaydi (foydalilik maosh tannarxini ochadi). Bu yerga
+  // qo'shilsa client server RUXSAT BERMAYDIGAN bo'limni ko'rsatib,
+  // foydalanuvchini 403 ga olib borardi.
 };
 
 const usePermissions = () => {

@@ -42,7 +42,12 @@ export const record = async ({
   reason = "",
   actor = null,
   meta = {},
+  // Chaqiruvchi tranzaksiya ichida bo'lsa — o'sha tranzaksiyada yozamiz.
+  // Aks holda audit yozuvi kommit bo'lib, asosiy amal qaytarilishi
+  // mumkin edi: "to'landi" degan audit izi qolib, to'lovning o'zi yo'q.
+  tx = null,
 }) => {
+  const client = tx || prisma;
   try {
     const employeeId = toId(employee);
     if (!employeeId) {
@@ -52,7 +57,7 @@ export const record = async ({
       return null;
     }
 
-    return await prisma.payrollAuditLog.create({
+    return await client.payrollAuditLog.create({
       data: {
         employeeId,
         year,
@@ -76,6 +81,10 @@ export const record = async ({
     });
   } catch (err) {
     logger.warn({ err: err?.message, action }, "Audit yozuvini saqlab bo'lmadi");
+    // TRANZAKSIYA ICHIDA xato YUTILMAYDI. Prisma tranzaksiyasida
+    // yiqilgan so'rovdan keyin o'sha tranzaksiya baribir bekor
+    // qilinadi — "yutib" davom etish faqat chalkash xato beradi.
+    if (tx) throw err;
     return null;
   }
 };

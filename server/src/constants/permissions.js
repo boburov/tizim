@@ -142,6 +142,64 @@ export const PERMISSIONS = Object.freeze({
   // Kategoriyalarni boshqarish va chiqimni O'CHIRISH - kuchliroq huquq.
   EXPENSES_MANAGE: "expenses.manage",
 
+  // ══════════════════════════════════════════════════════════════════
+  // MOLIYA: GRANULYAR RUXSATLAR (STEP 5.1)
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // NEGA KERAK: `finance.read` juda keng edi — u bilan bir vaqtda
+  // to'lovlar ham, pul oqimi ham, foydalilik ham ochilardi. Foydalilik
+  // esa MAOSH ma'lumotini oshkor qiladi (o'qituvchi tannarxi), ya'ni
+  // "moliyani ko'rish" huquqi berilgan resepshin bexosdan hamma
+  // o'qituvchining maoshini ko'ra olardi.
+  //
+  // ── ESKI KALITLAR BILAN MOSLIK ──
+  // `expenses.create` / `expenses.manage` shu yerdagi yangi nomlarni
+  // QAMRAB OLADI (helpers/permission.helper.js → PERMISSION_IMPLIES),
+  // shuning uchun mavjud rollar buzilmaydi. Yangi marshrutlar esa
+  // yangi nomlarni talab qiladi.
+  //
+  // ── NEGA `view_*` LARGA MOSLIK BERILMAGAN ──
+  // Ular FAQAT yangi `/finance-analytics` marshrutlarini qo'riqlaydi —
+  // ular hali hech kimga ochilmagan, ya'ni hech kim huquqini
+  // yo'qotmaydi. `finance.read` ularni QAMRAMAYDI: aks holda yangi
+  // kalitlar bezak bo'lib qolardi va ajratishning ma'nosi yo'qolardi.
+
+  // Chiqim yozish va boshqarish (eski `expenses.*` ning yangi nomi).
+  FINANCE_CREATE_EXPENSE: "finance.create_expense",
+  FINANCE_MANAGE_EXPENSE: "finance.manage_expense",
+
+  // Moliyaviy hisoblar (kassa, bank, Click...) - ochish, nomlash,
+  // boshlang'ich qoldiq belgilash.
+  FINANCE_MANAGE_ACCOUNTS: "finance.manage_accounts",
+
+  // QAYTARIM - kassadan pul chiqaradi, shuning uchun chiqim yozishdan
+  // ALOHIDA: chiqim yozadigan xo'jalik mudiri o'quvchiga pul qaytarish
+  // huquqini avtomatik OLMASLIGI kerak.
+  FINANCE_MANAGE_REFUNDS: "finance.manage_refunds",
+
+  // O'TKAZMA - hisoblar orasida va filiallararo inkassatsiya.
+  FINANCE_MANAGE_TRANSFERS: "finance.manage_transfers",
+
+  // ⚠ ENG SEZGIR: foydalilik tahlili MAOSH tannarxini ko'rsatadi
+  // (o'qituvchi/guruh/yo'nalish kesimida). `finance.read` uni
+  // QAMRAMAYDI - ataylab.
+  FINANCE_VIEW_PROFITABILITY: "finance.view_profitability",
+
+  // Pul oqimi va kassa qoldiqlari.
+  FINANCE_VIEW_CASHFLOW: "finance.view_cashflow",
+
+  // O'quvchi qarzlari va undirish darajasi.
+  FINANCE_VIEW_RECEIVABLES: "finance.view_receivables",
+
+  // BYUDJET — REJA ma'lumoti, jurnalga YOZILMAYDI.
+  //
+  // KO'RISH `finance.read` ostida qoladi (byudjet/fakt taqqoslash
+  // umumiy moliyaviy manzaraning bir qismi), BOSHQARISH esa alohida:
+  // byudjetni o'zgartirish "biz rejani bajardikmi?" degan savolning
+  // javobini qayta yozadi. Undan oshib ketgan xarajatni ko'rgan odam
+  // rejani ko'tarib qo'yishi mumkin edi va chetlanish yo'qolardi.
+  FINANCE_MANAGE_BUDGETS: "finance.manage_budgets",
+
   // Chiqim tasdig'i (limitdan oshgan to'lovlar).
   // FINANCE_APPROVE - tasdiqlash/rad etish huquqi. Bu ruxsat egasi limitdan
   // ham OZOD bo'ladi (u baribir o'zi tasdiqlay olardi).
@@ -341,6 +399,42 @@ export const PERMISSION_LABELS = {
   },
   [PERMISSIONS.FINANCE_APPROVE]: {
     label: "Chiqimni tasdiqlash",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_CREATE_EXPENSE]: {
+    label: "Chiqim yozish",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_MANAGE_EXPENSE]: {
+    label: "Chiqimni boshqarish (kategoriya, o'chirish)",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_MANAGE_ACCOUNTS]: {
+    label: "Moliyaviy hisoblarni boshqarish",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_MANAGE_REFUNDS]: {
+    label: "Qaytarimlarni boshqarish",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_MANAGE_TRANSFERS]: {
+    label: "O'tkazma va inkassatsiya",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_VIEW_PROFITABILITY]: {
+    label: "Foydalilik tahlili (maosh tannarxini ko'rsatadi)",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_VIEW_CASHFLOW]: {
+    label: "Pul oqimi va kassa qoldiqlari",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_VIEW_RECEIVABLES]: {
+    label: "Qarzdorlik va undirish tahlili",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_MANAGE_BUDGETS]: {
+    label: "Byudjetni boshqarish",
     group: "finance",
   },
   [PERMISSIONS.APPROVALS_DECIDE_CONFIG]: {

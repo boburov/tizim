@@ -15,8 +15,8 @@ import {
   createRequest,
 } from "../../expenseApprovals/services/expenseApproval.service.js";
 import * as studentPaymentService from "../../finance/services/studentPayment.service.js";
-import * as journalPosting from "../../../helpers/journalPosting.helper.js";
-import * as journal from "../../journal/services/journal.service.js";
+import * as financialTx from "../../finance/services/financialTransaction.service.js";
+import { runFinanceTxn } from "../../finance/services/financeTxn.helper.js";
 
 // ═══════════════════════════════════════════════════════════════════════
 // O'QUVCHI DEPOZITI (oldindan to'lov / garov).
@@ -52,10 +52,21 @@ const SAFE_STUDENT_SELECT = {
 };
 
 const db = (tx) => tx || prisma;
+
+// Chaqiruvchi ochiq tranzaksiya bersa — UNGA QO'SHILAMIZ, aks holda o'zimiz
+// ochamiz.
+//
+// NEGA MUHIM: Prisma'da ICHMA-ICH interaktiv tranzaksiya YO'Q. Ochiq
+// tranzaksiya ichida `prisma.$transaction()` chaqirilsa u ALOHIDA
+// ulanishda, ALOHIDA tranzaksiya bo'lib ochiladi — ya'ni tashqi amal
+// qaytarilsa ichkisi KOMMIT bo'lgancha qolardi (aynan biz yopmoqchi
+// bo'lgan tuynuk), ustiga ikkalasi bir xil qatorni qulflasa
+// o'z-o'zini bloklab qo'yardi.
+const withTxn = (tx, work) => (tx ? work(tx) : runFinanceTxn(work));
 const actorId = (u) => u?.id || u?._id || null;
 
-const ensureStudent = async (studentId) => {
-  const student = await prisma.user.findFirst({
+const ensureStudent = async (studentId, { tx } = {}) => {
+  const student = await db(tx).user.findFirst({
     where: { id: String(studentId), role: ROLES.STUDENT, isDeleted: false },
     select: { id: true, firstName: true, lastName: true, homeBranchId: true },
   });
@@ -68,14 +79,41 @@ const ensureStudent = async (studentId) => {
 export const getOrCreate = async (student, { tx } = {}) => {
   const studentId = String(student);
   const client = db(tx);
-  // `studentId` unique bo'lgani uchun upsert POYGAGA CHIDAMLI:
-  // findFirst → create ketma-ketligi ikki parallel to'ldirishda
-  // ikkita hisob yaratib, balansni bo'lib yuborardi.
-  return client.studentDeposit.upsert({
-    where: { studentId },
-    create: { studentId, balance: 0 },
-    update: {},
-  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // POYGAGA CHIDAMLI YARATISH — VA NEGA `catch (P2002)` YETARLI EMAS
+  // ═══════════════════════════════════════════════════════════════════
+  //
+  // Ilgari bu yerda `upsert` turardi, keyin unga `catch (P2002) → qayta
+  // o'qish` qo'shildi. Tranzaksiyadan TASHQARIDA bu ishlaydi.
+  // TRANZAKSIYA ICHIDA esa ISHLAMAYDI:
+  //
+  //   PostgreSQL'da tranzaksiya ichidagi HAR QANDAY xato butun
+  //   tranzaksiyani ABORT holatiga o'tkazadi. Undan keyingi har bir
+  //   so'rov "current transaction is aborted" bilan rad etiladi —
+  //   ya'ni `catch` ichidagi qayta o'qish ham YIQILADI.
+  //
+  // Aynan shu ko'rindi: to'lov butunlay bitta tranzaksiyaga
+  // ko'chirilgach, 10 ta parallel to'lovdan bittasi
+  // `PrismaClientUnknownRequestError: studentDeposit.findUnique()`
+  // bilan rad etila boshladi. Pul yo'qolmasdi (tranzaksiya to'liq
+  // qaytardi), lekin so'rov bekorga yiqilardi.
+  //
+  // TO'G'RI YECHIM — xatoni USHLASH emas, UMUMAN CHIQARMASLIK:
+  // `ON CONFLICT DO NOTHING` to'qnashuvni XATOSIZ hal qiladi, ya'ni
+  // tranzaksiya SOG'LOM qoladi. Parallel yozuv hali kommit bo'lmagan
+  // bo'lsa, INSERT uni KUTADI va keyin hech narsa qilmaydi; keyingi
+  // SELECT esa (READ COMMITTED) allaqachon kommit bo'lgan qatorni
+  // ko'radi.
+  //
+  // `updatedAt` OCHIQ berilishi shart: u Prisma tomonidagi `@updatedAt`
+  // bo'lgani uchun bazada DEFAULT'i YO'Q (createdAt'dan farqli).
+  await client.$executeRaw`
+    INSERT INTO "student_deposits" ("studentId", "balance", "createdAt", "updatedAt")
+    VALUES (${studentId}, 0, NOW(), NOW())
+    ON CONFLICT ("studentId") DO NOTHING
+  `;
+  return client.studentDeposit.findUnique({ where: { studentId } });
 };
 
 export const balanceFor = async (student) => {
@@ -99,10 +137,10 @@ const applyBalanceDelta = async (depositId, delta, { tx } = {}) => {
   if (d < 0) {
     const rows = await client.$queryRaw`
       UPDATE "student_deposits"
-      SET "balance" = "balance" + ${d}::double precision,
+      SET "balance" = "balance" + ${d}::numeric,
           "updatedAt" = NOW()
       WHERE "id" = ${id}
-        AND "balance" >= ${-d}::double precision
+        AND "balance" >= ${-d}::numeric
       RETURNING "id", "studentId", "balance"
     `;
     return rows.length ? rows[0] : null;
@@ -125,9 +163,10 @@ export const topup = async (
   studentId,
   { amount, method, paidAt, note, isOpening = false },
   currentUser,
+  { tx: outerTx } = {},
 ) => {
   // FILIAL: o'quvchining filiali (ensureStudent allaqachon yozuvni oladi).
-  const student = await ensureStudent(studentId);
+  const student = await ensureStudent(studentId, { tx: outerTx });
   const amt = Number(amount);
   if (!amt || amt <= 0) throw new ApiError(400, "Summa noto'g'ri");
   const day = paidAt ? parseLocalDay(paidAt) : localTodayMidnight();
@@ -136,33 +175,41 @@ export const topup = async (
     throw new ApiError(400, "Sana kelajakda bo'lishi mumkin emas");
   }
 
-  const deposit = await getOrCreate(student.id);
-  const updated = await applyBalanceDelta(deposit.id, amt);
-  const txn = await prisma.depositTransaction.create({
-    data: {
-      branchId: student.homeBranchId || null,
-      studentId: deposit.studentId,
-      depositId: deposit.id,
-      type: "topup",
-      amount: amt,
-      method: method || "cash",
-      balanceAfter: updated.balance,
-      note: note || "",
-      isOpening: Boolean(isOpening),
-      paidAt: day,
-      createdById: actorId(currentUser),
-    },
-  });
-
+  const deposit = await getOrCreate(student.id, { tx: outerTx });
+  // ── ATOMIK: balans + tranzaksiya + jurnal + audit ──
   // JURNAL: pul kassaga kirdi, lekin DAROMAD EMAS - o'quvchining
   // depoziti (majburiyat). Qarang constants/ledger.js DEPOSIT izohi.
-  await journalPosting.postDepositTopup(txn, journal);
+  const txn = await withTxn(outerTx, async (tx) => {
+    const updated = await applyBalanceDelta(deposit.id, amt, { tx });
+    const row = await tx.depositTransaction.create({
+      data: {
+        branchId: student.homeBranchId || null,
+        studentId: deposit.studentId,
+        depositId: deposit.id,
+        type: "topup",
+        amount: amt,
+        method: method || "cash",
+        balanceAfter: updated.balance,
+        note: note || "",
+        isOpening: Boolean(isOpening),
+        paidAt: day,
+        createdById: actorId(currentUser),
+      },
+    });
+    await financialTx.postDepositTopup(
+      { depositTransactionId: row.id },
+      currentUser,
+      { tx },
+    );
+    return row;
+  });
 
   // Pul qo'yilishi bilan mavjud qarzlarni darhol qoplaymiz (eng eskisidan).
-  await autoApply(student.id);
+  // TASHQI TRANZAKSIYA bo'lsa — o'sha tranzaksiyada.
+  await autoApply(student.id, currentUser, { tx: outerTx });
   // txn - chaqiruvchi audit izini yozishi uchun (openingBalance.service.js
   // materializedRefs). Depozit yozuvi esa avvalgidek qaytadi.
-  const fresh = await getOrCreate(student.id);
+  const fresh = await getOrCreate(student.id, { tx: outerTx });
   const out = withLegacyId(fresh);
   out.$lastTransactionId = txn.id;
   return out;
@@ -194,12 +241,18 @@ const writeWithdraw = async ({
   expenseApprovalId = null,
 }) => {
   const deposit = await getOrCreate(studentId);
-  const updated = await applyBalanceDelta(deposit.id, -amt);
-  if (!updated) {
-    throw new ApiError(400, `To'lovda yetarli mablag' yo'q (balans: ${deposit.balance} so'm)`);
-  }
-  try {
-    const txn = await prisma.depositTransaction.create({
+  // ── ATOMIK: qo'lda rollback O'RNIGA tranzaksiya ──
+  // Ilgari balans kamaytirilib, xato bo'lsa `catch` da qaytarilardi;
+  // qaytarishning o'zi yiqilsa o'quvchining puli yo'qolgandek qolardi.
+  await runFinanceTxn(async (tx) => {
+    const updated = await applyBalanceDelta(deposit.id, -amt, { tx });
+    if (!updated) {
+      throw new ApiError(
+        400,
+        `To'lovda yetarli mablag' yo'q (balans: ${deposit.balance} so'm)`,
+      );
+    }
+    const row = await tx.depositTransaction.create({
       data: {
         branchId: student.homeBranchId || null,
         studentId: deposit.studentId,
@@ -216,12 +269,13 @@ const writeWithdraw = async ({
     });
 
     // JURNAL: majburiyat kamaydi, pul kassadan chiqdi.
-    await journalPosting.postDepositWithdraw(txn, journal);
-  } catch (err) {
-    // Yozuv yaratilmasa balans kamaytirilgancha qolmasin (rollback).
-    await applyBalanceDelta(deposit.id, amt);
-    throw err;
-  }
+    await financialTx.postDepositWithdraw(
+      { depositTransactionId: row.id },
+      createdBy ? { id: createdBy } : null,
+      { tx },
+    );
+    return row;
+  });
   return withLegacyId(await getOrCreate(studentId));
 };
 
@@ -310,26 +364,27 @@ export const executeApprovedWithdraw = async (approval) => {
 // Bitta planga depozitdan `amount` qoplaydi: plan.paidAmount += (cap qoldiqqacha) +
 // balans -= + PaymentTransaction(source:"deposit", DAROMAD). Haqiqatda qo'llangan
 // summani qaytaradi (cap tufayli kamroq bo'lishi mumkin).
-const applyToPayment = async (deposit, payment, amount, currentUser) => {
+const applyToPayment = async (deposit, payment, amount, currentUser, { tx: outerTx } = {}) => {
   const remaining = Math.max(0, (payment.expectedAmount || 0) - (payment.paidAmount || 0));
   const amt = Math.min(amount, remaining);
   if (amt <= 0) return 0;
 
-  // Avval balansni atomik kamaytiramiz (yetmasa null).
-  const balUpd = await applyBalanceDelta(deposit.id, -amt);
-  if (!balUpd) return 0;
+  // ── ATOMIK: depozit balansi + plan balansi + tranzaksiya + jurnal ──
+  //
+  // Bu eng ko'p bosqichli amal edi va rollback IKKI POG'ONALI edi
+  // (avval plan, keyin balans). Ikkalasidan biri yiqilsa pul yarim
+  // holatda qolardi. Endi bitta tranzaksiya.
+  const done = await withTxn(outerTx, async (tx) => {
+    const balUpd = await applyBalanceDelta(deposit.id, -amt, { tx });
+    if (!balUpd) return 0;
 
-  // Planga qo'llaymiz (cap qoldiqqacha). Agar muvaffaqiyatsiz bo'lsa balansni qaytaramiz.
-  const planUpd = await studentPaymentService.applyPaidDelta(payment.id, amt, {
-    capToRemaining: true,
-  });
-  if (!planUpd) {
-    await applyBalanceDelta(deposit.id, amt); // rollback
-    return 0;
-  }
+    const planUpd = await studentPaymentService.applyPaidDelta(payment.id, amt, {
+      capToRemaining: true,
+      tx,
+    });
+    if (!planUpd) return 0;
 
-  try {
-    const applied = await prisma.paymentTransaction.create({
+    const applied = await tx.paymentTransaction.create({
       data: {
         // FILIAL: oylik plandan meros.
         branchId: payment.branchId,
@@ -349,14 +404,16 @@ const applyToPayment = async (deposit, payment, amount, currentUser) => {
 
     // JURNAL: PUL HARAKATI YO'Q - depozit majburiyati daromadga
     // aylanadi. Kassa qoldig'i o'zgarmaydi (pul to'ldirishda kirgan).
-    await journalPosting.postDepositApply(applied, journal);
-  } catch (err) {
-    // Tranzaksiya yozilmasa - plan va balansni qaytaramiz.
-    await studentPaymentService.applyPaidDelta(payment.id, -amt);
-    await applyBalanceDelta(deposit.id, amt);
-    throw err;
-  }
-  return amt;
+    await financialTx.postDepositApply(
+      { paymentTransactionId: applied.id },
+      currentUser,
+      { tx },
+    );
+    return amt;
+  });
+  // 0 → parallel so'rov ulgurdi yoki mablag' yetmadi (tranzaksiya
+  // hech narsa yozmadi, qaytarish shart emas).
+  return done;
 };
 
 // Qoldiq (expected>paid) planlar sharti - ustunni ustunga solishtirish.
@@ -365,13 +422,18 @@ const OUTSTANDING = {
 };
 
 // O'quvchi depozitidan barcha qoldiq planlarni ENG ESKISIDAN boshlab qoplaydi.
-export const autoApply = async (studentId, currentUser) => {
-  const deposit = await getOrCreate(studentId);
+export const autoApply = async (studentId, currentUser, { tx } = {}) => {
+  const client = db(tx);
+  const deposit = await getOrCreate(studentId, { tx });
   if ((deposit.balance || 0) <= 0) return { applied: 0 };
 
   // Qoldiq planlar, eng eski oy avval. Yomon qarz (write-off) yopilgan -
   // depozitdan qoplanmaydi.
-  const plans = await prisma.studentPayment.findMany({
+  //
+  // TARTIB QAT'IY (year, month, createdAt): qulflash tartibi barcha
+  // parallel so'rovlarda BIR XIL bo'lishi kerak, aks holda ikki so'rov
+  // bir-birining qatorini kutib qolishi (deadlock) mumkin edi.
+  const plans = await client.studentPayment.findMany({
     where: { studentId: deposit.studentId, writtenOff: false, ...OUTSTANDING },
     orderBy: [{ year: "asc" }, { month: "asc" }, { createdAt: "asc" }],
   });
@@ -379,10 +441,10 @@ export const autoApply = async (studentId, currentUser) => {
   let applied = 0;
   for (const plan of plans) {
     // eslint-disable-next-line no-await-in-loop
-    const fresh = await prisma.studentDeposit.findUnique({ where: { id: deposit.id } });
+    const fresh = await client.studentDeposit.findUnique({ where: { id: deposit.id } });
     if ((fresh?.balance || 0) <= 0) break;
     // eslint-disable-next-line no-await-in-loop
-    const used = await applyToPayment(fresh, plan, fresh.balance, currentUser);
+    const used = await applyToPayment(fresh, plan, fresh.balance, currentUser, { tx });
     applied += used;
   }
   return { applied };

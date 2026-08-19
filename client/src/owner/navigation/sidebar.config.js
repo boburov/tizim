@@ -132,6 +132,15 @@ const ownerSidebar = [
     icon: Wallet,
     isActive: true,
     items: [
+      // BOSHQARUV MARKAZI birinchi o'rinda: u "pul qayerda, foyda
+      // qayerda, nimaga e'tibor kerak" savollarining boshlang'ich
+      // nuqtasi. Eski hisobot sahifasi ostida qoladi — undagi
+      // tafsilotlar (write-off, guruh kesimi) hali ko'chirilmagan.
+      {
+        title: "Boshqaruv markazi",
+        url: "/owner/finance",
+        permission: "finance.read",
+      },
       {
         title: "Hisobot & statistika",
         url: "/owner/finance/accounting",

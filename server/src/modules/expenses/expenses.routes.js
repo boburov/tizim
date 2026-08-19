@@ -41,21 +41,21 @@ router.get(
 router.post(
   "/categories",
   requireAuth,
-  requirePermission(PERMISSIONS.EXPENSES_MANAGE),
+  requirePermission(PERMISSIONS.FINANCE_MANAGE_EXPENSE),
   validate(categoryCreateSchema),
   categoryCreate,
 );
 router.patch(
   "/categories/:id",
   requireAuth,
-  requirePermission(PERMISSIONS.EXPENSES_MANAGE),
+  requirePermission(PERMISSIONS.FINANCE_MANAGE_EXPENSE),
   validate(categoryUpdateSchema),
   categoryUpdate,
 );
 router.delete(
   "/categories/:id",
   requireAuth,
-  requirePermission(PERMISSIONS.EXPENSES_MANAGE),
+  requirePermission(PERMISSIONS.FINANCE_MANAGE_EXPENSE),
   validate(idParamSchema),
   categoryRemove,
 );
@@ -80,7 +80,7 @@ router.get(
 router.post(
   "/",
   requireAuth,
-  requirePermission(PERMISSIONS.EXPENSES_CREATE),
+  requirePermission(PERMISSIONS.FINANCE_CREATE_EXPENSE),
   validate(createSchema),
   create,
 );
@@ -94,14 +94,14 @@ router.get(
 router.patch(
   "/:id",
   requireAuth,
-  requirePermission(PERMISSIONS.EXPENSES_CREATE),
+  requirePermission(PERMISSIONS.FINANCE_CREATE_EXPENSE),
   validate(updateSchema),
   update,
 );
 router.delete(
   "/:id",
   requireAuth,
-  requirePermission(PERMISSIONS.EXPENSES_MANAGE),
+  requirePermission(PERMISSIONS.FINANCE_MANAGE_EXPENSE),
   validate(idParamSchema),
   remove,
 );

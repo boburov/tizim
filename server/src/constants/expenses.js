@@ -11,7 +11,43 @@
  * va Postgres uni enum xatosi bilan rad etadi - foydalanuvchi esa
  * tushunarsiz 500 ko'radi.
  */
-export const EXPENSE_METHODS = ["cash", "card", "bank", "transfer"];
+// FAZA 3: raqamli kanallar qo'shildi (schema.prisma, enum ExpenseMethod).
+// Chiqim ham Click/Payme orqali to'lanishi mumkin (obuna, reklama).
+export const EXPENSE_METHODS = [
+  "cash",
+  "card",
+  "bank",
+  "transfer",
+  "click",
+  "payme",
+  "uzcard",
+  "humo",
+  "terminal",
+];
+
+// FAZA 8: DOIMIY / O'ZGARUVCHAN xarajat (schema.prisma, enum CostType).
+//
+// `EXPENSE_CATEGORY_KINDS` dan BOSHQA O'Q: u "bu qanday xarajat"
+// (operating/payroll/tax/capital), bu esa "u hajm bilan o'sadimi".
+// Ijara ham, o'qituvchi foizi ham `operating` bo'lishi mumkin, lekin
+// biri o'quvchilar soniga bog'liq emas, ikkinchisi bevosita bog'liq.
+export const COST_TYPES = ["fixed", "variable"];
+
+// FAZA 9: takrorlanish oralig'i (schema.prisma, enum RecurringInterval).
+export const RECURRING_INTERVALS = [
+  "daily",
+  "weekly",
+  "monthly",
+  "quarterly",
+  "yearly",
+];
+
+export const RECURRING_OCCURRENCE_STATUSES = [
+  "pending",
+  "paid",
+  "skipped",
+  "canceled",
+];
 export const EXPENSE_CURRENCIES = ["UZS", "USD"];
 export const EXPENSE_ALLOCATIONS = ["none", "revenue", "students", "equal"];
 export const EXPENSE_CATEGORY_KINDS = ["operating", "payroll", "tax", "capital"];

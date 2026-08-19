@@ -54,24 +54,53 @@ import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
  */
 export const ensureAccount = async (branchId, kind, counterpartyBranchId = null, tx) => {
   const client = tx || prisma;
-  const query = {
-    branchId: String(branchId),
-    kind,
-    counterpartyBranchId: counterpartyBranchId ? String(counterpartyBranchId) : null,
-  };
+  const bid = String(branchId);
+  const cp = counterpartyBranchId ? String(counterpartyBranchId) : null;
+  const query = { branchId: bid, kind, counterpartyBranchId: cp };
 
   const existing = await client.account.findFirst({ where: query });
   if (existing) return existing;
 
-  try {
-    return await client.account.create({ data: query });
-  } catch (err) {
-    if (err?.code === "P2002") {
-      const raced = await client.account.findFirst({ where: query });
-      if (raced) return raced;
-    }
-    throw err;
+  // ═══════════════════════════════════════════════════════════════════
+  // POYGA: `catch (P2002)` TRANZAKSIYA ICHIDA ISHLAMAYDI
+  // ═══════════════════════════════════════════════════════════════════
+  //
+  // Ilgari bu yerda `create()` va to'qnashuvda `catch (P2002) → qayta
+  // o'qish` turardi. Tranzaksiyadan tashqarida bu to'g'ri, ICHIDA esa
+  // yo'q: PostgreSQL'da tranzaksiya ichidagi xato butun tranzaksiyani
+  // ABORT qiladi va `catch` ichidagi qayta o'qish ham yiqiladi.
+  //
+  // Bu STEP 4 dan keyin real xavfga aylandi: endi to'lov, chiqim va
+  // maosh BITTA tranzaksiyada yoziladi, hisoblar esa TALAB BO'YICHA
+  // yaratiladi. Ya'ni filialdagi ENG BIRINCHI parallel to'lovlar
+  // aynan shu yerda to'qnashardi.
+  //
+  // `ON CONFLICT DO NOTHING` xato CHIQARMAYDI — tranzaksiya sog'lom
+  // qoladi. Qisman (partial) unique indeks bo'lgani uchun `WHERE`
+  // sharti indeksdagi bilan AYNAN bir xil yozilishi shart, aks holda
+  // Postgres indeksni taniy olmaydi.
+  // Qarang: migrations/20260815200910_partial_unique_indexes.
+  if (cp) {
+    await client.$executeRaw`
+      INSERT INTO "accounts" ("branchId", "kind", "counterpartyBranchId", "createdAt", "updatedAt")
+      VALUES (${bid}, ${kind}::"AccountKind", ${cp}, NOW(), NOW())
+      ON CONFLICT ("branchId", "kind", "counterpartyBranchId")
+        WHERE "counterpartyBranchId" IS NOT NULL
+        DO NOTHING
+    `;
+  } else {
+    await client.$executeRaw`
+      INSERT INTO "accounts" ("branchId", "kind", "createdAt", "updatedAt")
+      VALUES (${bid}, ${kind}::"AccountKind", NOW(), NOW())
+      ON CONFLICT ("branchId", "kind")
+        WHERE "counterpartyBranchId" IS NULL
+        DO NOTHING
+    `;
   }
+
+  const account = await client.account.findFirst({ where: query });
+  if (!account) throw new ApiError(500, `Hisob yaratilmadi: ${kind}`);
+  return account;
 };
 
 /**
@@ -102,6 +131,17 @@ export const post = async ({
   counterpartyBranchId = null,
   createdBy = null,
   tx = null,
+  // ── STEP 4 da qo'shildi ──
+  // `postingKey` — idempotentlik kaliti (DB darajasida unique).
+  // `dimensions`  — o'lchovlar (studentId, teacherId, courseId...).
+  //
+  // IKKALASI HAM IXTIYORIY: mavjud chaqiruvchilar (smena yopilishi,
+  // o'quvchini ko'chirish) ularni bermaydi va avvalgidek ishlaydi.
+  // O'lchovlarni SHU YERDA qabul qilish — ataylab: muvozanat tekshiruvi
+  // ham, o'lchov yozuvi ham bitta `create` ichida bo'lsin, ya'ni
+  // "o'lchovsiz yozib qo'yish" uchun yon yo'l qolmasin.
+  postingKey = null,
+  dimensions = null,
 }) => {
   if (!branchId) throw new ApiError(400, "Jurnal yozuvi uchun filial kerak");
   if (!Array.isArray(lines) || lines.length < 2) {
@@ -172,12 +212,16 @@ export const post = async ({
       memo,
       refModel,
       refId: refId ? String(refId) : null,
+      postingKey: postingKey || null,
       isInternal,
       counterpartyBranchId: counterpartyBranchId ? String(counterpartyBranchId) : null,
       totalDebit,
       totalCredit,
       // Chaqiruvchilar `createdBy` nomi bilan uzatadi; ustun `createdById`.
       createdById: createdBy ? String(createdBy) : null,
+      // O'LCHOVLAR (STEP 4). Ular `financialTransaction.service.js` da
+      // MANBA HUJJATDAN aniqlanadi, chaqiruvchi qo'lidan emas.
+      ...(dimensions || {}),
       // Sarlavha va qatorlar BITTA amalda - yarim yozuv bo'lishi mumkin emas.
       lines: { create: resolved },
     },
@@ -185,6 +229,45 @@ export const post = async ({
   });
 
   return withLegacyId(entry);
+};
+
+/**
+ * IDEMPOTENT YOZISH — `postingKey` bo'yicha.
+ *
+ * Takroriy urinishda (webhook qayta yuborilishi, cron retry, double-click)
+ * YANGI yozuv yaratilmaydi: mavjudi qaytariladi. Poyga himoyasi DB
+ * darajasida — ikki so'rov bir vaqtda kelsa unique indeks ikkinchisini
+ * P2002 bilan rad etadi va biz o'shanda mavjudini o'qiymiz.
+ *
+ * NEGA XATO QAYTARILMAYDI: chaqiruvchi uchun "allaqachon yozilgan" —
+ * MUVAFFAQIYAT. Retry mexanizmi xato ko'rsa yana urinardi va cheksiz
+ * halqa hosil bo'lardi.
+ *
+ * @returns {{entry: object, duplicate: boolean}}
+ */
+export const postIdempotent = async (args) => {
+  const { postingKey, tx } = args;
+  if (!postingKey) throw new ApiError(400, "postingKey berilishi shart");
+  const client = tx || prisma;
+
+  const existing = await client.journalEntry.findUnique({
+    where: { postingKey },
+    include: { lines: true },
+  });
+  if (existing) return { entry: withLegacyId(existing), duplicate: true };
+
+  try {
+    return { entry: await post(args), duplicate: false };
+  } catch (err) {
+    if (err?.code === "P2002") {
+      const raced = await client.journalEntry.findUnique({
+        where: { postingKey },
+        include: { lines: true },
+      });
+      if (raced) return { entry: withLegacyId(raced), duplicate: true };
+    }
+    throw err;
+  }
 };
 
 /**

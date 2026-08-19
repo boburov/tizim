@@ -10,8 +10,8 @@ import {
 } from "../../expenseApprovals/services/expenseApproval.service.js";
 import * as payrollService from "./staffPayroll.service.js";
 import * as auditService from "./payrollAudit.service.js";
-import * as journalPosting from "../../../helpers/journalPosting.helper.js";
-import * as journal from "../../journal/services/journal.service.js";
+import * as financialTx from "../../finance/services/financialTransaction.service.js";
+import { runFinanceTxn } from "../../finance/services/financeTxn.helper.js";
 
 /**
  * XODIMGA MAOSH TO'LASH.
@@ -60,22 +60,26 @@ const writeTransaction = async ({
   createdBy,
   expenseApprovalId = null,
 }) => {
-  const updated = await payrollService.applyPaidDelta(payroll.id, amount, {
-    capToRemaining: true,
-  });
-  if (!updated) {
-    const remaining = Math.max(
-      0,
-      (payroll.finalAmount || 0) - (payroll.paidAmount || 0),
-    );
-    throw new ApiError(
-      400,
-      `To'lov qoldiqdan oshib ketadi (qoldiq: ${remaining} so'm)`,
-    );
-  }
+  // ── ATOMIK (o'qituvchi maoshi bilan bir xil sabab) ──
+  // Balans, tranzaksiya, jurnal, moliyaviy audit va payroll auditi —
+  // hammasi bitta tranzaksiyada. Ilgari rollback qo'lda edi.
+  const created = await runFinanceTxn(async (tx) => {
+    const updated = await payrollService.applyPaidDelta(payroll.id, amount, {
+      capToRemaining: true,
+      tx,
+    });
+    if (!updated) {
+      const remaining = Math.max(
+        0,
+        (payroll.finalAmount || 0) - (payroll.paidAmount || 0),
+      );
+      throw new ApiError(
+        400,
+        `To'lov qoldiqdan oshib ketadi (qoldiq: ${remaining} so'm)`,
+      );
+    }
 
-  try {
-    const created = await prisma.staffSalaryTransaction.create({
+    const row = await tx.staffSalaryTransaction.create({
       data: {
         branchId: payroll.branchId,
         payrollId: payroll.id,
@@ -91,29 +95,35 @@ const writeTransaction = async ({
       },
     });
 
-    // JURNAL: xodim maoshi ham xarajat (o'qituvchinikidan farqi -
-    // boshqa modelda saqlanadi, shuning uchun refModel boshqa).
-    await journalPosting.postSalary(created, journal, "StaffSalaryTransaction");
+    await financialTx.postStaffPayroll(
+      { staffSalaryTransactionId: row.id },
+      createdBy ? { id: createdBy } : null,
+      { tx },
+    );
 
+    // PAYROLL AUDITI HAM SHU TRANZAKSIYADA.
+    //
+    // Ilgari u jurnal yozuvidan keyin, lekin `catch` ichida edi — ya'ni
+    // audit yiqilsa balans qaytarilardi. Endi u tranzaksiyaning bir
+    // qismi: maosh to'lovi AUDIT IZISIZ qolishi mumkin emas.
     await auditService.record({
       employee: payroll.employeeId,
       year: payroll.year,
       month: payroll.month,
       action: auditService.PAYROLL_AUDIT_ACTIONS.PAID,
       targetType: "staffSalaryTransaction",
-      targetId: created.id,
+      targetId: row.id,
       oldValue: { paidAmount: payroll.paidAmount || 0 },
       newValue: { paidAmount: (payroll.paidAmount || 0) + amount, amount, method },
       reason: note || "",
       actor: createdBy ? { id: createdBy, _id: createdBy } : null,
+      tx,
     });
 
-    return withLegacyId(created);
-  } catch (err) {
-    // Yozuv o'tmadi - band qilingan balansni qaytaramiz.
-    await payrollService.applyPaidDelta(payroll.id, -amount);
-    throw err;
-  }
+    return row;
+  });
+
+  return withLegacyId(created);
 };
 
 export const create = async (body, currentUser) => {

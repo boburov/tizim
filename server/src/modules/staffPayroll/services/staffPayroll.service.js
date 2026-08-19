@@ -734,11 +734,11 @@ export const applyPaidDelta = async (payrollId, delta, { capToRemaining = false 
   const d = Number(delta) || 0;
 
   const setClause = Prisma.sql`
-    SET "paidAmount" = GREATEST(0, "paidAmount" + ${d}::double precision),
+    SET "paidAmount" = GREATEST(0, "paidAmount" + ${d}::numeric),
         "status"     = CASE
-          WHEN GREATEST(0, "paidAmount" + ${d}::double precision) <= 0
+          WHEN GREATEST(0, "paidAmount" + ${d}::numeric) <= 0
             THEN 'unpaid'::"PayStatus"
-          WHEN GREATEST(0, "paidAmount" + ${d}::double precision) >= "finalAmount"
+          WHEN GREATEST(0, "paidAmount" + ${d}::numeric) >= "finalAmount"
             THEN 'paid'::"PayStatus"
           ELSE 'partial'::"PayStatus"
         END,
@@ -750,7 +750,7 @@ export const applyPaidDelta = async (payrollId, delta, { capToRemaining = false 
       ? await prisma.$executeRaw`
           UPDATE "staff_payrolls" ${setClause}
           WHERE "id" = ${id}
-            AND "paidAmount" + ${d}::double precision <= "finalAmount"
+            AND "paidAmount" + ${d}::numeric <= "finalAmount"
         `
       : await prisma.$executeRaw`
           UPDATE "staff_payrolls" ${setClause}

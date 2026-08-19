@@ -24,3 +24,23 @@ export const SHIFT_STATUSES = Object.freeze({
   OPEN: "open",
   CLOSED: "closed",
 });
+
+/**
+ * TO'LOV KANALLARI — `prisma/schema.prisma` dagi `PaymentMethod` enumi
+ * bilan AYNAN bir xil bo'lishi SHART.
+ *
+ * Ajralib ketsa zod noto'g'ri qiymatni o'tkazadi va Postgres uni enum
+ * xatosi bilan rad etadi — foydalanuvchi esa tushunarsiz 500 ko'radi
+ * (aynan shu sabab `constants/expenses.js` da ham shunday ogohlantirish
+ * bor).
+ */
+export const PAYMENT_METHODS = Object.freeze([
+  "cash",
+  "card",
+  "click",
+  "payme",
+  "uzcard",
+  "humo",
+  "bank",
+  "transfer",
+]);

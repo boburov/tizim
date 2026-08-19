@@ -10,11 +10,29 @@
 //    o'sha tekshiruvlarni va frontend'dagi marshrutlarni buzardi.
 //    Qiymatni `gen_object_id()` SQL funksiyasi beradi (migrations ichida).
 //
-// 2) PUL MAYDONLARI — Float (double precision). Mongo'da ular float64 edi;
-//    Decimal'ga o'tish 54k qator arifmetikani Decimal.js obyektlariga
-//    ko'chirishni talab qiladi va bu ALOHIDA o'zgarish sifatida qilinishi
-//    kerak. Hozircha xulq-atvor 1:1 saqlangan.
-//    KEYINGI QADAM sifatida tavsiya etiladi: Decimal(14,2).
+// 2) PUL MAYDONLARI — Decimal(18,2), STAVKALAR — Decimal(18,4).
+//    (Ilgari Float/double precision edi — Mongo float64 merosi.)
+//
+//    NEGA O'ZGARDI: `double` da 0.1 + 0.2 !== 0.3, va SUM() natijasi
+//    qatorlar TARTIBIGA qarab farq qilishi mumkin. Pulda bu qabul
+//    qilinmaydi: hisobot ikki marta ochilganda ikki xil raqam bergan
+//    moliya tizimiga ishonib bo'lmaydi. `numeric` esa aniq.
+//
+//    QAMROV: 71 ustun. Ataylab TEGILMAGANLAR (bular pul EMAS):
+//      • areaM2, prorationFactor, studentUnits, lessonHours, quantity
+//      • size / usedBytes / lastRunFreedBytes (baytlar)
+//      • gradeWeight / attendanceWeight / confidenceFloor / score /
+//        confidence (vaznlar va ballar)
+//      • AiUsageLog.costUsd — USD, sent ostidagi qiymatlar (0.0023);
+//        2 kasrga keltirilsa NOLGA aylanardi.
+//
+//    JS TOMONI: Prisma `Decimal` obyektini qaytaradi va unda `a + b`
+//    JIMGINA SATR BIRIKTIRISHGA aylanadi ("100" + "200" = "100200").
+//    Shuning uchun `config/prisma.js` da klient kengaytmasi bor — u
+//    natijadagi Decimal'ni songa keltiradi. Ya'ni: bazada aniq
+//    `numeric`, SQL SUM() aniq, JS'da esa butun so'm (2^53 gacha
+//    xavfsiz). Yangi moliyaviy hisob uchun `utils/money.js`.
+//    Batafsil: FINANCE-ARCHITECTURE.md §5.
 //
 // 3) QISMAN UNIQUE INDEKSLAR (partialFilterExpression). Prisma ularni
 //    deklarativ qo'llab-quvvatlamaydi. Ular MIGRATSIYADA xom SQL bilan
@@ -58,6 +76,30 @@ enum AccountKind {
   revenue
   expense
   shortage
+
+  // ── FAZA 3: qo'shimcha to'lov kanallari ──
+  uzcard
+  humo
+  // Boshqa/aralash kanal (nomi Account.name da).
+  other
+
+  // ── FAZA 13: EGASINING PULI ──
+  // `equity` DAN ATAYLAB AJRATILGAN. `equity` — boshlang'ich qoldiqning
+  // qarshi tomoni (tizimga o'tish arxeologiyasi). Bu esa TIRIK oqim:
+  // egasi biznesga pul qo'shadi yoki oladi.
+  //
+  // Ikkalasi ham DAROMAD/XARAJAT EMAS: egasi 20 mln qo'shsa kassa oshadi,
+  // lekin markaz hech narsa SOTMAGAN. Aralashtirilsa "foyda" yolg'on
+  // ko'tarilib, eng muhim savol — "biznes o'zi pul topayaptimi?" —
+  // javobsiz qolardi.
+  owner_capital
+
+  // ── FAZA 12: TO'LOV TIZIMI KOMISSIYASI ──
+  // `expense` dan ajratilgan: bu markaz QARORI bilan qilingan xarajat
+  // emas, tushumdan AVTOMATIK ushlanadigan ulush. Alohida hisob
+  // "to'lov qabul qilish bizga qancha turadi?" savoliga to'g'ridan-to'g'ri
+  // javob beradi (provayderni almashtirish qarori shunga tayanadi).
+  payment_fee
 }
 
 enum EntryKind {
@@ -73,6 +115,24 @@ enum EntryKind {
   transfer_receive
   inter_branch
   adjustment
+
+  // ── FAZA 6: QAYTARIM ──
+  // Asl to'lov O'ZGARTIRILMAYDI — qaytarim ALOHIDA yozuv. Tarixda
+  // ikkala amal ham ko'rinadi (700k kirim, keyin 300k chiqim).
+  refund
+
+  // ── FAZA 13: egasining puli ──
+  owner_investment
+  owner_withdrawal
+
+  // ── FAZA 12: to'lov tizimi komissiyasi ──
+  payment_fee
+
+  // ── FAZA 3: HISOBLAR ORASIDA KO'CHIRISH (bitta filial ichida) ──
+  // `transfer_send`/`transfer_receive` dan BOSHQA narsa: ular
+  // FILIALLARARO inkassatsiya (yo'ldagi pul, ikki filial jurnali).
+  // Bu esa bitta filial ichida bank → kassa. NA daromad, NA xarajat.
+  account_transfer
 }
 
 enum HttpMethod {
@@ -213,9 +273,24 @@ enum DepositTxType {
   refund
 }
 
+// TO'LOV KANALI.
+//
+// Ilgari faqat `cash | card` edi — holbuki jurnalda Click va Payme
+// hisoblari ALLAQACHON mavjud (METHOD_TO_ACCOUNT, constants/ledger.js).
+// Ya'ni pul o'sha kanallar orqali kelardi, lekin tizimda "karta" bo'lib
+// yozilardi va kanal kesimidagi hisobot imkonsiz edi.
+//
+// QO'SHISH XAVFSIZ: enum'ga yangi qiymat qo'shish mavjud qatorlarga
+// tegmaydi (`card` o'z ma'nosini saqlaydi — POS terminal).
 enum PaymentMethod {
   cash
   card
+  click
+  payme
+  uzcard
+  humo
+  bank
+  transfer
 }
 
 enum DiscountType {
@@ -240,6 +315,12 @@ enum ExpenseMethod {
   card
   bank
   transfer
+  // Chiqim ham raqamli kanaldan to'lanishi mumkin (obuna, reklama).
+  click
+  payme
+  uzcard
+  humo
+  terminal
 }
 
 enum ExpenseCurrency {
@@ -541,6 +622,8 @@ enum CleanupFrequency {
 
 enum FilePurpose {
   assignment
+  // Moliyaviy hujjat ilovasi: chiqim cheki, qaytarim tilxati.
+  receipt
 }
 
 enum TeacherAttendanceStatus {
@@ -584,6 +667,102 @@ enum SalaryRateType {
 enum SalarySource {
   auto
   manual
+}
+
+// ═════════════════ MOLIYA: YANGI ENUMLAR (Faza 5-14) ═════════════════
+
+// FAZA 8: DOIMIY va O'ZGARUVCHAN xarajat.
+//
+// `ExpenseCategoryKind` (operating/payroll/tax/capital) BOSHQA O'Q —
+// u "bu qanday xarajat" deydi. Bu esa "u hajm bilan o'sadimi" deydi.
+// Ijara ham, o'qituvchi foizi ham `operating` bo'lishi mumkin, lekin
+// biri o'quvchilar soniga BOG'LIQ EMAS, ikkinchisi to'g'ridan-to'g'ri
+// bog'liq. Bu farqsiz "zarar chegarasi" (break-even) hisoblab bo'lmaydi.
+enum CostType {
+  fixed
+  variable
+}
+
+// FAZA 9: takrorlanish oralig'i.
+enum RecurringInterval {
+  daily
+  weekly
+  monthly
+  quarterly
+  yearly
+}
+
+// FAZA 9: KUTILAYOTGAN takrorlanuvchi chiqimning holati.
+//
+// `paid` HOLATIGA O'ZI O'TMAYDI — buni faqat haqiqiy to'lov qiladi
+// (o'sha paytda Expense yaratiladi va occurrence unga bog'lanadi).
+// Aks holda "to'landi" deb turgan, aslida to'lanmagan ijara hisobotni
+// yolg'on qilardi.
+enum RecurringOccurrenceStatus {
+  pending
+  paid
+  skipped
+  canceled
+}
+
+// FAZA 5: chegirma SABABI (turi).
+//
+// `DiscountType` (fixed/percent) — chegirma QANDAY hisoblanadi.
+// Bu esa NEGA berilgan. Ikkalasi ham kerak: birinchisi summani,
+// ikkinchisi javobgarlikni va tahlilni beradi.
+enum DiscountKind {
+  family
+  promotion
+  referral
+  scholarship
+  employee
+  manager
+  manual
+  other
+}
+
+// FAZA 6: qaytarim holati.
+enum RefundStatus {
+  pending
+  approved
+  executed
+  rejected
+  canceled
+}
+
+// FAZA 10: byudjet davri va holati.
+enum BudgetPeriodType {
+  month
+  quarter
+  year
+}
+
+enum BudgetStatus {
+  draft
+  active
+  closed
+}
+
+// FAZA 10: byudjet qatorining ko'lami.
+enum BudgetLineScope {
+  // Butun davr uchun yagona shift (kategoriyasiz).
+  total
+  // Aniq kategoriya bo'yicha (categoryId to'ldiriladi).
+  category
+  // Kategoriya TURI bo'yicha (payroll / operating / tax / capital).
+  kind
+}
+
+// FAZA 14: moliyaviy audit amali.
+enum FinancialAuditAction {
+  create
+  update
+  delete
+  restore
+  approve
+  reject
+  execute
+  cancel
 }
 
 enum Gender {
@@ -736,6 +915,22 @@ model User {
   teacherSalariesLocked   TeacherSalary[]          @relation("TeacherSalaryLockedBy")
   teacherSalariesCreated  TeacherSalary[]          @relation("TeacherSalaryCreatedBy")
 
+  // Jurnal o'lchovlari (Faza 16-19): bitta User uch xil ROLDA
+  // qatnashishi mumkin, shuning uchun uch alohida bog'lanish.
+  journalAsStudent JournalEntry[] @relation("JournalStudent")
+  journalAsTeacher JournalEntry[] @relation("JournalTeacher")
+  journalAsStaff   JournalEntry[] @relation("JournalStaff")
+  expensesAsPerson    Expense[]                    @relation("ExpensePerson")
+  discountsApproved   Discount[]                   @relation("DiscountApprovedBy")
+  recurringExpensesCreated RecurringExpense[]      @relation("RecurringExpenseCreatedBy")
+  recurringExpensesAsPerson RecurringExpense[]     @relation("RecurringExpensePerson")
+  occurrencesCreated  RecurringExpenseOccurrence[] @relation("OccurrenceCreatedBy")
+  budgetsCreated      Budget[]                     @relation("BudgetCreatedBy")
+  refundsAsStudent    Refund[]                     @relation("RefundStudent")
+  refundsRequested    Refund[]                     @relation("RefundRequestedBy")
+  refundsApproved     Refund[]                     @relation("RefundApprovedBy")
+  refundsCreated      Refund[]                     @relation("RefundCreatedBy")
+  financialAuditLogs  FinancialAuditLog[]          @relation("FinAuditActor")
   @@index([phone])
   @@index([leadId])
   @@index([homeBranchId, isDeleted, isActive])
@@ -827,7 +1022,7 @@ model Branch {
   address                 String?
   phone                   String?
   isMain                  Boolean   @default(false)
-  expenseApprovalThreshold Float?
+  expenseApprovalThreshold Decimal? @db.Decimal(18, 2)
   // Mongo'da Map<kind, {mode,maxAmount,minAmount,maxPercent}> edi.
   // Tuzilma constants/delegation.js dagi validateDelegation() bilan
   // tekshiriladi — u yagona haqiqat manbai bo'lib qoladi.
@@ -882,6 +1077,11 @@ model Branch {
   teacherCompensations TeacherCompensation[]    @relation("TeacherCompBranch")
   teacherSalaries      TeacherSalary[]          @relation("TeacherSalaryBranch")
 
+  recurringExpenses    RecurringExpense[]           @relation("RecurringExpenseBranch")
+  recurringOccurrences RecurringExpenseOccurrence[] @relation("OccurrenceBranch")
+  budgets              Budget[]                     @relation("BudgetBranch")
+  refunds              Refund[]                     @relation("RefundBranch")
+  financialAuditLogs   FinancialAuditLog[]          @relation("FinAuditBranch")
   @@map("branches")
 }
 
@@ -905,6 +1105,7 @@ model Course {
   groups Group[]       @relation("GroupCourse")
   prices CoursePrice[] @relation("CoursePriceCourse")
 
+  journalEntries JournalEntry[] @relation("JournalCourse")
   @@index([leadDirectionId])
   @@index([isActive, title])
   @@map("courses")
@@ -916,7 +1117,7 @@ model CoursePrice {
   course    Course    @relation("CoursePriceCourse", fields: [courseId], references: [id])
   branchId  String?   @db.VarChar(24)
   branch    Branch?   @relation("CoursePriceBranch", fields: [branchId], references: [id])
-  amount    Float
+  amount    Decimal @db.Decimal(18, 2)
   validFrom DateTime
   validTo   DateTime?
   note      String    @default("")
@@ -957,6 +1158,7 @@ model Room {
   groups Group[] @relation("GroupRoom")
 
   // QISMAN UNIQUE: (branchId, name) WHERE isDeleted = false
+  journalEntries JournalEntry[] @relation("JournalRoom")
   @@index([branchId])
   @@index([isActive])
   @@map("rooms")
@@ -1012,6 +1214,8 @@ model Group {
   teacherPeriods       TeacherGroupPeriod[]     @relation("GroupPeriodGroup")
   teacherSalaries      TeacherSalary[]          @relation("TeacherSalaryGroup")
 
+  journalEntries JournalEntry[] @relation("JournalGroup")
+  refunds Refund[] @relation("RefundGroup")
   @@index([branchId])
   @@index([courseId])
   @@index([roomId])
@@ -1065,6 +1269,8 @@ model GroupMembership {
   debtWriteOffs   DebtWriteOff[]   @relation("DebtWriteOffMembership")
 
   // QISMAN UNIQUE: (groupId, studentId) WHERE leftAt IS NULL AND isDeleted = false
+  journalEntries JournalEntry[] @relation("JournalMembership")
+  refunds Refund[] @relation("RefundMembership")
   @@index([groupId])
   @@index([studentId])
   @@index([leftReasonDetailId])
@@ -1257,14 +1463,14 @@ model StudentPayment {
   membership   GroupMembership? @relation("StudentPaymentMembership", fields: [membershipId], references: [id])
   year      Int
   month     Int
-  baseFee   Float   @default(0)
+  baseFee   Decimal   @default(0) @db.Decimal(18, 2)
   prorationFactor Float @default(1)
-  discountApplied Float @default(0)
-  expectedAmount  Float @default(0)
-  paidAmount      Float @default(0)
+  discountApplied Decimal @default(0) @db.Decimal(18, 2)
+  expectedAmount  Decimal @default(0) @db.Decimal(18, 2)
+  paidAmount      Decimal @default(0) @db.Decimal(18, 2)
   status    PayStatus @default(unpaid)
   writtenOff Boolean @default(false)
-  writeOffAmount Float @default(0)
+  writeOffAmount Decimal @default(0) @db.Decimal(18, 2)
   writeOffAt DateTime?
   recalculatedAt DateTime?
   // MUHIM: `isOpening` unique kalitning bir qismi. Boshlang'ich qarz qatori
@@ -1277,6 +1483,7 @@ model StudentPayment {
   transactions PaymentTransaction[] @relation("PaymentTxPayment")
   writeOffs    DebtWriteOffBreakdown[] @relation("BreakdownPayment")
 
+  refunds Refund[] @relation("RefundPayment")
   @@unique([studentId, groupId, year, month, isOpening])
   @@index([branchId])
   @@index([year, month, status])
@@ -1295,7 +1502,28 @@ model PaymentTransaction {
   group     Group    @relation("PaymentTxGroup", fields: [groupId], references: [id])
   year      Int
   month     Int
-  amount    Float
+  // BRUTTO — o'quvchi TO'LAGAN summa. Bu ustun ma'nosi O'ZGARMAYDI:
+  // o'quvchining qarzi aynan shu summaga kamayadi.
+  amount    Decimal @db.Decimal(18, 2)
+
+  // ── FAZA 12: TO'LOV TIZIMI KOMISSIYASI ──
+  // O'quvchi 700 000 to'ladi, provayder 7 000 ushlab qoldi, kassaga
+  // 693 000 tushdi. Uch raqamning UCHALASI ham kerak va ular BOSHQA
+  // savolga javob beradi:
+  //   amount    → o'quvchi qarzi qancha kamaydi (700 000)
+  //   feeAmount → pul qabul qilish bizga qancha turdi (7 000)
+  //   netAmount → kassa qoldig'i qancha oshdi (693 000)
+  //
+  // Ilgari faqat bittasi bo'lgani uchun ular jimgina ARALASHARDI:
+  // brutto yozilsa kassa 7 000 ga oshib ketardi, netto yozilsa
+  // o'quvchida 7 000 "qarz" qolib ketardi.
+  //
+  // default 0 → MAVJUD qatorlar uchun xulq-atvor aynan eski holicha
+  // (komissiya yo'q, netto = brutto).
+  feeAmount Decimal @default(0) @db.Decimal(18, 2)
+  // To'lov provayderi nomi (Click, Payme, bank) — komissiya tahlili uchun.
+  provider  String  @default("")
+
   source    PaymentSource @default(direct)
   method    PaymentMethod @default(cash)
   paidAt    DateTime
@@ -1313,6 +1541,7 @@ model PaymentTransaction {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  refunds Refund[] @relation("RefundOriginalTx")
   @@index([branchId])
   @@index([paymentId])
   @@index([studentId])
@@ -1327,7 +1556,7 @@ model StudentDeposit {
   id        String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
   studentId String @unique @db.VarChar(24)
   student   User   @relation("StudentDepositStudent", fields: [studentId], references: [id])
-  balance   Float  @default(0)
+  balance   Decimal  @default(0) @db.Decimal(18, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1346,9 +1575,9 @@ model DepositTransaction {
   depositId String  @db.VarChar(24)
   deposit   StudentDeposit @relation("DepositTxDeposit", fields: [depositId], references: [id])
   type      DepositTxType
-  amount    Float
+  amount    Decimal @db.Decimal(18, 2)
   method    PaymentMethod @default(cash)
-  balanceAfter Float @default(0)
+  balanceAfter Decimal @default(0) @db.Decimal(18, 2)
   note      String  @default("")
   isOpening Boolean @default(false)
   paidAt    DateTime
@@ -1380,11 +1609,20 @@ model Discount {
   groupId   String  @db.VarChar(24)
   group     Group   @relation("DiscountGroup", fields: [groupId], references: [id])
   type      DiscountType
-  value     Float
+  value     Decimal @db.Decimal(18, 2)
   scope     DiscountScope
   year      Int?
   month     Int?
   reason    String  @default("")
+  // FAZA 5: chegirma SABABI (oilaviy, aksiya, referal...). `type`
+  // chegirma QANDAY hisoblanishini aytadi, bu esa NEGA berilganini.
+  kind      DiscountKind @default(other)
+  // FAZA 5: kim TASDIQLADI. `createdById` — kim kiritdi; bu esa kim
+  // javobgar. Ko'pincha bir odam emas, va "chegirma kim tomonidan
+  // berilgan" tahlili aynan shu ustunga tayanadi.
+  approvedById String? @db.VarChar(24)
+  approvedBy   User?   @relation("DiscountApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
   isActive  Boolean @default(true)
   createdById String? @db.VarChar(24)
   createdBy   User?   @relation("DiscountCreatedBy", fields: [createdById], references: [id])
@@ -1407,7 +1645,7 @@ model GroupFee {
   group   Group  @relation("GroupFeeGroup", fields: [groupId], references: [id])
   year    Int
   month   Int
-  amount  Float  @default(0)
+  amount  Decimal  @default(0) @db.Decimal(18, 2)
   source  FeeSource @default(auto)
   createdById String? @db.VarChar(24)
   createdBy   User?   @relation("GroupFeeCreatedBy", fields: [createdById], references: [id])
@@ -1429,7 +1667,7 @@ model DebtWriteOff {
   group     Group  @relation("DebtWriteOffGroup", fields: [groupId], references: [id])
   membershipId String? @db.VarChar(24)
   membership   GroupMembership? @relation("DebtWriteOffMembership", fields: [membershipId], references: [id])
-  amount    Float  @default(0)
+  amount    Decimal  @default(0) @db.Decimal(18, 2)
   reasonTitle String @default("")
   studentName String @default("")
   groupName   String @default("")
@@ -1456,7 +1694,7 @@ model DebtWriteOffBreakdown {
   payment    StudentPayment? @relation("BreakdownPayment", fields: [paymentId], references: [id])
   year       Int
   month      Int
-  amount     Float
+  amount     Decimal @db.Decimal(18, 2)
 
   @@index([writeOffId])
   @@index([year, month])
@@ -1498,6 +1736,9 @@ model ExpenseCategory {
   isSystem  Boolean @default(false)
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
+  // FAZA 8: kategoriyaning STANDART xarajat turi. Ijara → fixed,
+  // marketing → variable. Chiqim uni meros oladi (ochiq ko'rsatilmasa).
+  costType  CostType @default(variable)
   createdById String? @db.VarChar(24)
   createdBy   User?   @relation("ExpenseCategoryCreatedBy", fields: [createdById], references: [id])
 
@@ -1511,6 +1752,9 @@ model ExpenseCategory {
   expenses Expense[] @relation("ExpenseCategoryRel")
 
   // QISMAN UNIQUE: (branchId, name) WHERE isDeleted = false
+  journalEntries JournalEntry[] @relation("JournalExpenseCategory")
+  recurringExpenses RecurringExpense[] @relation("RecurringExpenseCategory")
+  budgetLines       BudgetLine[]       @relation("BudgetLineCategory")
   @@index([kind])
   @@index([branchId])
   @@index([isActive])
@@ -1528,10 +1772,10 @@ model Expense {
   categoryKind String @default("operating")
   title       String
   description String  @default("")
-  amount      Float
+  amount      Decimal @db.Decimal(18, 2)
   currency    ExpenseCurrency @default(UZS)
-  originalAmount Float?
-  exchangeRate   Float?
+  originalAmount Decimal? @db.Decimal(18, 2)
+  exchangeRate   Decimal? @db.Decimal(18, 4)
   rateSource     String @default("")
   spentAt     DateTime
   accrualYear Int
@@ -1542,6 +1786,23 @@ model Expense {
   receipt     StoredFile? @relation("ExpenseReceipt", fields: [receiptId], references: [id])
   isCapital   Boolean @default(false)
   depreciationMonths Int?
+
+  // ── FAZA 8: DOIMIY / O'ZGARUVCHAN ──
+  // NULL = kategoriyaning standartidan meros (ExpenseCategory.costType).
+  // Ochiq qiymat faqat ISTISNO uchun: masalan bir martalik reklama
+  // kampaniyasi doimiy "Marketing" kategoriyasida turgan bo'lsa.
+  // Tahlilda: COALESCE(expense.costType, category.costType).
+  costType    CostType?
+
+  // ── FAZA 2: MAS'UL SHAXS / YETKAZIB BERUVCHI ──
+  // `vendor` (matn) QOLADI — tashqi yetkazib beruvchi ko'pincha tizimda
+  // umuman yo'q. Bu esa ICHKI odam: kim pul oldi/sarfladi.
+  personId    String? @db.VarChar(24)
+  person      User?   @relation("ExpensePerson", fields: [personId], references: [id])
+
+  // ── FAZA 9: qaysi takrorlanuvchi shablondan tug'ilgan ──
+  recurringExpenseId String? @db.VarChar(24)
+  recurringExpense   RecurringExpense? @relation("RecurringExpenseChild", fields: [recurringExpenseId], references: [id])
   expenseApprovalId String? @db.VarChar(24)
   expenseApproval   Approval? @relation("ExpenseApproval", fields: [expenseApprovalId], references: [id])
   createdById String? @db.VarChar(24)
@@ -1555,6 +1816,7 @@ model Expense {
   updatedAt DateTime @updatedAt
 
   // QISMAN UNIQUE: (expenseApprovalId) WHERE expenseApprovalId IS NOT NULL
+  recurringOccurrence RecurringExpenseOccurrence? @relation("OccurrenceExpense")
   @@index([spentAt, isDeleted])
   @@index([accrualYear, accrualMonth, categoryId])
   @@index([branchId, spentAt])
@@ -1569,8 +1831,8 @@ model Approval {
   branch   Branch @relation("ApprovalBranch", fields: [branchId], references: [id])
   kind     ApprovalKind
   category ApprovalCategory @default(financial)
-  amount   Float?
-  thresholdAtRequest Float?
+  amount   Decimal? @db.Decimal(18, 2)
+  thresholdAtRequest Decimal? @db.Decimal(18, 2)
   payload  Json   @default("{}")
   // QISMAN UNIQUE: bitta subject bo'yicha bir vaqtda faqat bitta
   // `pending` so'rov bo'lishi mumkin.
@@ -1598,6 +1860,7 @@ model Approval {
   staffSalaryTx       StaffSalaryTransaction[] @relation("StaffSalaryTxApproval")
   teacherSalaries     TeacherSalary[]          @relation("TeacherSalaryApproval")
 
+  refunds Refund[] @relation("RefundApproval")
   @@index([branchId, status, createdAt])
   @@index([requestedById, createdAt])
   @@index([category, status, createdAt])
@@ -1616,9 +1879,9 @@ model TeacherCompensation {
   effectiveFrom DateTime
   effectiveTo   DateTime?
   baseType     CompBaseType @default(none)
-  baseAmount   Float @default(0)
+  baseAmount   Decimal @default(0) @db.Decimal(18, 2)
   variableType CompVariableType @default(none)
-  variableRate Float @default(0)
+  variableRate Decimal @default(0) @db.Decimal(18, 4)
   percentBase  CompPercentBase @default(billed)
   note      String  @default("")
   createdById String? @db.VarChar(24)
@@ -1650,11 +1913,11 @@ model TeacherGroupPeriod {
   startDate DateTime
   endDate   DateTime?
   variableType CompVariableType?
-  variableRate Float?
+  variableRate Decimal? @db.Decimal(18, 4)
   percentBase  CompPercentBase?
   salaryType   SalaryRateType?
-  fixedAmount  Float?
-  percentRate  Float?
+  fixedAmount  Decimal? @db.Decimal(18, 2)
+  percentRate  Decimal? @db.Decimal(18, 4)
   createdById String? @db.VarChar(24)
   createdBy   User?   @relation("GroupPeriodCreatedBy", fields: [createdById], references: [id])
   updatedById String? @db.VarChar(24)
@@ -1685,32 +1948,32 @@ model TeacherSalary {
   year      Int
   month     Int
   salaryType SalaryRateType @default(fixed)
-  fixedAmount Float @default(0)
-  percentRate Float @default(0)
+  fixedAmount Decimal @default(0) @db.Decimal(18, 2)
+  percentRate Decimal @default(0) @db.Decimal(18, 4)
   workStartDate DateTime?
   workEndDate   DateTime?
   variableType  CompVariableType?
-  variableRate  Float @default(0)
+  variableRate  Decimal @default(0) @db.Decimal(18, 4)
   percentBase   CompPercentBase?
   rateSource    String @default("none")
   compensationId String? @db.VarChar(24)
   compensation   TeacherCompensation? @relation("TeacherSalaryComp", fields: [compensationId], references: [id])
-  groupRevenue    Float @default(0)
+  groupRevenue    Decimal @default(0) @db.Decimal(18, 2)
   prorationFactor Float @default(1)
   payableDays     Int   @default(0)
   totalDays       Int   @default(0)
-  proratedFixed   Float @default(0)
-  percentAmount   Float @default(0)
+  proratedFixed   Decimal @default(0) @db.Decimal(18, 2)
+  percentAmount   Decimal @default(0) @db.Decimal(18, 2)
   studentUnits    Float @default(0)
-  perStudentAmount Float @default(0)
+  perStudentAmount Decimal @default(0) @db.Decimal(18, 2)
   lessonHours     Float @default(0)
-  perHourAmount   Float @default(0)
-  perGroupAmount  Float @default(0)
-  baseEarnings    Float @default(0)
-  expectedAmount  Float @default(0)
+  perHourAmount   Decimal @default(0) @db.Decimal(18, 2)
+  perGroupAmount  Decimal @default(0) @db.Decimal(18, 2)
+  baseEarnings    Decimal @default(0) @db.Decimal(18, 2)
+  expectedAmount  Decimal @default(0) @db.Decimal(18, 2)
   isOpening       Boolean @default(false)
-  paidAmount      Float @default(0)
-  overpaidAmount  Float @default(0)
+  paidAmount      Decimal @default(0) @db.Decimal(18, 2)
+  overpaidAmount  Decimal @default(0) @db.Decimal(18, 2)
   status    PayStatus @default(unpaid)
   isLocked  Boolean @default(false)
   lockedAt  DateTime?
@@ -1756,7 +2019,7 @@ model SalaryTransaction {
   group    Group?  @relation("SalaryTxGroup", fields: [groupId], references: [id])
   year     Int
   month    Int
-  amount   Float
+  amount   Decimal @db.Decimal(18, 2)
   method   PaymentMethod
   paidAt   DateTime
   note     String @default("")
@@ -1791,7 +2054,7 @@ model StaffCompensation {
   branchId   String? @db.VarChar(24)
   branch     Branch? @relation("StaffCompBranch", fields: [branchId], references: [id])
   salaryType StaffSalaryType @default(fixed)
-  baseAmount Float   @default(0)
+  baseAmount Decimal   @default(0) @db.Decimal(18, 2)
   effectiveFrom DateTime
   effectiveTo   DateTime?
   note       String  @default("")
@@ -1819,11 +2082,11 @@ model KpiRule {
   trigger     KpiTrigger
   conditions  Json    @default("{}")
   rewardType  KpiRewardType @default(fixed)
-  rewardValue Float
+  rewardValue Decimal @db.Decimal(18, 4)
   applicableRoles String[] @default([])
   branchId    String? @db.VarChar(24)
   branch      Branch? @relation("KpiRuleBranch", fields: [branchId], references: [id])
-  monthlyCap  Float   @default(0)
+  monthlyCap  Decimal   @default(0) @db.Decimal(18, 2)
   enabled     Boolean @default(true)
   createdById String? @db.VarChar(24)
   createdBy   User?   @relation("KpiRuleCreatedBy", fields: [createdById], references: [id])
@@ -1852,7 +2115,7 @@ model StaffKpiAssignment {
   ruleId     String  @db.VarChar(24)
   rule       KpiRule @relation("KpiAssignmentRule", fields: [ruleId], references: [id])
   enabled    Boolean @default(true)
-  rewardValueOverride Float?
+  rewardValueOverride Decimal? @db.Decimal(18, 4)
   createdById String? @db.VarChar(24)
   createdBy   User?   @relation("KpiAssignmentCreatedBy", fields: [createdById], references: [id])
 
@@ -1878,19 +2141,19 @@ model StaffPayroll {
   year       Int
   month      Int
   salaryType String  @default("fixed")
-  baseAmount Float   @default(0)
+  baseAmount Decimal   @default(0) @db.Decimal(18, 2)
   prorationFactor Float @default(1)
   payableDays Int    @default(0)
   totalDays   Int    @default(0)
-  fixedAmount Float  @default(0)
-  autoKpiTotal Float @default(0)
-  manualBonusTotal Float @default(0)
-  penaltyTotal     Float @default(0)
-  openingCreditTotal Float @default(0)
-  openingDebtTotal   Float @default(0)
-  openingDebtApplied Float @default(0)
-  finalAmount Float  @default(0)
-  paidAmount  Float  @default(0)
+  fixedAmount Decimal  @default(0) @db.Decimal(18, 2)
+  autoKpiTotal Decimal @default(0) @db.Decimal(18, 2)
+  manualBonusTotal Decimal @default(0) @db.Decimal(18, 2)
+  penaltyTotal     Decimal @default(0) @db.Decimal(18, 2)
+  openingCreditTotal Decimal @default(0) @db.Decimal(18, 2)
+  openingDebtTotal   Decimal @default(0) @db.Decimal(18, 2)
+  openingDebtApplied Decimal @default(0) @db.Decimal(18, 2)
+  finalAmount Decimal  @default(0) @db.Decimal(18, 2)
+  paidAmount  Decimal  @default(0) @db.Decimal(18, 2)
   status      PayStatus @default(unpaid)
   computedAt  DateTime?
   source      PayrollSource @default(auto)
@@ -1932,8 +2195,8 @@ model StaffPayrollItem {
   // Takroriy KPI hisoblanishini to'sadi.
   eventKey   String
   quantity   Float  @default(1)
-  unitAmount Float  @default(0)
-  amount     Float  @default(0)
+  unitAmount Decimal  @default(0) @db.Decimal(18, 2)
+  amount     Decimal  @default(0) @db.Decimal(18, 2)
   meta       Json   @default("{}")
 
   createdAt DateTime @default(now())
@@ -1954,7 +2217,7 @@ model StaffPayrollAdjustment {
   year       Int
   month      Int
   kind       StaffAdjustmentKind
-  amount     Float
+  amount     Decimal @db.Decimal(18, 2)
   reason     String
   occurredAt DateTime?
   // Mongo'da `carriedFrom: { year, month }` ichki obyekt edi — yassilandi.
@@ -1986,7 +2249,7 @@ model StaffSalaryTransaction {
   employee   User    @relation("StaffSalaryTxEmployee", fields: [employeeId], references: [id])
   year       Int
   month      Int
-  amount     Float
+  amount     Decimal @db.Decimal(18, 2)
   method     PaymentMethod
   paidAt     DateTime
   note       String  @default("")
@@ -2050,6 +2313,19 @@ model Account {
   currency String  @default("UZS")
   isActive Boolean @default(true)
 
+  // ── FAZA 3: BOSHLANG'ICH QOLDIQ ──
+  // Tizimga o'tishdan oldin kassada bo'lgan pul. Jurnal bo'sh bo'lsa ham
+  // hisob qoldig'i HAQIQIY bo'lishi kerak.
+  //
+  // DIQQAT: `currentBalance` USTUNI ATAYLAB YO'Q. U jurnaldan hisoblanadi
+  // (`journal.balances()`). Saqlangan qoldiq MUQARRAR eskiradi — to'lov
+  // yozilib, qoldiq yangilanmay qolsa, qaysi biri haqiqat ekani noma'lum
+  // bo'lardi. Bu yerda haqiqat bitta: JURNAL QATORLARI.
+  openingBalance Decimal  @default(0) @db.Decimal(18, 2)
+  openingAt      DateTime?
+  // UI da ko'rsatish tartibi (Kassa → Bank → Click ...).
+  sortOrder      Int      @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2074,13 +2350,114 @@ model JournalEntry {
   memo     String @default("")
   refModel String?
   refId    String? @db.VarChar(24)
+
+  // ═══════════════════════════════════════════════════════════════════
+  // IDEMPOTENTLIK KALITI (STEP 4)
+  // ═══════════════════════════════════════════════════════════════════
+  //
+  // MUAMMO: takroriy urinish (webhook qayta yuborilishi, cron qayta
+  // ishga tushishi, double-click, tarmoq uzilgach retry) BIR XIL pulni
+  // IKKI MARTA yozib qo'yishi mumkin. Jurnal muvozanatda qoladi —
+  // ya'ni `reconcile()` ham buni TOPMAYDI — lekin kassada yo'q pul
+  // paydo bo'ladi. Bu eng yomon turdagi xato: jimgina va o'z-o'zidan
+  // "to'g'ri" ko'rinadi.
+  //
+  // NEGA (refModel, refId) YETARLI EMAS: bitta manba ATAYLAB bir
+  // nechta yozuv tug'diradi —
+  //   • inkassatsiya: bitta CashTransfer → `transfer_send` (jo'natuvchi
+  //     filial) + `transfer_receive` (qabul qiluvchi filial)
+  //   • o'quvchini ko'chirish: bitta User → ikkita `inter_branch` yozuv,
+  //     va o'quvchi KEYIN yana ko'chirilishi mumkin
+  // Ular ustidagi unique indeks haqiqiy amallarni bloklab qo'yardi.
+  //
+  // Shuning uchun kalit OCHIQ va MA'NOLI beriladi:
+  //   "payment:<paymentTransactionId>"
+  //   "expense:<expenseId>"
+  //   "refund:<refundId>"
+  //   "transfer_send:<cashTransferId>" / "transfer_receive:<...>"
+  //   "salary_teacher:<salaryTransactionId>"
+  //
+  // NULLABLE — ataylab: kalitsiz yozuv (qo'lda tuzatish, smena yopilishi)
+  // hamon yozilaveradi. Postgres'da NULL != NULL, ya'ni kalitsiz
+  // yozuvlar bir-birini bloklamaydi.
+  postingKey String? @unique
+
   isInternal Boolean @default(false)
   counterpartyBranchId String? @db.VarChar(24)
   counterpartyBranch   Branch? @relation("JournalCounterparty", fields: [counterpartyBranchId], references: [id])
-  totalDebit  Float
-  totalCredit Float
+  totalDebit  Decimal @db.Decimal(18, 2)
+  totalCredit Decimal @db.Decimal(18, 2)
   createdById String? @db.VarChar(24)
   createdBy   User?   @relation("JournalEntryCreatedBy", fields: [createdById], references: [id])
+
+  // ═══════════════════════════════════════════════════════════════════
+  // O'LCHOVLAR (dimensions) — Faza 1, 7, 16-19 ning POYDEVORI
+  // ═══════════════════════════════════════════════════════════════════
+  //
+  // NEGA JURNALDA, alohida "financial_transactions" jadvalida EMAS:
+  // ikkinchi jadval "operatsiya bo'ldi" deb, jurnal esa "kassada shuncha
+  // pul bor" deb turardi va ular BIRINCHI xatodayoq ajralib ketardi.
+  // Bu xato modelning O'ZIDA bo'lardi — keyin tuzatib bo'lmasdi.
+  //
+  // NEGA KERAK: "A o'qituvchi qancha foyda keltiradi?" degan savolga
+  // javob bermoqchi bo'lsak, uni har safar QAYTA HISOBLASH kerak edi —
+  // guruhlarni topib, ularning to'lovlarini yig'ib, o'sha davrdagi
+  // maoshni ajratib... Har hisobot boshqacha yozilardi va ular o'zaro
+  // TO'G'RI KELMASDI. Bu ustunlar bilan javob bitta `GROUP BY` ga
+  // aylanadi va manba HAMMA JOYDA bitta.
+  //
+  // HAMMASI NULLABLE — VA BU ATAYLAB (talab: "Do NOT force irrelevant
+  // relations"). Ijara chiqimida o'quvchi YO'Q; o'quvchi to'lovida xona
+  // bo'lishi mumkin, lekin shart emas. Majburiy qilingan o'lchov
+  // "bilmayman"ni yolg'on qiymat bilan to'ldirishga majburlardi.
+  //
+  // TO'LDIRISH VAQTI: yozuv yaratilayotganda, MANBADAN nusxalanadi
+  // (denormalizatsiya). Guruhning xonasi keyin o'zgarsa, o'tmishdagi
+  // yozuv o'z xonasida qoladi — tarix qayta yozilmaydi.
+
+  // Kimga tegishli (uchtasi ham User, lekin ROLI boshqa — shuning uchun
+  // alohida ustun: `teacherId IS NOT NULL` shartida indeks ishlaydi va
+  // "o'qituvchi maoshi" bilan "o'quvchi to'lovi" chalkashmaydi).
+  studentId String? @db.VarChar(24)
+  student   User?   @relation("JournalStudent", fields: [studentId], references: [id])
+  teacherId String? @db.VarChar(24)
+  teacher   User?   @relation("JournalTeacher", fields: [teacherId], references: [id])
+  // O'qituvchi BO'LMAGAN xodim (admin, kassir, farrosh) — Faza 7.
+  staffId   String? @db.VarChar(24)
+  staff     User?   @relation("JournalStaff", fields: [staffId], references: [id])
+
+  groupId   String? @db.VarChar(24)
+  group     Group?  @relation("JournalGroup", fields: [groupId], references: [id])
+  // YO'NALISH (Faza 17). Guruhdan nusxalanadi.
+  courseId  String? @db.VarChar(24)
+  course    Course? @relation("JournalCourse", fields: [courseId], references: [id])
+  // XONA (Faza 19). Guruhdan nusxalanadi.
+  roomId    String? @db.VarChar(24)
+  room      Room?   @relation("JournalRoom", fields: [roomId], references: [id])
+  // A'ZOLIK (enrollment) — bitta o'quvchining bitta guruhdagi davri.
+  membershipId String? @db.VarChar(24)
+  membership   GroupMembership? @relation("JournalMembership", fields: [membershipId], references: [id])
+
+  // CHIQIM KATEGORIYASI (Faza 2, 7, 10). Maosh yozuvi ham shu orqali
+  // "Payroll" kategoriyasiga bog'lanadi — shunda byudjet/fakt taqqoslash
+  // maoshni ham qamrab oladi.
+  expenseCategoryId String? @db.VarChar(24)
+  expenseCategory   ExpenseCategory? @relation("JournalExpenseCategory", fields: [expenseCategoryId], references: [id])
+
+  // DAVR (Faza 7): "2026-avgust maoshi" oktabrda to'lansa ham AVGUSTGA
+  // tegishli. `date` — pul harakati sanasi, bu esa tegishlilik davri.
+  // Ikkalasi boshqa savolga javob beradi va ikkalasi ham kerak.
+  periodYear  Int?
+  periodMonth Int?
+
+  // Qaysi kanal orqali (Faza 1, 12).
+  paymentMethod PaymentMethod?
+  // DOIMIY/O'ZGARUVCHAN (Faza 8) — chiqim yozuvlari uchun.
+  costType      CostType?
+
+  // Chek/kvitansiya (Faza 1, 2).
+  attachmentId String? @db.VarChar(24)
+  attachment   StoredFile? @relation("JournalAttachment", fields: [attachmentId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2092,6 +2469,17 @@ model JournalEntry {
   @@index([kind])
   @@index([refId])
   @@index([isInternal])
+  // O'LCHOV INDEKSLARI — analitika so'rovlari aynan shu shaklda keladi:
+  // "shu davrda, shu o'qituvchi bo'yicha". Sanasiz indeks butun tarixni
+  // o'qishga majburlardi.
+  @@index([teacherId, date])
+  @@index([studentId, date])
+  @@index([staffId, date])
+  @@index([groupId, date])
+  @@index([courseId, date])
+  @@index([roomId, date])
+  @@index([expenseCategoryId, date])
+  @@index([periodYear, periodMonth])
   @@map("journal_entries")
 }
 
@@ -2104,8 +2492,8 @@ model JournalLine {
   accountId String @db.VarChar(24)
   account   Account @relation("JournalLineAccount", fields: [accountId], references: [id])
   accountKind String
-  debit     Float  @default(0)
-  credit    Float  @default(0)
+  debit     Decimal  @default(0) @db.Decimal(18, 2)
+  credit    Decimal  @default(0) @db.Decimal(18, 2)
 
   @@index([entryId])
   @@index([accountId])
@@ -2124,10 +2512,10 @@ model Shift {
   closedAt  DateTime?
   closedById String? @db.VarChar(24)
   closedBy   User?   @relation("ShiftClosedBy", fields: [closedById], references: [id])
-  openingCash  Float @default(0)
-  expectedCash Float?
-  countedCash  Float?
-  variance     Float?
+  openingCash  Decimal @default(0) @db.Decimal(18, 2)
+  expectedCash Decimal? @db.Decimal(18, 2)
+  countedCash  Decimal? @db.Decimal(18, 2)
+  variance     Decimal? @db.Decimal(18, 2)
   varianceNote String @default("")
   status    ShiftStatus @default(open)
 
@@ -2150,9 +2538,9 @@ model CashTransfer {
   fromBranch   Branch @relation("TransferFrom", fields: [fromBranchId], references: [id])
   toBranchId   String @db.VarChar(24)
   toBranch     Branch @relation("TransferTo", fields: [toBranchId], references: [id])
-  amount       Float
-  countedOnArrival Float?
-  discrepancy      Float?
+  amount       Decimal @db.Decimal(18, 2)
+  countedOnArrival Decimal? @db.Decimal(18, 2)
+  discrepancy      Decimal? @db.Decimal(18, 2)
   status     TransferStatus @default(in_transit)
   sentById   String? @db.VarChar(24)
   sentBy     User?   @relation("CashTransferSentBy", fields: [sentById], references: [id])
@@ -2179,7 +2567,7 @@ model OpeningBalance {
   userId String @unique @db.VarChar(24)
   user   User   @relation("OpeningBalanceUser", fields: [userId], references: [id])
   role   OpeningRole
-  amount Float
+  amount Decimal @db.Decimal(18, 2)
   signConvention OpeningSignConvention @default(flow)
   branchId String? @db.VarChar(24)
   branch   Branch? @relation("OpeningBalanceBranch", fields: [branchId], references: [id])
@@ -2539,6 +2927,8 @@ model StoredFile {
   assignments Assignment[] @relation("AssignmentFile")
   expenses    Expense[]    @relation("ExpenseReceipt")
 
+  journalAttachments JournalEntry[] @relation("JournalAttachment")
+  refundReceipts Refund[] @relation("RefundReceipt")
   @@index([purpose])
   @@index([uploadedById])
   @@index([isDeleted, createdAt])
@@ -2803,7 +3193,7 @@ model Insight {
   factors    Json @default("[]")
   sourceRefs Json @default("[]")
   recommendedActions Json @default("[]")
-  expectedImpactAmount   Float  @default(0)
+  expectedImpactAmount   Decimal  @default(0) @db.Decimal(18, 2)
   expectedImpactCurrency String @default("UZS")
   expectedImpactLabel    String @default("")
   priority Int @default(0)
@@ -2869,7 +3259,7 @@ model AiReport {
   insightHigh          Int   @default(0)
   insightMedium        Int   @default(0)
   insightOpportunities Int   @default(0)
-  insightImpactAtRisk  Float @default(0)
+  insightImpactAtRisk  Decimal @default(0) @db.Decimal(18, 2)
   outcomePrevented       Int @default(0)
   outcomeOccurred        Int @default(0)
   outcomeResolvedByOwner Int @default(0)
@@ -2938,4 +3328,341 @@ model AiUsageLog {
   @@index([ok])
   @@index([createdAt])
   @@map("ai_usage_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOLIYA: TAKRORLANUVCHI CHIQIMLAR (Faza 9)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// ── ENG MUHIM QAROR: KUTILAYOTGAN ≠ TO'LANGAN ──
+//
+// Vasvasa shu edi: har oy avtomatik `Expense` yaratib qo'yish. Bu
+// JIMGINA YOLG'ON bo'lardi — ijara hali to'lanmagan bo'lsa ham hisobotda
+// "8 mln chiqim" turardi, kassa qoldig'i esa boshqa raqam ko'rsatardi.
+// Oy oxirida ikkalasi farq qilardi va sababi topilmasdi.
+//
+// Shuning uchun IKKI JADVAL:
+//   RecurringExpense           — SHABLON ("har oy 8 mln ijara")
+//   RecurringExpenseOccurrence — KUTILAYOTGAN qator ("2026-avgust, 8 mln")
+//   Expense                    — HAQIQIY to'lov (faqat pul chiqqanda)
+//
+// Occurrence `paid` ga O'ZI o'tmaydi. Odam to'lovni tasdiqlaganda
+// Expense yaratiladi va occurrence unga bog'lanadi.
+//
+// NEGA `Expense` GA `status` USTUNI QO'SHILMADI: mavjud hisobotlarning
+// HAMMASI `Expense` ni "to'langan" deb o'qiydi. Status qo'shilsa, har bir
+// so'rovga `status = 'paid'` sharti qo'shilishi kerak bo'lardi — bittasi
+// unutilsa, rejalashtirilgan chiqim haqiqiy chiqim bo'lib ko'rinardi.
+// Alohida jadval bu xavfni BUTUNLAY yo'q qiladi: eski so'rovlar
+// kutilayotgan qatorni umuman KO'RMAYDI.
+
+model RecurringExpense {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  // NULL = markaz umumiy (filialga taqsimlanmagan) — Expense bilan bir xil qoida.
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("RecurringExpenseBranch", fields: [branchId], references: [id])
+  categoryId String @db.VarChar(24)
+  category   ExpenseCategory @relation("RecurringExpenseCategory", fields: [categoryId], references: [id])
+
+  title       String
+  description String @default("")
+
+  // KUTILAYOTGAN summa. Haqiqiy to'lov undan farq qilishi MUMKIN
+  // (kommunal har oy o'zgaradi) — shuning uchun nomi `expected`.
+  expectedAmount Decimal @default(0) @db.Decimal(18, 2)
+  currency       ExpenseCurrency @default(UZS)
+  method         ExpenseMethod   @default(cash)
+  vendor         String @default("")
+  personId       String? @db.VarChar(24)
+  person         User?   @relation("RecurringExpensePerson", fields: [personId], references: [id])
+  // Takrorlanuvchi chiqim odatda DOIMIY (ijara, obuna) — shuning uchun
+  // standart `fixed`, Expense'dagi `variable` dan farqli.
+  costType       CostType @default(fixed)
+
+  interval      RecurringInterval @default(monthly)
+  // Har N oralig'ida (2 = har ikki oyda). Standart 1.
+  intervalCount Int @default(1)
+  // Oyning nechanchi kuni (oylik/kvartal/yillik uchun). NULL = startDate kuni.
+  dayOfMonth    Int?
+
+  startDate DateTime
+  endDate   DateTime?
+  // KEYINGI KUTILAYOTGAN sana. Generator shu ustunga qarab ishlaydi va
+  // uni oldinga suradi — ya'ni ikki marta yaratish mumkin emas
+  // (occurrence'da (recurringExpenseId, dueDate) unique ham bor).
+  nextDueAt DateTime?
+  lastGeneratedAt DateTime?
+
+  // false → qatorlar avtomatik yaratilmaydi, faqat qo'lda.
+  autoGenerate Boolean @default(true)
+  isActive     Boolean @default(true)
+  note         String  @default("")
+
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("RecurringExpenseCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  occurrences RecurringExpenseOccurrence[] @relation("OccurrenceTemplate")
+  expenses    Expense[]                    @relation("RecurringExpenseChild")
+
+  @@index([branchId, isActive])
+  @@index([nextDueAt, isActive])
+  @@index([categoryId])
+  @@map("recurring_expenses")
+}
+
+model RecurringExpenseOccurrence {
+  id String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  recurringExpenseId String @db.VarChar(24)
+  recurringExpense   RecurringExpense @relation("OccurrenceTemplate", fields: [recurringExpenseId], references: [id], onDelete: Cascade)
+  // Shablondan nusxalanadi — filial bo'yicha filtrlash uchun
+  // (har safar shablonga join qilmaslik uchun).
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("OccurrenceBranch", fields: [branchId], references: [id])
+
+  dueDate     DateTime
+  periodYear  Int
+  periodMonth Int
+  expectedAmount Decimal @default(0) @db.Decimal(18, 2)
+
+  status RecurringOccurrenceStatus @default(pending)
+
+  // TO'LANGANDA yaratilgan HAQIQIY chiqim. `@unique` — bitta kutilayotgan
+  // qatorga ikki marta chiqim biriktirib bo'lmaydi (ikki baravar hisob).
+  expenseId String? @unique @db.VarChar(24)
+  expense   Expense? @relation("OccurrenceExpense", fields: [expenseId], references: [id])
+  paidAt     DateTime?
+  paidAmount Decimal  @default(0) @db.Decimal(18, 2)
+
+  note String @default("")
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("OccurrenceCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // IDEMPOTENTLIK: generator ikki marta ishlasa ham (cron qayta urinishi,
+  // qo'lda chaqiruv) bir xil sana uchun ikkinchi qator YARATILMAYDI.
+  @@unique([recurringExpenseId, dueDate])
+  @@index([status, dueDate])
+  @@index([branchId, periodYear, periodMonth])
+  @@map("recurring_expense_occurrences")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOLIYA: BYUDJET (Faza 10)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Byudjet — REJA. Fakt esa jurnaldan/chiqimlardan keladi. Ikkalasi
+// BIR JADVALDA saqlanmaydi: reja o'zgarmas hujjat, fakt esa har kuni
+// o'sadi. Taqqoslash hisoblash paytida bo'ladi (analytics qatlami).
+
+model Budget {
+  id       String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  name     String  @default("")
+  // NULL = butun markaz bo'yicha byudjet.
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("BudgetBranch", fields: [branchId], references: [id])
+
+  periodType BudgetPeriodType @default(month)
+  year       Int
+  // TEGISHLI BO'LMAGANDA 0 (NULL EMAS). Sabab: Postgres'da NULL != NULL,
+  // ya'ni nullable ustun unique indeksda dublikatni TO'SMAYDI. 0 bilan
+  // "yillik byudjet" qatori takrorlanmasligi kafolatlanadi.
+  month      Int @default(0)
+  quarter    Int @default(0)
+
+  status BudgetStatus @default(draft)
+  note   String @default("")
+
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("BudgetCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines BudgetLine[] @relation("BudgetLines")
+
+  // QISMAN UNIQUE (migratsiyada, xom SQL — Account'dagi bilan bir xil
+  // sabab: branchId NULL bo'lganda Postgres dublikatni to'smaydi):
+  //   a) (branchId, periodType, year, month, quarter) WHERE branchId IS NOT NULL AND isDeleted = false
+  //   b) (periodType, year, month, quarter)           WHERE branchId IS NULL     AND isDeleted = false
+  @@index([year, month])
+  @@index([branchId, status])
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  budgetId String @db.VarChar(24)
+  budget   Budget @relation("BudgetLines", fields: [budgetId], references: [id], onDelete: Cascade)
+
+  // UCH XIL DARAJA bitta jadvalda:
+  //   total    → butun davr uchun shift (kategoriyasiz)
+  //   category → aniq kategoriya (categoryId)
+  //   kind     → kategoriya TURI (payroll / operating / tax / capital)
+  // Uchalasi bir vaqtda bo'lishi mumkin: "jami 50 mln, shundan
+  // marketing 5 mln". Tahlil qatlami darajalarni aralashtirmasligi kerak.
+  scope BudgetLineScope @default(category)
+
+  categoryId String? @db.VarChar(24)
+  category   ExpenseCategory? @relation("BudgetLineCategory", fields: [categoryId], references: [id])
+  categoryKind ExpenseCategoryKind?
+
+  amount Decimal @default(0) @db.Decimal(18, 2)
+  note   String  @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([budgetId])
+  @@index([categoryId])
+  @@map("budget_lines")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOLIYA: QAYTARIM (Faza 6)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// ── QOIDA: ASL TO'LOV HECH QACHON TAHRIRLANMAYDI ──
+//
+// 700 000 to'lov qilingan, keyin 300 000 qaytarilgan bo'lsa — tarixda
+// IKKALA amal ham turishi shart. `amount` ni 400 000 ga o'zgartirish
+// eng oson yo'l edi va aynan shuning uchun xavfli: kassada 700 000
+// kirim va 300 000 chiqim BO'LGAN, hujjatda esa faqat 400 000
+// ko'rinardi — kassa sanog'i hisobotga to'g'ri kelmasdi va sababi
+// izsiz yo'qolardi.
+//
+// ── NEGA `StudentPayment.paidAmount` KAMAYTIRILMAYDI ──
+// Qaytarim — PUL harakati, o'quvchining MAJBURIYATI emas. Kursni tark
+// etgan o'quvchiga pul qaytarilsa, uning qarzi TIKLANMASLIGI kerak.
+// Agar to'lovning o'zi xato yozilgan bo'lsa — bu boshqa holat va
+// boshqa oqim: tranzaksiyani bekor qilish (`transaction.remove`), u
+// paidAmount ni qaytaradi.
+
+model Refund {
+  id       String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  branchId String @db.VarChar(24)
+  branch   Branch @relation("RefundBranch", fields: [branchId], references: [id])
+  studentId String @db.VarChar(24)
+  student   User   @relation("RefundStudent", fields: [studentId], references: [id])
+  groupId   String? @db.VarChar(24)
+  group     Group?  @relation("RefundGroup", fields: [groupId], references: [id])
+  membershipId String? @db.VarChar(24)
+  membership   GroupMembership? @relation("RefundMembership", fields: [membershipId], references: [id])
+
+  // ASL TO'LOV — ixtiyoriy: qaytarim aniq bir tranzaksiyaga emas,
+  // umumiy hisobga (depozit qoldig'iga) tegishli bo'lishi mumkin.
+  originalTransactionId String? @db.VarChar(24)
+  originalTransaction   PaymentTransaction? @relation("RefundOriginalTx", fields: [originalTransactionId], references: [id])
+  paymentId String? @db.VarChar(24)
+  payment   StudentPayment? @relation("RefundPayment", fields: [paymentId], references: [id])
+
+  amount Decimal @db.Decimal(18, 2)
+  method PaymentMethod @default(cash)
+  reason String @default("")
+
+  status RefundStatus @default(pending)
+
+  requestedById String @db.VarChar(24)
+  requestedBy   User   @relation("RefundRequestedBy", fields: [requestedById], references: [id])
+  approvedById  String? @db.VarChar(24)
+  approvedBy    User?   @relation("RefundApprovedBy", fields: [approvedById], references: [id])
+  approvedAt    DateTime?
+  executedAt    DateTime?
+  decisionNote  String @default("")
+
+  // Mavjud tasdiq oqimiga ulanish (limitdan oshgan qaytarim).
+  approvalId String? @db.VarChar(24)
+  approval   Approval? @relation("RefundApproval", fields: [approvalId], references: [id])
+
+  // Bajarilganda yozilgan jurnal yozuvi — audit izi.
+  journalEntryId String? @db.VarChar(24)
+  receiptId String? @db.VarChar(24)
+  receipt   StoredFile? @relation("RefundReceipt", fields: [receiptId], references: [id])
+  note      String @default("")
+
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("RefundCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId, createdAt])
+  @@index([studentId, createdAt])
+  @@index([status, createdAt])
+  @@index([originalTransactionId])
+  @@map("refunds")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOLIYA: AUDIT IZI (Faza 14)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// `ActivityLog` DAN NEGA ALOHIDA: u HTTP darajasidagi log — "kim qaysi
+// endpoint'ga bordi". U so'rov TANASINI saqlaydi, lekin QIYMAT QANDAY
+// O'ZGARGANINI bilmaydi: 4.5 mln → 3.8 mln o'zgarishida eski qiymat
+// hech qayerda qolmasdi. Moliyada esa asosiy savol aynan shu —
+// "oldin qancha edi va kim o'zgartirdi?".
+//
+// Ikkinchi farq: ActivityLog TTL bilan tozalanadi (jobs/ttlCleanup),
+// moliyaviy audit esa TOZALANMAYDI.
+//
+// APPEND-ONLY: `updatedAt` ATAYLAB YO'Q. Audit yozuvini tahrirlash
+// mumkin bo'lsa, u audit bo'lishdan to'xtaydi.
+
+model FinancialAuditLog {
+  id String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+
+  // Qaysi hujjat: "Expense" | "Refund" | "Budget" | "Discount" |
+  // "JournalEntry" | "RecurringExpense" | "Account" ...
+  // FK EMAS — ataylab: hujjat o'chirilsa ham audit izi QOLISHI kerak.
+  entityType String
+  entityId   String @db.VarChar(24)
+  action     FinancialAuditAction
+
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("FinAuditBranch", fields: [branchId], references: [id])
+
+  actorId String? @db.VarChar(24)
+  actor   User?   @relation("FinAuditActor", fields: [actorId], references: [id])
+  // Ism NUSXASI: foydalanuvchi keyin o'chirilsa ham "kim qilgani" qoladi.
+  actorLabel String @default("")
+
+  oldValue Json?
+  newValue Json?
+  changedFields String[] @default([])
+  reason String @default("")
+
+  // Eng ko'p so'raladigan ikki raqam ALOHIDA ustunda: "4.5 mln → 3.8 mln"
+  // ni ko'rsatish uchun har safar JSON ochish shart bo'lmasin va ular
+  // bo'yicha filtr/saralash ishlasin.
+  amountBefore Decimal? @db.Decimal(18, 2)
+  amountAfter  Decimal? @db.Decimal(18, 2)
+
+  // Infratuzilma buni allaqachon qo'llab-quvvatlaydi (ActivityLog'da bor).
+  ip        String @default("")
+  userAgent String @default("")
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([action, createdAt])
+  @@map("financial_audit_logs")
 }

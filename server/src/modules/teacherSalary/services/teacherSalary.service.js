@@ -343,15 +343,15 @@ export const applyPaidDelta = async (salaryId, delta, { capToRemaining = false }
   const d = Number(delta) || 0;
 
   const setClause = Prisma.sql`
-    SET "paidAmount"     = COALESCE("paidAmount", 0) + ${d}::double precision,
+    SET "paidAmount"     = COALESCE("paidAmount", 0) + ${d}::numeric,
         "overpaidAmount" = GREATEST(
           0,
-          COALESCE("paidAmount", 0) + ${d}::double precision - "expectedAmount"
+          COALESCE("paidAmount", 0) + ${d}::numeric - "expectedAmount"
         ),
         "status"         = CASE
-          WHEN COALESCE("paidAmount", 0) + ${d}::double precision <= 0
+          WHEN COALESCE("paidAmount", 0) + ${d}::numeric <= 0
             THEN 'unpaid'::"PayStatus"
-          WHEN COALESCE("paidAmount", 0) + ${d}::double precision < "expectedAmount"
+          WHEN COALESCE("paidAmount", 0) + ${d}::numeric < "expectedAmount"
             THEN 'partial'::"PayStatus"
           ELSE 'paid'::"PayStatus"
         END,
@@ -364,7 +364,7 @@ export const applyPaidDelta = async (salaryId, delta, { capToRemaining = false }
     ? await prisma.$executeRaw`
         UPDATE "teacher_salaries" ${setClause}
         WHERE "id" = ${id}
-          AND COALESCE("paidAmount", 0) + ${d}::double precision <= "expectedAmount"
+          AND COALESCE("paidAmount", 0) + ${d}::numeric <= "expectedAmount"
       `
     : await prisma.$executeRaw`
         UPDATE "teacher_salaries" ${setClause}

@@ -87,6 +87,21 @@ export const PERMISSIONS = Object.freeze({
   FINANCE_PAY: "finance.pay",
   FINANCE_MANAGE: "finance.manage",
 
+  // ── GRANULYAR MOLIYA RUXSATLARI ──
+  // Server bilan AYNAN bir xil (server/src/constants/permissions.js).
+  // Chiqim yozish/boshqarish — eski `expenses.*` ning yangi nomi.
+  FINANCE_CREATE_EXPENSE: "finance.create_expense",
+  FINANCE_MANAGE_EXPENSE: "finance.manage_expense",
+  FINANCE_MANAGE_ACCOUNTS: "finance.manage_accounts",
+  FINANCE_MANAGE_REFUNDS: "finance.manage_refunds",
+  FINANCE_MANAGE_TRANSFERS: "finance.manage_transfers",
+  // ⚠ MAOSH TANNARXINI ochadi — `finance.read` uni QAMRAMAYDI.
+  FINANCE_VIEW_PROFITABILITY: "finance.view_profitability",
+  FINANCE_VIEW_CASHFLOW: "finance.view_cashflow",
+  FINANCE_VIEW_RECEIVABLES: "finance.view_receivables",
+  // Byudjet KO'RISH `finance.read` ostida, BOSHQARISH alohida.
+  FINANCE_MANAGE_BUDGETS: "finance.manage_budgets",
+
   // Teacher salary (O'qituvchi maoshlari)
   SALARY_READ: "salary.read",
   SALARY_PAY: "salary.pay",

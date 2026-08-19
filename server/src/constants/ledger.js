@@ -20,9 +20,19 @@
 // Jurnal esa "qaysi kassada qancha pul bor" degan savolning YAGONA
 // javobi bo'ladi.
 //
-// Shuning uchun daromad/xarajat hisoblari BITTA-BITTADAN (revenue,
-// expense) - ular faqat yozuvni MUVOZANATLASH uchun. To'liq P&L
-// tuzilmasi Faza 5 da, deferred revenue bilan birga quriladi.
+// Daromad/xarajat hisoblari ATAYLAB kam sonli (revenue, expense,
+// payment_fee, shortage) - ular yozuvni MUVOZANATLASH uchun. Tafsilot
+// esa hisobda emas, YOZUV O'LCHOVLARIDA (JournalEntry.teacherId,
+// courseId, roomId, expenseCategoryId...).
+//
+// NEGA SHUNDAY: har kesim uchun alohida hisob ochilsa (masalan har
+// o'qituvchiga bittadan), hisoblar soni cheksiz o'sardi va yangi kesim
+// qo'shish (xona bo'yicha foyda) butun hisoblar rejasini qayta qurishni
+// talab qilardi. O'lchov ustuni esa shunchaki yana bitta GROUP BY.
+//
+// Shu sababdan foyda/zarar tahlili (Faza 15-19) hisob TURI bo'yicha
+// emas, o'lchovlar bo'yicha yig'iladi. Qoidalar fayl oxirida:
+// NON_OPERATING_ENTRY_KINDS, REVENUE_KINDS, COST_KINDS, isOperating().
 
 export const ACCOUNT_KINDS = Object.freeze({
   // ── AKTIV: pul turgan joylar ──
@@ -65,6 +75,32 @@ export const ACCOUNT_KINDS = Object.freeze({
   // KAMOMAD: sanoqda yetishmagan pul. `expense` dan ATAYLAB ajratilgan -
   // u xarajat emas, YO'QOTISH va mas'ul shaxsga bog'lanadi.
   SHORTAGE: "shortage",
+
+  // ── FAZA 3: QO'SHIMCHA PUL KANALLARI ──
+  UZCARD: "uzcard",
+  HUMO: "humo",
+  // Boshqa/aralash kanal - aniq nomi Account.name da.
+  OTHER: "other",
+
+  // ── FAZA 13: EGASINING KAPITALI ──
+  //
+  // `EQUITY` DAN ATAYLAB AJRATILGAN va bu farq muhim:
+  //   equity        - boshlang'ich qoldiqning qarshi tomoni. O'tmish,
+  //                   bir marta yoziladi va boshqa qimirlamaydi.
+  //   owner_capital - TIRIK oqim: egasi bugun pul qo'shdi yoki oldi.
+  //
+  // IKKALASI HAM DAROMAD/XARAJAT EMAS. Egasi 20 mln qo'shsa kassa
+  // oshadi, lekin markaz hech narsa SOTMAGAN. Aralashtirilsa foyda
+  // yolg'on ko'tarilib, eng muhim savol - "biznes O'ZI pul topayaptimi?"
+  // - javobsiz qolardi. Aksincha: egasi pul yechganda "zarar" ko'rinardi.
+  OWNER_CAPITAL: "owner_capital",
+
+  // ── FAZA 12: TO'LOV TIZIMI KOMISSIYASI ──
+  // `EXPENSE` dan ajratilgan: bu markaz QARORI bilan qilingan xarajat
+  // emas, tushumdan avtomatik ushlanadigan ulush. Alohida hisob
+  // "pul qabul qilish bizga qancha turadi?" degan savolga to'g'ridan-
+  // to'g'ri javob beradi.
+  PAYMENT_FEE: "payment_fee",
 });
 
 export const ALL_ACCOUNT_KINDS = Object.values(ACCOUNT_KINDS);
@@ -84,11 +120,19 @@ export const NORMAL_SIDE = Object.freeze({
   [ACCOUNT_KINDS.DUE_FROM]: "debit",
   [ACCOUNT_KINDS.EXPENSE]: "debit",
   [ACCOUNT_KINDS.SHORTAGE]: "debit",
+  [ACCOUNT_KINDS.UZCARD]: "debit",
+  [ACCOUNT_KINDS.HUMO]: "debit",
+  [ACCOUNT_KINDS.OTHER]: "debit",
+  // Komissiya - xarajat tabiatli (debet bilan o'sadi).
+  [ACCOUNT_KINDS.PAYMENT_FEE]: "debit",
 
   [ACCOUNT_KINDS.DUE_TO]: "credit",
   [ACCOUNT_KINDS.DEPOSIT]: "credit",
   [ACCOUNT_KINDS.EQUITY]: "credit",
   [ACCOUNT_KINDS.REVENUE]: "credit",
+  // Egasi qo'shgan pul majburiyat tabiatli: markaz uni egasiga
+  // "qarzdor". Kredit bilan o'sadi.
+  [ACCOUNT_KINDS.OWNER_CAPITAL]: "credit",
 });
 
 // PUL TURGAN hisoblar - "filialda qancha pul bor" savoli shular yig'indisi.
@@ -100,6 +144,9 @@ export const TREASURY_KINDS = Object.freeze([
   ACCOUNT_KINDS.PAYME,
   ACCOUNT_KINDS.BANK,
   ACCOUNT_KINDS.TRANSIT,
+  ACCOUNT_KINDS.UZCARD,
+  ACCOUNT_KINDS.HUMO,
+  ACCOUNT_KINDS.OTHER,
 ]);
 
 // FILIALLARARO hisoblar - konsolidatsiyada ULAR o'zaro yo'q qilinadi.
@@ -117,6 +164,9 @@ export const METHOD_TO_ACCOUNT = Object.freeze({
   payme: ACCOUNT_KINDS.PAYME,
   bank: ACCOUNT_KINDS.BANK,
   transfer: ACCOUNT_KINDS.BANK,
+  uzcard: ACCOUNT_KINDS.UZCARD,
+  humo: ACCOUNT_KINDS.HUMO,
+  other: ACCOUNT_KINDS.OTHER,
 });
 
 // JURNAL YOZUVI TURLARI - "bu pul nega harakatlandi".
@@ -133,6 +183,23 @@ export const ENTRY_KINDS = Object.freeze({
   TRANSFER_RECEIVE: "transfer_receive", // inkassatsiya qabul qilindi
   INTER_BRANCH: "inter_branch", // filiallararo qarz
   ADJUSTMENT: "adjustment", // qo'lda tuzatish
+
+  // ── FAZA 6: QAYTARIM ──
+  // Asl to'lov O'ZGARTIRILMAYDI. Tarixda ikkala amal ham turadi.
+  REFUND: "refund",
+
+  // ── FAZA 13: egasining puli (operatsion natijaga KIRMAYDI) ──
+  OWNER_INVESTMENT: "owner_investment",
+  OWNER_WITHDRAWAL: "owner_withdrawal",
+
+  // ── FAZA 12: to'lov tizimi komissiyasi ──
+  PAYMENT_FEE: "payment_fee",
+
+  // ── FAZA 3: HISOBLAR ORASIDA KO'CHIRISH (bitta filial ichida) ──
+  // `TRANSFER_SEND`/`TRANSFER_RECEIVE` dan boshqa narsa: ular
+  // FILIALLARARO inkassatsiya (yo'ldagi pul, ikki filial jurnali).
+  // Bu esa bank -> kassa, bitta filial ichida.
+  ACCOUNT_TRANSFER: "account_transfer",
 });
 
 export const ALL_ENTRY_KINDS = Object.values(ENTRY_KINDS);
@@ -146,3 +213,54 @@ export const ALL_ENTRY_KINDS = Object.values(ENTRY_KINDS);
  */
 export const signedBalance = (kind, debit = 0, credit = 0) =>
   NORMAL_SIDE[kind] === "credit" ? credit - debit : debit - credit;
+
+// ═══════════════════════════════════════════════════════════════════════
+// OPERATSION NATIJA QOIDALARI (Faza 13, 15, 26)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Talab: "Prevent double counting" va "Owner investment must not appear
+// as operating revenue". Bu qoidalar BITTA joyda turishi shart - har
+// hisobotda qaytadan yozilsa, ular MUQARRAR ajralib ketadi va ikki
+// hisobot ikki xil "foyda" ko'rsatardi.
+
+// PUL HARAKATI BOR, LEKIN OPERATSION EMAS.
+//
+// Bu yozuvlar kassa qoldig'ini O'ZGARTIRADI (ya'ni pul oqimi hisobotida
+// KO'RINISHI SHART), lekin foyda hisobiga KIRMAYDI:
+//   • egasining puli    - biznes hech narsa sotmagan
+//   • hisoblar orasida  - pul bir cho'ntakdan ikkinchisiga o'tdi
+//   • filiallararo      - tarmoq darajasida pul hech qayerga ketmagan
+//
+// Aynan shu ro'yxat "FOYDA ≠ KASSA QOLDIG'I" farqini tushuntiradi
+// (Faza 11 talabi).
+export const NON_OPERATING_ENTRY_KINDS = Object.freeze([
+  ENTRY_KINDS.OWNER_INVESTMENT,
+  ENTRY_KINDS.OWNER_WITHDRAWAL,
+  ENTRY_KINDS.ACCOUNT_TRANSFER,
+  ENTRY_KINDS.TRANSFER_SEND,
+  ENTRY_KINDS.TRANSFER_RECEIVE,
+  ENTRY_KINDS.INTER_BRANCH,
+]);
+
+// MOLIYALASHTIRISH oqimi - pul oqimi hisobotining uchinchi bo'limi
+// (operatsion / investitsion / moliyalashtirish).
+export const FINANCING_ENTRY_KINDS = Object.freeze([
+  ENTRY_KINDS.OWNER_INVESTMENT,
+  ENTRY_KINDS.OWNER_WITHDRAWAL,
+]);
+
+// FOYDA hisobiga kiradigan hisob turlari.
+//
+// `OWNER_CAPITAL` va `EQUITY` bu yerda YO'Q - ataylab (Faza 13).
+// `DEPOSIT` ham yo'q: o'quvchi depoziti hali daromad emas, u faqat
+// oylikka qoplanganda daromadga aylanadi (deposit_apply).
+export const REVENUE_KINDS = Object.freeze([ACCOUNT_KINDS.REVENUE]);
+export const COST_KINDS = Object.freeze([
+  ACCOUNT_KINDS.EXPENSE,
+  ACCOUNT_KINDS.PAYMENT_FEE,
+  ACCOUNT_KINDS.SHORTAGE,
+]);
+
+/** Yozuv operatsion natijaga kiradimi? */
+export const isOperating = (entryKind) =>
+  !NON_OPERATING_ENTRY_KINDS.includes(entryKind);

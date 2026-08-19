@@ -86,7 +86,13 @@
     "test:expenses-chain": "node tests/expensesChainPrisma.test.js",
     "test:branch-analytics": "node tests/branchAnalyticsPrisma.test.js",
     "test:branch-cross": "node tests/branchCrossSectionPrisma.test.js",
-    "probe:migration": "node tests/migrationProbe.mjs"
+    "probe:migration": "node tests/migrationProbe.mjs",
+    "test:fintx": "node tests/financialTransactionPrisma.test.js",
+    "test:fin-analytics": "node tests/financeAnalyticsPrisma.test.js",
+    "test:fin-perms": "node tests/financePermissionsPrisma.test.js",
+    "test:fin-ops": "node tests/financeOpsPrisma.test.js",
+    "test:fin-entry": "node tests/financeEntryDetailPrisma.test.js",
+    "seed:finance-demo": "node src/seeds/financeDemo.seed.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

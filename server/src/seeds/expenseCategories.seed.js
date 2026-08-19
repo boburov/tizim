@@ -1,7 +1,6 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
-import ExpenseCategory from "../models/expenseCategory.model.js";
 
 // STANDART CHIQIM KATEGORIYALARI.
 //
@@ -31,23 +30,33 @@ const CATEGORIES = [
 const seed = async () => {
   await connectDB();
 
+  // MONGO → PRISMA
+  //   ExpenseCategory.findOne({ isDeleted: { $ne: true } })
+  //     → prisma.expenseCategory.findFirst({ where: { isDeleted: false } })
+  //       (`isDeleted` ustuni NOT NULL/default false, ya'ni `$ne: true`
+  //        oddiy `false` ga aylanadi)
+  //   ExpenseCategory.create(...) → prisma.expenseCategory.create({ data })
+  //
+  // `code` bo'yicha UNIQUE INDEKS YO'Q (qarang schema.prisma) — qisman
+  // unique (branchId, name) bo'yicha. Shuning uchun `upsert` emas,
+  // ochiq "bormi?" tekshiruvi: idempotentlik shu yerda ta'minlanadi.
   let created = 0;
   let skipped = 0;
   for (const c of CATEGORIES) {
-    const existing = await ExpenseCategory.findOne({
-      code: c.code,
-      branchId: null,
-      isDeleted: { $ne: true },
+    const existing = await prisma.expenseCategory.findFirst({
+      where: { code: c.code, branchId: null, isDeleted: false },
     });
     if (existing) {
       skipped += 1;
       continue;
     }
-    await ExpenseCategory.create({
-      ...c,
-      branchId: null,
-      isSystem: Boolean(c.isSystem),
-      isActive: true,
+    await prisma.expenseCategory.create({
+      data: {
+        ...c,
+        branchId: null,
+        isSystem: Boolean(c.isSystem),
+        isActive: true,
+      },
     });
     created += 1;
   }

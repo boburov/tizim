@@ -12,8 +12,8 @@ import {
   checkExpenseLimit,
   createRequest,
 } from "../../expenseApprovals/services/expenseApproval.service.js";
-import * as journalPosting from "../../../helpers/journalPosting.helper.js";
-import * as journal from "../../journal/services/journal.service.js";
+import * as financialTx from "../../finance/services/financialTransaction.service.js";
+import { runFinanceTxn } from "../../finance/services/financeTxn.helper.js";
 
 /**
  * UMUMIY CHIQIMLAR - servis qatlami.
@@ -188,11 +188,22 @@ export const create = async (body, currentUser) => {
     return { pendingApproval: true, approval };
   }
 
-  const created = await prisma.expense.create({
-    data: { ...draft, createdById: actorId(currentUser) },
+  // ── ATOMIK: chiqim + jurnal yozuvi + audit BITTA tranzaksiyada ──
+  //
+  // ILGARI: `prisma.expense.create()` keyin `postExpense()` alohida, va
+  // jurnal xatosi YUTILARDI. Natijada "chiqim bor, jurnalda yo'q"
+  // holati hosil bo'lishi mumkin edi — kassa qoldig'i hisobotdan
+  // farq qilardi va buni faqat `journalVerify` keyinroq topardi.
+  //
+  // ENDI: xato bo'lsa chiqim ham yozilmaydi. Eng yomon natija —
+  // "hech narsa yozilmadi", ya'ni foydalanuvchi xatoni DARHOL ko'radi.
+  const created = await runFinanceTxn(async (tx) => {
+    const expense = await tx.expense.create({
+      data: { ...draft, createdById: actorId(currentUser) },
+    });
+    await financialTx.postExpense({ expenseId: expense.id }, currentUser, { tx });
+    return expense;
   });
-  // JURNAL: xarajat o'sdi, kassa kamaydi (Faza 4).
-  await journalPosting.postExpense(created, journal);
   return withLegacyId(created);
 };
 
@@ -217,19 +228,24 @@ export const executeApprovedExpense = async (approval) => {
     canSeeAllBranches: true,
   });
 
-  const created = await prisma.expense.create({
-    data: {
-      ...draft,
-      branchId: approval.payload?.resolvedBranchId || null,
-      amount: approval.amount ?? draft.amount,
-      createdById: approval.requestedById || approval.requestedBy || null,
-      expenseApprovalId: String(approvalId),
-    },
+  // Tasdiqlangan chiqim ham to'g'ridan-to'g'ri yozilgani kabi pul
+  // harakati — o'sha atomik yo'ldan o'tadi.
+  const actor = {
+    id: approval.requestedById || approval.requestedBy || null,
+  };
+  const created = await runFinanceTxn(async (tx) => {
+    const expense = await tx.expense.create({
+      data: {
+        ...draft,
+        branchId: approval.payload?.resolvedBranchId || null,
+        amount: approval.amount ?? draft.amount,
+        createdById: approval.requestedById || approval.requestedBy || null,
+        expenseApprovalId: String(approvalId),
+      },
+    });
+    await financialTx.postExpense({ expenseId: expense.id }, actor, { tx });
+    return expense;
   });
-
-  // JURNAL: tasdiqlangan chiqim ham xuddi to'g'ridan-to'g'ri yozilgani
-  // kabi pul harakati - shuning uchun bu yerda ham yoziladi.
-  await journalPosting.postExpense(created, journal);
   return withLegacyId(created);
 };
 

@@ -10,6 +10,17 @@ import {
 } from "../../../helpers/branchContext.helper.js";
 import * as journal from "./journal.service.js";
 
+// ─────────────────────────────────────────────────────────────────────
+// NEGA BU MODUL `financialTransaction.service.js` NI ISHLATMAYDI
+//
+// Smena yopilishidagi farq (kamomad/ortiqcha) markaziy servisdagi
+// amallarning hech biriga to'g'ri kelmaydi: u to'lov ham, chiqim ham
+// emas — SANOQ natijasi va `shortage` hisobiga tushadi.
+//
+// Ikki marta yopilishning oldini shartli `updateMany` (WHERE status =
+// 'open') oladi. Qarang FINANCE-ARCHITECTURE.md, "STEP 4 ilovasi".
+// ─────────────────────────────────────────────────────────────────────
+
 // KASSA SMENASI - ochish, yopish, sanoq.
 //
 // ── SMENA NEGA KERAK ──

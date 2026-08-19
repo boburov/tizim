@@ -67,8 +67,38 @@ export const collectPermissions = async (role) => {
 // DIQQAT: bu ATAYLAB bir tomonlama. Teskarisi (create → manage) HECH
 // QACHON bo'lmasligi kerak - aks holda lid qo'shish huquqi berilgan
 // resepshin o'quvchilarni guruhga qabul qila olardi.
+// KUCHLIROQ RUXSAT QAMRAB OLADIGAN KALITLAR.
+//
+// ── MOLIYA KALITLARI QAYTA NOMLANGANDA (STEP 5.1) ──
+// `expenses.create` / `expenses.manage` yangi `finance.*` nomlariga
+// ko'chdi. Ro'yxatdagi moslik tufayli MAVJUD rollar buzilmaydi:
+// eski kalit berilgan xodim yangi nomni talab qiladigan marshrutdan
+// ham o'tadi. Ular `constants/permissions.js` da hamon mavjud, lekin
+// YANGI marshrutlar faqat yangi nomlarni ishlatadi.
+//
+// ── NEGA `view_*` BU YERDA YO'Q ──
+// `finance.read` ularni ATAYLAB qamramaydi. Aks holda yangi kalitlar
+// bezakka aylanardi: "moliyani ko'rish" huquqi bo'lgan har kim
+// o'qituvchi maoshi tannarxini ham ko'raverardi — ya'ni ajratishning
+// butun ma'nosi yo'qolardi.
+//
+// Ular faqat YANGI `/finance-analytics` marshrutlarini qo'riqlaydi,
+// ular hali hech kimga ochilmagan — demak hech kim huquqini
+// yo'qotmaydi. Ruxsat ochiq berilishi kerak (owner va filial
+// direktorida u seed orqali avtomatik bor).
 const PERMISSION_IMPLIES = Object.freeze({
   "leads.manage": ["leads.create", "leads.update"],
+
+  // Eski chiqim kalitlari → yangi nomlar.
+  "expenses.create": ["finance.create_expense"],
+  "expenses.manage": ["finance.manage_expense", "finance.create_expense"],
+
+  // `finance.manage` — mavjud kuchli kalit. Hisob va qaytarim
+  // boshqaruvi uning tabiiy davomi.
+  "finance.manage": ["finance.manage_accounts", "finance.manage_refunds"],
+
+  // O'tkazma marshrutlari ilgari `finance.pay` bilan qo'riqlangan.
+  "finance.pay": ["finance.manage_transfers"],
 });
 
 export const hasPermission = (permissions, key) => {

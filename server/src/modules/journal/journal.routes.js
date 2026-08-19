@@ -89,7 +89,7 @@ router.get(
 router.post(
   "/transfers",
   requireAuth,
-  requirePermission(PERMISSIONS.FINANCE_PAY),
+  requirePermission(PERMISSIONS.FINANCE_MANAGE_TRANSFERS),
   validate(transferSendSchema),
   transferSend,
 );
@@ -99,14 +99,14 @@ router.post(
 router.post(
   "/transfers/:id/receive",
   requireAuth,
-  requirePermission(PERMISSIONS.FINANCE_PAY),
+  requirePermission(PERMISSIONS.FINANCE_MANAGE_TRANSFERS),
   validate(transferReceiveSchema),
   transferReceive,
 );
 router.post(
   "/transfers/:id/cancel",
   requireAuth,
-  requirePermission(PERMISSIONS.FINANCE_PAY),
+  requirePermission(PERMISSIONS.FINANCE_MANAGE_TRANSFERS),
   validate(transferIdSchema),
   transferCancel,
 );
