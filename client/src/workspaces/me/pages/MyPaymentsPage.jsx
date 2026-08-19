@@ -5,7 +5,7 @@ import { formatMoney } from "@/shared/utils/formatMoney";
 import { formatDateUz } from "@/shared/utils/formatDate";
 import { QueryState } from "@/shared/components/analytics";
 import { useMyLedgerQuery } from "@/owner/features/ledger";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
+import WorkspacePage from "@/shared/components/page/PageShell";
 
 /**
  * ══════════════════════════════════════════════════════════════════════

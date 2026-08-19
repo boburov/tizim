@@ -95,7 +95,8 @@
     "test:fin-intel": "node tests/financeIntelligencePrisma.test.js",
     "audit:finance": "node tests/financeSecurityAudit.mjs",
     "audit:workspace": "node tests/workspaceSecurityAudit.mjs",
-    "fixture:qa": "node tests/fixtures/qaUsers.mjs"
+    "fixture:qa": "node tests/fixtures/qaUsers.mjs",
+    "test:rooms": "node tests/roomUtilization.test.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

@@ -26,42 +26,58 @@ client/src/
 │  └─ constants/            # roles, permissions, modals
 ├─ features/                # role-independent global features
 │  └─ auth/
-├─ owner/                   # OWNER panel
+├─ owner/                   # ADMIN PANEL (/owner/*) - the operational panel
 │  ├─ features/<feature>/   # api, hooks, components, pages, store, utils, index.js
-│  ├─ layout/
 │  ├─ routes/index.jsx
-│  ├─ navigation/sidebar.config.js
+│  ├─ navigation/sidebar.config.js   # THIS PANEL OWNS ITS MENU
 │  └─ index.js
+├─ superadmin/              # SUPER ADMIN PANEL (/org/*) - separate app shell
+│  ├─ layout/               # SuperAdminLayout + Header (MOLIYA) + Sidebar (3 items)
+│  ├─ navigation/           # nav.config.js, drilldown.js
+│  ├─ pages/                # Asosiy, Moliya, Filiallar, BranchDetail, TizimTahlili
+│  ├─ sections/ components/ api/ hooks/
+│  └─ routes/index.jsx
 ├─ teacher/                 # TEACHER panel (same structure)
 ├─ student/                 # STUDENT panel (same structure)
-└─ admin/                   # EXECUTIVE shell (/admin) - NOT a role, a viewpoint
-   ├─ features/<name>/      # overview, finance, academic, team, insights
-   ├─ layout/               # ExecutiveLayout (NO sidebar) + ExecutiveHeader
-   ├─ navigation/           # executiveNav.config.js, drilldown.js
-   ├─ api/ hooks/           # data adapters (status contract)
-   ├─ routes/index.jsx
-   └─ index.js
+└─ workspaces/              # /work (staff) + /me (student) landing screens only
+   ├─ work/pages/ me/pages/
+   └─ routes.jsx
 ```
 
-## Two shells: operational vs executive
+## Two panels: Super Admin and Admin
 
-| | `/owner/*` (+ `/teacher`, `/student`) | `/admin` |
+| | `/owner/*` — **Admin panel** | `/org/*` — **Super Admin panel** |
 |---|---|---|
-| Layout | `OperationalLayout` - **sidebar** | `ExecutiveLayout` - **no sidebar** |
-| Navigation | `AppSidebar`, 30+ links | top bar + 5 section tabs |
-| Purpose | daily work ("what do I do") | oversight ("how are we doing") |
-| Guarded by | `RoleGuard` | `PermissionGuard` per section |
+| Layout | `OperationalLayout` (shadcn `SidebarProvider`) | `SuperAdminLayout` — **its own shell** |
+| Header | `AppHeader` (mobile only) | `SuperAdminHeader`, full width, **MOLIYA** lives here |
+| Menu | `owner/navigation/sidebar.config.js`, ~12 groups | `superadmin/navigation/nav.config.js`, **exactly 3**: Asosiy · Filiallar · Tizim tahlili |
+| Scope | the user's assigned branch(es) | the whole organization |
+| Guarded by | `PermissionGuard` per route | `SuperAdminGuard` (`branches.view_all` **and** `system.admin_access`, or owner) |
 
-`admin/` is **not a role** - it is a second view of the same data. It adds **no new
-permission keys**; each section reuses an existing one (`admin_dashboard.read`,
-`finance.read`, `salary.read`, `ai.read`).
+**They are different shells on purpose.** `/org/*` is mounted *outside*
+`OperationalLayout` in `app/routes.jsx` — it has to be: `OperationalLayout` wraps
+everything in `SidebarProvider` and `AppHeader` calls `useSidebar()`, so "hiding"
+the sidebar from inside is impossible. Sharing one shell and swapping the menu
+array is exactly what makes a Super Admin panel read as "the Admin panel with
+extra buttons"; `panelAcceptance.mjs` asserts `[data-sidebar]` is **absent** on
+`/org`.
 
-`/admin` is mounted **outside** `OperationalLayout` in `app/routes.jsx`. It has to
-be: `OperationalLayout` wraps everything in `SidebarProvider` and `AppHeader` calls
-`useSidebar()`, so "hiding" the sidebar from inside is not possible - the provider,
-the `Ctrl+B` shortcut and `SidebarRail` would all still be there.
+**The same concept can exist in both panels — the difference is scope, not code.**
+Rooms, finance and system analysis each have **one** implementation used twice:
 
-> `DashboardLayout` is now a re-export of `OperationalLayout`. Use the new name.
+| Concept | Super Admin | Admin | Shared component |
+|---|---|---|---|
+| Rooms | `/org/filiallar/:id?tab=rooms` | `/owner/rooms` | `owner/features/rooms/components/RoomsGrid` |
+| Finance | `/org/moliya` | `/owner/finance` | `financeAnalytics/pages/FinanceCommandPage` |
+| System analysis | `/org/tahlil` | `/owner/tahlil` | `features/ai` + `rooms/RoomUtilizationSection` |
+
+Scope is a **filter applied by the server**, never a second screen. Writing a
+"branch version" of a finance screen produces two numbers for one fact.
+
+> `workspaces/` is what remains of an earlier four-workspace abstraction that
+> computed every panel's shell from permissions. It replaced the Admin panel's
+> own navigation and produced a second, half-finished branch panel (`/branch/*`).
+> Only `/work` and `/me` survive; `/branch/*` redirects into `/owner/*`.
 
 ### Dashboard components and the data contract
 
@@ -112,9 +128,10 @@ Rules that follow from this, and why:
   blocks and a sub-field can be missing while the request itself succeeded.
 - **Do not re-compute on the client what the server already computes**
   (`netGrowth`, attendance `rate`). Two formulas drift into two different numbers.
-- Drill-down targets live **only** in `admin/navigation/drilldown.js`, verified
-  against `owner/routes/index.jsx`. A 404 from an executive card destroys trust in
-  the numbers next to it.
+- Drill-down targets live **only** in `superadmin/navigation/drilldown.js`, verified
+  against `owner/routes/index.jsx`. A 404 from a Super Admin card destroys trust in
+  the numbers next to it. The universal number→journal chain is a separate registry:
+  `shared/drill/drillNodes.js`.
 
 ### Creating records: one registry, two shells
 
@@ -128,9 +145,11 @@ Rules that follow from this, and why:
   permissions on every render (a role change must not leave the button
   pointing at a modal the user can no longer open).
 - `CreateModals.jsx` — the modals, mounted **once per shell**
-  (`AppSidebar` for `/owner/*`, `ExecutiveLayout` for `/admin`). Never mount a
+  (`AppSidebar` for `/owner/*`, `SuperAdminLayout` for `/org/*`). Never mount a
   `ModalWrapper` with the same `name` at page level too — one `openModal`
-  would open two dialogs.
+  would open two dialogs. Context reaches the form through the modal payload:
+  `openModal(MODAL.ROOM_CREATE, { branchId })` arrives as a prop, which is how
+  the branch page pins the room to its branch without a second mount.
 
 Permission keys here must match the **server route**, not the folder name:
 rooms are guarded by `classes.create`, and branch creation needs
@@ -342,10 +361,18 @@ npm run check:data-contract    # dashboard status contract (29 checks)
 npm run check:permission-keys  # every PERMISSIONS.X resolves to a real key
 
 # Browser acceptance (needs the dev server + API running; Playwright from npx cache)
-npm run test:browser           # shell: sidebar/no-sidebar, drill-down, mobile
+# First: cd ../server && node tests/fixtures/qaUsers.mjs
+npm run test:browser-panels    # the two panels: shells, rooms, drill-down, scope
+npm run test:browser           # legacy shell checks, redirects, mobile
 npm run test:browser-create    # create split button + branch cross-section
 npm run test:browser-branch    # create a branch -> multi-branch mode -> compare
+npm run test:a11y              # landmarks, focus, contrast on key screens
 ```
+
+A check that cannot run for lack of data is reported as **⏭️ tekshirilmadi**, not
+as a pass. An empty database makes a leak assertion ("branch B sees nothing")
+vacuously green, so those assertions sit behind a **positive control**: if the
+allowed side finds nothing either, the whole check is declared unverified.
 
 `check:permission-keys` exists because a typo'd key **fails silently**:
 `PERMISSIONS.ROOMS_CREATE` (no such key) is `undefined`, and `has(undefined)`

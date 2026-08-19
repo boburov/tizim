@@ -25,8 +25,8 @@ const CONTROL =
  *
  * ── NEGA `ExecutivePageHeader` NING O'RNIGA ──
  * Eski komponent SAHIFA sarlavhasi edi va `<h1>` chizardi. Endi bu
- * ekranlar sahifa emas, tab MAZMUNI: `/org/analytics` va
- * `/org/branches` ichida yashaydi va ularning o'z `<h1>` i bor.
+ * ekranlar sahifa emas, tab MAZMUNI: `/org/tahlil` va
+ * `/org/filiallar` ichida yashaydi va ularning o'z `<h1>` i bor.
  * Ikkita `<h1>` bitta sahifada — hujjat tuzilishini buzadi va ekran
  * o'quvchi uchun "bu qaysi sahifa?" degan savolni javobsiz qoldiradi.
  *

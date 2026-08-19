@@ -8,7 +8,7 @@ import { cn } from "@/shared/utils/cn";
 import { formatMoney } from "@/shared/utils/formatMoney";
 import useAuth from "@/shared/hooks/useAuth";
 import { useMyLedgerQuery } from "@/owner/features/ledger";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
+import WorkspacePage from "@/shared/components/page/PageShell";
 
 /**
  * ══════════════════════════════════════════════════════════════════════

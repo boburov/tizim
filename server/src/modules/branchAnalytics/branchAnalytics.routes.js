@@ -7,6 +7,7 @@ import { PERMISSIONS } from "../../constants/permissions.js";
 import {
   pnlSchema,
   rangeSchema,
+  roomUtilizationSchema,
   transferPreviewSchema,
   transferSchema,
 } from "./validators/analytics.validator.js";
@@ -14,6 +15,7 @@ import {
 import pnl from "./handlers/pnl.handler.js";
 import elimination from "./handlers/elimination.handler.js";
 import utilization from "./handlers/utilization.handler.js";
+import roomUtilization from "./handlers/roomUtilization.handler.js";
 import churn from "./handlers/churn.handler.js";
 import normalized from "./handlers/normalized.handler.js";
 import transferPreview from "./handlers/transferPreview.handler.js";
@@ -54,6 +56,23 @@ router.get(
   requireAuth,
   requirePermission(PERMISSIONS.BRANCHES_READ),
   utilization,
+);
+
+// ── XONA BANDLIGI: XONA VA SOAT DARAJASIDA ──
+//
+// RUXSAT: `classes.read` — xonalarni ko'rish ruxsati. Bu ATAYLAB
+// `branches.read` emas: javobda pul ham, maosh ham yo'q, faqat xona
+// va dars jadvali. Filial administratori o'z xonalarining bandligini
+// ko'rishi uchun unga filial ro'yxatini ochish shart emas.
+//
+// `/utilization` (filial darajasi) JOYIDA QOLADI: uni filial
+// taqqoslash ekrani ishlatadi va u boshqa savolga javob beradi.
+router.get(
+  "/rooms",
+  requireAuth,
+  requirePermission(PERMISSIONS.CLASSES_READ),
+  validate(roomUtilizationSchema),
+  roomUtilization,
 );
 
 router.get(

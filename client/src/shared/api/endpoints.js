@@ -51,6 +51,9 @@ export const ENDPOINTS = Object.freeze({
     pnl: "/branch-analytics/pnl",
     elimination: "/branch-analytics/elimination",
     utilization: "/branch-analytics/utilization",
+    // XONA BANDLIGI — xona va soat darajasida (`/utilization` esa
+    // filial darajasida; ikkalasi boshqa savolga javob beradi).
+    rooms: "/branch-analytics/rooms",
     churn: "/branch-analytics/churn",
     normalized: "/branch-analytics/normalized",
     alerts: "/branch-analytics/alerts",

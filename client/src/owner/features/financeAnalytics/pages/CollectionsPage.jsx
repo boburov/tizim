@@ -4,8 +4,8 @@ import { useDrill, useDrillFilters } from "@/shared/drill";
 import useFinanceFilters from "@/owner/features/financeAnalytics/hooks/useFinanceFilters";
 import FinanceFilterBar from "@/owner/features/financeAnalytics/components/FinanceFilterBar";
 import ReceivablesSection from "@/owner/features/financeAnalytics/components/sections/ReceivablesSection";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
-import EmptyState from "@/workspaces/shared/EmptyState";
+import PageShell from "@/shared/components/page/PageShell";
+import EmptyState from "@/shared/components/page/EmptyState";
 
 /**
  * UNDIRISH — FILIAL DIREKTORINING KUNDALIK ISHI.
@@ -19,7 +19,7 @@ import EmptyState from "@/workspaces/shared/EmptyState";
  * Sahifa yangi kod emas — mavjud `ReceivablesSection` ning mustaqil
  * manzili. O'zgargani: yorliq, joy va nima uchun kerakligi.
  */
-const BranchCollectionsPage = () => {
+const CollectionsPage = () => {
   const { has } = usePermissions();
   const { filters, set, reset, activeCount } = useFinanceFilters();
   const { openRoot } = useDrill();
@@ -27,17 +27,17 @@ const BranchCollectionsPage = () => {
 
   if (!has(PERMISSIONS.FINANCE_VIEW_RECEIVABLES)) {
     return (
-      <WorkspacePage title="Undirish">
+      <PageShell title="Undirish">
         <EmptyState
           title="Qarzdorlik ma'lumoti yopiq"
           hint="Bu bo'limni ochish uchun qarzdorlikni ko'rish ruxsati kerak."
         />
-      </WorkspacePage>
+      </PageShell>
     );
   }
 
   return (
-    <WorkspacePage
+    <PageShell
       title="Undirish"
       subtitle="Kim qancha qarzdor, qancha vaqtdan beri — va qaysi to'lovdan kelib chiqqan"
     >
@@ -48,8 +48,8 @@ const BranchCollectionsPage = () => {
         activeCount={activeCount}
       />
       <ReceivablesSection filters={filters} onDrill={openRoot} />
-    </WorkspacePage>
+    </PageShell>
   );
 };
 
-export default BranchCollectionsPage;
+export default CollectionsPage;

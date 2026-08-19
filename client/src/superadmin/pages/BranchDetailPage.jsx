@@ -22,11 +22,10 @@ import {
 } from "@/owner/features/financeAnalytics/hooks/useFinanceAnalytics";
 import useBranchStatsQuery from "@/owner/features/branches/hooks/useBranchStatsQuery";
 import useBranchesQuery from "@/owner/features/branches/hooks/useBranchesQuery";
-import { useRoomsQuery, useRoomRemoveMutation } from "@/owner/features/catalog/hooks/useCatalogQueries";
-import RoomCreateModal from "@/owner/features/catalog/components/modals/RoomCreateModal";
+import RoomsGrid from "@/owner/features/rooms/components/RoomsGrid";
 import { useUsersListQuery } from "@/owner/features/users";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
-import EmptyState from "@/workspaces/shared/EmptyState";
+import PageShell from "@/shared/components/page/PageShell";
+import EmptyState from "@/shared/components/page/EmptyState";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -63,7 +62,7 @@ const TABS = [
   { key: "money", label: "Moliya", icon: Banknote },
 ];
 
-const OrgBranchDetailPage = () => {
+const BranchDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { has } = usePermissions();
@@ -89,7 +88,6 @@ const OrgBranchDetailPage = () => {
   useDrillFilters(filters);
   const summary = useSummary(filters, { enabled: canFinance });
   const stats = useBranchStatsQuery(id);
-  const rooms = useRoomsQuery({ branchId: id }, { enabled: canRooms && tab === "rooms" });
   const staff = useUsersListQuery(
     { branchId: id, limit: 100 },
     { enabled: canPeople && tab === "people" },
@@ -101,7 +99,6 @@ const OrgBranchDetailPage = () => {
     enabled: canFinance && tab === "money",
   });
 
-  const removeRoom = useRoomRemoveMutation();
   const s = fromQuery(summary);
   const d = summary.data;
   const st = fromQuery(stats);
@@ -114,7 +111,7 @@ const OrgBranchDetailPage = () => {
   });
 
   return (
-    <WorkspacePage
+    <PageShell
       title={branch?.name || "Filial"}
       subtitle={
         branch?.code
@@ -123,7 +120,7 @@ const OrgBranchDetailPage = () => {
       }
       actions={
         <>
-          <Button variant="outline" size="sm" onClick={() => navigate("/org/branches")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/org/filiallar")}>
             <ArrowLeft className="size-4" />
             Filiallar
           </Button>
@@ -228,64 +225,21 @@ const OrgBranchDetailPage = () => {
       {/* ══════════ XONALAR ══════════ */}
       {tab === "rooms" && canRooms && (
         <section className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Xonalar</h2>
-              <p className="text-xs text-muted-foreground">
-                Filialning fizik resursi. Guruh jadvali shu xonalarga bog'lanadi.
-              </p>
-            </div>
-            {canCreateRoom && (
-              <Button size="sm" onClick={() => openModal(MODAL.ROOM_CREATE, { branchId: id })}>
-                <Plus className="size-4" />
-                Xona qo'shish
-              </Button>
-            )}
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Xonalar</h2>
+            <p className="text-xs text-muted-foreground">
+              Filialning fizik resursi. Guruh jadvali shu xonalarga bog'lanadi —
+              bandlik va to'qnashuv hisobi ham shundan chiqadi.
+            </p>
           </div>
 
-          {/* `useRoomsQuery` KONVERTNI qaytaradi (`{ success, data }`),
-              massivni EMAS — shuning uchun `.data.data`. Bu farq jimgina
-              bo'sh jadval berardi: so'rov muvaffaqiyatli, xato yo'q,
-              lekin ro'yxat "bo'sh" bo'lib ko'rinardi. */}
-          <QueryState
-            query={rooms}
-            empty={!rooms.data?.data?.length}
-            emptyTitle="Bu filialda hali xona yo'q"
-            loadingRows={3}
-          >
-            {(res) => (
-              <AnalyticsTable
-                rows={res.data}
-                rowKey={(r) => r.id}
-                columns={[
-                  { key: "name", label: "Xona" },
-                  { key: "capacity", label: "Sig'im", align: "right", kind: "number" },
-                  { key: "areaM2", label: "Maydon (m²)", align: "right", kind: "number" },
-                  {
-                    key: "isActive",
-                    label: "Holat",
-                    render: (r) => (r.isActive ? "Faol" : "To'xtatilgan"),
-                  },
-                ]}
-              />
-            )}
-          </QueryState>
-
-          {!rooms.isLoading && !rooms.data?.data?.length && (
-            <EmptyState
-              icon={DoorOpen}
-              title="Xona yo'q"
-              hint="Xonasiz guruh jadvali tuzilmaydi — dars qayerda o'tishini tizim bilmaydi."
-              action={
-                canCreateRoom && (
-                  <Button size="sm" onClick={() => openModal(MODAL.ROOM_CREATE, { branchId: id })}>
-                    <Plus className="size-4" />
-                    Birinchi xonani qo'shish
-                  </Button>
-                )
-              }
-            />
-          )}
+          {/* AYNI KOMPONENT Admin panelida ham ishlatiladi
+              (`/owner/rooms`). Farqi bitta: bu yerda `branchId`
+              kontekstdan uzatiladi, u yerda esa server ko'lamdan
+              oladi. Ikkinchi nusxa yaratilmadi — aks holda ikkita
+              xona ekrani bo'lib, ular vaqt o'tishi bilan ajralib
+              ketardi. */}
+          <RoomsGrid branchId={id} enabled={tab === "rooms"} />
         </section>
       )}
 
@@ -300,7 +254,7 @@ const OrgBranchDetailPage = () => {
               </p>
             </div>
             <Link
-              to="/org/people"
+              to="/owner/staff"
               className="text-xs font-medium text-primary hover:underline"
             >
               Barcha odamlar
@@ -387,13 +341,15 @@ const OrgBranchDetailPage = () => {
         </section>
       )}
 
-      {/* Xona modali SAHIFA darajasida: `branchId` shu yerdagi
-          kontekstdan uzatiladi (talab 21 — amal o'z joyida). */}
-      <ModalWrapper name={MODAL.ROOM_CREATE} title="Yangi xona">
-        <RoomCreateModal onCreated={() => rooms.refetch()} />
-      </ModalWrapper>
-    </WorkspacePage>
+      {/* XONA MODALI BU YERDA MOUNT QILINMAYDI — uni qobiq ko'taradi
+          (`SuperAdminLayout` → `CreateModals`). Ikkinchi mount bitta
+          `openModal` ga IKKITA dialog ochardi.
+
+          `branchId` esa yo'qolmaydi: u `openModal(..., { branchId })`
+          ma'lumoti bilan boradi va `ModalWrapper` uni forma propsiga
+          aylantiradi. */}
+    </PageShell>
   );
 };
 
-export default OrgBranchDetailPage;
+export default BranchDetailPage;

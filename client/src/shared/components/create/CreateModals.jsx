@@ -30,10 +30,15 @@ import { MODAL } from "@/shared/constants/modals";
  * DiscountsPage va BranchesPage dan olib tashlangan.
  * ═══════════════════════════════════════════════════════════════════
  *
- * NEGA `shared` DA: endi IKKI qobiq ishlatadi - operatsion sidebar
- * (`AppSidebar`) va rahbariyat sarlavhasi (`ExecutiveHeader`). Ular bir
- * vaqtda ekranda bo'lmaydi (`/owner/*` va `/admin` alohida layout), ya'ni
- * ikki marta mount bo'lish xavfi yo'q.
+ * NEGA `shared` DA: IKKI panel ishlatadi — Admin panelining sidebari
+ * (`AppSidebar`) va Super Admin panelining qobig'i (`SuperAdminLayout`).
+ * Ular bir vaqtda ekranda BO'LMAYDI (`/owner/*` va `/org/*` alohida
+ * layout), ya'ni ikki marta mount bo'lish xavfi yo'q.
+ *
+ * Kontekst modal MA'LUMOTI orqali boradi:
+ * `openModal(MODAL.ROOM_CREATE, { branchId })` → `ModalWrapper` uni
+ * forma propsiga aylantiradi. Shu sababli filial sahifasi o'z
+ * `ModalWrapper` ini mount QILMAYDI.
  */
 const CreateModals = () => {
   /**

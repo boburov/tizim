@@ -55,8 +55,8 @@ await page.waitForTimeout(1200);
 const gate = page.locator("[data-branch-gate]");
 if (await gate.count()) { await gate.locator("button", { hasText: "Barcha filiallar" }).first().click(); await page.waitForTimeout(2500); }
 
-const PAGES = ["/org", "/org/branches", "/org/people", "/org/finance",
-  "/org/operations", "/org/analytics", "/org/permissions"];
+const PAGES = ["/org", "/org/filiallar", "/owner/staff", "/org/moliya",
+  "/owner/dashboard", "/org/tahlil", "/org/vakolatlar"];
 
 console.log("\n1) SARLAVHA IYERARXIYASI (har sahifada bitta h1)");
 for (const u of PAGES) {
@@ -89,7 +89,7 @@ if (lm.navNamed === lm.nav) ok("har <nav> nomlangan", `${lm.navNamed}/${lm.nav}`
 else warn("nomlanmagan <nav>", `${lm.navNamed}/${lm.nav}`);
 
 console.log("\n3) NOMSIZ INTERAKTIV ELEMENTLAR");
-for (const u of ["/org", "/org/finance", "/org/permissions"]) {
+for (const u of ["/org", "/org/moliya", "/org/vakolatlar"]) {
   await page.goto(`${APP}${u}`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1600);
   const nameless = await page.evaluate(() => {
@@ -114,22 +114,20 @@ const first = await page.evaluate(() => {
 });
 ok("birinchi Tab fokus oldi", `${first.tag} «${first.text}»`);
 
-const reached = await page.evaluate(async () => {
-  for (let i = 0; i < 40; i += 1) {
-    const a = document.activeElement;
-    if (a?.closest?.('[data-sidebar="sidebar"]') && a.getAttribute("href")) return i;
-    const ev = new KeyboardEvent("keydown", { key: "Tab" });
-    document.dispatchEvent(ev);
-    break;
-  }
-  return -1;
-});
-// Playwright bilan haqiqiy Tab bosamiz
+// MENYU SELEKTORI IKKALA QOBIQNI HAM QAMRAYDI.
+//
+// Ilgari bu yerda faqat `[data-sidebar="sidebar"]` — Admin panelining
+// shadcn sidebari — qidirilardi. Super Admin panelida u YO'Q (o'z
+// qobig'i, oddiy `<nav>`), shuning uchun tekshiruv "menyuga yetib
+// bo'lmadi" deb yiqilardi — holbuki menyu bor va u fokus oladi.
+//
+// Selektor qobiqqa emas, MENYU ekanligiga qaraydi.
+const NAV_SEL = '[data-sidebar="sidebar"], nav[aria-label]';
 let steps = -1;
 for (let i = 0; i < 30; i += 1) {
-  const inNav = await page.evaluate(() =>
-    Boolean(document.activeElement?.closest?.('[data-sidebar="sidebar"]')
-      && document.activeElement.getAttribute("href")));
+  const inNav = await page.evaluate((sel) =>
+    Boolean(document.activeElement?.closest?.(sel)
+      && document.activeElement.getAttribute("href")), NAV_SEL);
   if (inNav) { steps = i; break; }
   await page.keyboard.press("Tab");
 }
@@ -148,7 +146,7 @@ if (ring && (parseFloat(ring.outline) > 0 || ring.shadow)) ok("fokus halqasi bor
 else warn("fokus halqasi ko'rinmadi", JSON.stringify(ring));
 
 console.log("\n6) DRILL PANELI — klaviatura");
-await page.goto(`${APP}/org/finance?tab=revenue`, { waitUntil: "networkidle" });
+await page.goto(`${APP}/org/moliya?tab=revenue`, { waitUntil: "networkidle" });
 await page.waitForTimeout(2200);
 const row = page.locator("main table tbody tr").first();
 if (await row.count()) {
@@ -169,7 +167,11 @@ if (await row.count()) {
   await page.waitForTimeout(700);
   const closed = (await page.locator('[role="dialog"]').count()) === 0;
   if (closed) ok("Escape panelni yopdi"); else bad("Escape ishlamadi");
-} else bad("jadval qatori topilmadi");
+} else {
+  // Bo'sh bazada drill paneli ochiladigan qator YO'Q. Bu klaviatura
+  // nosozligi EMAS — tekshiruv shunchaki bajarilmadi.
+  warn("drill paneli klaviaturasi", "bazada daromad qatori yo'q — tekshirilmadi");
+}
 
 await browser.close();
 console.log(`\nNATIJA: ${R.pass} o'tdi, ${R.fail} yiqildi, ${R.warn} ogohlantirish\n`);

@@ -16,6 +16,6 @@ import FinanceCommandPage from "@/owner/features/financeAnalytics/pages/FinanceC
  * bilmasdi. Endi Moliya — sidebar'ning BITTA yozuvi va shu
  * sahifa uning yagona kirish nuqtasi.
  */
-const OrgFinancePage = () => <FinanceCommandPage />;
+const MoliyaPage = () => <FinanceCommandPage />;
 
-export default OrgFinancePage;
+export default MoliyaPage;

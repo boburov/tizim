@@ -7,8 +7,8 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
 import { QueryState } from "@/shared/components/analytics";
 import { useRoomsQuery } from "@/owner/features/catalog/hooks/useCatalogQueries";
 import useGroupsListQuery from "@/owner/features/groups/hooks/useGroupsListQuery";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
-import EmptyState from "@/workspaces/shared/EmptyState";
+import PageShell from "@/shared/components/page/PageShell";
+import EmptyState from "@/shared/components/page/EmptyState";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -60,7 +60,7 @@ const overlaps = (a, b) => {
   return as < be && bs < ae;
 };
 
-const BranchSchedulePage = () => {
+const SchedulePage = () => {
   const { has } = usePermissions();
   const groups = useGroupsListQuery({ limit: 500 });
   const rooms = useRoomsQuery({}, { enabled: has(PERMISSIONS.CLASSES_READ) });
@@ -115,7 +115,7 @@ const BranchSchedulePage = () => {
   const total = DAYS.reduce((acc, d) => acc + (byDay[d.key]?.length || 0), 0);
 
   return (
-    <WorkspacePage
+    <PageShell
       title="Haftalik jadval"
       subtitle="Qaysi guruh, qaysi kuni, qaysi xonada — va xona to'qnashuvlari"
     >
@@ -209,8 +209,8 @@ const BranchSchedulePage = () => {
           hint="Jadval ko'rinyapti, lekin xona nomlarini ko'rsatish uchun xonalarni ko'rish ruxsati kerak."
         />
       )}
-    </WorkspacePage>
+    </PageShell>
   );
 };
 
-export default BranchSchedulePage;
+export default SchedulePage;

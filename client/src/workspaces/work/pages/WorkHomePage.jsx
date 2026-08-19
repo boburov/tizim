@@ -7,8 +7,8 @@ import {
 import { cn } from "@/shared/utils/cn";
 import useAuth from "@/shared/hooks/useAuth";
 import usePermissions from "@/shared/hooks/usePermissions";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
-import EmptyState from "@/workspaces/shared/EmptyState";
+import WorkspacePage from "@/shared/components/page/PageShell";
+import EmptyState from "@/shared/components/page/EmptyState";
 
 /**
  * ══════════════════════════════════════════════════════════════════════

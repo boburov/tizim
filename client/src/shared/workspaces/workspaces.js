@@ -51,16 +51,22 @@ export const WORKSPACE_META = Object.freeze({
   [WORKSPACES.SUPER_ADMIN]: {
     key: WORKSPACES.SUPER_ADMIN,
     label: "Tashkilot",
-    tagline: "Butun biznesni boshqarish",
+    tagline: "Butun tashkilotni boshqarish",
+    // SUPER ADMIN PANELI — o'z qobig'i bilan alohida ilova
+    // (`superadmin/layout/SuperAdminLayout.jsx`).
     home: "/org",
     root: "/org",
   },
   [WORKSPACES.ADMIN]: {
     key: WORKSPACES.ADMIN,
-    label: "Filial",
-    tagline: "Filialni boshqarish",
-    home: "/branch",
-    root: "/branch",
+    label: "Admin paneli",
+    tagline: "O'z filialini boshqarish",
+    // MAVJUD ADMIN PANELI. U qayta qurilmadi va ko'chirilmadi —
+    // faqat KO'LAMI filial bilan chegaralandi. `/branch` degan
+    // ikkinchi qobiq bor edi va u aynan shu panelni almashtirishga
+    // urinardi; endi yo'naltirish (`app/routes.jsx`).
+    home: "/owner/dashboard",
+    root: "/owner",
   },
   [WORKSPACES.STAFF]: {
     key: WORKSPACES.STAFF,
@@ -92,7 +98,7 @@ export const WORKSPACE_META = Object.freeze({
  * Unga "Filial yaratish" tugmasini ko'rsatish yolg'on va'da bo'lardi:
  * server baribir 403 qaytaradi.
  */
-const hasOrgAuthority = (has) =>
+export const hasOrgAuthority = (has) =>
   has(PERMISSIONS.BRANCHES_VIEW_ALL) && has(PERMISSIONS.SYSTEM_ADMIN_ACCESS);
 
 /**
@@ -106,7 +112,7 @@ const hasOrgAuthority = (has) =>
  * Ya'ni yangi ruxsat kaliti O'YLAB TOPILMADI — mavjud kalitning
  * ma'nosi ish makoniga bog'landi.
  */
-const hasBranchAuthority = (has) => has(PERMISSIONS.ADMIN_DASHBOARD_READ);
+export const hasBranchAuthority = (has) => has(PERMISSIONS.ADMIN_DASHBOARD_READ);
 
 /**
  * Foydalanuvchining ish makonini aniqlaydi.

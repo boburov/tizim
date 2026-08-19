@@ -17,8 +17,8 @@
     "test:browser-branch": "node tests/branchLifecycleAcceptance.mjs",
     "check:finance-ui": "node scripts/check-finance-ui.mjs",
     "test:browser-finance": "node tests/financeCommandAcceptance.mjs",
-    "test:browser-workspace": "node tests/workspaceAcceptance.mjs",
-    "test:a11y": "node tests/a11yAcceptance.mjs"
+    "test:a11y": "node tests/a11yAcceptance.mjs",
+    "test:browser-panels": "node tests/panelAcceptance.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

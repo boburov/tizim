@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Building2, Plus, TrendingUp, AlertTriangle, Scale, Layers } from "lucide-react";
+import { Building2, Plus, TrendingUp, AlertTriangle, Scale, Layers, LayoutGrid } from "lucide-react";
 
 import Button from "@/shared/components/ui/button/Button";
 import { AnalyticsTable, QueryState } from "@/shared/components/analytics";
@@ -10,11 +10,11 @@ import { MODAL } from "@/shared/constants/modals";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 import { useBranchProfit } from "@/owner/features/financeAnalytics/hooks/useFinanceAnalytics";
 import useBranchesQuery from "@/owner/features/branches/hooks/useBranchesQuery";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
-import EmptyState from "@/workspaces/shared/EmptyState";
-import TabNav from "@/workspaces/shared/TabNav";
-import { useActiveTab } from "@/workspaces/shared/tabState";
+import PageShell from "@/shared/components/page/PageShell";
+import TabNav from "@/shared/components/page/TabNav";
+import { useActiveTab } from "@/shared/components/page/tabState";
 
+import BranchCard from "../components/BranchCard";
 import BranchPnlSection from "../sections/BranchPnlSection";
 import BranchCompareSection from "../sections/BranchCompareSection";
 
@@ -52,7 +52,7 @@ import BranchCompareSection from "../sections/BranchCompareSection";
  * degan savolga javob berardi va foydalanuvchi qaysi birini ochishni
  * bilmasdi.
  */
-const OrgBranchesPage = () => {
+const FiliallarPage = () => {
   const navigate = useNavigate();
   const { has } = usePermissions();
   const { openModal } = useModal();
@@ -62,8 +62,16 @@ const OrgBranchesPage = () => {
   const canProfit = has(PERMISSIONS.FINANCE_VIEW_PROFITABILITY);
   const canFinance = has(PERMISSIONS.FINANCE_READ);
 
+  // BIRINCHI TAB — KARTALAR, jadval EMAS (talab 8).
+  //
+  // Ega bu sahifaga ikki xil savol bilan keladi: "A filialiga kiray"
+  // (ish) va "qaysi filial yaxshi ishlayapti" (tahlil). Kartalar
+  // birinchi savolga, jadval ikkinchisiga javob beradi. Ilgari faqat
+  // jadval bor edi va oddiy "filialga kirish" ham ma'lumot qatorini
+  // o'qishdan boshlanardi.
   const TABS = [
-    { key: "compare", label: "Taqqoslash", icon: Scale },
+    { key: "list", label: "Filiallar", icon: LayoutGrid },
+    { key: "compare", label: "Taqqoslash", icon: Scale, visible: canProfit },
     { key: "pnl", label: "P&L", icon: Building2, visible: canFinance },
     { key: "cross", label: "Kesimlar", icon: Layers, visible: canFinance },
   ];
@@ -79,10 +87,16 @@ const OrgBranchesPage = () => {
 
   const rawBranches = branchList.data?.data || [];
 
+  // Karta uchun: filial ID → moliyaviy ko'rsatkichlar. Ro'yxat va
+  // raqamlar IKKI xil manbadan keladi (biri filial kartochkasi, biri
+  // jurnal kesimi), shuning uchun ular ID bo'yicha bog'lanadi —
+  // tartibga tayanish mumkin emas.
+  const statsById = new Map(rows.map((r) => [String(r.branchId), r]));
+
   return (
-    <WorkspacePage
+    <PageShell
       title="Filiallar"
-      subtitle="Har filial — o'z xonalari, odamlari va moliyasi bilan. Qatorni bosing."
+      subtitle="Har filial — o'z xonalari, odamlari va moliyasi bilan. Kartani bosing."
       actions={
         canCreate && (
           <Button size="sm" onClick={() => openModal(MODAL.BRANCH_CREATE)}>
@@ -93,6 +107,40 @@ const OrgBranchesPage = () => {
       }
     >
       <TabNav tabs={TABS} />
+
+      {/* ══════════ KARTALAR ══════════ */}
+      {tab === "list" && (
+        <QueryState
+          query={branchList}
+          empty={!rawBranches.length}
+          emptyTitle="Hali filial yo'q"
+          emptyHint="Filial — o'quv markazining fizik nuqtasi. Xonalar, guruhlar va moliya uning ichida bo'ladi."
+          loadingRows={3}
+        >
+          {() => (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {rawBranches.map((b) => (
+                <BranchCard key={b.id} branch={b} stats={statsById.get(b.id)} />
+              ))}
+
+              {/* "+" KARTASI TO'R ICHIDA, sarlavhada emas: "yana bitta
+                  filial ochsam bo'ladi" degani ko'rinib tursin
+                  (talab 7 — "bir necha soniyada"). Sarlavhadagi tugma
+                  ham qoladi — u ro'yxat uzun bo'lganda kerak. */}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => openModal(MODAL.BRANCH_CREATE)}
+                  className="flex min-h-[8rem] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/50 text-muted-foreground transition hover:border-primary/40 hover:bg-muted hover:text-foreground"
+                >
+                  <Plus className="size-6" strokeWidth={1.5} />
+                  <span className="text-sm font-medium">Filial qo'shish</span>
+                </button>
+              )}
+            </div>
+          )}
+        </QueryState>
+      )}
 
       {/* ── XULOSA: ikki jumla, model emas ── */}
       {tab === "compare" && canProfit && (best || weakest) && (
@@ -125,7 +173,7 @@ const OrgBranchesPage = () => {
       {tab === "compare" && (
       <DashboardSection
         title="Filiallar yonma-yon"
-        hint="Daromad, foyda, o'quvchi va undirish — bitta jadvalda. Qatorni bosing."
+        hint="Kutilgan — plan bo'yicha majburiyat; Yig'ilgan — undan to'langani; Daromad — jurnaldagi tushum (qaytarimsiz). Qatorni bosing."
       >
         {canProfit ? (
           <QueryState
@@ -140,15 +188,34 @@ const OrgBranchesPage = () => {
                 rows={rows}
                 rowKey={(r) => r.branchId}
                 defaultSort={{ key: "contributionProfit", dir: "desc" }}
-                onRowClick={(r) => navigate(`/org/branches/${r.branchId}`)}
+                onRowClick={(r) => navigate(`/org/filiallar/${r.branchId}`)}
                 columns={[
                   { key: "name", label: "Filial" },
+                  { key: "students", label: "O'quvchi", align: "right", kind: "number" },
+                  // ══════════════════════════════════════════════════
+                  // KUTILGAN ≠ YIG'ILGAN ≠ DAROMAD (talab 19)
+                  // ══════════════════════════════════════════════════
+                  //
+                  // Uchta boshqa-boshqa raqam va ular ATAYLAB yonma-yon
+                  // turadi:
+                  //
+                  //   Kutilgan  — oylik plan bo'yicha hisoblangan
+                  //               majburiyat (`StudentPayment.expected`)
+                  //   Yig'ilgan — o'sha majburiyatdan haqiqatan
+                  //               to'langan qismi
+                  //   Qarz      — qolgani
+                  //
+                  // "Daromad" esa TO'RTINCHI narsa: u jurnal yozuvidan
+                  // keladi va qaytarimlar ayirilgan. Ular bir xil emas
+                  // va ularni bitta ustunda ko'rsatish eng ko'p
+                  // uchraydigan moliyaviy chalkashlik manbai.
+                  { key: "expected", label: "Kutilgan", align: "right", kind: "moneyShort" },
+                  { key: "collected", label: "Yig'ilgan", align: "right", kind: "moneyShort" },
+                  { key: "outstanding", label: "Qarz", align: "right", kind: "moneyShort" },
+                  { key: "collectionRatePercent", label: "Undirish", align: "right", kind: "percent" },
                   { key: "revenue", label: "Daromad", align: "right", kind: "moneyShort" },
                   { key: "contributionProfit", label: "Hissa foydasi", align: "right", kind: "moneyShort" },
                   { key: "contributionMarginPercent", label: "Marja", align: "right", kind: "percent" },
-                  { key: "students", label: "O'quvchi", align: "right", kind: "number" },
-                  { key: "outstanding", label: "Qarz", align: "right", kind: "moneyShort" },
-                  { key: "collectionRatePercent", label: "Undirish", align: "right", kind: "percent" },
                 ]}
               />
             )}
@@ -167,7 +234,7 @@ const OrgBranchesPage = () => {
               <AnalyticsTable
                 rows={rawBranches}
                 rowKey={(r) => r.id}
-                onRowClick={(r) => navigate(`/org/branches/${r.id}`)}
+                onRowClick={(r) => navigate(`/org/filiallar/${r.id}`)}
                 columns={[
                   { key: "name", label: "Filial" },
                   { key: "code", label: "Kod" },
@@ -182,23 +249,8 @@ const OrgBranchesPage = () => {
       {tab === "pnl" && <BranchPnlSection />}
       {tab === "cross" && <BranchCompareSection />}
 
-      {tab === "compare" && !branchList.isLoading && rawBranches.length === 0 && (
-        <EmptyState
-          icon={Building2}
-          title="Hali filial yo'q"
-          hint="Filial — o'quv markazining fizik nuqtasi. Xonalar, guruhlar va moliya uning ichida bo'ladi."
-          action={
-            canCreate && (
-              <Button size="sm" onClick={() => openModal(MODAL.BRANCH_CREATE)}>
-                <Plus className="size-4" />
-                Birinchi filialni qo'shish
-              </Button>
-            )
-          }
-        />
-      )}
-    </WorkspacePage>
+    </PageShell>
   );
 };
 
-export default OrgBranchesPage;
+export default FiliallarPage;

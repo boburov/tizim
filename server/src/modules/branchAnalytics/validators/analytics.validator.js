@@ -30,3 +30,21 @@ export const transferSchema = z.object({
     note: z.string().trim().max(500).optional(),
   }),
 });
+
+/**
+ * XONA BANDLIGI.
+ *
+ * `dayStart`/`dayEnd` — ish kuni oralig'i. Ular BANDLIK MAXRAJINI
+ * belgilaydi, ya'ni javobdagi foizning ma'nosini: 12 soatlik kunga
+ * nisbatan 50% bandlik 8 soatlik kunga nisbatan 75% bo'ladi.
+ * Shuning uchun ular so'rov parametri va javobda qaytadan
+ * ko'rsatiladi (`window`) — ekran nimaga nisbatan hisoblanganini
+ * aytishi kerak.
+ */
+export const roomUtilizationSchema = z.object({
+  query: z.object({
+    branchId: z.string().min(1).optional(),
+    dayStart: z.coerce.number().int().min(0).max(23).optional(),
+    dayEnd: z.coerce.number().int().min(1).max(24).optional(),
+  }),
+});

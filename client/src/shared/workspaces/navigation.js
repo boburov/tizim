@@ -1,17 +1,11 @@
 import {
   LayoutDashboard,
-  Building2,
-  Users,
   Wallet,
   GraduationCap,
-  ChartColumnBig,
-  ShieldCheck,
   Star,
-  Settings,
   Target,
   CalendarDays,
   ClipboardCheck,
-  HandCoins,
   BookOpen,
   Bell,
   User,
@@ -20,133 +14,40 @@ import {
 } from "lucide-react";
 
 import { WORKSPACES } from "./workspaces";
+import ownerSidebar from "@/owner/navigation/sidebar.config";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
- * TO'RTTA NAVIGATSIYA — TO'RTTA AXBOROT ARXITEKTURASI
+ * OPERATSION QOBIQNING MENYUSI (`AppSidebar` shu yerdan o'qiydi)
  * ══════════════════════════════════════════════════════════════════════
  *
- * Bu FILTRLANGAN BITTA MENYU EMAS. Har ish makonining tuzilishi
- * boshqacha, chunki savol boshqacha:
+ * ── BU FAYL NIMA QILADI VA NIMA QILMAYDI ──
+ * U faqat BITTA savolga javob beradi: operatsion qobiqda turgan
+ * odamga qaysi menyu ko'rsatiladi?
  *
- *   SUPER_ADMIN → "qaysi filial, qayerda foyda, kimga ishonaman"
- *   ADMIN       → "bugun filialimda nima bo'lyapti"
- *   STAFF       → "menga nima biriktirilgan"
- *   STUDENT     → "mening o'qishim va to'lovim"
+ *   ega / administrator → Admin panelining o'z menyusi
+ *                         (`owner/navigation/sidebar.config.js`)
+ *   o'qituvchi          → `teacherNav`   (`/teacher/*` paneli)
+ *   xodim               → `officeNav`    (`/work`)
+ *   o'quvchi            → `studentNav`   (`/me`, `/student/*`)
  *
- * ── CHUQURLIK QOIDASI (talab 20, 25) ──
- * Ko'pi bilan IKKI daraja. Uchinchi daraja kerak bo'lsa — u sahifa
- * ichidagi tab yoki panel bo'ladi, menyuda emas. Menyu "qayerdaman"
- * degan savolga javob beradi, katalog bo'lib xizmat qilmaydi.
+ * ── NIMA O'ZGARDI ──
+ * Ilgari bu yerda TO'RTTA menyu bor edi va ulardan ikkitasi
+ * (`superAdminNav`, `adminNav`) mavjud panellarning navigatsiyasini
+ * ALMASHTIRARDI: Super Admin uchun sakkiz yozuvli ro'yxat, Admin
+ * uchun esa boshqa ro'yxat — ikkalasi ham AYNI qobiqda, ayni
+ * sidebar komponentida. Ya'ni ikki panel amalda bitta panel edi,
+ * faqat massivi boshqacha.
  *
- * ── MANZILLAR ──
- * Yangi ekranlar o'z makonining ildizida (`/org`, `/branch`, `/work`,
- * `/me`). Mavjud ishlaydigan sahifalar esa O'Z MANZILIDA qoladi
- * (`/owner/...`) va shu yerdan havola qilinadi — ikkinchi nusxa
- * yaratilmaydi. Qobiq (sidebar) ish makonidan kelib chiqadi, ya'ni
- * o'sha sahifa direktor uchun FILIAL menyusi bilan, ega uchun
- * TASHKILOT menyusi bilan ochiladi. Bitta sahifa, ikkita kontekst.
+ * Endi Super Admin panelining o'z qobig'i bor
+ * (`superadmin/layout/`) va u bu faylga umuman qaramaydi. Admin
+ * paneli esa o'z menyusini o'zi belgilaydi.
+ *
+ * ── XAVFSIZLIK ──
+ * Bu fayl FAQAT UX. Menyuda ko'rinmagan sahifaga URL orqali kirish
+ * mumkin va bu normal: ma'lumotni server qo'riqlaydi (rol + ruxsat +
+ * filial ko'lami, har so'rovda).
  */
-
-// ══════════════════════════════════════════════════════════════════
-// 1) SUPER ADMIN — TASHKILOT BOSHQARUV MARKAZI
-// ══════════════════════════════════════════════════════════════════
-const superAdminNav = [
-  {
-    title: "Umumiy holat",
-    icon: LayoutDashboard,
-    url: "/org",
-    end: true,
-  },
-  {
-    // FILIAL — TASHKILOTNING ASOSIY O'LCHOVI.
-    //
-    // Ilgari filial bilan bog'liq narsalar UCH joyga sochilgandi:
-    // ro'yxat "Filiallar" da, xonalar "Katalog" da, P&L esa
-    // "Filiallar > Tahlil" da. Ega xona qo'shish uchun filial
-    // kontekstidan CHIQIB ketishi kerak edi.
-    //
-    // Endi filial — KONTEYNER: ichida xonalar, odamlar, moliya,
-    // guruhlar. Talab 2 aynan shuni so'raydi.
-    title: "Filiallar",
-    icon: Building2,
-    url: "/org/branches",
-    permission: "branches.read",
-  },
-  {
-    title: "Odamlar",
-    icon: Users,
-    url: "/org/people",
-    permission: "users.read",
-  },
-  {
-    // MOLIYA — YASHIRIN HISOBOT EMAS, ASOSIY BO'LIM (talab 8).
-    title: "Moliya",
-    icon: Wallet,
-    url: "/org/finance",
-    permission: "finance.read",
-  },
-  {
-    // OPERATSIYA — kundalik ish. Ega bu yerga kamdan-kam tushadi,
-    // lekin tushganda hamma narsa bitta joyda bo'lishi kerak.
-    title: "Operatsiya",
-    icon: GraduationCap,
-    url: "/org/operations",
-    permissionAnyOf: ["students.read", "groups.read", "attendance.read", "leads.read"],
-  },
-  {
-    title: "Tahlil",
-    icon: ChartColumnBig,
-    url: "/org/analytics",
-    permissionAnyOf: ["finance.view_profitability", "ai.read", "admin_dashboard.read"],
-  },
-  {
-    // VAKOLATLAR — "kim nima qila oladi" degan savolning YAGONA joyi.
-    title: "Vakolatlar",
-    icon: ShieldCheck,
-    url: "/org/permissions",
-    permission: "roles.read",
-  },
-  {
-    title: "Sozlamalar",
-    icon: Settings,
-    url: "/owner/settings",
-  },
-];
-
-// ══════════════════════════════════════════════════════════════════
-// 2) ADMIN — FILIAL ISH MAKONI
-//
-// SUPER_ADMIN bilan bir xil DIZAYN TILI, boshqa TUZILISH.
-// Filial tanlagich YO'Q: uning filiali bitta va u shundoq ham
-// hamma sahifada ko'rinib turadi.
-// ══════════════════════════════════════════════════════════════════
-const adminNav = [
-  { title: "Bugun", icon: LayoutDashboard, url: "/branch", end: true },
-  { title: "O'quvchilar", icon: GraduationCap, url: "/owner/students", permission: "students.read" },
-  { title: "Guruhlar", icon: BookOpen, url: "/owner/groups", permission: "groups.read" },
-  { title: "O'qituvchilar", icon: Users, url: "/owner/teachers", permission: "teachers.read" },
-  { title: "Davomat", icon: ClipboardCheck, url: "/owner/attendance", permission: "attendance.read" },
-  { title: "Jadval", icon: CalendarDays, url: "/branch/schedule", permission: "classes.read" },
-  { title: "Lidlar", icon: Target, url: "/owner/leads", permission: "leads.read" },
-  {
-    // UNDIRISH — "kim qarzdor va nima qilamiz". Ilgari bu
-    // "Moliya > Hisobot" ichidagi tab edi va filial direktori uni
-    // moliyaviy hisobot deb o'ylab ochmasdi. Bu esa uning ENG
-    // kundalik ishi.
-    title: "Undirish",
-    icon: HandCoins,
-    url: "/branch/collections",
-    permissionAnyOf: ["finance.view_receivables", "finance.read"],
-  },
-  {
-    title: "Filial moliyasi",
-    icon: Wallet,
-    url: "/branch/finance",
-    permission: "finance.read",
-  },
-  { title: "Sozlamalar", icon: Settings, url: "/owner/settings" },
-];
 
 // ══════════════════════════════════════════════════════════════════
 // 3) STAFF — "MENGA BIRIKTIRILGAN ISH"
@@ -207,8 +108,19 @@ const studentNav = [
 ];
 
 export const WORKSPACE_NAV = Object.freeze({
-  [WORKSPACES.SUPER_ADMIN]: superAdminNav,
-  [WORKSPACES.ADMIN]: adminNav,
+  // SUPER ADMIN VA ADMIN — IKKALASI HAM ADMIN PANELINING MENYUSI.
+  //
+  // Bu qasddan. `AppSidebar` faqat OPERATSION qobiqda (`/owner/*`,
+  // `/work`, `/me`) chiziladi — Super Admin panelining o'z sidebari
+  // bor (`superadmin/layout/SuperAdminSidebar.jsx`) va u bu yerdan
+  // hech narsa olmaydi.
+  //
+  // Ya'ni bu ikki qator faqat bitta savolga javob beradi: "ega yoki
+  // direktor `/owner/students` sahifasini ochganda qanday menyu
+  // ko'radi?" Javob — Admin panelining o'z menyusi, chunki u AYNAN
+  // shu panelda turibdi.
+  [WORKSPACES.SUPER_ADMIN]: ownerSidebar,
+  [WORKSPACES.ADMIN]: ownerSidebar,
   [WORKSPACES.STAFF]: officeNav,
   [WORKSPACES.STUDENT]: studentNav,
 });

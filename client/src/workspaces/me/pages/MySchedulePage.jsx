@@ -2,8 +2,8 @@ import { CalendarDays } from "lucide-react";
 
 import useMyGroupQuery from "@/student/features/group/hooks/useMyGroupQuery";
 import { LoadingBlock } from "@/shared/components/analytics";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
-import EmptyState from "@/workspaces/shared/EmptyState";
+import WorkspacePage from "@/shared/components/page/PageShell";
+import EmptyState from "@/shared/components/page/EmptyState";
 
 /**
  * JADVALIM.

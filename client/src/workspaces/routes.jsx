@@ -4,22 +4,6 @@ import PermissionGuard from "@/shared/components/guards/PermissionGuard";
 import NotFoundPage from "@/shared/components/ui/feedback/NotFoundPage";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 
-// ── TASHKILOT (Super Admin) ──
-import OrgOverviewPage from "./org/pages/OrgOverviewPage";
-import OrgBranchesPage from "./org/pages/OrgBranchesPage";
-import OrgBranchDetailPage from "./org/pages/OrgBranchDetailPage";
-import OrgPeoplePage from "./org/pages/OrgPeoplePage";
-import OrgFinancePage from "./org/pages/OrgFinancePage";
-import OrgOperationsPage from "./org/pages/OrgOperationsPage";
-import OrgAnalyticsPage from "./org/pages/OrgAnalyticsPage";
-import OrgPermissionsPage from "./org/pages/OrgPermissionsPage";
-
-// ── FILIAL (Admin) ──
-import BranchTodayPage from "./branch/pages/BranchTodayPage";
-import BranchCollectionsPage from "./branch/pages/BranchCollectionsPage";
-import BranchFinancePage from "./branch/pages/BranchFinancePage";
-import BranchSchedulePage from "./branch/pages/BranchSchedulePage";
-
 // ── ISH JOYI (Staff) ──
 import WorkHomePage from "./work/pages/WorkHomePage";
 import WorkGroupsPage from "./work/pages/WorkGroupsPage";
@@ -33,107 +17,39 @@ import MySchedulePage from "./me/pages/MySchedulePage";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
- * ISH MAKONLARI MARSHRUTLARI
+ * XODIM VA O'QUVCHI SAHIFALARI
  * ══════════════════════════════════════════════════════════════════════
  *
- * ── QO'RIQLASH: MENYUDA YASHIRISH YETARLI EMAS ──
- * Har bo'lim `PermissionGuard` ostida va kalitlar navigatsiyadagilar
- * bilan AYNAN bir xil. Menyu ko'rsatmasligi mumkin, lekin URL ni
- * qo'lda yozib kirish har doim mumkin.
+ * ── BU YERDA NIMA QOLDI ──
+ * Faqat `/work` (xodim) va `/me` (o'quvchi). Ular o'zgartirilmadi va
+ * bu ATAYLAB: ikkalasi ham ishlab turibdi, ularni qayta ko'rib chiqish
+ * boshqa ishning mavzusi.
  *
- * VA BU HAM XAVFSIZLIK EMAS — bu faqat xushmuomalalik: server har
- * so'rovni o'zi tekshiradi va 403 qaytaradi. Qo'riqchi shunchaki
+ * ── NIMA KETDI VA QAYERGA ──
+ *   `/org/*`     → Super Admin paneli, o'z qobig'i bilan
+ *                  (`superadmin/`) — u endi "ish makoni" emas,
+ *                  ALOHIDA ilova qobig'i.
+ *   `/branch/*`  → Admin paneliga qaytarildi (`/owner/*`). U mavjud
+ *                  panelni almashtirishga urinardi va natijada
+ *                  administrator ikkita yarim panel bilan qolgandi.
+ *                  Manzillar `app/routes.jsx` da yo'naltiriladi.
+ *
+ * ── QO'RIQLASH ──
+ * Har bo'lim `PermissionGuard` ostida. BU XAVFSIZLIK EMAS — server
+ * har so'rovni o'zi tekshiradi va 403 qaytaradi. Qo'riqchi faqat
  * foydalanuvchini bo'sh ekranga emas, tushunarli joyga olib boradi.
  *
  * ── `fallback` NEGA ANIQ MANZIL ──
  * "/" ga yuborish HALQA xavfini tug'diradi: "/" `RoleHomeRedirect` ga
- * boradi, u esa rolning landing sahifasini o'qiydi — agar u aynan
- * shu qo'riqlangan sahifa bo'lsa, aylanish boshlanadi. WebKit bunday
+ * boradi, u esa rolning bosh sahifasini o'qiydi — agar u aynan shu
+ * qo'riqlangan sahifa bo'lsa, aylanish boshlanadi. WebKit bunday
  * halqani SecurityError bilan uzadi (qarang app/routes.jsx).
  */
 
-const ORG_HOME = "/org";
-const G = ({ required, anyOf, fallback = ORG_HOME, children }) => (
+const G = ({ required, anyOf, fallback, children }) => (
   <PermissionGuard required={required} anyOf={anyOf} fallback={fallback}>
     {children}
   </PermissionGuard>
-);
-
-export const OrgRoutes = () => (
-  <Routes>
-    <Route index element={<OrgOverviewPage />} />
-
-    <Route
-      path="branches"
-      element={<G required={PERMISSIONS.BRANCHES_READ}><OrgBranchesPage /></G>}
-    />
-    <Route
-      path="branches/:id"
-      element={<G required={PERMISSIONS.BRANCHES_READ}><OrgBranchDetailPage /></G>}
-    />
-    <Route
-      path="people"
-      element={<G required={PERMISSIONS.USERS_READ}><OrgPeoplePage /></G>}
-    />
-    <Route
-      path="finance"
-      element={<G required={PERMISSIONS.FINANCE_READ}><OrgFinancePage /></G>}
-    />
-    <Route
-      path="operations"
-      element={
-        <G anyOf={[
-          PERMISSIONS.STUDENTS_READ, PERMISSIONS.GROUPS_READ,
-          PERMISSIONS.ATTENDANCE_READ, PERMISSIONS.LEADS_READ,
-        ]}>
-          <OrgOperationsPage />
-        </G>
-      }
-    />
-    <Route
-      path="analytics"
-      element={
-        <G required={PERMISSIONS.FINANCE_VIEW_PROFITABILITY}><OrgAnalyticsPage /></G>
-      }
-    />
-    <Route
-      path="permissions"
-      element={<G required={PERMISSIONS.ROLES_READ}><OrgPermissionsPage /></G>}
-    />
-
-    <Route path="*" element={<NotFoundPage />} />
-  </Routes>
-);
-
-export const BranchRoutes = () => (
-  <Routes>
-    <Route index element={<BranchTodayPage />} />
-    <Route
-      path="collections"
-      element={
-        <G required={PERMISSIONS.FINANCE_VIEW_RECEIVABLES} fallback="/branch">
-          <BranchCollectionsPage />
-        </G>
-      }
-    />
-    <Route
-      path="finance"
-      element={
-        <G required={PERMISSIONS.FINANCE_READ} fallback="/branch">
-          <BranchFinancePage />
-        </G>
-      }
-    />
-    <Route
-      path="schedule"
-      element={
-        <G required={PERMISSIONS.GROUPS_READ} fallback="/branch">
-          <BranchSchedulePage />
-        </G>
-      }
-    />
-    <Route path="*" element={<NotFoundPage />} />
-  </Routes>
 );
 
 export const WorkRoutes = () => (
@@ -161,8 +77,8 @@ export const MeRoutes = () => (
     <Route index element={<MyHomePage />} />
     <Route path="payments" element={<MyPaymentsPage />} />
     <Route path="schedule" element={<MySchedulePage />} />
-    {/* O'quvchi paneli sahifalari o'z manzilida qoladi (talab 32) —
-        bu yerdan ularga YO'NALTIRILADI, nusxa yaratilmaydi. */}
+    {/* O'quvchi paneli sahifalari o'z manzilida qoladi — bu yerdan
+        ularga YO'NALTIRILADI, nusxa yaratilmaydi. */}
     <Route path="learning" element={<Navigate to="/student/group" replace />} />
     <Route path="attendance" element={<Navigate to="/student/attendance" replace />} />
     <Route path="progress" element={<Navigate to="/student/rating" replace />} />

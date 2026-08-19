@@ -13,8 +13,8 @@ import {
   useRolesQuery, useRolesMatrixQuery, useRoleQuery,
 } from "@/owner/features/roles/hooks/useRolesQuery";
 import { useRoleUpdateMutation } from "@/owner/features/roles/hooks/useRoleMutations";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
-import EmptyState from "@/workspaces/shared/EmptyState";
+import PageShell from "@/shared/components/page/PageShell";
+import EmptyState from "@/shared/components/page/EmptyState";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -53,7 +53,7 @@ const WORKSPACE_BADGE = {
   [WORKSPACES.STUDENT]: "bg-muted text-muted-foreground",
 };
 
-const OrgPermissionsPage = () => {
+const VakolatlarPage = () => {
   const { has } = usePermissions();
   const canRead = has(PERMISSIONS.ROLES_READ);
   const canWrite = has(PERMISSIONS.ROLES_UPDATE);
@@ -114,20 +114,20 @@ const OrgPermissionsPage = () => {
 
   if (!canRead) {
     return (
-      <WorkspacePage title="Vakolatlar">
+      <PageShell title="Vakolatlar">
         <EmptyState
           icon={ShieldCheck}
           title="Bu bo'lim yopiq"
           hint="Rollarni ko'rish uchun tegishli ruxsat kerak."
         />
-      </WorkspacePage>
+      </PageShell>
     );
   }
 
   const roleList = roles.data || [];
 
   return (
-    <WorkspacePage
+    <PageShell
       title="Vakolatlar"
       subtitle="Har rol nima qila olishi — odam tilida. O'zgarish darhol barcha shu roldagi odamlarga tegadi."
     >
@@ -297,8 +297,8 @@ const OrgPermissionsPage = () => {
           )}
         </div>
       </div>
-    </WorkspacePage>
+    </PageShell>
   );
 };
 
-export default OrgPermissionsPage;
+export default VakolatlarPage;

@@ -15,11 +15,25 @@ import {
 
 export const list = async ({
   search,
+  branchId,
   includeInactive = false,
   page = 1,
   limit = 200,
 }) => {
   const where = { ...branchFilter(), isDeleted: false };
+
+  // BITTA FILIAL SO'RALGANDA: avval RUXSAT, keyin filtr.
+  //
+  // Tartib muhim. Agar filtr shunchaki qo'yilsa, `branchFilter()`
+  // baribir himoya qilardi (natija bo'sh chiqardi), lekin foydalanuvchi
+  // "bu filialda xona yo'q ekan" degan XATO xulosaga kelardi. 403 esa
+  // haqiqatni aytadi: bu filial sizga tegishli emas.
+  if (branchId) {
+    if (!isBranchAllowed(branchId)) {
+      throw new ApiError(403, "Bu filial ma'lumotini ko'rish huquqingiz yo'q");
+    }
+    where.branchId = String(branchId);
+  }
   if (!includeInactive) where.isActive = true;
   if (search && search.trim()) {
     where.name = { contains: search.trim(), mode: "insensitive" };

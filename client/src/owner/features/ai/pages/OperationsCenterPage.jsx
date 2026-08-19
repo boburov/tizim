@@ -79,7 +79,18 @@ const HeaderLink = ({ to, icon: Icon, children }) => (
   </Link>
 );
 
-const OperationsCenterPage = () => {
+/**
+ * @param {object} props
+ * @param {boolean} [props.embedded] — sahifa BOSHQA sarlavha ostida
+ *   turibdi (masalan "Tizim tahlili" tabi ichida). Bunda o'z
+ *   sarlavhasi chizilmaydi: ikkita `<h1>` bir ekranda — ekran
+ *   o'quvchi uchun ikkita "sahifa boshi" degani va ko'rish jihatidan
+ *   ham qaysi biri asosiy ekani noaniq bo'lardi.
+ *
+ *   Yordamchi havolalar (hisobotlar, vazifalar, qayta hisoblash)
+ *   YO'QOLMAYDI — ular sarlavhasiz qatorda qoladi.
+ */
+const OperationsCenterPage = ({ embedded = false }) => {
   const paths = useAiPaths();
   const { data, isLoading, isError, error } = useBriefingQuery();
 
@@ -113,14 +124,16 @@ const OperationsCenterPage = () => {
   return (
     <div className="space-y-10">
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-foreground">Tahlil markazi</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {data?.branch?.name || "Barcha filiallar"}
-          </p>
-        </div>
+        {!embedded && (
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-foreground">Tahlil markazi</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {data?.branch?.name || "Barcha filiallar"}
+            </p>
+          </div>
+        )}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 ml-auto">
           <HeaderLink to={paths.reports} icon={FileText}>
             Hisobotlar
           </HeaderLink>

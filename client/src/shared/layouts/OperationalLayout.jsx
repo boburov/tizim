@@ -32,15 +32,14 @@ const DrillDrawer = lazy(() => import("@/shared/drill/DrillDrawer"));
  * ═══════════════════════════════════════════════════════════════════
  * Bu `DashboardLayout` ning O'ZI, faqat nomi aniqlashtirildi.
  *
- * NEGA QAYTA NOMLANDI: endi ikkita qobiq bor va "Dashboard" nomi
- * ikkalasiga ham tegishli bo'lib qoldi - rahbariyat ekrani ham
- * dashboard, operatsion panel ham. Fayl nomidan qaysi biri ekani
- * bilinmasdi va yangi sahifa qo'shayotgan odam noto'g'risini
- * tanlashi mumkin edi.
+ * NEGA QAYTA NOMLANDI: ilovada ikkita qobiq bor va "Dashboard" nomi
+ * ikkalasiga ham tegishli bo'lib qolgandi. Endi nom ISHNI aytadi:
  *
- * Endi nom ISHNI aytadi:
- *   OperationalLayout - kundalik ish, 30+ havola, sidebar
- *   ExecutiveLayout   - rahbariyat kesimi, 5 bo'lim, sidebar YO'Q
+ *   OperationalLayout  - ADMIN PANELI (`/owner/*`): kundalik ish,
+ *                        30+ havola, yig'iladigan sidebar
+ *   SuperAdminLayout   - SUPER ADMIN PANELI (`/org/*`): tashkilot
+ *                        boshqaruvi, uch yozuvli menyu, sarlavhada
+ *                        MOLIYA (`superadmin/layout/`)
  *
  * Eski nom (`DashboardLayout`) RE-EXPORT bo'lib qoladi - uni
  * ishlatayotgan kod buzilmasin.

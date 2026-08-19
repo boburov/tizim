@@ -37,6 +37,9 @@ export const qk = Object.freeze({
     pnl: (params) => ["branchAnalytics", "pnl", params],
     normalized: (params) => ["branchAnalytics", "normalized", params],
     utilization: () => ["branchAnalytics", "utilization"],
+    // Xona bandligi: filial va ish vaqti oynasi kalitning bir qismi —
+    // boshqa oyna BOSHQA raqam beradi, ya'ni keshda ham boshqa yozuv.
+    roomUtilization: (params) => ["branchAnalytics", "roomUtilization", params],
     churn: (params) => ["branchAnalytics", "churn", params],
     alerts: () => ["branchAnalytics", "alerts"],
     // Filiallar kesimi: sotuv voronkasi va o'qituvchi resursi.

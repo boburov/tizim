@@ -144,6 +144,30 @@ Error (emitted by the central `errorHandler`):
   Prisma'da `include: { permissions: true }` bilan o'qiladi.
 - Middleware: `requireAuth -> (requireRole("owner") | requirePermission("students.create"))`.
 
+## Filial ko'lami — eng muhim invariant
+
+Har so'rov `requireAuth` ichida filial kontekstiga o'raladi
+(`helpers/branchContext.helper.js`, AsyncLocalStorage). Servis qatlamida uch
+vosita ishlatiladi:
+
+| Vosita | Qachon | Xatti-harakati |
+|---|---|---|
+| `branchFilter(field?)` | HAR o'qish so'rovida | `where` ga filial shartini qo'shadi; biriktirilmagan odamda `{ in: [] }` — **fail-closed** |
+| `isBranchAllowed(id)` | so'ralgan filial bo'lsa | ko'lamda emasmi — `403` |
+| `resolveBranchForWrite()` | yozishda | filialni O'ZI hal qiladi; so'ralgani ko'lamdan tashqarida bo'lsa `403` |
+
+**Query parametri ko'lamni faqat TORAYTIRADI, hech qachon kengaytirmaydi.**
+`?branchId=` qabul qiladigan har endpoint avval `isBranchAllowed` ni chaqirishi
+shart. Buni unutish jimgina sizishga olib keladi: `/rooms` da `branchId`
+validatordan tushib qolgan edi va "A filiali → Xonalar" ekrani BARCHA
+filialning xonalarini ko'rsatardi — hech qanday xato bermasdan.
+
+Chegarani `tests/workspaceSecurityAudit.mjs` ishlab turgan serverga haqiqiy HTTP
+so'rovlar yuborib tekshiradi (brauzersiz — xuddi hujumchi kabi). Bo'sh bazada
+"B filial hech narsa ko'rmadi" degan tekshiruv o'z-o'zidan yashil bo'ladi,
+shuning uchun har sizish testi **musbat nazorat** ostida: ruxsat etilgan tomon
+ham hech narsa topmasa, tekshiruv "o'lchanmadi" deb belgilanadi.
+
 ## Rejalashtiruvchi (joblar)
 
 Agenda **faqat MongoDB** bilan ishlagani uchun u **pg-boss** bilan
@@ -180,6 +204,13 @@ npm run db:reset         # schema'ni qayta qurish + owner seed
 # ── Testlar ──
 npm run test:auth-prisma  # ko'chirilgan auth oqimi (haqiqiy Postgres ustida)
 npm run test:branch-cross # filiallar kesimi: sotuv voronkasi + o'qituvchi resursi
+npm run test:rooms        # xona bandligi: birlashma, faol kunlar, to'qnashuv
+
+# ── CHEGARA AUDITI (ishlab turgan serverga haqiqiy HTTP so'rovlar) ──
+node tests/fixtures/qaUsers.mjs     # sinov foydalanuvchilari (2 filial kerak)
+npm run audit:workspace             # filial/rol chegarasi, xonalar ham
+npm run audit:finance               # moliya ruxsatlari
+node tests/fixtures/qaUsers.mjs --clean
 ```
 
 Schema o'zgargach `npm run prisma:generate` **shart** - aks holda klient

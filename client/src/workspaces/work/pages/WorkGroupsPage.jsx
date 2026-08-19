@@ -6,8 +6,8 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
 import { AnalyticsTable, QueryState } from "@/shared/components/analytics";
 import useAuth from "@/shared/hooks/useAuth";
 import useGroupsListQuery from "@/owner/features/groups/hooks/useGroupsListQuery";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
-import EmptyState from "@/workspaces/shared/EmptyState";
+import WorkspacePage from "@/shared/components/page/PageShell";
+import EmptyState from "@/shared/components/page/EmptyState";
 
 /**
  * GURUHLARIM.

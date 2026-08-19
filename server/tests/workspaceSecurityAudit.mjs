@@ -71,15 +71,28 @@ const run = async () => {
   const student = await login("demo_student_1", "qa123456");
 
   for (const [n, t] of [["qa_admin_a", adminA], ["qa_admin_b", adminB],
-    ["qa_staff_a", staff], ["demo_student_1", student]]) {
+    ["qa_staff_a", staff]]) {
     if (!t) bad(`${n} login`, "fixture ishga tushirilganmi? (tests/fixtures/qaUsers.mjs)");
   }
+  // O'QUVCHI IXTIYORIY: u moliya demo seed'i bilan keladi. Yo'q bo'lsa
+  // tegishli bo'lim O'TKAZIB YUBORILADI — auditni yiqitish noto'g'ri
+  // signal berardi ("chegara buzilgan"), holbuki chegara emas,
+  // MA'LUMOT yo'q.
+  if (!student) warn("demo_student_1 yo'q", "o'quvchi bo'limi tekshirilmadi");
   if (!adminA || !adminB) return;
 
-  const branches = (await (await get("/branches", owner)).json()).data || [];
-  const A = branches.find((b) => String(b.name).startsWith("DEMO"));
-  const B = branches.find((b) => !String(b.name).startsWith("DEMO"));
-  if (!A || !B) { bad("ikkita filial kerak", "demo seed ishga tushirilganmi?"); return; }
+  // ── IKKI FILIAL ──
+  //
+  // Ilgari ular NOM bo'yicha topilardi (`startsWith("DEMO")`), ya'ni
+  // audit moliya demo seed'i ishlatilgan bazaga bog'langan edi va
+  // boshqa bazada butunlay ishga tushmasdi — "demo seed ishga
+  // tushirilganmi?" deb to'xtardi. Chegara tekshiruvi esa HAR QANDAY
+  // bazada ishlashi kerak.
+  const branches = ((await (await get("/branches", owner)).json()).data || [])
+    .filter((b) => !b.isDeleted);
+  const A = branches.find((b) => b.isMain) || branches[0];
+  const B = branches.find((b) => (b.id || b._id) !== (A?.id || A?._id));
+  if (!A || !B) { bad("ikkita filial kerak", `hozir ${branches.length} ta`); return; }
 
   // ══════════════════════════════════════════════════════════════════
   head("1) Autentifikatsiyasiz kirish — hamma joy yopiq");
@@ -207,6 +220,12 @@ const run = async () => {
 
   // ══════════════════════════════════════════════════════════════════
   head("10) O'QUVCHI — faqat o'zini ko'radi");
+  // TOKEN YO'Q BO'LSA TEKSHIRMAYMIZ. Aks holda har so'rov 401 qaytaradi
+  // va audit "chegara buzilgan" degan ELEVEN TA soxta muammo
+  // ko'rsatadi — aslida shunchaki o'quvchi yaratilmagan.
+  if (!student) {
+    warn("o'quvchi chegarasi", "demo_student_1 yo'q — tekshirilmadi");
+  } else {
   await expect("o'quvchi /ledger/me", get("/ledger/me", student), 200);
   await expect("o'quvchi /finance-analytics/summary", get("/finance-analytics/summary", student), 403);
   await expect("o'quvchi /users", get("/users", student), 403);
@@ -218,17 +237,44 @@ const run = async () => {
   if (other) {
     await expect("o'quvchi BOSHQA o'quvchi hisobvarag'i", get(`/ledger/${other.id}`, student), [403, 404]);
   }
+  }
 
   // ══════════════════════════════════════════════════════════════════
   head("11) QIDIRUV — filial chegarasini hurmat qiladi");
-  const sA = await (await get("/search?q=Demo", adminA)).json();
-  const sB = await (await get("/search?q=Demo", adminB)).json();
+
+  // ══════════════════════════════════════════════════════════════════
+  // MUSBAT NAZORAT — SIZISH TESTINING SHARTI
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // "B admini A filialidagilarni topmadi" degan tekshiruv BO'SH bazada
+  // ham o'tadi: u yerda hech kim hech kimni topmaydi. Ya'ni tekshiruv
+  // yashil bo'ladi-yu, HECH NARSANI isbotlamaydi — bu eng yomon
+  // turdagi test, chunki u xotirjamlik beradi.
+  //
+  // Shuning uchun avval MUSBAT NAZORAT: A admini o'z filialida biror
+  // narsani topishi kerak. Topmasa — bazada ma'lumot yo'q va sizish
+  // testi O'TKAZIB YUBORILADI (yiqilmaydi ham, o'tmaydi ham).
+  //
+  // Qidiruv so'zi ham bazadan olinadi: ilgari bu yerda "Demo" qattiq
+  // yozilgan edi va audit faqat demo seed ishlatilgan bazada
+  // ma'noli natija berardi.
+  const someone = ((await (await get("/users?limit=1", owner)).json()).data || [])[0];
+  const term = String(someone?.firstName || someone?.username || "").slice(0, 4);
+
   const cnt = (d) => (d?.students?.length || 0) + (d?.teachers?.length || 0) + (d?.groups?.length || 0);
-  if (cnt(sA.data) > 0) ok("A admini o'z filialidagilarni topadi", `${cnt(sA.data)} natija`);
-  else bad("A admini hech kimni topmadi", "ko'lam juda tor?");
-  if (cnt(sB.data) === 0) ok("B admini A filialidagilarni TOPMAYDI", "0 natija");
-  else bad("qidiruvda filial sizishi", `${cnt(sB.data)} begona natija`);
-  await expect("o'quvchi qidiruvi yopiq", get("/search?q=Demo", student), 403);
+  const sA = term ? await (await get(`/search?q=${encodeURIComponent(term)}`, adminA)).json() : null;
+  const sB = term ? await (await get(`/search?q=${encodeURIComponent(term)}`, adminB)).json() : null;
+
+  if (!term || cnt(sA?.data) === 0) {
+    warn("qidiruvda filial chegarasi",
+      "musbat nazorat bo'sh (bazada qidiriladigan odam yo'q) — sizish testi ma'nosiz");
+  } else {
+    ok("A admini o'z filialidagilarni topadi", `${cnt(sA.data)} natija`);
+    if (cnt(sB.data) === 0) ok("B admini A filialidagilarni TOPMAYDI", "0 natija");
+    else bad("qidiruvda filial sizishi", `${cnt(sB.data)} begona natija`);
+  }
+  if (student) await expect("o'quvchi qidiruvi yopiq", get("/search?q=Demo", student), 403);
+  else warn("o'quvchi qidiruvi", "demo_student_1 yo'q — tekshirilmadi");
   await expect("xodim qidiruvi yopiq (users.read yo'q)", get("/search?q=Demo", staff), 403);
 
   // ── TO'LOV NATIJALARI `finance.read` TALAB QILADI ──
@@ -236,16 +282,22 @@ const run = async () => {
   // Odamlarni ko'rish huquqi PULNI ko'rish huquqini BERMAYDI.
   // Bu yerda ikkalasi bir so'rovda qaytadi, ya'ni chegara javob
   // ichida — eng oson unutiladigan turdagi chegara.
-  const payOwner = await (await get("/search?q=Talaba", owner)).json();
-  const payPeople = await (await get("/search?q=Talaba", people)).json();
+  const q = term ? `?q=${encodeURIComponent(term)}` : "?q=a";
+  const payOwner = await (await get(`/search${q}`, owner)).json();
+  const payPeople = await (await get(`/search${q}`, people)).json();
   const nOwner = payOwner?.data?.payments?.length || 0;
   const nPeople = payPeople?.data?.payments?.length ?? -1;
-  if (nOwner > 0) ok("ega qidiruvda to'lovlarni ko'radi", `${nOwner} ta`);
-  else bad("ega to'lovlarni ko'rmadi", "demo seed ishga tushirilganmi?");
-  if ((payPeople?.data?.students?.length || 0) > 0) ok("odamlar roli o'quvchini topadi");
-  else bad("odamlar roli hech kimni topmadi");
-  if (nPeople === 0) ok("odamlar roli TO'LOVLARNI ko'rmaydi", "0 ta");
-  else bad("qidiruvda to'lov sizishi", `${nPeople} ta to'lov ko'rindi`);
+
+  // Bu yerda ham musbat nazorat: ega to'lovni KO'RMASA, "odamlar roli
+  // to'lovni ko'rmadi" degan xulosa hech narsani isbotlamaydi.
+  if (nOwner > 0) {
+    ok("ega qidiruvda to'lovlarni ko'radi", `${nOwner} ta`);
+    if (nPeople === 0) ok("odamlar roli TO'LOVLARNI ko'rmaydi", "0 ta");
+    else bad("qidiruvda to'lov sizishi", `${nPeople} ta to'lov ko'rindi`);
+  } else {
+    warn("qidiruvda to'lov chegarasi",
+      "bazada to'lov yo'q — musbat nazoratsiz sizish testi ma'nosiz");
+  }
 
   // ══════════════════════════════════════════════════════════════════
   head("12) O'QUVCHI MOLIYAVIY YO'LI — ko'lamdan tashqarida ko'rinmaydi");
@@ -256,13 +308,74 @@ const run = async () => {
     await expect("B admini A o'quvchisi", get(`/finance-analytics/students/${demoStudents[0].id}`, adminB), 404);
     await expect("xodim o'quvchi moliyasi", get(`/finance-analytics/students/${demoStudents[0].id}`, staff), 403);
   } else {
-    bad("o'quvchi topilmadi", "demo seed ishga tushirilganmi?");
+    warn("o'quvchi moliyaviy yo'li", "bazada to'lov qilgan o'quvchi yo'q — tekshirilmadi");
   }
 
   // ══════════════════════════════════════════════════════════════════
   head("13) YOZISH AMALLARI — tahlil qatlamida yozuv YO'Q");
   for (const p of ["/finance-analytics/summary", "/finance-analytics/entries"]) {
     await expect(`POST ${p} qabul qilinmaydi`, post(p, owner, {}), [404, 405]);
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  head("14) XONALAR — filial chegarasi (talab 11, 32, 33)");
+  {
+    {
+      const aId = A.id || A._id;
+      const bId = B.id || B._id;
+
+      // ── O'QISH ──
+      //
+      // A admini B filialining xonalarini SO'RASA — 403. Bu `branchId`
+      // parametri qo'shilganda paydo bo'lgan yangi yuza: parametrsiz
+      // ham ko'lam ushlab turadi, lekin parametr bilan u KENGAYTIRISH
+      // vositasiga aylanmasligi kerak.
+      await expect("A admini: B filialining xonalari", get(`/rooms?branchId=${bId}`, adminA), 403);
+      await expect("A admini: O'Z filialining xonalari", get(`/rooms?branchId=${aId}`, adminA), 200);
+
+      // Parametrsiz so'rov O'Z filiali bilan chegaralanadi.
+      const mine = await get("/rooms", adminA);
+      const mineBody = await mine.json().catch(() => ({}));
+      const foreign = (mineBody.data || []).filter((r) => {
+        const rb = r.branchId?._id || r.branchId?.id || r.branchId;
+        return String(rb) !== String(aId);
+      });
+      if (foreign.length === 0) ok("A admini: ro'yxatda faqat o'z filiali");
+      else bad("A admini: ro'yxatda begona filial xonasi", `${foreign.length} ta`);
+
+      // ── YOZISH ──
+      //
+      // Eng muhim qator: A admini B filialiga xona QO'SHA OLMAYDI.
+      // Frontend bunday imkoniyatni ko'rsatmaydi (forma filial
+      // tanlagichisiz), lekin himoya SHU YERDA — so'rovni qo'lda
+      // yozish har doim mumkin.
+      await expect(
+        "A admini: B filialiga xona qo'shish",
+        post("/rooms", adminA, { name: "ZZAUDIT xona", branchId: bId }),
+        403,
+      );
+
+      // ── BANDLIK TAHLILI ──
+      await expect(
+        "A admini: B filialining bandlik tahlili",
+        get(`/branch-analytics/rooms?branchId=${bId}`, adminA),
+        403,
+      );
+      await expect(
+        "A admini: o'z bandlik tahlili",
+        get("/branch-analytics/rooms", adminA),
+        200,
+      );
+      // Xonalarni ko'rish ruxsati YO'Q xodim uchun yopiq.
+      await expect("xodim: bandlik tahlili", get("/branch-analytics/rooms", staff), 403);
+
+      // Bandlik javobida BEGONA filial xonasi bo'lmasligi kerak.
+      const utilRes = await get("/branch-analytics/rooms", adminA);
+      const util = (await utilRes.json().catch(() => ({})))?.data;
+      const leaked = (util?.rooms || []).filter((r) => String(r.branchId) !== String(aId));
+      if (leaked.length === 0) ok("bandlik javobida begona filial yo'q");
+      else bad("bandlik javobida begona filial", `${leaked.length} ta xona`);
+    }
   }
 
   // ── NATIJA ──

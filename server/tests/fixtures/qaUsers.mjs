@@ -43,9 +43,31 @@ if (CLEAN) {
   process.exit(0);
 }
 
-const branches = await prisma.branch.findMany({ where:{isDeleted:false}, select:{id:true,name:true} });
-const A = branches.find(b=>b.name.startsWith("DEMO"));
-const B = branches.find(b=>!b.name.startsWith("DEMO"));
+// IKKI FILIAL KERAK: butun auditning ma'nosi A filial admini B
+// filialni KO'RA OLMASLIGINI tekshirishda.
+//
+// ── NEGA NOM BO'YICHA QIDIRILMAYDI ──
+// Ilgari bu yerda `name.startsWith("DEMO")` turardi, ya'ni fixture
+// moliya demo seed'i ishlatilgan bazaga BOG'LANGAN edi. Boshqa bazada
+// `A` `undefined` bo'lib, fixture "Cannot read properties of
+// undefined" bilan yiqilardi va sabab ko'rinmasdi.
+//
+// Endi tartib: asosiy filial → A, boshqa istalgani → B.
+const branches = await prisma.branch.findMany({
+  where: { isDeleted: false, isActive: true },
+  select: { id: true, name: true, isMain: true },
+  orderBy: { createdAt: "asc" },
+});
+if (branches.length < 2) {
+  console.error(
+    `\nIKKI FILIAL KERAK — hozir ${branches.length} ta.\n` +
+    "Filial ochish: panelda Filiallar → Filial qo'shish, yoki\n" +
+    "  npm run seed:multi-branch\n",
+  );
+  process.exit(2);
+}
+const A = branches.find((b) => b.isMain) || branches[0];
+const B = branches.find((b) => b.id !== A.id);
 console.log("A:", A.name, A.id, "| B:", B.name, B.id);
 
 const perms = await prisma.permission.findMany({ select:{id:true,key:true} });

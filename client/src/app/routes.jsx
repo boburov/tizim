@@ -26,6 +26,8 @@ import { ROLES } from "@/shared/constants/roles";
 import { LoginPage, BotAuthPage } from "@/features/auth";
 
 import WorkspaceGuard from "@/shared/components/guards/WorkspaceGuard";
+import SuperAdminGuard from "@/shared/components/guards/SuperAdminGuard";
+import SuperAdminLayout from "@/superadmin/layout/SuperAdminLayout";
 import { WORKSPACES } from "@/shared/workspaces";
 
 /**
@@ -55,10 +57,7 @@ const OwnerRoutes = lazy(() => import("@/owner/routes"));
 const TeacherRoutes = lazy(() => import("@/teacher/routes"));
 const StudentRoutes = lazy(() => import("@/student/routes"));
 
-const OrgRoutes = lazy(() =>
-  import("@/workspaces/routes").then((m) => ({ default: m.OrgRoutes })));
-const BranchRoutes = lazy(() =>
-  import("@/workspaces/routes").then((m) => ({ default: m.BranchRoutes })));
+const SuperAdminRoutes = lazy(() => import("@/superadmin/routes"));
 const WorkRoutes = lazy(() =>
   import("@/workspaces/routes").then((m) => ({ default: m.WorkRoutes })));
 const MeRoutes = lazy(() =>
@@ -134,17 +133,42 @@ const Routes = () => (
           takrorlangan edi), ya'ni yo'naltirish nusxani ham yo'q
           qiladi. */}
       <Route path="/admin" element={<Navigate to="/org" replace />} />
-      <Route path="/admin/moliya" element={<Navigate to="/org/branches?tab=pnl" replace />} />
-      <Route path="/admin/filiallar" element={<Navigate to="/org/branches?tab=cross" replace />} />
-      <Route path="/admin/oquv" element={<Navigate to="/org/analytics?tab=academic" replace />} />
-      <Route path="/admin/jamoa" element={<Navigate to="/org/analytics?tab=team" replace />} />
-      <Route path="/admin/tavsiyalar" element={<Navigate to="/org/analytics?tab=insights" replace />} />
+      <Route path="/admin/moliya" element={<Navigate to="/org/filiallar?tab=pnl" replace />} />
+      <Route path="/admin/filiallar" element={<Navigate to="/org/filiallar?tab=cross" replace />} />
+      <Route path="/admin/oquv" element={<Navigate to="/org/tahlil?tab=academic" replace />} />
+      <Route path="/admin/jamoa" element={<Navigate to="/org/tahlil?tab=team" replace />} />
+      <Route path="/admin/tavsiyalar" element={<Navigate to="/org/tahlil?tab=insights" replace />} />
       <Route path="/admin/tahlil" element={<Navigate to="/owner/ai" replace />} />
       <Route path="/admin/tahlil/vazifalar" element={<Navigate to="/owner/ai/tasks" replace />} />
       <Route path="/admin/tahlil/hisobotlar" element={<Navigate to="/owner/ai/reports" replace />} />
       <Route path="/admin/tahlil/hisobotlar/:id" element={<AiReportRedirect />} />
       {/* Noma'lum `/admin/...` — tashkilot makoniga. */}
       <Route path="/admin/*" element={<Navigate to="/org" replace />} />
+
+      {/* ══════════════════════════════════════════════════════════════
+          SUPER ADMIN PANELI — ALOHIDA QOBIQ
+          ══════════════════════════════════════════════════════════════
+
+          `OperationalLayout` DAN TASHQARIDA turishi SHART. U hamma
+          narsani `SidebarProvider` ichiga o'raydi va `AppHeader`
+          `useSidebar()` ni chaqiradi — ya'ni sidebarni "ichkaridan
+          yashirish" mumkin emas: provider ham, `Ctrl+B` ham,
+          `SidebarRail` ham joyida qolardi.
+
+          Bu ikki panelning HAQIQATAN alohida ekanini ta'minlaydigan
+          yagona joy. Ular bir xil qobiqda tursa, qancha menyu
+          o'zgartirilmasin, natija "tugmalari boshqacha Admin paneli"
+          bo'lardi. */}
+      <Route
+        path="/org/*"
+        element={
+          <SuperAdminGuard>
+            <SuperAdminLayout>
+              <SuperAdminRoutes />
+            </SuperAdminLayout>
+          </SuperAdminGuard>
+        }
+      />
 
       <Route element={<OperationalLayout />}>
         {/* ═══ ISH MAKONLARI — YANGI AXBOROT ARXITEKTURASI ═══
@@ -157,24 +181,23 @@ const Routes = () => (
             `WorkspaceGuard` — xushmuomalalik qatlami: boshqa makon
             manzilini ochgan odam o'z sahifasiga qaytariladi. Ma'lumot
             himoyasi serverda. */}
-        <Route
-          path="/org/*"
-          element={
-            <WorkspaceGuard allow={WORKSPACES.SUPER_ADMIN}>
-              <OrgRoutes />
-            </WorkspaceGuard>
-          }
-        />
-        <Route
-          path="/branch/*"
-          element={
-            /* Ega ham filial ekranini ochishi mumkin: u bitta filialga
-               "kirib" ishlashi normal holat. Teskarisi emas. */
-            <WorkspaceGuard allow={[WORKSPACES.ADMIN, WORKSPACES.SUPER_ADMIN]}>
-              <BranchRoutes />
-            </WorkspaceGuard>
-          }
-        />
+        {/* ═══ ESKI `/branch` QOBIG'I — ADMIN PANELIGA QAYTARILDI ═══
+
+            `/branch/*` Admin panelini ALMASHTIRISHGA urinardi: o'z
+            "Bugun" ekrani, o'z undirish sahifasi, o'z jadvali — lekin
+            o'quvchi, guruh, davomat va sozlamalar baribir `/owner/*`
+            da qolardi. Ya'ni bitta administrator IKKITA yarim panel
+            bilan ishlardi va qaysi biri "asosiy" ekani noaniq edi.
+
+            Admin paneli — `/owner/*`. Uning sahifalari o'sha yerda va
+            o'sha nomda qoladi; bu yerdagi manzillar esa xatcho'q va
+            eski havolalar uchun yo'naltiriladi. */}
+        <Route path="/branch" element={<Navigate to="/owner/dashboard" replace />} />
+        <Route path="/branch/collections" element={<Navigate to="/owner/finance/undirish" replace />} />
+        <Route path="/branch/finance" element={<Navigate to="/owner/finance" replace />} />
+        <Route path="/branch/schedule" element={<Navigate to="/owner/jadval" replace />} />
+        <Route path="/branch/*" element={<Navigate to="/owner/dashboard" replace />} />
+
         <Route
           path="/work/*"
           element={

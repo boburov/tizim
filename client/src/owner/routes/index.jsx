@@ -79,6 +79,8 @@ import {
 } from "@/owner/features/branches";
 import { CashDeskPage } from "@/owner/features/journal";
 import { CatalogPage } from "@/owner/features/catalog";
+import { RoomsPage, SchedulePage } from "@/owner/features/rooms";
+import { SystemAnalysisPage } from "@/owner/features/systemAnalysis";
 import { BranchPnlPage } from "@/owner/features/branchAnalytics";
 import { ExpenseApprovalsPage } from "@/owner/features/expenseApprovals";
 import {
@@ -112,7 +114,7 @@ import {
   SalaryGroupDetailPage,
 } from "@/owner/features/teacherSalary";
 import { FinanceReportPage, WriteOffsPage } from "@/owner/features/financeReport";
-import { FinanceCommandPage } from "@/owner/features/financeAnalytics";
+import { FinanceCommandPage, CollectionsPage } from "@/owner/features/financeAnalytics";
 import { ProfilePage } from "@/owner/features/profile";
 import { SettingsPage } from "@/owner/features/settings";
 import { StudentStatsPage } from "@/owner/features/studentStats";
@@ -457,12 +459,63 @@ const OwnerRoutes = () => (
       }
     />
 
-    {/* KATALOG - kurslar (global), xonalar (filial), narx matritsasi. */}
+    {/* KATALOG - kurslar (global) va narx matritsasi.
+        XONALAR bu yerdan CHIQARILDI: ular `/owner/rooms` da, o'z
+        sahifasida. Sabab — talab 35: "odam xona qo'shishni qidirib
+        yurmasin". Katalog ichidagi ikkinchi jadval eng yomon joy edi. */}
     <Route
       path="catalog"
       element={
         <PermissionGuard required="courses.read" fallback="/owner">
           <CatalogPage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* ══════════════════════════════════════════════════════════════
+        XONALAR — ADMIN PANELIDA (talab 11, 32)
+        ══════════════════════════════════════════════════════════════
+
+        Filial administratori o'z filialining xonalarini shu yerda
+        ko'radi va (ruxsati bo'lsa) qo'shadi. Filial TANLANMAYDI:
+        ro'yxatni server ko'lam bo'yicha kesadi, yangi xonani esa
+        o'zi administratorning filialiga bog'laydi. Boshqa filialga
+        xona qo'shish yo'li YO'Q va bu serverda ta'minlangan
+        (`rooms.service.js`), bu yerda emas. */}
+    <Route
+      path="rooms"
+      element={
+        <PermissionGuard required="classes.read" fallback="/owner">
+          <RoomsPage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* HAFTALIK JADVAL — "seshanba 14:00 da 201-xona bo'shmi?".
+        Xonalar sahifasidan havola qilinadi; menyuda alohida yozuv
+        YO'Q, chunki u xona savolining davomi. */}
+    <Route
+      path="jadval"
+      element={
+        <PermissionGuard required="groups.read" fallback="/owner">
+          <SchedulePage />
+        </PermissionGuard>
+      }
+    />
+
+    {/* ══════════════════════════════════════════════════════════════
+        TIZIM TAHLILI — MAVJUD DVIGATEL, YANGI JOY (talab 28, 31)
+        ══════════════════════════════════════════════════════════════
+
+        `/owner/ai*` marshrutlari O'Z JOYIDA qoladi: tavsiya
+        kartalaridagi havolalar, hisobot linklari va eski xatcho'plar
+        ishlashda davom etadi. Bu sahifa ularni ALMASHTIRMAYDI —
+        u tahlilga tushunarli nom va xona kesimini qo'shadi. */}
+    <Route
+      path="tahlil"
+      element={
+        <PermissionGuard anyOf={["ai.read", "classes.read"]} fallback="/owner">
+          <SystemAnalysisPage />
         </PermissionGuard>
       }
     />
@@ -683,6 +736,23 @@ const OwnerRoutes = () => (
         oqimi, qarzdorlik) sahifa ICHIDA alohida tekshiriladi —
         server ham aynan shunday qo'riqlaydi. */}
     <Route path="finance" element={<FinanceCommandPage />} />
+
+    {/* UNDIRISH — "kim qarzdor, qancha vaqtdan beri".
+        Ilgari bu "Moliya > Boshqaruv markazi > Qarzdorlik" tabida,
+        uch qadam ichkarida edi va "moliyaviy tahlil" yorlig'i ostida
+        turardi — administrator uchun esa bu TAHLIL emas, kundalik
+        qo'ng'iroqlar ro'yxati. */}
+    <Route
+      path="finance/undirish"
+      element={
+        <PermissionGuard
+          anyOf={["finance.view_receivables", "finance.read"]}
+          fallback="/owner/finance"
+        >
+          <CollectionsPage />
+        </PermissionGuard>
+      }
+    />
 
     {/* Moliyaviy hisob-kitob - umumiy hisobot sahifasi */}
     <Route path="finance/accounting" element={<FinanceReportPage />} />

@@ -17,8 +17,8 @@ import {
 import { useIntelligence } from "@/owner/features/financeAnalytics/hooks/useFinanceIntelligence";
 import IntelligenceCenter from "@/owner/features/financeAnalytics/components/IntelligenceCenter";
 import SignalDetailDrawer from "@/owner/features/financeAnalytics/components/SignalDetailDrawer";
-import WorkspacePage from "@/workspaces/shared/WorkspacePage";
-import EmptyState from "@/workspaces/shared/EmptyState";
+import PageShell from "@/shared/components/page/PageShell";
+import EmptyState from "@/shared/components/page/EmptyState";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -48,7 +48,7 @@ import EmptyState from "@/workspaces/shared/EmptyState";
  * eng sezgir — u ALOHIDA ruxsat bilan va faqat ruxsat bo'lsa.
  */
 
-const OrgOverviewPage = () => {
+const AsosiyPage = () => {
   const { has } = usePermissions();
   const { openRoot } = useDrill();
   // Signal paneli — "nega bu ogohlantirish chiqdi" savolining javobi.
@@ -69,7 +69,7 @@ const OrgOverviewPage = () => {
   const d = summary.data;
 
   return (
-    <WorkspacePage
+    <PageShell
       title="Umumiy holat"
       subtitle="Butun tashkilot bo'yicha joriy oy. Har raqam bosiladi."
     >
@@ -106,14 +106,14 @@ const OrgOverviewPage = () => {
             value={d?.cashBalance}
             status={s.status} error={s.error} onRetry={s.refetch}
             hint="Barcha hisoblar yig'indisi"
-            to="/org/finance?tab=cash"
+            to="/org/moliya?tab=cash"
           />
           <KpiTile
             label="Qarzdorlik" isMoney icon={HandCoins} invertDelta
             value={d?.receivables?.outstanding?.current}
             status={s.status} error={s.error} onRetry={s.refetch}
             hint="To'lanmagan majburiyat"
-            to="/org/finance?tab=receivables"
+            to="/org/moliya?tab=receivables"
           />
           <KpiTile
             label="O'quvchilar" icon={GraduationCap} suffix=" ta"
@@ -137,7 +137,7 @@ const OrgOverviewPage = () => {
         <DashboardSection
           title="Filiallar"
           hint="Qaysi filial kuchli, qaysi biriga e'tibor kerak"
-          to="/org/branches"
+          to="/org/filiallar"
           toLabel="To'liq taqqoslash"
         >
           <QueryState
@@ -177,7 +177,7 @@ const OrgOverviewPage = () => {
               ? `Bog'lanish qamrovi: ${directions.data.attribution.coveragePercent}% — qolgan daromad yo'nalishga bog'lanmagan`
               : undefined
           }
-          to="/org/analytics"
+          to="/org/tahlil"
           toLabel="Barcha kesimlar"
         >
           <QueryState
@@ -252,8 +252,8 @@ const OrgOverviewPage = () => {
         filters={{}}
         onOpenChange={setSignalId}
       />
-    </WorkspacePage>
+    </PageShell>
   );
 };
 
-export default OrgOverviewPage;
+export default AsosiyPage;
