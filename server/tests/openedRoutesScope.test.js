@@ -10,7 +10,8 @@
  * teshigiga aylanadi.
  *
  * BU TEST har bir ochilgan amalni A filial direktori sifatida B filial
- * obyektiga qo'llab ko'radi va 403 kutadi.
+ * obyektiga qo'llab ko'radi va TO'SILISHINI kutadi (403 yoki 404 —
+ * pastdagi `mustBlock` izohiga qarang).
  *
  * NEGA MUHIM: bu tekshiruvlar route qatlamida EMAS, SERVIS qatlamida
  * turadi. Route'ni ochish oson va e'tiborsiz qilinadi - servisdagi
@@ -46,11 +47,49 @@ const grab = async (fn) => {
   }
 };
 
-/** Amal B filialga tegishli obyektda 403 berishi SHART. */
+/**
+ * Amal B filialga tegishli obyektda TO'SILISHI shart.
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * NEGA 403 EMAS, «403 YOKI 404»
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * Bu test dastlab qat'iy 403 kutardi va o'n bir joyda yiqilardi —
+ * hammasida javob 404 («Foydalanuvchi topilmadi») edi. Tekshirilganda
+ * ma'lum bo'ldiki, bu NOSOZLIK EMAS: servislar filial shartini
+ * SO'ROVNING O'ZIGA qo'shadi (`findFirst({ id, ...branchCondition })`),
+ * ya'ni begona qator umuman TOPILMAYDI va 404 chiqadi.
+ *
+ * Va 404 bu yerda 403 dan XAVFSIZROQ:
+ *
+ *   403 = «bu ID mavjud, lekin sizniki emas»  ← ma'lumot sizadi
+ *   404 = «bunday narsa yo'q»                  ← hech narsa aytmaydi
+ *
+ * 403 bilan A filiali direktori ID'larni bittalab sinab, B filialida
+ * qaysi o'quvchi/guruh BOR ekanini sanab chiqa olardi. Bu — klassik
+ * obyekt sanash (enumeration) zaifligi.
+ *
+ * ── TEST BO'SHASHIB QOLMAYDI ──
+ * Obyekt test boshida HAQIQATAN yaratiladi, ya'ni u MAVJUD. Shu
+ * sababli bu yerdagi 404 «yo'q narsa» degani emas, «sizdan
+ * yashirilgan» degani. Eng muhimi: uchinchi holat — amal MUVAFFAQIYATLI
+ * bajarilishi — avvalgidek SIZISH deb baholanadi.
+ *
+ * ── XABAR MAZMUNI HAM TEKSHIRILADI ──
+ * Xato matni obyekt haqida tafsilot bermasligi kerak (ism, telefon,
+ * filial nomi). Aks holda 404 ning butun ma'nosi yo'qolardi.
+ */
+const LEAKY = /\b(?:filial|branch)\s*[:=]|telefon|\+998/i;
+
 const mustBlock = async (name, fn) => {
   const { err } = await grab(fn);
-  if (err?.statusCode === 403) return ok(name, `403: ${err.message}`);
-  if (err) return bad(name, `kutilgan 403, kelgani ${err.statusCode}: ${err.message}`);
+  if (err?.statusCode === 403 || err?.statusCode === 404) {
+    if (LEAKY.test(err.message || "")) {
+      return bad(name, `to'sildi (${err.statusCode}), lekin xabar tafsilot sizdirdi: ${err.message}`);
+    }
+    return ok(name, `${err.statusCode}: ${err.message}`);
+  }
+  if (err) return bad(name, `kutilgan 403/404, kelgani ${err.statusCode}: ${err.message}`);
   return bad(name, "SIZISH - amal bajarildi, hech qanday xato yo'q");
 };
 

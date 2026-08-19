@@ -1,4 +1,5 @@
 // Router
+import { lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 // Guards
@@ -68,11 +69,8 @@ import {
   AssignmentsListPage,
   AssignmentDetailPage,
 } from "@/owner/features/assignments";
-import { StorageAdminPage } from "@/owner/features/storage";
-import { ImportPage } from "@/owner/features/imports";
 import { NotificationTemplatesListPage } from "@/owner/features/notificationTemplates";
 import { HolidaysListPage } from "@/owner/features/holidays";
-import { RolesPage, RoleFormPage } from "@/owner/features/roles";
 import {
   BranchesPage,
   BranchComparePage,
@@ -83,12 +81,6 @@ import { CashDeskPage } from "@/owner/features/journal";
 import { CatalogPage } from "@/owner/features/catalog";
 import { BranchPnlPage } from "@/owner/features/branchAnalytics";
 import { ExpenseApprovalsPage } from "@/owner/features/expenseApprovals";
-import {
-  ActionCenterPage,
-  AiReportDetailPage,
-  AiReportsPage,
-  OperationsCenterPage,
-} from "@/owner/features/ai";
 import {
   FeedbackPage,
   FeedbackListPage,
@@ -129,6 +121,28 @@ import {
   RetentionContent,
 } from "@/owner/features/studentRetention";
 import NotFoundPage from "@/shared/components/ui/feedback/NotFoundPage";
+
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * KAMDAN-KAM OCHILADIGAN, LEKIN OG'IR BO'LIMLAR — ALOHIDA BO'LAKDA
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * Sozlamalar, rollar, import va tahlil markazi kunlik ish emas:
+ * ular oyda bir necha marta ochiladi. Statik import bo'lsa, ular
+ * HAR SAFAR — o'quvchilar ro'yxatini ochgan odamga ham — yuklanadi.
+ *
+ * `Suspense` chegarasi qobiqda (`OperationalLayout`): yuklanish
+ * paytida sidebar va sarlavha joyida qoladi, faqat kontent kutadi.
+ */
+const StorageAdminPage = lazy(() => import("@/owner/features/storage").then((m) => ({ default: m.StorageAdminPage })));
+const ImportPage = lazy(() => import("@/owner/features/imports").then((m) => ({ default: m.ImportPage })));
+const RolesPage = lazy(() => import("@/owner/features/roles").then((m) => ({ default: m.RolesPage })));
+const RoleFormPage = lazy(() => import("@/owner/features/roles").then((m) => ({ default: m.RoleFormPage })));
+const OperationsCenterPage = lazy(() => import("@/owner/features/ai").then((m) => ({ default: m.OperationsCenterPage })));
+const ActionCenterPage = lazy(() => import("@/owner/features/ai").then((m) => ({ default: m.ActionCenterPage })));
+const AiReportsPage = lazy(() => import("@/owner/features/ai").then((m) => ({ default: m.AiReportsPage })));
+const AiReportDetailPage = lazy(() => import("@/owner/features/ai").then((m) => ({ default: m.AiReportDetailPage })));
+
 
 const OwnerRoutes = () => (
   <Routes>

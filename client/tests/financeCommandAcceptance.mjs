@@ -548,7 +548,18 @@ const run = async () => {
         await p2.waitForTimeout(2000);
       }
       await p2.goto(`${BASE}/owner/finance`, { waitUntil: "domcontentloaded" });
-      await p2.waitForTimeout(2800);
+      // QAT'IY KUTISH O'RNIGA — MAZMUNNI KUTAMIZ.
+      //
+      // Marshrutlar endi `lazy()` bilan yuklanadi (kod bo'laklarga
+      // ajratilgan), ya'ni birinchi ochilishda qo'shimcha bo'lak
+      // so'rovi ketadi. Qat'iy 2800 ms shu sababli chegarada qolib,
+      // test tasodifan yiqila boshlagandi — sahifa esa TO'G'RI
+      // ishlayotgan edi.
+      //
+      // Sarlavhani kutish yuklash strategiyasidan QAT'I NAZAR
+      // ishonchli: u faqat sahifa haqiqatan chizilganda paydo bo'ladi.
+      await p2.waitForSelector("main h1", { timeout: 20000 }).catch(() => {});
+      await p2.waitForTimeout(1500);
       const nav = await p2.locator("nav").last().innerText().catch(() => "");
       const t2 = await p2.evaluate(() => document.body.innerText);
 

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ShieldCheck, ShieldAlert, Users, Check, Info } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ShieldCheck, ShieldAlert, Users, Check, Info, Eye } from "lucide-react";
 
 import Button from "@/shared/components/ui/button/Button";
 import { Switch } from "@/shared/components/shadcn/switch";
@@ -206,6 +207,31 @@ const OrgPermissionsPage = () => {
                     </strong>
                     makoniga tushadi — {WORKSPACE_META[previewWorkspace]?.tagline}
                   </p>
+                  {/* ══════════════════════════════════════════════════
+                      «BU ODAM NIMA KO'RADI?» — KO'RIB TEKSHIRISH
+                      ══════════════════════════════════════════════════
+
+                      Ega vakolat berayotganda aslida bitta savolga
+                      javob izlaydi: "bu odam nima ko'radi?". Ro'yxatdagi
+                      belgilar buni AYTADI, lekin KO'RSATMAYDI.
+
+                      Ilgari buni tekshirishning yagona yo'li — o'sha
+                      roldagi odam bo'lib tizimga kirish edi. Ya'ni
+                      amalda hech kim tekshirmasdi.
+
+                      Havola makonning bosh sahifasini ochadi. Ega
+                      barcha makonga kira oladi (`WorkspaceGuard`),
+                      shuning uchun bu yangi huquq bermaydi — faqat
+                      mavjud imkoniyatni KO'RINADIGAN qiladi. */}
+                  {previewWorkspace !== WORKSPACES.STUDENT && (
+                    <Link
+                      to={WORKSPACE_META[previewWorkspace]?.home || "/org"}
+                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      <Eye className="size-3" />
+                      Bu makonni ko'rib chiqish
+                    </Link>
+                  )}
                 </div>
                 {canWrite && (
                   <Button

@@ -1,5 +1,7 @@
 // Components
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
+import useModal from "@/shared/hooks/useModal";
+import { ROLES } from "@/shared/constants/roles";
 
 // Modal bodies (operatsion panel feature'laridan)
 import UserCreateModal from "@/owner/features/users/components/UserCreateModal";
@@ -33,9 +35,27 @@ import { MODAL } from "@/shared/constants/modals";
  * vaqtda ekranda bo'lmaydi (`/owner/*` va `/admin` alohida layout), ya'ni
  * ikki marta mount bo'lish xavfi yo'q.
  */
-const CreateModals = () => (
+const CreateModals = () => {
+  /**
+   * SARLAVHA YARATILAYOTGAN NARSANI ATAYDI.
+   *
+   * Ilgari u har doim "Yangi foydalanuvchi" edi — menyuda "O'quvchi"
+   * ni tanlagan odam ham shu sarlavhani ko'rardi. Bu kichik narsadek
+   * tuyuladi, lekin u ishonchni buzadi: odam "men noto'g'ri tugmani
+   * bosdimmi?" deb o'ylaydi va formani boshidan tekshirib chiqadi.
+   *
+   * Rol modal MA'LUMOTIDA keladi (`openModal(..., { defaultRole })`),
+   * shuning uchun sarlavha ham o'shandan olinadi.
+   */
+  const { data: userData } = useModal(MODAL.USER_CREATE);
+  const userTitle =
+    userData?.defaultRole === ROLES.TEACHER ? "Yangi o'qituvchi"
+      : userData?.defaultRole === ROLES.STUDENT ? "Yangi o'quvchi"
+        : "Yangi foydalanuvchi";
+
+  return (
   <>
-    <ModalWrapper name={MODAL.USER_CREATE} title="Yangi foydalanuvchi">
+    <ModalWrapper name={MODAL.USER_CREATE} title={userTitle}>
       <UserCreateModal />
     </ModalWrapper>
 
@@ -71,6 +91,7 @@ const CreateModals = () => (
       <BranchCreateModal />
     </ModalWrapper>
   </>
-);
+  );
+};
 
 export default CreateModals;

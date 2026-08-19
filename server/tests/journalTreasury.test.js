@@ -23,10 +23,33 @@
  *   npm run test:journal
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
 
-const BASE = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina";
-const DB = BASE.replace(/\/([^/?]+)(\?|$)/, "/bayyina_journal_test$2");
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * PRISMA'GA KO'CHIRILDI
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * Test fiksturani MONGOOSE modellari bilan yozardi (`Branch.create`),
+ * `journal.service.js` esa allaqachon PRISMA'dan o'qiydi va yozadi.
+ * Ya'ni filial Mongo'da yaratilardi, hisob esa Postgres'da ochilardi —
+ * va u yerda bunday filial YO'Q edi:
+ *
+ *   insert or update on table "accounts" violates foreign key
+ *   constraint "accounts_branchId_fkey"
+ *
+ * Test to'rtinchi tekshiruvda yiqilardi va qolgan ~40 tasi —
+ * xazina saqlanish qonuni, inkassatsiya, smena yopilishi — UMUMAN
+ * ishlamasdi. Bu invariantlarning Prisma davrida boshqa qoplovchisi
+ * yo'q edi.
+ *
+ * ── IZOLYATSIYA ──
+ * Ilgari alohida Mongo bazasi yaratilib, oxirida o'chirilardi.
+ * Postgres'da alohida baza yaratish qimmat, shuning uchun fikstura
+ * `JT-` prefiksi bilan belgilanadi va oxirida FAQAT o'sha yozuvlar
+ * o'chiriladi. Ishlab turgan ma'lumotga tegilmaydi.
+ */
+const TAG = `JT-${Date.now().toString(36)}`;
 
 const R = { pass: 0, fail: 0, notes: [] };
 const ok = (n, extra = "") => {
@@ -48,23 +71,33 @@ const grab = async (fn) => {
 };
 const money = (n) => new Intl.NumberFormat("uz-UZ").format(n || 0);
 
-const run = async () => {
-  if (DB === BASE) throw new Error("Test bazasi nomi ajratilmadi - to'xtatildi");
-  mongoose.set("autoIndex", false);
-  await mongoose.connect(DB);
-  if (!mongoose.connection.name.includes("journal_test")) {
-    throw new Error(`Kutilmagan baza: ${mongoose.connection.name}`);
+/** Fikstura izlarini o'chiradi — faqat `TAG` bilan belgilanganlarini. */
+const cleanup = async (ids = {}) => {
+  const bids = ids.branches || [];
+  const uids = ids.users || [];
+  if (bids.length) {
+    await prisma.cashTransfer.deleteMany({
+      where: { OR: [{ fromBranchId: { in: bids } }, { toBranchId: { in: bids } }] },
+    }).catch(() => {});
+    await prisma.shift.deleteMany({ where: { branchId: { in: bids } } }).catch(() => {});
+    const entries = await prisma.journalEntry.findMany({
+      where: { branchId: { in: bids } }, select: { id: true },
+    });
+    await prisma.journalLine.deleteMany({
+      where: { entryId: { in: entries.map((e) => e.id) } },
+    });
+    await prisma.journalEntry.deleteMany({ where: { branchId: { in: bids } } });
+    await prisma.financialAuditLog.deleteMany({ where: { branchId: { in: bids } } }).catch(() => {});
+    await prisma.account.deleteMany({ where: { branchId: { in: bids } } });
   }
-  await mongoose.connection.dropDatabase();
+  if (uids.length) await prisma.user.deleteMany({ where: { id: { in: uids } } });
+  if (bids.length) await prisma.branch.deleteMany({ where: { id: { in: bids } } });
+};
 
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const User = (await import("../src/models/user.model.js")).default;
-  const Account = (await import("../src/models/account.model.js")).default;
-  const JournalEntry = (await import("../src/models/journalEntry.model.js")).default;
-  const CashTransfer = (await import("../src/models/cashTransfer.model.js")).default;
-  const Shift = (await import("../src/models/shift.model.js")).default;
+const made = { branches: [], users: [] };
 
-  await Promise.all([Account.syncIndexes(), Shift.syncIndexes()]);
+const run = async () => {
+  await prisma.$queryRaw`SELECT 1`;
 
   const journal = await import("../src/modules/journal/services/journal.service.js");
   const shiftService = await import("../src/modules/journal/services/shift.service.js");
@@ -78,17 +111,30 @@ const run = async () => {
     "../src/helpers/branchContext.helper.js"
   );
 
-  const A = await Branch.create({ name: "A filial", isMain: true });
-  const B = await Branch.create({ name: "B filial" });
+  // `_id` TAXALLUSI SAQLANADI: quyidagi ~40 tekshiruv `A._id` shaklida
+  // yozilgan. Ularni qayta yozish o'rniga fikstura ikkala nomni ham
+  // beradi — port o'zgarishi FAQAT shu blok bilan cheklanadi.
+  const withLegacy = (row) => ({ ...row, _id: row.id });
 
-  const cashier = await User.create({
-    firstName: "Kassir",
-    lastName: "A",
-    username: "kassir_a",
-    passwordHash: "p",
-    role: "teacher",
-    homeBranchId: A._id,
-  });
+  const A = withLegacy(await prisma.branch.create({
+    data: { name: `${TAG} A filial`, code: `${TAG}A` },
+  }));
+  const B = withLegacy(await prisma.branch.create({
+    data: { name: `${TAG} B filial`, code: `${TAG}B` },
+  }));
+  made.branches.push(A.id, B.id);
+
+  const cashier = withLegacy(await prisma.user.create({
+    data: {
+      firstName: "Kassir",
+      lastName: TAG,
+      username: `kassir_${TAG.toLowerCase()}`,
+      passwordHash: "p",
+      role: "teacher",
+      homeBranchId: A.id,
+    },
+  }));
+  made.users.push(cashier.id);
 
   const asBranch = (branchId, fn) =>
     runWithBranchContext(
@@ -334,9 +380,9 @@ const run = async () => {
     transferService.receive(String(t2._id), { countedAmount: 980_000 }, null),
   );
 
-  const t2doc = await CashTransfer.findById(t2._id).lean();
+  const t2doc = await prisma.cashTransfer.findUnique({ where: { id: String(t2._id) } });
   check("Farq bo'lganda status `disputed`", t2doc.status === "disputed");
-  check("Farq yozildi", t2doc.discrepancy === -20_000, `farq: ${t2doc.discrepancy}`);
+  check("Farq yozildi", Number(t2doc.discrepancy) === -20_000, `farq: ${t2doc.discrepancy}`);
 
   check(
     "B kassasiga FAQAT haqiqatan kelgan summa tushdi",
@@ -446,21 +492,39 @@ const run = async () => {
   console.log("\n\x1b[1m8) O'ZGARMASLIK va STORNO\x1b[0m");
   // ─────────────────────────────────────────────────────────
 
-  const entry = await JournalEntry.findOne({ branchId: A._id }).sort({ createdAt: 1 });
-  entry.memo = "buzib ko'ramiz";
-  const edited = await grab(() => entry.save());
-  check(
-    "Yozilgan yozuvni TAHRIRLAB bo'lmaydi",
-    edited.err !== null,
-    "tahrirlangan jurnal audit uchun yaroqsiz",
-  );
+  // ── O'ZGARMASLIK ──
+  //
+  // Mongo'da bu model darajasidagi `pre('save')` qo'riqchisi edi.
+  // Postgres'ga ko'chishda u YO'QOLGANDI va aynan shu test uni
+  // tutishi kerak edi — lekin testning o'zi ham ishlamay qolgandi.
+  //
+  // Himoya `config/prisma.js` dagi `journal-immutability`
+  // kengaytmasida tiklandi: `journal_entries` va `journal_lines`
+  // ustidagi har qanday `update` rad etiladi. Tuzatishning yagona
+  // to'g'ri yo'li — storno (pastda tekshiriladi).
+  const entry = await prisma.journalEntry.findFirst({
+    where: { branchId: A._id }, orderBy: { createdAt: "asc" },
+  });
+  const edited = await grab(() => prisma.journalEntry.update({
+    where: { id: entry.id }, data: { memo: "buzib ko'ramiz" },
+  }));
+  if (edited.err) {
+    ok("Yozilgan yozuvni TAHRIRLAB bo'lmaydi",
+      `to'sildi: ${edited.err.code || edited.err.statusCode}`);
+  } else {
+    // Tahrirni QAYTARAMIZ — keyingi tekshiruvlar toza holatda ketsin.
+    await prisma.journalEntry.update({
+      where: { id: entry.id }, data: { memo: entry.memo },
+    });
+    bad("Yozilgan yozuvni TAHRIRLAB bo'lmaydi",
+      "tahrir O'TDI — `journal-immutability` kengaytmasi ishlamayapti");
+  }
 
   const cashBeforeReverse = await cashOf(A._id);
-  const target = await JournalEntry.findOne({
-    branchId: A._id,
-    kind: ENTRY_KINDS.EXPENSE,
-  }).lean();
-  await journal.reverse(target._id, {});
+  const target = await prisma.journalEntry.findFirst({
+    where: { branchId: A._id, kind: ENTRY_KINDS.EXPENSE },
+  });
+  await journal.reverse(target.id, {});
   check(
     "Storno yozuvi ta'sirni BEKOR QILDI",
     (await cashOf(A._id)) === cashBeforeReverse + 1_000_000,
@@ -480,21 +544,28 @@ const run = async () => {
 
   // Bazaga TO'G'RIDAN-TO'G'RI nomuvozanat yozuv kiritamiz - tekshiruv
   // uni topishi SHART (model validatsiyasi chetlab o'tilgan holat).
-  const someAccount = await Account.findOne({ branchId: A._id });
-  await JournalEntry.collection.insertOne({
-    branchId: A._id,
-    date: new Date(),
-    kind: ENTRY_KINDS.ADJUSTMENT,
-    memo: "qo'lda kiritilgan buzuq yozuv",
-    lines: [
-      { accountId: someAccount._id, accountKind: ACCOUNT_KINDS.CASH, debit: 100, credit: 0 },
-      { accountId: someAccount._id, accountKind: ACCOUNT_KINDS.REVENUE, debit: 0, credit: 50 },
-    ],
-    totalDebit: 100,
-    totalCredit: 50,
-    isInternal: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  // Servis qatlamini CHETLAB O'TIB buzuq yozuv kiritamiz —
+  // `reconcile()` uni topishi SHART. Mongo'da bu
+  // `collection.insertOne()` edi (model validatsiyasini chetlab
+  // o'tish uchun); Postgres'da esa oddiy `create` yetarli, chunki
+  // muvozanat qoidasi SERVISDA, bazada emas.
+  const someAccount = await prisma.account.findFirst({ where: { branchId: A._id } });
+  await prisma.journalEntry.create({
+    data: {
+      branchId: A._id,
+      date: new Date(),
+      kind: ENTRY_KINDS.ADJUSTMENT,
+      memo: "qo'lda kiritilgan buzuq yozuv",
+      totalDebit: 100,
+      totalCredit: 50,
+      isInternal: false,
+      lines: {
+        create: [
+          { accountId: someAccount.id, accountKind: ACCOUNT_KINDS.CASH, debit: 100, credit: 0 },
+          { accountId: someAccount.id, accountKind: ACCOUNT_KINDS.REVENUE, debit: 0, credit: 50 },
+        ],
+      },
+    },
   });
 
   const recBad = await journal.reconcile();
@@ -505,8 +576,6 @@ const run = async () => {
   );
 
   // ── Yakun ──
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
 
   console.log(
     `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
@@ -519,12 +588,13 @@ const run = async () => {
   }
 };
 
-run().catch(async (err) => {
-  console.error("\x1b[31mTEST YIQILDI:\x1b[0m", err);
-  try {
-    await mongoose.disconnect();
-  } catch {
-    /* ulanmagan bo'lsa e'tiborsiz */
-  }
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    console.error("\x1b[31mTEST YIQILDI:\x1b[0m", err);
+    R.fail += 1;
+  })
+  .finally(async () => {
+    await cleanup(made).catch((e) => console.error("tozalash xatosi:", e.message));
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
+  });

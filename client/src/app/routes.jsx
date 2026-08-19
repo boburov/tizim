@@ -1,4 +1,5 @@
 // Router
+import { lazy } from "react";
 import { Routes as RoutesWrapper, Route, Navigate, useParams } from "react-router-dom";
 
 // Guards
@@ -24,17 +25,44 @@ import { ROLES } from "@/shared/constants/roles";
 // Features
 import { LoginPage, BotAuthPage } from "@/features/auth";
 
-// Role panels (ESKI MANZILLAR — xatcho'qlar uchun saqlanadi, talab 32)
-import { OwnerRoutes } from "@/owner";
-import { TeacherRoutes } from "@/teacher";
-import { StudentRoutes } from "@/student";
-
-// ISH MAKONLARI — yangi axborot arxitekturasi
-import {
-  OrgRoutes, BranchRoutes, WorkRoutes, MeRoutes,
-} from "@/workspaces/routes";
 import WorkspaceGuard from "@/shared/components/guards/WorkspaceGuard";
 import { WORKSPACES } from "@/shared/workspaces";
+
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * MARSHRUT DARAJASIDA KOD BO'LAKLARGA AJRATILADI
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * ── NEGA ──
+ * Butun ilova bitta faylda edi. O'quvchi "qarzim bormi?" degan bitta
+ * savolga javob olish uchun ham moliya tahlilini, rol tahrirlagichini
+ * va filial taqqoslashni yuklab olardi — u hech qachon ko'rmaydigan
+ * ekranlarni. Telegram mini ilovada (mobil internet) bu birinchi
+ * ekrangacha bo'lgan kutishni sezilarli uzaytiradi.
+ *
+ * ── NEGA AYNAN SHU CHEGARADA ──
+ * Ish makoni — TABIIY chegara: foydalanuvchi bir vaqtda faqat
+ * BITTASIDA bo'ladi va boshqasiga o'ta olmaydi (`WorkspaceGuard`).
+ * Ya'ni yuklanmagan bo'lak unga umuman kerak emas.
+ *
+ * ── `fallback={null}` NEGA ──
+ * Qo'riqchilar (`AuthGuard`, `WorkspaceGuard`) yuklanish paytida
+ * allaqachon `null` qaytaradi. Spinner qo'shilsa, u qo'riqchi
+ * `null` idan KEYIN bir zumga chaqnab, ekran "sakragan"dek
+ * ko'rinardi. Bo'lak mahalliy tarmoqda ~10ms da keladi.
+ */
+const OwnerRoutes = lazy(() => import("@/owner/routes"));
+const TeacherRoutes = lazy(() => import("@/teacher/routes"));
+const StudentRoutes = lazy(() => import("@/student/routes"));
+
+const OrgRoutes = lazy(() =>
+  import("@/workspaces/routes").then((m) => ({ default: m.OrgRoutes })));
+const BranchRoutes = lazy(() =>
+  import("@/workspaces/routes").then((m) => ({ default: m.BranchRoutes })));
+const WorkRoutes = lazy(() =>
+  import("@/workspaces/routes").then((m) => ({ default: m.WorkRoutes })));
+const MeRoutes = lazy(() =>
+  import("@/workspaces/routes").then((m) => ({ default: m.MeRoutes })));
 
 
 /**

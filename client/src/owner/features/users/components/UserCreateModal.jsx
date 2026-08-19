@@ -27,6 +27,8 @@ import { todayInput } from "@/shared/utils/formatDate";
 import { ROLES, ROLE_LABELS } from "@/shared/constants/roles";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 import { NO_AUTOFILL, NO_AUTOFILL_FORM } from "@/shared/constants/form";
+import { suggestUsername, suggestPassword } from "../utils/credentials";
+
 
 const ROLE_OPTIONS = [
   { value: ROLES.STUDENT, label: ROLE_LABELS.student },
@@ -45,9 +47,14 @@ const initialState = (defaultRole) => ({
 
   firstName: "",
   lastName: "",
+  // Login va parol AVTOMATIK to'ldiriladi (ism yozilishi bilan).
+  // `manualCreds` yoqilganda foydalanuvchi ularni o'zi boshqaradi va
+  // avtomatik to'ldirish TO'XTAYDI — aks holda u yozgan qiymat
+  // ustidan yozib yuborilardi.
   username: "",
   phone: "",
   password: "",
+  manualCreds: false,
   role: defaultRole || ROLES.STUDENT,
   homeBranchId: "",
 
@@ -63,6 +70,9 @@ const initialState = (defaultRole) => ({
   // ── boshlang'ich qoldiq (ikkala rol uchun ham) ──
   // Ishorali summa: manfiy = odam qarzdor, musbat = markaz qarzdor,
   // 0/bo'sh = qoldiq yo'q.
+  // Yig'ilgan holatda ochiladi — kamdan-kam kerak bo'ladigan maydon
+  // kundalik yo'lni sekinlashtirmasin.
+  showOpening: false,
   openingBalance: "",
   openingNote: "",
 
@@ -95,10 +105,39 @@ const UserCreateModal = ({
   // ("Filial tanlanmagan") - o'shanda qaysi filialga yozishni SO'RAYMIZ.
   const { branches, isAllBranches, multiBranch } = useActiveBranch();
   const needsBranch = multiBranch && isAllBranches;
+
+  // FILIAL OLDINDAN TANLANADI, agar bitta bo'lsa.
+  //
+  // Ilgari maydon BO'SH ochilardi va darhol QIZIL xato ko'rsatardi —
+  // foydalanuvchi hali hech narsa qilmasdan turib. Bu "forma buzuq"
+  // degan taassurot berardi. Endi bitta filial bo'lsa u o'zi
+  // tanlanadi; ko'p bo'lsa tanlash SO'RALADI, lekin xato faqat
+  // foydalanuvchi tanlashni O'TKAZIB YUBORGANDA ko'rinadi.
+  const soleBranchId = branches.length === 1 ? String(branches[0]._id) : "";
   const branchOptions = branches.map((b) => ({
     value: String(b._id),
     label: b.name,
   }));
+
+  /**
+   * ISM YOZILGANDA LOGIN VA PAROL O'ZI TO'LDIRILADI.
+   *
+   * `manualCreds` yoqilgan bo'lsa TEGILMAYDI — foydalanuvchi ularni
+   * o'zi boshqarayotgan bo'ladi va uning yozganini bosib ketish eng
+   * jahlni chiqaradigan xatti-harakat bo'lardi.
+   *
+   * Parol BIR MARTA yasaladi va keyin o'zgarmaydi: har harf yozilganda
+   * yangilanib tursa, administrator uni yozib olishga ulgurmasdi.
+   */
+  const setName = (field, value) => {
+    const next = { ...obj.state, [field]: value };
+    const patch = { [field]: value };
+    if (!obj.manualCreds) {
+      patch.username = suggestUsername(next.firstName, next.lastName);
+      if (!obj.password) patch.password = suggestPassword();
+    }
+    obj.setFields(patch);
+  };
 
   const { mutate } = useUserCreateMutation({
     onSuccess: (data) => {
@@ -141,7 +180,7 @@ const UserCreateModal = ({
     obj.role &&
     (obj.role !== ROLES.TEACHER || obj.hiredAt) &&
     (obj.role !== ROLES.STUDENT || obj.enrolledAt) &&
-    (!needsBranch || obj.homeBranchId) &&
+    (!needsBranch || obj.homeBranchId || soleBranchId) &&
     // Nol/bo'sh - YAROQLI holat ("qoldiq yo'q"). Faqat chegaradan
     // oshgan summa yaratishni bloklaydi.
     isOpeningAmountValid(obj.openingBalance) &&
@@ -166,7 +205,8 @@ const UserCreateModal = ({
       password: obj.password,
       role: obj.role,
     };
-    if (needsBranch && obj.homeBranchId) body.homeBranchId = obj.homeBranchId;
+    const branchId = obj.homeBranchId || soleBranchId;
+    if (needsBranch && branchId) body.homeBranchId = branchId;
     if (obj.phone.trim()) body.phone = obj.phone.trim();
     if (obj.gender) body.gender = obj.gender;
 
@@ -262,7 +302,7 @@ const UserCreateModal = ({
               name="firstName"
               label="Ism"
               value={obj.firstName}
-              onChange={(e) => obj.setField("firstName", e.target.value)}
+              onChange={(e) => setName("firstName", e.target.value)}
               required
               disabled={isLoading}
               {...NO_AUTOFILL}
@@ -271,29 +311,11 @@ const UserCreateModal = ({
               name="lastName"
               label="Familiya"
               value={obj.lastName}
-              onChange={(e) => obj.setField("lastName", e.target.value)}
+              onChange={(e) => setName("lastName", e.target.value)}
               required
               disabled={isLoading}
               {...NO_AUTOFILL}
             />
-          </div>
-          <div>
-            <InputField
-              name="username"
-              label="Login (username)"
-              placeholder="Kamida 3 ta belgi"
-              value={obj.username}
-              onChange={(e) => obj.setField("username", e.target.value)}
-              error={usernameShort || usernameTaken}
-              required
-              disabled={isLoading}
-              {...NO_AUTOFILL}
-            />
-            {usernameTaken && (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-300">
-                Bu login allaqachon band — boshqasini tanlang
-              </p>
-            )}
           </div>
           {/* TELEFON TAKRORLANISHI MUMKIN: bir oila bitta raqamdan
               foydalanadi. "Band" tekshiruvi ataylab yo'q. */}
@@ -306,28 +328,109 @@ const UserCreateModal = ({
             disabled={isLoading}
             {...NO_AUTOFILL}
           />
-          <InputField
-            type="password"
-            name="password"
-            label="Parol"
-            value={obj.password}
-            onChange={(e) => obj.setField("password", e.target.value)}
-            required
-            disabled={isLoading}
-            {...NO_AUTOFILL}
-            // Bu YANGI odamning paroli - brauzer bu yerga OPERATORNING
-            // saqlangan parolini tiqib qo'ymasligi kerak. "new-password"
-            // aynan shu holat uchun va "off" dan ko'ra ishonchli.
-            autoComplete="new-password"
-          />
-          <SelectField
-            label="Rol"
-            value={obj.role}
-            onChange={(v) => obj.setField("role", v)}
-            options={ROLE_OPTIONS}
-            required
-            disabled={isLoading}
-          />
+
+          {/* ══════════════════════════════════════════════════════════
+              KIRISH MA'LUMOTLARI — AVTOMATIK, LEKIN KO'RINADIGAN
+              ══════════════════════════════════════════════════════════
+
+              Login va parol ism yozilishi bilan o'zi to'ldiriladi
+              (`setName`). Ular YASHIRILMAYDI — administrator ularni
+              o'quvchiga aytishi kerak, ya'ni ko'rib turishi shart.
+              Lekin ular endi TO'LDIRILADIGAN maydon emas, KO'RSATILGAN
+              natija.
+
+              O'zgartirish kerak bo'lsa — bitta tugma. Ya'ni imkoniyat
+              yo'qolmadi, faqat u endi majburiy yo'l emas. */}
+          {!obj.manualCreds ? (
+            <div className="rounded-lg border border-border bg-muted/40 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Kirish ma'lumotlari</p>
+                  <p className="mt-1 font-mono text-sm text-foreground">
+                    {obj.username || "—"}
+                    <span className="mx-2 text-muted-foreground">·</span>
+                    {obj.password || "—"}
+                  </p>
+                  {usernameTaken ? (
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                      Bu login band — o'zgartiring
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Avtomatik yasaldi. Shu ma'lumotni odamga bering.
+                    </p>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => obj.setField("password", suggestPassword())}
+                    disabled={isLoading}
+                    className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition hover:bg-accent"
+                  >
+                    Boshqa parol
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => obj.setField("manualCreds", true)}
+                    disabled={isLoading}
+                    className="rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground"
+                  >
+                    O'zim kiritaman
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                <InputField
+                  name="username"
+                  label="Login (username)"
+                  placeholder="Kamida 3 ta belgi"
+                  value={obj.username}
+                  onChange={(e) => obj.setField("username", e.target.value)}
+                  error={usernameShort || usernameTaken}
+                  required
+                  disabled={isLoading}
+                  {...NO_AUTOFILL}
+                />
+                {usernameTaken && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                    Bu login allaqachon band — boshqasini tanlang
+                  </p>
+                )}
+              </div>
+              <InputField
+                type="password"
+                name="password"
+                label="Parol"
+                value={obj.password}
+                onChange={(e) => obj.setField("password", e.target.value)}
+                required
+                disabled={isLoading}
+                {...NO_AUTOFILL}
+                // Bu YANGI odamning paroli - brauzer bu yerga OPERATORNING
+                // saqlangan parolini tiqib qo'ymasligi kerak. "new-password"
+                // aynan shu holat uchun va "off" dan ko'ra ishonchli.
+                autoComplete="new-password"
+              />
+            </>
+          )}
+
+          {/* ROL — FAQAT TANLANMAGAN BO'LSA SO'RALADI.
+              Menyudan "O'quvchi" tanlab kelgan odamdan rolni QAYTA
+              so'rash — u allaqachon javob bergan savolni takrorlash. */}
+          {!defaultRole && (
+            <SelectField
+              label="Rol"
+              value={obj.role}
+              onChange={(v) => obj.setField("role", v)}
+              options={ROLE_OPTIONS}
+              required
+              disabled={isLoading}
+            />
+          )}
 
           {needsBranch && (
             <CreatableSelectField
@@ -395,11 +498,39 @@ const UserCreateModal = ({
             </div>
           )}
 
-          <OpeningBalanceField
-            form={obj}
-            disabled={isLoading}
-            personLabel={isStudent ? "o'quvchi" : "o'qituvchi"}
-          />
+          {/* ══════════════════════════════════════════════════════════
+              BOSHLANG'ICH QOLDIQ — YIG'ILGAN HOLATDA
+              ══════════════════════════════════════════════════════════
+
+              Bu maydon TIZIMGA O'TISH paytidagi holat uchun: eski
+              daftardan ko'chirilayotgan qarz yoki oldindan to'lov.
+              Yangi o'quvchi qo'shishda u deyarli HAR DOIM bo'sh
+              qoladi.
+
+              Ochiq turganda u formaning yarmini egallardi va uch
+              qatorlik izoh bilan birga "bu nima, to'ldirishim
+              kerakmi?" degan savol tug'dirardi — har safar, har
+              o'quvchida.
+
+              Yig'ilgan holatda u YO'QOLMAYDI: kerak bo'lganda bitta
+              bosishda ochiladi. Ya'ni kamdan-kam holat kundalik
+              yo'lni sekinlashtirmaydi. */}
+          {obj.showOpening ? (
+            <OpeningBalanceField
+              form={obj}
+              disabled={isLoading}
+              personLabel={isStudent ? "o'quvchi" : "o'qituvchi"}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => obj.setField("showOpening", true)}
+              disabled={isLoading}
+              className="self-start text-xs text-muted-foreground underline-offset-2 transition hover:text-foreground hover:underline"
+            >
+              + Boshlang'ich qoldiq (eski qarz yoki oldindan to'lov)
+            </button>
+          )}
 
           <div className="flex gap-2 pt-1">
             <Button

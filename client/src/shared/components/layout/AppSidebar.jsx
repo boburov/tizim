@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+
 // Icons
 import {
   Sun,
@@ -65,14 +67,32 @@ import { useIsMobile } from "@/shared/hooks/useMobile";
 import { ROLES, ROLE_TYPES } from "@/shared/constants/roles";
 import { APP_NAME, APP_LOGO } from "@/shared/constants/app";
 
-import {
-  OwnerGlobalSearch,
-  OwnerCreateMenu,
-  OwnerCreateModals,
-  OwnerApprovalsBadge,
-  OwnerApprovalNotifier,
-  OwnerApprovalsBell,
-} from "@/owner";
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * ISHCHI PANEL WIDGET'LARI — KERAK BO'LGANDA YUKLANADI
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * Qidiruv, yaratish menyusi, yaratish MODALLARI va tasdiqlar
+ * qo'ng'irog'i faqat ishchi makonlarda ko'rsatiladi (`isWorkPanel`).
+ * Lekin statik import bo'lsa, ular O'QUVCHIGA ham yuklanardi — u
+ * hech qachon ko'rmaydigan o'nlab forma bilan birga (o'quvchi
+ * yaratish, guruh yaratish, filial yaratish...).
+ *
+ * Sidebar kirish faylida turadi, ya'ni bu og'irlik HAR yuklanishga
+ * tushardi. Endi u faqat kerak bo'lganda keladi.
+ *
+ * `Suspense fallback={null}`: bu widget'lar sidebar tepasidagi
+ * qo'shimcha, sahifa mazmuni emas. Ular bir zumdan keyin paydo
+ * bo'lgani — spinner chaqnaganidan yaxshiroq.
+ */
+const OwnerGlobalSearch = lazy(() => import("@/owner/components/GlobalSearch"));
+const OwnerCreateMenu = lazy(() => import("@/owner/components/CreateMenu"));
+const OwnerCreateModals = lazy(() => import("@/owner/components/CreateModals"));
+const OwnerApprovalsBadge = lazy(() => import("@/owner/components/ApprovalsBadge"));
+const OwnerApprovalNotifier = lazy(() =>
+  import("@/owner/features/expenseApprovals").then((m) => ({ default: m.ApprovalNotifier })));
+const OwnerApprovalsBell = lazy(() =>
+  import("@/owner/features/expenseApprovals").then((m) => ({ default: m.ApprovalsBell })));
 
 // ISH MAKONI — menyuning YAGONA manbai.
 import useWorkspace from "@/shared/hooks/useWorkspace";
@@ -208,7 +228,7 @@ const Main = () => {
           narsa chiqmasdi. Menyu esa ko'rinib turardi - shuning uchun
           nosozlik jimgina bo'lardi. */}
       {isWorkPanel && (
-        <>
+        <Suspense fallback={null}>
           {/* Qidiruv to'liq kenglikda. Tasdiqlar qo'ng'irog'i ilgari shu
               yerda, qidiruv yonida turardi - u kenglikni yer, yig'ilgan
               holatda ustma-ust tushardi va menyudagi "Tasdiqlar" qatori
@@ -231,7 +251,7 @@ const Main = () => {
               doim DashboardLayout ichida turadi, ya'ni toast va kirish
               oynasi istalgan sahifada ishlaydi. */}
           <OwnerApprovalNotifier />
-        </>
+        </Suspense>
       )}
       {/* ── NAVIGATSIYA LANDMARK'I ──
           `SidebarGroup` — oddiy `<div>`. Ekran o'quvchi uchun bu
@@ -260,6 +280,7 @@ const Main = () => {
                  xil; yig'ilgan holatda SidebarMenuButton o'zi ikonka +
                  tooltip'ga aylanadi, alohida moslash kerak emas. */
               <SidebarMenuItem key={item.title}>
+                <Suspense fallback={null}>
                 <OwnerApprovalsBell
                   renderTrigger={({ open }) => (
                     <SidebarMenuButton
@@ -273,6 +294,7 @@ const Main = () => {
                     </SidebarMenuButton>
                   )}
                 />
+                </Suspense>
               </SidebarMenuItem>
             ) : item.items.length === 0 ? (
               /* Yakka link - collapsible'siz, to'g'ridan-to'g'ri sahifaga */

@@ -23,6 +23,30 @@
  *
  * ISHLATISH:  npm run test:ledger
  */
+
+/**
+ * ⚠ BU TEST HOZIRDA ISHLAMAYDI — MONGO→POSTGRES MIGRATSIYASI QOLDIG'I.
+ *
+ * Fikstura MONGOOSE modellari bilan yoziladi, tekshirilayotgan servis
+ * esa allaqachon PRISMA'dan o'qiydi. Ya'ni ma'lumot bir bazaga
+ * yoziladi, boshqasidan o'qiladi — test `MongooseError: buffering
+ * timed out` bilan yiqiladi.
+ *
+ * ── BU NIMA DEGANI ──
+ * Tekshirilayotgan XUSUSIYAT buzilgan degani EMAS. Servis ishlaydi;
+ * uni qo'riqlaydigan test ishlamaydi. Ya'ni bu yerda QOPLOV YO'Q va
+ * regressiya jimgina o'tib ketishi mumkin.
+ *
+ * ── KO'CHIRISH NAMUNASI ──
+ * `branchScopeExploit.test.js` va `journalTreasury.test.js` xuddi shu
+ * muammodan aziyat chekardi va ko'chirildi: fikstura `prisma.*.create`
+ * ga o'tkaziladi, `_id` taxallusi saqlanadi (`{...row, _id: row.id}`),
+ * oxirida esa `TAG` prefiksi bo'yicha tozalanadi.
+ *
+ * Bu fayl KATTAROQ: 11 ta model bo'ylab fiksturalar butun fayl bo'ylab
+ * sochilgan. Shuning uchun u alohida ish sifatida qoldirildi —
+ * yarim ko'chirilgan test ishlamaydiganidan xavfliroq.
+ */
 import "dotenv/config";
 import mongoose from "mongoose";
 

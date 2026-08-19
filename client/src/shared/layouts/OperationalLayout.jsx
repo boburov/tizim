@@ -1,4 +1,5 @@
 // Router
+import { lazy, Suspense } from "react";
 import { Outlet } from "react-router-dom";
 
 // Components
@@ -9,7 +10,21 @@ import {
 import AppHeader from "@/shared/components/layout/AppHeader";
 import AppSidebar from "@/shared/components/layout/AppSidebar";
 import BranchModeBanner from "@/shared/components/layout/BranchModeBanner";
-import { DrillProvider, DrillDrawer } from "@/shared/drill";
+import { DrillProvider } from "@/shared/drill";
+
+/**
+ * DRILL PANELI — KERAK BO'LGANDA YUKLANADI.
+ *
+ * Panel qobiq darajasida mount qilinadi (istalgan ekrandagi jadval
+ * uni ocha olishi kerak), lekin u OCHILMAGUNCHA hech narsa
+ * ko'rsatmaydi. Statik import bo'lsa, u o'zi bilan birga tahlil
+ * jadvallarini va grafik kutubxonasini ham kirish fayliga tortib
+ * kelardi — o'quvchi hech qachon ko'rmaydigan kodni.
+ *
+ * Provider statik qoladi: u faqat holat (React konteksti), og'irligi
+ * yo'q va u BO'LMASA jadvallardagi `useDrill()` ishlamay qolardi.
+ */
+const DrillDrawer = lazy(() => import("@/shared/drill/DrillDrawer"));
 
 /**
  * OPERATSION QOBIQ - SIDEBAR BILAN.
@@ -51,10 +66,26 @@ const OperationalLayout = () => (
         <AppHeader />
         <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:py-2">
           <BranchModeBanner />
-          <Outlet />
+          {/* KOD BO'LAGI YUKLANISHI uchun chegara.
+              Marshrut daraxtlari `lazy()` bilan yuklanadi
+              (`app/routes.jsx`), ya'ni ular birinchi ochilishda
+              kelmagan bo'lishi mumkin. Chegara SAHIFA o'rnida —
+              qobiq (sidebar, sarlavha) joyida qoladi va faqat
+              kontent kutadi.
+
+              `fallback={null}`: qo'riqchilar allaqachon `null`
+              qaytaradi, spinner esa ularning ketidan bir zumga
+              chaqnab, ekran "sakragan"dek ko'rinardi. */}
+          <Suspense fallback={null}>
+            <Outlet />
+          </Suspense>
         </div>
       </SidebarInset>
-      <DrillDrawer />
+      {/* Panel bo'lagi birinchi drill'da keladi; shu paytgacha
+          `fallback={null}` — ekranda hech narsa o'zgarmaydi. */}
+      <Suspense fallback={null}>
+        <DrillDrawer />
+      </Suspense>
     </DrillProvider>
   </SidebarProvider>
 );

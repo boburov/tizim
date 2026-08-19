@@ -651,6 +651,113 @@ const run = async () => {
   eq("qayta urinishda plan to'landi", planAok.paidAmount, 100_000);
   eq("ortiqcha depozitga tushdi", okRes.depositCredited, 200_000);
 
+  // ═══════════ 21) DEPOZIT — IKKI BOSQICH ═══════════
+  //
+  // ══════════════════════════════════════════════════════════════════
+  // BU BUTUN MODULDAGI ENG NOZIK JOY
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // Depozit ikki bosqichli va ular BOSHQA-BOSHQA narsani anglatadi:
+  //
+  //   TO'LDIRISH  pul KIRDI, lekin DAROMAD EMAS — bu hali o'quvchining
+  //               puli (majburiyat). U ertaga qaytarib so'rashi mumkin.
+  //   QOPLASH     pul HARAKATLANMADI (u allaqachon kassada), lekin endi
+  //               u DAROMAD — xizmat ko'rsatildi.
+  //
+  // Chalkashtirilsa tushum IKKI BAROBAR ko'rinardi: bir marta
+  // to'ldirishda, ikkinchi marta qoplashda. Va bu jimgina bo'lardi —
+  // muvozanat invarianti buzilmaydi, jurnal "to'g'ri" ko'rinadi,
+  // faqat daromad raqami yolg'on chiqadi.
+  //
+  // ── NEGA BU YERDA, ENDI ──
+  // Bu invariant `journalWiring.test.js` da tekshirilardi. U Mongoose
+  // davridan qolgan va MAVJUD BO'LMAGAN modulni (`journalPosting.helper.js`)
+  // import qiladi — ya'ni import bosqichida yiqiladi va uzoq vaqtdan
+  // beri HECH NARSANI tekshirmayapti. Prisma testlarida esa bu
+  // xususiyat umuman qoplanmagan edi.
+  head("21) Depozit — to'ldirish DAROMAD EMAS, qoplash DAROMAD");
+
+  const d21DepBefore = await journal.accountBalance(br.id, ACCOUNT_KINDS.DEPOSIT);
+  const d21CashBefore = await journal.accountBalance(br.id, ACCOUNT_KINDS.CASH);
+  const d21RevBefore = await journal.accountBalance(br.id, ACCOUNT_KINDS.REVENUE);
+
+  // ── 1-bosqich: TO'LDIRISH ──
+  const d21DepRec = await prisma.studentDeposit.upsert({
+    where: { studentId: student.id },
+    update: {},
+    create: { studentId: student.id, balance: 0 },
+  });
+  const d21Topup = await prisma.depositTransaction.create({
+    data: {
+      branchId: br.id, studentId: student.id, depositId: d21DepRec.id,
+      type: "topup", amount: 600_000, method: "cash",
+      balanceAfter: 600_000, paidAt: new Date(Date.UTC(2026, 7, 10)),
+    },
+  });
+  await inBr(() => financialTx.postDepositTopup({ depositTransactionId: d21Topup.id }, owner));
+
+  const d21CashAfterTopup = await journal.accountBalance(br.id, ACCOUNT_KINDS.CASH);
+  const d21RevAfterTopup = await journal.accountBalance(br.id, ACCOUNT_KINDS.REVENUE);
+  const d21DepAfterTopup = await journal.accountBalance(br.id, ACCOUNT_KINDS.DEPOSIT);
+
+  eq("to'ldirishda naqd KIRDI", d21CashAfterTopup - d21CashBefore, 600_000);
+  eq("to'ldirish DAROMAD EMAS", d21RevAfterTopup - d21RevBefore, 0);
+  eq("depozit majburiyati o'sdi", d21DepAfterTopup - d21DepBefore, 600_000);
+
+  // ── 2-bosqich: QOPLASH ──
+  // MUHIM: bu yerda `source: "deposit"` — pul allaqachon kassada.
+  // Oy 1 — yuqoridagi bo'limlar 8..12 ni band qilgan
+  // (`studentId+groupId+year+month` unique).
+  const d21Plan = await mkPlan(1, 600_000);
+  const d21Applied = await prisma.paymentTransaction.create({
+    data: {
+      branchId: br.id, paymentId: d21Plan.id, studentId: student.id, groupId: group.id,
+      year: 2026, month: 1, amount: 600_000, feeAmount: 0,
+      source: "deposit", method: "cash", paidAt: new Date(Date.UTC(2026, 0, 5)),
+    },
+  });
+  await inBr(() => financialTx.postDepositApply({ paymentTransactionId: d21Applied.id }, owner));
+
+  const d21CashAfterApply = await journal.accountBalance(br.id, ACCOUNT_KINDS.CASH);
+  const d21RevAfterApply = await journal.accountBalance(br.id, ACCOUNT_KINDS.REVENUE);
+  const d21DepAfterApply = await journal.accountBalance(br.id, ACCOUNT_KINDS.DEPOSIT);
+
+  eq("qoplashda naqd O'ZGARMADI", d21CashAfterApply, d21CashAfterTopup);
+  eq("qoplashda daromad o'sdi", d21RevAfterApply - d21RevAfterTopup, 600_000);
+  eq("depozit majburiyati yopildi", d21DepAfterApply - d21DepBefore, 0);
+
+  // ── ENG MUHIM XULOSA: PUL IKKI MARTA SANALMADI ──
+  eq("600 000 BIR MARTA daromad bo'ldi", d21RevAfterApply - d21RevBefore, 600_000);
+  eq("600 000 BIR MARTA kassaga kirdi", d21CashAfterApply - d21CashBefore, 600_000);
+
+  // ── QAYTARISH: majburiyat ham, pul ham kamayadi ──
+  const d21Withdraw = await prisma.depositTransaction.create({
+    data: {
+      branchId: br.id, studentId: student.id, depositId: d21DepRec.id,
+      type: "withdraw", amount: 100_000, method: "cash",
+      balanceAfter: 0, paidAt: new Date(Date.UTC(2026, 10, 6)),
+    },
+  });
+  // Qaytarish uchun avval majburiyat bo'lishi kerak — yana to'ldiramiz.
+  const d21Topup2 = await prisma.depositTransaction.create({
+    data: {
+      branchId: br.id, studentId: student.id, depositId: d21DepRec.id,
+      type: "topup", amount: 100_000, method: "cash",
+      balanceAfter: 100_000, paidAt: new Date(Date.UTC(2026, 10, 6)),
+    },
+  });
+  await inBr(() => financialTx.postDepositTopup({ depositTransactionId: d21Topup2.id }, owner));
+  await inBr(() => financialTx.postDepositWithdraw({ depositTransactionId: d21Withdraw.id }, owner));
+
+  eq("qaytarishdan keyin majburiyat nolga qaytdi",
+    await journal.accountBalance(br.id, ACCOUNT_KINDS.DEPOSIT), d21DepAfterApply);
+  eq("qaytarish DAROMADGA tegmadi",
+    await journal.accountBalance(br.id, ACCOUNT_KINDS.REVENUE), d21RevAfterApply);
+
+  // ── JURNAL MUVOZANATI BUZILMADI ──
+  const d21Rec = await inBr(() => journal.reconcile({ branchId: br.id }));
+  eq("depozit yozuvlaridan keyin ham muvozanat", d21Rec.ok, true);
+
   console.log(`\n=== NATIJA: ${R.pass} o'tdi, ${R.fail} yiqildi ===\n`);
   if (R.failures.length) {
     console.log("Muammolar:");

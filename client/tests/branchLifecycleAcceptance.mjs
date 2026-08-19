@@ -311,10 +311,16 @@ const run = async () => {
   check("yangi filial nomi jadvalda ko'rinadi", bodyText.includes(BRANCH_NAME));
 
   // ── checkbox tanlagich ──
-  // `main` ICHIDA: header'dagi `BranchBadge` ham "Barcha filiallar"
-  // yozuvini ko'rsatadi va u DOM'da oldinroq turadi, ya'ni `.first()`
-  // noto'g'ri elementni (dropdown menyuni) ochardi.
-  const picker = page.locator('main button:has-text("Barcha filiallar")').first();
+  //
+  // FAQAT KO'RINADIGAN TUGMA. "Barcha filiallar" yozuvi ikki joyda:
+  // taqqoslash bo'limidagi tanlagichda va MOBIL sarlavhadagi
+  // `BranchBadge` da. Ikkinchisi desktopda `md:hidden` — o'lchami
+  // 0×0, ya'ni bosib bo'lmaydi.
+  //
+  // Ilgari `main` bilan cheklash yetarli edi (sarlavha `main` dan
+  // tashqarida edi). Yagona qobiqqa o'tilgach u ichkariga tushdi va
+  // `.first()` ko'rinmas tugmani tanlab, klik 30 soniya kutardi.
+  const picker = page.locator('main button:visible', { hasText: "Barcha filiallar" }).first();
   check("filial tanlagichi ko'rinadi", (await picker.count()) === 1);
 
   await picker.click();

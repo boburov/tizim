@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 import env from "./env.js";
 import logger from "./logger.js";
+import ApiError from "../utils/ApiError.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Prisma klienti — eski `config/db.js` (mongoose.connect) o'rniga.
@@ -112,6 +113,64 @@ const withDecimalNormalization = (client) =>
     },
   });
 
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * JURNAL O'ZGARMAS (immutable)
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * ── NEGA BU HIMOYA QAYTARILDI ──
+ * Mongo davrida yozuvni tahrirlashni model darajasidagi `pre('save')`
+ * qo'riqchisi to'sardi. Postgres'ga ko'chishda u YO'QOLDI: invariant
+ * kodda hujjatlashtirilgan bo'lib qoldi
+ * (`journal.service.js` → "Yozuv o'zgarmas"), lekin uni ushlab
+ * turadigan hech narsa qolmadi.
+ *
+ * Bu jimgina yo'qotish edi: hech qanday test yiqilmadi, chunki
+ * o'sha invariantni tekshiradigan yagona test
+ * (`journalTreasury.test.js`) migratsiyadan keyin umuman ishga
+ * tushmay qolgandi.
+ *
+ * ── NIMA TO'SILADI ──
+ * `journal_entries` va `journal_lines` ustidagi HAR QANDAY yangilash.
+ * Xato yozuvni tuzatishning yagona to'g'ri yo'li — STORNO
+ * (`journal.reverse()`): teskari yozuv qo'shiladi va audit izida
+ * xato ham, tuzatish ham ko'rinib turadi.
+ *
+ * ── NEGA O'CHIRISH TO'SILMAYDI ──
+ * Demo/test tozalash skriptlari unga tayanadi va o'chirish KO'RINADI
+ * (yozuv yo'qoladi). Xavfli holat — jimgina TAHRIR: summa o'zgaradi,
+ * hisobot boshqa raqam ko'rsatadi, hech kim sezmaydi.
+ *
+ * ── CHEGARASI ──
+ * Bu ilova qatlamidagi himoya: to'g'ridan-to'g'ri SQL yoki Prisma
+ * Studio uni chetlab o'tadi. Mongo'dagi `pre('save')` ham xuddi
+ * shunday edi (mongo shell uni ko'rmasdi), ya'ni bu YO'QOTILGAN
+ * himoyani AYNAN tiklaydi. Bazadagi trigger kuchliroq bo'lardi,
+ * lekin u migratsiya talab qiladi va tozalash yo'llarini
+ * buzish xavfi bor.
+ */
+const IMMUTABLE_MODELS = new Set(["JournalEntry", "JournalLine"]);
+const MUTATING_OPS = new Set(["update", "updateMany", "upsert"]);
+
+const withJournalImmutability = (client) =>
+  client.$extends({
+    name: "journal-immutability",
+    query: {
+      $allModels: {
+        async $allOperations({ model, operation, args, query }) {
+          if (IMMUTABLE_MODELS.has(model) && MUTATING_OPS.has(operation)) {
+            throw new ApiError(
+              409,
+              "Jurnal yozuvi o'zgarmas. Tuzatish uchun storno (reverse) ishlating",
+              { code: "JOURNAL_IMMUTABLE" },
+            );
+          }
+          return query(args);
+        },
+      },
+    },
+  });
+
 const base = globalForPrisma.__prismaBase ?? createClient();
 
 if (!globalForPrisma.__prismaBase) {
@@ -125,7 +184,8 @@ if (!globalForPrisma.__prismaBase) {
 // Kengaytirilgan klient ham keshlanadi: `$extends` HAR CHAQIRUVDA yangi
 // proxy yaratadi va uni modul darajasida qayta yaratish nodemon
 // qayta yuklashlarida proxy zanjirini o'stirib borardi.
-const prisma = globalForPrisma.__prisma ?? withDecimalNormalization(base);
+const prisma =
+  globalForPrisma.__prisma ?? withJournalImmutability(withDecimalNormalization(base));
 if (!globalForPrisma.__prisma) globalForPrisma.__prisma = prisma;
 
 // ─────────────────────────────────────────────────────────────────────────

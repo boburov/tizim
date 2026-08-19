@@ -46,14 +46,21 @@ export default defineConfig({
      * brauzeri ularni KESHDA saqlaydi va keyingi deploy'da faqat
      * ilova bo'lagini qayta yuklaydi.
      *
-     * `recharts` alohida: u eng og'ir bog'liqlik va FAQAT grafikli
-     * ekranlarda kerak.
+     * ── `recharts` BU YERDA ATAYLAB YO'Q ──
+     * U dastlab shu ro'yxatda edi va NATIJA TESKARI bo'ldi: qo'lda
+     * bo'lak e'lon qilinishi bilan u kirish faylining bog'liqligiga
+     * aylandi va `index.html` ga `modulepreload` bo'lib tushdi —
+     * ya'ni 360 kB grafik kutubxonasi HAR yuklanishda, hatto grafik
+     * yo'q ekranda ham kelardi.
+     *
+     * Ro'yxatdan chiqarilgach, rollup uni O'ZI kerakli lazy bo'lakka
+     * joylaydi. Qo'lda bo'lak — faqat HAR JOYDA kerak bo'ladigan
+     * kutubxonalar uchun.
      */
     rollupOptions: {
       output: {
         manualChunks: {
           "vendor-react": ["react", "react-dom", "react-router-dom"],
-          "vendor-charts": ["recharts"],
           "vendor-query": ["@tanstack/react-query", "axios"],
           "vendor-state": ["@reduxjs/toolkit", "react-redux"],
         },

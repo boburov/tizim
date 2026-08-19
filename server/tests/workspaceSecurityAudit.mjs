@@ -21,9 +21,11 @@
 import "dotenv/config";
 
 const API = process.env.API || "http://localhost:5000/api";
-const R = { pass: 0, fail: 0, failures: [] };
+const R = { pass: 0, fail: 0, warn: 0, failures: [] };
 const ok = (n, e = "") => { R.pass += 1; console.log(`  ✅ ${n}${e ? ` — ${e}` : ""}`); };
 const bad = (n, e = "") => { R.fail += 1; R.failures.push(`${n} — ${e}`); console.log(`  ❌ ${n} — ${e}`); };
+/** O'LCHANMADI — «o'tdi» ham emas, «yiqildi» ham emas. */
+const warn = (n, e = "") => { R.warn += 1; console.log(`  ⚠️  ${n}${e ? ` — ${e}` : ""}`); };
 const head = (t) => console.log(`\n\x1b[1m${t}\x1b[0m`);
 
 const login = async (l, p) => {
@@ -119,6 +121,49 @@ const run = async () => {
   const leaked = Number(hdrBody?.data?.revenue?.current || 0);
   if (leaked === 0) ok("x-branch-id e'tiborsiz qoldirildi", "daromad 0");
   else bad("x-branch-id orqali sizish", `boshqa filial daromadi ko'rindi: ${leaked}`);
+
+  // ══════════════════════════════════════════════════════════════════
+  head("3b) DEPOZIT HISOBOTI — boshqa filial puli qo'shilmaydi");
+  //
+  // ── NEGA ALOHIDA TEKSHIRUV ──
+  // Hisobot ID QAYTARMAYDI, faqat SONLARNI. Ro'yxat sizishini ko'rish
+  // oson (begona ism ko'rinadi), yig'indidagi sizish esa KO'RINMAYDI —
+  // raqam shunchaki kattaroq bo'ladi va uni hech kim tekshirmaydi.
+  //
+  // Eski `test:scope` shu xususiyatni qo'riqlardi, lekin u fiksturani
+  // Mongoose bilan yozadi, servis esa Prisma bilan o'qiydi (migratsiya
+  // qoldig'i) — ya'ni u hozir HECH NARSANI tasdiqlamayapti. Bu yerda
+  // xususiyat HTTP orqali, haqiqiy ko'lam bilan tekshiriladi.
+  {
+    const rOwner = await (await get("/deposits/report", owner)).json();
+    const rAdminA = await (await get("/deposits/report", adminA)).json();
+    const rAdminB = await (await get("/deposits/report", adminB)).json();
+    const num = (r) => Number(r?.data?.totalTopup ?? r?.data?.topup ?? 0);
+    const all = num(rOwner);
+    const a = num(rAdminA);
+    const b = num(rAdminB);
+
+    // ── BO'SH MA'LUMOTDA «O'TDI» DEB YOZMAYMIZ ──
+    //
+    // Demo seed depozit tranzaksiyasi YARATMAYDI, ya'ni uchala raqam
+    // ham nol bo'lishi mumkin. `0 ≤ 0` shartini «o'tdi» deb belgilash
+    // eng yomon turdagi yolg'on bo'lardi: audit yashil, xususiyat esa
+    // umuman tekshirilmagan.
+    //
+    // Aynan shu sabab eski `test:scope` ni ham chalg'itgan edi — u
+    // nolni ko'rib «kutilmagan qiymat» deb yiqilardi, lekin hech kim
+    // sababini tekshirmasdi (fikstura Mongoose bilan yozilardi,
+    // servis esa Prisma bilan o'qiydi).
+    if (all === 0 && a === 0 && b === 0) {
+      warn("depozit hisoboti ko'lami — O'LCHANMADI",
+        "bazada depozit tranzaksiyasi yo'q; xususiyat tekshirilmadi");
+    } else {
+      if (a <= all) ok("A admini hisoboti tashkilotdan oshmaydi", `${a} ≤ ${all}`);
+      else bad("A admini hisoboti tashkilotdan KATTA", `${a} > ${all}`);
+      if (b < a || b === 0) ok("B admini A filialining pulini ko'rmaydi", `B=${b}, A=${a}`);
+      else bad("depozit hisobotida filial sizishi", `B=${b}, A=${a}`);
+    }
+  }
 
   // ══════════════════════════════════════════════════════════════════
   head("4) FILIAL BOSHQARUVI — admin filial ocha olmaydi");
@@ -222,7 +267,7 @@ const run = async () => {
 
   // ── NATIJA ──
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`NATIJA: ${R.pass} o'tdi, ${R.fail} yiqildi`);
+  console.log(`NATIJA: ${R.pass} o'tdi, ${R.fail} yiqildi, ${R.warn} o'lchanmadi`);
   if (R.failures.length) {
     console.log("\nMUAMMOLAR:");
     for (const f of R.failures) console.log(`  • ${f}`);

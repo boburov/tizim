@@ -311,11 +311,21 @@ check("'Manba ulanmagan' DEMAYDI (uchalasi ham ko'chirilgan)",
 
 // ══ 7) FILIAL TANLAGICH (checkbox) ═════════════════════════════
 console.log("\n7) filial tanlagich (checkbox)");
-// `main` ICHIDA qidiriladi. Sarlavhadagi `BranchBadge` ham "Barcha
-// filiallar" yozuvini ko'rsatadi va DOM'da oldinroq turadi - u
-// bosilganda cmdk emas, oddiy dropdown menyu ochilardi va tekshiruv
-// "0 variant" deb yiqilardi.
-const picker = page.locator('main button:has-text("Barcha filiallar")');
+// ── FAQAT KO'RINADIGAN TUGMA ──
+//
+// "Barcha filiallar" yozuvi IKKI joyda: taqqoslash bo'limidagi
+// tanlagichda va MOBIL sarlavhadagi `BranchBadge` da. Ikkinchisi
+// desktopda `md:hidden` bilan yashiringan — o'lchami 0×0, ya'ni
+// bosib bo'lmaydi.
+//
+// Ilgari `main` bilan cheklash yetarli edi, chunki sarlavha `main`
+// dan TASHQARIDA turardi. Yagona qobiqqa o'tilgach u ichkariga
+// tushdi va `.first()` o'sha ko'rinmas tugmani tanlab, klik 30
+// soniya kutib yiqila boshladi.
+//
+// `:visible` — Playwright'ning o'z tanlagichi: nol o'lchamli va
+// `display:none` elementlarni chiqarib tashlaydi.
+const picker = page.locator('main button:visible', { hasText: "Barcha filiallar" });
 const pickerCount = await picker.count();
 if (pickerCount > 0) {
   await picker.first().click();

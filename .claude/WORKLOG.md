@@ -14752,3 +14752,356 @@ Now fixing the landing redirects so every entry point resolves through the singl
 <sub>session `42085373` · branch `main` · 366 ta qadam</sub>
 
 ---
+
+## 2026-08-19 18:41 — davom et
+
+**So'rov**
+
+> davom et
+
+**Buyruqlar (36)**
+
+```sh
+grep -E 'BRAUZER QA|NATIJA|TUGADI' /tmp/all.log | sed 's/\x1b\[[0-9;]*m//g' | tail -6; echo "── ❌ ──"; grep '❌' /tmp/all.log | sed 's/\x1b\[[0-9;]*m//g' | head …
+cd client && rm -f /tmp/final.log && ( for t in browserAcceptance createAndCompareAcceptance branchLifecycleAcceptance; do echo "═══ $t" >> /tmp/final.log APP_U…
+cd client && du -sh dist/assets 2>/dev/null; echo "── ish makonlari bo'yicha boshlang'ich yuk ──" node -e ' const fs=require("fs"); const html=fs.readFileSync("…
+cd client && cat > /tmp/bundle.cjs <<'EOF' const fs = require("fs"); const dir = "dist/assets"; const html = fs.readFileSync("dist/index.html", "utf8"); const e…
+until grep -q 'TUGADI' /tmp/final.log 2>/dev/null; do sleep 10; done; grep -E '═══ [a-z]|NATIJA|❌' /tmp/final.log | sed 's/\x1b\[[0-9;]*m//g'
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/42085373-5693-4cf8-b355-95e9cb6b58f2/scratchpad && python3 - <<'PY' p='build_report.py' s=open(p).r…
+grep -E '═══ [a-z]|NATIJA|❌' /tmp/final.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g'
+sed 's/\x1b\[[0-9;]*m//g' /tmp/final.log | grep -n 'createAndCompareAcceptance' -A 200 | grep -E 'NATIJA|❌' | head -4; echo "── branchLifecycle xatosi ──"; sed …
+cd client && grep -n "7) filial tanlagich" -A 25 tests/branchLifecycleAcceptance.mjs | head -30
+grep -n "filial tanlagich (checkbox)" -A 30 tests/branchLifecycleAcceptance.mjs | head -35
+grep -rn "filial tanlagich" tests/*.mjs | head
+sed -n '305,340p' tests/createAndCompareAcceptance.mjs
+sed -n '285,305p' tests/createAndCompareAcceptance.mjs
+cat > /tmp/pickdbg.mjs <<'JSEOF' const { existsSync, readdirSync } = await import("node:fs"); const npx = `${process.env.HOME}/.npm/_npx`; let pw = null; for (c…
+python3 - <<'PY' p='/tmp/pickdbg.mjs' s=open(p).read() s=s.replace(''' cls: (b.className || "").toString().slice(0, 60), };''',''' cls: (b.className || "").toSt…
+python3 - <<'PY' p='tests/createAndCompareAcceptance.mjs' s=open(p).read() old = '''// `main` ICHIDA qidiriladi. Sarlavhadagi `BranchBadge` ham "Barcha // filia…
+sed 's/\x1b\[[0-9;]*m//g' /tmp/final.log | grep -n 'branchLifecycleAcceptance' -A 60 | grep -E '✗|NATIJA|filial tanlagichi' | head -6
+sed 's/\x1b\[[0-9;]*m//g' /tmp/final.log | sed -n '215,235p'
+grep -n 'main button:has-text("Barcha filiallar")' tests/branchLifecycleAcceptance.mjs
+sed -n '310,322p' tests/branchLifecycleAcceptance.mjs
+python3 - <<'PY' p='tests/branchLifecycleAcceptance.mjs' s=open(p).read() old = ''' // ── checkbox tanlagich ── // `main` ICHIDA: header'dagi `BranchBadge` ham …
+until grep -q 'NATIJA' /tmp/cc4.log 2>/dev/null; do sleep 8; done; grep -E 'NATIJA|❌' /tmp/cc4.log | sed 's/\x1b\[[0-9;]*m//g' | tail -3; echo "── endi lifecycl…
+grep -E 'NATIJA|❌' /tmp/cc4.log /tmp/bl4.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g'
+SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/42085373-5693-4cf8-b355-95e9cb6b58f2/scratchpad for f in s1-org-overview s2-analytics-academic; do …
+python3 - <<'PY' import re p='/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/42085373-5693-4cf8-b355-95e9cb6b58f2/scratchpad/workspace-redesign-repor…
+# … yana 11 ta
+```
+
+**Natija**
+
+Finance QA: 92/0. Rerunning the two suites that were disturbed by a mid-run server restart:
+
+Now updating the report's test, UX and performance sections with this pass's results:
+
+Two matches — one is a zero-size button. Tracing where it comes from before patching the test:
+
+Not a real bug — it's the mobile header's badge, `display:none` on desktop (so unfocusable). The test's locator is too loose:
+
+Same locator issue in the branch-lifecycle test:
+
+All six browser suites green. Updating final totals and refreshing screenshots for the new IA:
+
+Final verification pass, then cleanup:
+
+One branch and one user above baseline — checking what the lifecycle test left behind:
+
+That's orphaned data from the test run the server restart interrupted. Removing it through the same API path the test uses:
+
+<sub>session `42085373` · branch `main` · 45 ta qadam</sub>
+
+---
+
+## 2026-08-19 19:09 — lets continue
+
+**So'rov**
+
+> lets continue
+
+**Buyruqlar (79)**
+
+```sh
+cd server && for t in ledger journal journal-wiring; do echo "═══ test:$t"; npm run "test:$t" 2>&1 | grep -E "Error|ERR_MODULE|MongooseError|NATIJA" | head -3; …
+cd server && head -30 tests/journalWiring.test.js; echo "── mavjud helperlar ──"; ls src/helpers/ | grep -i journal || echo "journal helper YO'Q"
+sed -n '1,45p' tests/journalWiring.test.js
+grep -n "deposit\|depozit" tests/financialTransactionPrisma.test.js | grep -iE "head\(|ok\(|eq\(" | head -12; echo "── bo'limlar ──"; grep -n 'head("' tests/fin…
+grep -rn "deposit_in\|deposit_apply\|deposit_out" tests/*.test.js | grep -v journalWiring | head -8; echo "── financeAnalytics testida ──"; grep -n "depozit" te…
+wc -l tests/journalWiring.test.js; grep -n 'head(\|check(\|eq(' tests/journalWiring.test.js | sed -n '1,40p'
+sed -n '96,180p' tests/journalWiring.test.js
+grep -n '^export const post\|^export const' src/modules/finance/services/financialTransaction.service.js | head -20; echo "── ACCOUNT_KINDS ──"; grep -n 'DEPOSI…
+grep -n 'accountBalance\|export const' src/modules/journal/services/*.js 2>/dev/null | head -10; ls src/modules/journal/services/ 2>/dev/null; echo "── fintx te…
+sed -n '1,80p' tests/financialTransactionPrisma.test.js | grep -n 'import\|const TAG\|cleanup\|const mk' | head -20; echo "── fikstura yaratish namunasi ──"; se…
+sed -n '160,200p' tests/financialTransactionPrisma.test.js; echo "── oxirgi bo'lim ──"; sed -n '650,680p' tests/financialTransactionPrisma.test.js
+sed -n '255,340p' src/modules/finance/services/financialTransaction.service.js
+python3 - <<'PY' p='tests/financialTransactionPrisma.test.js' s=open(p).read() anchor = ''' console.log(`\\n=== NATIJA: ${R.pass} o'tdi, ${R.fail} yiqildi ===\\…
+npm run test:fintx 2>&1 | tail -20
+python3 - <<'PY' import re p='tests/financialTransactionPrisma.test.js' s=open(p).read() i=s.index(" // ═══════════ 21) DEPOZIT — IKKI BOSQICH ═══════════") hea…
+python3 - <<'PY' p='tests/financialTransactionPrisma.test.js' s=open(p).read() s=s.replace('type: "d21Topup"', 'type: "topup"') s=s.replace('type: "d21Withdraw"…
+grep -n 'mkPlan(' tests/financialTransactionPrisma.test.js | awk -F'mkPlan\\(' '{print $2}' | cut -d, -f1 | sort -n | uniq -c
+python3 - <<'PY' p='tests/financialTransactionPrisma.test.js' s=open(p).read() s=s.replace(''' const d21Plan = await mkPlan(11, 600_000);''', ''' // Oy 1 — yuqo…
+sed -n '270,300p' tests/journalWiring.test.js; echo "── journalVerify boshqa testda ──"; grep -rln 'journalVerify' tests/ | grep -v journalWiring || echo "YO'Q …
+grep -n 'journalVerify\|verify(' tests/openingBalance.test.js | head -5; echo "── openingBalance ishlaydimi ──"; npm run test:opening 2>&1 | grep -E "NATIJA|Err…
+node -e " const s=require('./package.json').scripts; console.log(Object.keys(s).filter(k=>k.startsWith('test:')).join('\n'));" > /tmp/tests.txt; wc -l < /tmp/te…
+npm run test:fintx 2>&1 | grep -E "❌|NATIJA" | tail -4; echo "── fin-intel yolg'iz ──"; npm run test:fin-intel 2>&1 | grep -E "NATIJA" | tail -1
+for t in delegation scope-mw director priv resource-scope branch-intent leak opened-routes scope; do printf "%-18s " "$t"; npm run "test:$t" 2>&1 | grep -oE "[0…
+for t in delegation director priv resource-scope branch-intent leak opened-routes scope; do printf "%-18s " "$t"; npm run "test:$t" 2>&1 | sed 's/\x1b\[[0-9;]*m…
+npm run test:delegation 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -E "✗|✘|❌" | head -10
+# … yana 54 ta
+```
+
+**Natija**
+
+Continuing with the remaining items. Starting with the three broken legacy tests — a suite where scripts crash on import is a liability:
+
+No Prisma-era test covers the two-phase deposit revenue rule — a real gap on money correctness. Reading what the dead test protected:
+
+The Prisma service has all three posting functions. Writing a focused test for the deposit invariant:
+
+The `fintx` harness already has everything needed. Adding the deposit invariant there rather than a new file:
+
+The Prisma implementation is correct by inspection — but untested. Adding the invariant:
+
+The rename hit string literals too. Repairing:
+
+Deposit invariant covered. Checking what else the dead test uniquely protected:
+
+Let me get a full picture of the test suite health rather than fixing these one at a time:
+
+The batch sweep isn't a valid measurement — 50 tests share one database and interfere. Verifying the security-relevant ones individually:
+
+Two genuine failures in scope-related tests. Investigating whether my changes caused them:
+
+Confirmed pre-existing and unrelated — those paths were never touched. Now handling the dead test whose coverage I've replaced:
+
+29 test files still import Mongoose while their services are Prisma — that's systemic migration debt beyond this redesign. Checking the ones I can resolve:
+
+`test:journal` has the same root cause I fixed before — Mongoose fixtures, Prisma services. It covers treasury conservation, which has no Prisma equivalent. Assessing the port:
+
+The Mongoose surface is only the setup block. Porting it:
+
+Porting the four remaining Mongoose model usages:
+
+43/0 — treasury coverage restored. But the port surfaced something real: journal immutability is no longer enforced at the database level. Checking:
+
+Journal immutability is documented as an invari
+
+…(qisqartirildi)
+
+<sub>session `42085373` · branch `main` · 82 ta qadam</sub>
+
+---
+
+## 2026-08-19 19:30 — <task-notification> <task-id>bx5lnqjfy</task-id> <tool-use-id>toolu_01
+
+**So'rov**
+
+> <task-notification>
+> <task-id>bx5lnqjfy</task-id>
+> <tool-use-id>toolu_017B6njmsWBn4SKqYvwf1gpe</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/42085373-5693-4cf8-b355-95e9cb6b58f2/tasks/bx5lnqjfy.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Make the test wait for content and rerun" completed (exit code 0)</summary>
+> </task-notification>
+
+**Buyruqlar (7)**
+
+```sh
+echo "── f4 (toza yurish) ──"; grep -E 'BRAUZER QA|❌' /tmp/f4.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | tail -5; echo "✅ soni: $(grep -c '✅' /tmp/f4.log 2>/…
+until grep -qE 'BRAUZER QA' /tmp/f4.log 2>/dev/null; do sleep 20; done; grep -E 'BRAUZER QA|❌' /tmp/f4.log | sed 's/\x1b\[[0-9;]*m//g' | tail -5
+grep -E 'BRAUZER QA|❌' /tmp/f4.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | tail -5; echo "✅: $(grep -c '✅' /tmp/f4.log 2>/dev/null)"
+git status --short | sed 's/^/ /'; echo "── o'zgarish ──"; git diff --stat | tail -1
+grep -E 'BRAUZER QA|❌' /tmp/f4.log 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | tail -5; echo "✅: $(grep -c '✅' /tmp/f4.log 2>/dev/null)"; echo "── baza ──"; cd se…
+until grep -qE 'BRAUZER QA' /tmp/f4.log 2>/dev/null; do sleep 15; done; grep -E 'BRAUZER QA|❌' /tmp/f4.log | sed 's/\x1b\[[0-9;]*m//g' | tail -5
+node tests/fixtures/qaUsers.mjs --clean 2>&1 | grep -v ERROR; npm run seed:finance-demo -- --clean 2>&1 | grep -E "o'chirildi|topilmadi"; node -e " import('./sr…
+```
+
+**Natija**
+
+The finance suite finished clean: **92/0**. Everything is verified and the database is back at baseline.
+
+## Final state
+
+| | |
+|---|---|
+| Browser suites | 36 · 44 · 19 · 92 · 35 · 31 — **0 failures** |
+| Server (individually) | journal **44/0**, fintx **112/0**, scope **5/0**, opened-routes **17/0**, fin-analytics **113/0**, invariants **44/0**, leak **61/0** |
+| Audits | workspace **56/0** (+1 explicitly unmeasured), finance **36/0** |
+| Build / lint / contracts | passing; lint unchanged at 22 pre-existing |
+| Database | 2 branches, 8 users, 5 roles, 0 journal entries — exact baseline |
+
+Working tree: 21 files changed (978 insertions, 212 deletions), uncommitted.
+
+## What this last stretch actually produced
+
+The leftover test debt turned out to be hiding a third integrity gap. **Journal entries had lost their immutability guard** in the Mongo→Postgres migration — the invariant was still documented in `journal.service.js`, with nothing enforcing it. It's restored as a Prisma client extension (`409 JOURNAL_IMMUTABLE`), which was safe because no code path anywhere mutates those tables; `reverse()` already does the right thing by writing a storno entry.
+
+It stayed invisible because the one test guarding it had been dead since the migration — and with it, **44 assertions** on treasury conservation, inkassatsiya discrepancies, shift shortages and `reconcile()`. That's ported and green. A second dead file was hiding the only coverage of the two-phase deposit rule (top-up = money without revenue; apply = revenue without money) — the case where revenue silently double-counts while the balance invariant still looks correct. That's now 11 checks inside `test:fintx`, and the dead file is deleted.
+
+`test:ledger` and `test:openingBalance` have the same cause but need a real migrat
+
+…(qisqartirildi)
+
+<sub>session `42085373` · branch `main` · 7 ta qadam</sub>
+
+---
+
+## 2026-08-19 19:36 — tushunmadim hozir faqat pal tuzildimi yoki hamma ish tayyormi ?
+
+**So'rov**
+
+> tushunmadim hozir faqat pal tuzildimi yoki hamma ish tayyormi ?
+
+**Buyruqlar (1)**
+
+```sh
+curl -s -o /dev/null -w "api:%{http_code} " --max-time 3 http://localhost:5000/api/health; curl -s -o /dev/null -w "client:%{http_code}\n" --max-time 3 http://l…
+```
+
+<sub>session `42085373` · branch `main` · 1 ta qadam</sub>
+
+---
+
+## 2026-08-19 19:39 — men talab qilgan /admin va super admin uchun alohida panel qilindimi m
+
+**So'rov**
+
+> men talab qilgan /admin va super admin uchun alohida panel qilindimi men kormayapman ? va ishchi qoshish oquvchi qoshish juda noqulay
+
+**Buyruqlar (43)**
+
+```sh
+cd client && echo "═══ ISH MAKONLARI MARSHRUTLARI ═══" && grep -n 'path="/org\|path="/branch\|path="/work\|path="/me' src/app/routes.jsx; echo; echo "═══ ADMIN …
+cd client && echo "═══ YARATISH REYESTRI ═══" && grep -n 'key:\|label:\|permission' src/shared/components/create/createRegistry.js | head -40
+grep -n 'key:\|label:\|hint:' src/shared/components/create/createRegistry.js | head -40
+cd ../server && npm run seed:finance-demo 2>&1 | grep -E "tayyor" && node tests/fixtures/qaUsers.mjs 2>&1 | grep -v ERROR | tail -1
+cd ../client && cat > /tmp/look.mjs <<'JSEOF' const { existsSync, readdirSync } = await import("node:fs"); const npx = `${process.env.HOME}/.npm/_npx`; let pw=n…
+cat > /tmp/addflow.mjs <<'JSEOF' const { existsSync, readdirSync } = await import("node:fs"); const npx = `${process.env.HOME}/.npm/_npx`; let pw=null; for (con…
+wc -l src/owner/features/users/components/UserCreateModal.jsx; sed -n '1,60p' src/owner/features/users/components/UserCreateModal.jsx
+grep -n 'username\|password\|homeBranchId\|isValid\|canSubmit' src/owner/features/users/components/UserCreateModal.jsx | sed -n '1,40p'
+sed -n '108,175p' src/owner/features/users/components/UserCreateModal.jsx
+sed -n '60,108p' src/owner/features/users/components/UserCreateModal.jsx; echo "── needsBranch ──"; grep -n 'needsBranch\|defaultRole\|roleLocked\|const UserCre…
+cat > /tmp/credgen.py <<'PYEOF' import io p='src/owner/features/users/components/UserCreateModal.jsx' s=open(p).read() # ── 1) Login/parol AVTOMATIK generatsiya…
+python3 - <<'PY' p='src/owner/features/users/components/UserCreateModal.jsx' s=open(p).read() # ── initialState: login/parol bo'sh qoladi, lekin "qo'lda" bayrog…
+python3 - <<'PY' p='src/owner/features/users/components/UserCreateModal.jsx' s=open(p).read() # ── Ism/familiya o'zgarganda login+parolni AVTOMATIK to'ldirish ─…
+sed -n '364,420p' src/owner/features/users/components/UserCreateModal.jsx
+python3 - <<'PY' p='src/owner/features/users/components/UserCreateModal.jsx' s=open(p).read() old = ''' <div> <InputField name="username" label="Login (username…
+python3 - <<'PY' import re p='src/owner/features/users/components/UserCreateModal.jsx' s=open(p).read() i=s.index('/**\n * ═════════════════════════════════════…
+grep -rn 'USER_CREATE' src/shared/components/create/CreateModals.jsx | head -5; grep -n 'title=' src/shared/components/create/CreateModals.jsx | head -8
+sed -n '30,45p' src/shared/components/create/CreateModals.jsx; grep -n 'ModalWrapper' -A 6 src/shared/components/ui/modal/ModalWrapper.jsx | grep -n 'title' | h…
+grep -n 'const useModal' -A 20 src/shared/hooks/useModal.js | head -25
+python3 - <<'PY' p='src/shared/components/create/CreateModals.jsx' s=open(p).read() s=s.replace('''const CreateModals = () => ( <> <ModalWrapper name={MODAL.USE…
+python3 - <<'PY' p='src/shared/components/create/CreateModals.jsx' s=open(p).read() s=s.replace('import ModalWrapper from "@/shared/components/ui/modal/ModalWra…
+cat > /tmp/newflow.mjs <<'JSEOF' const { existsSync, readdirSync } = await import("node:fs"); const npx = `${process.env.HOME}/.npm/_npx`; let pw=null; for (con…
+grep -n 'OpeningBalanceField' -B 3 -A 12 src/owner/features/users/components/UserCreateModal.jsx | head -24
+sed -n '496,510p' src/owner/features/users/components/UserCreateModal.jsx
+python3 - <<'PY' p='src/owner/features/users/components/UserCreateModal.jsx' s=open(p).read() s=s.replace(''' <OpeningBalanceField form={obj} disabled={isLoadin…
+# … yana 18 ta
+```
+
+**Natija**
+
+Ikkalasi ham o'rinli. Aniqlik kiritay va tekshiray.
+
+Let me seed data and actually look at both — the Admin panel and the create flow.
+
+Ikkalasi ham javob topdi. Avval **Admin paneli** — u bor va ishlayapti:
+
+Admin paneli bor — butunlay boshqa menyu, boshqa ekran. **Siz uni ko'rmadingiz, chunki `owner` bilan kirasiz — u har doim `/org` ga tushadi.**
+
+Endi yaratish oqimiga qaray:
+
+Endi aniq. Tugmalar sahifalarda **bor** — muammo tugmada emas, **formada**:
+
+Muammo aniq — **bitta o'quvchi qo'shish uchun 7 ta majburiy maydon**, ulardan ikkitasi (login, parol) foydalanuvchi o'ylab topishi kerak bo'lgan texnik narsa. Filial esa hali tegmasdan qizil xato ko'rsatyapti.
+
+Komponentni ko'ray:
+
+Endi tuzataman. Avval qolgan mantiqni ko'ray:
+
+Now implementing the fix — auto-generated credentials, sensible defaults, and a collapsed edge case:
+
+Now hiding the credential fields behind a disclosure so the common path is just name + branch:
+
+Now the modal title should name what's being created, and the opening-balance block should collapse:
+
+Now testing the improved flow end to end — creating a real student:
+
+**7 majburiy maydon → 2 ta yozish.** Ko'rinishini tekshiray:
+
+Ancha yaxshi. Qolgan shovqin — **«Boshlang'ich qoldiq»** bloki formaning yarmini egallaydi, holbuki u kamdan-kam holat. Yig'ib qo'yaman:
+
+Now the same treatment for staff — the other half of the complaint:
+
+Ikkalasi ham tuzatildi. Sinov paytida yaratilgan yozuvlarni tozalayman:
+
+Endi birinchi shikoyat — **egada Admin panelini ko'rish imkoni yo'q edi**. Vakolatlar sahifasiga ko'rish havolasini qo'shaman:
+
+Xodim formasida ham «Boshlang'ich qoldiq» ochiq turibdi — uni ham yig'aman:
+
+Ikkala shikoyat ham o'rinli edi. Nima aniqlandi va nima qilindi:
+
+## 1. Admin paneli — **bor edi, lekin siz ko'ra olmasdingiz**
+
+`/branch` mavjud
+
+…(qisqartirildi)
+
+<sub>session `42085373` · branch `main` · 50 ta qadam</sub>
+
+---
+
+## 2026-08-19 19:53 — <task-notification> <task-id>bedqmy3xk</task-id> <tool-use-id>toolu_01
+
+**So'rov**
+
+> <task-notification>
+> <task-id>bedqmy3xk</task-id>
+> <tool-use-id>toolu_01JZTGTTrQ8MouEF3MjNRBT5</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/42085373-5693-4cf8-b355-95e9cb6b58f2/tasks/bedqmy3xk.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Re-verify after final two changes" completed (exit code 0)</summary>
+> </task-notification>
+
+**Buyruqlar (2)**
+
+```sh
+grep -E '═══ [a-z]|NATIJA|❌' /tmp/reg2.log | sed 's/\x1b\[[0-9;]*m//g'
+cd server && node -e " import('./src/config/prisma.js').then(async({default:p})=>{ const f=await p.branch.count({where:{isDeleted:false}}); const u=await p.user…
+```
+
+**Natija**
+
+Barcha tekshiruvlar tugadi.
+
+## Yakuniy holat
+
+| Tekshiruv | Natija |
+|---|---|
+| `createAndCompareAcceptance` | 35 / 0 |
+| `workspaceAcceptance` | 44 / 0 |
+| `browserAcceptance` | 36 / 0 |
+| `a11yAcceptance` | 19 / 0 |
+| Build · lint | o'tadi · 22 (o'zgarmagan) |
+| Baza | 2 filial, 8 foydalanuvchi, 0 jurnal — **baseline** |
+
+Yaratish formasini o'zgartirgandan keyin ham hech narsa buzilmadi — «+ Yaratish» tugmasi, tur tanlash menyusi va modallar oqimi testda to'liq qoplangan.
+
+## Bu turda nima qilindi
+
+**Admin paneli** — u bor edi, lekin egada uni ko'rish yo'li yo'q edi. Endi Vakolatlar sahifasida har rol yonida «Bu makonni ko'rib chiqish» havolasi bor: rolni tanlaysiz, u qaysi makonga tushishini o'qiysiz, bosasiz va o'sha odam ko'radigan ekranni ochasiz. Bu yangi huquq bermaydi — ega barcha makonga allaqachon kira olardi, faqat buni hech kim bilmasdi.
+
+**Yaratish formasi** — 7 majburiy maydondan 2 taga tushdi. Login va parol endi ismdan o'zi yasaladi va ekranda ko'rinib turadi, chunki ularni odamga aytish kerak. Parol alifbosidan chalkashadigan belgilar (`l/I/1/O/0`) olib tashlandi — parol ko'pincha og'zaki aytiladi.
+
+## Ochiq qolgan narsalar
+
+Kod hali **commit qilinmagan** — hozir 25 ta fayl ish daraxtida. Xohlasangiz commit qilaman.
+
+Va takrorlab aytay, chunki bu muhim: yaratish oqimi men **umuman qaramagan** joy edi — men modallarni o'z holicha qoldirib, faqat atrofidagi navigatsiyani qayta qurgandim. Shu sababli **guruh yaratish, lid qo'shish, chegirma berish, xona qo'shish** formalarida ham xuddi shunday muammolar bo'lishi ehtimoli katta. Men ularni tekshirmadim va tekshirmasdan turib «yaxshi» deb ayta olmayman.
+
+Ayting — o'sha to'rttasini ham xuddi shu tarzda o'lchab tuzataymi?
+
+<sub>session `42085373` · branch `main` · 2 ta qadam</sub>
+
+---

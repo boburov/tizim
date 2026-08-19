@@ -18,6 +18,7 @@ import OpeningBalanceField from "@/owner/features/ledger/components/OpeningBalan
 // Constants
 import { ROLES } from "@/shared/constants/roles";
 import { PERMISSIONS } from "@/shared/constants/permissions";
+import { suggestUsername, suggestPassword } from "../utils/credentials";
 import { NO_AUTOFILL, NO_AUTOFILL_FORM } from "@/shared/constants/form";
 import {
   parseOpeningAmount,
@@ -28,8 +29,13 @@ const initialState = (homeBranchId) => ({
   firstName: "",
   lastName: "",
   phone: "",
+  // Login va parol AVTOMATIK — ism yozilishi bilan
+  // (`UserCreateModal` bilan bir xil qoida, bitta yordamchidan).
   username: "",
   password: "",
+  manualCreds: false,
+  // Kamdan-kam kerak — yig'ilgan holatda ochiladi.
+  showOpening: false,
   role: "",
   homeBranchId: homeBranchId || "",
 
@@ -93,6 +99,17 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
     label: b.name,
   }));
 
+  /** Ism yozilganda login+parol o'zi to'ldiriladi (qo'lda rejimda tegilmaydi). */
+  const setName = (field, value) => {
+    const next = { ...obj.state, [field]: value };
+    const patch = { [field]: value };
+    if (!obj.manualCreds) {
+      patch.username = suggestUsername(next.firstName, next.lastName);
+      if (!obj.password) patch.password = suggestPassword();
+    }
+    obj.setFields(patch);
+  };
+
   const usernameShort =
     obj.username.trim().length > 0 && obj.username.trim().length < 3;
 
@@ -147,7 +164,7 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
           name="firstName"
           label="Ism"
           value={obj.firstName}
-          onChange={(e) => obj.setField("firstName", e.target.value)}
+          onChange={(e) => setName("firstName", e.target.value)}
           required
           disabled={isLoading}
           {...NO_AUTOFILL}
@@ -156,7 +173,7 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
           name="lastName"
           label="Familiya"
           value={obj.lastName}
-          onChange={(e) => obj.setField("lastName", e.target.value)}
+          onChange={(e) => setName("lastName", e.target.value)}
           required
           disabled={isLoading}
           {...NO_AUTOFILL}
@@ -175,43 +192,87 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
         {...NO_AUTOFILL}
       />
 
+      {/* KIRISH MA'LUMOTLARI — AVTOMATIK.
+          Xodim qo'shayotgan odam login o'ylab topishi shart emas:
+          u ismdan yasaladi, parol esa og'zaki aytish uchun qulay
+          alifbodan (chalkashadigan l/I/0/O belgilarisiz).
+          Batafsil: `users/utils/credentials.js`. */}
       <div className="pt-2 border-t">
         <p className="text-sm font-medium mb-2">Kirish ma'lumotlari</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
+        {!obj.manualCreds ? (
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/40 p-3">
+            <div className="min-w-0">
+              <p className="font-mono text-sm text-foreground">
+                {obj.username || "—"}
+                <span className="mx-2 text-muted-foreground">·</span>
+                {obj.password || "—"}
+              </p>
+              {usernameTaken ? (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                  Bu login band — o'zgartiring
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Avtomatik yasaldi. Shu ma'lumotni xodimga bering.
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => obj.setField("password", suggestPassword())}
+                disabled={isLoading}
+                className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition hover:bg-accent"
+              >
+                Boshqa parol
+              </button>
+              <button
+                type="button"
+                onClick={() => obj.setField("manualCreds", true)}
+                disabled={isLoading}
+                className="rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground"
+              >
+                O'zim kiritaman
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <InputField
+                name="username"
+                label="Login"
+                placeholder="masalan: aziz_dir"
+                value={obj.username}
+                onChange={(e) => obj.setField("username", e.target.value)}
+                error={usernameShort || usernameTaken}
+                description={usernameShort ? "Kamida 3 ta belgi" : ""}
+                required
+                disabled={isLoading}
+                {...NO_AUTOFILL}
+              />
+              {usernameTaken && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                  Bu login allaqachon band
+                </p>
+              )}
+            </div>
             <InputField
-              name="username"
-              label="Login"
-              placeholder="masalan: aziz_dir"
-              value={obj.username}
-              onChange={(e) => obj.setField("username", e.target.value)}
-              error={usernameShort || usernameTaken}
-              description={usernameShort ? "Kamida 3 ta belgi" : ""}
+              type="password"
+              name="password"
+              label="Parol"
+              value={obj.password}
+              onChange={(e) => obj.setField("password", e.target.value)}
+              description="Kamida 6 ta belgi"
               required
               disabled={isLoading}
               {...NO_AUTOFILL}
+              // Yangi xodimning paroli - operatorning saqlangan paroli
+              // bu yerga tiqilib qolmasligi kerak.
+              autoComplete="new-password"
             />
-            {usernameTaken && (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-300">
-                Bu login allaqachon band
-              </p>
-            )}
           </div>
-          <InputField
-            type="password"
-            name="password"
-            label="Parol"
-            value={obj.password}
-            onChange={(e) => obj.setField("password", e.target.value)}
-            description="Kamida 6 ta belgi"
-            required
-            disabled={isLoading}
-            {...NO_AUTOFILL}
-            // Yangi xodimning paroli - operatorning saqlangan paroli
-            // bu yerga tiqilib qolmasligi kerak.
-            autoComplete="new-password"
-          />
-        </div>
+        )}
       </div>
 
       <div className="pt-2 border-t">
@@ -253,12 +314,28 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
         </p>
       </div>
 
+      {/* BOSHLANG'ICH QOLDIQ — YIG'ILGAN.
+          Tizimga o'tish paytidagi eski qarz uchun; yangi xodim
+          qo'shishda deyarli har doim bo'sh qoladi. Ochiq turganda
+          formaning uchdan birini egallab, har safar "buni
+          to'ldirishim kerakmi?" degan savol tug'dirardi. */}
       <div className="pt-2 border-t">
-        <OpeningBalanceField
-          form={obj}
-          disabled={isLoading}
-          personLabel="xodim"
-        />
+        {obj.showOpening ? (
+          <OpeningBalanceField
+            form={obj}
+            disabled={isLoading}
+            personLabel="xodim"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => obj.setField("showOpening", true)}
+            disabled={isLoading}
+            className="text-xs text-muted-foreground underline-offset-2 transition hover:text-foreground hover:underline"
+          >
+            + Boshlang'ich qoldiq (eski qarz yoki oldindan to'lov)
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2 pt-2">
