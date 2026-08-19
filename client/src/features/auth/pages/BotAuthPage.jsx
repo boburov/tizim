@@ -14,7 +14,6 @@ import BrandMark from "@/shared/components/brand/BrandMark";
 
 // Constants
 import { APP_NAME } from "@/shared/constants/app";
-import { resolveHomePath } from "@/shared/constants/roles";
 
 /**
  * Mini ilova sahifasi.
@@ -95,14 +94,9 @@ const BotAuthPage = () => {
 
   // roleMeta serverdan keladi (custom rolda landing sahifa shu yerda).
   const goHome = (r, meta) =>
-    navigate(
-      resolveHomePath({
-        defaultPath: meta?.defaultPath,
-        role: r,
-        roleType: meta?.roleType,
-      }),
-      { replace: true },
-    );
+      // "/" — bosh sahifani ish makoni hal qiladi (useLoginMutation
+      // dagi izohga qarang: `defaultPath` eskirishi mumkin).
+      navigate("/", { replace: true });
 
   const { mutate: loginAndLink, isPending: isLoggingIn } =
     useBotAuthLoginMutation({

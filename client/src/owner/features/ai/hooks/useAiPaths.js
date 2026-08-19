@@ -1,57 +1,33 @@
-import { useLocation } from "react-router-dom";
-
 /**
- * TAHLIL MARKAZI SAHIFALARINING MANZILLARI — QOBIQQA QARAB.
+ * ══════════════════════════════════════════════════════════════════════
+ * TAHLIL MARKAZI MANZILLARI
+ * ══════════════════════════════════════════════════════════════════════
  *
- * ═══════════════════════════════════════════════════════════════════
- * MUAMMO: BITTA SAHIFA, IKKI QOBIQ
+ * ── NEGA BU HOOK BOR EDI ──
+ * Ilgari ilovada IKKITA qobiq bor edi va tahlil sahifalari
+ * IKKALASIDA ham mount qilingandi: `/owner/ai*` va `/admin/tahlil*`.
+ * Sahifadagi ichki havola qat'iy yozilgan bo'lsa, rahbariyat
+ * qobig'ida turgan odam bosilgan havoladan BOSHQA qobiqqa otib
+ * ketardi — 404 emas, shuning uchun hech qanday xato ko'rinmasdi,
+ * u shunchaki boshqa ilovaga tushgandek bo'lardi.
  *
- * Tahlil markazi sahifalari IKKI joyda mount qilingan:
+ * ── NEGA ENDI SODDA ──
+ * Qobiq BITTA qoldi (ish makoni), `/admin/tahlil*` esa shu yerga
+ * yo'naltiriladi (`app/routes.jsx`). Ya'ni tanlanadigan prefiks yo'q.
  *
- *   /owner/ai            /admin/tahlil            (rahbariyat qobig'i)
- *   /owner/ai/tasks      /admin/tahlil/vazifalar
- *   /owner/ai/reports    /admin/tahlil/hisobotlar
- *   /owner/ai/reports/:id  /admin/tahlil/hisobotlar/:id
- *
- * Komponentlar ichidagi havolalar esa `/owner/ai/...` deb QATTIQ
- * yozilgan edi. Natijada rahbariyat qobig'ida turgan foydalanuvchi
- * "Hisobotlar" ni bosishi bilan sidebar'li operatsion panelga
- * OTILIB tushardi - u yerdan qaytish yo'li esa faqat brauzer
- * tugmasi bo'lardi.
- *
- * Bu "404" emas, shuning uchun hech qanday xato ko'rinmasdi -
- * foydalanuvchi shunchaki boshqa ilovaga tushgandek bo'lardi.
- * ═══════════════════════════════════════════════════════════════════
- *
- * MARSHRUTLAR IKKILANTIRILMAYDI, faqat prefiks almashadi. Sahifa
- * komponentlari bitta nusxada qoladi (`owner/features/ai`), qaysi
- * qobiqda ekanini esa MANZILDAN biladi - propdan emas: prop bo'lsa
- * uni har chaqiruvda uzatish kerak bo'lardi va bitta joyda unutilsa
- * xato jimgina qaytardi.
+ * Hook o'chirilmadi va manzillar sahifalarga qaytarilmadi: ular
+ * TO'RTTA fayldan chaqiriladi va bitta joyda turgani marshrut
+ * o'zgarganda tekshiriladigan joyni ham bitta qoldiradi.
  */
-const ADMIN_BASE = "/admin/tahlil";
-const OWNER_BASE = "/owner/ai";
+const BASE = "/owner/ai";
 
-export const aiPathsFor = (pathname = "") => {
-  const inAdmin = pathname.startsWith(ADMIN_BASE);
+export const AI_PATHS = Object.freeze({
+  home: BASE,
+  tasks: `${BASE}/tasks`,
+  reports: `${BASE}/reports`,
+  report: (id) => `${BASE}/reports/${id}`,
+});
 
-  return inAdmin
-    ? {
-        inAdmin: true,
-        home: ADMIN_BASE,
-        tasks: `${ADMIN_BASE}/vazifalar`,
-        reports: `${ADMIN_BASE}/hisobotlar`,
-        report: (id) => `${ADMIN_BASE}/hisobotlar/${id}`,
-      }
-    : {
-        inAdmin: false,
-        home: OWNER_BASE,
-        tasks: `${OWNER_BASE}/tasks`,
-        reports: `${OWNER_BASE}/reports`,
-        report: (id) => `${OWNER_BASE}/reports/${id}`,
-      };
-};
-
-const useAiPaths = () => aiPathsFor(useLocation().pathname);
+const useAiPaths = () => AI_PATHS;
 
 export default useAiPaths;

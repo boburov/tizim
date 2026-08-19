@@ -3,10 +3,8 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/shared/utils/cn";
-import MetricValue from "./MetricValue";
-import isMissing from "../utils/isMissing";
-import ComparisonBadge from "./ComparisonBadge";
-import { LoadingBlock, ErrorBlock } from "./StateBlock";
+import { MetricValue, ComparisonBadge, LoadingBlock, ErrorBlock } from "@/shared/components/analytics";
+import { isMissing } from "@/shared/components/analytics";
 
 /**
  * ASOSIY KO'RSATKICHLAR.

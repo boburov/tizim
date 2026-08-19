@@ -15,15 +15,15 @@ import {
   useOverviewData,
   useCashflowData,
   useBranchPnlData,
-} from "../../../hooks/useExecutiveData";
+} from "../hooks/useExecutiveData";
 
 // Local components
-import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
-import CashflowBars from "../../../components/CashflowBars";
+import SectionHeader from "../components/SectionHeader";
+import CashflowBars from "../components/CashflowBars";
 import BranchPnlTable from "../components/BranchPnlTable";
 
 // Navigation
-import { DRILLDOWN } from "../../../navigation/drilldown";
+import { DRILLDOWN } from "../navigation/drilldown";
 
 /**
  * MOLIYA KESIMI.
@@ -58,9 +58,9 @@ const FinancePage = () => {
 
   return (
     <div className="space-y-6">
-      <ExecutivePageHeader
-        title="Moliya"
-        hint="Tushum, pul oqimi va filiallar bo'yicha kesim."
+      <SectionHeader
+        title="Filiallar bo'yicha P&L"
+        hint="Tushum, pul oqimi va normallashtirilgan foyda — filial kesimida."
         period={period}
       />
 

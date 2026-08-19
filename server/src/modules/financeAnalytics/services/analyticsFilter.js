@@ -1,5 +1,8 @@
 import { Prisma } from "@prisma/client";
-import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import {
+  branchFilter,
+  assertBranchInScope,
+} from "../../../helpers/branchContext.helper.js";
 import { NON_OPERATING_ENTRY_KINDS } from "../../../constants/ledger.js";
 
 /**
@@ -123,6 +126,15 @@ export const autoGranularity = ({ from, to }) => {
  */
 export const branchClause = (col, explicitBranchId = null) => {
   if (explicitBranchId) {
+    // ⚠ ANIQ FILIAL KO'LAMNI ALMASHTIRADI, shuning uchun u KO'LAM
+    // ICHIDA ekani shu yerda tekshiriladi. Aks holda `?branchId=...`
+    // parametri filial chegarasini butunlay chetlab o'tardi
+    // (batafsil: branchContext.helper.js → assertBranchInScope).
+    //
+    // Tekshiruv aynan SHU YERDA: bu — tahlil qatlamidagi barcha
+    // so'rovlar o'tadigan yagona nuqta. Har handler'da takrorlansa,
+    // yangi endpoint qo'shgan odam uni unutishi muqarrar edi.
+    assertBranchInScope(explicitBranchId);
     return Prisma.sql`AND ${Prisma.raw(col)} = ${String(explicitBranchId)}`;
   }
   const bf = branchFilter();

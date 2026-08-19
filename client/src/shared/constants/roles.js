@@ -30,26 +30,21 @@ export const ROLE_TYPE_LABELS = Object.freeze({
   student: "O'quvchi",
 });
 
-// Built-in rol uchun standart landing route. Custom rol uchun bu map'da
-// yozuv YO'Q - u serverdan (roleMeta.defaultPath) keladi. Shuning uchun
-// to'g'ridan-to'g'ri ROLE_HOME[role] o'rniga resolveHomePath() ishlating.
-export const ROLE_HOME = Object.freeze({
-  // EGA -> RAHBARIYAT QOBIG'I. Server ham shu qiymatni beradi
-  // (`Role.defaultPath`), bu yerdagi map faqat ZAXIRA: server javobi
-  // hali kelmagan yoki rol bazada topilmagan holat uchun.
-  //
-  // `RoleGuard` da `/admin` uchun ALOHIDA istisno bor - u rol emas,
-  // owner panelining ikkinchi qarashi (qarang admin/index.js).
-  owner: "/admin",
-  teacher: "/teacher",
-  student: "/student",
-});
-
-// Custom rol standart ravishda owner paneliga tushadi (staff rollari
-// asosan boshqaruv paneli bilan ishlaydi).
-export const FALLBACK_HOME = "/owner";
-
-// Landing sahifani aniqlashning YAGONA joyi.
-// Tartib: serverdagi rol sozlamasi -> built-in map -> rol tipi -> fallback.
-export const resolveHomePath = ({ defaultPath, role, roleType } = {}) =>
-  defaultPath || ROLE_HOME[role] || ROLE_HOME[roleType] || FALLBACK_HOME;
+// ── LANDING SAHIFA ENDI BU YERDA EMAS ──
+//
+// Ilgari `ROLE_HOME` xaritasi va `resolveHomePath()` bor edi: bosh
+// sahifa `Role.defaultPath` satridan, u bo'lmasa shu xaritadan
+// olinardi.
+//
+// MUAMMO: `defaultPath` — rol yaratilganda BIR MARTA yozib qo'yiladigan
+// qiymat, ruxsatlar esa keyin o'zgaradi. Egasi direktorga yangi vakolat
+// bersa, u boshqa ish makoniga o'tishi kerak — lekin `defaultPath`
+// eski holicha qolardi va odam har login'dan keyin noto'g'ri panelga
+// tushardi. Xato jimgina edi: hech qanday xabar, hech qanday log.
+//
+// Endi bosh sahifa ISH MAKONIDAN keladi va u RUXSATLARDAN
+// HISOBLANADI: `shared/workspaces/workspaces.js` → `resolveWorkspace`,
+// `shared/hooks/useWorkspace.js` → `home`.
+//
+// Login, bot-auth, `GuestGuard`, `RoleGuard` va 404 sahifasi —
+// hammasi o'sha yagona manbadan foydalanadi.

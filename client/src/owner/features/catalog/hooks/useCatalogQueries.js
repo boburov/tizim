@@ -18,10 +18,13 @@ export const useCoursePricesQuery = (id, options = {}) =>
     ...options,
   });
 
-export const useRoomsQuery = (params = {}) =>
+// `options` — `enabled` uchun. Filial kartasidagi "Xonalar" tabi
+// ochilmaguncha so'rov ketmasligi kerak (talab 29).
+export const useRoomsQuery = (params = {}, options = {}) =>
   useQuery({
     queryKey: qk.rooms.list(params),
     queryFn: () => roomsAPI.list(params).then((r) => r.data),
+    ...options,
   });
 
 // Nomi `use` bilan boshlanadi - eslint hook qoidasi shuni talab qiladi

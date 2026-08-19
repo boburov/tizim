@@ -42,8 +42,29 @@ export const analyticsFilterSchema = z.object({
 /** Kesim (breakdown) tanlovi — faqat ruxsat etilgan qiymatlar. */
 export const breakdownSchema = z.object({
   params: z.object({
-    by: z.enum(["branch", "course", "teacher", "group", "room", "method"]),
+    // `student` — zanjirning eng chuqur bo'g'ini (talab 34):
+    // guruh daromadini bosgan odam KIM TO'LAGANINI ko'radi.
+    by: z.enum(["branch", "course", "teacher", "group", "room", "method", "student"]),
   }),
+  query: analyticsFilterSchema.shape.query,
+});
+
+/**
+ * CHIQIM KESIMI — "pul qayerga ketdi" zanjiri uchun.
+ *
+ * `person` va `teacher` MAOSH tannarxini odam bo'yicha ochadi, shuning
+ * uchun marshrutda qo'shimcha ruxsat tekshiruvi bor (routes.js).
+ */
+export const expenseBreakdownSchema = z.object({
+  params: z.object({
+    by: z.enum(["category", "person", "teacher", "branch", "group", "costType"]),
+  }),
+  query: analyticsFilterSchema.shape.query,
+});
+
+/** Bitta o'quvchining moliyaviy yo'li. */
+export const studentIdSchema = z.object({
+  params: z.object({ id }),
   query: analyticsFilterSchema.shape.query,
 });
 
@@ -55,4 +76,14 @@ export const receivablesBreakdownSchema = z.object({
 /** Bitta jurnal yozuvi tafsiloti. */
 export const entryIdSchema = z.object({
   params: z.object({ id: id }),
+});
+
+/** Intellekt signali — ID `type` yoki `type:entityId` shaklida. */
+export const alertIdSchema = z.object({
+  params: z.object({
+    alertId: z.string().regex(/^[a-z_]+(:[0-9a-fA-F]{24})?$/, "Signal ID formati noto'g'ri"),
+  }),
+  query: analyticsFilterSchema.shape.query.extend({
+    explain: z.enum(["true", "false"]).optional(),
+  }),
 });

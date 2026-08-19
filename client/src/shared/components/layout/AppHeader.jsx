@@ -2,7 +2,6 @@
 import { useSidebar } from "../shadcn/sidebar";
 import NotificationBell from "../notification/NotificationBell";
 import BranchBadge from "./BranchBadge";
-import ExecutiveReturnButton from "./ExecutiveReturnButton";
 import ThemeToggle from "@/shared/components/theme/ThemeToggle";
 
 // Icons
@@ -15,8 +14,21 @@ const AppHeader = () => {
   const { toggleSidebar } = useSidebar();
   return (
     <header className="flex items-center justify-between h-12 container sticky top-0 z-30 bg-card shadow-sm md:hidden">
-      {/* Hamburger menu */}
-      <button onClick={toggleSidebar} className="size-7">
+      {/* MENYU TUGMASI.
+          `aria-label` MAJBURIY: ichida faqat ikonka bor, ya'ni ekran
+          o'quvchi uni "tugma" deb o'qiydi va nima qilishini AYTMAYDI.
+          Bu qator mobilda YAGONA menyu kirish nuqtasi — nomsiz bo'lsa,
+          klaviatura yoki ekran o'quvchi bilan ishlaydigan odam menyuga
+          umuman yetib bora olmaydi.
+
+          `type="button"` — sarlavha forma ichida bo'lib qolsa, tugma
+          uni JO'NATIB yubormasin. */}
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        aria-label="Menyuni ochish"
+        className="size-7"
+      >
         <TextAlignJustify strokeWidth={1.5} className="size-5" />
       </button>
 
@@ -39,7 +51,6 @@ const AppHeader = () => {
           menyuni ochish kerak edi. Ikonka ko'rinishida - bu qatorda
           joy tor. */}
       <div className="flex items-center gap-1 min-w-0">
-        <ExecutiveReturnButton variant="compact" />
         <BranchBadge />
         <ThemeToggle variant="switch" className="size-8" />
         <NotificationBell />

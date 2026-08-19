@@ -228,10 +228,16 @@ const run = async () => {
     `multiBranch=${me.body?.data?.multiBranch}`,
   );
 
-  await page.reload({ waitUntil: "networkidle" });
+  // ── NAVIGATSIYA ENDI ISH MAKONI SIDEBAR'IDA ──
+  //
+  // Ilgari bu tekshiruv rahbariyat qobig'ining yuqori navigatsiyasini
+  // o'qirdi. Endi "Filiallar" — TASHKILOT ish makonining sidebar
+  // yozuvi (`/org/branches`), ya'ni ikkinchi filial ochilgach u aynan
+  // o'sha yerda paydo bo'lishi kerak.
+  await page.goto(`${APP}/org`, { waitUntil: "networkidle" });
   await page.waitForTimeout(2000);
   const navTexts = (
-    await page.locator('nav[aria-label="Rahbariyat bo\'limlari"] a').allInnerTexts()
+    await page.locator('[data-sidebar="sidebar"] a span').allInnerTexts()
   ).map((t) => t.trim());
   check(
     "'Filiallar' bo'limi navigatsiyada paydo bo'ldi",

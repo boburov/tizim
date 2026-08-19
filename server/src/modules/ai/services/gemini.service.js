@@ -252,3 +252,122 @@ export const generateNarration = async (insight, model = env.GEMINI_MODEL) => {
     clearTimeout(timer);
   }
 };
+
+// ══════════════════════════════════════════════════════════════════════
+// MOLIYAVIY IZOH — tuzilmali faktlarni jumlaga aylantiradi
+// ══════════════════════════════════════════════════════════════════════
+//
+// Yuqoridagi `generateNarration` bilan BIR XIL falsafada: model
+// TAHLIL QILMAYDI, faqat tayyor raqamlarni o'zbekchaga o'giradi.
+//
+// FARQI faqat kirish shaklida: u `Insight` hujjatini oladi, bu esa
+// moliyaviy intellekt signalini (`evidence[]`). Provayder chaqiruvi,
+// timeout, usage yozuvi va zaxira yo'li — hammasi bir xil, shuning
+// uchun ular shu faylda qoladi (ikkinchi nusxa yaratilmaydi).
+
+const buildFinancePrompt = (signal) => {
+  const facts = (signal.evidence || [])
+    .slice(0, 6)
+    .map((e) => {
+      const parts = [`- ${e.label}: ${e.current ?? "—"}${e.unit ? " " + e.unit : ""}`];
+      if (e.previous !== null && e.previous !== undefined) {
+        parts.push(`(oldingi davr: ${e.previous}${e.unit ? " " + e.unit : ""})`);
+      }
+      if (e.changePercent !== null && e.changePercent !== undefined) {
+        parts.push(`(o'zgarish: ${e.changePercent > 0 ? "+" : ""}${e.changePercent}%)`);
+      }
+      return parts.join(" ");
+    })
+    .join("\n");
+
+  return `Sen o'quv markazi egasi uchun moliyaviy holatni tushuntiradigan yordamchisan.
+
+QOIDALAR:
+1. FAQAT quyidagi raqamlardan foydalan. Yangi raqam, foiz yoki sana O'YLAB TOPMA.
+2. Berilgan raqamlarni O'ZGARTIRMA va yaxlitlama.
+3. Eng ko'pi 2 ta jumla.
+4. Umumiy maslahat berma ("marketingni yaxshilang" kabi) — tavsiya alohida ko'rsatiladi.
+5. Raqamlar O'ZARO QANDAY bog'liqligini ayt: nima nimadan tez o'sdi, nima nimani kamaytirdi.
+6. O'zbek tilida, lotin yozuvida. Rasmiy, lekin sodda. Vahimasiz.
+
+HOLAT: ${signal.title}
+TAQQOSLASH ASOSI: ${signal.comparison?.label || "oldingi davr"}
+FAKTLAR:
+${facts}`;
+};
+
+/**
+ * Moliyaviy signal uchun izoh yozadi.
+ *
+ * Yiqilsa `null` qaytaradi — chaqiruvchi determinstik matnni
+ * ko'rsatishda davom etadi. LLM hech qachon MAJBURIY bo'g'in emas.
+ */
+export const generateFinanceExplanation = async (signal, model = env.GEMINI_MODEL) => {
+  if (!isNarrationConfigured()) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const startedAt = Date.now();
+
+  const log = (ok, errorCode, usage = {}) =>
+    recordUsage({
+      branchId: signal?.branchId || null,
+      provider: "gemini",
+      model,
+      kind: "narration",
+      inputTokens: usage.promptTokenCount || 0,
+      outputTokens: usage.candidatesTokenCount || 0,
+      latencyMs: Date.now() - startedAt,
+      ok,
+      errorCode,
+    });
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: buildFinancePrompt(signal) }] }],
+          generationConfig: {
+            temperature: 0.3,
+            thinkingConfig: { thinkingBudget: 0 },
+            maxOutputTokens: 300,
+          },
+        }),
+        signal: controller.signal,
+      },
+    );
+
+    if (!res.ok) {
+      const level = res.status === 429 ? "debug" : "warn";
+      logger[level]({ status: res.status }, "Gemini moliyaviy izoh bermadi");
+      await log(false, String(res.status));
+      return null;
+    }
+
+    const data = await res.json();
+    const usage = data?.usageMetadata || {};
+    const candidate = data?.candidates?.[0];
+    if (candidate?.finishReason === "MAX_TOKENS") {
+      await log(false, "MAX_TOKENS");
+      return null;
+    }
+
+    const text = (candidate?.content?.parts?.[0]?.text || "").trim();
+    if (text.length < MIN_NARRATION_LENGTH || text.length > MAX_NARRATION_LENGTH) {
+      await log(false, "LENGTH");
+      return null;
+    }
+
+    await log(true, null, usage);
+    return text;
+  } catch (err) {
+    logger.warn({ err: err?.message }, "Gemini moliyaviy izoh xatosi");
+    await log(false, err?.name === "AbortError" ? "TIMEOUT" : "ERROR");
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+};

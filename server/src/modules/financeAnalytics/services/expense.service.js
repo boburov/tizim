@@ -123,6 +123,160 @@ export const getExpenseBreakdown = async (filters = {}) => {
 };
 
 /**
+ * ══════════════════════════════════════════════════════════════════════
+ * CHIQIM KESIMI — "PUL QAYERGA KETDI?" (talab 10)
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * NEGA `getExpenseBreakdown` YETARLI EMAS: u faqat KATEGORIYA beradi
+ * ("Maosh — 4.2 mln"). Talab esa zanjirni davom ettirishni so'raydi:
+ *
+ *     Maosh 4.2 mln  →  O'qituvchi A 1.4 mln  →  guruhlari  →  yozuvlar
+ *
+ * Kategoriyadan keyingi bo'g'in ODAM. Jurnal yozuvida `teacherId` va
+ * `staffId` allaqachon muhrlangan (STEP 4), ya'ni bu yerda YANGI
+ * ma'lumot yaratilmaydi — mavjud o'lchov bo'yicha guruhlash ochiladi.
+ *
+ * ── NEGA `person` BITTA KESIM, `teacher`/`staff` EMAS ──
+ * Foydalanuvchi "maosh kimga ketdi" deb so'raydi, "o'qituvchimi yoki
+ * xodimmi" deb emas. COALESCE ikkalasini bitta ustunga yig'adi va
+ * javob qatorida kim ekani `kind` bilan ko'rsatiladi.
+ *
+ * ⚠ RUXSAT: bu kesim MAOSH TANNARXINI odam bo'yicha ochadi, shuning
+ * uchun marshrut darajasida `salary.read`/`payroll.read` talab
+ * qilinadi (financeAnalytics.routes.js). Servis o'zi ruxsat
+ * tekshirmaydi — bu qatlamning qoidasi (qarang entryDetail.service.js).
+ */
+// Komissiya "chiqim" bo'lmaydigan kesimlar — quyidagi `feesAreCost`
+// izohiga qarang. Marshrutdagi bir xil nomli ro'yxat RUXSAT uchun,
+// bu esa HISOB uchun: ikkalasi bir xil o'lchovlarni sanaydi, lekin
+// sabablari boshqa va ular birga o'zgarmasligi ham mumkin.
+const PAYROLL_DIMENSIONS = Object.freeze(["person", "teacher"]);
+
+const EXPENSE_BREAKDOWNS = Object.freeze({
+  category: { col: 'e."expenseCategoryId"', kind: "expenseCategory" },
+  person: { col: 'COALESCE(e."teacherId", e."staffId")', kind: "person" },
+  teacher: { col: 'e."teacherId"', kind: "teacher" },
+  branch: { col: 'e."branchId"', kind: "branch" },
+  group: { col: 'e."groupId"', kind: "group" },
+  costType: { col: 'e."costType"::text', kind: "costType" },
+});
+
+const COST_TYPE_LABELS = Object.freeze({
+  fixed: "Doimiy",
+  variable: "O'zgaruvchan",
+});
+
+const expenseNames = async (kind, ids) => {
+  if (!ids.length) return new Map();
+  if (kind === "expenseCategory") {
+    const rows = await prisma.expenseCategory.findMany({
+      where: { id: { in: ids } }, select: { id: true, name: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+  if (kind === "person" || kind === "teacher") {
+    const rows = await prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, firstName: true, lastName: true, username: true, role: true },
+    });
+    return new Map(rows.map((r) => [
+      r.id,
+      `${r.firstName || ""} ${r.lastName || ""}`.trim() || r.username || "",
+    ]));
+  }
+  if (kind === "branch") {
+    const rows = await prisma.branch.findMany({
+      where: { id: { in: ids } }, select: { id: true, name: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+  if (kind === "group") {
+    const rows = await prisma.group.findMany({
+      where: { id: { in: ids } }, select: { id: true, name: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+  if (kind === "costType") {
+    return new Map(ids.map((id) => [id, COST_TYPE_LABELS[id] || id]));
+  }
+  return new Map();
+};
+
+export const getExpenseBy = async (by, filters = {}) => {
+  const meta = EXPENSE_BREAKDOWNS[by];
+  if (!meta) throw new Error(`Noma'lum chiqim kesimi: ${by}`);
+
+  const range = parseRange(filters);
+  // `journalWhere` non-operating yozuvlarni (egasi puli, o'tkazma)
+  // o'zi chiqarib tashlaydi — chiqim ta'rifi butun modulda BITTA.
+  const where = journalWhere({
+    ...range, branchId: filters.branchId || null, dimensions: filters,
+  });
+  const c = Prisma.raw(meta.col);
+  const limit = Math.min(Number(filters.limit) || 50, 200);
+
+  const rows = await prisma.$queryRaw`
+    SELECT ${c} AS "id",
+      ${SQL_EXPENSE}            AS "expense",
+      ${SQL_PAYROLL}            AS "payroll",
+      ${SQL_EXPENSE_NON_PAYROLL} AS "other",
+      ${SQL_FEES}               AS "fees",
+      COUNT(DISTINCT e.id)      AS "entries"
+    FROM journal_lines l
+    JOIN journal_entries e ON e.id = l."entryId"
+    WHERE ${where} AND ${c} IS NOT NULL
+    GROUP BY ${c}
+    HAVING (${SQL_EXPENSE} + ${SQL_FEES}) <> 0
+    ORDER BY "expense" DESC
+    LIMIT ${limit}
+  `;
+
+  const ids = rows.map((r) => String(r.id)).filter(Boolean);
+  const names = await expenseNames(meta.kind, ids);
+
+  // ── KOMISSIYA QAYSI KESIMDA "CHIQIM" ──
+  //
+  // Kategoriya/filial kesimida komissiya CHIQIM: markaz uni to'lagan
+  // va u mavjud `/expenses/breakdown` jamisiga ham kiradi (ikkalasi
+  // bir xil raqam berishi shart).
+  //
+  // ODAM kesimida esa YO'Q. "Kimga to'landi?" degan savolga komissiya
+  // javob bermaydi — u Click/Payme ga ketgan, o'qituvchiga emas.
+  // Jurnalda komissiya yozuvi o'sha guruhning `teacherId` si bilan
+  // muhrlangani uchun u qo'shilsa "O'qituvchi A — 1.614 mln" chiqardi,
+  // holbuki odam qo'liga 1.6 mln tekkan. Yig'indi 14 ming ga
+  // "adashgan" ko'rinardi va zanjirga bo'lgan ishonch yo'qolardi.
+  const feesAreCost = !PAYROLL_DIMENSIONS.includes(by);
+  const amountOf = (r) => n(r.expense) + (feesAreCost ? n(r.fees) : 0);
+  const total = rows.reduce((s, r) => s + amountOf(r), 0);
+
+  return {
+    by,
+    kind: meta.kind,
+    period: { from: range.from, to: range.to },
+    // Komissiya `amount` ga kirmagan kesimda buni OCHIQ aytamiz —
+    // UI izohni shundan oladi, o'zi taxmin qilmaydi.
+    feesIncluded: feesAreCost,
+    total,
+    items: rows.map((r) => {
+      const amount = amountOf(r);
+      return {
+        id: String(r.id),
+        name: names.get(String(r.id)) || "",
+        amount,
+        payroll: n(r.payroll),
+        other: n(r.other),
+        // Odam kesimida: shu odamning yozuvlariga tegib o'tgan
+        // komissiya (uning xarajati EMAS, kontekst uchun).
+        fees: n(r.fees),
+        entries: Number(r.entries || 0),
+        sharePercent: ratioPercent(amount, total),
+      };
+    }),
+  };
+};
+
+/**
  * DOIMIY va O'ZGARUVCHAN XARAJAT (Faza 8).
  *
  * `costType` jurnal yozuviga STEP 4 da muhrlanadi (chiqimdan yoki

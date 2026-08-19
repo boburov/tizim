@@ -92,7 +92,11 @@
     "test:fin-perms": "node tests/financePermissionsPrisma.test.js",
     "test:fin-ops": "node tests/financeOpsPrisma.test.js",
     "test:fin-entry": "node tests/financeEntryDetailPrisma.test.js",
-    "seed:finance-demo": "node src/seeds/financeDemo.seed.js"
+    "seed:finance-demo": "node src/seeds/financeDemo.seed.js",
+    "test:fin-intel": "node tests/financeIntelligencePrisma.test.js",
+    "audit:finance": "node tests/financeSecurityAudit.mjs",
+    "audit:workspace": "node tests/workspaceSecurityAudit.mjs",
+    "fixture:qa": "node tests/fixtures/qaUsers.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

@@ -11,13 +11,13 @@ import DashboardSection from "@/shared/components/dashboard/SectionGrid";
 import { narrow, DATA_STATUS } from "@/shared/components/dashboard/dataStatus";
 
 // Hooks
-import { useInsightsData } from "../../../hooks/useExecutiveData";
+import { useInsightsData } from "../hooks/useExecutiveData";
 
 // Local components
-import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
+import SectionHeader from "../components/SectionHeader";
 
 // Navigation
-import { DRILLDOWN } from "../../../navigation/drilldown";
+import { DRILLDOWN } from "../navigation/drilldown";
 // Tavsiya amalining manzili - jadval operatsion panelda (ikkilantirilmaydi).
 import { ownerActionHref } from "@/owner";
 
@@ -49,7 +49,7 @@ const InsightsPage = () => {
 
   return (
     <div className="space-y-6">
-      <ExecutivePageHeader
+      <SectionHeader
         title="Tavsiyalar"
         hint="Tahlil aniqlagan xavflar va imkoniyatlar. Har biri aniq amalga olib boradi."
         actions={

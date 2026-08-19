@@ -23,6 +23,7 @@ export const financeAnalyticsAPI = {
 
   expenseTrend: (params) => http.get(E.expenseTrend, { params }),
   expenseBreakdown: (params) => http.get(E.expenseBreakdown, { params }),
+  expenseBy: (by, params) => http.get(E.expenseBy(by), { params }),
   costStructure: (params) => http.get(E.costStructure, { params }),
   recurring: (params) => http.get(E.recurring, { params }),
   budget: (params) => http.get(E.budget, { params }),
@@ -39,8 +40,14 @@ export const financeAnalyticsAPI = {
   groups: (params) => http.get(E.groups, { params }),
   rooms: (params) => http.get(E.rooms, { params }),
   branches: (params) => http.get(E.branches, { params }),
+  intelligence: (params) => http.get(E.intelligence, { params }),
+  briefing: (params) => http.get(E.intelligenceBriefing, { params }),
+  // `explain=true` — LLM FAQAT shu yerda va faqat foydalanuvchi
+  // so'raganda chaqiriladi (dashboard ochilishida emas).
+  signal: (id, params) => http.get(E.intelligenceAlert(id), { params }),
   entries: (params) => http.get(E.entries, { params }),
   entry: (id) => http.get(E.entry(id)),
+  studentFinance: (id, params) => http.get(E.studentFinance(id), { params }),
 };
 
 /** Moliyaviy amallar (yozish). */

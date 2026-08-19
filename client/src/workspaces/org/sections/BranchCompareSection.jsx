@@ -17,16 +17,16 @@ import {
   useBranchPnlData,
   useBranchSalesData,
   useBranchTeachersData,
-} from "../../../hooks/useExecutiveData";
+} from "../hooks/useExecutiveData";
 
 // Local components
-import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
+import SectionHeader from "../components/SectionHeader";
 import BranchPicker from "../components/BranchPicker";
 import CompareTable from "../components/CompareTable";
 import SourceBreakdown from "../components/SourceBreakdown";
 
 // Navigation
-import { DRILLDOWN } from "../../../navigation/drilldown";
+import { DRILLDOWN } from "../navigation/drilldown";
 
 // Constants
 import { PERMISSIONS } from "@/shared/constants/permissions";
@@ -112,9 +112,9 @@ const ComparePage = () => {
 
   return (
     <div className="space-y-6">
-      <ExecutivePageHeader
-        title="Filiallar kesimi"
-        hint="Moliya, o'qituvchi resursi va sotuv voronkasi — yonma-yon."
+      <SectionHeader
+        title="Uch kesim yonma-yon"
+        hint="Past foyda sababi ko'pincha ikkinchi jadvalda (maosh fondi) yoki uchinchisida (lid oqimi) ko'rinadi."
         period={state}
         actions={
           hasMultipleBranches ? (

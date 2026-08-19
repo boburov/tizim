@@ -63,7 +63,10 @@ import * as cashSvc from "../src/modules/financeAnalytics/services/cashFlow.serv
 import * as recvSvc from "../src/modules/financeAnalytics/services/receivables.service.js";
 import * as profitSvc from "../src/modules/financeAnalytics/services/profitability.service.js";
 import * as discountSvc from "../src/modules/financeAnalytics/services/discount.service.js";
-import * as alertSvc from "../src/modules/financeAnalytics/services/alerts.service.js";
+// STEP 8: ogohlantirish qoidalari intellekt qatlamiga BIRLASHTIRILDI
+// (ikkita qoida dvigateli bo'lmasligi uchun). Eski `/alerts` shakli
+// saqlanadi, lekin manba bitta.
+import * as alertSvc from "../src/modules/financeAnalytics/services/financialIntelligence.service.js";
 
 const R = { pass: 0, fail: 0, failures: [] };
 const ok = (n, e = "") => { R.pass += 1; console.log(`  ✅ ${n}${e ? ` — ${e}` : ""}`); };
@@ -281,7 +284,17 @@ const run = async () => {
     ] } } });
   made.budgets.push(budget.id);
 
-  const F = { year: cur.year, month: cur.month };
+  // ── FILTR FILIALGA OCHIQ BOG'LANADI ──
+  //
+  // Ilgari bu yerda faqat davr bor edi va test BO'SH BAZAGA
+  // tayanardi: kontekstda `canSeeAllBranches: true` bo'lgani uchun
+  // `branchFilter()` bo'sh qaytardi va so'rovlar BARCHA filialni
+  // qamrab olardi. Bazada boshqa ma'lumot paydo bo'lishi bilan
+  // (masalan demo seed) to'lov kanallari va byudjet tekshiruvlari
+  // yiqildi — ilova to'g'ri ishlayotgan holda.
+  //
+  // Endi ko'lam OCHIQ: test faqat O'Z filialini tekshiradi.
+  const F = { year: cur.year, month: cur.month, branchId: br.id };
 
   // ══════════════ 1) XULOSA ══════════════
   head("1) Moliyaviy xulosa");
@@ -471,10 +484,36 @@ const run = async () => {
   eq("dinamika yig'indisi == netto daromad", trendSum, 1_900_000);
 
   // ══════════════ 16) KO'P FILIAL FILTRI ══════════════
-  head("16) Filial filtri");
-  const other = await inBr(() => summarySvc.getSummary({ ...F, branchId: brB.id }));
-  eq("boshqa filialda daromad yo'q", other.revenue.current, 0);
-  eq("bo'sh filialda marja null", other.contributionMargin.current, null);
+  //
+  // ── KUTILGAN NATIJA O'ZGARDI: 0 EMAS, 403 ──
+  //
+  // Ilgari bu test "A filialiga bog'langan kontekst B ni so'rasa, 0
+  // qaytadi" deb yozilgan edi. Ya'ni u O'SHA PAYTDAGI xatti-harakatni
+  // qayd etardi, lekin o'sha xatti-harakatning O'ZI teshik edi:
+  // `branchClause` aniq `branchId` ni ko'lam bilan solishtirmasdan
+  // SQL ga qo'yardi. B filialida ma'lumot bo'lganda (bu yerda yo'q
+  // edi — shuning uchun 0 chiqib, test "o'tgan"dek ko'ringan) o'sha
+  // ma'lumot TO'LIQ ochilardi.
+  //
+  // HTTP darajasida bu shunday ko'rinardi:
+  //     GET /finance-analytics/summary?branchId=<boshqa filial>
+  //     → 200, boshqa filialning butun moliyasi
+  //
+  // Endi qoida: aniq filial ko'lamni faqat TORAYTIRA oladi.
+  // Kengaytirishga urinish — 403 (assertBranchInScope).
+  head("16) Filial filtri — ko'lamdan tashqari filial rad etiladi");
+  let denied = null;
+  try {
+    await inBr(() => summarySvc.getSummary({ ...F, branchId: brB.id }));
+  } catch (e) {
+    denied = e;
+  }
+  eq("boshqa filial so'ralsa 403", denied?.statusCode, 403);
+
+  // O'Z filialini aniq ko'rsatish esa ISHLASHDA DAVOM ETADI — aks holda
+  // "filialga kirib ishlash" oqimi buzilardi.
+  const own = await inBr(() => summarySvc.getSummary({ ...F, branchId: br.id }));
+  eq("o'z filialini aniq so'rash ishlaydi", own.revenue.current, 1_900_000);
 
   // ══════════════ 17) NOL / BO'LISH CHEKKA HOLATLARI ══════════════
   head("17) Nol va bo'lish chekka holatlari");
@@ -487,16 +526,18 @@ const run = async () => {
 
   // ══════════════ 18) OGOHLANTIRISHLAR ══════════════
   head("18) Ogohlantirish tizimi");
-  const al = await inBr(() => alertSvc.getFinancialAlerts(F));
-  const codes = al.alerts.map((a) => a.code);
+  const al = await inBr(() => alertSvc.getIntelligence(F, ["finance.read", "salary.read"]));
+  const codes = al.alerts.map((a) => a.type);
   ok("chiqarilgan ogohlantirishlar", codes.join(", ") || "(yo'q)");
   eq("marketing o'sishi topildi", codes.includes("expense_growth"), true);
   eq("byudjetdan oshish topildi", codes.includes("budget_overspend"), true);
-  const growth = al.alerts.find((a) => a.code === "expense_growth");
+  const growth = al.alerts.find((a) => a.type === "expense_growth");
   eq("ogohlantirishda joriy qiymat bor", growth?.currentValue, 200_000);
-  eq("ogohlantirishda taqqoslash qiymati bor", growth?.comparisonValue, 100_000);
-  eq("ogohlantirishda subyekt ID si bor", growth?.entities?.expenseCategoryId, catMkt.id);
-  ok("izoh haqiqiy raqamlardan", growth?.explanation?.slice(0, 60) + "...");
+  // STEP 8 shakli: `previousValue` (eski `/alerts` da `comparisonValue`).
+  eq("ogohlantirishda oldingi qiymat bor", growth?.previousValue, 100_000);
+  eq("ogohlantirishda subyekt ID si bor", growth?.entityId, catMkt.id);
+  eq("dalil mashina o'qiy oladigan", growth?.evidence?.length > 0, true);
+  ok("dalil namunasi", `${growth?.evidence?.[0]?.label}=${growth?.evidence?.[0]?.current}`);
 
   // ══════════════ 19) JURNAL BUTUNLIGI ══════════════
   head("19) Jurnal butunligi (tahlil hech narsani buzmadi)");

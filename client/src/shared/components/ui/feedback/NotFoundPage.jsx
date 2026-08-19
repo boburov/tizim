@@ -9,16 +9,14 @@ import Button from "@/shared/components/ui/button/Button";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
-
-// Constants
-import { resolveHomePath } from "@/shared/constants/roles";
+import useWorkspace from "@/shared/hooks/useWorkspace";
 
 const NotFoundPage = () => {
   const navigate = useNavigate();
-  const { role, roleType, homePath } = useAuth();
-  const home = role
-    ? resolveHomePath({ defaultPath: homePath, role, roleType })
-    : "/";
+  const { role } = useAuth();
+  // Bosh sahifa ish makonidan (yagona manba) — rol sozlamasidan emas.
+  const { home: workspaceHome } = useWorkspace();
+  const home = role ? workspaceHome : "/";
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-4">

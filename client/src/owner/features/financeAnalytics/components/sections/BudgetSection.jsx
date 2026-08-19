@@ -5,10 +5,8 @@ import { cn } from "@/shared/utils/cn";
 import Button from "@/shared/components/ui/button/Button";
 import usePermissions from "@/shared/hooks/usePermissions";
 import { PERMISSIONS } from "@/shared/constants/permissions";
-import MetricValue from "../MetricValue";
-import AnalyticsTable from "../AnalyticsTable";
+import { MetricValue, AnalyticsTable, LoadingBlock, ErrorBlock, EmptyBlock } from "@/shared/components/analytics";
 import BudgetEditorSheet from "../BudgetEditorSheet";
-import { LoadingBlock, ErrorBlock, EmptyBlock } from "../StateBlock";
 import { useBudget, useExpenseBreakdown } from "../../hooks/useFinanceAnalytics";
 import { useBudgetList } from "../../hooks/useBudgetOps";
 

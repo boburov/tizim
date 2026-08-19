@@ -4,10 +4,7 @@ import { AlertTriangle, Info } from "lucide-react";
 import { cn } from "@/shared/utils/cn";
 import usePermissions from "@/shared/hooks/usePermissions";
 import { PERMISSIONS } from "@/shared/constants/permissions";
-import MetricValue from "../MetricValue";
-import ComparisonBadge from "../ComparisonBadge";
-import AnalyticsTable from "../AnalyticsTable";
-import { QueryState, DeniedBlock } from "../StateBlock";
+import { MetricValue, ComparisonBadge, AnalyticsTable, QueryState, DeniedBlock } from "@/shared/components/analytics";
 import {
   useTeacherProfit, useDirectionProfit, useGroupProfit,
   useRoomRevenue, useBranchProfit,

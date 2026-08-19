@@ -6,14 +6,16 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
 import { cn } from "@/shared/utils/cn";
 
 import useFinanceFilters from "../hooks/useFinanceFilters";
-import { useSummary, useAlerts } from "../hooks/useFinanceAnalytics";
+import { useSummary } from "../hooks/useFinanceAnalytics";
+import { useIntelligence, useBriefing } from "../hooks/useFinanceIntelligence";
 import FinanceFilterBar from "../components/FinanceFilterBar";
 import FinanceKpiGrid from "../components/FinanceKpiGrid";
-import AlertCenter from "../components/AlertCenter";
+import IntelligenceCenter from "../components/IntelligenceCenter";
+import BriefingCard from "../components/BriefingCard";
+import SignalDetailDrawer from "../components/SignalDetailDrawer";
 import QuickActions from "../components/actions/QuickActions";
-import DrillDownDrawer from "../components/DrillDownDrawer";
-import FinancialTransactionDrawer from "../components/FinancialTransactionDrawer";
-import { DeniedBlock } from "../components/StateBlock";
+import { DeniedBlock } from "@/shared/components/analytics";
+import { useDrill, useDrillFilters } from "@/shared/drill";
 
 import RevenueSection from "../components/sections/RevenueSection";
 import ExpenseSection from "../components/sections/ExpenseSection";
@@ -58,10 +60,18 @@ const FinanceCommandPage = () => {
   const { has } = usePermissions();
   const { filters, set, reset, activeCount } = useFinanceFilters();
   const [params, setParams] = useSearchParams();
-  const [drill, setDrill] = useState(null);
-  // Tranzaksiya paneli drill-down panelining USTIGA ochiladi —
-  // yopilganda foydalanuvchi aynan o'sha ro'yxatga qaytadi.
-  const [entryId, setEntryId] = useState(null);
+  const [signalId, setSignalId] = useState(null);
+
+  // DRILL-DOWN — ILOVA BO'YLAB YAGONA MEXANIZM.
+  //
+  // Ilgari bu sahifada O'Z paneli bor edi (`DrillDownDrawer`) va u
+  // faqat moliya ekranida ishlardi: filial kartasidan yoki bosh
+  // sahifadan bosilgan raqam boshqacha (yoki umuman hech qanday)
+  // panel ochardi. Endi mexanizm bitta — `shared/drill`.
+  const { openRoot } = useDrill();
+  // Davr va filtrlar panelga MEROS bo'ladi (aks holda panel joriy
+  // oyni ko'rsatardi, foydalanuvchi esa boshqa oyni tanlagan bo'lardi).
+  useDrillFilters(filters);
 
   // Tab ham URL da — havola bo'lishilganda o'sha bo'lim ochiladi.
   const tab = params.get("tab") || "overview";
@@ -72,9 +82,11 @@ const FinanceCommandPage = () => {
   };
 
   const summary = useSummary(filters);
-  // Ogohlantirishlar server tomonda 8 ta hisobotni birlashtiradi —
-  // shuning uchun faqat "Umumiy" tabda so'raladi.
-  const alerts = useAlerts(filters, { enabled: tab === "overview" });
+  // INTELLEKT server tomonda 12 ta hisobotni birlashtiradi — shuning
+  // uchun faqat "Umumiy" tabda so'raladi. LLM bu yerda ISHLAMAYDI:
+  // qoidalar deterministik, AI izohi faqat signal panelida.
+  const intelligence = useIntelligence(filters, { enabled: tab === "overview" });
+  const briefing = useBriefing(filters, { enabled: tab === "overview" });
 
   if (!has(PERMISSIONS.FINANCE_READ)) {
     return <DeniedBlock permission="finance.read" className="mt-6" />;
@@ -84,7 +96,18 @@ const FinanceCommandPage = () => {
   // (server baribir 403 qaytaradi).
   const visibleTabs = TABS.filter((t) => !t.permission || has(t.permission));
 
-  const openDrill = (target) => setDrill(target);
+  const openDrill = (target) => openRoot(target);
+
+  /**
+   * Tavsiya bosilganda — TEGISHLI BO'LIMGA o'tamiz va filtrni
+   * qo'llaymiz. Tizim moliyaviy amalni O'ZI bajarmaydi (talab S):
+   * bu faqat navigatsiya.
+   */
+  const handleSignalAction = (target) => {
+    if (!target) return;
+    if (target.filters) set(target.filters);
+    if (target.tab) setTab(target.tab);
+  };
 
   return (
     <div className="space-y-4">
@@ -128,7 +151,14 @@ const FinanceCommandPage = () => {
       </nav>
 
       {tab === "overview" && (
-        <AlertCenter query={alerts} onAction={(target) => setTab(target)} />
+        <>
+          <BriefingCard query={briefing} onOpenSignal={setSignalId} />
+          <IntelligenceCenter
+            query={intelligence}
+            onOpenSignal={setSignalId}
+            onAction={handleSignalAction}
+          />
+        </>
       )}
       {tab === "revenue" && (
         <RevenueSection filters={filters} onFilter={set} onDrill={openDrill} />
@@ -149,15 +179,12 @@ const FinanceCommandPage = () => {
       )}
       {tab === "budget" && <BudgetSection filters={filters} />}
 
-      <DrillDownDrawer
-        target={drill}
+      <SignalDetailDrawer
+        signalId={signalId}
         filters={filters}
-        onOpenChange={setDrill}
-        onDrill={openDrill}
-        onOpenEntry={setEntryId}
+        onOpenChange={setSignalId}
+        onAction={handleSignalAction}
       />
-
-      <FinancialTransactionDrawer entryId={entryId} onOpenChange={setEntryId} />
     </div>
   );
 };

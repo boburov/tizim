@@ -48,6 +48,23 @@ const nameResolvers = {
     const rows = await prisma.room.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
     return new Map(rows.map((r) => [r.id, r.name]));
   },
+  // O'QUVCHI — zanjirning eng chuqur nomlangan bo'g'ini.
+  //
+  // Talab 34: "Guruh A" ni bosgan odam O'QUVCHILAR ro'yxatini ko'rishi
+  // kerak. Ilgari bu kesim YO'Q edi va zanjir guruhda uzilardi:
+  // qarzdorlik bo'yicha o'quvchi ro'yxati bor edi (receivables/by/student),
+  // lekin "kim TO'LADI" degan savolga javob yo'q edi — faqat "kim
+  // to'lamadi".
+  student: async (ids) => {
+    const rows = await prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, firstName: true, lastName: true, username: true },
+    });
+    return new Map(rows.map((r) => [
+      r.id,
+      `${r.firstName || ""} ${r.lastName || ""}`.trim() || r.username || "",
+    ]));
+  },
 };
 
 const BREAKDOWNS = Object.freeze({
@@ -57,6 +74,9 @@ const BREAKDOWNS = Object.freeze({
   group: 'e."groupId"',
   room: 'e."roomId"',
   method: 'e."paymentMethod"',
+  // `studentId` jurnal yozuvida ALLAQACHON bor (STEP 4 o'lchovlari) —
+  // bu yerda faqat kesim ochiladi, yangi ma'lumot yozilmaydi.
+  student: 'e."studentId"',
 });
 
 /** DAROMAD KESIMI — bitta GROUP BY, hech qanday N+1 yo'q. */

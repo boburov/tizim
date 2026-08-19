@@ -23,6 +23,13 @@ import { join, relative } from "node:path";
 const ROOT = new URL("../src", import.meta.url).pathname;
 const SERVER = new URL("../../server/src", import.meta.url).pathname;
 const FEATURE = join(ROOT, "owner/features/financeAnalytics");
+// UMUMIY TAHLIL KOMPONENTLARI — moliya bo'limidan `shared` ga ko'chdi
+// (universal drill-down ular ustiga quriladi). Shartnoma o'zgarmadi:
+// to'rt holat va null-xavfsiz ko'rsatish HAMON majburiy, faqat fayl
+// endi butun ilova uchun umumiy.
+const ANALYTICS = join(ROOT, "shared/components/analytics");
+// DRILL-DOWN — endi ilova bo'ylab yagona mexanizm.
+const DRILL = join(ROOT, "shared/drill");
 
 const problems = [];
 const checks = [];
@@ -188,17 +195,43 @@ if (!/SALARY_READ|PAYROLL_READ/.test(profitSrc)) {
 } else ok("O'qituvchi kesimi maosh ruxsatini talab qiladi");
 
 // ── 9) HOLAT KO'RINISHLARI ──
-const stateSrc = read(join(FEATURE, "components/StateBlock.jsx"));
+const stateSrc = read(join(ANALYTICS, "StateBlock.jsx"));
 const states = ["LoadingBlock", "EmptyBlock", "ErrorBlock", "DeniedBlock"];
 const missingState = states.filter((s) => !stateSrc.includes(`export const ${s}`));
 if (missingState.length) fail("To'rt holat mavjud", missingState.join(", "));
 else ok("To'rt holat mavjud", states.join(", "));
 
 // ── 10) NULL-XAVFSIZ KO'RSATISH ──
-const metricSrc = read(join(FEATURE, "components/MetricValue.jsx"));
+const metricSrc = read(join(ANALYTICS, "MetricValue.jsx"));
 if (!metricSrc.includes("isMissing") || !metricSrc.includes("Dash")) {
   fail("MetricValue null-xavfsiz", "isMissing/Dash topilmadi");
 } else ok("MetricValue null-xavfsiz", "null → '—'");
+
+// ── 11) DRILL-DOWN ZANJIRI ──
+//
+// Talab 11: har muhim raqamdan manba yozuvigacha yo'l bo'lishi shart.
+// Zanjir reyestrda e'lon qilinadi, ya'ni uzilgan bo'g'in shu yerda
+// ko'rinadi — jadvallar bo'ylab qidirib yurish shart emas.
+const nodesSrc = read(join(DRILL, "drillNodes.js"));
+const CHAIN = ["revenue", "expense", "branch", "course", "group", "student",
+  "teacher", "room", "expenseCategory", "person", "paymentMethod", "account", "entry"];
+const missingNode = CHAIN.filter((t) => !new RegExp(`\\[T\\.${
+  t.replace(/([A-Z])/g, "_$1").toUpperCase()
+}\\]`).test(nodesSrc));
+if (missingNode.length) fail("Drill zanjiri to'liq", missingNode.join(", "));
+else ok("Drill zanjiri to'liq", `${CHAIN.length} tugun`);
+
+// Zanjirning oxiri JURNAL YOZUVI bo'lishi shart — aks holda
+// "qayerdan keldi?" savoli hujjatga yetib bormaydi.
+if (!/\[T\.ENTRY\]:\s*\{[^}]*terminal:\s*true/s.test(nodesSrc)) {
+  fail("Zanjir jurnal yozuvida tugaydi", "ENTRY terminal emas");
+} else ok("Zanjir jurnal yozuvida tugaydi");
+
+// Panel HISOBLAMASLIGI kerak: bo'limlar faqat server javobini chizadi.
+const sectionsSrc = read(join(DRILL, "DrillSections.jsx"));
+if (/\.reduce\(\s*\(/.test(sectionsSrc)) {
+  fail("Drill paneli hisoblamaydi", "reduce() topildi — server raqamidan chetlashish xavfi");
+} else ok("Drill paneli hisoblamaydi", "faqat server qiymatlari");
 
 // ── NATIJA ──
 console.log("\nMOLIYA UI SHARTNOMASI\n");

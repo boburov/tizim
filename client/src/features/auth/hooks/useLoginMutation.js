@@ -15,7 +15,6 @@ import { authAPI } from "../api/auth.api";
 import { qk } from "@/shared/lib/query/keys";
 
 // Constants
-import { resolveHomePath } from "@/shared/constants/roles";
 
 // Lib
 import { clearActiveBranchId } from "@/shared/lib/branch/activeBranch";
@@ -41,16 +40,18 @@ const useLoginMutation = () => {
       });
       qc.invalidateQueries({ queryKey: qk.auth.me() });
       toast.success("Tizimga xush kelibsiz");
-      // Custom rolda landing sahifa ROLE_HOME map'ida yo'q - u serverdan
-      // (roleMeta.defaultPath) keladi.
-      navigate(
-        resolveHomePath({
-          defaultPath: data.roleMeta?.defaultPath,
-          role: data.user.role,
-          roleType: data.roleMeta?.roleType,
-        }),
-        { replace: true },
-      );
+      // "/" GA YUBORAMIZ, aniq manzilga emas.
+      //
+      // Bosh sahifa endi ISH MAKONIDAN aniqlanadi, u esa RUXSATLARDAN
+      // hisoblanadi (`useWorkspace`). Login javobida ruxsatlar YO'Q —
+      // ular `/auth/me` bilan keladi. Ya'ni bu yerda manzilni hisoblash
+      // eskirgan `roleMeta.defaultPath` ga tayanishni anglatardi:
+      // egaga yangi vakolat berilsa ham u eski panelga tushib
+      // qolaverardi.
+      //
+      // "/" esa `RoleHomeRedirect` ga boradi va u YAGONA manbadan
+      // (ish makoni) foydalanadi — landing mantig'i ikkilanmaydi.
+      navigate("/", { replace: true });
     },
     onError: (err) => {
       apiErrorToast(err, "Login yoki parol noto'g'ri");

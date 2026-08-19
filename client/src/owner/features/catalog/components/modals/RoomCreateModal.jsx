@@ -29,7 +29,7 @@ import { useRoomCreateMutation } from "../../hooks/useCatalogQueries";
  * markazda u faqat shovqin).
  * ═══════════════════════════════════════════════════════════════════
  */
-const RoomCreateModal = ({ close, isLoading, setIsLoading, onCreated }) => {
+const RoomCreateModal = ({ close, isLoading, setIsLoading, onCreated, branchId: fixedBranchId }) => {
   const { branches, isAllBranches, hasMultipleBranches } = useActiveBranch();
 
   const obj = useObjectState({
@@ -48,9 +48,16 @@ const RoomCreateModal = ({ close, isLoading, setIsLoading, onCreated }) => {
     onError: () => setIsLoading(false),
   });
 
+  // FILIAL KARTASIDAN CHAQIRILGANDA (`branchId` prop) tanlagich
+  // UMUMAN chiqmaydi: foydalanuvchi allaqachon A filialining ichida
+  // turibdi va unga "qaysi filial?" deb savol berish — kontekstni
+  // yo'qotgandek ko'rinadi. Yomoni, u yerda BOSHQA filialni tanlash
+  // mumkin bo'lardi va xona noto'g'ri joyda paydo bo'lardi.
+  const pinned = Boolean(fixedBranchId);
+
   // Tanlagich faqat shu shartda kerak: ko'p filial bor VA hozir aniq
-  // filial tanlanmagan.
-  const needsBranch = hasMultipleBranches && isAllBranches;
+  // filial tanlanmagan VA kontekstdan filial berilmagan.
+  const needsBranch = !pinned && hasMultipleBranches && isAllBranches;
 
   const branchOptions = branches.map((b) => ({
     value: b._id || b.id,
@@ -69,7 +76,10 @@ const RoomCreateModal = ({ close, isLoading, setIsLoading, onCreated }) => {
       // bilan "sig'imi kiritilmagan xona" boshqa-boshqa gap.
       capacity: obj.capacity === "" ? null : Number(obj.capacity),
       areaM2: obj.areaM2 === "" ? null : Number(obj.areaM2),
-      ...(needsBranch ? { branchId: obj.branchId } : {}),
+      // Kontekstdan kelgan filial USTUN turadi. Berilmasa — tanlangani,
+      // u ham bo'lmasa server aktiv filialdan oladi
+      // (`resolveBranchForWrite`).
+      ...(pinned ? { branchId: fixedBranchId } : needsBranch ? { branchId: obj.branchId } : {}),
     });
   };
 

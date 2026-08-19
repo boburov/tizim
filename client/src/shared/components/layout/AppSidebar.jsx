@@ -52,7 +52,6 @@ import {
 import BranchSwitcher from "./BranchSwitcher";
 import StorageQuota from "./StorageQuota";
 import SidebarItemBadge from "./SidebarItemBadge";
-import ExecutiveReturnButton from "./ExecutiveReturnButton";
 
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
@@ -66,9 +65,7 @@ import { useIsMobile } from "@/shared/hooks/useMobile";
 import { ROLES, ROLE_TYPES } from "@/shared/constants/roles";
 import { APP_NAME, APP_LOGO } from "@/shared/constants/app";
 
-// Rol-spec sidebar konfiguratsiyalari
 import {
-  ownerSidebar,
   OwnerGlobalSearch,
   OwnerCreateMenu,
   OwnerCreateModals,
@@ -76,18 +73,32 @@ import {
   OwnerApprovalNotifier,
   OwnerApprovalsBell,
 } from "@/owner";
-import { teacherSidebar } from "@/teacher";
-import { studentSidebar } from "@/student";
 
-const ROLE_SIDEBAR = {
-  [ROLES.OWNER]: ownerSidebar,
-  [ROLES.TEACHER]: teacherSidebar,
-  [ROLES.STUDENT]: studentSidebar,
-  // XODIM (direktor, buxgalter, administrator...) - owner panelida ishlaydi,
-  // lekin menyusi RUXSATLARI bo'yicha kesiladi (pastdagi filter).
-  // Bu qator bo'lmasa custom rolli foydalanuvchi bo'sh menyu ko'rardi.
-  staff: ownerSidebar,
-};
+// ISH MAKONI — menyuning YAGONA manbai.
+import useWorkspace from "@/shared/hooks/useWorkspace";
+import { WORKSPACES } from "@/shared/workspaces";
+
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * MENYU ENDI ROLDAN EMAS, ISH MAKONIDAN KELADI
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * Ilgari `ROLE_SIDEBAR` xaritasi bor edi va u ikkita muammoni
+ * hal qila olmasdi:
+ *
+ *  1) DINAMIK ROLLAR. "Filial direktori" va "Resepshin" xaritada
+ *     YO'Q edi, shuning uchun ikkalasi ham xodim qatoriga tushardi —
+ *     ya'ni EGA MENYUSINING o'zini ko'rardi,
+ *     faqat ruxsat bo'yicha kesilgan holda. Bu esa talab ATAYLAB
+ *     rad etadigan model: "Admin — bu tugmalari kamaytirilgan
+ *     Super Admin emas".
+ *
+ *  2) MANZIL ≠ KONTEKST. Bitta sahifa (`/owner/students`) turli
+ *     odamlar uchun turli axborot arxitekturasida turishi kerak.
+ *     Endi qobiq MANZILDAN emas, ODAMDAN kelib chiqadi: direktor
+ *     uni FILIAL menyusi bilan, ega esa TASHKILOT menyusi bilan
+ *     ko'radi. Sahifa bitta, nusxa yo'q.
+ */
 
 const AppSidebar = ({ ...props }) => {
   return (
@@ -137,26 +148,19 @@ const Header = () => {
 const Main = () => {
   const isMobile = useIsMobile();
   const { toggleSidebar } = useSidebar();
-  const { role, roleType, multiBranch } = useAuth();
+  const { roleType, multiBranch } = useAuth();
   const { isAllBranches } = useActiveBranch();
   const { has, hasAny } = usePermissions();
+  const { workspace, nav: navItems, meta } = useWorkspace();
 
-  // MENYUNI roleType ANIQLAYDI, rol NOMI emas.
+  // YARATISH TUGMASI, QIDIRUV VA MODALLAR — o'quvchidan boshqa hammaga.
   //
-  // Rollar dinamik: "director", "buxgalter" kabi custom rollar bor va
-  // ular ROLE_SIDEBAR xaritasida YO'Q. Faqat `role` bo'yicha qaralsa
-  // menyu bo'm-bo'sh chiqardi - foydalanuvchi hamma ruxsatga ega bo'lsa ham
-  // hech narsa ko'rmasdi. roleType ("owner"/"teacher"/"student") esa
-  // har doim mavjud va custom rol qaysi panel bilan ishlashini bildiradi.
-  const navItems = ROLE_SIDEBAR[role] || ROLE_SIDEBAR[roleType] || [];
-
-  // OWNER PANELIDA ishlayaptimi. Menyu ROLE_SIDEBAR'da `staff: ownerSidebar`
-  // bilan berilgani uchun xodim (direktor, buxgalter) ham shu panelda
-  // ishlaydi - yaratish tugmasi, qidiruv va MODALLAR unga ham kerak.
-  const isOwnerPanel =
-    role === ROLES.OWNER ||
-    roleType === ROLES.OWNER ||
-    roleType === ROLE_TYPES.STAFF;
+  // Ilgari shart `roleType` ga qarardi va o'qituvchi tushib qolardi:
+  // uning "Vazifa yuborish" modali umuman mount qilinmasdi. Endi
+  // shart ISH MAKONI — o'quvchi makonidan boshqa hamma ishchi
+  // makonda yaratish amallari bo'lishi mumkin (aniq ro'yxatni
+  // `createRegistry` ruxsat bo'yicha kesadi).
+  const isWorkPanel = workspace !== WORKSPACES.STUDENT;
 
   // `permission` - bitta kalit; `permissionAnyOf` - kamida bittasi
   // yetarli (bitta sahifa ikki xil ruxsat egasiga ochiq bo'lganda).
@@ -197,14 +201,13 @@ const Main = () => {
           Sidebar har doim DashboardLayout ichida turadi, ya'ni modallar
           istalgan sahifadan ochiladi.
 
-          DIQQAT: shart `isOwnerPanel` - roleType "staff" HAM kiradi.
-          Ilgari faqat owner tekshirilardi va filial direktori (roleType
-          "staff") uchun modallar UMUMAN mount qilinmasdi: sahifadagi
-          "Yangi o'quvchi" tugmasi bosilardi, Redux holati ochilardi,
-          lekin ekranda hech narsa chiqmasdi. Menyu esa ROLE_SIDEBAR'da
-          `staff: ownerSidebar` orqali ko'rinib turardi - shuning uchun
+          DIQQAT: shart `isWorkPanel` - o'quvchidan BOSHQA hamma.
+          Ilgari faqat owner tekshirilardi va filial direktori uchun
+          modallar UMUMAN mount qilinmasdi: sahifadagi "Yangi o'quvchi"
+          tugmasi bosilardi, Redux holati ochilardi, lekin ekranda hech
+          narsa chiqmasdi. Menyu esa ko'rinib turardi - shuning uchun
           nosozlik jimgina bo'lardi. */}
-      {isOwnerPanel && (
+      {isWorkPanel && (
         <>
           {/* Qidiruv to'liq kenglikda. Tasdiqlar qo'ng'irog'i ilgari shu
               yerda, qidiruv yonida turardi - u kenglikni yer, yig'ilgan
@@ -214,15 +217,14 @@ const Main = () => {
           <SidebarGroup className="gap-2 pb-0">
             <OwnerCreateMenu />
             <OwnerGlobalSearch />
-            {/* RAHBARIYATGA QAYTISH - eng tepada, menyu ro'yxatidan
-                TASHQARIDA.
-                Yo'l ikki tomonlama bo'lishi kerak: `/admin` sarlavhasida
-                "Operatsion panel" tugmasi bor, teskarisi esa faqat
-                menyudagi bitta qator edi - o'ttizta havola orasida
-                yo'qolib ketardi. Rahbariyat kartasidan drill-down
-                qilgan odam aynan shu yerda "qanday qaytaman?" degan
-                savolga tushardi. */}
-            <ExecutiveReturnButton variant="sidebar" />
+            {/* "RAHBARIYATGA QAYTISH" TUGMASI OLIB TASHLANDI.
+                U hal qilgan muammo — "asosiy ekranga qanday qaytaman?" —
+                endi TUZILISH darajasida yo'q: har ish makonining bosh
+                sahifasi menyuning BIRINCHI qatori. Tugma esa yangi
+                modelda buzuq bo'lardi: filial direktorida
+                `admin_dashboard.read` bor, ya'ni u ko'rinardi, lekin
+                bosilganda `/admin → /org → (makon qo'riqchisi) → /branch`
+                bo'lib, odam turgan joyiga qaytardi. */}
           </SidebarGroup>
           <OwnerCreateModals />
           {/* Bildirishnoma qatlamining YAGONA mount nuqtasi: sidebar har
@@ -231,8 +233,25 @@ const Main = () => {
           <OwnerApprovalNotifier />
         </>
       )}
+      {/* ── NAVIGATSIYA LANDMARK'I ──
+          `SidebarGroup` — oddiy `<div>`. Ekran o'quvchi uchun bu
+          "matn to'plami", ya'ni foydalanuvchi menyuga SAKRAB o'ta
+          olmaydi va uni sahifadagi boshqa ro'yxatlardan ajrata
+          olmaydi. Landmark bo'lsa — bitta buyruq bilan boriladi.
+
+          `aria-label` ish makonini aytadi: ega va direktor bir xil
+          qobiqni ko'radi, lekin menyu TUZILMASI boshqa. Ekran
+          o'quvchi bilan ishlaydigan odam qaysi makonda ekanini
+          ko'rmaydi — eshitadi. */}
       <SidebarGroup>
-        <SidebarGroupLabel>Platforma</SidebarGroupLabel>
+        <nav aria-label={`${meta?.label || "Asosiy"} menyusi`}>
+        {/* GURUH YORLIG'I ENDI ISH MAKONINI AYTADI.
+            Ilgari bu yerda "Platforma" turardi — u hech qanday
+            savolga javob bermasdi va har makonda bir xil edi.
+            Endi u "Tashkilot" / "Filial" / "Ish joyim" / "Mening
+            sahifam" bo'ladi: menyu tuzilmasi nega bunday ekanini
+            bitta so'z bilan tushuntiradi. */}
+        <SidebarGroupLabel>{meta?.label || "Menyu"}</SidebarGroupLabel>
         <SidebarMenu>
           {filtered.map((item) =>
             item.sheet === "approvals" ? (
@@ -323,12 +342,13 @@ const Main = () => {
             ),
           )}
         </SidebarMenu>
+        </nav>
       </SidebarGroup>
 
       {/* FAYL XOTIRASI - faqat fayl YUKLAY oladiganlar uchun.
           O'quvchi panelida ko'rsatilmaydi: u fayl yuklamaydi, ya'ni raqam
           unga hech qanday qaror bermaydi - faqat menyuni chalg'itardi. */}
-      {(isOwnerPanel || roleType === ROLES.TEACHER) && <StorageQuota />}
+      {isWorkPanel && <StorageQuota />}
     </SidebarContent>
   );
 };

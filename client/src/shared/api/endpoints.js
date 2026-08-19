@@ -346,6 +346,8 @@ export const ENDPOINTS = Object.freeze({
     alerts: "/finance-analytics/alerts",
 
     revenueTrend: "/finance-analytics/revenue/trend",
+    // `by`: branch|course|teacher|group|room|method|student.
+    // `student` — zanjirning eng chuqur bo'g'ini (talab 34).
     revenueBy: (by) => `/finance-analytics/revenue/by/${by}`,
     paymentMethods: "/finance-analytics/payment-methods",
     refunds: "/finance-analytics/refunds",
@@ -353,6 +355,9 @@ export const ENDPOINTS = Object.freeze({
 
     expenseTrend: "/finance-analytics/expenses/trend",
     expenseBreakdown: "/finance-analytics/expenses/breakdown",
+    // "PUL QAYERGA KETDI" zanjiri: category|person|teacher|branch|group|costType.
+    // `person`/`teacher` maosh ruxsatini talab qiladi (server 403 beradi).
+    expenseBy: (by) => `/finance-analytics/expenses/by/${by}`,
     costStructure: "/finance-analytics/expenses/cost-structure",
     recurring: "/finance-analytics/expenses/recurring",
     budget: "/finance-analytics/budget",
@@ -370,8 +375,15 @@ export const ENDPOINTS = Object.freeze({
     rooms: "/finance-analytics/rooms",
     branches: "/finance-analytics/branches",
     // Bitta jurnal yozuvi tafsiloti — tahlildan hujjatgacha kuzatish.
+    intelligence: "/finance-analytics/intelligence",
+    intelligenceAlerts: "/finance-analytics/intelligence/alerts",
+    intelligenceBriefing: "/finance-analytics/intelligence/briefing",
+    intelligenceAlert: (id) => `/finance-analytics/intelligence/alerts/${id}`,
     entries: "/finance-analytics/entries",
     entry: (id) => `/finance-analytics/entries/${id}`,
+    // O'quvchining moliyaviy yo'li: to'langan / qarz / chegirma /
+    // qaytarim + guruh konteksti (talab 15).
+    studentFinance: (id) => `/finance-analytics/students/${id}`,
   },
 
   // MOLIYAVIY AMALLAR (STEP 6) — yozish.

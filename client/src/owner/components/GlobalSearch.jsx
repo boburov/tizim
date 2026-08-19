@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, GraduationCap, User, Users, Clock, X } from "lucide-react";
+import { Search, GraduationCap, User, Users, Clock, X, Wallet } from "lucide-react";
 
 import {
   Dialog,
@@ -22,6 +22,9 @@ import useDebounce from "@/shared/hooks/useDebounce";
 import { useIsMobile } from "@/shared/hooks/useMobile";
 import { cn } from "@/shared/utils/cn";
 import { formatPhone } from "@/shared/utils/formatPhone";
+import { formatMoney } from "@/shared/utils/formatMoney";
+import { formatDateUz } from "@/shared/utils/formatDate";
+import { paymentMethodLabel } from "@/shared/constants/finance";
 
 import useGlobalSearchQuery from "../hooks/useGlobalSearchQuery";
 import useRecentSearches from "../hooks/useRecentSearches";
@@ -36,6 +39,9 @@ const RECENT_ICON = {
   student: GraduationCap,
   teacher: User,
   group: Users,
+  // To'lov yozuvi ham "so'nggi qidiruv" ga tushadi — ikonkasiz u
+  // umumiy soat belgisi bilan chiqib, boshqalardan ajralmasdi.
+  payment: Wallet,
 };
 
 const GlobalSearch = ({ renderTrigger }) => {
@@ -91,6 +97,10 @@ const GlobalSearch = ({ renderTrigger }) => {
   const students = results?.students || [];
   const teachers = results?.teachers || [];
   const groups = results?.groups || [];
+  // TO'LOVLAR (talab 22). Server ularni `finance.read` siz UMUMAN
+  // qaytarmaydi — client bu yerda ruxsatni QAYTA tekshirmaydi:
+  // ikkita joyda ikkita qoida bo'lsa, ular ajralib ketardi.
+  const payments = results?.payments || [];
   const searching = term.trim().length >= 2;
 
   // Qidiruv matniga mos sahifalar (faqat qidirilayotganda)
@@ -236,6 +246,55 @@ const GlobalSearch = ({ renderTrigger }) => {
                             {title}
                           </span>
                           <span className="text-xs text-muted-foreground truncate">
+                            {subtitle}
+                          </span>
+                        </div>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              )}
+
+              {/* Server natijalari: TO'LOVLAR.
+                  O'quvchilardan KEYIN turadi: odam avval odamni
+                  qidiradi, pul esa uning konteksti. Bosilganda
+                  o'quvchining to'lov tarixi ochiladi — bitta
+                  to'lovning o'zi kamdan-kam kerak, undan ko'ra
+                  "shu odam qanday to'layapti" muhimroq. */}
+              {searching && payments.length > 0 && (
+                <CommandGroup heading="To'lovlar">
+                  {payments.map((pmt) => {
+                    const subtitle = [
+                      pmt.studentName,
+                      pmt.groupName,
+                      paymentMethodLabel(pmt.method),
+                      formatDateUz(pmt.paidAt),
+                    ].filter(Boolean).join(" · ");
+                    const url = `/owner/finance/student-payments/student/${pmt.studentId}`;
+                    return (
+                      <CommandItem
+                        key={`payment-${pmt._id}`}
+                        value={`payment-${pmt._id}`}
+                        onSelect={() =>
+                          go(url, {
+                            id: `payment-${pmt._id}`,
+                            type: "payment",
+                            title: formatMoney(pmt.amount),
+                            subtitle,
+                            url,
+                          })
+                        }
+                        className="flex items-center gap-3 py-2"
+                      >
+                        <Wallet
+                          className="size-4 shrink-0 text-muted-foreground"
+                          strokeWidth={1.75}
+                        />
+                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="truncate text-sm font-medium tabular-nums">
+                            {formatMoney(pmt.amount)}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
                             {subtitle}
                           </span>
                         </div>

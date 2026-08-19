@@ -2,11 +2,8 @@ import { useState } from "react";
 import { CreditCard, Undo2, Tag } from "lucide-react";
 
 import { cn } from "@/shared/utils/cn";
-import MetricValue from "../MetricValue";
-import ComparisonBadge from "../ComparisonBadge";
-import TrendChart from "../TrendChart";
-import AnalyticsTable from "../AnalyticsTable";
-import { QueryState } from "../StateBlock";
+import { MetricValue, ComparisonBadge, TrendChart, AnalyticsTable, QueryState } from "@/shared/components/analytics";
+import { paymentMethodLabel } from "@/shared/constants/finance";
 import {
   useRevenueTrend, useRevenueBy, usePaymentMethods,
   useRefundAnalytics, useDiscountAnalytics,
@@ -112,9 +109,15 @@ const RevenueSection = ({ filters, onFilter, onDrill }) => {
                 rows={rows}
                 rowKey={(r) => r.method}
                 defaultSort={{ key: "gross", dir: "desc" }}
-                onRowClick={(r) => onDrill?.({ type: "paymentMethod", id: r.method, name: r.method })}
+                onRowClick={(r) =>
+                  onDrill?.({ type: "paymentMethod", id: r.method, name: paymentMethodLabel(r.method) })
+                }
                 columns={[
-                  { key: "method", label: "Kanal" },
+                  {
+                    key: "method",
+                    label: "Kanal",
+                    render: (r) => paymentMethodLabel(r.method),
+                  },
                   { key: "count", label: "Soni", align: "right", kind: "number" },
                   { key: "gross", label: "Brutto", align: "right", kind: "moneyShort" },
                   { key: "fees", label: "Komissiya", align: "right", kind: "moneyShort" },

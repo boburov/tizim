@@ -35,7 +35,7 @@ const QuickActions = ({ className }) => {
   const canPay = has(PERMISSIONS.FINANCE_READ);
   const canRefund = has(PERMISSIONS.FINANCE_MANAGE_REFUNDS);
   const canTransfer = has(PERMISSIONS.FINANCE_MANAGE_TRANSFERS);
-  const canOwner = has(PERMISSIONS.FINANCE_MANAGE_ACCOUNTS);
+  const canOwner = has(PERMISSIONS.FINANCE_MANAGE_OWNER_CAPITAL);
 
   const actions = [
     canExpense && { key: "expense", icon: Receipt, label: "Chiqim", onClick: () => navigate("/owner/finance/expenses") },

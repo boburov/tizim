@@ -9,6 +9,7 @@ import {
 import AppHeader from "@/shared/components/layout/AppHeader";
 import AppSidebar from "@/shared/components/layout/AppSidebar";
 import BranchModeBanner from "@/shared/components/layout/BranchModeBanner";
+import { DrillProvider, DrillDrawer } from "@/shared/drill";
 
 /**
  * OPERATSION QOBIQ - SIDEBAR BILAN.
@@ -30,16 +31,31 @@ import BranchModeBanner from "@/shared/components/layout/BranchModeBanner";
  * ishlatayotgan kod buzilmasin.
  * ═══════════════════════════════════════════════════════════════════
  */
+/**
+ * ── DRILL PANELI QOBIQ DARAJASIDA ──
+ *
+ * `DrillProvider` shu yerda mount qilinadi, sahifada emas. Sabab:
+ * panel zanjiri (daromad → guruh → o'quvchi → yozuv) sahifa
+ * almashganda YO'QOLMASLIGI kerak va istalgan ekrandagi jadval uni
+ * ocha olishi kerak. Har sahifa o'z provider'ini qo'ysa, "bosiladigan
+ * raqam" ekranga qarab ishlaydigan-ishlamaydigan bo'lib qolardi —
+ * aynan talab 35 taqiqlaydigan holat.
+ *
+ * Sahifa faqat O'Z FILTRLARINI e'lon qiladi (`useDrillFilters`).
+ */
 const OperationalLayout = () => (
   <SidebarProvider className="relative z-10">
-    <AppSidebar />
-    <SidebarInset className="min-w-0">
-      <AppHeader />
-      <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:py-2">
-        <BranchModeBanner />
-        <Outlet />
-      </div>
-    </SidebarInset>
+    <DrillProvider>
+      <AppSidebar />
+      <SidebarInset className="min-w-0">
+        <AppHeader />
+        <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:py-2">
+          <BranchModeBanner />
+          <Outlet />
+        </div>
+      </SidebarInset>
+      <DrillDrawer />
+    </DrillProvider>
   </SidebarProvider>
 );
 

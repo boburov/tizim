@@ -53,6 +53,32 @@ export const useRoomRevenue = make(qk.financeAnalytics.rooms, financeAnalyticsAP
 export const useBranchProfit = make(qk.financeAnalytics.branches, financeAnalyticsAPI.branches);
 
 /** Kesimli so'rovlar — `by` parametri bilan. */
+/**
+ * CHIQIM KESIMI — "pul qayerga ketdi" zanjiri.
+ *
+ * `by = person|teacher` maosh ruxsatini talab qiladi va serversiz
+ * 403 qaytaradi. Bu YAXSHI: client tekshiruvni takrorlamaydi,
+ * `QueryState` esa 403 ni "ruxsat yo'q" bloki qilib ko'rsatadi.
+ */
+export const useExpenseBy = (by, filters, opts = {}) =>
+  useQuery({
+    queryKey: qk.financeAnalytics.expenseBy(by, filters),
+    queryFn: () => financeAnalyticsAPI.expenseBy(by, filters).then((r) => r.data.data),
+    ...DEFAULTS,
+    ...opts,
+  });
+
+/** O'quvchining moliyaviy yo'li (talab 15). */
+export const useStudentFinance = (studentId, filters, opts = {}) =>
+  useQuery({
+    queryKey: qk.financeAnalytics.studentFinance(studentId, filters),
+    queryFn: () =>
+      financeAnalyticsAPI.studentFinance(studentId, filters).then((r) => r.data.data),
+    enabled: Boolean(studentId),
+    ...DEFAULTS,
+    ...opts,
+  });
+
 export const useRevenueBy = (by, filters, opts = {}) =>
   useQuery({
     queryKey: qk.financeAnalytics.revenueBy(by, filters),

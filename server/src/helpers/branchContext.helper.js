@@ -372,6 +372,64 @@ export const userBranchCondition = () => {
 };
 
 /**
+ * ══════════════════════════════════════════════════════════════════════
+ * SO'RALGAN FILIAL KO'LAMDAMI?
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * ── QANDAY TESHIK YOPILADI ──
+ * Tahlil endpoint'lari filialni IKKI YO'L bilan qabul qiladi:
+ *
+ *   1) `x-branch-id` sarlavhasi → `resolveBranchScope` uni tekshiradi
+ *      va ruxsat etilmagan bo'lsa E'TIBORSIZ qoldiradi (foydalanuvchi
+ *      o'z ko'lamida qoladi).
+ *
+ *   2) `?branchId=...` so'rov parametri → u kontekstga UMUMAN
+ *      tegmasdan to'g'ri SQL bo'lagiga tushardi va ko'lam filtrini
+ *      BUTUNLAY ALMASHTIRARDI (`branchClause` dagi `explicitBranchId`).
+ *
+ * Ya'ni B filiali direktori `?branchId=<A>` deb yozib, A filialining
+ * to'liq moliyasini o'qiy olardi: daromad, chiqim, qarzdorlik,
+ * jurnal yozuvlari. Filtr NIYATI to'g'ri edi ("kesimni toraytirish"),
+ * lekin u ko'lamdan KENGROQ bo'lishi mumkinligi hisobga olinmagan.
+ *
+ * ── QOIDA ──
+ * Aniq filial faqat KO'LAMNI TORAYTIRISHI mumkin, kengaytirishi
+ * MUMKIN EMAS. Kengaytirishga urinish — 403.
+ *
+ * ── NEGA 403, "e'tiborsiz qoldirish" EMAS ──
+ * Sarlavhada e'tiborsiz qoldirish o'rinli edi: u eskirgan
+ * localStorage'dan kelishi mumkin va foydalanuvchini tizimdan
+ * qulflab qo'ymaslik kerak. Bu yerda esa parametrni FOYDALANUVCHI
+ * ATAYLAB yozadi — jim qolib boshqa raqam ko'rsatish "ma'lumot
+ * to'g'ri" degan yolg'on taassurot berardi.
+ */
+export const assertBranchInScope = (branchId) => {
+  if (!branchId) return;
+  const ctx = storage.getStore();
+  // Kontekstsiz chaqiruv (job, seed, migratsiya) — cheklov yo'q.
+  if (!ctx) return;
+
+  const requested = String(branchId);
+
+  // Aniq filial tanlangan bo'lsa, undan BOSHQASINI so'rash mumkin emas
+  // — hatto ruxsat etilganini ham: bu holda ekrandagi filial va
+  // raqamlar bir-biriga mos kelmay qolardi.
+  if (ctx.branchId) {
+    if (String(ctx.branchId) === requested) return;
+    throw new ApiError(403, "Bu filial ma'lumotiga ruxsat yo'q");
+  }
+
+  // Konsolidatsiya rejimi: hamma filialni ko'ra oladigan odam
+  // istalganini toraytirib so'rashi mumkin.
+  if (ctx.canSeeAllBranches) return;
+
+  const allowed = (ctx.allowedBranchIds || []).map(String);
+  if (allowed.includes(requested)) return;
+
+  throw new ApiError(403, "Bu filial ma'lumotiga ruxsat yo'q");
+};
+
+/**
  * XAVFSIZLIK QO'RIQCHISI: berilgan foydalanuvchi joriy filial ko'lamida
  * ekanini tasdiqlaydi, aks holda 403 bilan yiqiladi.
  *

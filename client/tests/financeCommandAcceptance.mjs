@@ -99,6 +99,22 @@ const run = async () => {
     else ok(`${label}: NaN/undefined/Infinity yo'q`);
   };
 
+  // Filial ID si NODE tomonda oldindan olinadi — 8b va 9b da kerak.
+  let demoBranchIdEarly = null;
+  try {
+    const lr = await fetch(`${API}/auth/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login: LOGIN, password: PASS }),
+    });
+    const lj = await lr.json();
+    const br = await fetch(`${API}/branches`, {
+      headers: { Authorization: `Bearer ${lj?.data?.accessToken}` },
+    });
+    const bj = await br.json();
+    const list = bj?.data?.items || bj?.data || [];
+    demoBranchIdEarly = (list.find((b) => String(b.name || "").startsWith("DEMO")) || {}).id || null;
+  } catch { demoBranchIdEarly = null; }
+
   try {
     // ══════════ LOGIN ══════════
     //
@@ -143,12 +159,46 @@ const run = async () => {
     else bad("haqiqiy pul raqami ekranda", "topilmadi");
     await assertNoBadValues("Umumiy");
 
-    // ══════════ 2) OGOHLANTIRISHLAR ══════════
-    head("2) Harakat markazi");
-    if (t.includes("Nimaga e'tibor kerak")) ok("ogohlantirish bloki bor");
-    else bad("ogohlantirish bloki bor");
-    if (/byudjetdan/i.test(t)) ok("byudjet ogohlantirishi ko'rinadi");
-    else bad("byudjet ogohlantirishi ko'rinadi", "topilmadi");
+    // ══════════ 2) MOLIYAVIY INTELLEKT ══════════
+    head("2) Harakat markazi + intellekt");
+    if (t.includes("Nimaga e'tibor kerak")) ok("intellekt bloki bor");
+    else bad("intellekt bloki bor");
+    if (/byudjetdan/i.test(t)) ok("byudjet signali ko'rinadi");
+    else bad("byudjet signali ko'rinadi", "topilmadi");
+    if (/Shoshilinch|Kuzatuv|Ijobiy/.test(t)) ok("uch bo'limga ajratilgan");
+    else bad("uch bo'limga ajratilgan", "topilmadi");
+    if (/moliyaviy xulosa/i.test(t)) ok("kunlik brifing ko'rinadi");
+    else bad("kunlik brifing ko'rinadi");
+    if (/Taqqoslash:/.test(t)) ok("taqqoslash asosi OCHIQ ko'rsatilgan");
+    else bad("taqqoslash asosi ko'rsatilgan");
+    if (/cheklangan/i.test(t)) ok("ma'lumot sifati belgisi ko'rinadi");
+    else ok("ma'lumot sifati to'liq (cheklov yo'q)");
+
+    head("2b) Signal tafsiloti — dalil birinchi");
+    const sigRow = page.locator("button", { hasText: "byudjetdan" }).first();
+    const sigReady = await sigRow.waitFor({ state: "visible", timeout: 10000 })
+      .then(() => true).catch(() => false);
+    if (sigReady) {
+      await sigRow.click();
+      if (await waitForText(page, "Dalil")) ok("signal paneli ochildi");
+      else bad("signal paneli ochildi", "«Dalil» topilmadi");
+      const sd = await bodyText();
+      if (/Byudjet \(reja\)/.test(sd)) ok("dalil jadvalida haqiqiy raqamlar");
+      else bad("dalil jadvalida haqiqiy raqamlar");
+      if (/Izoh/.test(sd)) ok("izoh bo'limi bor");
+      else bad("izoh bo'limi bor");
+      if (/Ma'lumot sifati/.test(sd)) ok("ma'lumot sifati ko'rsatilgan");
+      else bad("ma'lumot sifati ko'rsatilgan");
+      if (/Tavsiya/.test(sd)) ok("tavsiya bor");
+      else bad("tavsiya bor");
+      if (/o'zi bajarmaydi/.test(sd)) ok("«tizim o'zi bajarmaydi» ogohlantirishi");
+      else bad("«tizim o'zi bajarmaydi» ogohlantirishi");
+      if (/Qoida:/.test(sd)) ok("audit izi (qoida + davr) ko'rinadi");
+      else bad("audit izi ko'rinadi");
+      await assertNoBadValues("Signal paneli");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(800);
+    } else bad("signal qatori bosildi", "topilmadi");
 
     // ══════════ 3) DAVR FILTRI ══════════
     head("3) Davr filtri URL bilan sinxron");
@@ -187,11 +237,17 @@ const run = async () => {
         if (await waitForText(page, "Moliyaviy yozuvlar")) ok("guruh → yozuvlar ro'yxati");
         else bad("guruh → yozuvlar ro'yxati", "topilmadi");
 
-        // `count()` NI GUARD SIFATIDA ISHLATMAYMIZ: jadval qayta
+        // `count()` NI GUARD SIFATIDA ISHLATMAYMIZ: ro'yxat qayta
         // render bo'layotgan lahzada u 0 qaytarib, test yolg'on
         // yiqilardi (ilova esa to'g'ri ishlayotgan bo'lardi).
         // `waitFor` + to'g'ridan-to'g'ri klik ishonchli.
-        const entryRow = page.locator("tr", { hasText: "O'quvchi to'lovi" }).first();
+        //
+        // MARKUP O'ZGARDI: yozuvlar universal drill panelida
+        // `<ul><li><button>` bilan chiziladi, jadval bilan emas
+        // (qarang shared/drill/DrillSections.jsx → Entries).
+        const entryRow = page
+          .locator('[role="dialog"] ul li button', { hasText: "O'quvchi to'lovi" })
+          .first();
         const rowReady = await entryRow
           .waitFor({ state: "visible", timeout: 15000 })
           .then(() => true).catch(() => false);
@@ -283,6 +339,93 @@ const run = async () => {
     } else bad("tahrirlash tugmasi bor");
     await assertNoBadValues("Byudjet");
 
+    // ══════════ 8b) BYUDJET SAQLASH — TO'LIQ AYLANMA ══════════
+    //
+    // Talab: qiymatni o'zgartir → saqla → SAHIFANI QAYTA YUKLA →
+    // qiymat saqlanganini va "byudjet vs fakt" yangilanganini
+    // tekshir. Qayta yuklash MUHIM: kesh tufayli ekranda eski
+    // qiymat qolib, saqlangan deb ko'rinishi mumkin.
+    head("8b) Byudjet saqlash aylanmasi (aniq filial)");
+    if (demoBranchIdEarly) {
+      await page.evaluate((id) => localStorage.setItem("activeBranchId", id), demoBranchIdEarly);
+      await page.goto(`${BASE}/owner/finance?tab=budget`, { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(3000);
+
+      const edit = page.getByRole("button", { name: "Tahrirlash", exact: true }).first();
+      if (await edit.count()) {
+        await edit.click();
+        await waitForText(page, "Byudjetni tahrirlash");
+        // Birinchi summa maydonini yangi qiymatga o'zgartiramiz.
+        const amounts = page.locator('input[inputmode="numeric"]');
+        const n0 = await amounts.count();
+        if (n0 > 0) {
+          const target = amounts.first();
+          await target.click();
+          await target.press("Control+a");
+          await target.press("Meta+a");
+          await target.press("Backspace");
+          await target.type("31500000", { delay: 40 });
+          await page.waitForTimeout(400);
+          await page.getByRole("button", { name: "Saqlash", exact: true }).click();
+          const saved = await waitForText(page, "saqlandi", 12000);
+          if (saved) ok("byudjet saqlandi (toast)");
+          else bad("byudjet saqlandi", "toast chiqmadi");
+
+          // ── QAYTA YUKLASH ──
+          await page.waitForTimeout(1500);
+          await page.goto(`${BASE}/owner/finance?tab=budget`, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(3000);
+          const reloaded = await bodyText();
+          if (/31[\s,]?500[\s,]?000|31,5 mln|31.5 mln/.test(reloaded)) {
+            ok("QAYTA YUKLASHDAN KEYIN qiymat saqlanib qoldi", "31 500 000");
+          } else bad("qayta yuklashdan keyin qiymat saqlandi", "31 500 000 topilmadi");
+          if (/Fakt/.test(reloaded) && /Farq/.test(reloaded)) ok("byudjet vs fakt qayta hisoblandi");
+          else bad("byudjet vs fakt qayta hisoblandi");
+          await assertNoBadValues("Byudjet (saqlashdan keyin)");
+        } else bad("byudjet summa maydoni topildi", "input yo'q");
+      } else bad("byudjet tahrirlash tugmasi", "topilmadi");
+      await page.evaluate(() => localStorage.setItem("activeBranchId", "all"));
+    } else bad("byudjet aylanmasi uchun filial", "DEMO topilmadi");
+
+    // ══════════ 8c) CHIQIM → KATEGORIYA → YOZUV → PANEL ══════════
+    head("8c) Chiqim drill-down → tranzaksiya paneli");
+    await page.goto(`${BASE}/owner/finance?tab=expenses`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3000);
+    const catRow = page.locator("tr", { hasText: "Ijara" }).first();
+    const catReady = await catRow.waitFor({ state: "visible", timeout: 12000 })
+      .then(() => true).catch(() => false);
+    if (catReady) {
+      await catRow.click();
+      if (await waitForText(page, "Moliyaviy yozuvlar")) ok("kategoriya → yozuvlar ro'yxati");
+      else bad("kategoriya → yozuvlar ro'yxati", "topilmadi");
+      // YOZUVLAR RO'YXATI ENDI JADVAL EMAS, RO'YXAT.
+      //
+      // Universal drill panelida (`shared/drill/DrillSections.jsx`)
+      // yozuvlar `<ul><li><button>` bilan chiziladi — ustunlar
+      // yo'q, chunki har qator bir xil uchta narsani ko'rsatadi:
+      // turi, sanasi, summasi. Jadval bu yerda ortiqcha ramka
+      // bo'lardi va mobil ekranda gorizontal surilishga majbur
+      // qilardi.
+      const expEntry = page.locator('[role="dialog"] ul li button', { hasText: "Chiqim" }).last();
+      const expReady = await expEntry.waitFor({ state: "visible", timeout: 12000 })
+        .then(() => true).catch(() => false);
+      if (expReady) {
+        await expEntry.click();
+        if (await waitForText(page, "Qo'sh yozuv")) ok("CHIQIM tranzaksiya paneli ochildi");
+        else bad("chiqim tranzaksiya paneli ochildi");
+        const et2 = await bodyText();
+        if (/Xarajat/.test(et2)) ok("xarajat hisobi ko'rinadi");
+        else bad("xarajat hisobi ko'rinadi");
+        if (/Manba hujjat/.test(et2)) ok("manba hujjat bo'limi bor");
+        else bad("manba hujjat bo'limi bor");
+        await assertNoBadValues("Chiqim paneli");
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(600);
+      } else bad("chiqim yozuvi qatori", "ko'rinmadi");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(600);
+    } else bad("chiqim kategoriyasi qatori", "ko'rinmadi");
+
     // ══════════ 9) TEZ AMALLAR ══════════
     head("9) Tez amallar");
     t = await bodyText();
@@ -319,19 +462,7 @@ const run = async () => {
     // tahlil O'ZI yangilanadi.
     head("9b) Haqiqiy amal (aniq filial) + tahlil yangilanishi");
     // Filial ID si NODE tomonda olinadi (brauzer ichidan emas).
-    let demoBranchId = null;
-    try {
-      const lr = await fetch(`${API}/auth/login`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login: LOGIN, password: PASS }),
-      });
-      const lj = await lr.json();
-      const token = lj?.data?.accessToken;
-      const br = await fetch(`${API}/branches`, { headers: { Authorization: `Bearer ${token}` } });
-      const bj = await br.json();
-      const list = bj?.data?.items || bj?.data || [];
-      demoBranchId = (list.find((b) => String(b.name || "").startsWith("DEMO")) || {}).id || null;
-    } catch { demoBranchId = null; }
+    const demoBranchId = demoBranchIdEarly;
     if (demoBranchId) {
       await page.evaluate((id) => localStorage.setItem("activeBranchId", id), demoBranchId);
       await page.goto(`${BASE}/owner/finance`, { waitUntil: "domcontentloaded" });

@@ -1,11 +1,7 @@
 import { PieChart, Repeat } from "lucide-react";
 
 import { cn } from "@/shared/utils/cn";
-import MetricValue from "../MetricValue";
-import ComparisonBadge from "../ComparisonBadge";
-import TrendChart from "../TrendChart";
-import AnalyticsTable from "../AnalyticsTable";
-import { QueryState } from "../StateBlock";
+import { MetricValue, ComparisonBadge, TrendChart, AnalyticsTable, QueryState } from "@/shared/components/analytics";
 import {
   useExpenseTrend, useExpenseBreakdown, useCostStructure, useRecurringSplit,
 } from "../../hooks/useFinanceAnalytics";

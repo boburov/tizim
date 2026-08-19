@@ -12,15 +12,15 @@ import useObjectState from "@/shared/hooks/useObjectState";
 import {
   useOverviewData,
   useStudentFlowData,
-} from "../../../hooks/useExecutiveData";
+} from "../hooks/useExecutiveData";
 
 // Local components
-import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
+import SectionHeader from "../components/SectionHeader";
 import StudentFlowBars from "../components/StudentFlowBars";
 import AttendanceBreakdown from "../components/AttendanceBreakdown";
 
 // Navigation
-import { DRILLDOWN } from "../../../navigation/drilldown";
+import { DRILLDOWN } from "../navigation/drilldown";
 
 /**
  * O'QUV JARAYONI KESIMI.
@@ -51,7 +51,7 @@ const AcademicPage = () => {
 
   return (
     <div className="space-y-6">
-      <ExecutivePageHeader
+      <SectionHeader
         title="O'quv jarayoni"
         hint="O'quvchilar oqimi, guruhlar va davomat."
         period={period}

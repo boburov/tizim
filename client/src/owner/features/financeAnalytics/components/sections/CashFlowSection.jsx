@@ -1,11 +1,14 @@
 import { ArrowDownLeft, ArrowUpRight, Repeat, Landmark, Info } from "lucide-react";
 
 import { cn } from "@/shared/utils/cn";
-import MetricValue from "../MetricValue";
-import TrendChart from "../TrendChart";
-import AnalyticsTable from "../AnalyticsTable";
-import { LoadingBlock, ErrorBlock, QueryState } from "../StateBlock";
+import { MetricValue, TrendChart, AnalyticsTable, LoadingBlock, ErrorBlock, QueryState } from "@/shared/components/analytics";
+import { useDrill, DRILL_TYPES } from "@/shared/drill";
+// Hisob nomlari BUTUN ILOVA uchun bitta joyda (shared/constants/finance.js):
+// ilgari bu xarita shu faylda edi va tranzaksiya panelidagisidan
+// farq qilardi.
+import { accountKindLabel } from "@/shared/constants/finance";
 import { useCashFlow, useCashTrend, useAccounts } from "../../hooks/useFinanceAnalytics";
+
 
 /**
  * PUL OQIMI.
@@ -85,6 +88,7 @@ const FlowGroup = ({ title, icon: Icon, data, note, tone }) => (
 );
 
 const CashFlowSection = ({ filters }) => {
+  const { openRoot } = useDrill();
   const flow = useCashFlow(filters);
   const trend = useCashTrend(filters);
   const accounts = useAccounts(filters);
@@ -150,14 +154,29 @@ const CashFlowSection = ({ filters }) => {
           <Landmark className="size-4 text-muted-foreground" />
           Hisoblar
         </h2>
-        <QueryState query={accounts} empty={!accounts.data?.length} emptyTitle="Hisob harakati yo'q">
+        <QueryState
+          query={accounts}
+          empty={!accounts.data?.length}
+          emptyTitle="Hisob harakati yo'q"
+          emptyHint="Tanlangan davrda hech qaysi hisobga pul kirmagan va chiqmagan."
+        >
           {(rows) => (
             <AnalyticsTable
-              rows={rows}
+              rows={rows.map((r) => ({ ...r, label: accountKindLabel(r.accountKind) }))}
               rowKey={(r, i) => `${r.accountKind}-${r.branchId}-${i}`}
               defaultSort={{ key: "balance", dir: "desc" }}
+              /* HISOBNI BOSISH — talab 9. Panel o'sha hisobga tegib
+                 o'tgan barcha yozuvni ko'rsatadi va ulardan
+                 tranzaksiya hujjatiga o'tiladi. */
+              onRowClick={(r) =>
+                openRoot({
+                  type: DRILL_TYPES.ACCOUNT,
+                  id: r.accountKind,
+                  name: `${r.label}${r.branchName ? ` · ${r.branchName}` : ""}`,
+                })
+              }
               columns={[
-                { key: "accountKind", label: "Hisob" },
+                { key: "label", label: "Hisob" },
                 { key: "branchName", label: "Filial" },
                 { key: "inflow", label: "Kirim", align: "right", kind: "moneyShort" },
                 { key: "outflow", label: "Chiqim", align: "right", kind: "moneyShort" },

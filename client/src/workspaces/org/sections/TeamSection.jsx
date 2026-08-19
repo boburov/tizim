@@ -13,13 +13,13 @@ import DashboardSection, {
 import { narrow } from "@/shared/components/dashboard/dataStatus";
 
 // Hooks
-import { useOverviewData } from "../../../hooks/useExecutiveData";
+import { useOverviewData } from "../hooks/useExecutiveData";
 
 // Local components
-import ExecutivePageHeader from "../../../components/ExecutivePageHeader";
+import SectionHeader from "../components/SectionHeader";
 
 // Navigation
-import { DRILLDOWN, userHref } from "../../../navigation/drilldown";
+import { DRILLDOWN, userHref } from "../navigation/drilldown";
 
 /**
  * JAMOA KESIMI.
@@ -51,7 +51,7 @@ const TeamPage = () => {
 
   return (
     <div className="space-y-6">
-      <ExecutivePageHeader
+      <SectionHeader
         title="Jamoa"
         hint="O'qituvchilar va xodimlarning joriy holati."
       />

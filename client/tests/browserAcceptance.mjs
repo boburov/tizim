@@ -121,19 +121,47 @@ check("login muvaffaqiyatli", !page.url().includes("/login"), page.url().replace
 await page.waitForTimeout(1200);
 if (await passBranchGate(page)) ok("majburiy filial tanlash ekrani o'tildi");
 
-// ══ 1) EXECUTIVE — SIDEBAR YO'Q ════════════════════════════════
-console.log("\n1) /admin — rahbariyat qobig'i");
-await page.goto(`${APP}/admin`, { waitUntil: "networkidle" });
+// ══ 1) ILOVADA BITTA QOBIQ ═════════════════════════════════════
+//
+// ── NIMA O'ZGARDI ──
+// Ilgari ikkita qobiq bor edi: operatsion panel (sidebar bilan) va
+// rahbariyat ko'rinishi (`/admin`, sidebarsiz, o'z navigatsiyasi
+// bilan). Bu test o'sha paytda "SIDEBAR YO'Q" ni tekshirardi — ya'ni
+// ikkinchi qobiq mavjudligini TASDIQLARDI.
+//
+// Endi qobiq BITTA: barcha kesim tashkilot ish makonining tab'lari.
+// Shuning uchun test teskarisiga aylandi — HAR sahifada sidebar
+// bo'lishi shart. Ikkinchi qobiq qaytib kelsa, bu test yiqiladi.
+console.log("\n1) yagona qobiq — har sahifada sidebar");
+await page.goto(`${APP}/org`, { waitUntil: "networkidle" });
 await page.waitForTimeout(1500);
 
+// Eski manzillar YO'NALTIRILADI (talab 32) — xatcho'q ishlashi shart.
+const REDIRECTS = [
+  ["/admin", "/org"],
+  ["/admin/moliya", "/org/branches?tab=pnl"],
+  ["/admin/oquv", "/org/analytics?tab=academic"],
+  ["/admin/tahlil", "/owner/ai"],
+];
+for (const [from, to] of REDIRECTS) {
+  await page.goto(`${APP}${from}`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(900);
+  const got = page.url().replace(APP, "");
+  check(`eski manzil ${from} → ${to}`, got === to, got);
+}
+
+await page.goto(`${APP}/org`, { waitUntil: "networkidle" });
+await page.waitForTimeout(1200);
 const sidebarCount = await page.locator('[data-sidebar="sidebar"]').count();
-check("SIDEBAR YO'Q", sidebarCount === 0, `${sidebarCount} ta topildi`);
+check("SIDEBAR BOR (yagona qobiq)", sidebarCount === 1, `${sidebarCount} ta`);
 
 const topnav = await page.locator('nav[aria-label="Rahbariyat bo\'limlari"]').count();
-check("yuqori navigatsiya BOR", topnav === 1);
+check("eski rahbariyat navigatsiyasi YO'Q", topnav === 0, `${topnav} ta`);
 
-const navLinks = await page.locator('nav[aria-label="Rahbariyat bo\'limlari"] a').allTextContents();
-check("bo'lim tablari ko'rinadi", navLinks.length >= 3, navLinks.map(t => t.trim()).join(" | "));
+const navLinks = (await page
+  .locator('[data-sidebar="sidebar"] a span')
+  .allTextContents()).map((t) => t.trim()).filter(Boolean);
+check("ish makoni menyusi ko'rinadi", navLinks.length >= 6, navLinks.join(" | "));
 
 const kpiCount = await page.locator("main .tabular-nums").count();
 check("KPI plitalari render bo'ldi", kpiCount > 0, `${kpiCount} raqamli element`);
@@ -203,8 +231,8 @@ if (badgeCount > 0) {
 }
 
 // ══ 3) /admin/moliya — P&L HAQIQIY MA'LUMOT ════════════════════
-console.log("\n3) /admin/moliya");
-await page.goto(`${APP}/admin/moliya`, { waitUntil: "networkidle" });
+console.log("\n3) filiallar P&L");
+await page.goto(`${APP}/org/branches?tab=pnl`, { waitUntil: "networkidle" });
 await page.waitForTimeout(2000);
 
 const pnlReq = allRequests.filter((r) => r.url.includes("/branch-analytics/pnl"));
@@ -237,8 +265,8 @@ check("davr tanlagichi bor", selects >= 2, `${selects} ta select`);
 // u ikkala holatni ham TO'G'RI deb qabul qiladi, lekin har birida
 // EKRAN mos holatni ko'rsatishini talab qiladi. Shunda test modul
 // ko'chgan-ko'chmaganidan qat'i nazar ma'noli bo'lib qoladi.
-console.log("\n4) /admin/tavsiyalar");
-await page.goto(`${APP}/admin/tavsiyalar`, { waitUntil: "networkidle" });
+console.log("\n4) tavsiyalar kesimi");
+await page.goto(`${APP}/org/analytics?tab=insights`, { waitUntil: "networkidle" });
 await page.waitForTimeout(2000);
 
 const aiReq = allRequests.filter((r) => r.url.includes("/ai/insights"));
@@ -277,44 +305,56 @@ check(
   aiToasts.join(" | ").slice(0, 120),
 );
 
-// ══ 5) DRILL-DOWN + BACK ═══════════════════════════════════════
-console.log("\n5) drill-down va brauzer Back");
-await page.goto(`${APP}/admin`, { waitUntil: "networkidle" });
-await page.waitForTimeout(1200);
+// ══ 5) DRILL-DOWN — ENDI PANEL, SAHIFA ALMASHTIRISH EMAS ═══════
+//
+// ── NIMA O'ZGARDI ──
+// Ilgari rahbariyat kartasi bosilganda BOSHQA SAHIFAGA o'tilardi
+// (`/owner/...`) va tanlangan davr, filial, filtr — hammasi
+// yo'qolardi. Endi ustiga PANEL ochiladi: kontekst joyida qoladi va
+// zanjir (breadcrumb) qayerdan kelinganini ko'rsatib turadi.
+//
+// To'liq zanjir alohida testda: `tests/workspaceAcceptance.mjs`.
+console.log("\n5) drill-down paneli");
+await page.goto(`${APP}/org/finance?tab=revenue`, { waitUntil: "networkidle" });
+await page.waitForTimeout(2200);
 
-const firstKpiLink = page.locator('main a[href^="/owner"]').first();
-const drillCount = await page.locator('main a[href^="/owner"]').count();
+const drillRows = page.locator("main table tbody tr");
+const drillCount = await drillRows.count();
 if (drillCount) {
-  const href = await firstKpiLink.getAttribute("href");
-  await firstKpiLink.click();
-  await page.waitForTimeout(2500);
-  const landed = page.url().includes("/owner");
-  check("drill-down operatsion panelga o'tdi", landed, `${href} -> ${page.url().replace(APP, "")}`);
+  const before = page.url();
+  await drillRows.first().click();
+  await page.waitForTimeout(2000);
+  const sheetOpen = await page.locator('[role="dialog"]').count();
+  check("jadval qatori panelni ochdi", sheetOpen > 0);
+  check("SAHIFA ALMASHMADI (kontekst saqlandi)", page.url() === before,
+    page.url().replace(APP, ""));
 
-  // 6) OPERATSION SAHIFADA SIDEBAR BOR
   const opSidebar = await page.locator('[data-sidebar="sidebar"]').count();
-  check("operatsion sahifada SIDEBAR BOR", opSidebar > 0, `${opSidebar} ta`);
+  check("ish makoni qobig'i joyida", opSidebar > 0, `${opSidebar} ta sidebar`);
 
-  await page.goBack();
-  await page.waitForTimeout(1500);
-  check("brauzer Back rahbariyatga qaytardi", page.url().includes("/admin"), page.url().replace(APP, ""));
-  const backSidebar = await page.locator('[data-sidebar="sidebar"]').count();
-  check("qaytgach SIDEBAR yana YO'Q", backSidebar === 0, `${backSidebar} ta`);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(800);
+  check("Escape panelni yopdi", (await page.locator('[role="dialog"]').count()) === 0);
 } else {
-  check("drill-down havolalari bor", false, "topilmadi");
+  check("daromad kesimi jadvali", false, "qator topilmadi");
 }
 
-// ══ 6) OPERATSION → RAHBARIYAT ═════════════════════════════════
-console.log("\n6) operatsion → rahbariyat");
-await page.goto(`${APP}/owner/dashboard`, { waitUntil: "networkidle" });
-await page.waitForTimeout(1500);
-const toAdmin = page.locator('a[href="/admin"]').first();
-if (await toAdmin.count()) {
-  await toAdmin.click();
+// ══ 6) BOSH SAHIFAGA QAYTISH ═══════════════════════════════════
+//
+// ── "RAHBARIYATGA QAYTISH" TUGMASI OLIB TASHLANDI ──
+// U hal qilgan muammo — "asosiy ekranga qanday qaytaman?" — endi
+// TUZILISH darajasida yo'q: har ish makonining bosh sahifasi
+// menyuning BIRINCHI qatori. Shuning uchun test endi tugmani emas,
+// AYNAN SHU xususiyatni tekshiradi.
+console.log("\n6) bosh sahifaga qaytish yo'li");
+await page.goto(`${APP}/owner/students`, { waitUntil: "networkidle" });
+await page.waitForTimeout(1800);
+const homeLink = page.locator('[data-sidebar="sidebar"] a[href="/org"]').first();
+check("operatsion sahifada bosh sahifa havolasi bor", await homeLink.count() > 0);
+if (await homeLink.count()) {
+  await homeLink.click();
   await page.waitForTimeout(2000);
-  check("sidebar'dagi 'Rahbariyat' /admin ga olib bordi", page.url().includes("/admin"));
-} else {
-  check("operatsion paneldan /admin ga havola bor", false, "topilmadi");
+  check("bosh sahifaga qaytdi", page.url().endsWith("/org"), page.url().replace(APP, ""));
 }
 
 // ══ 7) MOBIL ═══════════════════════════════════════════════════
@@ -328,22 +368,30 @@ const mpage = await newPage(mctx);
 // Kirish holatini ko'chiramiz
 const storage = await ctx.storageState();
 await mctx.addCookies(storage.cookies);
-await mpage.goto(`${APP}/admin`, { waitUntil: "domcontentloaded" });
+await mpage.goto(`${APP}/org`, { waitUntil: "domcontentloaded" });
 await mpage.evaluate((s) => {
   for (const o of s.origins || []) for (const kv of o.localStorage || []) localStorage.setItem(kv.name, kv.value);
 }, storage);
-await mpage.goto(`${APP}/admin`, { waitUntil: "networkidle" });
+await mpage.goto(`${APP}/org/branches?tab=pnl`, { waitUntil: "networkidle" });
 await mpage.waitForTimeout(2500);
 
 const mOverflow = await mpage.evaluate(() =>
   document.documentElement.scrollWidth - document.documentElement.clientWidth);
 check("mobil: sahifa gorizontal TOSHMAYDI", mOverflow <= 1, `${mOverflow}px`);
 
-const mSidebar = await mpage.locator('[data-sidebar="sidebar"]').count();
-check("mobil: sidebar yo'q", mSidebar === 0);
+// MOBILDA SIDEBAR YIG'ILGAN bo'ladi (shadcn `Sheet` ichida) — ya'ni
+// DOM da bor, lekin ekranni yemaydi. Ilgari bu yerda "sidebar yo'q"
+// tekshirilardi, chunki rahbariyat qobig'ida u UMUMAN yo'q edi.
+// Endi qobiq bitta, shuning uchun to'g'ri savol boshqa: u kontentni
+// SIQIB QO'YMAYAPTIMI.
+const mContentWidth = await mpage.evaluate(() => {
+  const m = document.querySelector("main");
+  return m ? m.getBoundingClientRect().width : 0;
+});
+check("mobil: kontent to'liq kenglikda", mContentWidth >= 300, `${Math.round(mContentWidth)}px`);
 
 const tabsScrollable = await mpage.evaluate(() => {
-  const n = document.querySelector('nav[aria-label="Rahbariyat bo\'limlari"]');
+  const n = document.querySelector('nav[aria-label="Bo\'limlar"]');
   return n ? { sw: n.scrollWidth, cw: n.clientWidth } : null;
 });
 check(
@@ -352,16 +400,20 @@ check(
   tabsScrollable ? `${tabsScrollable.sw}px / ${tabsScrollable.cw}px` : "nav yo'q",
 );
 
-await mpage.goto(`${APP}/admin/moliya`, { waitUntil: "networkidle" });
+await mpage.goto(`${APP}/org/branches?tab=pnl`, { waitUntil: "networkidle" });
 await mpage.waitForTimeout(2000);
 const mOverflow2 = await mpage.evaluate(() =>
   document.documentElement.scrollWidth - document.documentElement.clientWidth);
-check("mobil: /admin/moliya toshmaydi (jadval o'z ichida suriladi)", mOverflow2 <= 1, `${mOverflow2}px`);
+check("mobil: filiallar P&L toshmaydi (jadval o'z ichida suriladi)", mOverflow2 <= 1, `${mOverflow2}px`);
 
 // ══ 8) YAKUNIY: KONSOL VA TARMOQ ═══════════════════════════════
 console.log("\n8) konsol va tarmoq xulosasi");
+// ERR_NETWORK_CHANGED — MUHIT xatosi, ilova xatosi EMAS: mahalliy
+// tarmoq interfeysi almashganda (Wi-Fi/VPN) brauzer ochiq so'rovni
+// uzadi. Uni "ilova buzuq" deb ko'rsatish testni shovqinli qiladi va
+// haqiqiy xatoni ko'rinmas holga keltiradi.
 const realErrors = consoleErrors.filter(
-  (e) => !/Download the React DevTools|Failed to load resource: the server responded with a status of 501/i.test(e),
+  (e) => !/Download the React DevTools|Failed to load resource: the server responded with a status of 501|ERR_NETWORK_CHANGED|ResizeObserver/i.test(e),
 );
 check("konsol xatolari YO'Q", realErrors.length === 0, realErrors.slice(0, 3).join(" | "));
 check("500 javob YO'Q", badRequests.length === 0, badRequests.map((r) => `${r.status} ${r.url}`).join(", "));

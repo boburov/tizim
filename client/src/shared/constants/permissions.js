@@ -101,6 +101,8 @@ export const PERMISSIONS = Object.freeze({
   FINANCE_VIEW_RECEIVABLES: "finance.view_receivables",
   // Byudjet KO'RISH `finance.read` ostida, BOSHQARISH alohida.
   FINANCE_MANAGE_BUDGETS: "finance.manage_budgets",
+  // Egasining puli — `manage_accounts` dan ATAYLAB ajratilgan.
+  FINANCE_MANAGE_OWNER_CAPITAL: "finance.manage_owner_capital",
 
   // Teacher salary (O'qituvchi maoshlari)
   SALARY_READ: "salary.read",

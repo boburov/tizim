@@ -26,6 +26,7 @@ import {
   Monitor,
   FileText,
   AlertTriangle,
+  Building2,
 } from "lucide-react";
 
 // Bayyina admin panelining barcha qidiriladigan sahifalari.
@@ -46,6 +47,130 @@ export const SEARCH_INDEX = [
     icon: LayoutDashboard,
     category: "Asosiy",
     permission: "admin_dashboard.read",
+  },
+
+  // ══════════════════════════════════════════════════════════════════
+  // ISH MAKONLARI — YANGI AXBOROT ARXITEKTURASI
+  //
+  // Qidiruv oynasi (⌘K) shu ro'yxatdan sahifa natijalarini beradi.
+  // Yangi ekranlar bu yerga QO'SHILMASA, ular faqat menyudan
+  // topilardi — ya'ni "qaysi modulda ekanini bilish" talab qilinardi,
+  // aynan talab 22 taqiqlaydigan holat.
+  //
+  // Ruxsat kalitlari MARSHRUT qo'riqchisi bilan bir xil: aks holda
+  // qidiruvda ko'rinib, bosilgach yo'naltirib yuborilardi.
+  // ══════════════════════════════════════════════════════════════════
+  {
+    title: "Umumiy holat",
+    description: "Butun tashkilot: daromad, foyda, pul, qarzdorlik",
+    keywords: "org, tashkilot, overview, umumiy, biznes, kpi",
+    url: "/org",
+    icon: LayoutDashboard,
+    category: "Tashkilot",
+    permission: "admin_dashboard.read",
+  },
+  {
+    title: "Filiallar",
+    description: "Filiallar ro'yxati va taqqoslash; ichida xonalar va odamlar",
+    keywords: "filial, branch, taqqoslash, compare, xona, room",
+    url: "/org/branches",
+    icon: Building2,
+    category: "Tashkilot",
+    permission: "branches.read",
+  },
+  {
+    title: "Vakolatlar",
+    description: "Kim nima qila oladi — rollar va ruxsatlar odam tilida",
+    keywords: "ruxsat, rol, permission, role, vakolat, delegatsiya, access",
+    url: "/org/permissions",
+    icon: ShieldCheck,
+    category: "Tashkilot",
+    permission: "roles.read",
+  },
+  {
+    title: "Foydalilik tahlili",
+    description: "O'qituvchi, yo'nalish, guruh, xona va filial kesimida foyda",
+    keywords: "foyda, profit, marja, margin, tahlil, analytics, foydalilik",
+    url: "/org/analytics?tab=profit",
+    icon: BarChart3,
+    category: "Tashkilot",
+    permission: "finance.view_profitability",
+  },
+  // ── RAHBARIYAT KESIMLARI (ilgari `/admin/*`) ──
+  // Ular endi tab, lekin qidiruvda ALOHIDA yozuv bo'lib qoladi:
+  // foydalanuvchi "davomat" yoki "tavsiya" deb qidiradi, "tahlil"
+  // deb emas. Tab ichida yashirilsa, ular topilmasdi.
+  {
+    title: "O'quv jarayoni kesimi",
+    description: "O'quvchilar oqimi, guruhlar va davomat — bir ekranda",
+    keywords: "o'quv, academic, oqim, davomat, chiqib ketish, churn",
+    url: "/org/analytics?tab=academic",
+    icon: GraduationCap,
+    category: "Tashkilot",
+    permission: "admin_dashboard.read",
+  },
+  {
+    title: "Jamoa kesimi",
+    description: "O'qituvchilar va xodimlarning joriy holati",
+    keywords: "jamoa, team, o'qituvchi, xodim, kadr",
+    url: "/org/analytics?tab=team",
+    icon: UserCog,
+    category: "Tashkilot",
+    permission: "admin_dashboard.read",
+  },
+  {
+    title: "Tavsiyalar",
+    description: "Tahlil aniqlagan xavflar va imkoniyatlar",
+    keywords: "tavsiya, insight, xavf, imkoniyat, risk, tahlil",
+    url: "/org/analytics?tab=insights",
+    icon: AlertTriangle,
+    category: "Tashkilot",
+    permission: "ai.read",
+  },
+  {
+    title: "Filiallar bo'yicha P&L",
+    description: "Tushum, pul oqimi va normallashtirilgan foyda",
+    keywords: "pnl, p&l, foyda, filial, moliya, hisobot",
+    url: "/org/branches?tab=pnl",
+    icon: Wallet,
+    category: "Tashkilot",
+    permission: "finance.read",
+  },
+  {
+    title: "Filiallar kesimi",
+    description: "Moliya, o'qituvchi resursi va sotuv voronkasi yonma-yon",
+    keywords: "kesim, taqqoslash, compare, sotuv, voronka, resurs",
+    url: "/org/branches?tab=cross",
+    icon: Building2,
+    category: "Tashkilot",
+    permission: "finance.read",
+  },
+  {
+    title: "Moliya",
+    description: "Daromad, chiqim, pul oqimi, qarzdorlik va byudjet",
+    keywords: "moliya, finance, pul, kassa, daromad, chiqim, byudjet",
+    url: "/org/finance",
+    icon: Wallet,
+    category: "Moliya",
+    permission: "finance.read",
+  },
+  {
+    title: "Undirish",
+    description: "Kim qancha qarzdor va qancha vaqtdan beri",
+    keywords: "qarz, qarzdor, undirish, debitorlik, receivables, collection",
+    url: "/branch/collections",
+    icon: TrendingDown,
+    category: "Moliya",
+    permission: "finance.view_receivables",
+  },
+  {
+    title: "Haftalik jadval",
+    description: "Qaysi guruh, qaysi kuni, qaysi xonada — va to'qnashuvlar",
+    keywords: "jadval, schedule, dars, xona, to'qnashuv, conflict",
+    url: "/branch/schedule",
+    icon: CalendarCheck,
+    category: "O'quv jarayoni",
+    permission: "groups.read",
   },
   {
     title: "Tahlil markazi",

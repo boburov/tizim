@@ -3,12 +3,17 @@ import requireAuth from "../../middleware/auth.js";
 import requirePermission from "../../middleware/requirePermission.js";
 import validate from "../../middleware/validate.js";
 import { PERMISSIONS } from "../../constants/permissions.js";
+import ApiError from "../../utils/ApiError.js";
+import { hasAnyPermission } from "../../helpers/permission.helper.js";
 
 import {
   analyticsFilterSchema,
   breakdownSchema,
+  expenseBreakdownSchema,
   receivablesBreakdownSchema,
   entryIdSchema,
+  alertIdSchema,
+  studentIdSchema,
 } from "./validators/analytics.validator.js";
 
 import summary from "./handlers/summary.handler.js";
@@ -18,6 +23,8 @@ import paymentMethods from "./handlers/paymentMethods.handler.js";
 import refunds from "./handlers/refunds.handler.js";
 import expenseTrend from "./handlers/expenseTrend.handler.js";
 import expenseBreakdown from "./handlers/expenseBreakdown.handler.js";
+import expenseBy from "./handlers/expenseBy.handler.js";
+import studentProfile from "./handlers/studentProfile.handler.js";
 import costStructure from "./handlers/costStructure.handler.js";
 import recurringSplit from "./handlers/recurringSplit.handler.js";
 import budget from "./handlers/budget.handler.js";
@@ -35,6 +42,7 @@ import discounts from "./handlers/discounts.handler.js";
 import alerts from "./handlers/alerts.handler.js";
 import entryDetail from "./handlers/entryDetail.handler.js";
 import entryList from "./handlers/entryList.handler.js";
+import * as intelligence from "./handlers/intelligence.handler.js";
 
 /**
  * MOLIYA TAHLILI — FAQAT O'QISH.
@@ -84,6 +92,31 @@ const canViewTeacherProfit = [
 
 const F = validate(analyticsFilterSchema);
 
+/**
+ * CHIQIM KESIMI — O'LCHOVGA QARAB RUXSAT.
+ *
+ * `category` / `costType` / `branch` — oddiy moliyaviy ko'rinish.
+ * `person` / `teacher` esa MAOSHNI ODAM BO'YICHA ochadi ("O'qituvchi A
+ * — 1.4 mln"), ya'ni `/teachers` jadvali bilan bir xil sezgirlikda.
+ *
+ * Marshrutni ikkiga bo'lish mumkin edi, lekin unda client ikkita
+ * manzilni bilishi kerak bo'lardi. O'lcham bitta parametr — tekshiruv
+ * ham shu yerda, so'rov servisga YETIB BORMASDAN oldin.
+ */
+const PAYROLL_DIMENSIONS = Object.freeze(["person", "teacher"]);
+
+const guardExpenseDimension = (req, _res, next) => {
+  if (!PAYROLL_DIMENSIONS.includes(req.params.by)) return next();
+  // `hasAnyPermission` — xom `.includes()` EMAS: u PERMISSION_IMPLIES
+  // iyerarxiyasini hisobga oladi, ya'ni qoida modul bo'ylab bir xil.
+  const ok = hasAnyPermission(req.permissions, [
+    PERMISSIONS.SALARY_READ,
+    PERMISSIONS.PAYROLL_READ,
+  ]);
+  if (ok) return next();
+  return next(new ApiError(403, "Maosh ma'lumotini ko'rish uchun ruxsat yo'q"));
+};
+
 // ── UMUMIY ──
 router.get("/summary", ...canRead, F, summary);
 
@@ -98,8 +131,27 @@ router.get("/summary", ...canRead, F, summary);
 // RO'YXAT — jamlanma bilan tafsilot orasidagi ko'prik. Maosh
 // yozuvlari ruxsatsiz foydalanuvchida ro'yxatdan CHIQARILADI.
 router.get("/entries", ...canRead, F, entryList);
+// O'QUVCHINING MOLIYAVIY YO'LI (talab 15) — zanjirning odam bo'g'ini.
+// `finance.read`: bu o'quvchining to'lov holati, maosh emas.
+router.get("/students/:id", ...canRead, validate(studentIdSchema), studentProfile);
 router.get("/entries/:id", ...canRead, validate(entryIdSchema), entryDetail);
 router.get("/alerts", ...canRead, F, alerts);
+
+// ══════════════════════════════════════════════════════════════════
+// MOLIYAVIY INTELLEKT (STEP 8)
+//
+// Determinstik qoidalar tahlil ustida ishlaydi — LLM aniqlashda
+// QATNASHMAYDI. AI faqat `/alerts/:alertId?explain=true` da va
+// faqat foydalanuvchi so'raganda matn yozadi.
+//
+// RUXSAT: `finance.read`. Maoshga bog'liq qoidalar servis ichida
+// `salary.read`/`payroll.read` bo'yicha filtrlanadi — ular umuman
+// hisoblanmaydi, ya'ni AI ga ham yetib bormaydi.
+// ══════════════════════════════════════════════════════════════════
+router.get("/intelligence", ...canRead, F, intelligence.overview);
+router.get("/intelligence/alerts", ...canRead, F, intelligence.alerts);
+router.get("/intelligence/briefing", ...canRead, F, intelligence.briefing);
+router.get("/intelligence/alerts/:alertId", ...canRead, validate(alertIdSchema), intelligence.alertDetail);
 
 // ── DAROMAD ──
 router.get("/revenue/trend", ...canRead, F, revenueTrend);
@@ -111,6 +163,14 @@ router.get("/discounts", ...canRead, F, discounts);
 // ── CHIQIM ──
 router.get("/expenses/trend", ...canRead, F, expenseTrend);
 router.get("/expenses/breakdown", ...canRead, F, expenseBreakdown);
+// "PUL QAYERGA KETDI" zanjiri: kategoriya → odam → yozuvlar (talab 10).
+router.get(
+  "/expenses/by/:by",
+  ...canRead,
+  validate(expenseBreakdownSchema),
+  guardExpenseDimension,
+  expenseBy,
+);
 router.get("/expenses/cost-structure", ...canRead, F, costStructure);
 router.get("/expenses/recurring", ...canRead, F, recurringSplit);
 router.get("/budget", ...canRead, F, budget);

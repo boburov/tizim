@@ -357,11 +357,32 @@ export const listEntries = async (filters, permissions = []) => {
   ]);
   const payrollClause = canPayroll ? Prisma.empty : Prisma.sql`AND e.kind <> 'salary'`;
 
+  /**
+   * HISOB BO'YICHA FILTR — "Bank hisobini bosdim, nima bo'lgan?"
+   *
+   * ── NEGA `EXISTS`, JOIN EMAS ──
+   * Hisob turi yozuvda emas, uning QATORLARIDA (`journal_lines`).
+   * `JOIN` qilinsa, ikki qatori bir xil hisobga tegadigan yozuv
+   * ro'yxatda IKKI MARTA chiqardi va summalar qo'shilib ketardi.
+   * `EXISTS` esa yozuvni bir marta beradi — "shu hisobga tegdimi?"
+   * degan savolga ha/yo'q javob.
+   *
+   * Kalit qat'iy ro'yxatdan (zod enum) keladi, ya'ni bu yerda
+   * in'ektsiya mumkin emas; baribir parametr sifatida uzatiladi.
+   */
+  const accountClause = filters.accountKind
+    ? Prisma.sql`AND EXISTS (
+        SELECT 1 FROM journal_lines jl
+        WHERE jl."entryId" = e.id
+          AND jl."accountKind"::text = ${String(filters.accountKind)}
+      )`
+    : Prisma.empty;
+
   const rows = await prisma.$queryRaw`
     SELECT e.id, e.kind::text AS kind, e.date, e.memo, e."totalDebit" AS amount,
            e."postingKey", e."refModel", e."paymentMethod"::text AS "paymentMethod"
     FROM journal_entries e
-    WHERE ${where} ${payrollClause}
+    WHERE ${where} ${payrollClause} ${accountClause}
     ORDER BY e.date DESC, e."createdAt" DESC
     LIMIT ${limit}
   `;

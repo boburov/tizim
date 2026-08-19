@@ -42,12 +42,16 @@ router.post(
   transfer,
 );
 
-// EGASINING PULI — `finance.manage_accounts` bilan qo'riqlanadi:
-// bu kapital/hisob amali, operatsion chiqim emas.
+// EGASINING PULI — ALOHIDA ruxsat.
+//
+// Ilgari bu `finance.manage_accounts` bilan qo'riqlanardi va bu juda
+// keng edi: hisob ochish huquqi bor xodim markazdan pul yechib olish
+// huquqini ham olardi. Endi kalit alohida va `manage_accounts` uni
+// QAMRAMAYDI.
 router.post(
   "/owner-capital",
   requireAuth,
-  requirePermission(PERMISSIONS.FINANCE_MANAGE_ACCOUNTS),
+  requirePermission(PERMISSIONS.FINANCE_MANAGE_OWNER_CAPITAL),
   validate(ownerCapitalSchema),
   ownerCapital,
 );

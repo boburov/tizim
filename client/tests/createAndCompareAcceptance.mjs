@@ -115,22 +115,32 @@ check("login muvaffaqiyatli", !page.url().includes("/login"), page.url().replace
 await page.waitForTimeout(1200);
 if (await passBranchGate(page)) ok("majburiy filial tanlash ekrani o'tildi", "Barcha filiallar");
 
-// EGA UCHUN DEFAULT - `/admin`.
-// Server `Role.defaultPath` ni birinchi o'qiydi, ya'ni bu tekshiruv
-// BAZADAGI qiymatni ham qamraydi (faqat kod konstantasini emas).
+// EGA UCHUN DEFAULT — `/org` (TASHKILOT ISH MAKONI).
+//
+// ── NEGA `/admin` EMAS ──
+// Bosh sahifa endi ROL SOZLAMASIDAN (`Role.defaultPath`) emas, ISH
+// MAKONIDAN aniqlanadi va u RUXSATLARDAN hisoblanadi
+// (`shared/workspaces/workspaces.js`). Sabab: `defaultPath` — bir
+// marta yozilib qoladigan satr, ruxsatlar esa o'zgaradi. Ular
+// ajralib ketganda odam har login'dan keyin noto'g'ri panelga
+// tushardi va buni hech qanday tekshiruv tutmasdi.
 await page.waitForTimeout(1500);
 check(
-  "ega login qilgach /admin ga tushdi",
-  new URL(page.url()).pathname.startsWith("/admin"),
+  "ega login qilgach tashkilot makoniga tushdi",
+  new URL(page.url()).pathname.startsWith("/org"),
   page.url().replace(APP, ""),
 );
 
 // ══ 1) YARATISH TUGMASI — IKKI QISM ════════════════════════════
+//
+// Tugma ilgari IKKI qobiqda edi: rahbariyat sarlavhasida va
+// operatsion sidebar'da. Endi ish makoni qobig'i BITTA, ya'ni tugma
+// ham bitta joyda — sidebar'ning tepasida.
 console.log("\n1) '+ Yaratish' split tugmasi");
-await page.goto(`${APP}/admin`, { waitUntil: "networkidle" });
+await page.goto(`${APP}/org`, { waitUntil: "networkidle" });
 await page.waitForTimeout(1200);
 
-const header = page.locator("header").first();
+const header = page.locator('[data-sidebar="sidebar"]').first();
 const createMain = header.locator('button:has-text("Yaratish")').first();
 const createChevron = header.locator('button[aria-label="Yaratish turini tanlash"]');
 
@@ -175,13 +185,13 @@ check("tugma yuzi 'Xona' ga o'zgardi", /Xona/.test(faceAfter), faceAfter);
 
 await page.reload({ waitUntil: "networkidle" });
 await page.waitForTimeout(1500);
-const faceReload = (await page.locator("header").first()
+const faceReload = (await page.locator('[data-sidebar="sidebar"]').first()
   .locator('button:has-text("Yaratish")').first()
   .innerText().catch(() => "")).replace(/\s+/g, " ").trim();
 check("sahifa qayta yuklangach ham 'Xona' (localStorage)", /Xona/.test(faceReload), faceReload);
 
 // ENG MUHIM TEKSHIRUV: chap qismni BIR MARTA bosganda modal ochiladi.
-await page.locator("header").first().locator('button:has-text("Yaratish")').first().click();
+await page.locator('[data-sidebar="sidebar"]').first().locator('button:has-text("Yaratish")').first().click();
 await page.waitForTimeout(900);
 check(
   "BIR BOSISHDA xona modali ochildi (talabning o'zagi)",
@@ -218,24 +228,23 @@ if (await branchDialog.count()) {
 await page.keyboard.press("Escape");
 await page.waitForTimeout(600);
 
-// ══ 5) TIZIM TAHLILI /admin GA KO'CHDI ═════════════════════════
-console.log("\n5) tizim tahlili — rahbariyat qobig'ida");
-const navTexts = (await page
-  .locator('nav[aria-label="Rahbariyat bo\'limlari"] a')
-  .allInnerTexts()).map((t) => t.trim());
-check("navigatsiyada 'Tizim tahlili' bor", navTexts.some((t) => /Tizim tahlili/i.test(t)),
-  navTexts.join(" | "));
-// FILIALLAR BO'LIMI YAKKA MARKAZDA ATAYLAB YO'Q.
-const hasCompareTab = navTexts.some((t) => /^Filiallar$/i.test(t));
-if (multiBranch) {
-  check("ko'p filialli markaz: 'Filiallar' bo'limi bor", hasCompareTab, navTexts.join(" | "));
-} else {
-  check("yakka markaz: 'Filiallar' bo'limi YASHIRILGAN (ataylab)",
-    !hasCompareTab, navTexts.join(" | "));
-}
+// ══ 5) TAHLIL MARKAZI — YAGONA QOBIQDA ═════════════════════════
+//
+// ── NIMA O'ZGARDI ──
+// Bu bo'lim ilgari "tizim tahlili `/admin` ga ko'chdi" ni tekshirardi
+// va buning uchun rahbariyat navigatsiyasini o'qirdi. O'sha
+// navigatsiya endi YO'Q: ikkinchi qobiq butunlay olib tashlandi.
+//
+// Yangi haqiqat: tahlil markazi `/owner/ai*` da, ish makoni qobig'i
+// ichida ochiladi. `/admin/tahlil` esa o'sha yerga yo'naltiriladi.
+console.log("\n5) tahlil markazi — yagona qobiqda");
 
-await page.goto(`${APP}/admin/tahlil`, { waitUntil: "networkidle" });
-await page.waitForTimeout(2000);
+await page.goto(`${APP}/admin/tahlil`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+check("/admin/tahlil → /owner/ai ga yo'naltirdi",
+  page.url().replace(APP, "") === "/owner/ai", page.url().replace(APP, ""));
+
+await page.waitForTimeout(1500);
 // 404 NI MATNDAN QIDIRISH NOTO'G'RI EDI: sahifa ko'chgach ichida
 // mutlaqo qonuniy "Hisobot topilmadi" kabi BO'SH HOLAT matnlari paydo
 // bo'ldi va tekshiruv yolg'on yiqila boshladi.
@@ -243,11 +252,25 @@ await page.waitForTimeout(2000);
 // Endi 404 SAHIFANING O'ZI bo'yicha aniqlanadi: `NotFoundPage`
 // sarlavhasi bormi. Bo'sh holat matni unga ta'sir qilmaydi.
 const tahlilHeading = await page.locator("main h1").first().innerText().catch(() => "");
-check("/admin/tahlil ochildi (404 emas)",
+check("tahlil markazi ochildi (404 emas)",
   /Tahlil markazi/i.test(tahlilHeading),
   `${page.url().replace(APP, "")} | h1: ${tahlilHeading.slice(0, 40)}`);
-check("/admin/tahlil da SIDEBAR yo'q",
-  (await page.locator('[data-sidebar="sidebar"]').count()) === 0);
+check("tahlil markazida SIDEBAR BOR (yagona qobiq)",
+  (await page.locator('[data-sidebar="sidebar"]').count()) === 1);
+
+// FILIALLAR — ko'p filialli markazda ish makoni menyusida bo'ladi.
+await page.goto(`${APP}/org`, { waitUntil: "networkidle" });
+await page.waitForTimeout(1500);
+const navTexts = (await page
+  .locator('[data-sidebar="sidebar"] a span')
+  .allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+const hasBranches = navTexts.some((t) => /^Filiallar$/i.test(t));
+if (multiBranch) {
+  check("ko'p filialli markaz: 'Filiallar' menyuda bor", hasBranches, navTexts.join(" | "));
+} else {
+  check("yakka markaz: 'Filiallar' menyuda bor (kartaga kirish uchun)",
+    hasBranches, navTexts.join(" | "));
+}
 
 // Operatsion sidebar'dan ESKI yozuv olib tashlanganmi
 await page.goto(`${APP}/owner/dashboard`, { waitUntil: "networkidle" });

@@ -3,9 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { cn } from "@/shared/utils/cn";
-import MetricValue from "../MetricValue";
-import AnalyticsTable from "../AnalyticsTable";
-import { LoadingBlock, ErrorBlock, QueryState } from "../StateBlock";
+import { MetricValue, AnalyticsTable, LoadingBlock, ErrorBlock, QueryState } from "@/shared/components/analytics";
 import { useReceivables, useReceivablesBy } from "../../hooks/useFinanceAnalytics";
 
 /**

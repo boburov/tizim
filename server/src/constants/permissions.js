@@ -191,6 +191,21 @@ export const PERMISSIONS = Object.freeze({
   // O'quvchi qarzlari va undirish darajasi.
   FINANCE_VIEW_RECEIVABLES: "finance.view_receivables",
 
+  // ── EGASINING KAPITALI ──
+  //
+  // `finance.manage_accounts` DAN AJRATILDI. Ilgari egasining puli
+  // shu kalit bilan qo'riqlanardi va bu juda keng edi: hisob ochish
+  // yoki nomlash huquqi berilgan xodim avtomatik ravishda markazga
+  // 20 mln "kiritish" yoki undan pul YECHIB OLISH huquqini ham
+  // olardi. Bular butunlay boshqa darajadagi amallar.
+  //
+  // MOSLIK ATAYLAB BERILMAGAN: `finance.manage_accounts` bu kalitni
+  // QAMRAMAYDI. Ya'ni yangilanishdan keyin egasining puli faqat
+  // OCHIQ ruxsat berilgan odamda ishlaydi. Bu ongli ravishda
+  // "xavfsiz tomonga og'ish": moliyaviy huquqni bexosdan kengaytirib
+  // yuborgandan ko'ra, uni qo'lda qayta berish yaxshiroq.
+  FINANCE_MANAGE_OWNER_CAPITAL: "finance.manage_owner_capital",
+
   // BYUDJET — REJA ma'lumoti, jurnalga YOZILMAYDI.
   //
   // KO'RISH `finance.read` ostida qoladi (byudjet/fakt taqqoslash
@@ -435,6 +450,10 @@ export const PERMISSION_LABELS = {
   },
   [PERMISSIONS.FINANCE_MANAGE_BUDGETS]: {
     label: "Byudjetni boshqarish",
+    group: "finance",
+  },
+  [PERMISSIONS.FINANCE_MANAGE_OWNER_CAPITAL]: {
+    label: "Egasining puli (kiritish / yechib olish)",
     group: "finance",
   },
   [PERMISSIONS.APPROVALS_DECIDE_CONFIG]: {
