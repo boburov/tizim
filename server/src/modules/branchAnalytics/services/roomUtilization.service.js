@@ -4,6 +4,21 @@ import {
   branchFilter,
   isBranchAllowed,
 } from "../../../helpers/branchContext.helper.js";
+// ASOSIY HISOB PRIMITIVLARI — MOLIYA KESIMI BILAN BIR XIL MANBA.
+//
+// `helpers/roomOccupancy.helper.js` ni `/finance-analytics/rooms` ham
+// ishlatadi. Ular nusxa bo'lsa, ikki ekran bir xil xona uchun ikki xil
+// foiz ko'rsatardi — bu allaqachon yuz bergan (103% va 100%).
+import {
+  DAYS as OCCUPANCY_DAYS,
+  DEFAULT_DAY_START,
+  DEFAULT_DAY_END,
+  toMinutes,
+  toClock,
+  overlaps,
+  mergeIntervals,
+  activeDaysOf,
+} from "../../../helpers/roomOccupancy.helper.js";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -42,58 +57,11 @@ import {
  * oladi.
  */
 
-export const DAYS = Object.freeze(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]);
-
-const DEFAULT_DAY_START = 9;
-const DEFAULT_DAY_END = 21;
-
-/** "HH:MM" → daqiqa. Yaroqsiz qiymatda `null` (0 EMAS — 0 yarim tun). */
-const toMinutes = (value) => {
-  const [h, m] = String(value || "").split(":").map(Number);
-  if (!Number.isFinite(h) || h < 0 || h > 24) return null;
-  return h * 60 + (Number.isFinite(m) ? m : 0);
-};
-
-const toClock = (minutes) => {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-};
+export const DAYS = OCCUPANCY_DAYS;
 
 const round1 = (n) => Math.round(n * 10) / 10;
 const percent = (part, whole) =>
   whole > 0 ? Math.round((part / whole) * 1000) / 10 : null;
-
-/**
- * Ikki oraliq KESISHADIMI.
- *
- * Chegara tegib turishi (11:00 tugadi — 11:00 boshlandi) to'qnashuv
- * EMAS: bu odatiy ketma-ket dars. Shuning uchun qat'iy `<`.
- */
-const overlaps = (a, b) => a.start < b.end && b.start < a.end;
-
-/**
- * Kesishuvchi oraliqlarni BIRLASHTIRADI.
- *
- * ── NEGA SHART ──
- * "Xona qancha vaqt band?" degan savolning javobi — xona EGALLANGAN
- * vaqt. Ikki guruh 10:00–12:00 da bitta xonaga yozilgan bo'lsa, xona
- * baribir ikki soat band, to'rt soat emas. Oddiy yig'indi bilan bandlik
- * 100% dan oshib ketardi va raqam ma'nosini yo'qotardi.
- *
- * Ikkilanma yozuv YO'QOLMAYDI: u `conflicts` da alohida ko'rsatiladi —
- * u boshqa savolning javobi ("jadvalda xato bormi?").
- */
-const mergeIntervals = (slots) => {
-  const sorted = [...slots].sort((a, b) => a.start - b.start);
-  const out = [];
-  for (const s of sorted) {
-    const last = out[out.length - 1];
-    if (last && s.start <= last.end) last.end = Math.max(last.end, s.end);
-    else out.push({ start: s.start, end: s.end });
-  }
-  return out;
-};
 
 /** Band oraliqlardan ish vaqti ichidagi BO'SH oynalarni chiqaradi. */
 const freeWindows = (slots, dayStartMin, dayEndMin, minMinutes) => {
@@ -185,11 +153,7 @@ export const getRoomUtilization = async ({
   // qaysi kunlarda ishlashini AYTMAYDI, tizim uni jadvaldan O'QIYDI.
   // Hech qanday dars bo'lmasa — 7 kun (nolga bo'lishdan saqlaydi va
   // bu holatda band vaqt baribir 0).
-  const scheduledDays = new Set();
-  for (const g of groups) {
-    for (const s of g.schedule || []) scheduledDays.add(s.day);
-  }
-  const activeDays = DAYS.filter((d) => scheduledDays.has(d));
+  const activeDays = activeDaysOf(groups);
   const denominatorDays = activeDays.length || DAYS.length;
 
   // ── 1) GURUH JADVALINI XONA BO'YICHA TAQSIMLASH ──
@@ -402,11 +366,27 @@ const MIN_PEAK_ROOMS = 2;
 const buildRecommendations = (rooms, demand, unassigned) => {
   const out = [];
 
+  /**
+   * BARQAROR VA NOYOB ID.
+   *
+   * ── NEGA KERAK ──
+   * Bitta xonada bir nechta to'qnashuv bo'lishi mumkin, cho'qqi soati
+   * ham bir nechta bo'ladi. `kind + roomId` bilan ular BIR XIL kalit
+   * olardi va ekran ularni bitta element deb hisoblardi (React
+   * "two children with the same key" — brauzer testi shuni ushladi:
+   * ro'yxatning bir qismi umuman chizilmasligi mumkin edi).
+   *
+   * ID SERVERDA yasaladi: ro'yxat indeksiga tayanish qayta
+   * saralashdan keyin buzilardi.
+   */
+  const push = (rec, ...parts) =>
+    out.push({ ...rec, id: [rec.kind, ...parts].filter(Boolean).join(":") });
+
   // 1) TO'QNASHUV — eng qattiq muammo, birinchi o'rinda. Bu tavsiya
   //    emas, XATO: ikki guruh bitta xonada bir vaqtda tura olmaydi.
   for (const room of rooms) {
     for (const c of room.conflicts) {
-      out.push({
+      push({
         kind: "conflict",
         severity: "high",
         roomId: room.roomId,
@@ -414,43 +394,43 @@ const buildRecommendations = (rooms, demand, unassigned) => {
         day: c.day,
         text: `${room.name}: "${c.a.name}" va "${c.b.name}" bir vaqtda (${c.a.from}–${c.a.to} / ${c.b.from}–${c.b.to})`,
         evidence: { a: c.a, b: c.b },
-      });
+      }, room.roomId, c.day, c.a.groupId, c.b.groupId, c.a.from);
     }
   }
 
   // 2) XONASIZ GURUH — jadval bor, xona yo'q. Bandlik hisobi bunday
   //    guruhni KO'RMAYDI, ya'ni raqam ham noto'g'ri bo'ladi.
   for (const g of unassigned) {
-    out.push({
+    push({
       kind: "unassigned_group",
       severity: g.lessonsPerWeek > 0 ? "high" : "low",
       groupId: g.groupId,
       text: `"${g.name}" guruhiga xona biriktirilmagan${g.lessonsPerWeek ? ` (haftasiga ${g.lessonsPerWeek} dars)` : ""}`,
       evidence: { lessonsPerWeek: g.lessonsPerWeek },
-    });
+    }, g.groupId);
   }
 
   // 3) TO'LIB KETGAN VA BO'SH XONALAR.
   for (const room of rooms) {
     if (room.utilizationPercent === null) continue;
     if (room.utilizationPercent >= HIGH_UTILIZATION) {
-      out.push({
+      push({
         kind: "overloaded",
         severity: "medium",
         roomId: room.roomId,
         roomName: room.name,
         text: `${room.name} to'lib ketgan — bandlik ${room.utilizationPercent}%`,
         evidence: { utilizationPercent: room.utilizationPercent, busyHours: room.busyHours },
-      });
+      }, room.roomId);
     } else if (room.utilizationPercent <= LOW_UTILIZATION && rooms.length > 1) {
-      out.push({
+      push({
         kind: "low_utilization",
         severity: "low",
         roomId: room.roomId,
         roomName: room.name,
         text: `${room.name} ko'p vaqt bo'sh — bandlik ${room.utilizationPercent}%`,
         evidence: { utilizationPercent: room.utilizationPercent, busyHours: room.busyHours },
-      });
+      }, room.roomId);
     }
   }
 
@@ -478,7 +458,7 @@ const buildRecommendations = (rooms, demand, unassigned) => {
       );
       if (!freeRoom) continue;
 
-      out.push({
+      push({
         kind: "free_slot_at_peak",
         severity: "low",
         roomId: freeRoom.roomId,
@@ -492,7 +472,7 @@ const buildRecommendations = (rooms, demand, unassigned) => {
           freeRooms: h.freeRooms,
           loadPercent: h.loadPercent,
         },
-      });
+      }, freeRoom.roomId, day, String(h.hour));
     }
   }
 

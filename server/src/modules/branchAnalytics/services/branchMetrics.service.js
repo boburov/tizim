@@ -1,5 +1,9 @@
 import prisma from "../../../config/prisma.js";
 import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import {
+  weeklyRoomHours,
+  WORKING_HOURS_PER_DAY,
+} from "../../../helpers/roomOccupancy.helper.js";
 import { pnl } from "./branchPnl.service.js";
 
 // NORMALIZATSIYA VA UNUMDORLIK.
@@ -22,49 +26,32 @@ import { pnl } from "./branchPnl.service.js";
 const div = (a, b) => (b > 0 ? Math.round((a / b) * 100) / 100 : null);
 
 /**
- * XONA BANDLIGI (utilization).
+ * XONA BANDLIGI — FILIAL DARAJASIDA.
  *
  * FORMULA: band slot-soat / mavjud slot-soat.
  *
- *   band     = guruhlar jadvalidagi haftalik dars soatlari yig'indisi
- *   mavjud   = xonalar soni × ish kunidagi soat × haftadagi ish kuni
+ *   band     = xonalarning EGALLANGAN haftalik soatlari
+ *   mavjud   = xonalar soni × ish kunidagi soat × FAOL kunlar
  *
- * "MAVJUD" ni aniqlash SHARTLI: markaz 09:00-21:00 (12 soat), haftada
- * 7 kun ishlaydi deb olinadi. Bu parametr - agar markaz boshqacha
- * ishlasa, uni o'zgartirish kerak (hozircha kod ichida, keyinchalik
- * filial sozlamasiga chiqariladi).
+ * ── HISOB SHU YERDA QILINMAYDI ──
+ * Band soat `helpers/roomOccupancy.helper.js` dan keladi — xuddi
+ * `/branch-analytics/rooms` va `/finance-analytics/rooms` kabi.
+ *
+ * NEGA MUHIM: ilgari uchala joy ham O'ZICHA hisoblardi va natijada
+ * ayni xona uchun uch xil foiz chiqishi mumkin edi. Ulardan ikkitasi
+ * ustma-ust yozilgan darslarni ikki barobar sanardi (bandlik 100% dan
+ * oshardi), uchalasi ham maxrajni 7 kunga qo'yardi (dushanbadan
+ * jumagacha to'la band xona "74%" ko'rsatardi).
  */
-const WORKING_HOURS_PER_DAY = 12;
-const WORKING_DAYS_PER_WEEK = 7;
-
-const parseHours = (start, end) => {
-  const [sh, sm] = String(start || "0:0").split(":").map(Number);
-  const [eh, em] = String(end || "0:0").split(":").map(Number);
-  const mins = eh * 60 + em - (sh * 60 + sm);
-  return mins > 0 ? mins / 60 : 0;
-};
-
 export const utilization = async () => {
   const scope = branchFilter();
 
-  const [rooms, groups] = await Promise.all([
+  const [rooms, occupancy] = await Promise.all([
     prisma.room.findMany({
       where: { ...scope, isActive: true, isDeleted: false },
       select: { id: true, branchId: true },
     }),
-    // ⚠ `schedule` MAJBURIY `include`: Mongo'da u hujjat ICHIDAGI
-    // massiv edi va `select` bilan birga kelardi. Prisma'da u ALOHIDA
-    // jadval (`GroupScheduleItem`) - so'ralmasa `undefined` bo'lib
-    // qoladi va bandlik soati JIMGINA 0 chiqardi.
-    prisma.group.findMany({
-      where: { ...scope, isActive: true, isDeleted: false },
-      select: {
-        id: true,
-        branchId: true,
-        roomId: true,
-        schedule: { select: { startTime: true, endTime: true } },
-      },
-    }),
+    weeklyRoomHours(),
   ]);
 
   const roomsByBranch = new Map();
@@ -73,14 +60,14 @@ export const utilization = async () => {
     roomsByBranch.set(k, (roomsByBranch.get(k) || 0) + 1);
   }
 
+  // Band soat XONA bo'yicha keladi; uni filialga xona orqali bog'laymiz.
+  // Boshqa filialning xonasi (yoki nofaol xona) hisobga olinmaydi.
+  const branchOfRoom = new Map(rooms.map((r) => [String(r.id), String(r.branchId)]));
   const busyByBranch = new Map();
-  for (const g of groups) {
-    const k = String(g.branchId);
-    let hours = 0;
-    for (const slot of g.schedule || []) {
-      hours += parseHours(slot.startTime, slot.endTime);
-    }
-    busyByBranch.set(k, (busyByBranch.get(k) || 0) + hours);
+  for (const [roomId, h] of occupancy.byRoom) {
+    const branch = branchOfRoom.get(roomId);
+    if (!branch) continue;
+    busyByBranch.set(branch, (busyByBranch.get(branch) || 0) + h.weeklyHours);
   }
 
   const branchIds = [...new Set([...roomsByBranch.keys(), ...busyByBranch.keys()])];
@@ -95,7 +82,8 @@ export const utilization = async () => {
   return branchIds.map((k) => {
     const roomCount = roomsByBranch.get(k) || 0;
     const busyHours = Math.round((busyByBranch.get(k) || 0) * 10) / 10;
-    const capacityHours = roomCount * WORKING_HOURS_PER_DAY * WORKING_DAYS_PER_WEEK;
+    const capacityHours =
+      roomCount * WORKING_HOURS_PER_DAY * occupancy.activeDaysPerWeek;
 
     return {
       branchId: k,
@@ -103,7 +91,8 @@ export const utilization = async () => {
       roomCount,
       busyHours,
       capacityHours,
-      // Xona kiritilmagan bo'lsa null - "0% bandlik" degan yolg'on
+      activeDaysPerWeek: occupancy.activeDaysPerWeek,
+      // Xona kiritilmagan bo'lsa null — "0% bandlik" degan yolg'on
       // xulosa chiqmasin.
       utilizationPercent:
         capacityHours > 0

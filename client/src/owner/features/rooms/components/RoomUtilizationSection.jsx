@@ -3,6 +3,9 @@ import { TriangleAlert, CircleAlert, Lightbulb, Clock } from "lucide-react";
 
 import { cn } from "@/shared/utils/cn";
 import { AnalyticsTable, QueryState } from "@/shared/components/analytics";
+import usePermissions from "@/shared/hooks/usePermissions";
+import { PERMISSIONS } from "@/shared/constants/permissions";
+import { useRoomRevenue } from "@/owner/features/financeAnalytics/hooks/useFinanceAnalytics";
 
 import useRoomUtilizationQuery from "../hooks/useRoomUtilizationQuery";
 
@@ -152,12 +155,40 @@ const FreeWindows = ({ room }) => {
 
 const RoomUtilizationSection = ({ branchId, enabled = true }) => {
   const [openRoom, setOpenRoom] = useState(null);
+  const { has } = usePermissions();
+
+  // DAROMAD ALOHIDA RUXSAT TALAB QILADI.
+  //
+  // Xona daromadi guruh daromadidan meros bo'ladi, ya'ni u pul
+  // ma'lumoti. Bandlik esa shunchaki jadval. Ikkalasi bitta jadvalda
+  // ko'rsatilsa ham, ruxsatlari BOSHQA — daromad ustuni ruxsatsiz
+  // odamda umuman chiqmaydi.
+  const canRevenue = has(PERMISSIONS.FINANCE_VIEW_PROFITABILITY);
 
   const params = branchId ? { branchId } : {};
   const query = useRoomUtilizationQuery(params, { enabled });
+  const revenueQuery = useRoomRevenue(params, { enabled: enabled && canRevenue });
 
   const d = query.data;
   const selected = d?.rooms?.find((r) => r.roomId === openRoom);
+
+  // ── DAROMADNI BANDLIKKA ULASH ──
+  //
+  // IKKI SO'ROV, BITTA JADVAL. Ular ID bo'yicha bog'lanadi va bu yerda
+  // HECH NARSA HISOBLANMAYDI: `revenue` ham, `revenuePerOccupiedHour`
+  // ham serverdan tayyor keladi.
+  //
+  // Band soat ikkala endpointda ham AYNI helperdan
+  // (`helpers/roomOccupancy.helper.js`) chiqadi, ya'ni "daromad/soat"
+  // yonidagi "band soat" bilan ziddiyatga tushmaydi.
+  const revenueById = new Map(
+    (revenueQuery.data?.items || []).map((i) => [String(i.roomId), i]),
+  );
+  const rows = (d?.rooms || []).map((r) => ({
+    ...r,
+    revenue: revenueById.get(r.roomId)?.revenue ?? null,
+    revenuePerHour: revenueById.get(r.roomId)?.revenuePerOccupiedHour ?? null,
+  }));
 
   return (
     <section className="space-y-5">
@@ -182,7 +213,11 @@ const RoomUtilizationSection = ({ branchId, enabled = true }) => {
                   const s = SEVERITY[rec.severity] || SEVERITY.low;
                   return (
                     <li
-                      key={`${rec.kind}-${rec.roomId || rec.groupId || i}`}
+                      // `rec.id` SERVERDA yasaladi va noyob: bitta
+                      // xonada bir nechta to'qnashuv yoki bir nechta
+                      // cho'qqi soati bo'lishi mumkin va ular
+                      // `kind + roomId` bilan bir xil kalit olardi.
+                      key={rec.id || `${rec.kind}-${i}`}
                       className="flex items-start gap-2 rounded-lg border border-border bg-card px-3 py-2"
                     >
                       <s.icon className={cn("mt-0.5 size-4 shrink-0", s.cls)} />
@@ -193,11 +228,62 @@ const RoomUtilizationSection = ({ branchId, enabled = true }) => {
               </ul>
             )}
 
+            {/* ══════════ UCHTA SAVOL, UCHTA JAVOB (talab 27) ══════════
+
+                "Qaysi xona eng ko'p daromad keltiradi / eng bo'sh /
+                eng band?" — talab aynan shu uchtasini so'raydi.
+
+                XULOSA CHIQARILMAYDI, faqat jadvalning eng chekka
+                qatori nomi bilan ko'rsatiladi. Saralash mezoni
+                yozib qo'yilgan, ya'ni raqamni tekshirib bo'ladi. */}
+            {rows.length > 1 && (
+              <div className="grid gap-2 sm:grid-cols-3">
+                {[
+                  canRevenue && {
+                    label: "Eng daromadli xona",
+                    basis: "daromad bo'yicha",
+                    room: [...rows]
+                      .filter((r) => r.revenue !== null)
+                      .sort((a, b) => b.revenue - a.revenue)[0],
+                  },
+                  {
+                    label: "Eng band xona",
+                    basis: "bandlik bo'yicha",
+                    room: [...rows]
+                      .filter((r) => r.utilizationPercent !== null)
+                      .sort((a, b) => b.utilizationPercent - a.utilizationPercent)[0],
+                  },
+                  {
+                    label: "Eng bo'sh xona",
+                    basis: "bandlik bo'yicha",
+                    room: [...rows]
+                      .filter((r) => r.utilizationPercent !== null)
+                      .sort((a, b) => a.utilizationPercent - b.utilizationPercent)[0],
+                  },
+                ]
+                  .filter((c) => c && c.room)
+                  .map((c) => (
+                    <div
+                      key={c.label}
+                      className="rounded-xl border border-border bg-card p-3"
+                    >
+                      <p className="text-xs text-muted-foreground">{c.label}</p>
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {c.room.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.room.utilizationPercent}% band · {c.basis}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            )}
+
             {/* ── XONALAR JADVALI ── */}
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-foreground">Xonalar bo'yicha</h3>
               <AnalyticsTable
-                rows={data.rooms}
+                rows={rows}
                 rowKey={(r) => r.roomId}
                 defaultSort={{ key: "utilizationPercent", dir: "desc" }}
                 onRowClick={(r) => setOpenRoom(openRoom === r.roomId ? null : r.roomId)}
@@ -213,6 +299,13 @@ const RoomUtilizationSection = ({ branchId, enabled = true }) => {
                     align: "right",
                     render: (r) => <UtilizationBar value={r.utilizationPercent} />,
                   },
+                  // DAROMAD — faqat ruxsat bo'lsa (talab 27).
+                  ...(canRevenue
+                    ? [
+                      { key: "revenue", label: "Daromad", align: "right", kind: "moneyShort" },
+                      { key: "revenuePerHour", label: "Daromad/soat", align: "right", kind: "moneyShort" },
+                    ]
+                    : []),
                 ]}
               />
             </div>
@@ -230,6 +323,31 @@ const RoomUtilizationSection = ({ branchId, enabled = true }) => {
                   </h3>
                 </div>
                 <FreeWindows room={selected} />
+
+                {/* XONAGA BIRIKTIRILGAN GURUHLAR (talab 27).
+                    "204-xona bo'sh" degan xulosani tekshirish uchun
+                    odam u yerda NIMA turganini ko'rishi kerak. */}
+                {selected.groupCount > 0 && (
+                  <div className="mt-3 space-y-1 border-t border-border pt-3">
+                    <p className="text-xs font-medium text-foreground">
+                      Bu xonadagi guruhlar ({selected.groupCount})
+                    </p>
+                    <ul className="space-y-0.5 text-xs text-muted-foreground">
+                      {Object.entries(selected.byDay || {})
+                        .filter(([, list]) => list.length)
+                        .map(([day, list]) => (
+                          <li key={day} className="flex flex-wrap gap-x-2">
+                            <span className="w-20 shrink-0">{DAY_LABEL[day]}</span>
+                            <span>
+                              {list
+                                .map((l) => `${l.groupName} (${l.from}–${l.to})`)
+                                .join(", ")}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
 
                 {selected.conflicts?.length > 0 && (
                   <div className="mt-3 space-y-1 border-t border-border pt-3">

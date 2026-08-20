@@ -133,6 +133,25 @@ Rules that follow from this, and why:
   the numbers next to it. The universal number→journal chain is a separate registry:
   `shared/drill/drillNodes.js`.
 
+### Room occupancy: one computation, three screens
+
+"How busy is this room?" is asked in three places — the branch comparison, the
+system-analysis Rooms tab, and Finance → Profitability → Rooms. All three read
+`server/src/helpers/roomOccupancy.helper.js`. Never compute it again locally.
+
+Two bugs are fixed there, and both were invisible until the numbers were compared:
+
+- **Occupied time is the *union* of intervals.** Two groups booked into one room
+  at the same hour do not make it busy for two hours. A raw `SUM(end - start)`
+  pushed utilization past 100% (103.35% was caught in a test). The double
+  booking is not lost — it surfaces separately as `conflicts`.
+- **The denominator is *active days*, read from the schedule**, not 7. A room
+  booked solid Mon–Fri showed 74%, so the system said "there is room" when
+  there was none.
+
+The API always states its own basis (`window.note`, `availableHoursBasis`), and
+the UI prints it. A percentage whose denominator is unstated cannot be checked.
+
 ### Creating records: one registry, two shells
 
 `shared/components/create/` is the single source of "what can be created":

@@ -15347,3 +15347,36 @@ A real gap: an owner inside the Admin panel has no way back to the S
 <sub>session `aa3395ce` · branch `main` · 197 ta qadam</sub>
 
 ---
+
+## 2026-08-20 12:06 — davom eting
+
+**So'rov**
+
+> davom eting
+
+**Buyruqlar (12)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/aa3395ce-36a5-44cc-9c0b-ba88eb8cfafb/scratchpad/k…
+python3 - <<'PY' import re, pathlib # `.map(` dan keyingi 6 qatorda `key=` yo'q bo'lsa — nomzod. suspects = [] for f in pathlib.Path("src").rglob("*.jsx"): line…
+sed -n 95,125p src/superadmin/components/CashflowBars.jsx; echo "──────── StudentFlowBars ────────"; sed -n 44,70p src/superadmin/components/StudentFlowBars.jsx
+python3 - <<'PY' import pathlib files = list(pathlib.Path("src/superadmin").rglob("*.jsx")) + \ list(pathlib.Path("src/owner/features/ai").rglob("*.jsx")) def s…
+python3 - <<'PY' import pathlib def span(text, start): depth, i = 0, start while i < len(text): c = text[i] if c == "(": depth += 1 elif c == ")": depth -= 1 if…
+python3 - <<'PY' import pathlib p = pathlib.Path("CLAUDE.md"); s = p.read_text() anchor = "### Creating records: one registry, two shells" section = '''### Room…
+for c in check:permission-keys check:capabilities check:data-contract check:finance-ui check:contrast check:ai-metrics; do printf "%-24s " "$c"; npm run $c 2>&1…
+cd /Users/shukrullo/Desktop/lc-total/server && for t in test:rooms test:fin-analytics test:branch-analytics test:invariants test:groups-chain test:fin-entry tes…
+curl -s -o /dev/null -w "vite: %{http_code}\n" --max-time 4 http://localhost:5173/ || echo "vite: o'chiq"; curl -s -o /dev/null -w "api: %{http_code}\n" --max-t…
+cd /Users/shukrullo/Desktop/lc-total/server && node tests/fixtures/qaUsers.mjs --clean 2>&1 | tail -2; node --input-type=module -e " import('./src/config/prisma…
+cd /Users/shukrullo/Desktop/lc-total && git status --short | wc -l | tr -d ' ' | xargs -I{} echo "o'zgargan fayl: {}"; git diff --stat | tail -1; echo "── yangi…
+git log --oneline -6 | cat; echo "── holat ──"; git status --short | head -20
+```
+
+**Natija**
+
+Vite dev serveri to'xtabdi. Xotiramda "serverni o'zim ishga tushirmayman" degan yozuv bor, shuning uchun uni kod tekshiruvi bilan topaman:
+
+Statik tekshiruv: butun `src` bo'ylab kalitsiz JSX `.map()` yo'q. Aniqroq joyni topish uchun ishlab turgan dev server kerak — uni o'zim ishga tushirmayman. Qolgan ishni yakunlayman:
+
+<sub>session `aa3395ce` · branch `main` · 13 ta qadam</sub>
+
+---

@@ -10,6 +10,7 @@ import { MODAL } from "@/shared/constants/modals";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 import { useBranchProfit } from "@/owner/features/financeAnalytics/hooks/useFinanceAnalytics";
 import useBranchesQuery from "@/owner/features/branches/hooks/useBranchesQuery";
+import { useUtilizationQuery } from "@/owner/features/branchAnalytics";
 import PageShell from "@/shared/components/page/PageShell";
 import TabNav from "@/shared/components/page/TabNav";
 import { useActiveTab } from "@/shared/components/page/tabState";
@@ -79,6 +80,10 @@ const FiliallarPage = () => {
 
   const branchList = useBranchesQuery();
   const profit = useBranchProfit({}, { enabled: canProfit });
+  // XONA BANDLIGI — talab 17 filial taqqoslashida uni ochiq so'raydi.
+  // Alohida endpoint, chunki bu PUL emas: `classes.read` yetarli va
+  // moliyaviy ruxsati yo'q odam ham binoning to'lganini ko'rishi kerak.
+  const utilization = useUtilizationQuery();
 
   const rows = profit.data?.items || [];
   const rankings = profit.data?.rankings || {};
@@ -92,6 +97,18 @@ const FiliallarPage = () => {
   // jurnal kesimi), shuning uchun ular ID bo'yicha bog'lanadi —
   // tartibga tayanish mumkin emas.
   const statsById = new Map(rows.map((r) => [String(r.branchId), r]));
+  const utilById = new Map(
+    (utilization.data || []).map((u) => [String(u.branchId), u]),
+  );
+
+  // Taqqoslash jadvali uchun ikki manbani ID bo'yicha ulaymiz.
+  // HISOB QILINMAYDI: `utilizationPercent` serverdan tayyor keladi va
+  // u xona tahlilidagi raqam bilan AYNI helperdan chiqadi
+  // (`helpers/roomOccupancy.helper.js`).
+  const compareRows = rows.map((r) => ({
+    ...r,
+    utilizationPercent: utilById.get(String(r.branchId))?.utilizationPercent ?? null,
+  }));
 
   return (
     <PageShell
@@ -185,7 +202,7 @@ const FiliallarPage = () => {
           >
             {() => (
               <AnalyticsTable
-                rows={rows}
+                rows={compareRows}
                 rowKey={(r) => r.branchId}
                 defaultSort={{ key: "contributionProfit", dir: "desc" }}
                 onRowClick={(r) => navigate(`/org/filiallar/${r.branchId}`)}
@@ -216,6 +233,7 @@ const FiliallarPage = () => {
                   { key: "revenue", label: "Daromad", align: "right", kind: "moneyShort" },
                   { key: "contributionProfit", label: "Hissa foydasi", align: "right", kind: "moneyShort" },
                   { key: "contributionMarginPercent", label: "Marja", align: "right", kind: "percent" },
+                  { key: "utilizationPercent", label: "Xona bandligi", align: "right", kind: "percent" },
                 ]}
               />
             )}

@@ -385,10 +385,11 @@ await page.goto(`${APP}/owner/students`, { waitUntil: "networkidle" });
 await page.waitForTimeout(1800);
 const backToOrg = page.locator('[data-sidebar="sidebar"] a[href="/org"]').first();
 check("Admin panelidan Super Admin paneliga yo'l bor", await backToOrg.count() > 0);
-if (await homeLink.count()) {
-  await homeLink.click();
+if (await backToOrg.count()) {
+  await backToOrg.click();
   await page.waitForTimeout(2000);
-  check("bosh sahifaga qaytdi", page.url().endsWith("/org"), page.url().replace(APP, ""));
+  check("bosilganda Super Admin paneli ochildi",
+    page.url().endsWith("/org"), page.url().replace(APP, ""));
 }
 
 // ══ 7) MOBIL ═══════════════════════════════════════════════════

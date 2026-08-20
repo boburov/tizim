@@ -137,7 +137,27 @@ check(
 // operatsion sidebar'da. Endi ish makoni qobig'i BITTA, ya'ni tugma
 // ham bitta joyda — sidebar'ning tepasida.
 console.log("\n1) '+ Yaratish' split tugmasi");
+
+// ══════════════════════════════════════════════════════════════════
+// YARATISH TUGMASI — ADMIN PANELIDA (`/owner`), `/org` DA EMAS
+// ══════════════════════════════════════════════════════════════════
+//
+// Ilgari bu tekshiruv `/org` da qidirardi, chunki o'sha paytda barcha
+// ekran BITTA qobiqda edi. Endi ikki panel bor va tugma ATAYLAB
+// operatsion panelda:
+//
+//   Admin paneli  — o'quvchi, guruh, lid, xodim yaratish (kundalik ish)
+//   Super Admin   — filial va xona yaratish, LEKIN kontekst ichida:
+//                   Filiallar → "+", filial → Xonalar → "+"
+//
+// Super Admin panelida umumiy "Yaratish" menyusi bo'lsa, u panelni
+// yana operatsion panelga aylantirardi.
 await page.goto(`${APP}/org`, { waitUntil: "networkidle" });
+await page.waitForTimeout(1200);
+const orgCreate = await page.locator('button:has-text("Yaratish")').count();
+check("Super Admin panelida umumiy 'Yaratish' menyusi YO'Q", orgCreate === 0, `${orgCreate} ta`);
+
+await page.goto(`${APP}/owner/dashboard`, { waitUntil: "networkidle" });
 await page.waitForTimeout(1200);
 
 const header = page.locator('[data-sidebar="sidebar"]').first();
@@ -255,14 +275,19 @@ const tahlilHeading = await page.locator("main h1").first().innerText().catch(()
 check("tahlil markazi ochildi (404 emas)",
   /Tahlil markazi/i.test(tahlilHeading),
   `${page.url().replace(APP, "")} | h1: ${tahlilHeading.slice(0, 40)}`);
-check("tahlil markazida SIDEBAR BOR (yagona qobiq)",
+// Tahlil markazi (`/owner/ai`) — ADMIN panelida, ya'ni uning qobig'i.
+check("tahlil markazi Admin panelining qobig'ida",
   (await page.locator('[data-sidebar="sidebar"]').count()) === 1);
 
-// FILIALLAR — ko'p filialli markazda ish makoni menyusida bo'ladi.
+// FILIALLAR — Super Admin panelining O'Z menyusida.
+//
+// Selektor `[data-sidebar]` edi (Admin panelining shadcn sidebari) va
+// `/org` da bunday element YO'Q: u alohida qobiq. Menyu yozuvi bor
+// edi-yu, test uni topa olmasdi.
 await page.goto(`${APP}/org`, { waitUntil: "networkidle" });
 await page.waitForTimeout(1500);
 const navTexts = (await page
-  .locator('[data-sidebar="sidebar"] a span')
+  .locator('nav[aria-label="Tashkilot menyusi"] a')
   .allInnerTexts()).map((t) => t.trim()).filter(Boolean);
 const hasBranches = navTexts.some((t) => /^Filiallar$/i.test(t));
 if (multiBranch) {

@@ -81,18 +81,29 @@ const run = async () => {
   if (!student) warn("demo_student_1 yo'q", "o'quvchi bo'limi tekshirilmadi");
   if (!adminA || !adminB) return;
 
-  // ── IKKI FILIAL ──
+  // ══════════════════════════════════════════════════════════════════
+  // IKKI FILIAL — ADMINNING O'Z BIRIKTIRILISHIDAN O'QILADI
+  // ══════════════════════════════════════════════════════════════════
   //
-  // Ilgari ular NOM bo'yicha topilardi (`startsWith("DEMO")`), ya'ni
-  // audit moliya demo seed'i ishlatilgan bazaga bog'langan edi va
-  // boshqa bazada butunlay ishga tushmasdi — "demo seed ishga
-  // tushirilganmi?" deb to'xtardi. Chegara tekshiruvi esa HAR QANDAY
-  // bazada ishlashi kerak.
+  // ── NEGA TAXMIN QILINMAYDI ──
+  // Bu yerda avval filial NOM bo'yicha tanlanardi ("DEMO..." yoki
+  // `isMain`). Muammo shundaki, fixture ham filialni O'ZICHA tanlaydi
+  // va ikkala mantiq ajralishi bilan audit YOLG'ON gapira boshlaydi:
+  // "A admini O'Z filialini so'raydi → 403" deb yozadi, aslida esa u
+  // BOSHQA filialni so'ragan bo'ladi. Bu aynan yuz berdi.
+  //
+  // Endi haqiqat manbai bitta: `/auth/me` qa_admin_a ga QAYSI filial
+  // biriktirilganini aytadi. B — undan boshqa istalgan filial.
+  const meA = await (await get("/auth/me", adminA)).json();
+  const A = (meA?.data?.branches || [])[0];
   const branches = ((await (await get("/branches", owner)).json()).data || [])
     .filter((b) => !b.isDeleted);
-  const A = branches.find((b) => b.isMain) || branches[0];
   const B = branches.find((b) => (b.id || b._id) !== (A?.id || A?._id));
-  if (!A || !B) { bad("ikkita filial kerak", `hozir ${branches.length} ta`); return; }
+  if (!A || !B) {
+    bad("ikkita filial kerak", `admin filiali: ${A?.name || "yo'q"}, jami: ${branches.length}`);
+    return;
+  }
+  ok("ko'lam manbai", `A = ${A.name} (adminning o'z filiali) · B = ${B.name}`);
 
   // ══════════════════════════════════════════════════════════════════
   head("1) Autentifikatsiyasiz kirish — hamma joy yopiq");

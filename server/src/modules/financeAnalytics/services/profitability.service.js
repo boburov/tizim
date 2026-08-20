@@ -1,4 +1,8 @@
 import prisma from "../../../config/prisma.js";
+import {
+  weeklyRoomHours,
+  WORKING_HOURS_PER_DAY,
+} from "../../../helpers/roomOccupancy.helper.js";
 import { Prisma } from "@prisma/client";
 import {
   parseRange, previousRange, journalWhere, branchClause, planPeriodClause,
@@ -49,8 +53,6 @@ import { nameResolvers } from "./revenue.service.js";
 //
 // `branchMetrics.service.js` bilan BIR XIL qiymatlar (ikki sahifada
 // ikki xil bandlik chiqmasligi uchun).
-const WORKING_HOURS_PER_DAY = 12;
-const WORKING_DAYS_PER_WEEK = 7;
 
 const weeksBetween = (from, to) =>
   Math.max(1, (to.getTime() - from.getTime()) / (7 * 86_400_000));
@@ -382,38 +384,41 @@ export const getRoomRevenue = async (filters = {}) => {
   const range = parseRange(filters);
   const branchId = filters.branchId || null;
   const weeks = weeksBetween(range.from, range.to);
-  const bc = branchClause('g."branchId"', branchId);
 
   const [rows, coverage] = await Promise.all([
     profitRows('e."roomId"', range, filters),
     attributionCoverage('e."roomId"', range, filters),
   ]);
 
-  const hourRows = await prisma.$queryRaw`
-    SELECT g."roomId" AS "id",
-      COALESCE(SUM(
-        EXTRACT(EPOCH FROM (gs."endTime"::time - gs."startTime"::time)) / 3600.0
-      ), 0) AS "weeklyHours",
-      COUNT(DISTINCT g.id) AS "groups"
-    FROM groups g
-    JOIN group_schedule_items gs ON gs."groupId" = g.id
-    WHERE g."isDeleted" = false AND g."isActive" = true AND g."roomId" IS NOT NULL ${bc}
-    GROUP BY g."roomId"
-  `;
-  const hoursById = new Map(hourRows.map((r) => [String(r.id), {
-    weekly: Number(r.weeklyHours) || 0, groups: Number(r.groups || 0),
-  }]));
-
+  // ══════════════════════════════════════════════════════════════════
+  // BAND SOAT — YAGONA MANBADAN (`helpers/roomOccupancy.helper.js`)
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // ── NEGA XOM SQL OLIB TASHLANDI ──
+  // Bu yerda `SUM(end - start)` turardi va u IKKI xatoga yo'l qo'yardi:
+  //
+  //   1. Bitta xonaga bir vaqtda ikki guruh yozilgan bo'lsa, band vaqt
+  //      QO'SHILARDI va bandlik 100% dan oshardi. Test buni aniq
+  //      ushladi: 101-xona "103.35%" — mavjud bo'lmagan holat.
+  //   2. Maxraj haftaning 7 kuni edi, xona tahlilida esa FAOL kunlar.
+  //      Ayni xona uchun ikki ekran ikki xil foiz ko'rsatardi.
+  //
+  // Endi ikkala endpoint AYNI helperdan o'qiydi, ya'ni ular ajralib
+  // keta olmaydi. MOLIYAVIY FORMULAGA TEGILMADI — daromad, tannarx va
+  // foyda hisobi o'zgarmagan; faqat SOAT hisobi bitta joyga yig'ildi.
+  const occupancy = await weeklyRoomHours({ branchId });
+  const hoursById = occupancy.byRoom;
+  const activeDaysPerWeek = occupancy.activeDaysPerWeek;
   const ids = [...new Set([...rows.map((r) => String(r.id)), ...hoursById.keys()])];
   const names = ids.length ? await nameResolvers.room(ids) : new Map();
   const byId = new Map(rows.map((r) => [String(r.id), r]));
 
-  const availableHours = Math.round(WORKING_HOURS_PER_DAY * WORKING_DAYS_PER_WEEK * weeks * 10) / 10;
+  const availableHours = Math.round(WORKING_HOURS_PER_DAY * activeDaysPerWeek * weeks * 10) / 10;
 
   const items = ids.map((id) => {
     const r = byId.get(id) || {};
     const h = hoursById.get(id);
-    const occupied = h ? Math.round(h.weekly * weeks * 10) / 10 : 0;
+    const occupied = h ? Math.round(h.weeklyHours * weeks * 10) / 10 : 0;
     const revenue = n(r.revenue);
     return {
       roomId: id,
@@ -435,9 +440,12 @@ export const getRoomRevenue = async (filters = {}) => {
     availableHoursBasis: {
       assumption: true,
       workingHoursPerDay: WORKING_HOURS_PER_DAY,
-      workingDaysPerWeek: WORKING_DAYS_PER_WEEK,
+      // Jadvaldan O'QILADI, taxmin qilinmaydi — `/branch-analytics/rooms`
+      // bilan aynan bir xil qoida.
+      workingDaysPerWeek: activeDaysPerWeek,
       weeksInPeriod: Math.round(weeks * 10) / 10,
-      note: "Mavjud soat TAXMIN asosida. Markaz ish rejimi boshqacha bo'lsa bandlik foizi ham o'zgaradi.",
+      note: `Mavjud soat ${WORKING_HOURS_PER_DAY} soatlik kun va haftaning `
+        + `${activeDaysPerWeek} faol kuniga nisbatan. Faol kun — jadvalda dars bo'lgan kun.`,
     },
     note: "Xona bo'yicha FOYDA hisoblanmaydi: ijara/kommunal butun binoga to'lanadi "
       + "va uni xonalarga bo'lish qoidasi yo'q. Faqat daromad va bandlik.",

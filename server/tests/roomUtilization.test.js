@@ -28,6 +28,7 @@
  */
 import prisma from "../src/config/prisma.js";
 import { getRoomUtilization } from "../src/modules/branchAnalytics/services/roomUtilization.service.js";
+import { getRoomRevenue } from "../src/modules/financeAnalytics/services/profitability.service.js";
 
 const TAG = "ZZTEST";
 const made = { rooms: [], groups: [] };
@@ -121,6 +122,36 @@ try {
   const n204 = narrow.rooms.find((r) => r.name.endsWith("204"));
   console.log(`  18:00-20:00 oynasida 204 bandligi: ${n204.utilizationPercent}%`);
   check("tor oynada 204 bandligi 2/10 = 20% (2 soat × 5 faol kun)", n204.utilizationPercent === 20, `(${n204.utilizationPercent})`);
+  // ══════════════════════════════════════════════════════════════════
+  console.log("\n── IKKI ENDPOINT BIR XIL JAVOB BERADIMI ──");
+  //
+  // Xona bandligi IKKI joyda ko'rsatiladi:
+  //   Tizim tahlili → Xonalar        (`/branch-analytics/rooms`)
+  //   Moliya → Foydalilik → Xonalar  (`/finance-analytics/rooms`)
+  //
+  // Ular BOSHQA-BOSHQA hisoblasa, foydalanuvchi bir xil xona uchun ikki
+  // xil foiz ko'radi va qaysi biri to'g'ri ekanini ayta olmaydi. Shu
+  // tekshiruv ular ajralib ketishiga yo'l qo'ymaydi.
+  const fin = await getRoomRevenue({});
+  const finById = new Map(fin.items.map((i) => [String(i.roomId), i]));
+
+  check(
+    "maxraj bir xil (faol kunlar)",
+    fin.availableHoursBasis.workingDaysPerWeek === d.window.denominatorDays,
+    `moliya ${fin.availableHoursBasis.workingDaysPerWeek} · tahlil ${d.window.denominatorDays}`,
+  );
+
+  for (const room of [r101, r204]) {
+    const f = finById.get(room.roomId);
+    if (!f) { check(`${room.name} moliya kesimida bor`, false); continue; }
+    // Yaxlitlash farqi 0.1% dan oshmasligi kerak.
+    const diff = Math.abs((f.utilizationPercent ?? 0) - (room.utilizationPercent ?? 0));
+    check(
+      `${room.name}: ikki endpoint bir xil bandlik`,
+      diff <= 0.1,
+      `moliya ${f.utilizationPercent}% · tahlil ${room.utilizationPercent}%`,
+    );
+  }
 } finally {
   console.log("\n── TOZALASH ──");
   await prisma.groupScheduleItem.deleteMany({ where: { groupId: { in: made.groups } } });

@@ -406,7 +406,32 @@ const run = async () => {
   eq("R1 da 2 guruh", r1?.groups, 2);
   eq("mavjud soat TAXMIN ekani ochiq", rm.availableHoursBasis.assumption, true);
   ok("foyda hisoblanmagani izohlangan", rm.note.slice(0, 40) + "...");
-  eq("R1 band soati R2 dan ko'p", r1.occupiedHours > r2.occupiedHours, true);
+  // ══════════════════════════════════════════════════════════════════
+  // USTMA-UST YOZUV BAND SOATNI IKKI BAROBAR QILMAYDI
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // Fixture'da G1 va G3 AYNI xonada (R1) va AYNI vaqtda
+  // (dushanba/chorshanba 09:00–11:00). Ya'ni R1 haftasiga 4 soat band —
+  // ikkita guruh yozilgani xonani 8 soat band QILMAYDI.
+  //
+  // ── BU TEKSHIRUV AVVAL TESKARI EDI ──
+  // Ilgari u "R1 band soati R2 dan ko'p" deb talab qilardi va o'tardi,
+  // chunki servis `SUM(end - start)` bilan ikkala guruhni qo'shib
+  // yuborardi. Ya'ni test XATONI kutilgan xatti-harakat sifatida
+  // muhrlab qo'ygan edi va shu sababli bandlik 100% dan oshib ketishi
+  // mumkin edi (boshqa fixture'da 103.35% ko'rindi).
+  //
+  // Endi band vaqt — oraliqlar BIRLASHMASI
+  // (`helpers/roomOccupancy.helper.js`). Ikkilanma yozuv yo'qolmaydi:
+  // u `/branch-analytics/rooms` javobida `conflicts` bo'lib chiqadi.
+  eq("R1 band soati = R2 (ustma-ust yozuv ikki barobar sanalmaydi)",
+    r1.occupiedHours === r2.occupiedHours, true);
+  // `occupiedHours` DAVR bo'yicha (haftalik × davrdagi haftalar soni),
+  // haftalik emas — shuning uchun kutilgan qiymat ham shunga ko'paytiriladi.
+  const wk = rm.availableHoursBasis.weeksInPeriod;
+  eq("R1 band soati = 4 soat/hafta × davr",
+    Math.abs(r1.occupiedHours - 4 * wk) < 0.2, true);
+  eq("bandlik 100% dan oshmaydi", r1.utilizationPercent <= 100, true);
 
   // ══════════════ 9) FILIAL ══════════════
   head("9) Filial foydaliligi");

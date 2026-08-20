@@ -66,7 +66,18 @@ if (branches.length < 2) {
   );
   process.exit(2);
 }
-const A = branches.find((b) => b.isMain) || branches[0];
+// TARTIB MUHIM: agar moliya demo seed'i ishlatilgan bo'lsa, A —
+// AYNAN o'sha filial. Sabab: audit "A admini o'z filialidagilarni
+// topadi" degan MUSBAT NAZORATGA tayanadi va u ma'lumotsiz filialda
+// bo'sh chiqadi — natijada sizish testi o'z-o'zidan yashil bo'lardi
+// va hech narsani isbotlamasdi.
+//
+// Demo bo'lmasa — asosiy filial (audit HAR QANDAY bazada ishlashi
+// kerak; ilgari bu yerda faqat "DEMO" qidirilardi va boshqa bazada
+// fixture "Cannot read properties of undefined" bilan yiqilardi).
+const A = branches.find((b) => String(b.name).startsWith("DEMO"))
+  || branches.find((b) => b.isMain)
+  || branches[0];
 const B = branches.find((b) => b.id !== A.id);
 console.log("A:", A.name, A.id, "| B:", B.name, B.id);
 

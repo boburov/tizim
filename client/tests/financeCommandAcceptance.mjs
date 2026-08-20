@@ -15,7 +15,8 @@
  * `npm run seed:finance-demo` bajarilgan bo'lishi kerak.
  *
  * ISHLATISH:
- *   BASE=http://localhost:5174 node tests/financeCommandAcceptance.mjs
+ *   node tests/financeCommandAcceptance.mjs
+ *   BASE=http://localhost:5174 node tests/financeCommandAcceptance.mjs  # boshqa port
  */
 const resolvePlaywright = async () => {
   const { existsSync, readdirSync } = await import("node:fs");
@@ -34,7 +35,10 @@ const resolvePlaywright = async () => {
   process.exit(2);
 };
 
-const BASE = process.env.BASE || "http://localhost:5174";
+// PORT: qolgan to'plamlar 5173 (vite standarti) ishlatadi. Bu yerda
+// 5174 turardi va to'plam "ERR_CONNECTION_REFUSED" bilan yiqilardi —
+// sabab esa xato xabaridan ko'rinmasdi.
+const BASE = process.env.BASE || process.env.APP_URL || "http://localhost:5173";
 // API to'g'ridan-to'g'ri (Vite proxy'siga tayanmaymiz — dev serverda
 // `/api` mavjud bo'lmasa u index.html qaytaradi va JSON parse yiqiladi).
 const API = process.env.API || "http://localhost:5000/api";
@@ -232,6 +236,15 @@ const run = async () => {
 
       const grpRow = page.locator("tr", { hasText: "IELTS-A" }).first();
       await grpRow.waitFor({ state: "visible", timeout: 12000 }).catch(() => {});
+      // PANEL SURILISH ANIMATSIYASI TUGASHINI KUTAMIZ.
+      //
+      // Playwright "element is not stable" deb 30 soniya kutib
+      // yiqilardi: qator KO'RINADI, lekin panel hali surilib
+      // kiryapti va u DOM'dan uzilib qayta ulanadi. Bu ILOVA
+      // nosozligi emas — oldingi tekshiruv ("panel ochildi")
+      // o'tgan. `force` ishlatilmaydi: u haqiqiy nosozlikni ham
+      // yashirib qo'yardi.
+      await page.waitForTimeout(700);
       if (await grpRow.count()) {
         await grpRow.click();
         if (await waitForText(page, "Moliyaviy yozuvlar")) ok("guruh → yozuvlar ro'yxati");
