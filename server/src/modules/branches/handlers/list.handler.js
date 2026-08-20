@@ -2,6 +2,7 @@ import asyncHandler from "../../../middleware/asyncHandler.js";
 import * as service from "../services/branches.service.js";
 import { parsePagination, buildMeta } from "../../../utils/pagination.js";
 import { hasPermission } from "../../../helpers/permission.helper.js";
+import { credentialScope } from "../../../helpers/credentialScope.helper.js";
 import { PERMISSIONS } from "../../../constants/permissions.js";
 
 const list = asyncHandler(async (req, res) => {
@@ -20,12 +21,24 @@ const list = asyncHandler(async (req, res) => {
   const withManagers = String(req.query.withManagers) === "true"
     && hasPermission(req.permissions, PERMISSIONS.USERS_READ);
 
+  // PAROL — QO'SHIMCHA RUXSAT VA QO'SHIMCHA KO'LAM.
+  //
+  // `users.password` bo'lsa ham, servis parolni faqat aktyorning
+  // HAQIQIY filiallari uchun qo'yadi (`credentialScope`). Ya'ni
+  // `branches.view_all` bilan butun tarmoq parolini yig'ib bo'lmaydi
+  // — bu aynan `tests/privEscalation.test.js` yopgan teshik.
+  const credentials = withManagers
+    && hasPermission(req.permissions, PERMISSIONS.USERS_PASSWORD)
+    ? credentialScope(req)
+    : null;
+
   const { items, total } = await service.list({
     search: req.query.search,
     includeInactive: req.query.includeInactive,
     allowedBranchIds: req.allowedBranchIds,
     canSeeAllBranches: req.canSeeAllBranches,
     withManagers,
+    credentials,
     page,
     limit,
   });

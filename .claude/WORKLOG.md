@@ -15447,3 +15447,182 @@ Endi hujjatlarni yangilayman:
 <sub>session `aa3395ce` · branch `main` · 52 ta qadam</sub>
 
 ---
+
+## 2026-08-20 14:01 — filial da filial login parol korinmayapti superadmin panelda
+
+**So'rov**
+
+> filial da filial login parol korinmayapti superadmin panelda
+
+**Buyruqlar (48)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && grep -n "BranchCredentials" -B 4 -A 4 src/superadmin/pages/BranchDetailPage.jsx; echo "════ tab holati ════"; sed…
+sed -n 150,175p src/superadmin/pages/BranchDetailPage.jsx; echo "════ 205-224 ════"; sed -n 205,224p src/superadmin/pages/BranchDetailPage.jsx
+cd ../server && node --input-type=module -e " import('./src/config/prisma.js').then(async ({default:p})=>{ const branches = await p.branch.findMany({where:{isDe…
+grep -rn "userInBranch" src/ | head -3; echo "════"; grep -rn "export const userInBranch" -A 25 src/helpers/*.js src/modules/branches/services/*.js 2>/dev/null …
+sed -n 14,40p src/modules/branches/services/branches.service.js
+node --input-type=module -e " import('./src/config/prisma.js').then(async ({default:p})=>{ const users = await p.user.findMany({where:{isDeleted:false},select:{…
+node --input-type=module -e " Promise.all([import('./src/modules/branches/services/branches.service.js'), import('./src/config/prisma.js')]).then(async ([svc,{d…
+sed -n 40,90p src/modules/branches/services/branches.service.js
+python3 - <<'PY' import pathlib # ── 1) SERVIS: ro'yxatga boshqaruvchi loginini qo'shish (ixtiyoriy) ── p = pathlib.Path("src/modules/branches/services/branches…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/modules/branches/handlers/list.handler.js") p.write_text('''import asyncHandler from "../../../middleware/…
+node --input-type=module -e " Promise.all([import('./src/modules/branches/services/branches.service.js')]).then(async ([svc])=>{ const r = await svc.list({ canS…
+cd ../client && python3 - <<'PY' import pathlib # ── 1) API + hook `withManagers` ni uzatsin ── p = pathlib.Path("src/owner/features/branches/hooks/useBranchesQ…
+python3 - <<'PY' import pathlib # ── Filiallar sahifasi: loginlar bilan so'raydi ── p = pathlib.Path("src/superadmin/pages/FiliallarPage.jsx"); s = p.read_text(…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/superadmin/components/BranchCredentials.jsx"); s = p.read_text() s = s.replace('''const BranchCredentials …
+cd ../server && npm run test:branch-analytics 2>&1 | grep NATIJA; node --input-type=module -e " import('./src/modules/branches/handlers/list.handler.js').then((…
+cd ../server && node --input-type=module -e " Promise.all([import('./src/helpers/permission.helper.js'), import('./src/config/prisma.js')]).then(async ([ph,{def…
+node --input-type=module -e " import('./src/config/prisma.js').then(async ({default:p})=>{ const r = await p.role.findFirst({where:{value:'teacher'},select:{per…
+python3 - <<'PY' import pathlib p = pathlib.Path("tests/workspaceSecurityAudit.mjs"); s = p.read_text() s = s.replace(''' // ── NATIJA ──''', ''' // ═══════════…
+cd /Users/shukrullo/Desktop/lc-total && git status --short | wc -l | xargs -I{} echo "fayl: {}"; curl -s -o /dev/null -w "vite %{http_code} · " --max-time 3 htt…
+cd server && node tests/fixtures/qaUsers.mjs 2>&1 | grep "^A:"; npm run audit:workspace 2>&1 | tail -16
+cd ../client && npm run test:browser-panels 2>&1 | tail -30
+cd ../client && cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/aa3395ce-36a5-44cc-9c0b-ba88eb8cfafb/scratchpad/probe.mjs <<'EOF' const { exists…
+npm run test:browser-panels 2>&1 | tail -32
+grep -rn '"/owner\|/owner/' src/shared/components/notification/NotificationBell.jsx src/shared/components/theme/ThemeToggle.jsx 2>/dev/null | head; echo "── bel…
+sed -n 1,40p src/shared/components/notification/NotificationBell.jsx
+# … yana 23 ta
+```
+
+**Natija**
+
+Tekshiraman — avval komponent qayerga tushganini va yashirin qolish sabablarini ko'ray:
+
+Joylashuvi to'g'ri. Sabab ma'lumotda bo'lishi mumkin — bazani to'g'ridan-to'g'ri tekshiraman (server kerak emas):
+
+Backend to'g'ri ishlayapti. Sabab aniq bo'ldi:
+
+Sabab: **"Asosiy filial" va "DEMO Markaz"da umuman direktor biriktirilmagan** — siz shu kartalarni ochgan bo'lsangiz, blok bo'sh chiqadi. Ikkita tuzatish qilaman — hech qachon jimgina yo'qolmasin va login kartada ham ko'rinsin:
+
+Backend tayyor. Endi klient tomoni — kartada login, va blok hech qachon jimgina yo'qolmasin:
+
+Endi ichki blok hech qachon jimgina yo'qolmasin va bo'sh holat nima qilish kerakligini aytsin:
+
+Yangi `withManagers` bayrog'i login sizdirmasligini tekshiraman va auditga qo'shaman:
+
+Serverlar qaytadan ishlayapti — endi haqiqiy tekshiruv:
+
+Panel bo'm-bo'sh chiqyapti — bu ish paytidagi xato. Konsolni o'qiyman:
+
+App aslida to'g'ri ishlayapti — konsol toza, KPI raqamlari joyida. Test vite qayta kompilyatsiya qilayotgan paytda ishga tushgan. Qaytadan:
+
+Ikkalasi ham haqiqiy topilma. Birinchisini aniqlayman:
+
+Qo'ng'iroq egani `/owner/inbox` ga yuborayotgan ekan — bu endi yopiq. Super Adminga o'z xabarlar sahifasini beraman:
+
+Endi ikkinchi topilma — test kutilmasi noto'g'ri edi, direktorda `ai.read` va foydalilik ruxsati yo'q:
+
+Bir nechta natija devor bilan bog'liq — har birini ko'rib chiqaman:
+
+Eski `/admin/tahlil` havolasi ikkala auditoriyaga bitta manzil bilan xizmat qila olmaydi — uni rolga qarab yo'naltiraman:
+
+Hamma to'plam yashil. Yakuniy to'liq tekshiruv:
+
+<sub>session `aa3395ce` · branch `main` · 62 ta qadam</sub>
+
+---
+
+## 2026-08-20 14:52 — filial cardni ozida parol va login korinib tursin
+
+**So'rov**
+
+> filial cardni ozida parol va login korinib tursin
+
+**Buyruqlar (15)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && cat src/helpers/credentialScope.helper.js; echo "── resolveActorBranchIds ──"; grep -n "resolveActorBranchIds\|as…
+grep -n "export const resolveActorBranchIds" -A 30 src/helpers/branchAccess.helper.js | head -40
+grep -rn "resolveActorBranchIds" src/ | head -3; grep -rn "const resolveActorBranchIds" -A 25 src/modules/users/services/users.service.js | head -32
+ls tests/privEscalation.test.js 2>/dev/null && npm run test:priv 2>&1 | grep -E "NATIJA|❌" | tail -3
+python3 - <<'PY' import pathlib # ── 1) Ko'lam qoidasi bitta joyga: credentialScope.helper.js ── p = pathlib.Path("src/helpers/credentialScope.helper.js"); s = …
+python3 - <<'PY' import pathlib p = pathlib.Path("src/modules/branches/services/branches.service.js"); s = p.read_text() s = s.replace(''' withManagers = false,…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/modules/branches/handlers/list.handler.js"); s = p.read_text() s = s.replace('''import { hasPermission } f…
+node --input-type=module -e " import('./src/modules/branches/services/branches.service.js').then(async (svc)=>{ try { await svc.list({ canSeeAllBranches: true, …
+node --input-type=module -e " import('./src/config/prisma.js').then(async ({default:p})=>{ const u = await p.user.findFirst({ where:{role:'director'}, select:{ …
+python3 - <<'PY' import pathlib p = pathlib.Path("src/modules/branches/services/branches.service.js"); s = p.read_text() s = s.replace(''' select: { id: true, u…
+node --input-type=module -e " Promise.all([import('./src/modules/branches/services/branches.service.js'), import('./src/config/prisma.js')]).then(async ([svc,{d…
+cd ../client && python3 - <<'PY' import pathlib p = pathlib.Path("src/superadmin/components/BranchCard.jsx"); s = p.read_text() s = s.replace(''' {managers !== …
+cd ../server && python3 - <<'PY' import pathlib p = pathlib.Path("tests/workspaceSecurityAudit.mjs"); s = p.read_text() s = s.replace(''' // Bayroqsiz so'rovda …
+until curl -s -o /dev/null --max-time 3 http://localhost:5000/api/auth/me; do sleep 3; done; npm run audit:workspace 2>&1 | tail -16
+cd ../client && python3 - <<'PY' import pathlib p = pathlib.Path("tests/panelAcceptance.mjs"); s = p.read_text() s = s.replace(''' const addBranch = page.locato…
+```
+
+**Natija**
+
+Endi ro'yxatga parolni ham qo'shaman — **ayni** ko'lam qoidasi bilan:
+
+Chegara to'g'ri ishlayapti. Endi kartada parolni ko'rsataman:
+
+Endi kartani ko'z bilan tekshiraman:
+
+Bajarildi — kartada login va parol yonma-yon turibdi: `salombek · salomov`, `boburov · 123456`.
+
+## Nima qilindi
+
+**Parol ro'yxat javobiga qo'shildi**, har filial uchun alohida so'rov emas. `/branches?withManagers=true` endi bitta so'rovda login **va** parolni qaytaradi — aks holda 10 ta filial 10 ta qo'shimcha so'rov degani bo'lardi.
+
+Kartada eng ko'pi bilan ikkita boshqaruvchi ko'rsatiladi, qolgani `+N boshqaruvchi` bo'lib yig'iladi (kartani cho'zib yubormaslik uchun).
+
+## Chegara — bu yerda ehtiyot bo'lish kerak edi
+
+Parolni ro'yxatga qo'shish oson yo'l bilan **allaqachon yopilgan teshikni qayta ochishi mumkin edi**. Kodda `credentialScope.helper.js` bor va u aniq aytadi: `branches.view_all` — bu *hisobot* ruxsati, u parolga o'tkazgich bo'lmasligi kerak; aks holda `view_all` + `admin_access` juftligi butun tarmoq parollarini ochib berardi (`privEscalation.test.js` shu ssenariyni yopgan).
+
+Shuning uchun:
+
+- Parol **faqat** `users.password` ruxsati bilan qo'shiladi;
+- va faqat aktyorning **haqiqiy** filiallari doirasida — ro'yxat bazadan qayta o'qiladi, `req.allowedBranchIds` ga ishonilmaydi (chunki `view_all` o'sha ro'yxatning o'zini kengaytiradi);
+- haqiqiy `owner` — cheklovsiz.
+
+Qoida ikki nusxada bo'lmasligi uchun `resolveActorBranchIds` `users.service.js` dan `credentialScope.helper.js` ga ko'chirildi — endi `/users/:id/password` ham, filiallar ro'yxati ham **ayni** funksiyani chaqiradi.
+
+Auditga uchta yangi tekshiruv qo'shdim, hammasi o'tdi:
+
+```
+✅ A admini: BEGONA filial paroli kelmadi
+✅ xodim: boshqaruvchi ma'lumoti umuman kelmadi
+✅ bayroqsiz so'rovda `managers` maydoni YO'Q
+```
+
+Bazada ham t
+
+…(qisqartirildi)
+
+<sub>session `aa3395ce` · branch `main` · 19 ta qadam</sub>
+
+---
+
+## 2026-08-20 15:03 — filiallni ochirish va tahrirlashni ham qoshing
+
+**So'rov**
+
+> filiallni ochirish va tahrirlashni ham qoshing
+
+**Buyruqlar (13)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "BRANCH_EDIT\|BRANCH_DELETE\|BRANCH_FREEZE\|BRANCH_DELEGATION" src/ | grep -v "constants/modals" | head …
+sed -n 1,40p src/owner/features/branches/components/modals/BranchDeleteModal.jsx; echo "══ EDIT ══"; sed -n 1,35p src/owner/features/branches/components/modals/…
+cd ../server && grep -n "export const softRemove" -A 40 src/modules/branches/services/branches.service.js | head -45
+cd ../client && sed -n 36,60p src/owner/features/branches/components/modals/BranchDeleteModal.jsx
+python3 - <<'PY' import pathlib # ── 1) O'chirish modaliga `onDeleted` (ixtiyoriy) ── p = pathlib.Path("src/owner/features/branches/components/modals/BranchDele…
+grep -n "ModalWrapper\|useNavigate\|const navigate" src/superadmin/pages/BranchDetailPage.jsx | head
+grep -n "useBranchUpdateMutation\|useBranchRemoveMutation" -A 14 src/owner/features/branches/hooks/useBranchMutations.js | grep -n "invalidate\|mutationFn\|toas…
+python3 - <<'PY' import pathlib p = pathlib.Path("tests/panelAcceptance.mjs"); s = p.read_text() s = s.replace(''' // ── KIRISH MA'LUMOTLARI (filial logini) ──'…
+sed 's/\x1b\[[0-9;]*m//g' /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/aa3395ce-36a5-44cc-9c0b-ba88eb8cfafb/tasks/b62p2du86.output | grep -E "❌|✅ t…
+npm run test:browser-panels > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/aa3395ce-36a5-44cc-9c0b-ba88eb8cfafb/scratchpad/panels.log 2>&1; sed 's/…
+node --input-type=module -e " const login = async (u,p)=>{const r=await fetch('http://localhost:5000/api/auth/login',{method:'POST',headers:{'Content-Type':'app…
+cd ../server && npm run audit:workspace 2>&1 | grep NATIJA; cd ../client && npx eslint src/ 2>&1 | tail -2; npx vite build 2>&1 | grep "built in"; node --input-…
+cd ../server && node tests/fixtures/qaUsers.mjs --clean 2>&1 | tail -1; cd /Users/shukrullo/Desktop/lc-total && git status --short | wc -l | xargs -I{} echo "co…
+```
+
+**Natija**
+
+`Tahrirlash` tugmasi bosilganda hech narsa ochilmayapti ekan — modal Super Admin panelida mount qilinmagan. Tekshiraman:
+
+Endi brauzerda haqiqiy oqimni sinayman — tahrirlash formasi to'ladimi va o'chirish ishlaydimi:
+
+<sub>session `aa3395ce` · branch `main` · 16 ta qadam</sub>
+
+---

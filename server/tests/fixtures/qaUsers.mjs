@@ -87,7 +87,12 @@ const pick = (keys) => keys.map(k=>byKey.get(k)).filter(Boolean).map(id=>({id}))
 
 const ADMIN_KEYS = ["admin_dashboard.read","students.read","students.create","students.update",
   "groups.read","groups.create","groups.update","groups.manage_students","attendance.read","attendance.record",
-  "teachers.read","users.read","finance.read","finance.pay","finance.view_receivables","branches.read","classes.read","leads.read"];
+  "teachers.read","users.read","finance.read","finance.pay","finance.view_receivables","branches.read","leads.read",
+  // XONA YARATISH — direktorning haqiqiy ishi (talab 11/32).
+  // Faqat `classes.read` bo'lsa, "Xona qo'shish" kartasi umuman
+  // chizilmaydi va brauzer testi o'sha oqimni JIMGINA o'tkazib
+  // yuborardi — ya'ni qoplama bordek ko'rinib, aslida yo'q edi.
+  "classes.read","classes.create","classes.update","classes.delete"];
 const STAFF_KEYS = ["leads.read","leads.create","leads.update"];
 
 const upsertRole = async (value,label,roleType,keys) =>

@@ -1,3 +1,4 @@
+import prisma from "../config/prisma.js";
 import { ROLE_TYPES } from "../constants/roles.js";
 
 // PAROL ENDPOINT'LARI UCHUN KO'LAM.
@@ -50,5 +51,45 @@ export const credentialScope = (req) => ({
     req?.role?.roleType === ROLE_TYPES.OWNER ||
     req?.baseRole?.roleType === ROLE_TYPES.OWNER,
 });
+
+/**
+ * Aktyorning HAQIQIY filiallari (homeBranchId + branchAssignments).
+ *
+ * ── NEGA `req.allowedBranchIds` ISHLATILMAYDI ──
+ * `resolveBranchScope()` `branches.view_all` bo'lganda o'sha ro'yxatga
+ * BARCHA filialni soladi. Ya'ni "bayroqni e'tiborsiz qoldirish"
+ * yetarli emas edi — ro'yxatning O'ZI kengaygan bo'lardi va kesishuv
+ * tekshiruvi jimgina o'tib ketardi.
+ *
+ * Shuning uchun bazadan qayta o'qiladi.
+ */
+export const resolveActorBranchIds = async (actorId) => {
+  if (!actorId) return [];
+  const actor = await prisma.user.findUnique({
+    where: { id: String(actorId) },
+    select: {
+      homeBranchId: true,
+      branchAssignments: { select: { branchId: true } },
+    },
+  });
+  if (!actor) return [];
+
+  const ids = new Set();
+  if (actor.homeBranchId) ids.add(String(actor.homeBranchId));
+  for (const a of actor.branchAssignments || []) {
+    if (a?.branchId) ids.add(String(a.branchId));
+  }
+  return [...ids];
+};
+
+/**
+ * Shu filialdagi odamning PAROLINI ko'rsa bo'ladimi.
+ *
+ * Qoida `getPassword` dagi bilan AYNI: haqiqiy owner cheklovsiz,
+ * qolgan hamma faqat O'ZIGA biriktirilgan filial doirasida.
+ * `branches.view_all` bu yerda o'tkazgich EMAS.
+ */
+export const canReadCredentialsIn = (actorBranchIds, isOwner, branchId) =>
+  Boolean(isOwner) || actorBranchIds.includes(String(branchId));
 
 export default credentialScope;

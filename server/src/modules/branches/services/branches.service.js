@@ -1,6 +1,10 @@
 import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
+import {
+  resolveActorBranchIds,
+  canReadCredentialsIn,
+} from "../../../helpers/credentialScope.helper.js";
 import logger from "../../../config/logger.js";
 import { ROLES } from "../../../constants/roles.js";
 import { validateDelegation } from "../../../constants/delegation.js";
@@ -52,6 +56,17 @@ export const list = async ({
   // (`list.handler.js`). Aks holda o'quvchi filial tanlagichini ochib
   // direktorning loginini o'qib olardi.
   withManagers = false,
+  // PAROL — ALOHIDA VA ENG QATTIQ CHEGARA.
+  //
+  // `{ actorId, isOwner }` yoki `null`. Berilganda boshqaruvchi
+  // yozuviga `password` qo'shiladi, LEKIN faqat aktyorning HAQIQIY
+  // filiallari doirasida (haqiqiy owner — cheklovsiz).
+  //
+  // Qoida `users.service.getPassword` bilan AYNI va bitta joydan
+  // keladi (`helpers/credentialScope.helper.js`). `branches.view_all`
+  // bu yerda o'tkazgich EMAS — aks holda "hisobot ruxsati" butun
+  // tarmoqning parollarini ochib berardi (tests/privEscalation).
+  credentials = null,
   page = 1,
   limit = 100,
 }) => {
@@ -81,6 +96,11 @@ export const list = async ({
   let managersByBranch = new Map();
   if (withManagers && items.length) {
     const ids = items.map((b) => String(b.id));
+
+    // Parol so'ralgan bo'lsa — aktyorning haqiqiy ko'lami.
+    const actorBranchIds = credentials
+      ? await resolveActorBranchIds(credentials.actorId)
+      : [];
     const users = await prisma.user.findMany({
       where: {
         ...userInBranches(ids),
@@ -92,6 +112,13 @@ export const list = async ({
         id: true, username: true, role: true, firstName: true, lastName: true,
         homeBranchId: true,
         branchAssignments: { select: { branchId: true } },
+        // Global `omit` parolni HAR QANDAY so'rovdan chetlatadi
+        // (config/prisma.js). Uni OCHIQ `select` bekor qiladi.
+        //
+        // `omit: { passwordHash: false }` ishlatilmaydi: Prisma
+        // `select` va `omit` ni BIR VAQTDA qabul qilmaydi
+        // ("Please either use `omit` or `select`").
+        ...(credentials ? { passwordHash: true } : {}),
       },
       orderBy: { createdAt: "asc" },
     });
@@ -106,12 +133,20 @@ export const list = async ({
       for (const bid of branchIds) {
         if (!ids.includes(bid)) continue;
         if (!acc.has(bid)) acc.set(bid, []);
+
+        // PAROL FILIAL BO'YICHA QARORLASHTIRILADI, odam bo'yicha emas:
+        // bir xodim bir necha filialga biriktirilgan bo'lishi mumkin va
+        // aktyor ularning faqat bir qismini ko'rishi mumkin.
+        const showPassword = credentials
+          && canReadCredentialsIn(actorBranchIds, credentials.isOwner, bid);
+
         acc.get(bid).push({
           id: u.id,
           username: u.username,
           role: u.role,
           firstName: u.firstName,
           lastName: u.lastName,
+          ...(showPassword ? { password: u.passwordHash || "" } : {}),
         });
       }
       return acc;

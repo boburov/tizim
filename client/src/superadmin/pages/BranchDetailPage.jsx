@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
-  ArrowLeft, Plus, DoorOpen, Users, GraduationCap, Wallet, Pencil,
+  ArrowLeft, Plus, DoorOpen, Users, GraduationCap, Wallet, Pencil, Trash2,
   TrendingDown, PiggyBank, HandCoins, Banknote,
 } from "lucide-react";
 
@@ -23,6 +23,8 @@ import {
 import useBranchStatsQuery from "@/owner/features/branches/hooks/useBranchStatsQuery";
 import useBranchesQuery from "@/owner/features/branches/hooks/useBranchesQuery";
 import RoomsGrid from "@/owner/features/rooms/components/RoomsGrid";
+import BranchEditModal from "@/owner/features/branches/components/modals/BranchEditModal";
+import BranchDeleteModal from "@/owner/features/branches/components/modals/BranchDeleteModal";
 import BranchCredentials from "../components/BranchCredentials";
 import { useUsersListQuery } from "@/owner/features/users";
 import PageShell from "@/shared/components/page/PageShell";
@@ -76,6 +78,12 @@ const BranchDetailPage = () => {
   const canCreateRoom = has(PERMISSIONS.CLASSES_CREATE);
   const canPeople = has(PERMISSIONS.USERS_READ);
   const canEdit = has(PERMISSIONS.SYSTEM_ADMIN_ACCESS) && has(PERMISSIONS.BRANCHES_UPDATE);
+  // O'CHIRISH — TAHRIRLASHDAN ALOHIDA RUXSAT.
+  //
+  // Server ikkalasini ham `system.admin_access` BILAN BIRGA talab
+  // qiladi (`branches.routes.js`): faqat `branches.delete` ga bog'lash
+  // imtiyoz oshirish yo'li bo'lardi.
+  const canDelete = has(PERMISSIONS.SYSTEM_ADMIN_ACCESS) && has(PERMISSIONS.BRANCHES_DELETE);
 
   // Filial nomi — ro'yxatdan. Alohida so'rov qilinmaydi: ro'yxat
   // sidebar tanlagichi uchun baribir keshda turadi.
@@ -125,14 +133,32 @@ const BranchDetailPage = () => {
             <ArrowLeft className="size-4" />
             Filiallar
           </Button>
+          {/* DIQQAT: `openModal(NAME, { branch })` — MA'LUMOT SHAKLI
+              MUHIM. `ModalWrapper` `data` ni propslarga YOYIB beradi,
+              ya'ni `openModal(NAME, branch)` yozilsa modal `branch`
+              propini UMUMAN olmasdi va forma BO'SH ochilardi (xato
+              bermasdan). Bu aynan shu yerda yuz bergan edi. */}
           {canEdit && branch && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => openModal(MODAL.BRANCH_EDIT, branch)}
+              onClick={() => openModal(MODAL.BRANCH_EDIT, { branch })}
             >
               <Pencil className="size-4" />
               Tahrirlash
+            </Button>
+          )}
+          {/* O'CHIRISH — ASOSIY FILIALDA KO'RSATILMAYDI.
+              Server uni baribir rad etadi ("Asosiy filialni o'chirib
+              bo'lmaydi"), ya'ni tugma faqat yolg'on va'da bo'lardi. */}
+          {canDelete && branch && !branch.isMain && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openModal(MODAL.BRANCH_DELETE, { branch })}
+            >
+              <Trash2 className="size-4" />
+              O&apos;chirish
             </Button>
           )}
         </>
@@ -342,6 +368,26 @@ const BranchDetailPage = () => {
           </div>
         </section>
       )}
+
+      {/* ══════════════════════════════════════════════════════════
+          FILIAL MODALLARI — SAHIFA DARAJASIDA
+          ══════════════════════════════════════════════════════════
+
+          Qobiq (`SuperAdminLayout` → `CreateModals`) faqat
+          `BRANCH_CREATE` ni ko'taradi. Tahrirlash va o'chirish esa
+          FAQAT shu ekranda kerak, shuning uchun shu yerda.
+
+          Ilgari "Tahrirlash" tugmasi bor edi-yu, modal hech qayerda
+          mount qilinmagandi: tugma bosilardi, redux holati ochilardi,
+          ekranda esa HECH NARSA bo'lmasdi. Nosozlik jimgina edi. */}
+      <ModalWrapper name={MODAL.BRANCH_EDIT} title="Filialni tahrirlash">
+        <BranchEditModal />
+      </ModalWrapper>
+      <ModalWrapper name={MODAL.BRANCH_DELETE} title="Filialni o'chirish">
+        {/* O'chirilgach ro'yxatga qaytamiz — mavjud bo'lmagan filial
+            ekranida qolib ketmaslik uchun. */}
+        <BranchDeleteModal onDeleted={() => navigate("/org/filiallar")} />
+      </ModalWrapper>
 
       {/* XONA MODALI BU YERDA MOUNT QILINMAYDI — uni qobiq ko'taradi
           (`SuperAdminLayout` → `CreateModals`). Ikkinchi mount bitta

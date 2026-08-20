@@ -20,7 +20,9 @@ import useAuth from "@/shared/hooks/useAuth";
 import useWorkspace from "@/shared/hooks/useWorkspace";
 
 // Constants
-import { ROLES } from "@/shared/constants/roles";
+import { ROLES, ROLE_TYPES } from "@/shared/constants/roles";
+import usePermissions from "@/shared/hooks/usePermissions";
+import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
 
 // Features
 import { LoginPage, BotAuthPage } from "@/features/auth";
@@ -93,6 +95,31 @@ const AiReportRedirect = () => {
   return <Navigate to={`/owner/ai/reports/${id}`} replace />;
 };
 
+/**
+ * ESKI `/admin/tahlil` — TIZIM TAHLILIGA, LEKIN QAYSI PANELDA?
+ *
+ * Bu manzil ikkala auditoriyaga ham tegishli: ega ham, direktor ham
+ * "tizim tahlili" ni ochmoqchi. Lekin ular BOSHQA panelda ishlaydi va
+ * bir-birinikiga kira olmaydi.
+ *
+ * Qat'iy manzil yozilsa, ulardan bittasi HAR DOIM noto'g'ri joyga
+ * tushardi: `/owner/tahlil` yozilsa ega `AdminPanelGuard` dan
+ * qaytarilardi, `/org/tahlil` yozilsa direktor `SuperAdminGuard` dan.
+ * Ikkala holatda ham odam bosh sahifada paydo bo'lib, nima
+ * bo'lganini tushunmasdi.
+ *
+ * Shuning uchun yo'nalish ODAMGA qarab tanlanadi. Sahifa mazmuni
+ * ikkalasida ham AYNI (`SystemAnalysisTabs`) — faqat ko'lam boshqa.
+ */
+const AnalysisRedirect = () => {
+  const auth = useAuth();
+  const { has } = usePermissions();
+  if (auth.isLoading) return null;
+  const type = auth.roleType || auth.role;
+  const isOrgLevel = type === ROLE_TYPES.OWNER || hasOrgAuthority(has);
+  return <Navigate to={isOrgLevel ? "/org/tahlil" : "/owner/tahlil"} replace />;
+};
+
 const RoleHomeRedirect = () => {
   const { role } = useAuth();
   const { home, isLoading } = useWorkspace();
@@ -139,7 +166,12 @@ const Routes = () => (
       <Route path="/admin/oquv" element={<Navigate to="/org/tahlil?tab=academic" replace />} />
       <Route path="/admin/jamoa" element={<Navigate to="/org/tahlil?tab=team" replace />} />
       <Route path="/admin/tavsiyalar" element={<Navigate to="/org/tahlil?tab=insights" replace />} />
-      <Route path="/admin/tahlil" element={<Navigate to="/owner/ai" replace />} />
+      {/* TAHLIL — endi `/org/tahlil` da.
+          Ilgari bu `/owner/ai` ga yo'naltirilardi, lekin ega Admin
+          paneliga kira olmaydi (`AdminPanelGuard`) va o'sha manzil
+          u uchun o'lik havolaga aylangandi. `/owner/ai*` marshrutlari
+          O'Z JOYIDA qoladi — ular direktor uchun ishlaydi. */}
+      <Route path="/admin/tahlil" element={<AnalysisRedirect />} />
       <Route path="/admin/tahlil/vazifalar" element={<Navigate to="/owner/ai/tasks" replace />} />
       <Route path="/admin/tahlil/hisobotlar" element={<Navigate to="/owner/ai/reports" replace />} />
       <Route path="/admin/tahlil/hisobotlar/:id" element={<AiReportRedirect />} />

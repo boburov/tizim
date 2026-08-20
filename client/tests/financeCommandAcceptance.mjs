@@ -125,6 +125,16 @@ const run = async () => {
     // Naqsh mavjud `browserAcceptance.mjs` dan olingan: Enter bilan
     // yuboriladi (tugma React qayta render paytida ajralib ketishi
     // mumkin), keyin MAJBURIY filial tanlash ekrani o'tiladi.
+    // ── EGA O'Z PANELIDA ISHLAYDI ──
+    //
+    // Moliya ekrani IKKI manzilda bir xil komponent:
+    //   ega          → `/org/moliya`
+    //   direktor/xodim → `/owner/finance`
+    //
+    // Ega `/owner/*` ga kira olmaydi (`AdminPanelGuard`), shuning
+    // uchun bu yerda tashkilot manzili ishlatiladi. Cheklangan
+    // rollar (`demo_qa_*`) tashkilot darajasida emas — ular
+    // Admin panelida qoladi va o'z manzilini ishlatadi.
     head("0) Kirish");
     await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector('input[name="username"]', { timeout: 20000 });
@@ -149,7 +159,7 @@ const run = async () => {
 
     // ══════════ 1) MOLIYA MARKAZI ══════════
     head("1) Moliya boshqaruv markazi ochiladi");
-    await page.goto(`${BASE}/owner/finance`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE}/org/moliya`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(3000);
     let t = await bodyText();
     ok("sahifa ochildi", page.url().replace(BASE, ""));
@@ -361,7 +371,7 @@ const run = async () => {
     head("8b) Byudjet saqlash aylanmasi (aniq filial)");
     if (demoBranchIdEarly) {
       await page.evaluate((id) => localStorage.setItem("activeBranchId", id), demoBranchIdEarly);
-      await page.goto(`${BASE}/owner/finance?tab=budget`, { waitUntil: "domcontentloaded" });
+      await page.goto(`${BASE}/org/moliya?tab=budget`, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(3000);
 
       const edit = page.getByRole("button", { name: "Tahrirlash", exact: true }).first();
@@ -386,7 +396,7 @@ const run = async () => {
 
           // ── QAYTA YUKLASH ──
           await page.waitForTimeout(1500);
-          await page.goto(`${BASE}/owner/finance?tab=budget`, { waitUntil: "domcontentloaded" });
+          await page.goto(`${BASE}/org/moliya?tab=budget`, { waitUntil: "domcontentloaded" });
           await page.waitForTimeout(3000);
           const reloaded = await bodyText();
           if (/31[\s,]?500[\s,]?000|31,5 mln|31.5 mln/.test(reloaded)) {
@@ -402,7 +412,7 @@ const run = async () => {
 
     // ══════════ 8c) CHIQIM → KATEGORIYA → YOZUV → PANEL ══════════
     head("8c) Chiqim drill-down → tranzaksiya paneli");
-    await page.goto(`${BASE}/owner/finance?tab=expenses`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE}/org/moliya?tab=expenses`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(3000);
     const catRow = page.locator("tr", { hasText: "Ijara" }).first();
     const catReady = await catRow.waitFor({ state: "visible", timeout: 12000 })
@@ -478,7 +488,7 @@ const run = async () => {
     const demoBranchId = demoBranchIdEarly;
     if (demoBranchId) {
       await page.evaluate((id) => localStorage.setItem("activeBranchId", id), demoBranchId);
-      await page.goto(`${BASE}/owner/finance`, { waitUntil: "domcontentloaded" });
+      await page.goto(`${BASE}/org/moliya`, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(3000);
       await page.getByRole("button", { name: "O'tkazma", exact: true }).first().click();
       await page.waitForTimeout(1200);
@@ -518,7 +528,7 @@ const run = async () => {
     head("10) Responsiv");
     for (const [w, h, name] of [[1440, 900, "desktop"], [1024, 768, "tor desktop"], [820, 1180, "planshet"]]) {
       await page.setViewportSize({ width: w, height: h });
-      await page.goto(`${BASE}/owner/finance`, { waitUntil: "domcontentloaded" });
+      await page.goto(`${BASE}/org/moliya`, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(2200);
       const overflow = await page.evaluate(() =>
         document.documentElement.scrollWidth - document.documentElement.clientWidth);

@@ -204,7 +204,19 @@ check("menyu ochildi", menuLabels.length > 0, `${menuLabels.length} variant`);
 // elementga mos keladi. Shu sababli `data-create-key` ishlatiladi.
 check("XONA varianti bor", (await adminPage.locator('[data-create-key="room"]').count()) === 1,
   menuLabels.join(" | ").slice(0, 100));
-check("FILIAL varianti bor", (await adminPage.locator('[data-create-key="branch"]').count()) === 1);
+
+// FILIAL VARIANTI DIREKTORDA BO'LMASLIGI KERAK.
+//
+// Filial ochish — TASHKILOT darajasidagi amal: u
+// `system.admin_access` + `branches.create` talab qiladi va Super
+// Admin panelida, "Filiallar" sahifasidagi "+" kartasi orqali
+// bajariladi.
+//
+// Bu tekshiruv ilgari teskarisini talab qilardi, chunki o'sha paytda
+// menyuni EGA ko'rardi (u hamma narsani ko'radi). Endi menyu
+// direktor hisobida ochiladi — ega Admin paneliga umuman kirmaydi.
+check("FILIAL varianti direktorda YO'Q",
+  (await adminPage.locator('[data-create-key="branch"]').count()) === 0);
 
 // ══ 2) BIR BOSISH: tur tanlangach modal DARHOL ochiladi ════════
 console.log("\n2) tur tanlash -> modal darhol ochiladi");
@@ -243,13 +255,20 @@ await adminPage.keyboard.press("Escape");
 await adminPage.waitForTimeout(600);
 
 // ══ 4) SODDALASHTIRILGAN FILIAL MODALI ═════════════════════════
+//
+// FILIAL OCHISH — SUPER ADMIN PANELIDA, "Filiallar" sahifasidagi
+// "+" kartasi orqali. Bu tashkilot darajasidagi amal
+// (`system.admin_access` + `branches.create`) va u Admin panelining
+// yaratish menyusida YO'Q — direktor filial ocha olmaydi.
+//
+// Shu sababli bu bo'lim EGA sessiyasiga (`page`) qaytadi.
 console.log("\n4) filial qo'shish — soddalashtirilgan");
-await adminPage.locator('button[aria-label="Yaratish turini tanlash"]').first().click();
-await adminPage.waitForTimeout(600);
-await adminPage.locator('[data-create-key="branch"]').click();
-await adminPage.waitForTimeout(900);
+await page.goto(`${APP}/org/filiallar`, { waitUntil: "networkidle" });
+await page.waitForTimeout(1500);
+await page.locator('main button:has-text("Filial qo\'shish")').first().click();
+await page.waitForTimeout(900);
 
-const branchDialog = adminPage.locator('[role="dialog"]:has-text("Yangi filial")');
+const branchDialog = page.locator('[role="dialog"]:has-text("Yangi filial")');
 check("filial modali ochildi", (await branchDialog.count()) === 1);
 
 if (await branchDialog.count()) {
@@ -267,8 +286,8 @@ if (await branchDialog.count()) {
   const dialogText = (await branchDialog.innerText()).replace(/\s+/g, " ");
   check("'Qo'shimcha' yig'ilgan bo'lim bor", /Qo'shimcha/i.test(dialogText));
 }
-await adminPage.keyboard.press("Escape");
-await adminPage.waitForTimeout(600);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(600);
 
 // ══ 5) TAHLIL MARKAZI — YAGONA QOBIQDA ═════════════════════════
 //
@@ -283,8 +302,12 @@ console.log("\n5) tahlil markazi — yagona qobiqda");
 
 await adminPage.goto(`${APP}/admin/tahlil`, { waitUntil: "domcontentloaded" });
 await adminPage.waitForTimeout(1500);
-check("/admin/tahlil → /owner/ai ga yo'naltirdi",
-  adminPage.url().replace(APP, "") === "/owner/ai", adminPage.url().replace(APP, ""));
+// DIREKTOR → `/owner/tahlil` (Admin panelidagi tizim tahlili).
+// Ega esa `/org/tahlil` ga tushadi — yo'nalish ODAMGA qarab
+// tanlanadi, chunki ikkala panel bir-biriga yopiq
+// (`AnalysisRedirect`, app/routes.jsx).
+check("/admin/tahlil → tizim tahliliga yo'naltirdi",
+  adminPage.url().replace(APP, "") === "/owner/tahlil", adminPage.url().replace(APP, ""));
 
 await adminPage.waitForTimeout(1500);
 // 404 NI MATNDAN QIDIRISH NOTO'G'RI EDI: sahifa ko'chgach ichida
@@ -294,8 +317,8 @@ await adminPage.waitForTimeout(1500);
 // Endi 404 SAHIFANING O'ZI bo'yicha aniqlanadi: `NotFoundPage`
 // sarlavhasi bormi. Bo'sh holat matni unga ta'sir qilmaydi.
 const tahlilHeading = await adminPage.locator("main h1").first().innerText().catch(() => "");
-check("tahlil markazi ochildi (404 emas)",
-  /Tahlil markazi/i.test(tahlilHeading),
+check("tizim tahlili ochildi (404 emas)",
+  /Tizim tahlili/i.test(tahlilHeading),
   `${adminPage.url().replace(APP, "")} | h1: ${tahlilHeading.slice(0, 40)}`);
 // Tahlil markazi (`/owner/ai`) — ADMIN panelida, ya'ni uning qobig'i.
 check("tahlil markazi Admin panelining qobig'ida",

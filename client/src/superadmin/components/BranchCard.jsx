@@ -30,6 +30,19 @@ import MetricValue from "@/shared/components/analytics/MetricValue";
  * ── "OCHISH" — KARTANING O'ZI ──
  * Butun karta havola. Alohida kichkina tugma qo'yish bosish
  * maydonini kichraytirardi va mobilda tegish qiyin bo'lardi.
+ *
+ * ── KIRISH MA'LUMOTI: LOGIN VA PAROL ──
+ * Ikkalasi ham kartada, ochiq holda — bu SO'RALGAN xatti-harakat.
+ *
+ * DIQQAT: ro'yxat ekrani yelka ustidan o'qishga eng ochiq joy va bu
+ * yerda BIR NECHTA filialning paroli bir vaqtda ekranda turadi.
+ * Ekranni ulashish yoki suratga olishda ular ham ketadi.
+ *
+ * Chegara serverda: parol `users.password` ruxsati VA aktyorning
+ * HAQIQIY filial ko'lami tekshirilgandan keyin qo'shiladi
+ * (`branches.service.js` → `helpers/credentialScope.helper.js`).
+ * `branches.view_all` bu yerda o'tkazgich emas — aks holda "hisobot
+ * ruxsati" butun tarmoqning parolini ochib berardi.
  */
 const Metric = ({ label, value, kind = "moneyShort" }) => (
   <div className="min-w-0">
@@ -98,24 +111,39 @@ const BranchCard = ({ branch, stats }) => {
         Bu JIM qolmaydi. Direktorsiz filialga hech kim kira olmaydi —
         ya'ni bu "ma'lumot yo'q" emas, TUGALLANMAGAN ish. */}
     {managers !== undefined && (
-      <div className="flex items-center gap-1.5 border-t border-border pt-2.5 text-xs">
+      <div className="border-t border-border pt-2.5 text-xs">
         {managers.length > 0 ? (
-          <>
-            <KeyRound className="size-3 shrink-0 text-muted-foreground" />
-            <span className="truncate font-mono text-foreground">
-              {managers[0].username}
-            </span>
-            {managers.length > 1 && (
-              <span className="shrink-0 text-muted-foreground">
-                +{managers.length - 1}
-              </span>
+          <div className="space-y-1">
+            {managers.slice(0, 2).map((m) => (
+              <div key={m.id} className="flex items-center gap-1.5">
+                <KeyRound className="size-3 shrink-0 text-muted-foreground" />
+                <span className="truncate font-mono text-foreground">{m.username}</span>
+                {/* PAROL faqat server bergan bo'lsa.
+                    U `users.password` ruxsati VA aktyorning haqiqiy
+                    filial ko'lami tekshirilgandan keyin keladi
+                    (`helpers/credentialScope.helper.js`) — ya'ni bu
+                    yerda hech qanday shart qayta yozilmaydi. */}
+                {m.password !== undefined && (
+                  <>
+                    <span className="shrink-0 text-muted-foreground">·</span>
+                    <span className="truncate font-mono text-foreground">
+                      {m.password || "—"}
+                    </span>
+                  </>
+                )}
+              </div>
+            ))}
+            {managers.length > 2 && (
+              <p className="text-muted-foreground">
+                +{managers.length - 2} boshqaruvchi
+              </p>
             )}
-          </>
+          </div>
         ) : (
-          <>
+          <div className="flex items-center gap-1.5">
             <TriangleAlert className="size-3 shrink-0 text-warning" />
             <span className="text-muted-foreground">Direktor biriktirilmagan</span>
-          </>
+          </div>
         )}
       </div>
     )}

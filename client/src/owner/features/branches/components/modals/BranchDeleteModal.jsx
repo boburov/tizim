@@ -1,7 +1,15 @@
 import Button from "@/shared/components/ui/button/Button";
 import { useBranchRemoveMutation } from "../../hooks/useBranchMutations";
 
-const BranchDeleteModal = ({ branch = {}, close, isLoading, setIsLoading }) => {
+/**
+ * @param {object} props
+ * @param {Function} [props.onDeleted] — o'chirilgandan KEYIN chaqiriladi.
+ *   Filial kartasidan o'chirilganda sahifa ro'yxatga qaytishi kerak:
+ *   aks holda odam mavjud bo'lmagan filial ekranida qolib, bo'sh
+ *   raqamlarni ko'rardi va nima bo'lganini tushunmasdi.
+ *   Ro'yxat sahifasida u umuman berilmaydi — u yerda qaytadigan joy yo'q.
+ */
+const BranchDeleteModal = ({ branch = {}, close, isLoading, setIsLoading, onDeleted }) => {
   // DIQQAT: ModalWrapper `data` ni YOYIB beradi (...(data || {})),
   // ya'ni openModal(NAME, { branch }) -> shu yerda `branch` propi.
   // `data.branch` deb o'qish undefined qaytarardi.
@@ -10,6 +18,7 @@ const BranchDeleteModal = ({ branch = {}, close, isLoading, setIsLoading }) => {
     onSuccess: () => {
       setIsLoading(false);
       close?.();
+      onDeleted?.();
     },
     onError: () => setIsLoading(false),
   });

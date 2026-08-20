@@ -150,7 +150,7 @@ const REDIRECTS = [
   ["/admin", "/org"],
   ["/admin/moliya", "/org/filiallar?tab=pnl"],
   ["/admin/oquv", "/org/tahlil?tab=academic"],
-  ["/admin/tahlil", "/owner/ai"],
+  ["/admin/tahlil", "/org/tahlil"],
 ];
 for (const [from, to] of REDIRECTS) {
   await page.goto(`${APP}${from}`, { waitUntil: "domcontentloaded" });

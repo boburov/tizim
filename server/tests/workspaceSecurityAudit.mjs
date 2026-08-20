@@ -414,6 +414,26 @@ const run = async () => {
       warn("boshqaruvchi logini", "hech bir filialda direktor yo'q — tekshirilmadi");
     }
 
+    // ── PAROL: ENG QATTIQ CHEGARA ──
+    //
+    // Kartada parol ham ko'rinadi, ya'ni u endi RO'YXAT javobida
+    // keladi. Shuning uchun `branches.view_all` bilan butun tarmoq
+    // parolini yig'ib bo'lmasligini alohida tekshiramiz — bu aynan
+    // `privEscalation.test.js` yopgan teshik.
+    const adminABody = await (await get("/branches?withManagers=true", adminA)).json();
+    const foreignWithPw = (adminABody?.data || []).filter((b) => {
+      const bid = String(b.id || b._id);
+      return bid !== String(A.id || A._id)
+        && (b.managers || []).some((m) => "password" in m);
+    });
+    if (foreignWithPw.length === 0) ok("A admini: BEGONA filial paroli kelmadi");
+    else bad("begona filial paroli sizdi", `${foreignWithPw.length} ta filial`);
+
+    const staffBody = await (await get("/branches?withManagers=true", staff)).json();
+    const staffPw = (staffBody?.data || []).some((b) => (b.managers || []).length);
+    if (!staffPw) ok("xodim: boshqaruvchi ma'lumoti umuman kelmadi");
+    else bad("xodimga boshqaruvchi ma'lumoti sizdi");
+
     // Bayroqsiz so'rovda maydon UMUMAN bo'lmasligi kerak.
     const bare = await (await get("/branches", owner)).json();
     const leaked = (bare?.data || []).some((b) => "managers" in b);

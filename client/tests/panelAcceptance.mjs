@@ -182,6 +182,12 @@ head("1) SUPER ADMIN — o'z qobig'i");
   const cardCount = await cards.count();
   check("filial KARTALARI (jadval emas)", cardCount > 0, `${cardCount} karta`);
 
+  // KARTADA LOGIN VA PAROL (so'ralgan xatti-harakat).
+  const cardsText = await page.locator("main").innerText();
+  const hasCred = /[a-z_]+\s·\s\S+/.test(cardsText) || /Direktor biriktirilmagan/.test(cardsText);
+  check("kartada kirish ma'lumoti ko'rinadi", hasCred,
+    cardsText.split("\n").filter((l) => /·/.test(l)).slice(0, 2).join(" | ") || "—");
+
   const addBranch = page.locator("main button", { hasText: "Filial qo'shish" });
   check("'+ Filial qo'shish' ko'rinib turadi", (await addBranch.count()) > 0);
   await shot(page, "02-org-filiallar");
@@ -211,6 +217,47 @@ head("1) SUPER ADMIN — o'z qobig'i");
     await page.waitForTimeout(2000);
     check("filial konteksti ochildi",
       /\/org\/filiallar\/[0-9a-f]{24}/.test(page.url()), page.url().replace(APP, ""));
+
+    // ══════════════════════════════════════════════════════════════
+    // TAHRIRLASH VA O'CHIRISH
+    // ══════════════════════════════════════════════════════════════
+    //
+    // "Tahrirlash" tugmasi bor edi-yu, modal mount qilinmagandi:
+    // bosilardi va HECH NARSA ochilmasdi. Shu sababli bu yerda
+    // tugmaning MAVJUDLIGI emas, modal OCHILISHI va forma
+    // TO'LDIRILGANI tekshiriladi.
+    const editBtn = page.locator("main button", { hasText: "Tahrirlash" }).first();
+    if (await editBtn.count()) {
+      await editBtn.click();
+      await page.waitForTimeout(900);
+      const dlg = page.locator('[role="dialog"]');
+      check("tahrirlash modali ochildi",
+        (await dlg.locator('input[name="name"]').count()) > 0);
+      // Forma BO'SH ochilmasligi kerak — `openModal(NAME, branch)`
+      // yozilganda aynan shunday bo'lardi.
+      const nameVal = await dlg.locator('input[name="name"]').inputValue().catch(() => "");
+      check("forma joriy nom bilan to'ldirilgan", nameVal.trim().length > 0, `"${nameVal}"`);
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(600);
+    } else bad("Tahrirlash tugmasi topilmadi");
+
+    // O'CHIRISH — ASOSIY filialda ko'rsatilmasligi kerak (server
+    // baribir rad etadi).
+    const branchName = await page.locator("main h1").first().innerText().catch(() => "");
+    const delBtn = page.locator("main button", { hasText: "O'chirish" }).first();
+    const isMainBranch = /Asosiy filial/.test(branchName);
+    if (isMainBranch) {
+      check("asosiy filialda 'O'chirish' YO'Q", (await delBtn.count()) === 0, branchName);
+    } else if (await delBtn.count()) {
+      await delBtn.click();
+      await page.waitForTimeout(900);
+      const dlgText = await page.locator('[role="dialog"]').innerText().catch(() => "");
+      check("o'chirish tasdig'i ochildi", /o'chirmoqchimisiz/i.test(dlgText));
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(600);
+    } else {
+      skip("filial o'chirish", "bu filialda tugma yo'q (ruxsat yoki asosiy filial)");
+    }
 
     // ── KIRISH MA'LUMOTLARI (filial logini) ──
     const credText = await page.locator("main").innerText();

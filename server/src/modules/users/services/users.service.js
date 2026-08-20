@@ -1,4 +1,5 @@
 import prisma from "../../../config/prisma.js";
+import { resolveActorBranchIds } from "../../../helpers/credentialScope.helper.js";
 import ApiError from "../../../utils/ApiError.js";
 import { ROLES, ROLE_TYPES } from "../../../constants/roles.js";
 import { normalizePhone } from "../../../utils/phone.js";
@@ -663,24 +664,10 @@ export const update = async (id, body, currentUser = null, scope = null) => {
  * biriktirilmagan (yoki aktyori noma'lum) chaqiruv hech kimning
  * parolini ko'rmasligi kerak - fail-closed.
  */
-const resolveActorBranchIds = async (actorId) => {
-  if (!actorId) return [];
-  const actor = await prisma.user.findUnique({
-    where: { id: String(actorId) },
-    select: {
-      homeBranchId: true,
-      branchAssignments: { select: { branchId: true } },
-    },
-  });
-  if (!actor) return [];
-
-  const ids = new Set();
-  if (actor.homeBranchId) ids.add(String(actor.homeBranchId));
-  for (const a of actor.branchAssignments || []) {
-    if (a?.branchId) ids.add(String(a.branchId));
-  }
-  return [...ids];
-};
+// `resolveActorBranchIds` `helpers/credentialScope.helper.js` GA
+// KO'CHIRILDI: ayni qoidani filiallar ro'yxati ham ishlatadi
+// (`branches.service.js` — kartadagi login/parol). Ikki nusxa bo'lsa,
+// bittasi tuzatilib, ikkinchisi eski holicha qolib ketardi.
 
 // Owner uchun: login va parolni qaytaradi. Parol OCHIQ MATNDA saqlanadi,
 // shu sababli to'g'ridan-to'g'ri o'qib ko'rsatiladi.
