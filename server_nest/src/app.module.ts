@@ -20,6 +20,7 @@ import { LeadOptionsModule } from './modules/lead-options/lead-options.module.js
 import { FeedbackTypesModule } from './modules/feedback-types/feedback-types.module.js';
 import { ArchiveReasonsModule } from './modules/archive-reasons/archive-reasons.module.js';
 import { AttendanceSettingsModule } from './modules/attendance-settings/attendance-settings.module.js';
+import { FeedbackModule } from './modules/feedback/feedback.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -91,6 +92,8 @@ import { AttendanceSettingsModule } from './modules/attendance-settings/attendan
     FeedbackTypesModule,
     ArchiveReasonsModule,
     AttendanceSettingsModule,
+    // Fikr-mulohaza (aloqa) — bildirishnomalarga tayanadi.
+    FeedbackModule,
   ],
 })
 export class AppModule {}

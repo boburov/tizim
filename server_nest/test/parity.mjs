@@ -122,6 +122,18 @@ const CASES = [
   { name: 'storage/settings', method: 'GET', path: '/api/storage/settings', auth: true },
   { name: 'storage/files', method: 'GET', path: '/api/storage/files?limit=5', auth: true },
   { name: "storage/usage (auth yo'q → 401)", method: 'GET', path: '/api/storage/usage' },
+  // ── Faza 10: fikr-mulohaza + kataloglar ──
+  { name: 'feedback (list)', method: 'GET', path: '/api/feedback?limit=5', auth: true },
+  { name: 'feedback/me', method: 'GET', path: '/api/feedback/me?limit=5', auth: true },
+  { name: 'feedback/stats', method: 'GET', path: '/api/feedback/stats', auth: true },
+  { name: 'feedback/:id (404)', method: 'GET',
+    path: `/api/feedback/${'a'.repeat(24)}`, auth: true },
+  { name: 'lead-options (list)', method: 'GET', path: '/api/lead-options', auth: true },
+  { name: 'archive-reasons (list)', method: 'GET',
+    path: '/api/archive-reasons?limit=5', auth: true },
+  { name: 'archive-reasons/report', method: 'GET',
+    path: '/api/archive-reasons/report', auth: true },
+  { name: 'attendance-settings', method: 'GET', path: '/api/attendance-settings', auth: true },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },

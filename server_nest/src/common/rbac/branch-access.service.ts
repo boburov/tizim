@@ -3,7 +3,12 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../errors/api-error.js';
 import { PERMISSIONS } from '../constants/permissions.js';
 import { hasPermission } from './permission.service.js';
-import { getBranchContext, isBranchAllowed } from '../als/branch-context.js';
+import {
+  getBranchContext,
+  isBranchAllowed,
+  branchFilter,
+  userBranchCondition,
+} from '../als/branch-context.js';
 
 /**
  * `server/src/helpers/branchAccess.helper.js` NING KO'CHIRMASI.
@@ -357,6 +362,59 @@ export class BranchAccessService {
     if (ctx?.allowedBranchIds?.length === 1) return String(ctx.allowedBranchIds[0]);
 
     throw new ApiError(400, "Filial tanlanmagan - yozish uchun aniq filial kerak");
+  }
+
+  /**
+   * ═════════════════════════════════════════════════════════════════════
+   * GURUH ORQALI filialga bog'langan modellar uchun filtr.
+   *
+   * `Attendance`, `Grade`, `GroupMembership`, `Feedback` kabi modellarda
+   * `branchId` YO'Q — ular guruhga tegishli, guruh esa filialga. Bu
+   * helper avval joriy ko'lamdagi guruh ID'larini oladi, keyin ular
+   * bo'yicha filtr quradi.
+   *
+   * ⚠ JOIN EMAS, ID RO'YXATI: guruhlar soni kichik (yuzlab), shuning
+   * uchun `IN` ro'yxati joindan ancha tez va uni ham alohida
+   * filtrlash kerak bo'lmaydi.
+   *
+   * Ko'lam cheklanmagan bo'lsa (owner "barcha filiallar") — bo'sh
+   * obyekt, ya'ni filtr qo'yilmaydi.
+   * ═════════════════════════════════════════════════════════════════════
+   */
+  async branchGroupFilter(field = 'group'): Promise<Record<string, unknown>> {
+    const filter = branchFilter();
+    if (Object.keys(filter).length === 0) return {};
+
+    const groups = await this.prisma.group.findMany({
+      where: filter as never,
+      select: { id: true },
+    });
+    return { [field]: { in: groups.map((g) => g.id) } };
+  }
+
+  /**
+   * O'QUVCHI/FOYDALANUVCHI ORQALI filialga bog'langan modellar uchun filtr.
+   *
+   * Yuqoridagining egizagi, lekin BOSHQA yo'l bilan: yozuv guruhga
+   * emas, FOYDALANUVCHIGA tegishli. Foydalanuvchining filiali esa
+   * `homeBranchId` / `branchAssignments` da — shuning uchun
+   * `userBranchCondition()` QAYTA ISHLATILADI: "foydalanuvchi qaysi
+   * filialda" qoidasi ikki joyda ikki xil bo'lib qolmasligi kerak.
+   *
+   * ⚠ BO'SH RO'YXAT HAM TO'G'RI NATIJA: hech qaysi filialga
+   * biriktirilmagan foydalanuvchi hech kimni ko'rmasligi kerak
+   * (fail-closed).
+   */
+  async branchUserFilter(field = 'student'): Promise<Record<string, unknown>> {
+    const condition = userBranchCondition();
+    // null = cheklov yo'q (kontekstsiz job/seed yoki owner "barcha filiallar").
+    if (!condition) return {};
+
+    const users = await this.prisma.user.findMany({
+      where: condition as never,
+      select: { id: true },
+    });
+    return { [field]: { in: users.map((u) => u.id) } };
   }
 
   /**

@@ -151,7 +151,7 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | notifications | `/api/notifications` | 11 | ✅ 11/11 |
 | systemNotifications | `/api/system-notifications` | 5 | ✅ 5/5 |
 | notificationTemplates | `/api/notification-templates` | 5 | ✅ 5/5 |
-| feedback | `/api/feedback` | 9 | ⬜ |
+| feedback | `/api/feedback` | 9 | ✅ 9/9 |
 | storage | `/api/storage` | 7 | ✅ 7/7 |
 | imports (+ `queues/importQueue`) | `/api/imports` | 11 | ⬜ |
 | bot (Telegram, 11 handler) | — | — | ⬜ |
