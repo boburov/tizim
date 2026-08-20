@@ -59,6 +59,7 @@ Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/sr
 | `helpers/roomOccupancy.helper.js` | ⬜ FAZA 3 (`/rooms` marshrutlarida ISHLATILMAYDI — u `branchAnalytics` uchun) |
 | `constants/delegation.js` | ✅ `common/constants/delegation.ts` |
 | `constants/payrollAudit.js` | ✅ `common/constants/payroll-audit.ts` |
+| `constants/ledger.js`, `constants/treasury.js` | ✅ `common/constants/{ledger,treasury}.ts` (FAZA 7) |
 | `helpers/selfSalary.guard.js` | ⬜ FAZA 8 |
 | `helpers/correlationCache.js`, `configMetrics.helper.js` | ⬜ FAZA 9 |
 | `utils/ApiError.js` | ✅ `common/errors/api-error.ts` |
@@ -124,7 +125,7 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | deposits | `/api/deposits` | 8 | ⬜ |
 | expenses | `/api/expenses` | 10 | ⬜ |
 | expenseApprovals | `/api/expense-approvals`, `/api/approvals` | 10 | ⬜ |
-| journal | `/api/journal` | 9 | ⬜ |
+| journal | `/api/journal` | 9 | ✅ 9/9 |
 | ledger | `/api/ledger` | 2 | ⬜ |
 | openingBalance | `/api/opening-balance` | 3 | ⬜ |
 | financeOps | `/api/finance-ops` | 8 | ⬜ |

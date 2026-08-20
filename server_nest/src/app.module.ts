@@ -26,6 +26,7 @@ import { FeedbackModule } from './modules/feedback/feedback.module.js';
 import { HolidaysModule } from './modules/holidays/holidays.module.js';
 import { SearchModule } from './modules/search/search.module.js';
 import { ActivityHistoryModule } from './modules/activity-history/activity-history.module.js';
+import { JournalModule } from './modules/journal/journal.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -109,6 +110,10 @@ import { ActivityHistoryModule } from './modules/activity-history/activity-histo
     // Global qidiruv (⌘K) va faoliyat tarixi — faqat o'qish.
     SearchModule,
     ActivityHistoryModule,
+    // ── FAZA 7: MOLIYA ──
+    // Jurnal BIRINCHI ko'chiriladi: qolgan hamma moliya moduli
+    // (to'lov, depozit, chiqim, maosh, qaytarim) unga yozadi.
+    JournalModule,
   ],
 })
 export class AppModule {}
