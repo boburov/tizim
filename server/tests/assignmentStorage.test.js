@@ -68,6 +68,8 @@ const { createFixtures } = await import("./helpers/prismaFixtures.js");
 const fx = createFixtures();
 /** Global `StorageSettings` singletonining asl holati (yakunda tiklanadi). */
 let storageSettingsBackup = null;
+/** Test BOSHLANISHIDAN oldin mavjud bo'lgan fayl qatorlari. */
+const storedFileBaseline = new Set();
 
 const { runWithBranchContext } = await import(
   "../src/helpers/branchContext.helper.js"
@@ -115,6 +117,11 @@ const run = async () => {
   storageSettingsBackup = await prisma.storageSettings
     .findUnique({ where: { id: "default" } })
     .catch(() => null);
+
+  // Bazaviy surat — yuqoridagi tozalash izohiga qarang.
+  for (const f of await prisma.storedFile.findMany({ select: { id: true } }).catch(() => [])) {
+    storedFileBaseline.add(f.id);
+  }
 
   head("0. Chegaralar .env dan o'qildi");
   if (env.MAX_UPLOAD_BYTES === 512 * 1024) ok("MAX_UPLOAD_MB=0.5 -> 512 KB");
@@ -823,10 +830,19 @@ run()
         .catch(() => []);
       for (const r of recips) fx.track("assignmentRecipient", r.id);
     }
+    // ⚠ FAYLLARNI EGASI BO'YICHA TOPIB BO'LMAYDI.
+    //
+    // `StoredFile` da `userId` YO'Q — `uploadedById` bor, va tozalash
+    // oqimi uni NULL ga tushiradi (yumshoq o'chirilgan fayl egasiz
+    // qoladi). Shuning uchun ular EGA bo'yicha emas, BAZAVIY SURAT
+    // bo'yicha aniqlanadi: test boshlanishidan oldin mavjud bo'lmagan
+    // har bir qator — shu testniki.
     const files = await prisma.storedFile
-      .findMany({ where: { userId: { in: uids } }, select: { id: true } })
+      .findMany({ select: { id: true } })
       .catch(() => []);
-    for (const f of files) fx.track("storedFile", f.id);
+    for (const f of files) {
+      if (!storedFileBaseline.has(f.id)) fx.track("storedFile", f.id);
+    }
 
     const problems = await fx.cleanup();
     const leftovers = await fx.assertClean();
