@@ -476,7 +476,17 @@ export const previewStudentRow = async (data, ctx) => {
 export const loadGroupFees = async (groupIds) => {
   if (!groupIds?.length) return new Map();
   const rows = await prisma.groupFee.findMany({
-    where: { groupId: { in: groupIds }, isDeleted: false },
+    // ⚠ `isDeleted` FILTRI OLIB TASHLANDI — `GroupFee` da bunday ustun
+    // UMUMAN YO'Q (qarang `schema.prisma`). Mongo davridan qolgan qoldiq
+    // edi va Prisma uni "Unknown argument" bilan RAD ETARDI, ya'ni
+    // `loadGroupFees` har chaqiruvda YIQILARDI — o'quvchi importining
+    // qoralama/ko'rib chiqish yo'li ishlamasdi.
+    //
+    // Guruh narxi HECH QACHON o'chirilmaydi: u faqat `upsert` bilan
+    // yangilanadi (`groupFee.service.js`), shuning uchun soft-delete
+    // tushunchasi bu yerda ma'noga ega emas. Qolgan 5 ta o'qish joyi
+    // ham bu filtrni ishlatmaydi.
+    where: { groupId: { in: groupIds } },
     select: { groupId: true, amount: true, year: true, month: true },
     orderBy: [{ year: "desc" }, { month: "desc" }],
   });

@@ -76,6 +76,8 @@ const DELETE_ORDER = [
   "payrollAuditLog",
   // ── kassa / jurnal ──
   "cashTransfer", "shift", "openingBalance",
+  // ── o'quvchi holati ──
+  "studentFreeze",
   // ── a'zolik va guruh ──
   "groupMembership", "groupScheduleItem", "group",
   // ── lid / tasdiq / audit ──
