@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { BranchesModule } from './modules/branches/branches.module.js';
+import { JobsModule } from './jobs/jobs.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
 
 /**
@@ -49,6 +50,11 @@ import { RoomsModule } from './modules/rooms/rooms.module.js';
     UsersModule,
     // ── FAZA 3: tashkiliy tuzilma ──
     BranchesModule,
+    // ── FAZA 10: fon ishlari (pg-boss) ──
+    // ⚠ Standart holda HECH NARSA ishga tushmaydi: `NEST_WORKERS_ENABLED`
+    // va `NEST_WORKER_JOBS` bo'sh bo'lsa modul faqat `SchedulerService` ni
+    // DI'ga qo'yadi, navbatlarga TEGMAYDI. Express yagona worker.
+    JobsModule,
     // Xonalar — filialning fizik resursi (`classes.*` ruxsatlari).
     RoomsModule,
   ],

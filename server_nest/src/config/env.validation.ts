@@ -80,6 +80,45 @@ export const envSchema = z.object({
   IMPORT_QUEUE_CONCURRENCY: positiveNumber(1),
 
   TZ_NAME: z.string().default('Asia/Tashkent'),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ⚠⚠ FON ISHLARI VA BOT — IKKILANISH HIMOYASI ⚠⚠
+  //
+  // Express `server/` HOZIR yagona worker va yagona Telegram poller.
+  // Quyidagi ikki bayroq standart holda `false` — ya'ni NestJS jarayoni
+  // pg-boss navbatlariga TEGMAYDI va Telegram'ni POLL QILMAYDI.
+  //
+  // Ularni yoqish — ONGLI kesib o'tish (cutover) qarori: avval Express
+  // tomonidagi mos oila TO'XTATILADI, keyin bu yerda yoqiladi. Ikkalasi
+  // bir vaqtda ishlasa dublikat bildirishnoma, dublikat Telegram xabari
+  // va (moliya oilasida) dublikat pul harakati kelib chiqardi.
+  //
+  // Batafsil: `server_nest/WORKERS-DEPENDENCY-MATRIX.md` §4.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /** pg-boss worker'lari umuman ishga tushsinmi. */
+  NEST_WORKERS_ENABLED: boolish(false),
+
+  /**
+   * IZOLYATSIYA RO'YXATI — vergul bilan ajratilgan job nomlari.
+   *
+   * `NEST_WORKERS_ENABLED=true` bo'lsa ham FAQAT shu ro'yxatdagi joblar
+   * ro'yxatga olinadi. Bo'sh bo'lsa — hech biri (fail-closed).
+   * `*` — hammasi (FAQAT to'liq cutover'dan keyin).
+   *
+   * Masalan:  NEST_WORKER_JOBS=daily.ttl-cleanup
+   */
+  NEST_WORKER_JOBS: z.string().default(''),
+
+  /**
+   * Telegram polling'ni SHU jarayon boshlasinmi.
+   *
+   * `false` bo'lsa bot nusxasi baribir yaratiladi (xabar YUBORISH
+   * polling talab qilmaydi), lekin `startPolling()` chaqirilmaydi.
+   * `true` bo'lganda ham `bot_locks` jadvalidagi `poller` qulfi
+   * (Express bilan BIR XIL) ikkinchi pollerni to'sadi.
+   */
+  NEST_BOT_POLLING: boolish(false),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
