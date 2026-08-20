@@ -25,11 +25,15 @@
  *
  * ── KUTILGAN FARQ (yashirilmaydi, O'LCHANADI) ──
  *
- * `GET /users/:id` O'QUVCHI/O'QITUVCHI nishonida NestJS'da 501
- * (`PROFILE_NOT_MIGRATED`) qaytaradi — profil guruh/davomat modullariga
- * tayanadi (Faza 2.3 da qabul qilingan cheklov). Bu holat ATAYLAB
- * `expectDivergence` bilan tekshiriladi: farq YO'QOLSA ham test yiqiladi,
- * ya'ni cheklov bartaraf etilgani darhol ko'rinadi.
+ * `GET /users/:id` O'QUVCHI nishonida NestJS'da 501
+ * (`PROFILE_NOT_MIGRATED`) qaytaradi — o'quvchi profili
+ * `attendance.getStudentSummary` ga tayanadi va u hali ko'chirilmagan.
+ * Bu holat ATAYLAB `expectDivergence` bilan tekshiriladi: farq YO'QOLSA
+ * ham test yiqiladi, ya'ni cheklov bartaraf etilgani darhol ko'rinadi.
+ *
+ * ⚠ O'QITUVCHI ENDI FARQ QILMAYDI: `groups` moduli ko'chgach uning
+ * profili to'liq ochildi va u oddiy `both()` bilan solishtiriladi
+ * (musbat nazorat bilan — pastga qarang).
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import assert from 'node:assert/strict';
@@ -255,9 +259,44 @@ const main = async () => {
   await both('GET /users/:id (404)', (b) =>
     req(b, 'GET', `/api/users/${'a'.repeat(24)}`, { token: ownerToken }));
 
+  // ── O'QITUVCHI PROFILI — ENDI TO'LIQ (`groups` ko'chgach ochildi) ──
+  //
+  // ⚠ MUSBAT NAZORAT SHART: bo'sh `groups: []` ikkala stekda ham
+  // "bir xil" bo'ladi va TEKSHIRUVNI YOLG'ON YASHIL qilardi. Shuning
+  // uchun kamida BITTA guruhi bor o'qituvchi bo'lishi TALAB qilinadi —
+  // aynan u `groups.list` yo'lini haqiqatan bosib o'tadi.
+  {
+    const tr = await req(EXPRESS, 'GET', '/api/users?role=teacher&limit=10', {
+      token: ownerToken,
+    });
+    const teachers = tr.body?.data || [];
+    if (!teachers.length) {
+      skip("o'qituvchi profili", "bazada o'qituvchi topilmadi");
+    } else {
+      let withGroups = 0;
+      for (const t of teachers) {
+        const { e } = await both(`GET /users/:id (O'QITUVCHI ${t.username})`, (b) =>
+          req(b, 'GET', `/api/users/${t.id}`, { token: ownerToken }));
+        if ((e?.body?.data?.groups?.length || 0) > 0) withGroups += 1;
+      }
+      if (withGroups > 0) {
+        ok(`MUSBAT NAZORAT: ${withGroups} ta o'qituvchida guruh bor — ` +
+          '`groups.list` yo\'li haqiqatan bosib o\'tildi');
+      } else {
+        bad("o'qituvchi profili musbat nazorati",
+          "hech bir o'qituvchida guruh yo'q — `groups` yo'li O'LCHANMADI, " +
+          "bo'sh massivning tengligi hech nimani isbotlamaydi");
+      }
+    }
+  }
+
   if (student) {
+    // ⚠ KUTILGAN FARQ TORAYDI: ilgari o'quvchi HAM, o'qituvchi HAM 501
+    // edi. `groups` ko'chgach o'qituvchi ochildi (yuqorida o'lchandi),
+    // o'quvchi esa HAMON yopiq — `attendance.getStudentSummary` yo'q.
+    // Farq yo'qolgan kuni bu test yiqiladi va cheklov yopilgani ko'rinadi.
     await expectDivergence(
-      "GET /users/:id (O'QUVCHI — profil hali ko'chirilmagan)",
+      "GET /users/:id (O'QUVCHI — `attendance` hali ko'chirilmagan)",
       (b) => req(b, 'GET', `/api/users/${student.id}`, { token: ownerToken }),
       { expressStatus: 200, nestStatus: 501, nestCode: 'PROFILE_NOT_MIGRATED' },
     );

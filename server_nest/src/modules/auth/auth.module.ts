@@ -4,6 +4,7 @@ import { AuthService } from './auth.service.js';
 import { UserProfileService } from './user-profile.service.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
 import { authLimiter } from '../../common/middleware/rate-limit.js';
+import { GroupsModule } from '../groups/groups.module.js';
 
 /**
  * ⚠ MIDDLEWARE FAQAT HIMOYALANGAN MARSHRUTLARGA ULANADI.
@@ -15,6 +16,12 @@ import { authLimiter } from '../../common/middleware/rate-limit.js';
  * chiqib ketardi.
  */
 @Module({
+  // `GroupsModule` — O'QITUVCHI profili uchun (`buildUserProfile`).
+  // ⚠ AYLANMA BOG'LIQLIK YO'Q: `GroupsModule` `AuthModule` ni import
+  // QILMAYDI (u faqat `AuthMiddleware` ni ishlatadi, u esa global
+  // `CommonModule` dan keladi). Guruhlar moduli o'z izohida aynan shu
+  // iste'molchini oldindan e'lon qilgan.
+  imports: [GroupsModule],
   controllers: [AuthController],
   providers: [AuthService, UserProfileService],
   // `UserProfileService` — `users` moduliga ham kerak (`GET /:id`,

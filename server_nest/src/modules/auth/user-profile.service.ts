@@ -5,28 +5,38 @@ import { withLegacyId } from '../../common/utils/serialize.js';
 import { ROLES } from '../../common/constants/permissions.js';
 import { BOT_STATUS, botStatusOf } from '../../common/rbac/bot-status.js';
 import { PermissionService } from '../../common/rbac/permission.service.js';
+import { GroupsService } from '../groups/groups.service.js';
 
 /**
  * `helpers/userProfile.helper.js` — `/auth/me` javobidagi `profile`.
  *
  * ⚠⚠ QISMAN KO'CHIRILGAN — VA BU ATAYLAB LOUD ⚠⚠
  *
- * O'QUVCHI va O'QITUVCHI profili ko'chirilmagan modullarga tayanadi:
+ * ── HOLAT ──
  *
- *   o'quvchi  → groups.findAllActiveForStudent, findPendingRemovalNotice,
- *               attendance.getStudentSummary, studentFreeze.getActiveFreeze
- *   o'qituvchi → groups.list (+ shapeGroup)
+ *   owner / direktor / resepshin / custom staff → ✅ TO'LIQ
+ *   o'qituvchi                                   → ✅ TO'LIQ (`groups` ko'chgach ochildi)
+ *   o'quvchi                                     → 🛑 501 `PROFILE_NOT_MIGRATED`
+ *
+ * ── NEGA O'QUVCHI HAMON YOPIQ ──
+ *
+ * O'quvchi profili TO'RT manbaga tayanadi:
+ *
+ *   groups.findAllActiveForStudent    ✅ ko'chirilgan
+ *   groups.findPendingRemovalNotice   ✅ ko'chirilgan
+ *   studentFreeze.getActiveFreeze     ✅ ko'chirilgan (`student-freeze`)
+ *   attendance.getStudentSummary      🛑 `attendance` moduli YO'Q
  *
  * `getStudentSummary` o'z navbatida dars kunlari hisobi, bayramlar,
  * imtiyoz va muzlatish oynalarini tortadi — ya'ni butun `attendance`
- * yadrosi. Bu Faza 2.5/E ishi, 2.3 emas.
+ * yadrosi. UCHTA manba tayyor bo'lsa ham, TO'RTINCHISIZ javob
+ * `attendanceSummary` maydonisiz chiqardi.
  *
- * SHUNING UCHUN: bu ikki rol uchun profil JIMGINA BO'SH QAYTARILMAYDI —
- * ochiq xato beriladi. Bo'sh qaytarish `/auth/me` shartnomasini buzib,
- * klientda "guruhlarim yo'q" degan YOLG'ON holat ko'rsatardi.
- *
- * Qolgan rollar (owner, direktor, resepshin, custom staff) uchun profil
- * TO'LIQ va Express bilan bir xil.
+ * ⚠ SHUNING UCHUN JIMGINA BO'SH QAYTARILMAYDI — ochiq 501 beriladi.
+ * Bo'sh yoki chala qaytarish `/auth/me` shartnomasini buzib, klientda
+ * "davomatim yo'q" degan YOLG'ON holat ko'rsatardi. `attendance`
+ * ko'chgan kuni shu bitta `throw` o'chiriladi va qolgan uchta chaqiruv
+ * shu yerga qo'shiladi.
  */
 
 const calcYears = (date: unknown): number | null => {
@@ -50,6 +60,7 @@ export class UserProfileService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
+    private readonly groups: GroupsService,
   ) {}
 
   /**
@@ -95,14 +106,46 @@ export class UserProfileService {
     const telegram = await this.fetchTelegram(String(user.id));
     const botStatus = telegram?.status || BOT_STATUS.NOT_LINKED;
 
-    if (user.role === ROLES.STUDENT || user.role === ROLES.TEACHER) {
+    if (user.role === ROLES.STUDENT) {
       throw new ApiError(
         501,
-        "O'quvchi va o'qituvchi profili NestJS'ga hali ko'chirilmagan " +
-          "(guruh/davomat/muzlatish modullari kerak). Express (5000-port) " +
-          'to\'liq ishlaydi.',
+        "O'quvchi profili NestJS'ga hali ko'chirilmagan (`attendance` " +
+          "moduli kerak: getStudentSummary). Express (5000-port) to'liq " +
+          'ishlaydi.',
         { code: 'PROFILE_NOT_MIGRATED', details: { role: user.role } },
       );
+    }
+
+    if (user.role === ROLES.TEACHER) {
+      // ⚠ `limit: 100` — Express'dagi bilan AYNAN bir xil. Uni oshirish
+      // "yaxshilash" emas, SHARTNOMANI o'zgartirish bo'lardi: 100 dan
+      // ortiq guruhi bor o'qituvchi ikkala stekda ham bir xil kesilishi
+      // kerak, aks holda paritet aynan chekka holatda buzilardi.
+      const { items } = await this.groups.list({
+        teacherId: String(user.id),
+        page: 1,
+        limit: 100,
+      });
+      // ⚠ FAQAT TO'RT MAYDON. `groups.list` guruh kartochkasi uchun
+      // ancha ko'p narsa qaytaradi (o'qituvchilar ro'yxati, oylik tarif,
+      // filial). Ularni profilga o'tkazib yuborish shartnomani
+      // KENGAYTIRARDI — va `monthlyFee` orqali o'qituvchiga guruh
+      // daromadini ochib qo'yardi.
+      const groups = (items as Record<string, unknown>[]).map((g) => ({
+        _id: g._id,
+        name: g.name,
+        schedule: g.schedule,
+        studentsCount: g.studentsCount || 0,
+      }));
+
+      return {
+        ...base,
+        age: calcYears(user.birthDate),
+        years: calcYears(user.hiredAt),
+        groups,
+        telegram,
+        botStatus,
+      };
     }
 
     // Owner va boshqa rollar — minimal profil (Express bilan AYNAN bir xil).
