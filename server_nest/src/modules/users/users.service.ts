@@ -5,6 +5,7 @@ import { ROLES, ROLE_TYPES } from '../../common/constants/permissions.js';
 import { normalizePhone } from '../../common/utils/phone.js';
 import { hashPassword } from '../../common/utils/password.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
+import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 import {
   toUtcMidnight,
   localTodayMidnight,
@@ -30,8 +31,9 @@ import {
 } from '../../common/rbac/roles.helper.js';
 import { StudentCompletionService } from '../../common/helpers/student-completion.service.js';
 import { UserRelationsService } from '../../common/helpers/user-relations.service.js';
-import { ArchiveLogService } from '../../common/helpers/archive-log.service.js';
-import { SystemNotificationService } from '../../common/helpers/system-notification.service.js';
+import { ArchiveReasonsService } from '../archive-reasons/archive-reasons.service.js';
+import { SystemNotificationsService } from '../system-notifications/system-notifications.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
 import { UserProfileService } from '../auth/user-profile.service.js';
 import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
 import {
@@ -122,8 +124,13 @@ export class UsersService {
     private readonly freezes: StudentFreezeService,
     private readonly payrollAudit: PayrollAuditService,
     private readonly relations: UserRelationsService,
-    private readonly archiveLog: ArchiveLogService,
-    private readonly systemNotifications: SystemNotificationService,
+    // ⚠ EGASI MODULLARDAN — NUSXA EMAS. Bu ikkalasi qisqa muddat
+    // `common/helpers/` dagi VAQTINCHALIK ko'prik edi (egasi modullar
+    // hali ko'chmagan paytda). Modullar kelgan zahoti ko'priklar
+    // O'CHIRILDI — aks holda ikkita manba bir-biridan uzoqlashardi.
+    private readonly archiveReasons: ArchiveReasonsService,
+    private readonly systemNotifications: SystemNotificationsService,
+    private readonly approvals: ExpenseApprovalsService,
   ) {}
 
   private readonly logger = new Logger('UsersService');
@@ -1064,7 +1071,7 @@ export class UsersService {
       // qoladi).
       await this.completion.safeRecompute(saved.id);
       try {
-        await this.archiveLog.logAction({
+        await this.archiveReasons.logAction({
           user: saved.id,
           action: 'restore',
           reasonId,
@@ -1283,5 +1290,212 @@ export class UsersService {
       await tx.user.delete({ where: { id: user.id } });
     }, FINANCE_TXN_OPTIONS);
     return { id: user.id, _id: user.id };
+  }
+  // ═══════════════════════════════════════════════════════════════════
+  // XODIM YARATISH (`POST /users/staff`)
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * XODIM (direktor/administrator/o'qituvchi) yaratish — login/parol +
+   * filial + rol.
+   *
+   * ── ⚠ KO'CHIRILMAGAN YON TA'SIRLAR — JIMGINA TASHLAB KETILMAYDI ──
+   *
+   * Express ikkita IXTIYORIY yon ta'sir bajaradi va ikkalasi ham
+   * ko'chirilmagan MOLIYA zanjiriga tayanadi:
+   *
+   *   `compensation`   → teacherSalary/teacherCompensation.setCompensation
+   *   `openingBalance` → openingBalance.create
+   *
+   * Ikkinchisi JAVOB TANASIGA ham chiqadi: xato bo'lsa Express
+   * `profile.openingBalanceError` maydonini qo'shadi. Ya'ni uni jimgina
+   * o'tkazib yuborish PUL MA'LUMOTINI YO'QOTARDI — aynan Express kodi
+   * ehtiyot bo'ladigan holat.
+   *
+   * Shuning uchun OCHIQ 501. Bu `POST /auth/register-user` da allaqachon
+   * qabul qilingan naqsh (`REGISTER_SIDE_EFFECTS_NOT_MIGRATED`) —
+   * ikkalasi bir xil ikki yon ta'sirga ega opasingdi.
+   *
+   * ⚠⚠ 501 QAYERDA TURGANI MUHIM — U BARCHA VALIDATSIYADAN KEYIN.
+   *
+   * `register-user` da bu tekshiruv metodning ENG BOSHIDA turadi, ya'ni
+   * login band bo'lsa ham `openingBalance` bilan 501 qaytadi (Express
+   * esa 409 berardi). Bu yerda u ATAYLAB PASTGA tushirildi — barcha
+   * tekshiruvlardan KEYIN, birinchi YOZUVDAN OLDIN:
+   *
+   *   • noto'g'ri kirish + openingBalance → Express bilan AYNAN bir xil
+   *     xato (400/403/409);
+   *   • to'g'ri kirish + openingBalance   → 501, va HECH NARSA YOZILMAYDI.
+   *
+   * Boshiga qo'yish soddaroq bo'lardi, lekin pastga qo'yish paritetni
+   * KENGROQ saqlaydi. Yozuvdan KEYIN qo'yish esa mumkin emas: xodim
+   * yaratilib, so'ng 501 qaytarilsa yarim holat qolardi.
+   */
+  async createStaff(
+    body: Record<string, any>,
+    currentUser: {
+      _id?: unknown;
+      permissions?: string[];
+      allowedBranchIds?: string[];
+      canSeeAllBranches?: boolean;
+    },
+  ) {
+    const phone = body.phone ? normalizePhone(body.phone) : null;
+    if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
+
+    const username = String(body.username).toLowerCase().trim();
+
+    // TELEFON TAKRORLANISHI RUXSAT ETILADI (qarang: schema.prisma, User.phone).
+    const usernameTaken = await this.prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+    if (usernameTaken) {
+      throw new ApiError(409, 'Bunday login (username) allaqachon mavjud');
+    }
+
+    // --- ROL tekshiruvi ---
+    const targetRole = await this.roles.assertRoleAssignable(body.role);
+    // IMTIYOZ OSHIRISHDAN HIMOYA: o'zida yo'q ruxsatli rolni bera olmaydi,
+    // va owner rolini faqat owner biriktira oladi.
+    await this.roles.assertCanGrantRole(targetRole, currentUser as never);
+
+    // --- FILIAL tekshiruvi ---
+    const homeBranchId = body.homeBranchId || null;
+    if (!homeBranchId) throw new ApiError(400, 'Filial tanlanishi shart');
+
+    // Direktor faqat O'ZI kira oladigan filialga xodim qo'sha oladi. Bu
+    // bo'lmasa u boshqa filialga odam qo'shib, keyin uning OCHIQ
+    // MATNDAGI parolini `/:id/password` orqali o'qib olardi.
+    assertCanAssignBranch(
+      currentUser?.allowedBranchIds,
+      currentUser?.canSeeAllBranches,
+      homeBranchId,
+    );
+
+    const branch = await this.prisma.branch.findFirst({
+      where: { id: String(homeBranchId), isDeleted: false },
+      select: { id: true, name: true },
+    });
+    if (!branch) throw new ApiError(400, 'Filial topilmadi');
+
+    // Qo'shimcha filiallar (ixtiyoriy) — har biri ham tekshiriladi.
+    const branchAssignments: { branchId: string; role: string | null }[] = [];
+    for (const a of body.branchAssignments || []) {
+      assertCanAssignBranch(
+        currentUser?.allowedBranchIds,
+        currentUser?.canSeeAllBranches,
+        a.branchId,
+      );
+      if (a.role) {
+        const r = await this.roles.assertRoleAssignable(a.role);
+        await this.roles.assertCanGrantRole(r, currentUser as never);
+      }
+      branchAssignments.push({ branchId: String(a.branchId), role: a.role || null });
+    }
+
+    // ⚠ SHU YERDA — barcha tekshiruvlardan KEYIN, birinchi yozuvdan OLDIN.
+    this.assertHireSideEffectsMigrated(body);
+
+    const passwordHash = await hashPassword(body.password);
+
+    const user = await this.prisma.user.create({
+      data: {
+        firstName: body.firstName.trim(),
+        lastName: body.lastName.trim(),
+        username,
+        phone: phone || null,
+        passwordHash,
+        role: body.role,
+        homeBranchId: branch.id,
+        // Embedded massiv o'rniga alohida jadval — Prisma uni ichma-ich
+        // `create` bilan bitta amalda yozadi (qo'shimcha so'rov shart emas).
+        branchAssignments: branchAssignments.length
+          ? { create: branchAssignments }
+          : undefined,
+        isActive: true,
+        birthDate: body.birthDate ? new Date(body.birthDate) : null,
+        // Kalendar kuni (UTC-midnight) — "bugun" mahalliy (Asia/Tashkent) kun bo'yicha.
+        hiredAt: body.hiredAt ? parseLocalDay(body.hiredAt) : localTodayMidnight(),
+      },
+      include: SCOPE_INCLUDE,
+    });
+
+    return this.profiles.build(user as never);
+  }
+
+  /**
+   * `compensation` / `openingBalance` bilan kelgan so'rovni OCHIQ rad
+   * etadi. Xato SHAKLI `POST /auth/register-user` dagi bilan AYNAN bir
+   * xil — ikkala marshrut bir xil ikki yon ta'sirga ega va klient ularni
+   * bir xilda ushlashi kerak.
+   */
+  private assertHireSideEffectsMigrated(body: Record<string, any>) {
+    if (body.compensation || body.openingBalance) {
+      throw new ApiError(
+        501,
+        "Maosh stavkasi va boshlang'ich qoldiq bilan xodim qo'shish " +
+          "NestJS'ga hali ko'chirilmagan (moliya moduli kerak). " +
+          "Express (5000-port) to'liq ishlaydi.",
+        {
+          code: 'REGISTER_SIDE_EFFECTS_NOT_MIGRATED',
+          details: {
+            compensation: Boolean(body.compensation),
+            openingBalance: Boolean(body.openingBalance),
+          },
+        },
+      );
+    }
+  }
+
+  /**
+   * ISHGA OLISHNI TASDIQQA YUBORADI (filial delegatsiyasi `approval`
+   * bo'lganda). Hech qanday `User` YARATILMAYDI — so'rov "buyruq
+   * jurnali", haqiqiy ish tasdiqlangach bajariladi.
+   *
+   * ⚠ BU YERDA `compensation`/`openingBalance` TEKSHIRUVI YO'Q — VA BU
+   * TO'G'RI. So'rov faqat PAYLOAD saqlaydi, hech qanday moliyaviy yon
+   * ta'sir bajarmaydi. Ular tasdiqlash paytida ishlaydi, tasdiq
+   * bajaruvchilari esa `expense-approvals` da allaqachon ochiq 501
+   * (`APPROVAL_EXECUTORS_NOT_MIGRATED`) bilan to'silgan. Ya'ni pul
+   * jimgina yo'qolishi mumkin bo'lgan yo'l YO'Q.
+   */
+  async requestHire(
+    body: Record<string, any>,
+    currentUser: { _id?: unknown; id?: string },
+  ) {
+    const username = String(body.username).toLowerCase().trim();
+    const phone = body.phone ? normalizePhone(body.phone) : null;
+    if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
+
+    // Telefon bandligi TEKSHIRILMAYDI — takrorlanish ruxsat etilgan.
+    const taken = await this.prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+    if (taken) {
+      throw new ApiError(409, 'Bunday login (username) allaqachon mavjud');
+    }
+    if (!body.homeBranchId) throw new ApiError(400, 'Filial tanlanishi shart');
+
+    const branch = await this.prisma.branch.findFirst({
+      where: { id: String(body.homeBranchId), isDeleted: false },
+      select: { id: true, name: true },
+    });
+    if (!branch) throw new ApiError(400, 'Filial topilmadi');
+
+    return this.approvals.createRequest({
+      branchId: branch.id,
+      kind: APPROVAL_KINDS.STAFF_HIRE,
+      // ⚠ payload ichida PAROL bor. U o'qish javoblarida (list/getById)
+      // olib tashlanadi — `expense-approvals` dagi `stripSensitive()`.
+      payload: { ...body, username, phone: phone || undefined },
+      // Bitta login uchun bitta kutilayotgan so'rov.
+      subjectKey: `staff_hire:${username}`,
+      subjectName: `${body.firstName || ''} ${body.lastName || ''}`.trim(),
+      contextName: branch.name || '',
+      requestNote: body.requestNote,
+      currentUser: currentUser as never,
+    });
   }
 }

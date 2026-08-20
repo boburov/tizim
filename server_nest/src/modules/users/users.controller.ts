@@ -6,8 +6,10 @@ import {
   Patch,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { UsersService } from './users.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import {
@@ -19,6 +21,8 @@ import {
 import { AllPermissionsGuard } from '../../common/guards/all-permissions.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
+import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
+import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
 import { credentialScope } from '../../common/rbac/credential-scope.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
@@ -32,6 +36,7 @@ import {
   setBranchesSchema,
   archiveActionSchema,
   permanentDeleteSchema,
+  createStaffSchema,
   type IdRequest,
   type ListRequest,
   type CheckAvailabilityRequest,
@@ -41,10 +46,11 @@ import {
   type SetBranchesRequest,
   type ArchiveActionRequest,
   type PermanentDeleteRequest,
+  type CreateStaffRequest,
 } from './users.validators.js';
 
 /**
- * Express `users.routes.js` — 14 marshrutdan 13 tasi.
+ * Express `users.routes.js` — 14 marshrutdan 14 tasi.
  *
  * ⚠ E'LON TARTIBI Express bilan AYNAN bir xil bo'lishi SHART. Aniq
  * yo'llar `/:id` DAN OLDIN turadi, aks holda `/:id` ularni yutib
@@ -52,14 +58,10 @@ import {
  *   PATCH /:id/branches → PATCH /:id dan oldin
  *   GET   /staff-stats, /check-availability → GET /:id dan oldin
  *
- * ⚠ HALI KO'CHIRILMAGAN — FAQAT BITTA: `POST /staff`. U UCHTA
- * ko'chirilmagan modulga tayanadi va UCHALASI HAM JAVOB TANASINI
- * o'zgartiradi (`expenseApprovals` → 202/403, `openingBalance` →
- * `openingBalanceError`, `teacherSalary` → stavka). Yarim ko'chirish
- * uch mustaqil o'qda farq bergan bo'lardi. U Express'da qoladi.
- *
  * ⚠ `DELETE /:id/permanent` OWNER-ONLY — u ALOHIDA kontrollerda
- * (`RolesGuard`), fayl oxiriga qarang.
+ * (`RolesGuard`), fayl oxiriga qarang. `POST /staff` va
+ * `PATCH /:id/branches` esa IKKI ruxsat birdan talab qiladi (AND) —
+ * ular `UserBranchesController` da (`AllPermissionsGuard`).
  *
  * ⚠ IKKI RUXSAT BIRDAN: Express `PATCH /:id/branches` ga
  * `requirePermission(USERS_READ)` VA `requirePermission(ROLES_UPDATE)`
@@ -330,7 +332,67 @@ export class UserPermanentDeleteController {
 @Controller('users')
 @UseGuards(AllPermissionsGuard)
 export class UserBranchesController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly approvals: ExpenseApprovalsService,
+  ) {}
+
+  /**
+   * XODIM (direktor/administrator/o'qituvchi) yaratish.
+   *
+   * IKKI RUXSAT BIRDAN: odam yaratish VA rol biriktirish — chunki bu
+   * amal ikkalasini birdan bajaradi.
+   *
+   * ── ISHGA OLISH TASDIG'I ──
+   *
+   * Filialning delegatsiya matritsasi hal qiladi
+   * (`Branch.delegation.staff_hire`). `auto` bo'lsa direktor xodimni
+   * o'zi qo'shadi; `approval` bo'lsa `User` DARHOL YARATILMAYDI —
+   * owner tasdig'iga yuboriladi. `forbidden` bo'lsa 403.
+   *
+   * ⚠ 202 = "qabul qilindi, lekin hali bajarilmadi". 201 EMAS: 201
+   * "yaratildi" degani bo'lardi va klient yangi xodim ID'sini kutardi.
+   *
+   * Ishga olishda o'lchanadigan summa yo'q, shuning uchun `metrics` ham
+   * yo'q — bu tur uchun `threshold` rejimi mavjud emas.
+   */
+  @Post('staff')
+  @HttpCode(201)
+  @AllPermissions(PERMISSIONS.TEACHERS_CREATE, PERMISSIONS.ROLES_UPDATE)
+  async createStaff(
+    @Validated(createStaffSchema) v: CreateStaffRequest,
+    @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { needsApproval } = await this.approvals.checkConfigApproval({
+      permissions: req.permissions,
+      kind: APPROVAL_KINDS.STAFF_HIRE,
+    });
+
+    if (needsApproval) {
+      const approval = await this.users.requestHire(v.body, { _id: req.user!._id });
+      // ⚠ `@HttpCode(201)` metod darajasida turibdi, bu shox esa 202
+      // qaytarishi kerak — shuning uchun statusni SHU YERDA yozamiz.
+      // Ikki xil muvaffaqiyat statusini bitta dekorator bilan ifodalab
+      // bo'lmaydi.
+      res.status(202);
+      return {
+        success: true,
+        data: approval,
+        message: "Tasdiqlash uchun yuborildi. Owner tasdiqlagach xodim yaratiladi.",
+      };
+    }
+
+    // ⚠ `permissions` va filial ko'lami `req` DA (auth middleware
+    // o'rnatadi), `req.user` da EMAS.
+    const data = await this.users.createStaff(v.body, {
+      _id: req.user!._id,
+      permissions: req.permissions,
+      allowedBranchIds: req.allowedBranchIds,
+      canSeeAllBranches: req.canSeeAllBranches,
+    });
+    return { success: true, data, message: "Xodim qo'shildi" };
+  }
 
   @Patch(':id/branches')
   @AllPermissions(PERMISSIONS.USERS_READ, PERMISSIONS.ROLES_UPDATE)

@@ -3,6 +3,7 @@
  * FAZA 2.5b — FOYDALANUVCHI HAYOT SIKLI PARITETI (Express 5000 ↔ NestJS 5001)
  *
  * Qamrov:
+ *   POST   /api/users/staff          (xodim yaratish)
  *   DELETE /api/users/:id            (arxivlash)
  *   POST   /api/users/:id/restore    (qaytarish)
  *   DELETE /api/users/:id/permanent  (butunlay o'chirish, owner-only)
@@ -144,6 +145,27 @@ const cleanup = async () => {
     await prisma.botUser.updateMany({ where: { userId: { in: ids } }, data: { userId: null } });
     await prisma.groupMembership.deleteMany({ where: { studentId: { in: ids } } });
     await prisma.teacherSalary.deleteMany({ where: { teacherId: { in: ids } } });
+
+    // ── ⚠ XODIM MAOSHI ZANJIRI ──
+    //
+    // `POST /users/staff` HAQIQIY xodim yaratadi va tizim unga maosh
+    // qatorlarini ochadi (`staff_payrolls`, `payroll_audit_logs`).
+    // Ularning FK'si `RESTRICT`, ya'ni tozalamasdan foydalanuvchini
+    // o'chirib BO'LMAYDI — birinchi yurishda `cleanup()` aynan
+    // `staff_payrolls_employeeId_fkey` da yiqildi.
+    //
+    // TARTIB FK BO'YICHA: bola → ota.
+    await prisma.staffPayrollItem.deleteMany({
+      where: { payroll: { employeeId: { in: ids } } },
+    });
+    await prisma.staffSalaryTransaction.deleteMany({ where: { employeeId: { in: ids } } });
+    await prisma.staffPayrollAdjustment.deleteMany({ where: { employeeId: { in: ids } } });
+    await prisma.staffPayroll.deleteMany({ where: { employeeId: { in: ids } } });
+    await prisma.staffKpiAssignment.deleteMany({ where: { employeeId: { in: ids } } });
+    await prisma.staffCompensation.deleteMany({ where: { employeeId: { in: ids } } });
+    await prisma.payrollAuditLog.deleteMany({ where: { employeeId: { in: ids } } });
+    await prisma.openingBalance.deleteMany({ where: { userId: { in: ids } } });
+
     await prisma.userBranchAssignment.deleteMany({ where: { userId: { in: ids } } });
     await prisma.user.deleteMany({ where: { id: { in: ids } } });
   }
@@ -225,6 +247,12 @@ const main = async () => {
   });
 
   const staff = await mkUser('staff', 'qa_staff', A.id);
+  // ⚠ ALOHIDA, HECH QACHON O'ZGARTIRILMAYDIGAN aktyor. `staff` ni
+  // ishlatib bo'lmaydi: arxivlash bloki `bothMutating` bilan tugaydi va
+  // u nishonni ARXIVLANGAN holatda qoldiradi — arxivlangan hisob esa
+  // login qila olmaydi (401). Birinchi yurishda test aynan shu sababli
+  // "O'LCHANMADI" bergan edi.
+  const weak = await mkUser('weak', 'qa_staff', A.id);
   // EGIZAKLAR: ko'rinadigan ism bir xil ("QALC teacher_twin"), username farq.
   const teacherE = await mkUser('teacher_e', 'teacher', A.id, { displayLast: 'teacher_twin' });
   const teacherN = await mkUser('teacher_n', 'teacher', A.id, { displayLast: 'teacher_twin' });
@@ -316,6 +344,25 @@ const main = async () => {
       bad(name, `express: ${JSON.stringify(en).slice(0, 700)}\n      nest   : ${JSON.stringify(nn).slice(0, 700)}`);
     }
     return { e, n };
+  };
+
+  /**
+   * ATAYLAB kutilayotgan farq. Farq YO'QOLSA HAM yiqiladi — ya'ni
+   * cheklov bartaraf etilgani darhol ko'rinadi va bu test eskirib
+   * "yolg'on yashil" bo'lib qolmaydi.
+   */
+  const expectDivergence = async (name, fn, expect) => {
+    let e, n;
+    try { e = await fn(EXPRESS); n = await fn(NEST); }
+    catch (err) { skip(name, err.message); return; }
+    try {
+      assert.equal(e.status, expect.expressStatus, 'express status');
+      assert.equal(n.status, expect.nestStatus, 'nest status');
+      if (expect.nestCode) assert.equal(n.body?.code, expect.nestCode, 'nest code');
+      ok(`${name} — express ${e.status}, nest ${n.status} (kutilgan farq)`);
+    } catch (err) {
+      bad(name, `${err.message}\n      express: ${e.status} · nest: ${n.status} ${JSON.stringify(n.body).slice(0, 200)}`);
+    }
   };
 
   /** Bazadagi holatni to'g'ridan-to'g'ri tiklaydi (API'siz — u sinalayotgan yuza). */
@@ -711,7 +758,132 @@ const main = async () => {
     studentE, studentN, 'QALC student_twin',
   );
 
-  // ═══════════════════ 5. DRIFT ═══════════════════
+  // ═══════════════════ 5. XODIM YARATISH ═══════════════════
+  console.log('\x1b[2m  ── xodim yaratish (POST /users/staff) ──\x1b[0m');
+
+  const staffBody = (suffix, extra = {}) => ({
+    firstName: 'QALC',
+    lastName: `new_${suffix}`,
+    username: `${PREFIX}new_${suffix}`,
+    password: 'qa123456',
+    role: 'qa_staff',
+    homeBranchId: A.id,
+    ...extra,
+  });
+
+  // ── VALIDATSIYA VA TO'SIQLAR (yozuv yaratmaydi) ──
+  await both("POST /users/staff (bo'sh tana → 400)", (b) =>
+    req(b, 'POST', '/api/users/staff', { token: ownerToken, body: {} }));
+  await both("POST /users/staff (qisqa parol → 400)", (b) =>
+    req(b, 'POST', '/api/users/staff', {
+      token: ownerToken, body: staffBody('x', { password: 'qisqa' }),
+    }));
+  await both("POST /users/staff (band login → 409)", (b) =>
+    req(b, 'POST', '/api/users/staff', {
+      token: ownerToken, body: staffBody('x', { username: 'owner' }),
+    }));
+  await both("POST /users/staff (mavjud bo'lmagan rol → 400)", (b) =>
+    req(b, 'POST', '/api/users/staff', {
+      token: ownerToken, body: staffBody('x', { role: '__nope__' }),
+    }));
+  await both("POST /users/staff (mavjud bo'lmagan filial → 400)", (b) =>
+    req(b, 'POST', '/api/users/staff', {
+      token: ownerToken, body: staffBody('x', { homeBranchId: 'f'.repeat(24) }),
+    }));
+  await both("POST /users/staff (token yo'q → 401)", (b) =>
+    req(b, 'POST', '/api/users/staff', { body: staffBody('x') }));
+
+  // ⚠ IKKI RUXSAT AND: direktorda `roles.update` BOR, `teachers.create`
+  // holatiga qarab farq qiladi — shuning uchun `qa_staff` bilan
+  // (ikkalasi ham YO'Q) sinaymiz. MUSBAT NAZORAT: o'sha token bilan
+  // owner 200/201 oladi (yuqoridagi testlar buni ko'rsatdi).
+  {
+    let weakToken = null;
+    try { weakToken = await login(EXPRESS, { login: weak.username, password: PW }); }
+    catch (err) { skip('ruxsatsiz xodim yaratish', err.message); }
+    if (weakToken) {
+      await both("`teachers.create` yo'q xodim staff yarata olmaydi (403)", (b) =>
+        req(b, 'POST', '/api/users/staff', { token: weakToken, body: staffBody('x') }));
+    }
+  }
+
+  // ── ⚠ KUTILGAN FARQ: moliyaviy yon ta'sirlar ko'chirilmagan ──
+  //
+  // `compensation` / `openingBalance` bilan Express 201 qaytaradi (va
+  // xato bo'lsa `openingBalanceError` qo'shadi), NestJS esa OCHIQ 501.
+  // Pul jimgina yo'qolmasligi uchun — `POST /auth/register-user` da
+  // allaqachon qabul qilingan naqsh. Farq yo'qolsa test yiqiladi.
+  //
+  // ⚠⚠ HAR STEKKA BOSHQA LOGIN. Express shoxi HAQIQATAN xodim yaratadi
+  // (u 201 qaytaradi), shuning uchun bir xil login bilan NestJS 409
+  // olardi va "501 kelmadi" degan YOLG'ON yiqilish chiqardi — birinchi
+  // yurishda aynan shunday bo'ldi.
+  //
+  // ⚠ AYNI PAYTDA bu 409 NestJS'ning 501 i TO'G'RI JOYDA turganini ham
+  // isbotlaydi: u login tekshiruvidan KEYIN ishlaydi, ya'ni noto'g'ri
+  // kirish Express bilan bir xil xato beradi.
+  await expectDivergence(
+    "POST /users/staff (openingBalance bilan — pul jimgina yo'qolmaydi)",
+    (b) => req(b, 'POST', '/api/users/staff', {
+      token: ownerToken,
+      body: staffBody(b === EXPRESS ? 'ob_e' : 'ob_n', { openingBalance: 100000 }),
+    }),
+    { expressStatus: 201, nestStatus: 501, nestCode: 'REGISTER_SIDE_EFFECTS_NOT_MIGRATED' },
+  );
+
+  // MUSBAT NAZORAT: NestJS 501 i AYNAN `openingBalance` sababli — bir
+  // xil tanadan uni OLIB TASHLASA 201 keladi. Aks holda 501 boshqa
+  // sababdan (mas. ruxsat) kelayotgan bo'lishi mumkin edi.
+  {
+    const r = await req(NEST, 'POST', '/api/users/staff', {
+      token: ownerToken, body: staffBody('ob_ctl'),
+    });
+    if (r.status === 201) ok("MUSBAT NAZORAT: `openingBalance` siz o'sha tana NestJS'da 201");
+    else bad('501 sababi', `openingBalance siz ham ${r.status}: ${JSON.stringify(r.body).slice(0, 200)}`);
+  }
+
+  // ── HAQIQIY YARATISH — EGIZAK (username unique, shuning uchun ikkita) ──
+  {
+    try {
+      const e = await req(EXPRESS, 'POST', '/api/users/staff', {
+        token: ownerToken, body: staffBody('e'),
+      });
+      const n = await req(NEST, 'POST', '/api/users/staff', {
+        token: ownerToken, body: staffBody('n'),
+      });
+      // `username`/`lastName`/`_id`/`id` egizaklarda ATAYLAB farq qiladi —
+      // ular solishtiruvdan chiqariladi, qolgan BUTUN profil solishtiriladi.
+      const shape = (r) => {
+        const d = { ...(r.body?.data || {}) };
+        delete d.id; delete d._id; delete d.username; delete d.lastName;
+        return { status: r.status, message: r.body?.message, data: strip(d) };
+      };
+      assert.equal(e.status, 201, `Express yarata olmadi: ${JSON.stringify(e.body)}`);
+      assert.deepEqual(shape(n), shape(e));
+      ok(`POST /users/staff — ${e.status}, profil shakli bir xil`);
+
+      // ⚠ MUSBAT NAZORAT: ikkala yozuv ham HAQIQATAN bazada, bir xil
+      // rol/filial bilan. Javob tengligi yozuvning to'g'ri saqlanganini
+      // isbotlamaydi.
+      const rows = await prisma.user.findMany({
+        where: { username: { in: [`${PREFIX}new_e`, `${PREFIX}new_n`] } },
+        select: { username: true, role: true, homeBranchId: true, isActive: true, hiredAt: true },
+        orderBy: { username: 'asc' },
+      });
+      assert.equal(rows.length, 2, 'ikkala xodim ham yaratilmadi');
+      assert.equal(rows[0].role, rows[1].role, 'rol farq qildi');
+      assert.equal(rows[0].homeBranchId, rows[1].homeBranchId, 'filial farq qildi');
+      assert.equal(
+        rows[0].hiredAt?.toISOString(), rows[1].hiredAt?.toISOString(),
+        'hiredAt farq qildi (mahalliy kun hisobi)',
+      );
+      ok(`BAZA HOLATI bir xil (role=${rows[0].role}, hiredAt=${rows[0].hiredAt?.toISOString().slice(0, 10)})`);
+    } catch (err) {
+      bad('POST /users/staff', err.message);
+    }
+  }
+
+  // ═══════════════════ 6. DRIFT ═══════════════════
   console.log('\x1b[2m  ── baza drifti ──\x1b[0m');
 
   const removed = await cleanup();

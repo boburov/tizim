@@ -7,13 +7,11 @@ import { z } from 'zod';
  * (`details[].path`, masalan `"body.password"`) Express bilan bir xil
  * chiqishi uchun.
  *
- * ⚠ `createStaffSchema` BU YERDA YO'Q. `POST /users/staff` tasdiqlar
- * (`expenseApprovals`), maosh shartnomasi (`teacherSalary`) va
- * boshlang'ich qoldiq (`openingBalance`) modullariga tayanadi — ular
- * hali ko'chirilmagan va UCHALASI HAM JAVOB TANASIGA ta'sir qiladi
- * (202 tasdiq, `openingBalanceError`). Sxemani "oldindan" yozib qo'yish
- * uni marshrutsiz qoldirardi va keyin ikkinchi manba bo'lib ajralib
- * ketardi.
+ * ⚠ `createStaffSchema` `compensation` va `openingBalance` ni QABUL
+ * QILADI, garchi ular NestJS'da 501 ga olib kelsa ham. Ularni sxemadan
+ * OLIB TASHLASH xatoni 400 ga aylantirardi — ya'ni "hali ko'chirilmagan"
+ * o'rniga "noto'g'ri so'rov" deb yolg'on aytardi va klient formani
+ * tuzatishga urinardi. Chegara VALIDATSIYADA emas, SERVISDA.
  */
 
 /** `update.validator.js` dagi `idSchema`. */
@@ -151,6 +149,96 @@ export const permanentDeleteSchema = z.object({
     .default({}),
 });
 
+
+/**
+ * `createStaff.validator.js` — XODIM (direktor/administrator) yaratish.
+ *
+ * `registerUser` dan farqi: rol DINAMIK (custom rollar ham), va
+ * `hiredAt`/`enrolledAt` kabi rolga xos MAJBURIY maydonlar YO'Q.
+ */
+
+/** `constants/compensation.js` — sxemadagi enumlar bilan AYNAN bir xil. */
+const COMP_BASE_TYPES = ['none', 'fixed_monthly'] as const;
+const COMP_VARIABLE_TYPES = [
+  'none',
+  'percent',
+  'per_student',
+  'per_lesson_hour',
+  'per_group',
+] as const;
+const COMP_PERCENT_BASES = ['billed', 'collected'] as const;
+
+/** `constants/openingBalance.js` */
+const OPENING_MAX_AMOUNT = 500_000_000;
+
+/**
+ * ISHGA OLISHDA MAOSH (ixtiyoriy). O'qituvchi uchun formaning o'zida
+ * oylik belgilanadi — keyin alohida sahifaga o'tish shart emas.
+ */
+const compensationSchema = z
+  .object({
+    effectiveFrom: z.coerce.date().optional(),
+    baseType: z.enum(COMP_BASE_TYPES).optional(),
+    baseAmount: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
+    variableType: z.enum(COMP_VARIABLE_TYPES).optional(),
+    variableRate: z.coerce.number().min(0).max(1_000_000_000).optional(),
+    percentBase: z.enum(COMP_PERCENT_BASES).optional(),
+    branchId: z.string().min(1).nullable().optional(),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((d) => d.variableType !== 'percent' || (d.variableRate ?? 0) <= 100, {
+    message: "Foiz stavkasi 100 dan oshmasligi kerak",
+    path: ['variableRate'],
+  });
+
+/**
+ * `openingBalance.validator.js` dagi `openingAmountSchema`.
+ *
+ * ⚠ Bo'sh forma maydoni ("") "kiritilmagan" deb qabul qilinadi — aks
+ * holda `z.coerce.number()` uni 0 ga aylantirib, "qoldiq nol" degan
+ * ma'noda ham, "kiritilmagan" ma'noda ham bir xil ko'rinardi.
+ */
+const openingAmountSchema = z.preprocess(
+  (v) => (v === '' || v == null ? undefined : v),
+  z
+    .coerce.number()
+    .int("Boshlang'ich summa butun son bo'lishi kerak")
+    .refine((n) => Math.abs(n) <= OPENING_MAX_AMOUNT, {
+      message: `Boshlang'ich summa ${OPENING_MAX_AMOUNT.toLocaleString('ru-RU')} so'mdan oshmasligi kerak`,
+    })
+    .optional(),
+);
+
+export const createStaffSchema = z.object({
+  body: z.object({
+    firstName: z.string().min(1, 'Ism kerak').max(60),
+    lastName: z.string().min(1, 'Familiya kerak').max(60),
+    username: z.string().min(3, 'Login kamida 3 belgi').max(40),
+    password: z.string().min(6, 'Parol kamida 6 belgi').max(100),
+    phone: z
+      .string()
+      .optional()
+      .nullable()
+      .transform((v) => (v === '' ? undefined : v)),
+    // Rol — `Role.value` (dinamik, enum YO'Q). Mavjudligi servisda
+    // `assertRoleAssignable` orqali tekshiriladi.
+    role: z.string().min(1, 'Rol tanlanishi shart').max(40),
+    homeBranchId: z.string().min(1, 'Filial tanlanishi shart'),
+    branchAssignments: z.array(branchAssignmentSchema).optional(),
+    birthDate: z.coerce.date().optional().nullable(),
+    hiredAt: z.coerce.date().optional().nullable(),
+    // Faqat o'qituvchi uchun ma'noli — boshqa rollarda e'tiborsiz qoldiriladi.
+    compensation: compensationSchema.optional(),
+    // BOSHLANG'ICH QOLDIQ — ishga olishdan OLDINGI hisob-kitob.
+    //   +X = markaz xodimga qarzdor (to'lanmagan eski oylik)
+    //   -X = xodim markazga qarzdor (ortiqcha olingan avans)
+    openingBalance: openingAmountSchema,
+    openingBalanceNote: z.string().trim().max(500).optional(),
+    // Tasdiq talab qilinganda so'rovchi qoldiradigan izoh (owner ko'radi).
+    requestNote: z.string().trim().max(500).optional(),
+  }),
+});
+
 export type IdRequest = z.infer<typeof idSchema>;
 export type ListRequest = z.infer<typeof listSchema>;
 export type CheckAvailabilityRequest = z.infer<typeof checkAvailabilitySchema>;
@@ -160,3 +248,4 @@ export type SetRoleRequest = z.infer<typeof setRoleSchema>;
 export type SetBranchesRequest = z.infer<typeof setBranchesSchema>;
 export type ArchiveActionRequest = z.infer<typeof archiveActionSchema>;
 export type PermanentDeleteRequest = z.infer<typeof permanentDeleteSchema>;
+export type CreateStaffRequest = z.infer<typeof createStaffSchema>;

@@ -9,6 +9,9 @@ import { AuthMiddleware } from '../../middleware/auth.middleware.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { StudentFreezeModule } from '../student-freeze/student-freeze.module.js';
 import { StaffPayrollModule } from '../staff-payroll/staff-payroll.module.js';
+import { ExpenseApprovalsModule } from '../expense-approvals/expense-approvals.module.js';
+import { ArchiveReasonsModule } from '../archive-reasons/archive-reasons.module.js';
+import { SystemNotificationsModule } from '../system-notifications/system-notifications.module.js';
 
 /**
  * ⚠ KONTROLLER TARTIBI MUHIM: `UserBranchesController` (`PATCH
@@ -26,7 +29,18 @@ import { StaffPayrollModule } from '../staff-payroll/staff-payroll.module.js';
  * `AuthModule` — `UserProfileService` uchun (profil qurish).
  */
 @Module({
-  imports: [AuthModule, StudentFreezeModule, StaffPayrollModule],
+  // `ExpenseApprovalsModule` — `POST /staff` ishga olish tasdig'i uchun
+  // (`checkConfigApproval` + `createRequest`).
+  imports: [
+    AuthModule,
+    StudentFreezeModule,
+    StaffPayrollModule,
+    ExpenseApprovalsModule,
+    // Hayot sikli yon ta'sirlari: arxiv jurnali (o'quvchi qaytarilishi)
+    // va owner bildirishnomasi (ishga qaytarish / butunlay o'chirish).
+    ArchiveReasonsModule,
+    SystemNotificationsModule,
+  ],
   controllers: [
     UserBranchesController,
     UserPermanentDeleteController,

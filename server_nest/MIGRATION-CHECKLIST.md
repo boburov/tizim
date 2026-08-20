@@ -87,8 +87,8 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | 2.3 | auth | `/api/auth` | 7 | ✅ |
 | 2.4 | roles (+`helpers/roles.helper`) | `/api/roles` | 7 | ✅ 7/7 |
 | 2.5a | users (mustaqil marshrutlar) | `/api/users` | 10/14 | ✅ |
-| 2.5b | users (arxivlash/tiklash/hard delete) | `/api/users` | 3/14 | ✅ 13/14 |
-| 2.5c | users (`POST /staff`) | `/api/users` | 1/14 | ⬜ **BLOKLANGAN** — pastga qarang |
+| 2.5b | users (arxivlash/tiklash/hard delete) | `/api/users` | 3/14 | ✅ |
+| 2.5c | users (`POST /staff`) | `/api/users` | 1/14 | ✅ **14/14** |
 | 2.6 | botAuth | `/api/bot-auth` | 2 | 🛑 **BLOKLANGAN** — Express'da ishlamaydi |
 | 2.7 | activityLogs + auditLog middleware | `/api/activity-logs` | 3 | ⬜ |
 
@@ -251,19 +251,36 @@ ketilmadi: `UsersService.deferredEffect()` har safar barqaror belgili
 `DEFERRED_EFFECT` WARN yozadi. FAZA 8 kelganda o'sha belgini qidirib,
 ikkita chaqiruvni ulash kifoya.
 
-**2.5c (BLOKLANGAN)** — `POST /staff`. Bu marshrut UCH mustaqil o'qda
-javob tanasini o'zgartiradi va uchalasi ham ko'chirilmagan:
+**2.5c (BAJARILDI)** — `POST /staff`. U dastlab BLOKLANGAN edi; uchta
+to'siqning ikkitasi boshqa to'lqinlar ko'chgach o'z-o'zidan yopildi:
 
-1. `expenseApprovals.checkConfigApproval` → 403 (taqiqlangan) yoki
-   202 + `Approval` obyekti (`users.requestHire` → `createRequest`);
-2. `openingBalance.create` → xato bo'lsa javobga `openingBalanceError`
-   maydoni QO'SHILADI;
-3. `teacherSalary.setCompensation` → stavka (javobga chiqmaydi, lekin
-   yaratilgan xodim maoshsiz qoladi).
+| To'siq | Holat |
+|---|---|
+| `expenseApprovals.checkConfigApproval` + `createRequest` | ✅ `expense-approvals` ko'chdi |
+| `buildUserProfile` o'qituvchi nishonida | ✅ `groups` ko'chdi |
+| `openingBalance.create` / `teacherSalary.setCompensation` | 🛑 hamon yo'q |
 
-Bundan tashqari `buildUserProfile` o'qituvchi nishonida 501 beradi.
-Yarim ko'chirish uch o'qda farq bergan bo'lardi — shuning uchun u
-Express'da QOLDI.
+Oxirgisi uchun `POST /auth/register-user` dagi ALLAQACHON QABUL
+QILINGAN naqsh qo'llandi: `compensation` yoki `openingBalance` bilan
+kelgan so'rov OCHIQ 501 (`REGISTER_SIDE_EFFECTS_NOT_MIGRATED`) oladi —
+pul jimgina yo'qolmasin.
+
+⚠ 501 QAYERDA TURGANI MUHIM. `register-user` da u metodning eng
+boshida; `createStaff` da esa ATAYLAB PASTGA tushirildi — BARCHA
+tekshiruvlardan KEYIN, birinchi YOZUVDAN OLDIN:
+
+  • noto'g'ri kirish + openingBalance → Express bilan AYNAN bir xil
+    xato (400/403/409);
+  • to'g'ri kirish + openingBalance   → 501, HECH NARSA YOZILMAYDI.
+
+Ya'ni paritet `register-user` dagidan KENGROQ saqlangan.
+
+⚠ TASDIQ SHOXI (202) TO'LIQ ISHLAYDI, lekin tasdiqni BAJARISH
+(`executeApprovedHire`) hamon yopiq — `expense-approvals` ning
+`approve`/`bulkDecide` marshrutlari allaqachon ochiq 501
+(`APPROVAL_EXECUTORS_NOT_MIGRATED`) beradi. So'rov faqat payload
+saqlaydi, moliyaviy yon ta'sir bajarmaydi — ya'ni pul jimgina
+yo'qolishi mumkin bo'lgan yo'l YO'Q.
 
 ### Meros qilib olingan cheklov (Faza 2.3 dan)
 
