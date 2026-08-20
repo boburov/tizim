@@ -41,7 +41,8 @@
     "test:holidays-parity": "node test/holidays-parity.test.mjs",
     "test:search-history-parity": "node test/search-history-parity.test.mjs",
     "test:users-lifecycle-parity": "node test/users-lifecycle-parity.test.mjs",
-    "probe:bot-auth": "node --env-file=../server/.env test/bot-auth-blocker.probe.mjs"
+    "probe:bot-auth": "node --env-file=../server/.env test/bot-auth-blocker.probe.mjs",
+    "mint-token": "node --env-file=../server/.env test/mint-token.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"
