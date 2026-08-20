@@ -310,15 +310,6 @@ const run = async () => {
   check("NET balans nolga tushdi", (await balanceOf(partial.id)) === 0);
 
   // ─────────────────────────────────────────────────────────────────
-  console.log(
-    `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
-      `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
-  );
-  if (R.notes.length) {
-    console.log("\nYiqilganlar:");
-    R.notes.forEach((n) => console.log(`  - ${n}`));
-  }
-  process.exit(R.fail ? 1 : 0);
 };
 
 run()

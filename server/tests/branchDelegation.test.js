@@ -568,16 +568,11 @@ const run = async () => {
   check("Aralash: ikkalasi chegarada -> o'tadi", mixedOk.needsApproval === false);
 
   // ── Yakun ──
-
-  console.log(
-    `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
-      `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
-  );
-  if (R.fail) {
-    console.log("\nYiqilganlar:");
-    R.notes.forEach((n) => console.log(`  • ${n}`));
-    process.exit(1);
-  }
+  //
+  // ⚠ BU YERDA `process.exit` YO'Q. Ilgari yiqilish holatida u shu
+  // joyda chaqirilardi va `.finally()` dagi TOZALASH umuman ishga
+  // tushmasdi — ya'ni test yiqilgan har safar bazada fixture qolib
+  // ketardi. Xulosa va chiqish kodi endi FAQAT `.finally()` da.
 };
 
 run()
