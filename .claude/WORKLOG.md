@@ -15380,3 +15380,70 @@ Statik tekshiruv: butun `src` bo'ylab kalitsiz JSX `.map()` yo'q. Aniqroq joyni 
 <sub>session `aa3395ce` · branch `main` · 13 ta qadam</sub>
 
 ---
+
+## 2026-08-20 13:40 — super admin , admin panelga qyata kira olsamsin va admin panel faqat d
+
+**So'rov**
+
+> super admin , admin panelga qyata kira olsamsin va admin panel faqat direktorlar uchun bo'lishi kerak va superadmin da mavud tizim tahlilini admin panelga hamm kochirib bering va admin paneldan tashkilot paneli ga qyatishni olib tashlang amdin panelda super amdin panelga ota olmasin va super amdinda filial login aprollari korinib tursin va tizim tahlili iconi monitor settng iconini qoyib ber
+
+**O'zgargan fayllar (3)**
+
+- `client/src/shared/components/guards/AdminPanelGuard.jsx` — yaratildi/qayta yozildi
+- `client/src/owner/features/systemAnalysis/components/SystemAnalysisTabs.jsx` — yaratildi/qayta yozildi
+- `client/src/superadmin/components/BranchCredentials.jsx` — yaratildi/qayta yozildi
+
+**Buyruqlar (49)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && grep -n "password" prisma/schema.prisma | head -10; echo "── ochiq parol migratsiyasi ──"; head -25 src/seeds/rem…
+sed -n 1,60p src/modules/branches/handlers/stats.handler.js; echo "── parol tiklash endpointi ──"; grep -rn "password" src/modules/users/*.routes.js src/modules…
+grep -n "export const stats" -A 60 src/modules/branches/services/branches.service.js | grep -n "leader\|director\|username\|role\|return" | head -20
+cd /Users/shukrullo/Desktop/lc-total/client && node -e " const i=require('./node_modules/lucide-react/dist/cjs/lucide-react.js'); for (const n of ['MonitorCog',…
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n 455,495p src/modules/branches/services/branches.service.js
+sed -n 104,128p src/modules/users/users.routes.js; echo "── client mutatsiyasi ──"; cd ../client && grep -rn "password" src/owner/features/users/hooks/*.js src/…
+cd ../server && cat src/modules/users/handlers/getPassword.handler.js 2>/dev/null; grep -n "getPassword\|export const password" -A 30 src/modules/users/services…
+sed -n 699,730p src/modules/users/services/users.service.js
+cat src/helpers/password.helper.js; echo "── bazadagi haqiqiy qiymat ──"; node --input-type=module -e " import('./src/config/prisma.js').then(async ({default:p}…
+node --input-type=module -e " import('./src/config/prisma.js').then(async ({default:p})=>{ const u = await p.user.findFirst({where:{role:{not:'owner'}}, omit:{p…
+cd /Users/shukrullo/Desktop/lc-total/client && python3 - <<'PY' import pathlib # ── 1) IKONKA: Activity → MonitorCog (ikkala panelda) ── p = pathlib.Path("src/s…
+python3 - <<'PY' import pathlib # ── Marshrutga qo'riqchi ── p = pathlib.Path("src/app/routes.jsx"); s = p.read_text() s = s.replace('''import SuperAdminGuard f…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/superadmin/layout/SuperAdminHeader.jsx"); s = p.read_text() s = s.replace(''' * Vakolatlar — "kim nima qil…
+cd /Users/shukrullo/Desktop/lc-total/client && python3 - <<'PY' import pathlib, re SA = "owner/features/systemAnalysis" # ── Ko'chirilgan fayllar ichidagi nisbi…
+git mv src/superadmin/sections/DirectionDemandSection.jsx src/owner/features/systemAnalysis/sections/DirectionDemandSection.jsx && \ cat > src/owner/features/sy…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/superadmin/pages/TizimTahliliPage.jsx") p.write_text('''import PageShell from "@/shared/components/page/Pa…
+grep -rn "DRILLDOWN\.\|userHref\|groupHref\|branchHref\|to=\"/owner\|href=\"/owner" src/owner/features/systemAnalysis/sections/*.jsx src/superadmin/sections/*.j…
+cat src/owner/features/systemAnalysis/components/SectionHeader.jsx | sed -n 30,90p; echo "── QuickLink ──"; grep -n "const QuickLink" -A 12 src/owner/features/s…
+grep -n "to\b" -B 2 -A 10 src/shared/components/dashboard/SectionGrid.jsx | sed -n 1,45p
+tail -30 src/owner/features/systemAnalysis/navigation/drilldown.js; echo "── TeamSection 95-115 ──"; sed -n 95,115p src/owner/features/systemAnalysis/sections/T…
+python3 - <<'PY' import pathlib p = pathlib.Path("src/owner/features/systemAnalysis/navigation/drilldown.js"); s = p.read_text() s += ''' /** * ════════════════…
+python3 - <<'PY' import pathlib, re SEC = pathlib.Path("src/owner/features/systemAnalysis/sections") # ── 1) TeamSection ── f = SEC / "TeamSection.jsx"; s = f.r…
+python3 - <<'PY' import pathlib # TeamSection'dagi `<Link to={userHref(...)}>` — null bo'lsa oddiy qatorga aylanadi. f = pathlib.Path("src/owner/features/system…
+python3 - <<'PY' import pathlib, re # ── Super Admin bo'limlari ham kontekstga qarasin ── for name in ["BranchPnlSection.jsx", "BranchCompareSection.jsx"]: f = …
+npx eslint src/superadmin 2>&1 | tail -8; npx vite build 2>&1 | grep -E "error|built in" | head -5
+# … yana 24 ta
+```
+
+**Natija**
+
+Tushundim — ikki panel orasida qattiq devor. Avval bir nechta noma'lumni tekshiray:
+
+Muhim: parollar loyiha talabiga ko'ra **ochiq matnda** saqlanadi (`hashPassword` — bu shunchaki `String(plain)`), ya'ni parolni ko'rsatish mumkin. Tasdiqlayman:
+
+Hammasi aniq. Boshlayman — avval ikonka, ikki tomonlama devor va qo'riqchi:
+
+Now the guard and the header link removal:
+
+Now the shared analysis page — full tab set, used by both panels:
+
+Now the branch credentials component (§ so'rov 6):
+
+Now wiring the credentials block into the branch page — on the "Umumiy" tab where it's found immediately after creating a branch:
+
+Testlarni yangi arxitekturaga moslashtiraman:
+
+Endi hujjatlarni yangilayman:
+
+<sub>session `aa3395ce` · branch `main` · 52 ta qadam</sub>
+
+---

@@ -122,7 +122,10 @@ const AsosiyPage = () => {
             error={fromQuery(branches).error}
             onRetry={branches.refetch}
             hint="Faol filiallar bo'yicha"
-            to="/owner/students"
+            // ADMIN PANELIGA HAVOLA QILINMAYDI: Super Admin u yerga
+            // kira olmaydi (`AdminPanelGuard`). O'quvchilar soni
+            // filiallar kesimida ochiladi.
+            to="/org/filiallar?tab=compare"
           />
         </KpiGrid>
       )}

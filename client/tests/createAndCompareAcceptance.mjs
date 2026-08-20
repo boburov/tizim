@@ -157,10 +157,32 @@ await page.waitForTimeout(1200);
 const orgCreate = await page.locator('button:has-text("Yaratish")').count();
 check("Super Admin panelida umumiy 'Yaratish' menyusi YO'Q", orgCreate === 0, `${orgCreate} ta`);
 
-await page.goto(`${APP}/owner/dashboard`, { waitUntil: "networkidle" });
-await page.waitForTimeout(1200);
+// ══════════════════════════════════════════════════════════════════
+// YARATISH TUGMASI DIREKTOR HISOBIDA TEKSHIRILADI
+// ══════════════════════════════════════════════════════════════════
+//
+// Ega `/owner/*` ga KIRA OLMAYDI (`AdminPanelGuard`) — Admin paneli
+// filial direktorlarining ish joyi. Shuning uchun bu bo'lim uchun
+// alohida sessiya ochiladi.
+//
+// Ega yo'qotmaydi: u filial va xonani O'Z panelida, kontekst ichida
+// yaratadi (Filiallar → "+", filial → Xonalar → "+").
+const adminCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const adminPage = await adminCtx.newPage();
+await adminPage.goto(`${APP}/login`, { waitUntil: "domcontentloaded" });
+await adminPage.fill('input[name="username"]', "qa_admin_a");
+await adminPage.fill('input[name="password"]', "qa123456");
+await adminPage.press('input[name="password"]', "Enter");
+await adminPage.waitForTimeout(3500);
+const adminGate = adminPage.locator("[data-branch-gate]");
+if (await adminGate.count()) {
+  await adminGate.locator("button").first().click().catch(() => {});
+  await adminPage.waitForTimeout(2000);
+}
+await adminPage.goto(`${APP}/owner/dashboard`, { waitUntil: "networkidle" });
+await adminPage.waitForTimeout(1500);
 
-const header = page.locator('[data-sidebar="sidebar"]').first();
+const header = adminPage.locator('[data-sidebar="sidebar"]').first();
 const createMain = header.locator('button:has-text("Yaratish")').first();
 const createChevron = header.locator('button[aria-label="Yaratish turini tanlash"]');
 
@@ -172,62 +194,62 @@ check("tugmada FAOL TUR nomi ko'rinadi", /·/.test(faceBefore), faceBefore);
 
 // ── menyu ochilishi va yangi turlar ──
 await createChevron.click();
-await page.waitForTimeout(600);
-const menuLabels = (await page.locator('[role="menuitem"]').allInnerTexts()).map((t) =>
+await adminPage.waitForTimeout(600);
+const menuLabels = (await adminPage.locator('[role="menuitem"]').allInnerTexts()).map((t) =>
   t.replace(/\s+/g, " ").trim(),
 );
 check("menyu ochildi", menuLabels.length > 0, `${menuLabels.length} variant`);
 // MATN BO'YICHA QIDIRISH ISHLAMAYDI: "Filial" so'zi `Xodim` va `Xona`
 // yozuvlarining IZOHIDA ham bor, ya'ni `:has-text("Filial")` uchta
 // elementga mos keladi. Shu sababli `data-create-key` ishlatiladi.
-check("XONA varianti bor", (await page.locator('[data-create-key="room"]').count()) === 1,
+check("XONA varianti bor", (await adminPage.locator('[data-create-key="room"]').count()) === 1,
   menuLabels.join(" | ").slice(0, 100));
-check("FILIAL varianti bor", (await page.locator('[data-create-key="branch"]').count()) === 1);
+check("FILIAL varianti bor", (await adminPage.locator('[data-create-key="branch"]').count()) === 1);
 
 // ══ 2) BIR BOSISH: tur tanlangach modal DARHOL ochiladi ════════
 console.log("\n2) tur tanlash -> modal darhol ochiladi");
-await page.locator('[data-create-key="room"]').click();
-await page.waitForTimeout(900);
+await adminPage.locator('[data-create-key="room"]').click();
+await adminPage.waitForTimeout(900);
 
-const roomDialog = page.locator('[role="dialog"]:has-text("Yangi xona")');
+const roomDialog = adminPage.locator('[role="dialog"]:has-text("Yangi xona")');
 check("Xona tanlangach modal DARHOL ochildi (ikkinchi bosish yo'q)",
   (await roomDialog.count()) === 1);
 check("modalda 'Xona nomi' maydoni bor",
   (await roomDialog.locator('input[name="name"]').count()) === 1);
 
-await page.keyboard.press("Escape");
-await page.waitForTimeout(600);
+await adminPage.keyboard.press("Escape");
+await adminPage.waitForTimeout(600);
 
 // ══ 3) ESLAB QOLISH: qayta yuklangach ham o'sha tur ════════════
 console.log("\n3) tanlangan tur ESLAB QOLINADI");
 const faceAfter = (await createMain.innerText().catch(() => "")).replace(/\s+/g, " ").trim();
 check("tugma yuzi 'Xona' ga o'zgardi", /Xona/.test(faceAfter), faceAfter);
 
-await page.reload({ waitUntil: "networkidle" });
-await page.waitForTimeout(1500);
-const faceReload = (await page.locator('[data-sidebar="sidebar"]').first()
+await adminPage.reload({ waitUntil: "networkidle" });
+await adminPage.waitForTimeout(1500);
+const faceReload = (await adminPage.locator('[data-sidebar="sidebar"]').first()
   .locator('button:has-text("Yaratish")').first()
   .innerText().catch(() => "")).replace(/\s+/g, " ").trim();
 check("sahifa qayta yuklangach ham 'Xona' (localStorage)", /Xona/.test(faceReload), faceReload);
 
 // ENG MUHIM TEKSHIRUV: chap qismni BIR MARTA bosganda modal ochiladi.
-await page.locator('[data-sidebar="sidebar"]').first().locator('button:has-text("Yaratish")').first().click();
-await page.waitForTimeout(900);
+await adminPage.locator('[data-sidebar="sidebar"]').first().locator('button:has-text("Yaratish")').first().click();
+await adminPage.waitForTimeout(900);
 check(
   "BIR BOSISHDA xona modali ochildi (talabning o'zagi)",
-  (await page.locator('[role="dialog"]:has-text("Yangi xona")').count()) === 1,
+  (await adminPage.locator('[role="dialog"]:has-text("Yangi xona")').count()) === 1,
 );
-await page.keyboard.press("Escape");
-await page.waitForTimeout(600);
+await adminPage.keyboard.press("Escape");
+await adminPage.waitForTimeout(600);
 
 // ══ 4) SODDALASHTIRILGAN FILIAL MODALI ═════════════════════════
 console.log("\n4) filial qo'shish — soddalashtirilgan");
-await page.locator('button[aria-label="Yaratish turini tanlash"]').first().click();
-await page.waitForTimeout(600);
-await page.locator('[data-create-key="branch"]').click();
-await page.waitForTimeout(900);
+await adminPage.locator('button[aria-label="Yaratish turini tanlash"]').first().click();
+await adminPage.waitForTimeout(600);
+await adminPage.locator('[data-create-key="branch"]').click();
+await adminPage.waitForTimeout(900);
 
-const branchDialog = page.locator('[role="dialog"]:has-text("Yangi filial")');
+const branchDialog = adminPage.locator('[role="dialog"]:has-text("Yangi filial")');
 check("filial modali ochildi", (await branchDialog.count()) === 1);
 
 if (await branchDialog.count()) {
@@ -245,8 +267,8 @@ if (await branchDialog.count()) {
   const dialogText = (await branchDialog.innerText()).replace(/\s+/g, " ");
   check("'Qo'shimcha' yig'ilgan bo'lim bor", /Qo'shimcha/i.test(dialogText));
 }
-await page.keyboard.press("Escape");
-await page.waitForTimeout(600);
+await adminPage.keyboard.press("Escape");
+await adminPage.waitForTimeout(600);
 
 // ══ 5) TAHLIL MARKAZI — YAGONA QOBIQDA ═════════════════════════
 //
@@ -259,33 +281,33 @@ await page.waitForTimeout(600);
 // ichida ochiladi. `/admin/tahlil` esa o'sha yerga yo'naltiriladi.
 console.log("\n5) tahlil markazi — yagona qobiqda");
 
-await page.goto(`${APP}/admin/tahlil`, { waitUntil: "domcontentloaded" });
-await page.waitForTimeout(1500);
+await adminPage.goto(`${APP}/admin/tahlil`, { waitUntil: "domcontentloaded" });
+await adminPage.waitForTimeout(1500);
 check("/admin/tahlil → /owner/ai ga yo'naltirdi",
-  page.url().replace(APP, "") === "/owner/ai", page.url().replace(APP, ""));
+  adminPage.url().replace(APP, "") === "/owner/ai", adminPage.url().replace(APP, ""));
 
-await page.waitForTimeout(1500);
+await adminPage.waitForTimeout(1500);
 // 404 NI MATNDAN QIDIRISH NOTO'G'RI EDI: sahifa ko'chgach ichida
 // mutlaqo qonuniy "Hisobot topilmadi" kabi BO'SH HOLAT matnlari paydo
 // bo'ldi va tekshiruv yolg'on yiqila boshladi.
 //
 // Endi 404 SAHIFANING O'ZI bo'yicha aniqlanadi: `NotFoundPage`
 // sarlavhasi bormi. Bo'sh holat matni unga ta'sir qilmaydi.
-const tahlilHeading = await page.locator("main h1").first().innerText().catch(() => "");
+const tahlilHeading = await adminPage.locator("main h1").first().innerText().catch(() => "");
 check("tahlil markazi ochildi (404 emas)",
   /Tahlil markazi/i.test(tahlilHeading),
-  `${page.url().replace(APP, "")} | h1: ${tahlilHeading.slice(0, 40)}`);
+  `${adminPage.url().replace(APP, "")} | h1: ${tahlilHeading.slice(0, 40)}`);
 // Tahlil markazi (`/owner/ai`) — ADMIN panelida, ya'ni uning qobig'i.
 check("tahlil markazi Admin panelining qobig'ida",
-  (await page.locator('[data-sidebar="sidebar"]').count()) === 1);
+  (await adminPage.locator('[data-sidebar="sidebar"]').count()) === 1);
 
 // FILIALLAR — Super Admin panelining O'Z menyusida.
 //
 // Selektor `[data-sidebar]` edi (Admin panelining shadcn sidebari) va
 // `/org` da bunday element YO'Q: u alohida qobiq. Menyu yozuvi bor
 // edi-yu, test uni topa olmasdi.
-await page.goto(`${APP}/org`, { waitUntil: "networkidle" });
-await page.waitForTimeout(1500);
+await adminPage.goto(`${APP}/org`, { waitUntil: "networkidle" });
+await adminPage.waitForTimeout(1500);
 const navTexts = (await page
   .locator('nav[aria-label="Tashkilot menyusi"] a')
   .allInnerTexts()).map((t) => t.trim()).filter(Boolean);
@@ -297,10 +319,10 @@ if (multiBranch) {
     hasBranches, navTexts.join(" | "));
 }
 
-// Operatsion sidebar'dan ESKI yozuv olib tashlanganmi
-await page.goto(`${APP}/owner/dashboard`, { waitUntil: "networkidle" });
-await page.waitForTimeout(1800);
-const sidebarLinks = await page.locator('[data-sidebar="sidebar"] a').allInnerTexts();
+// Operatsion sidebar'dan ESKI yozuv olib tashlanganmi (direktor hisobida)
+await adminPage.goto(`${APP}/owner/dashboard`, { waitUntil: "networkidle" });
+await adminPage.waitForTimeout(1800);
+const sidebarLinks = await adminPage.locator('[data-sidebar="sidebar"] a').allInnerTexts();
 check("operatsion sidebar'da 'Tahlil markazi' YO'Q (ko'chirildi)",
   !sidebarLinks.some((t) => /Tahlil markazi/i.test(t)),
   sidebarLinks.map((t) => t.trim()).filter(Boolean).slice(0, 12).join(" | "));
@@ -384,6 +406,7 @@ const byStatus = {};
 for (const r of allRequests) byStatus[r.status] = (byStatus[r.status] || 0) + 1;
 console.log(`  ℹ jami API so'rov: ${allRequests.length} — ${JSON.stringify(byStatus)}`);
 
+await adminCtx.close();
 await browser.close();
 console.log(`\n=== NATIJA: ${R.pass} o'tdi, ${R.fail} yiqildi ===\n`);
 process.exit(R.fail ? 1 : 0);

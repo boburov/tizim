@@ -8,7 +8,6 @@ import {
   LogOut,
   Monitor,
   PanelLeft,
-  Building2,
   ChevronRight,
   ArrowLeftToLine,
 } from "lucide-react";
@@ -98,7 +97,6 @@ const OwnerApprovalsBell = lazy(() =>
 // ISH MAKONI — menyuning YAGONA manbai.
 import useWorkspace from "@/shared/hooks/useWorkspace";
 import { WORKSPACES } from "@/shared/workspaces";
-import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -175,10 +173,6 @@ const Main = () => {
   const { has, hasAny } = usePermissions();
   const { workspace, nav: navItems, meta } = useWorkspace();
 
-  // `SuperAdminGuard` bilan AYNI shart — ikkisi ajralib ketsa,
-  // tugma ko'rinib, bosilganda qaytarib yuborardi.
-  const canOpenOrg = roleType === ROLE_TYPES.OWNER || hasOrgAuthority(has);
-
   // YARATISH TUGMASI, QIDIRUV VA MODALLAR — o'quvchidan boshqa hammaga.
   //
   // Ilgari shart `roleType` ga qarardi va o'qituvchi tushib qolardi:
@@ -242,40 +236,23 @@ const Main = () => {
               qatorning o'zidan ochiladi (pastda). */}
           <SidebarGroup className="gap-2 pb-0">
             {/* ══════════════════════════════════════════════════════
-                SUPER ADMIN PANELIGA QAYTISH
+                SUPER ADMIN PANELIGA HAVOLA ATAYLAB YO'Q
                 ══════════════════════════════════════════════════════
 
-                ── NEGA KERAK ──
-                Ega Super Admin panelidan Admin paneliga o'ta oladi
-                (sarlavha menyusidagi "Admin paneli"), lekin ORQAGA
-                yo'l YO'Q edi: `/owner/*` da hech qayerda `/org`
-                havolasi ko'rinmasdi va odam URL ni qo'lda yozishi
-                kerak bo'lardi. Brauzer testi buni aynan shunday
-                tutdi.
+                Bir muddat bu yerda "Tashkilot paneli" tugmasi turgandi.
+                U OLIB TASHLANDI: ikki panel bir-biridan TO'LIQ
+                ajratilgan bo'lishi kerak.
 
-                ── NEGA MENYU RO'YXATIDA EMAS ──
-                Bu qator qolgan o'ttizta havoladan BOSHQA ish qiladi:
-                u sahifaga emas, boshqa PANELGA olib boradi. Menyu
-                ichida u "yana bitta bo'lim" bo'lib o'qilardi va
-                aynan kerak bo'lgan paytda ko'zga tashlanmasdi.
+                Admin paneli — filial direktorining ish joyi. Undan
+                tashkilot darajasiga chiqadigan yo'l bo'lsa, panel
+                "kattaroq panelning bir qismi" bo'lib o'qiladi va
+                direktor o'zi ko'ra olmaydigan bo'limni ko'rsatadigan
+                tugmani bosib yuradi.
 
-                ── KIMGA KO'RINADI ──
-                Faqat `/org` ni ocha oladiganlarga (`SuperAdminGuard`
-                bilan AYNI shart). Aks holda tugma bosilardi-yu, odam
-                darhol shu yerga qaytarilardi — ishonchni buzadigan
-                "yolg'on eshik". */}
-            {canOpenOrg && (
-              <SidebarMenuButton
-                asChild
-                tooltip="Tashkilot paneli"
-                className="h-auto border border-sidebar-border py-2"
-              >
-                <Link to="/org" onClick={isMobile ? toggleSidebar : undefined}>
-                  <Building2 strokeWidth={1.5} />
-                  <span>Tashkilot paneli</span>
-                </Link>
-              </SidebarMenuButton>
-            )}
+                Chegara UI da emas, MARSHRUTDA: `/org/*` `SuperAdminGuard`
+                ostida, `/owner/*` esa `AdminPanelGuard` ostida
+                (`app/routes.jsx`). Ma'lumot esa har doimgidek serverda
+                qo'riqlanadi. */}
             <OwnerCreateMenu />
             <OwnerGlobalSearch />
             {/* "RAHBARIYATGA QAYTISH" TUGMASI OLIB TASHLANDI.

@@ -1,5 +1,5 @@
 import { NavLink, Link } from "react-router-dom";
-import { ChevronDown, LogOut, ShieldCheck, LayoutList, User } from "lucide-react";
+import { ChevronDown, LogOut, ShieldCheck, User } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -38,11 +38,14 @@ import { SUPER_ADMIN_HEADER_NAV } from "../navigation/nav.config";
  *   Vakolatlar      — "kim nima qila oladi". Bu SOZLASH ishi, kundalik
  *                     emas: sidebar'da bo'lsa uch yozuvli menyuni
  *                     to'rtga chiqarardi.
- *   Admin paneli    — Super Admin operatsion ishga (o'quvchi qo'shish,
- *                     davomat) tushishi mumkin. Ikkala panel orasida
- *                     OSHKORA yo'l bo'lishi shart: aks holda odam
- *                     "boshqa ekranga qanday o'taman?" degan savolda
- *                     qoladi va URL'ni qo'lda yozadi.
+ *
+ * ── ADMIN PANELIGA HAVOLA ATAYLAB YO'Q ──
+ * Bir muddat bu menyuda "Admin paneli" qatori turgandi. U olib
+ * tashlandi: Admin paneli — filial direktorlarining ish joyi va Super
+ * Admin u yerda ishlamaydi (`AdminPanelGuard` uni qaytaradi).
+ *
+ * Havolani qoldirish "yolg'on eshik" bo'lardi: bosiladi, lekin odam
+ * darhol shu yerga qaytariladi.
  */
 const SuperAdminHeader = () => {
   const { user, roleLabel } = useAuth();
@@ -122,14 +125,6 @@ const SuperAdminHeader = () => {
                 </Link>
               </DropdownMenuItem>
             )}
-
-            {/* IKKI PANEL ORASIDAGI OSHKORA YO'L (qarang komponent izohi). */}
-            <DropdownMenuItem asChild>
-              <Link to="/owner/dashboard">
-                <LayoutList className="size-4" />
-                Admin paneli
-              </Link>
-            </DropdownMenuItem>
 
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => logout()}>

@@ -24,6 +24,11 @@
  *     (o'qituvchi va xodim tafsiloti UMUMIY sahifada ochiladi)
  * ═══════════════════════════════════════════════════════════════════
  */
+import useAuth from "@/shared/hooks/useAuth";
+import usePermissions from "@/shared/hooks/usePermissions";
+import { ROLE_TYPES } from "@/shared/constants/roles";
+import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
+
 const OWNER = "/owner";
 
 export const DRILLDOWN = Object.freeze({
@@ -100,3 +105,45 @@ export const groupHref = (id) => (id ? `${OWNER}/groups/${id}` : DRILLDOWN.group
  * Ishlamaydigan chuqur havola berish o'rniga ro'yxatga olib boramiz.
  */
 export const branchHref = () => DRILLDOWN.branches;
+
+
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * KONTEKSTGA QARAB: HAVOLA BORMI YOKI YO'QMI
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * Yuqoridagi manzillarning HAMMASI Admin panelida (`/owner/*`). Super
+ * Admin esa u yerga KIRA OLMAYDI (`AdminPanelGuard`) — ikki panel
+ * ataylab ajratilgan.
+ *
+ * Ya'ni Super Admin panelida bu havolalar "yolg'on eshik" bo'lardi:
+ * bosiladi, lekin odam darhol `/org` ga qaytariladi. Bu eng yomon
+ * turdagi nosozlik — sahifa buzilmaydi, shunchaki ISHONCH yo'qoladi
+ * ("demak yonidagi raqamlar ham ishonchsiz").
+ *
+ * Shuning uchun havolalar SHU YERDA, bitta joyda o'chiriladi:
+ * `useDrilldown()` Super Adminda bo'sh xarita qaytaradi va
+ * `DashboardSection` (`{to && ...}`) havolani umuman chizmaydi.
+ * Har karta joyida `if (isSuperAdmin)` yozish o'nlab joyda
+ * takrorlanardi va bittasi albatta unutilardi.
+ */
+const EMPTY = Object.freeze(
+  Object.fromEntries(Object.keys(DRILLDOWN).map((k) => [k, null])),
+);
+
+export const useDrilldown = () => {
+  const auth = useAuth();
+  const { has } = usePermissions();
+
+  if (auth.isLoading) return EMPTY;
+  const type = auth.roleType || auth.role;
+  const isOrgLevel = type === ROLE_TYPES.OWNER || hasOrgAuthority(has);
+
+  return isOrgLevel ? EMPTY : DRILLDOWN;
+};
+
+/** Odam kartasiga havola — Super Adminda `null` (qarang `useDrilldown`). */
+export const useUserHref = () => {
+  const map = useDrilldown();
+  return (id) => (map.staff ? userHref(id) : null);
+};

@@ -180,16 +180,10 @@ const orgNav = (await page
   .allTextContents()).map((t) => t.trim()).filter(Boolean);
 check("Super Admin: uch yozuvli o'z menyusi", orgNav.length === 3, orgNav.join(" | "));
 
-await page.goto(`${APP}/owner/dashboard`, { waitUntil: "networkidle" });
-await page.waitForTimeout(1200);
-const adminSidebar = await page.locator('[data-sidebar="sidebar"]').count();
-check("Admin paneli: o'z qobig'i joyida", adminSidebar === 1, `${adminSidebar} ta`);
-
-const navLinks = (await page
-  .locator('[data-sidebar="sidebar"] a span')
-  .allTextContents()).map((t) => t.trim()).filter(Boolean);
-check("Admin paneli menyusi to'liq", navLinks.length >= 6, navLinks.join(" | "));
-
+// ADMIN PANELINING QOBIG'I DIREKTOR HISOBIDA tekshiriladi: ega u
+// yerga kira olmaydi (`AdminPanelGuard`). Bu bo'lim `panelAcceptance`
+// da to'liq qoplangan, shuning uchun bu yerda faqat SUPER ADMIN
+// tomonini o'lchaymiz.
 const kpiCount = await page.locator("main .tabular-nums").count();
 check("KPI plitalari render bo'ldi", kpiCount > 0, `${kpiCount} raqamli element`);
 
@@ -371,26 +365,27 @@ if (drillCount) {
   info("drill-down zanjiri tekshirilmadi — bazada daromad qatori yo'q");
 }
 
-// ══ 6) IKKI PANEL ORASIDA IKKI TOMONLAMA YO'L ══════════════════
+// ══ 6) IKKI PANEL — QATTIQ DEVOR ═══════════════════════════════
 //
-// Ega ikkala panelda ham ishlaydi va ular orasida OSHKORA yo'l
-// bo'lishi shart. Bir tomonlama yo'l eng yomon holat: odam Admin
-// paneliga tushadi va qaytish uchun URL ni qo'lda yozadi (yoki
-// umuman qaytolmaydi).
+// Panellar orasida navigatsiya havolasi BO'LMASLIGI kerak va
+// manzilni qo'lda yozish ham ishlamasligi kerak.
 //
-//   /org   → sarlavha menyusi → "Admin paneli"
-//   /owner → sidebar tepasi   → "Tashkilot paneli"
-console.log("\n6) ikki panel orasidagi yo'l");
+// Bu tekshiruv ilgari TESKARI narsani talab qilardi ("Admin
+// panelidan Super Admin paneliga yo'l bor"). Talab o'zgardi: ikki
+// panel to'liq ajratildi — Admin paneli filial direktorlarining ish
+// joyi, Super Admin esa u yerda ishlamaydi.
+console.log("\n6) ikki panel — qattiq devor");
 await page.goto(`${APP}/owner/students`, { waitUntil: "networkidle" });
-await page.waitForTimeout(1800);
-const backToOrg = page.locator('[data-sidebar="sidebar"] a[href="/org"]').first();
-check("Admin panelidan Super Admin paneliga yo'l bor", await backToOrg.count() > 0);
-if (await backToOrg.count()) {
-  await backToOrg.click();
-  await page.waitForTimeout(2000);
-  check("bosilganda Super Admin paneli ochildi",
-    page.url().endsWith("/org"), page.url().replace(APP, ""));
-}
+await page.waitForTimeout(1500);
+
+// Ega `/owner/*` ga kira olmaydi → `/org` ga qaytariladi.
+check("Super Admin Admin paneliga kira olmaydi",
+  page.url().includes("/org"), page.url().replace(APP, ""));
+
+await page.goto(`${APP}/org`, { waitUntil: "networkidle" });
+await page.waitForTimeout(1200);
+const crossLinks = await page.locator('a[href^="/owner"]').count();
+check("Super Admin panelida `/owner` havolasi YO'Q", crossLinks === 0, `${crossLinks} ta`);
 
 // ══ 7) MOBIL ═══════════════════════════════════════════════════
 console.log("\n7) mobil (360×740)");

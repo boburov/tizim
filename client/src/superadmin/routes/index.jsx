@@ -10,6 +10,7 @@ import FiliallarPage from "../pages/FiliallarPage";
 import BranchDetailPage from "../pages/BranchDetailPage";
 import TizimTahliliPage from "../pages/TizimTahliliPage";
 import VakolatlarPage from "../pages/VakolatlarPage";
+import { MyInboxPage } from "@/owner/features/notifications";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -90,15 +91,24 @@ const SuperAdminRoutes = () => (
       element={<G required={PERMISSIONS.ROLES_READ}><VakolatlarPage /></G>}
     />
 
+    {/* XABARLAR — sarlavhadagi qo'ng'iroq shu yerga olib keladi.
+        Ilgari u `/owner/inbox` ga ketardi, ya'ni Super Admin uchun
+        O'LIK havola edi: `AdminPanelGuard` uni darhol qaytarardi.
+        Sahifa AYNI o'sha — nusxa yaratilmadi. */}
+    <Route path="xabarlar" element={<MyInboxPage />} />
+
     {/* ── ESKI MANZILLAR ── */}
     <Route path="branches" element={<Navigate to="/org/filiallar" replace />} />
     <Route path="branches/:id" element={<BranchRedirect />} />
     <Route path="finance" element={<Navigate to="/org/moliya" replace />} />
     <Route path="analytics" element={<Navigate to="/org/tahlil" replace />} />
     <Route path="permissions" element={<Navigate to="/org/vakolatlar" replace />} />
-    {/* Odamlar va operatsiya — Admin panelining o'z ishi (talab 29). */}
-    <Route path="people" element={<Navigate to="/owner/staff" replace />} />
-    <Route path="operations" element={<Navigate to="/owner/dashboard" replace />} />
+    {/* ODAMLAR VA OPERATSIYA — Admin panelining ishi, lekin Super
+        Admin u yerga kira olmaydi (`AdminPanelGuard`). Shuning uchun
+        bu manzillar `/org` ICHIDA qoladi: filial jamoasi filial
+        kartasining "Odamlar" tabida. */}
+    <Route path="people" element={<Navigate to="/org/filiallar" replace />} />
+    <Route path="operations" element={<Navigate to="/org" replace />} />
 
     <Route path="*" element={<NotFoundPage />} />
   </Routes>

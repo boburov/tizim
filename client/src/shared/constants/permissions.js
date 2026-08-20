@@ -12,6 +12,14 @@ export const PERMISSIONS = Object.freeze({
   //   keyin biladi).
   // `npm run check:permission-keys` shu turdagi xatoni tutadi.
   USERS_CREATE: "users.create",
+  // LOGIN VA PAROLNI KO'RISH/ALMASHTIRISH.
+  //
+  // Serverda ANCHADAN BERI bor (`users.password`) va katalogda ham
+  // ro'yxatlangan, lekin bu yerda YO'Q edi. `PERMISSIONS.USERS_PASSWORD`
+  // yozgan komponent `undefined` olardi va `has(undefined)` EGA uchun
+  // `true`, qolgan hamma uchun `false` qaytarardi — ya'ni chegara
+  // tasodifan "faqat ega" bo'lib qolardi va buni hech narsa aytmasdi.
+  USERS_PASSWORD: "users.password",
   ARCHIVE_REASONS_MANAGE: "archive_reasons.manage",
 
   // Leads

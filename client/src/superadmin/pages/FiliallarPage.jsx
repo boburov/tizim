@@ -78,7 +78,10 @@ const FiliallarPage = () => {
   ];
   const tab = useActiveTab(TABS);
 
-  const branchList = useBranchesQuery();
+  // LOGINLAR BILAN: karta "bu filialga kim kiradi" savoliga darhol
+  // javob bersin (talab — filial login/parollari ko'rinib tursin).
+  // Server bu maydonni faqat `users.read` ruxsati bo'lsa qaytaradi.
+  const branchList = useBranchesQuery({ withManagers: true });
   const profit = useBranchProfit({}, { enabled: canProfit });
   // XONA BANDLIGI — talab 17 filial taqqoslashida uni ochiq so'raydi.
   // Alohida endpoint, chunki bu PUL emas: `classes.read` yetarli va

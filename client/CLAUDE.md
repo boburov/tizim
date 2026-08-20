@@ -51,8 +51,24 @@ client/src/
 | Layout | `OperationalLayout` (shadcn `SidebarProvider`) | `SuperAdminLayout` — **its own shell** |
 | Header | `AppHeader` (mobile only) | `SuperAdminHeader`, full width, **MOLIYA** lives here |
 | Menu | `owner/navigation/sidebar.config.js`, ~12 groups | `superadmin/navigation/nav.config.js`, **exactly 3**: Asosiy · Filiallar · Tizim tahlili |
+| Who | branch **directors** and staff | owner / org-level authority |
 | Scope | the user's assigned branch(es) | the whole organization |
-| Guarded by | `PermissionGuard` per route | `SuperAdminGuard` (`branches.view_all` **and** `system.admin_access`, or owner) |
+| Guarded by | `AdminPanelGuard` — org-level users are sent to `/org` | `SuperAdminGuard` — everyone else is sent to their own panel |
+
+**The wall is two-way and there is no link across it.** A Super Admin cannot open
+`/owner/*`; a director cannot open `/org/*`. Neither shell renders a link to the
+other, because a link that always bounces is a false door — it costs more trust
+than the missing shortcut saves.
+
+Consequences to keep in mind when adding a screen:
+
+- Anything the owner needs must exist **inside `/org`**. `/owner/settings`,
+  `/owner/catalog` and the operational lists are director territory.
+- Deep links into `/owner/*` from analysis cards are switched off centrally by
+  `useDrilldown()` (`owner/features/systemAnalysis/navigation/drilldown.js`):
+  it returns an all-`null` map for org-level users, and `DashboardSection`
+  renders no link when `to` is falsy. Never re-add a hardcoded `/owner/...`
+  `<Link>` inside `superadmin/`.
 
 **They are different shells on purpose.** `/org/*` is mounted *outside*
 `OperationalLayout` in `app/routes.jsx` — it has to be: `OperationalLayout` wraps
@@ -69,7 +85,7 @@ Rooms, finance and system analysis each have **one** implementation used twice:
 |---|---|---|---|
 | Rooms | `/org/filiallar/:id?tab=rooms` | `/owner/rooms` | `owner/features/rooms/components/RoomsGrid` |
 | Finance | `/org/moliya` | `/owner/finance` | `financeAnalytics/pages/FinanceCommandPage` |
-| System analysis | `/org/tahlil` | `/owner/tahlil` | `features/ai` + `rooms/RoomUtilizationSection` |
+| System analysis | `/org/tahlil` | `/owner/tahlil` | `systemAnalysis/SystemAnalysisTabs` (6 tabs, identical in both) |
 
 Scope is a **filter applied by the server**, never a second screen. Writing a
 "branch version" of a finance screen produces two numbers for one fact.

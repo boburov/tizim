@@ -20,7 +20,7 @@ import StudentFlowBars from "../components/StudentFlowBars";
 import AttendanceBreakdown from "../components/AttendanceBreakdown";
 
 // Navigation
-import { DRILLDOWN } from "../navigation/drilldown";
+import { useDrilldown } from "../navigation/drilldown";
 
 /**
  * O'QUV JARAYONI KESIMI.
@@ -31,6 +31,7 @@ import { DRILLDOWN } from "../navigation/drilldown";
  * muammo bo'lib ko'rinardi (yoki aksincha).
  */
 const AcademicPage = () => {
+  const DRILLDOWN = useDrilldown();
   const now = new Date();
   const period = useObjectState({
     year: now.getFullYear(),

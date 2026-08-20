@@ -17,16 +17,16 @@ import {
   useBranchPnlData,
   useBranchSalesData,
   useBranchTeachersData,
-} from "../hooks/useExecutiveData";
+} from "@/owner/features/systemAnalysis/hooks/useExecutiveData";
 
 // Local components
-import SectionHeader from "../components/SectionHeader";
+import SectionHeader from "@/owner/features/systemAnalysis/components/SectionHeader";
 import BranchPicker from "../components/BranchPicker";
 import CompareTable from "../components/CompareTable";
 import SourceBreakdown from "../components/SourceBreakdown";
 
 // Navigation
-import { DRILLDOWN } from "../navigation/drilldown";
+import { useDrilldown } from "@/owner/features/systemAnalysis/navigation/drilldown";
 
 // Constants
 import { PERMISSIONS } from "@/shared/constants/permissions";
@@ -64,6 +64,7 @@ import { ALL_BRANCHES } from "@/shared/lib/branch/activeBranch";
  * ═══════════════════════════════════════════════════════════════════
  */
 const ComparePage = () => {
+  const DRILLDOWN = useDrilldown();
   const now = new Date();
   const state = useObjectState({
     year: now.getFullYear(),

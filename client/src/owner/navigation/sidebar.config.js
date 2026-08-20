@@ -10,7 +10,7 @@ import {
   Target,
   Wallet,
   BookMarked,
-  Activity,
+  MonitorCog,
 } from "lucide-react";
 
 /**
@@ -174,7 +174,7 @@ const ownerSidebar = [
   // faqat uning filialga kesilgan ko'rinishi.
   {
     title: "Tizim tahlili",
-    icon: Activity,
+    icon: MonitorCog,
     url: "/owner/tahlil",
     permissionAnyOf: ["ai.read", "admin_dashboard.read"],
   },

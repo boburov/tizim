@@ -17,7 +17,7 @@ import { useInsightsData } from "../hooks/useExecutiveData";
 import SectionHeader from "../components/SectionHeader";
 
 // Navigation
-import { DRILLDOWN } from "../navigation/drilldown";
+import { useDrilldown } from "../navigation/drilldown";
 // Tavsiya amalining manzili - jadval operatsion panelda (ikkilantirilmaydi).
 import { ownerActionHref } from "@/owner";
 
@@ -35,6 +35,7 @@ import { ownerActionHref } from "@/owner";
  * O'tgan oyning tavsiyasi allaqachon eskirgan bo'ladi.
  */
 const InsightsPage = () => {
+  const DRILLDOWN = useDrilldown();
   const insights = useInsightsData({ status: "open", limit: 50 });
 
   // Bitta so'rov, ikkita ro'yxat. Har biri O'Z holatiga ega bo'lishi

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Building2 } from "lucide-react";
+import { ArrowRight, Building2, KeyRound, TriangleAlert } from "lucide-react";
 
 import { cn } from "@/shared/utils/cn";
 import MetricValue from "@/shared/components/analytics/MetricValue";
@@ -40,7 +40,9 @@ const Metric = ({ label, value, kind = "moneyShort" }) => (
   </div>
 );
 
-const BranchCard = ({ branch, stats }) => (
+const BranchCard = ({ branch, stats }) => {
+  const managers = branch.managers;
+  return (
   <Link
     to={`/org/filiallar/${branch.id}`}
     className={cn(
@@ -78,7 +80,47 @@ const BranchCard = ({ branch, stats }) => (
         kind="percent"
       />
     </div>
+
+    {/* ══════════════════════════════════════════════════════════════
+        BU FILIALGA KIM KIRADI
+        ══════════════════════════════════════════════════════════════
+
+        ── NEGA KARTADA ──
+        Filial ochilgandan keyingi BIRINCHI savol — "direktor qaysi
+        login bilan kiradi?". Uni faqat filial ichiga qo'yish o'sha
+        savolni bir bosish orqasiga yashirardi.
+
+        PAROL BU YERDA YO'Q va bo'lmasligi ham kerak: ro'yxat ekrani
+        yelka ustidan o'qishga eng ochiq joy. Parol filial ichida,
+        "Ko'rsatish" bosilgandan keyin va alohida so'rov bilan keladi.
+
+        ── DIREKTOR YO'Q BO'LSA ──
+        Bu JIM qolmaydi. Direktorsiz filialga hech kim kira olmaydi —
+        ya'ni bu "ma'lumot yo'q" emas, TUGALLANMAGAN ish. */}
+    {managers !== undefined && (
+      <div className="flex items-center gap-1.5 border-t border-border pt-2.5 text-xs">
+        {managers.length > 0 ? (
+          <>
+            <KeyRound className="size-3 shrink-0 text-muted-foreground" />
+            <span className="truncate font-mono text-foreground">
+              {managers[0].username}
+            </span>
+            {managers.length > 1 && (
+              <span className="shrink-0 text-muted-foreground">
+                +{managers.length - 1}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <TriangleAlert className="size-3 shrink-0 text-warning" />
+            <span className="text-muted-foreground">Direktor biriktirilmagan</span>
+          </>
+        )}
+      </div>
+    )}
   </Link>
-);
+  );
+};
 
 export default BranchCard;

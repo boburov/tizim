@@ -55,8 +55,13 @@ await page.waitForTimeout(1200);
 const gate = page.locator("[data-branch-gate]");
 if (await gate.count()) { await gate.locator("button", { hasText: "Barcha filiallar" }).first().click(); await page.waitForTimeout(2500); }
 
-const PAGES = ["/org", "/org/filiallar", "/owner/staff", "/org/moliya",
-  "/owner/dashboard", "/org/tahlil", "/org/vakolatlar"];
+// FAQAT SUPER ADMIN PANELINING SAHIFALARI.
+//
+// Bu test ega hisobida ishlaydi va ega `/owner/*` ga kira olmaydi
+// (`AdminPanelGuard`) — u yerdagi manzil qo'yilsa, test aslida
+// yo'naltirilgan `/org` ni tekshirib, "hammasi joyida" derdi.
+const PAGES = ["/org", "/org/filiallar", "/org/filiallar?tab=compare",
+  "/org/moliya", "/org/tahlil", "/org/vakolatlar"];
 
 console.log("\n1) SARLAVHA IYERARXIYASI (har sahifada bitta h1)");
 for (const u of PAGES) {

@@ -160,6 +160,11 @@ head("1) SUPER ADMIN — o'z qobig'i");
   check("MOLIYA sarlavhada, sidebarda emas",
     (await headerMoliya.count()) > 0 && !nav.some((n) => n.includes("Moliya")));
 
+  // Sarlavha menyusida Admin paneliga havola BO'LMASLIGI kerak —
+  // u "yolg'on eshik" bo'lardi (bosiladi, lekin qaytariladi).
+  const adminLink = await page.locator('header a[href^="/owner"]').count();
+  check("sarlavhada Admin paneliga havola YO'Q", adminLink === 0, `${adminLink} ta`);
+
   // ── ASOSIY: yuqori darajadagi manzara (talab 5) ──
   const kpi = await page.locator("main .tabular-nums").count();
   check("Asosiy: KPI plitalari", kpi > 0, `${kpi} raqam`);
@@ -206,6 +211,20 @@ head("1) SUPER ADMIN — o'z qobig'i");
     await page.waitForTimeout(2000);
     check("filial konteksti ochildi",
       /\/org\/filiallar\/[0-9a-f]{24}/.test(page.url()), page.url().replace(APP, ""));
+
+    // ── KIRISH MA'LUMOTLARI (filial logini) ──
+    const credText = await page.locator("main").innerText();
+    check("filialga kirish ma'lumotlari ko'rinadi",
+      /Kirish ma'lumotlari/.test(credText));
+    const revealBtn = page.locator("main button", { hasText: "Ko'rsatish" }).first();
+    if (await revealBtn.count()) {
+      await revealBtn.click();
+      await page.waitForTimeout(1200);
+      const after = await page.locator("main").innerText();
+      check("parol ochildi", /Yashirish/.test(after));
+    } else {
+      skip("filial paroli", "bu filialda boshqaruvchi biriktirilmagan");
+    }
 
     const roomsTab = page.locator("main button", { hasText: "Xonalar" }).first();
     if (await roomsTab.count()) {
@@ -314,6 +333,19 @@ head("1) SUPER ADMIN — o'z qobig'i");
     await shot(page, "10-org-xona-tahlili");
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // ADMIN PANELI SUPER ADMIN UCHUN YOPIQ
+  // ══════════════════════════════════════════════════════════════
+  //
+  // Devor IKKI TOMONLAMA. Bu tomonini tekshirmasak, "ajratilgan
+  // panellar" yana bir-birining ichiga kirib ketardi.
+  for (const url of ["/owner/dashboard", "/owner/students", "/owner/rooms"]) {
+    await page.goto(`${APP}${url}`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1200);
+    check(`Super Admin: ${url} yopiq`, page.url().includes("/org"),
+      page.url().replace(APP, ""));
+  }
+
   // ── VAKOLATLAR (sarlavha menyusidan) ──
   await page.goto(`${APP}/org/vakolatlar`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1800);
@@ -356,6 +388,11 @@ head("2) ADMIN — mavjud panel, o'z filiali");
 
   const nav = await sidebarItems(page);
   check("menyuda XONALAR bor (talab 11)", nav.some((n) => n.includes("Xonalar")), nav.join(" · "));
+  // Admin panelidan tashkilot darajasiga chiqadigan yo'l BO'LMASLIGI kerak.
+  check("menyuda 'Tashkilot paneli' YO'Q",
+    !nav.some((n) => n.includes("Tashkilot")), nav.join(" · "));
+  const orgHref = await page.locator('[data-sidebar="sidebar"] a[href="/org"]').count();
+  check("sidebarda /org havolasi YO'Q", orgHref === 0, `${orgHref} ta`);
   check("menyuda TIZIM TAHLILI bor (talab 31)",
     nav.some((n) => n.includes("Tizim tahlili")), nav.join(" · "));
   check("VAKOLATLAR yo'q (tashkilot darajasi)",
@@ -385,8 +422,31 @@ head("2) ADMIN — mavjud panel, o'z filiali");
 
   // ── TIZIM TAHLILI: filial ko'lamida ──
   await page.goto(`${APP}/owner/tahlil`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(2500);
   check("Admin tizim tahlili ochildi", page.url().includes("/owner/tahlil"));
+
+  // SUPER ADMIN BILAN AYNI KESIMLAR (talab 31): administrator o'z
+  // filiali haqidagi foydalilik/yo'nalish/jamoa kesimlarini ham
+  // ko'rishi kerak — ilgari bu yerda faqat ikkita tab bor edi.
+  const adminTabs = (await page.locator("main nav[aria-label='Bo\\'limlar'] button")
+    .allTextContents()).map((t) => t.trim()).filter(Boolean);
+  // KUTILGAN KESIMLAR — `qa_admin` ROLINING RUXSATLARIGA QARAB.
+  //
+  // Bu direktorda `ai.read` ham, `finance.view_profitability` ham
+  // YO'Q, ya'ni "Tavsiyalar" va "Foydalilik" tabi ko'rinmasligi
+  // TO'G'RI. Ularni talab qilish testni ruxsat tizimiga qarshi
+  // qo'yardi va "hamma hamma narsani ko'rsin" degan noto'g'ri
+  // xulosani muhrlab qo'yardi.
+  //
+  // Tekshiriladigan narsa boshqa: Admin panelida endi eski IKKI tab
+  // emas, Super Admin bilan AYNI komponent turibdi — ya'ni ruxsati
+  // bor kesimlarning HAMMASI ochiq.
+  const wanted = ["Yo'nalishlar", "Xonalar", "O'quv jarayoni", "Jamoa"];
+  const missingTabs = wanted.filter((w) => !adminTabs.some((t) => t.includes(w)));
+  check("Admin tahlilida ruxsat etilgan kesimlar ochiq", missingTabs.length === 0,
+    missingTabs.length ? `yo'q: ${missingTabs}` : adminTabs.join(" · "));
+  check("ruxsatsiz kesim ko'rsatilmaydi (ai.read yo'q)",
+    !adminTabs.some((t) => t.includes("Tavsiyalar")), adminTabs.join(" · "));
   await shot(page, "14-admin-tahlil");
 
   // ── SUPER ADMIN PANELI YOPIQ (talab 33) ──

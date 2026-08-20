@@ -389,6 +389,38 @@ const run = async () => {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  head("15) FILIAL BOSHQARUVCHISI LOGINI — `?withManagers=true`");
+  {
+    // Bu bayroq filial ro'yxatiga xodim LOGINLARINI qo'shadi. Ro'yxat
+    // esa filial tanlagichi uchun HAR QANDAY auth'langan
+    // foydalanuvchiga ochiq — ya'ni bayroq ruxsatsiz ishlasa,
+    // o'quvchi direktorning loginini o'qib olardi.
+    const withM = async (token) => {
+      const r = await get("/branches?withManagers=true", token);
+      const body = await r.json().catch(() => ({}));
+      const rows = body?.data || [];
+      return rows.some((b) => Array.isArray(b.managers) && b.managers.length);
+    };
+
+    const ownerSees = await withM(owner);
+    if (ownerSees) {
+      ok("ega: boshqaruvchi logini keladi");
+      // Musbat nazorat o'tdi — endi rad etilishi kerak bo'lgan tomon.
+      const staffSees = await withM(staff);
+      if (!staffSees) ok("xodim (users.read yo'q): login KELMAYDI");
+      else bad("xodimga boshqaruvchi logini sizdi");
+    } else {
+      warn("boshqaruvchi logini", "hech bir filialda direktor yo'q — tekshirilmadi");
+    }
+
+    // Bayroqsiz so'rovda maydon UMUMAN bo'lmasligi kerak.
+    const bare = await (await get("/branches", owner)).json();
+    const leaked = (bare?.data || []).some((b) => "managers" in b);
+    if (!leaked) ok("bayroqsiz so'rovda `managers` maydoni YO'Q");
+    else bad("`managers` standart javobda ham keladi");
+  }
+
   // ── NATIJA ──
   console.log(`\n${"═".repeat(60)}`);
   console.log(`NATIJA: ${R.pass} o'tdi, ${R.fail} yiqildi, ${R.warn} o'lchanmadi`);

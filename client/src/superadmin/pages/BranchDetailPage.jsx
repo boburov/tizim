@@ -23,6 +23,7 @@ import {
 import useBranchStatsQuery from "@/owner/features/branches/hooks/useBranchStatsQuery";
 import useBranchesQuery from "@/owner/features/branches/hooks/useBranchesQuery";
 import RoomsGrid from "@/owner/features/rooms/components/RoomsGrid";
+import BranchCredentials from "../components/BranchCredentials";
 import { useUsersListQuery } from "@/owner/features/users";
 import PageShell from "@/shared/components/page/PageShell";
 import EmptyState from "@/shared/components/page/EmptyState";
@@ -200,13 +201,11 @@ const BranchDetailPage = () => {
               label="O'quvchilar" icon={GraduationCap} suffix=" ta"
               value={stats.data?.studentCount}
               status={st.status} error={st.error} onRetry={st.refetch}
-              to="/owner/students"
             />
             <KpiTile
               label="Guruhlar" icon={Users} suffix=" ta"
               value={stats.data?.activeGroupCount}
               status={st.status} error={st.error} onRetry={st.refetch}
-              to="/owner/groups"
             />
             <KpiTile
               label="Xodimlar" icon={Users} suffix=" ta"
@@ -215,6 +214,13 @@ const BranchDetailPage = () => {
               onClick={() => setTab("people")}
             />
           </KpiGrid>
+
+          {/* KIRISH MA'LUMOTLARI — "UMUMIY" TABDA, ko'milgan joyda emas.
+              Filial ochilgandan keyin beriladigan BIRINCHI savol:
+              "direktor qaysi login bilan kiradi?". Uni "Odamlar"
+              tabining ichiga qo'yish o'sha savolni yana bir bosish
+              orqasiga yashirardi. */}
+          <BranchCredentials branchId={id} enabled={tab === "overview"} />
 
           <p className="text-xs text-muted-foreground">
             Filialning xonalari, odamlari va pul harakati — yuqoridagi bo'limlarda.
@@ -253,12 +259,9 @@ const BranchDetailPage = () => {
                 Bu filialga biriktirilgan xodim va o'qituvchilar
               </p>
             </div>
-            <Link
-              to="/owner/staff"
-              className="text-xs font-medium text-primary hover:underline"
-            >
-              Barcha odamlar
-            </Link>
+            {/* "Barcha odamlar" havolasi OLIB TASHLANDI: u Admin
+                paneliga (`/owner/staff`) olib borardi va Super Admin
+                u yerga kira olmaydi. Filial jamoasi shu ro'yxatda. */}
           </div>
 
           <QueryState
@@ -272,7 +275,6 @@ const BranchDetailPage = () => {
               <AnalyticsTable
                 rows={res.data}
                 rowKey={(r) => r.id}
-                onRowClick={(r) => navigate(`/owner/users/${r.id}`)}
                 columns={[
                   {
                     key: "fullName",

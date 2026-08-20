@@ -19,7 +19,7 @@ import { useOverviewData } from "../hooks/useExecutiveData";
 import SectionHeader from "../components/SectionHeader";
 
 // Navigation
-import { DRILLDOWN, userHref } from "../navigation/drilldown";
+import { useDrilldown, useUserHref } from "../navigation/drilldown";
 
 /**
  * JAMOA KESIMI.
@@ -35,6 +35,8 @@ import { DRILLDOWN, userHref } from "../navigation/drilldown";
  * halol yo'nalish.
  */
 const TeamPage = () => {
+  const DRILLDOWN = useDrilldown();
+  const userHref = useUserHref();
   // DAVR TANLAGICHI YO'Q va bu ATAYLAB.
   //
   // Bu sahifadagi ikkala ko'rsatkich ham (o'qituvchilar soni, guruhlar
@@ -98,9 +100,12 @@ const TeamPage = () => {
             <ul className="divide-y rounded-md border">
               {items.map((t, i) => (
                 <li key={t.id || t._id || i}>
-                  <Link
-                    // `/owner/teachers/:id` MARSHRUTI YO'Q - o'qituvchi
-                    // tafsiloti umumiy `/owner/users/:id` sahifasida.
+                  {/* HAVOLA BO'LMASA — oddiy qator.
+                      Super Adminda operatsion sahifalar yopiq, ya'ni
+                      `<Link to={null}>` yozib bo'lmaydi (React Router
+                      yiqiladi) va bosiladigan qator ko'rsatish ham
+                      noto'g'ri bo'lardi. */}
+                  <Row
                     to={userHref(t.id || t._id)}
                     className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent"
                   >
@@ -122,7 +127,7 @@ const TeamPage = () => {
                         {t.studentsCount} o'quvchi
                       </span>
                     )}
-                  </Link>
+                  </Row>
                 </li>
               ))}
             </ul>
@@ -145,13 +150,29 @@ const TeamPage = () => {
   );
 };
 
-const QuickLink = ({ to, label }) => (
+// `to` bo'lmasa UMUMAN chizilmaydi: Super Adminda operatsion
+// havolalar yo'q (qarang `navigation/drilldown.js`).
+/**
+ * Havola BO'LSA `<Link>`, bo'lmasa oddiy `<div>`.
+ *
+ * Super Admin panelida operatsion sahifalar yopiq (`AdminPanelGuard`),
+ * ya'ni o'sha yerda bu qatorlar bosilmaydi — lekin MA'LUMOT baribir
+ * ko'rinishi kerak.
+ */
+const Row = ({ to, className, children }) =>
+  (to ? (
+    <Link to={to} className={className}>{children}</Link>
+  ) : (
+    <div className={className}>{children}</div>
+  ));
+
+const QuickLink = ({ to, label }) => (!to ? null : (
   <Link
     to={to}
     className="rounded-md border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
   >
     {label}
   </Link>
-);
+));
 
 export default TeamPage;

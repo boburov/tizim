@@ -15,15 +15,15 @@ import {
   useOverviewData,
   useCashflowData,
   useBranchPnlData,
-} from "../hooks/useExecutiveData";
+} from "@/owner/features/systemAnalysis/hooks/useExecutiveData";
 
 // Local components
-import SectionHeader from "../components/SectionHeader";
+import SectionHeader from "@/owner/features/systemAnalysis/components/SectionHeader";
 import CashflowBars from "../components/CashflowBars";
 import BranchPnlTable from "../components/BranchPnlTable";
 
 // Navigation
-import { DRILLDOWN } from "../navigation/drilldown";
+import { useDrilldown } from "@/owner/features/systemAnalysis/navigation/drilldown";
 
 /**
  * MOLIYA KESIMI.
@@ -34,6 +34,7 @@ import { DRILLDOWN } from "../navigation/drilldown";
  * Tafsilotga drill-down orqali tushiladi.
  */
 const FinancePage = () => {
+  const DRILLDOWN = useDrilldown();
   const now = new Date();
   const period = useObjectState({
     year: now.getFullYear(),

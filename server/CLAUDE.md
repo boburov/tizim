@@ -168,6 +168,18 @@ so'rovlar yuborib tekshiradi (brauzersiz — xuddi hujumchi kabi). Bo'sh bazada
 shuning uchun har sizish testi **musbat nazorat** ostida: ruxsat etilgan tomon
 ham hech narsa topmasa, tekshiruv "o'lchanmadi" deb belgilanadi.
 
+## Parollar OCHIQ MATNDA saqlanadi
+
+`helpers/password.helper.js` — `hashPassword` parolni O'ZGARTIRMASDAN
+qaytaradi, `comparePassword` esa oddiy matn solishtiruvi. Bu loyiha talabi
+(maydon nomi `passwordHash` tarixiy sabablarga ko'ra qolgan).
+
+Shu sababli `GET /users/:id/password` mavjud qiymatni QAYTARADI — u parolni
+"tiklamaydi". Chegara ikki qatlamli: `users.password` ruxsati VA filial ko'lami.
+`branches.view_all` bu yerda ATAYLAB o'tkazgich emas
+(`helpers/credentialScope.helper.js`) — aks holda filial direktori boshqa
+filial xodimining paroli bilan uning hisobiga kirib olardi.
+
 ## Rejalashtiruvchi (joblar)
 
 Agenda **faqat MongoDB** bilan ishlagani uchun u **pg-boss** bilan

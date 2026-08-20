@@ -43,6 +43,15 @@ export const list = async ({
   includeInactive = false,
   allowedBranchIds = [],
   canSeeAllBranches = false,
+  // BOSHQARUVCHI LOGINI — IXTIYORIY VA RUXSAT BILAN.
+  //
+  // Bu ro'yxat filial tanlagichi uchun HAR QANDAY auth'langan
+  // foydalanuvchiga ochiq (o'quvchi ham o'z filialini ko'radi).
+  // Shuning uchun xodim logini standart holatda QAYTMAYDI — uni
+  // faqat handler `users.read` ruxsatini tekshirgandan keyin so'raydi
+  // (`list.handler.js`). Aks holda o'quvchi filial tanlagichini ochib
+  // direktorning loginini o'qib olardi.
+  withManagers = false,
   page = 1,
   limit = 100,
 }) => {
@@ -66,7 +75,54 @@ export const list = async ({
     }),
     prisma.branch.count({ where }),
   ]);
-  return { items: withLegacyIds(items), total, page, limit };
+
+  // N+1 DAN QOCHISH: har filial uchun alohida so'rov o'rniga BITTA
+  // so'rov va xotirada guruhlash.
+  let managersByBranch = new Map();
+  if (withManagers && items.length) {
+    const ids = items.map((b) => String(b.id));
+    const users = await prisma.user.findMany({
+      where: {
+        ...userInBranches(ids),
+        role: { notIn: ["student", "teacher", "owner"] },
+        isActive: true,
+        isDeleted: false,
+      },
+      select: {
+        id: true, username: true, role: true, firstName: true, lastName: true,
+        homeBranchId: true,
+        branchAssignments: { select: { branchId: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    managersByBranch = users.reduce((acc, u) => {
+      // Bir odam bir necha filialga biriktirilgan bo'lishi mumkin —
+      // u HAR BIRIDA ko'rinishi kerak.
+      const branchIds = new Set([
+        ...(u.homeBranchId ? [String(u.homeBranchId)] : []),
+        ...u.branchAssignments.map((a) => String(a.branchId)),
+      ]);
+      for (const bid of branchIds) {
+        if (!ids.includes(bid)) continue;
+        if (!acc.has(bid)) acc.set(bid, []);
+        acc.get(bid).push({
+          id: u.id,
+          username: u.username,
+          role: u.role,
+          firstName: u.firstName,
+          lastName: u.lastName,
+        });
+      }
+      return acc;
+    }, new Map());
+  }
+
+  const shaped = withLegacyIds(items).map((b) => (
+    withManagers ? { ...b, managers: managersByBranch.get(String(b.id)) || [] } : b
+  ));
+
+  return { items: shaped, total, page, limit };
 };
 
 export const getById = async (id) => {

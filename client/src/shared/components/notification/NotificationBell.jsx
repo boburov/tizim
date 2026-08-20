@@ -2,7 +2,9 @@ import { Bell } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useUnreadCountQuery } from "@/owner/features/notifications/hooks/useInboxQuery";
 import useAuth from "@/shared/hooks/useAuth";
-import { ROLES } from "@/shared/constants/roles";
+import usePermissions from "@/shared/hooks/usePermissions";
+import { ROLES, ROLE_TYPES } from "@/shared/constants/roles";
+import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
 
 const ROLE_INBOX_PATH = {
   [ROLES.OWNER]: "/owner/inbox",
@@ -11,8 +13,19 @@ const ROLE_INBOX_PATH = {
 };
 
 const NotificationBell = ({ className = "" }) => {
-  const { user, role } = useAuth();
-  const inboxPath = ROLE_INBOX_PATH[role] || "/";
+  const { user, role, roleType } = useAuth();
+  const { has } = usePermissions();
+
+  // ── TASHKILOT DARAJASIDAGI ODAM `/org` DAN CHIQMAYDI ──
+  //
+  // Xarita `role` bo'yicha edi va ega uchun `/owner/inbox` berardi.
+  // Endi Admin paneli unga yopiq (`AdminPanelGuard`), ya'ni qo'ng'iroq
+  // bosilganda odam darhol `/org` ga qaytarilardi — bildirishnomani
+  // umuman ocholmasdi.
+  //
+  // Sahifa BIR XIL (`MyInboxPage`), faqat manzili o'z panelida.
+  const isOrgLevel = (roleType || role) === ROLE_TYPES.OWNER || hasOrgAuthority(has);
+  const inboxPath = isOrgLevel ? "/org/xabarlar" : (ROLE_INBOX_PATH[role] || "/");
 
   // Yagona unread-count hook (optimistik yangilanishlar shu kesh bilan ishlaydi)
   const { data } = useUnreadCountQuery({ enabled: !!user });

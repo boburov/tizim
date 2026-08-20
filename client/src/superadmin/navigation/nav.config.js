@@ -1,4 +1,4 @@
-import { LayoutDashboard, Building2, Activity, Wallet } from "lucide-react";
+import { LayoutDashboard, Building2, MonitorCog, Wallet } from "lucide-react";
 
 import { PERMISSIONS } from "@/shared/constants/permissions";
 
@@ -49,7 +49,7 @@ export const SUPER_ADMIN_NAV = Object.freeze([
   {
     key: "tahlil",
     title: "Tizim tahlili",
-    icon: Activity,
+    icon: MonitorCog,
     url: "/org/tahlil",
     permissionAnyOf: [
       PERMISSIONS.AI_READ,

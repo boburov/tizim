@@ -27,6 +27,7 @@ import { LoginPage, BotAuthPage } from "@/features/auth";
 
 import WorkspaceGuard from "@/shared/components/guards/WorkspaceGuard";
 import SuperAdminGuard from "@/shared/components/guards/SuperAdminGuard";
+import AdminPanelGuard from "@/shared/components/guards/AdminPanelGuard";
 import SuperAdminLayout from "@/superadmin/layout/SuperAdminLayout";
 import { WORKSPACES } from "@/shared/workspaces";
 
@@ -234,15 +235,23 @@ const Routes = () => (
             O'qituvchi ATAYLAB chiqarilgan: unda o'z paneli bor
             (`/teacher/*`) va operatsion panel unga ilgari ham
             yopiq edi. */}
+        {/* ═══ ADMIN PANELI — DIREKTORLAR UCHUN ═══
+
+            `AdminPanelGuard` tashkilot vakolatiga ega odamni (ega,
+            `branches.view_all` + `system.admin_access`) bu yerdan
+            `/org` ga qaytaradi. Devor IKKI TOMONLAMA: `/org/*` da
+            `SuperAdminGuard` teskarisini qiladi.
+
+            NEGA: ikki panel bir-birining ichiga kirsa, ular amalda
+            bitta panel bo'lib qoladi — Super Admin operatsion
+            ekranlarda ishlay boshlaydi, Admin paneli esa "kattaroq
+            panelning bo'lagi" bo'lib o'qiladi. */}
         <Route
           path="/owner/*"
           element={
-            <WorkspaceGuard
-              allow={[WORKSPACES.SUPER_ADMIN, WORKSPACES.ADMIN, WORKSPACES.STAFF]}
-              excludeTeacher
-            >
+            <AdminPanelGuard>
               <OwnerRoutes />
-            </WorkspaceGuard>
+            </AdminPanelGuard>
           }
         />
 
