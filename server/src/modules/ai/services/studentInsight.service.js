@@ -1,5 +1,5 @@
 import prisma from "../../../config/prisma.js";
-import { DEFAULT_THRESHOLDS } from "../../../models/aiConfig.model.js";
+import { DEFAULT_THRESHOLDS } from "../../../constants/aiDefaults.js";
 import { ROLES } from "../../../constants/roles.js";
 import { branchMatchStage } from "../../../helpers/branchContext.helper.js";
 import { collectStudentSignals } from "../signals/student.signal.js";

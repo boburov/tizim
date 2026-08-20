@@ -23,14 +23,14 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # --- Bayroqlarni ajratish ---
-# `-y` faqat SHU script'niki (savolni o'tkazib yuborish). Qolgani
-# cleanDatabase.seed.js ga uzatiladi.
+# `-y` savolni o'tkazib yuboradi (CI uchun). Boshqa bayroq qabul
+# qilinmaydi: tozalash `prisma migrate reset` bilan bo'ladi va u
+# tanlab tozalashni (`--keep-auth`, `--drop`) qo'llab-quvvatlamaydi.
 SKIP_PROMPT=0
-CLEAN_ARGS=()
 for arg in "$@"; do
   case "$arg" in
     -y|--yes) SKIP_PROMPT=1 ;;
-    *) CLEAN_ARGS+=("$arg") ;;
+    *) echo "XATO: noma'lum bayroq '$arg' (faqat -y qabul qilinadi)." >&2; exit 1 ;;
   esac
 done
 

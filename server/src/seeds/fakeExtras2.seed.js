@@ -1,19 +1,11 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
 import { ROLES } from "../constants/roles.js";
 import {
   dateKeyOf,
   getClassDaysInRange,
 } from "../helpers/attendance.helper.js";
-import User from "../models/user.model.js";
-import Group from "../models/group.model.js";
-import GroupMembership from "../models/groupMembership.model.js";
-import Attendance from "../models/attendance.model.js";
-import TeacherAttendance from "../models/teacherAttendance.model.js";
-import Holiday from "../models/holiday.model.js";
-import ActivityLog from "../models/activityLog.model.js";
-import AttendanceSettings from "../models/attendanceSettings.model.js";
 
 // fakeData + fakeExtras dan keyin ishlaydi. Avval QAMRALMAGAN kolleksiyalarni
 // to'ldiradi: Holiday, TeacherAttendance, refund-to'lovlar, Attendance.history,
@@ -36,13 +28,15 @@ const sample = (arr, n) => {
 };
 const daysAgo = (n) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000);
 
-const bulkInsert = async (Model, docs, chunkSize = 1000) => {
+// `insertMany(..., { ordered: false })` ning o'rni.
+const bulkCreate = async (model, docs, chunkSize = 1000) => {
   let count = 0;
   for (let i = 0; i < docs.length; i += chunkSize) {
-    const chunk = await Model.insertMany(docs.slice(i, i + chunkSize), {
-      ordered: false,
+    const res = await prisma[model].createMany({
+      data: docs.slice(i, i + chunkSize),
+      skipDuplicates: true,
     });
-    count += chunk.length;
+    count += res.count;
   }
   return count;
 };
@@ -51,27 +45,32 @@ const seed = async () => {
   await connectDB();
   const startedAt = Date.now();
 
-  const owner = await User.findOne({ role: ROLES.OWNER }).lean();
+  const owner = await prisma.user.findFirst({ where: { role: ROLES.OWNER } });
   if (!owner) throw new Error("Owner yo'q. Avval `npm run seed:owner`.");
-  const teachers = await User.find({ role: ROLES.TEACHER, isActive: true }).lean();
-  const groups = await Group.find({ isDeleted: { $ne: true } }).lean();
+  const teachers = await prisma.user.findMany({ where: { role: ROLES.TEACHER, isActive: true } });
+  // `schedule` va `teachers` — `getClassDaysInRange()` va o'qituvchi
+  // xaritasi uchun (Mongo'da ikkalasi hujjat ichida edi).
+  const groups = await prisma.group.findMany({
+    where: { isDeleted: false },
+    include: { schedule: true, teachers: { select: { id: true } } },
+  });
   if (groups.length === 0 || teachers.length === 0) {
     throw new Error("Avval `npm run seed:fake-data` ishga tushiring.");
   }
 
   // Idempotent tozalash (faqat shu seed egalik qiladigan ma'lumot)
-  await Promise.all([
-    Holiday.deleteMany({}),
-    TeacherAttendance.deleteMany({}),
-    ActivityLog.deleteMany({}),
-  ]);
+  // Uchalasi ham bir-biriga bog'liq emas, lekin ketma-ket yoziladi:
+  // parallel `deleteMany` Prisma'da alohida ulanish oladi va foydasi yo'q.
+  await prisma.holiday.deleteMany({});
+  await prisma.teacherAttendance.deleteMany({});
+  await prisma.activityLog.deleteMany({});
 
   // ───────── Singleton settings ─────────
-  await AttendanceSettings.findOneAndUpdate(
-    { _id: "default" },
-    { $setOnInsert: { _id: "default" } },
-    { upsert: true, setDefaultsOnInsert: true },
-  );
+  await prisma.attendanceSettings.upsert({
+    where: { id: "default" },
+    create: { id: "default" },
+    update: {},
+  });
   logger.info("Settings singleton tayyor (attendance)");
 
   // ───────── HOLIDAY ─────────
@@ -84,7 +83,7 @@ const seed = async () => {
     message,
     audience,
     isActive: true,
-    createdBy: owner._id,
+    createdById: owner.id,
   });
   const oneTime = (name, year, month, day, message, audience = "all") => ({
     name,
@@ -95,7 +94,7 @@ const seed = async () => {
     message,
     audience,
     isActive: true,
-    createdBy: owner._id,
+    createdById: owner.id,
   });
   const holidayDocs = [
     recurring("Yangi yil", 1, 1, "Yangi yil bilan! Sizga sog'lik va omad."),
@@ -111,7 +110,7 @@ const seed = async () => {
     oneTime("Markaz tashkil etilgan kun", 2025, 11, 15, "Markazimiz tug'ilgan kuni!", "all"),
   ];
   const holidayKeys = new Set(holidayDocs.map((h) => `${h.month}-${h.day}-${h.year}`));
-  await Holiday.insertMany(holidayDocs);
+  await bulkCreate("holiday", holidayDocs);
   logger.info(`${holidayDocs.length} ta bayram yaratildi`);
 
   // ───────── TEACHER ATTENDANCE (manba-haqiqat, per-teacher kunlik) ─────────
@@ -120,14 +119,14 @@ const seed = async () => {
   const groupsByTeacher = new Map();
   for (const g of groups) {
     for (const t of g.teachers || []) {
-      const k = String(t);
+      const k = String(t.id);
       if (!groupsByTeacher.has(k)) groupsByTeacher.set(k, []);
       groupsByTeacher.get(k).push(g);
     }
   }
   const taDocs = [];
   for (const t of teachers) {
-    const tGroups = groupsByTeacher.get(String(t._id)) || [];
+    const tGroups = groupsByTeacher.get(String(t.id)) || [];
     const classDayKeys = new Set();
     for (const g of tGroups) {
       for (const cd of getClassDaysInRange(g, from, NOW)) {
@@ -141,79 +140,79 @@ const seed = async () => {
       const status = chance(0.6) ? "absent" : "excused";
       const date = new Date(`${dateKey}T05:00:00.000Z`);
       taDocs.push({
-        teacher: t._id,
+        teacherId: t.id,
         date,
         dateKey,
         status,
         reason: status === "excused" ? pick(["Kasallik", "Oilaviy sabab", "Majlis"]) : "",
-        recordedBy: owner._id,
+        recordedById: owner.id,
         recordedAt: date,
       });
     }
   }
-  const taCount = await bulkInsert(TeacherAttendance, taDocs);
+  const taCount = await bulkCreate("teacherAttendance", taDocs);
   logger.info(`${taCount} ta o'qituvchi davomati (absent/excused) yaratildi`);
 
   // ───────── ATTENDANCE HISTORY (tahrirlangan yozuvlar - ✎ indikatori uchun) ─────────
-  const attSample = await Attendance.find({ isDeleted: { $ne: true } })
-    .select("status recordedBy recordedAt source")
-    .limit(600)
-    .lean();
-  const toEdit = sample(attSample, Math.min(200, attSample.length));
-  const histOps = toEdit.map((a) => {
-    const prev = a.status === "present" ? "absent" : "present";
-    return {
-      updateOne: {
-        filter: { _id: a._id },
-        update: {
-          $set: {
-            history: [
-              {
-                at: a.recordedAt || NOW,
-                by: a.recordedBy || owner._id,
-                from: prev,
-                to: a.status,
-                source: a.source || "teacher",
-              },
-            ],
-          },
-        },
-      },
-    };
+  const attSample = await prisma.attendance.findMany({
+    where: { isDeleted: false },
+    select: { id: true, status: true, recordedById: true, recordedAt: true, source: true },
+    take: 600,
   });
-  if (histOps.length) await Attendance.bulkWrite(histOps, { ordered: false });
-  logger.info(`${histOps.length} ta davomat yozuviga tahrir tarixi qo'shildi`);
+  const toEdit = sample(attSample, Math.min(200, attSample.length));
+  // Mongo'da bu BITTA `bulkWrite` edi. Prisma'da qatorlarning har biriga
+  // BOSHQA qiymat yoziladi, ya'ni `updateMany` mos kelmaydi (u bitta
+  // `data` ni hammaga qo'llaydi) va `bulkWrite` ham yo'q. 200 ta yozuv -
+  // oddiy halqa yetarli.
+  //
+  // `history` — `Json` ustun, shuning uchun massiv o'z holicha yoziladi.
+  for (const a of toEdit) {
+    const prev = a.status === "present" ? "absent" : "present";
+    await prisma.attendance.update({
+      where: { id: a.id },
+      data: {
+        history: [
+          {
+            at: a.recordedAt || NOW,
+            by: a.recordedById || owner.id,
+            from: prev,
+            to: a.status,
+            source: a.source || "teacher",
+          },
+        ],
+      },
+    });
+  }
+  logger.info(`${toEdit.length} ta davomat yozuviga tahrir tarixi qo'shildi`);
 
   // ───────── ARXIVLANGAN O'QUVCHILAR ─────────
   // Arxivlash = isActive:false + faol a'zoliklar yopiladi (leftAt). Bu holatdan keyin
   // generateForPeriod ularga YANGI invoice yozmaydi (savolga amaliy javob).
-  const activeStudents = await User.find({
-    role: ROLES.STUDENT,
-    isActive: true,
-    isDeleted: { $ne: true },
-  })
-    .select("_id")
-    .limit(200)
-    .lean();
+  const activeStudents = await prisma.user.findMany({
+    where: { role: ROLES.STUDENT, isActive: true, isDeleted: false },
+    select: { id: true },
+    take: 200,
+  });
   const toArchive = sample(activeStudents, Math.min(12, activeStudents.length));
   let archivedMemberships = 0;
   for (const s of toArchive) {
-    await User.updateOne({ _id: s._id }, { $set: { isActive: false } });
-    const res = await GroupMembership.updateMany(
-      { student: s._id, leftAt: null, isDeleted: { $ne: true } },
-      { $set: { leftAt: NOW, leftReason: "removed" } },
-    );
-    archivedMemberships += res.modifiedCount || 0;
+    await prisma.user.update({ where: { id: s.id }, data: { isActive: false } });
+    const res = await prisma.groupMembership.updateMany({
+      where: { studentId: s.id, leftAt: null, isDeleted: false },
+      data: { leftAt: NOW, leftReason: "removed" },
+    });
+    archivedMemberships += res.count || 0;
   }
   logger.info(
     `${toArchive.length} ta o'quvchi arxivlandi (${archivedMemberships} ta a'zolik yopildi)`,
   );
 
   // ───────── ACTIVITY LOG (audit jurnali) ─────────
-  const allUsers = await User.find({ isDeleted: { $ne: true } })
-    .select("_id role")
-    .limit(200)
-    .lean();
+  const allUsers = await prisma.user.findMany({
+    where: { isDeleted: false },
+    select: { id: true, role: true },
+    take: 200,
+  });
   const PATHS = [
     ["POST", "/api/attendance/groups/:id/bulk", "attendance", 201],
     ["GET", "/api/attendance/dashboard", "attendance", 200],
@@ -229,7 +228,7 @@ const seed = async () => {
     const u = chance(0.85) ? pick(allUsers) : null;
     const [method, path, resourceType, status] = pick(PATHS);
     logDocs.push({
-      user: u?._id || null,
+      userId: u?.id || null,
       userRole: u?.role || "system",
       method,
       path,
@@ -242,12 +241,12 @@ const seed = async () => {
       createdAt: randDate(daysAgo(60), NOW),
     });
   }
-  await ActivityLog.insertMany(logDocs);
+  await bulkCreate("activityLog", logDocs);
   logger.info(`${logDocs.length} ta activity log yaratildi`);
 
   const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
   logger.info(
-    `Fake extras-2 tayyor (${secs}s): ${holidayDocs.length} holiday, ${taCount} teacher-attendance, ${histOps.length} attendance-history, ${toArchive.length} archived-student, ${logDocs.length} activity-log`,
+    `Fake extras-2 tayyor (${secs}s): ${holidayDocs.length} holiday, ${taCount} teacher-attendance, ${toEdit.length} attendance-history, ${toArchive.length} archived-student, ${logDocs.length} activity-log`,
   );
   await disconnectDB();
 };

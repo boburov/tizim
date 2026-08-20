@@ -6,8 +6,8 @@ import {
   INSIGHT_STANCES,
   INSIGHT_STATUSES,
   INSIGHT_SUBJECT_TYPES,
-} from "../../../models/insight.model.js";
-import { AI_REPORT_PERIODS } from "../../../models/aiReport.model.js";
+} from "../insightKinds.js";
+import { AI_REPORT_PERIODS } from "../../../constants/ai.js";
 
 const objectId = z
   .string()

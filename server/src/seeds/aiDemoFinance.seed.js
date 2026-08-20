@@ -1,16 +1,8 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
 import { ROLES } from "../constants/roles.js";
 
-import Branch from "../models/branch.model.js";
-import User from "../models/user.model.js";
-import Group from "../models/group.model.js";
-import GroupMembership from "../models/groupMembership.model.js";
-import GroupFee from "../models/groupFee.model.js";
-import StudentPayment from "../models/studentPayment.model.js";
-import PaymentTransaction from "../models/paymentTransaction.model.js";
-import Grade from "../models/grade.model.js";
 
 // AI DEMO MOLIYA + BAHO SEED.
 //
@@ -89,42 +81,59 @@ const lastMonths = (now, count) => {
   return out;
 };
 
-const bulkInsert = async (Model, docs, chunk = 3000) => {
-  const out = [];
+// `insertMany(..., { ordered: false })` ning o'rni.
+//
+// `skipDuplicates: true` Postgres'da `ON CONFLICT DO NOTHING` ga aylanadi -
+// u HAR QANDAY unique indeksni, jumladan QISMAN indekslarni ham qamraydi
+// (Prisma sxemada e'lon qilinmaganlarini ham). Ya'ni Mongo'dagi
+// `ordered:false` xatti-harakati aynan saqlanadi: dublikat tashlab
+// yuboriladi, qolgani yoziladi.
+//
+// DIQQAT: `createMany` yaratilgan QATORLARNI qaytarmaydi (faqat sonini).
+// Yozilgan qatorning `id` si kerak bo'lsa keyin alohida o'qish kerak.
+const bulkCreate = async (model, docs, chunk = 3000) => {
+  let count = 0;
   for (let i = 0; i < docs.length; i += chunk) {
-    const part = await Model.insertMany(docs.slice(i, i + chunk), { ordered: false });
-    out.push(...part);
+    const res = await prisma[model].createMany({
+      data: docs.slice(i, i + chunk),
+      skipDuplicates: true,
+    });
+    count += res.count;
   }
-  return out;
+  return count;
 };
 
 const seed = async () => {
   await connectDB();
   const startedAt = Date.now();
 
-  const branch = await Branch.findOne({ isMain: true, isDeleted: false });
+  const branch = await prisma.branch.findFirst({ where: { isMain: true, isDeleted: false } });
   if (!branch) throw new Error("Filial yo'q. Avval `npm run seed:all` ishga tushiring.");
 
-  const owner = await User.findOne({ role: ROLES.OWNER });
-  const groups = await Group.find({ isDeleted: { $ne: true } })
-    .select({ name: 1, teachers: 1 })
-    .lean();
+  const owner = await prisma.user.findFirst({ where: { role: ROLES.OWNER } });
+  const groups = await prisma.group.findMany({
+    where: { isDeleted: false },
+    select: { id: true, name: true, teachers: { select: { id: true } } },
+  });
   if (!groups.length) throw new Error("Guruh yo'q. Avval `npm run seed:all` ishga tushiring.");
 
-  const memberships = await GroupMembership.find({ isDeleted: { $ne: true } })
-    .select({ student: 1, group: 1, joinedAt: 1, leftAt: 1 })
-    .lean();
+  const memberships = await prisma.groupMembership.findMany({
+    where: { isDeleted: false },
+    select: { id: true, studentId: true, groupId: true, joinedAt: true, leftAt: true },
+  });
 
   const now = new Date();
   const periods = lastMonths(now, MONTHS_BACK);
 
   // --- Eskisini tozalash (idempotent qayta ishga tushirish) ---
-  await Promise.all([
-    GroupFee.deleteMany({}),
-    StudentPayment.deleteMany({}),
-    PaymentTransaction.deleteMany({}),
-    Grade.deleteMany({}),
-  ]);
+  // O'CHIRISH TARTIBI MAJBURIY: `payment_transactions.paymentId` →
+  // `student_payments` tashqi kaliti RESTRICT, ya'ni bola ota'sidan OLDIN
+  // ketishi shart. Mongo'da FK yo'q edi va tartib ahamiyatsiz edi -
+  // shuning uchun bu ilgari `Promise.all` bilan parallel bajarilardi.
+  await prisma.paymentTransaction.deleteMany({});
+  await prisma.studentPayment.deleteMany({});
+  await prisma.groupFee.deleteMany({});
+  await prisma.grade.deleteMany({});
 
   // --- 1) Guruh tariflari ---
   const feeDocs = [];
@@ -132,18 +141,18 @@ const seed = async () => {
   for (const g of groups) {
     const dir = directionOf(g.name);
     const price = PRICE_BY_DIRECTION[dir] || DEFAULT_PRICE;
-    priceByGroup.set(String(g._id), price);
+    priceByGroup.set(String(g.id), price);
     for (const { year, month } of periods) {
-      feeDocs.push({ group: g._id, year, month, amount: price, source: "auto" });
+      feeDocs.push({ groupId: g.id, year, month, amount: price, source: "auto" });
     }
   }
-  await bulkInsert(GroupFee, feeDocs);
+  await bulkCreate("groupFee", feeDocs);
   logger.info(`${feeDocs.length} ta guruh tarifi yaratildi`);
 
   // --- 2) O'quvchi xulq-atvor profillari (12 oy davomida O'ZGARMAYDI) ---
   const profileByStudent = new Map();
   for (const m of memberships) {
-    const sid = String(m.student);
+    const sid = String(m.studentId);
     if (!profileByStudent.has(sid)) profileByStudent.set(sid, pickProfile());
   }
 
@@ -152,10 +161,10 @@ const seed = async () => {
   const txPlans = []; // tranzaksiya to'lov _id sini talab qiladi - keyin yoziladi
 
   for (const m of memberships) {
-    const groupId = String(m.group);
+    const groupId = String(m.groupId);
     const price = priceByGroup.get(groupId);
     if (price == null) continue;
-    const profile = profileByStudent.get(String(m.student));
+    const profile = profileByStudent.get(String(m.studentId));
 
     for (const { year, month } of periods) {
       // A'zolik shu oyda amal qilganmi (qo'shilgandan keyin, ketishdan oldin).
@@ -176,10 +185,10 @@ const seed = async () => {
       const status = paidAmount === 0 ? "unpaid" : paidAmount < price ? "partial" : "paid";
 
       const doc = {
-        branchId: branch._id,
-        student: m.student,
-        group: m.group,
-        membership: m._id,
+        branchId: branch.id,
+        studentId: m.studentId,
+        groupId: m.groupId,
+        membershipId: m.id,
         year,
         month,
         baseFee: price,
@@ -204,17 +213,17 @@ const seed = async () => {
         // Kelajakka to'lov yozilmasin.
         if (paidAt <= now) {
           txPlans.push({
-            key: `${m.student}_${m.group}_${year}_${month}`,
-            branchId: branch._id,
-            student: m.student,
-            group: m.group,
+            key: `${m.studentId}_${m.groupId}_${year}_${month}`,
+            branchId: branch.id,
+            studentId: m.studentId,
+            groupId: m.groupId,
             year,
             month,
             amount: paidAmount,
             source: "direct",
             method: Math.random() < 0.6 ? "cash" : "card",
             paidAt,
-            createdBy: owner?._id || null,
+            createdById: owner?.id || null,
           });
         } else {
           // To'lov sanasi kelajakda chiqdi - hali to'lanmagan deb yozamiz.
@@ -225,21 +234,29 @@ const seed = async () => {
     }
   }
 
-  const payments = await bulkInsert(StudentPayment, paymentDocs);
-  logger.info(`${payments.length} ta oylik to'lov yozuvi yaratildi`);
+  const paymentCount = await bulkCreate("studentPayment", paymentDocs);
+  logger.info(`${paymentCount} ta oylik to'lov yozuvi yaratildi`);
 
   // Tranzaksiyani to'lov yozuviga bog'lash.
+  //
+  // `createMany` yaratilgan qatorlarni QAYTARMAYDI (Mongo'ning `insertMany`
+  // idan asosiy farq), shuning uchun kalitlar alohida o'qib olinadi.
+  // Jadval yuqorida to'liq tozalangan, ya'ni bu yerdagi barcha qatorlar -
+  // shu yurishda yozilganlari.
+  const paymentRows = await prisma.studentPayment.findMany({
+    select: { id: true, studentId: true, groupId: true, year: true, month: true },
+  });
   const paymentIdByKey = new Map(
-    payments.map((p) => [`${p.student}_${p.group}_${p.year}_${p.month}`, p._id]),
+    paymentRows.map((p) => [`${p.studentId}_${p.groupId}_${p.year}_${p.month}`, p.id]),
   );
   const txDocs = [];
   for (const plan of txPlans) {
     const paymentId = paymentIdByKey.get(plan.key);
     if (!paymentId) continue;
     const { key, ...rest } = plan;
-    txDocs.push({ ...rest, payment: paymentId });
+    txDocs.push({ ...rest, paymentId });
   }
-  await bulkInsert(PaymentTransaction, txDocs);
+  await bulkCreate("paymentTransaction", txDocs);
   logger.info(`${txDocs.length} ta to'lov tranzaksiyasi yaratildi`);
 
   // --- 4) Baholar ---
@@ -249,23 +266,27 @@ const seed = async () => {
   // shovqindan tasodifiy g'olib tanlaydi. Har bir o'qituvchiga yashirin
   // "sifat" koeffitsienti beriladi va o'quvchilarining bahosi shunga
   // qarab o'sadi - ya'ni bazada TOPILADIGAN haqiqat bor.
-  const teacherIds = [...new Set(groups.flatMap((g) => (g.teachers || []).map(String)))];
+  const teacherIds = [
+    ...new Set(groups.flatMap((g) => (g.teachers || []).map((t) => String(t.id)))),
+  ];
   const qualityByTeacher = new Map(
     teacherIds.map((id) => [id, 0.3 + Math.random() * 0.7]), // 0.3..1.0
   );
 
   const membersByGroup = new Map();
   for (const m of memberships) {
-    const gid = String(m.group);
+    const gid = String(m.groupId);
     if (!membersByGroup.has(gid)) membersByGroup.set(gid, []);
     membersByGroup.get(gid).push(m);
   }
 
   const gradeDocs = [];
   for (const g of groups) {
-    const gid = String(g._id);
+    const gid = String(g.id);
     const members = membersByGroup.get(gid) || [];
-    const teacherId = (g.teachers || [])[0];
+    // Prisma `teachers` ni obyekt sifatida qaytaradi (`{ id }`), Mongo esa
+    // xom ObjectId massivi berardi.
+    const teacherId = (g.teachers || [])[0]?.id;
     const quality = qualityByTeacher.get(String(teacherId)) ?? 0.5;
 
     for (const m of members) {
@@ -281,38 +302,34 @@ const seed = async () => {
         const daysAgo = Math.round((1 - t) * 84);
         const date = new Date(now.getTime() - daysAgo * DAY_MS);
         const dateKey = date.toISOString().slice(0, 10);
+        // `recordedById` MAJBURIY (NOT NULL + FK). Mongo'da sxema uni
+        // talab qilmasdi va `undefined` jimgina tushib qolardi; Postgres
+        // bunday qatorni rad etadi, shuning uchun egasi yo'q baho
+        // umuman yozilmaydi.
+        const recordedById = teacherId || owner?.id;
+        if (!recordedById) continue;
         gradeDocs.push({
-          group: m.group,
-          student: m.student,
+          groupId: m.groupId,
+          studentId: m.studentId,
           date,
           dateKey,
           slot: "",
           value,
-          recordedBy: teacherId || owner?._id,
+          recordedById,
           recordedAt: date,
           source: "teacher",
         });
       }
     }
   }
-  // dateKey takrorlanishi mumkin (unique indeks bo'lsa) - ordered:false bilan
-  // dublikatlar tashlab yuboriladi, qolganlari yoziladi.
-  let gradeCount = 0;
-  for (let i = 0; i < gradeDocs.length; i += 3000) {
-    try {
-      const part = await Grade.insertMany(gradeDocs.slice(i, i + 3000), {
-        ordered: false,
-      });
-      gradeCount += part.length;
-    } catch (err) {
-      gradeCount += err?.insertedDocs?.length || 0;
-    }
-  }
+  // dateKey takrorlanishi mumkin - `skipDuplicates` (ON CONFLICT DO NOTHING)
+  // dublikatni tashlab yuboradi, qolganlari yoziladi.
+  const gradeCount = await bulkCreate("grade", gradeDocs);
   logger.info(`${gradeCount} ta baho yaratildi`);
 
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
   logger.info(
-    `AI demo moliya tayyor (${elapsed}s): ${feeDocs.length} tarif, ${payments.length} to'lov, ${txDocs.length} tranzaksiya, ${gradeCount} baho`,
+    `AI demo moliya tayyor (${elapsed}s): ${feeDocs.length} tarif, ${paymentCount} to'lov, ${txDocs.length} tranzaksiya, ${gradeCount} baho`,
   );
   await disconnectDB();
 };

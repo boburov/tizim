@@ -20,4 +20,18 @@
  */
 export const AI_ENGINE_VERSION = "1.0.0";
 
+/**
+ * AI HISOBOT DAVRLARI.
+ *
+ * Ilgari bu ro'yxat `models/aiReport.model.js` ichida edi va Mongoose
+ * sxemasining `enum` i bo'lib xizmat qilardi. Model fayllari o'chirilgach
+ * qiymat VALIDATORGA kerak bo'lib qoladi
+ * (`modules/ai/validators/insight.validator.js`), shuning uchun bu yerga
+ * chiqarildi.
+ *
+ * Prisma `AiReportPeriod` enum'i bilan AYNAN bir xil bo'lishi SHART -
+ * aks holda validatordan o'tgan qiymat bazada rad etiladi.
+ */
+export const AI_REPORT_PERIODS = ["daily", "weekly", "monthly"];
+
 export default AI_ENGINE_VERSION;

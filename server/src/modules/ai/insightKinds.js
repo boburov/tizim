@@ -125,3 +125,32 @@ export const KIND_LABELS = Object.freeze({
   course_demand: "Kursga talab yuqori",
   course_marketing: "Marketing imkoniyati",
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ilgari bu uchtasi `models/insight.model.js` ichida edi va Mongoose
+// sxemasining `enum` i bo'lib xizmat qilardi. Model fayllari o'chirilgach
+// qiymatlar VALIDATORGA kerak bo'lib qoladi
+// (`modules/ai/validators/insight.validator.js`), shuning uchun bu yerga -
+// qolgan insight taksonomiyasining YONIGA - ko'chirildi.
+//
+// Prisma `InsightSubjectType` / `InsightSeverity` / `InsightStatus`
+// enumlari bilan AYNAN bir xil bo'lishi SHART.
+// ═══════════════════════════════════════════════════════════════════════════
+export const INSIGHT_SUBJECT_TYPES = Object.freeze([
+  "student",
+  "teacher",
+  "group",
+  "lead",
+  "course",
+  "branch",
+]);
+
+export const INSIGHT_SEVERITIES = Object.freeze(["high", "medium", "low"]);
+
+export const INSIGHT_STATUSES = Object.freeze([
+  "open",
+  "acked",
+  "done",
+  "dismissed",
+  "expired",
+]);

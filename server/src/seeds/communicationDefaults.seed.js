@@ -1,8 +1,5 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
-import NotificationTemplate from "../models/notificationTemplate.model.js";
-import FeedbackType from "../models/feedbackType.model.js";
-import Holiday from "../models/holiday.model.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
 
 // Markaz nomi matnga QATTIQ yozilmaydi - `{markaz}` tokeni ishlatiladi.
@@ -109,35 +106,49 @@ const HOLIDAYS = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════
+// `$setOnInsert` SEMANTIKASI: MAVJUD QATOR HECH QACHON O'ZGARTIRILMAYDI.
+//
+// Mongo'da bu `findOneAndUpdate(filter, { $setOnInsert }, { upsert: true })`
+// edi. Prisma'ning `upsert` i BU YERDA ISHLAMAYDI: `notification_templates`
+// va `feedback_types` dagi yagonalik QISMAN unique indeks
+// (`(name) WHERE isActive = true`, qarang
+// `migrations/20260815200910_partial_unique_indexes`), Prisma esa qisman
+// indeksni bilmaydi va uni `where` da nishonga ola olmaydi. `Holiday` da
+// esa `name` bo'yicha unique umuman yo'q.
+//
+// Shuning uchun tekshiruv ochiq yoziladi: bor bo'lsa TEGILMAYDI. Bu aynan
+// eski xatti-harakat - owner qo'lda tahrirlagan shablon keyingi seed'da
+// TIKLANMASLIGI kerak.
+// ═══════════════════════════════════════════════════════════════════════════
+const insertIfMissing = async (model, where, data) => {
+  const found = await prisma[model].findFirst({ where, select: { id: true } });
+  if (found) return false;
+  await prisma[model].create({ data });
+  return true;
+};
+
 const seed = async () => {
   await connectDB();
 
+  let created = 0;
   for (const t of TEMPLATES) {
-    await NotificationTemplate.findOneAndUpdate(
-      { name: t.name, isActive: true },
-      { $setOnInsert: { ...t, isActive: true } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    );
+    if (await insertIfMissing("notificationTemplate", { name: t.name, isActive: true }, { ...t, isActive: true })) created += 1;
   }
-  logger.info(`Notification shablonlari seed qilindi: ${TEMPLATES.length}`);
+  logger.info(`Notification shablonlari seed qilindi: ${TEMPLATES.length} (yangi: ${created})`);
 
+  created = 0;
   for (const name of FEEDBACK_TYPES) {
-    await FeedbackType.findOneAndUpdate(
-      { name, isActive: true },
-      { $setOnInsert: { name, isActive: true } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    );
+    if (await insertIfMissing("feedbackType", { name, isActive: true }, { name, isActive: true })) created += 1;
   }
-  logger.info(`Feedback turlari seed qilindi: ${FEEDBACK_TYPES.length}`);
+  logger.info(`Feedback turlari seed qilindi: ${FEEDBACK_TYPES.length} (yangi: ${created})`);
 
+  created = 0;
   for (const h of HOLIDAYS) {
-    await Holiday.findOneAndUpdate(
-      { name: h.name },
-      { $setOnInsert: { ...h, isActive: true } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    );
+    // Bayramda filtr FAQAT `name` bo'yicha - eski Mongo filtri ham shunday edi.
+    if (await insertIfMissing("holiday", { name: h.name }, { ...h, isActive: true })) created += 1;
   }
-  logger.info(`Bayramlar seed qilindi: ${HOLIDAYS.length}`);
+  logger.info(`Bayramlar seed qilindi: ${HOLIDAYS.length} (yangi: ${created})`);
 
   await disconnectDB();
 };

@@ -5,7 +5,7 @@ import {
   COMP_BASE_TYPES,
   COMP_VARIABLE_TYPES,
   COMP_PERCENT_BASES,
-} from "../../../models/teacherCompensation.model.js";
+} from "../../../constants/compensation.js";
 import {
   openingAmountSchema,
   openingNoteSchema,

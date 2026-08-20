@@ -9,7 +9,7 @@ import {
   norm,
   readMap,
 } from "../scoring/common.scoring.js";
-import { DEFAULT_THRESHOLDS } from "../../../models/aiConfig.model.js";
+import { DEFAULT_THRESHOLDS } from "../../../constants/aiDefaults.js";
 import { narrate } from "./narration.service.js";
 import {
   buildInsight,
