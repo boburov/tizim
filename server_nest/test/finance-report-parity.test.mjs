@@ -37,11 +37,13 @@
  *             NEST_URL=http://127.0.0.1:5002 node test/finance-report-parity.test.mjs
  * ═══════════════════════════════════════════════════════════════════════════
  */
+import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 import {
   EXPRESS,
   NEST,
   request,
+  normalize,
   mintToken,
   waitForStacks,
   createReporter,
@@ -49,7 +51,7 @@ import {
 
 const prisma = new PrismaClient();
 const TAG = `FR-${Date.now().toString(36)}`;
-const { R, ok, bad, section, both, finish } = createReporter('finance-report');
+const { R, ok, bad, skip, section, finish } = createReporter('finance-report');
 
 const made = { branches: [], users: [], groups: [] };
 
@@ -96,6 +98,25 @@ const cleanup = async () => {
     console.error('  ⚠ tozalash xatosi:', e.message);
   }
 };
+
+/**
+ * ⚠ TEZLIK CHEGARASI (429) — YOLG'ON QIZIL BERMASIN.
+ *
+ * Express'da global chegara bor: `generalLimiter` — daqiqasiga 200 ta
+ * so'rov (`middleware/rateLimiter.js`). Bu ISHLAB CHIQARISH HIMOYASI va
+ * testda o'chirilmaydi.
+ *
+ * Bu to'plam bir ishga tushirishda ~150–200 so'rov yuboradi (20 ta bir
+ * vaqtdagi konkurentlik tekshiruvi ham shu ichida), ya'ni KETMA-KET
+ * ishga tushirishlar bitta oynaga sig'maydi. O'shanda javob 429 bo'ladi
+ * va uni "paritet buzildi" deb ko'rsatish YOLG'ON bo'lardi — aslida
+ * hech narsa o'lchanmagan.
+ *
+ * Shuning uchun 429 alohida ajratiladi va O'LCHANMADI deb belgilanadi.
+ */
+const rateLimited = (r) =>
+  r?.status === 429 ||
+  /so'rovlar soni juda ko'p/i.test(String(r?.body?.message || ''));
 
 const run = async () => {
   await waitForStacks();
@@ -233,17 +254,57 @@ const run = async () => {
     },
   });
 
+  /**
+   * Garnizondagi `both()` ning 429 ni ajratadigan varianti.
+   *
+   * ⚠ GARNIZON `both()` NI O'RAB EMAS, QAYTA YOZIB: o'rash uchun avval
+   * "sinov" so'rovi yuborish kerak bo'lardi, ya'ni HAR TEKSHIRUV UCHUN
+   * BITTA QO'SHIMCHA SO'ROV — bu aynan tezlik chegarasini tezroq
+   * tugatardi. Mantiq garnizondagi bilan bir xil, farqi faqat 429
+   * shoxida.
+   */
+  const both = async (name, fn, subsOf = () => []) => {
+    let e, n;
+    try { e = await fn(EXPRESS); n = await fn(NEST); }
+    catch (err) { skip(name, err.message); return {}; }
+    if (rateLimited(e) || rateLimited(n)) {
+      skip(name, "429 — Express tezlik chegarasi (200/daq). Ishga tushirishlarni ORALIQ bilan bajaring.");
+      return {};
+    }
+    if (e.status >= 200 && e.status < 300) R.successes += 1;
+    const en = { status: e.status, body: normalize(e.body, subsOf(EXPRESS)) };
+    const nn = { status: n.status, body: normalize(n.body, subsOf(NEST)) };
+    try { assert.deepEqual(nn, en); ok(`${name} — ${e.status}`); }
+    catch {
+      bad(name, `express: ${JSON.stringify(en).slice(0, 700)}\n      ` +
+                `nest   : ${JSON.stringify(nn).slice(0, 700)}`);
+    }
+    return { e, n };
+  };
+
   const q = (p) => `/api/finance-report${p}`;
   const asOwner = (path) => (base) => request(base, 'GET', q(path), { token });
   const asDir = (path, t, branchId) => (base) =>
     request(base, 'GET', q(path), { token: t, headers: { 'x-branch-id': branchId } });
 
-  /** Javob "bo'sh emas" ligini tasdiqlaydi — aks holda paritet ma'nosiz. */
+  /**
+   * Javob "bo'sh emas" ligini tasdiqlaydi — aks holda paritet ma'nosiz.
+   *
+   * ⚠ `res` YO'Q bo'lishi MUMKIN: `both()` 429 (yoki tarmoq xatosi)
+   * da bo'sh obyekt qaytaradi. O'shanda bu tekshiruv ham O'LCHANMADI
+   * bo'lishi kerak — "javob bo'sh" deb QIZIL berish yolg'on bo'lardi
+   * va (avvalgi holatda) `JSON.stringify(undefined).slice(...)` bilan
+   * butun testni yiqitardi.
+   */
   const nonEmpty = (name, res, pick) => {
-    const v = pick(res?.body?.data);
+    if (!res || !res.body) {
+      skip(name, "oldingi so'rov o'lchanmadi (429 yoki tarmoq)");
+      return;
+    }
+    const v = pick(res.body.data);
     if (v) ok(`${name} — o'lchandi (${JSON.stringify(v).slice(0, 60)})`);
     else bad(`${name} — o'lchanmadi`,
-      `javob bo'sh/nol: ${JSON.stringify(res?.body?.data).slice(0, 200)}`);
+      `javob bo'sh/nol: ${JSON.stringify(res.body.data ?? null).slice(0, 200)}`);
   };
 
   // ─────────────────────────────────────────────────────────────────

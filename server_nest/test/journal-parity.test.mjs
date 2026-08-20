@@ -250,6 +250,25 @@ const cleanup = async () => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * ⚠ TEZLIK CHEGARASI (429) — YOLG'ON QIZIL BERMASIN.
+ *
+ * Express'da global chegara bor: `generalLimiter` — daqiqasiga 200 ta
+ * so'rov (`middleware/rateLimiter.js`). Bu ISHLAB CHIQARISH HIMOYASI va
+ * testda o'chirilmaydi.
+ *
+ * Bu to'plam bir ishga tushirishda ~150–200 so'rov yuboradi (20 ta bir
+ * vaqtdagi konkurentlik tekshiruvi ham shu ichida), ya'ni KETMA-KET
+ * ishga tushirishlar bitta oynaga sig'maydi. O'shanda javob 429 bo'ladi
+ * va uni "paritet buzildi" deb ko'rsatish YOLG'ON bo'lardi — aslida
+ * hech narsa o'lchanmagan.
+ *
+ * Shuning uchun 429 alohida ajratiladi va O'LCHANMADI deb belgilanadi.
+ */
+const rateLimited = (r) =>
+  r?.status === 429 ||
+  /so'rovlar soni juda ko'p/i.test(String(r?.body?.message || ''));
+
 const run = async () => {
   await waitForStacks();
   console.log(`\n\x1b[1mKASSA JURNALI — PARITET\x1b[0m  (${TAG})`);
@@ -332,6 +351,10 @@ const run = async () => {
       n = await fn(NEST, fx[NEST]);
     } catch (err) {
       skip(name, err.message);
+      return {};
+    }
+    if (rateLimited(e) || rateLimited(n)) {
+      skip(name, "429 — Express tezlik chegarasi (200/daq). Ishga tushirishlarni ORALIQ bilan bajaring.");
       return {};
     }
     if (e.status >= 200 && e.status < 300) R.successes += 1;

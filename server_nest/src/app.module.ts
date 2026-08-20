@@ -28,6 +28,7 @@ import { SearchModule } from './modules/search/search.module.js';
 import { ActivityHistoryModule } from './modules/activity-history/activity-history.module.js';
 import { JournalModule } from './modules/journal/journal.module.js';
 import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
+import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-approvals.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -117,6 +118,8 @@ import { FinanceReportModule } from './modules/finance-report/finance-report.mod
     JournalModule,
     // Moliya hisoboti — KPI, dinamika, guruh kesimi, ledger, write-off.
     FinanceReportModule,
+    // Tasdiqlar — IKKI manzil: /expense-approvals (eski) va /approvals.
+    ExpenseApprovalsModule,
   ],
 })
 export class AppModule {}
