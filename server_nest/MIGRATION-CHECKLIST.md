@@ -52,9 +52,16 @@ Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/sr
 | `helpers/studentCompletion.helper.js` | ✅ `common/helpers/student-completion.service.ts` |
 | `utils/pagination.js` | ✅ `common/utils/pagination.ts` |
 | `helpers/actor.helper.js`, `auditLog.helper.js` | ⬜ FAZA 2.7 |
-| `helpers/userRelations.helper.js`, `cascadeDelete.helper.js` | ⬜ FAZA 2.5 |
-| `helpers/group.helper.js`, `membership.helper.js`, `period.helper.js` | ⬜ FAZA 6 |
-| `helpers/attendance.helper.js`, `lessonCancellation.helper.js` | ⬜ FAZA 6 |
+| `helpers/userRelations.helper.js` | ✅ `common/helpers/user-relations.service.ts` (⚠ `hardDeleteGroupData` — `groups` bilan) |
+| `helpers/cascadeDelete.helper.js` | ⬜ FAZA 5 (faqat `groups.service` chaqiradi) |
+| `archiveReasons::logAction` | ✅ `common/helpers/archive-log.service.ts` (⚠ VAQTINCHALIK KO'PRIK) |
+| `systemNotifications::create` | ✅ `common/helpers/system-notification.service.ts` (⚠ VAQTINCHALIK KO'PRIK) |
+| `finance::runFinanceTxn` | ✅ `common/utils/finance-txn.ts` (faqat chegaralar) |
+| `helpers/group.helper.js` | ✅ `common/helpers/group-state.ts` |
+| `helpers/membership.helper.js` | ✅ `common/helpers/membership.service.ts` |
+| `helpers/period.helper.js` | ✅ `common/utils/period.ts` |
+| `helpers/attendance.helper.js` | ✅ `common/utils/attendance.ts` + `date.ts` |
+| `helpers/lessonCancellation.helper.js` | ⬜ FAZA 6 |
 | `helpers/studentFreeze.helper.js` | ⬜ FAZA 4 |
 | `helpers/roomOccupancy.helper.js` | ⬜ FAZA 3 (`/rooms` marshrutlarida ISHLATILMAYDI — u `branchAnalytics` uchun) |
 | `constants/delegation.js` | ✅ `common/constants/delegation.ts` |
@@ -80,9 +87,41 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | 2.3 | auth | `/api/auth` | 7 | ✅ |
 | 2.4 | roles (+`helpers/roles.helper`) | `/api/roles` | 7 | ✅ 7/7 |
 | 2.5a | users (mustaqil marshrutlar) | `/api/users` | 10/14 | ✅ |
-| 2.5b | users (hayot sikli) | `/api/users` | 4/14 | ⬜ FAZA 7/8 dan keyin |
-| 2.6 | botAuth | `/api/bot-auth` | 2 | ⬜ |
+| 2.5b | users (arxivlash/tiklash/hard delete) | `/api/users` | 3/14 | ✅ 13/14 |
+| 2.5c | users (`POST /staff`) | `/api/users` | 1/14 | ⬜ **BLOKLANGAN** — pastga qarang |
+| 2.6 | botAuth | `/api/bot-auth` | 2 | 🛑 **BLOKLANGAN** — Express'da ishlamaydi |
 | 2.7 | activityLogs + auditLog middleware | `/api/activity-logs` | 3 | ⬜ |
+
+#### 🛑 2.6 `botAuth` — KO'CHIRIB BO'LMAYDI (Express manbasi buzuq)
+
+`modules/botAuth/services/botAuth.service.js` MONGOOSE davridan qolgan
+maydon nomlarini ishlatadi; ular Prisma sxemasida YO'Q:
+
+| Kod | Sxemadagi haqiqat |
+|---|---|
+| `user.password` | `passwordHash` |
+| `where: { login }` | `username` |
+| `include: { role: true }` | `role` — SKALYAR (String), relation emas |
+| `include: { branches: true }` | bunday relation yo'q (`branchAssignments`) |
+
+Handler `{ accessToken, refreshToken, user, roleMeta }` ni kutadi, servis
+esa `{ user, tokens }` qaytaradi — `accessToken` HAR DOIM `undefined`.
+
+O'LCHANDI (taxmin emas): HAQIQIY bot tokeni bilan HMAC to'sig'idan
+o'tilgach IKKALA marshrut ham **500 `PrismaClientValidationError`**
+beradi. Takrorlash:
+
+```
+node --env-file=../server/.env test/bot-auth-blocker.probe.mjs
+```
+
+⚠ NEGA BU ILGARI KO'RINMAGAN: haqiqiy `initData` bo'lmasa har qanday
+so'rov 401 da to'xtaydi va Prisma yo'liga umuman yetib bormaydi.
+
+NEGA TO'SIQ: ko'chirish qoidasi "Express — etalon". Bu yerda etalon 500
+qaytaradi, ya'ni SAQLANADIGAN XULQ-ATVOR YO'Q. Avval Express'dagi
+`botAuth` tuzatilishi (= yangi xulq-atvor loyihalash) yoki modul
+keraksiz deb e'lon qilinishi kerak. Ikkalasi ham MAHSULOT QARORI.
 
 ### FAZA 3 — TASHKILIY TUZILMA
 | Modul | Manzil | E | Holat |
@@ -110,7 +149,8 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 ### FAZA 5–6 — GURUHLAR / TA'LIM
 | Modul | Manzil | E | Holat |
 |---|---|---|---|
-| groups | `/api/groups` | 24 | ⬜ |
+| groups (5a — o'qish) | `/api/groups` | 9/24 | ✅ |
+| groups (5b — yozish) | `/api/groups` | 15/24 | ⬜ MOLIYA/MAOSHDAN KEYIN |
 | attendance | `/api/attendance` | 11 | ⬜ |
 | teacherAttendance | `/api/teacher-attendance` | 2 | ⬜ |
 | attendanceExemptions | `/api/attendance-exemptions` | 4 | ⬜ |
@@ -191,14 +231,51 @@ qoplanadigan 10 marshrut:
 `GET /:id/group-history`, `GET /:id/password`, `PATCH /:id/password`,
 `PATCH /:id/role`, `PATCH /:id/branches`, `PATCH /:id`.
 
-**2.5b (FAZA 7/8 dan keyin)** — hayot sikli, moliyaga tegadigan 4 marshrut:
-`POST /staff`, `DELETE /:id`, `POST /:id/restore`, `DELETE /:id/permanent`.
+**2.5b (BAJARILDI)** — hayot sikli, 3 marshrut: `DELETE /:id`,
+`POST /:id/restore`, `DELETE /:id/permanent`.
+
+Dastlabki reja ularni FAZA 7/8 gacha kechiktirgan edi. QAYTA TEKSHIRUV
+ko'rsatdiki, bu UCHALASIDA ham moliya bog'liqligi JAVOB TANASIGA
+CHIQMAYDI — u faqat `try/catch` ichidagi yon ta'sir:
+
+| Marshrut | Ko'chirilmagan bog'liqlik | Javobga ta'siri |
+|---|---|---|
+| `DELETE /:id` | `teacherCompensation.recomputeFrom` | YO'Q (best-effort) |
+| `DELETE /:id` | `financePayment.recalcForStudent` | ERISHIB BO'LMAYDI (o'quvchi 400 bilan to'siladi) |
+| `POST /:id/restore` | `teacherCompensation.getActive` | ICHKARIGA ko'chirildi (sof o'qish) |
+| `DELETE /:id/permanent` | `teacherSalary.recalcForGroup` | YO'Q (best-effort) |
+
+Qolgan ikkita chaqiruv (`recomputeFrom`, `recalcForGroup`) 2 700 qatorlik
+maosh hisoblash dvigateliga tayanadi — u FAZA 8. Ular JIMGINA tashlab
+ketilmadi: `UsersService.deferredEffect()` har safar barqaror belgili
+`DEFERRED_EFFECT` WARN yozadi. FAZA 8 kelganda o'sha belgini qidirib,
+ikkita chaqiruvni ulash kifoya.
+
+**2.5c (BLOKLANGAN)** — `POST /staff`. Bu marshrut UCH mustaqil o'qda
+javob tanasini o'zgartiradi va uchalasi ham ko'chirilmagan:
+
+1. `expenseApprovals.checkConfigApproval` → 403 (taqiqlangan) yoki
+   202 + `Approval` obyekti (`users.requestHire` → `createRequest`);
+2. `openingBalance.create` → xato bo'lsa javobga `openingBalanceError`
+   maydoni QO'SHILADI;
+3. `teacherSalary.setCompensation` → stavka (javobga chiqmaydi, lekin
+   yaratilgan xodim maoshsiz qoladi).
+
+Bundan tashqari `buildUserProfile` o'qituvchi nishonida 501 beradi.
+Yarim ko'chirish uch o'qda farq bergan bo'lardi — shuning uchun u
+Express'da QOLDI.
 
 ### Meros qilib olingan cheklov (Faza 2.3 dan)
 
 `buildUserProfile` O'QUVCHI/O'QITUVCHI uchun NestJS'da 501
 (`PROFILE_NOT_MIGRATED`). Ta'sir qiladigan marshrutlar: `/auth/me`,
 `GET /users/:id`, `PATCH /users/:id/role`, `PATCH /users/:id/branches`.
+
+⚠ HAYOT SIKLI MARSHRUTLARI BUNGA TEGMAYDI: `DELETE /:id`,
+`POST /:id/restore` va `DELETE /:id/permanent` profil QURMAYDI — ular
+`withLegacyId(saved)` yoki faqat `{ success, message }` qaytaradi.
+Shuning uchun ular o'quvchi/o'qituvchi nishonida ham Express bilan
+AYNAN bir xil (`test/users-lifecycle-parity.test.mjs` da o'lchangan).
 Bu `groups` + `attendance` + `studentFreeze` ko'chgach yopiladi va
 `test/users-parity.test.mjs` dagi `expectDivergence` uni KUZATIB turadi —
 farq yo'qolgan kuni test yiqiladi va e'tibor tortadi.
@@ -241,3 +318,6 @@ takrorlandi. Har biri klient shartnomasining bir qismi, shuning uchun
 | B10 | `UPLOAD_DIR` (ko'chirish davri) | Express `server/` dan, NestJS `server_nest/` dan yuradi va `UPLOAD_DIR` NISBIY bo'lsa ular IKKI XIL papkani ko'radi — baza esa BITTA. O'shanda NestJS o'chirgan fayl diskda QOLIB ketardi (`unlink` xatosi yutiladi), kvota hisoblagichi esa kamayardi: joy "bo'shadi" deb ko'rinib, aslida bo'shamasdi. | ⚠ NESTJS TOMONDA TUZATILDI: `env.validation.ts` uni Express kabi `path.resolve(cwd, ...)` bilan yechadi, `StorageService` ishga tushganda papka yo'qligini ogohlantiradi, `.env.example` da MUTLAQ yo'l talab qilinishi yozildi. Test diskdagi faylning haqiqatan o'chganini tekshiradi. |
 | B11 | Fayl o'chirilganda faqat `assignment.fileId` nollanadi | `StoredFile` ga `Expense.receipt`, `JournalEntry.attachment`, `Refund.receipt` ham ishora qiladi, lekin `runCleanup`/`removeFileById` FAQAT `assignment` havolasini uzadi. | Yumshoq o'chirish bo'lgani uchun FK buzilmaydi — havola o'chirilgan faylga ishora qilib turaveradi. Express xulqi AYNAN shunday; o'zgartirish moliya modullariga tegadi, ya'ni alohida qaror. |
 | B12 | `npm run test:rooms` (`tests/roomUtilization.test.js`) | **4 ta tekshiruv yiqiladi** (ko'chirishdan OLDIN ham). Sabab: test o'zi yaratgan guruhlardan tashqari SEED guruhlarini ham hisobga oladigan servisga qarshi yozilgan — "faol kunlar" dushanba–juma deb kutiladi, seed'da esa SHANBA darslari ham bor (6 kun). Shu sababli maxraj 60 emas 72 chiqadi va bandlik 100% o'rniga 83.3%. | ⚠ TEST IZOLYATSIYASI kamchiligi, MAHSULOT xatosi emas: `getRoomUtilization` butun filial bo'yicha hisoblaydi, test esa faqat o'z fixture'lari borday taxmin qiladi. `roomUtilization` `branchAnalytics` bilan birga ko'chiriladi — o'shanda test fixture'lari izolyatsiya qilinadi. Jimgina "tuzatilmadi": maxrajni o'zgartirish bandlik foizini, u esa xona rejalashtirish qarorlarini o'zgartiradi. |
+| B13 | `GET /groups/:id/history` | Guruh TUGAGAN bo'lsa **400** ("Kurs tugagan..."), 200 EMAS. Sabab: handler `ensureGroup()` dan o'tadi, u esa YOZUV amallari uchun mo'ljallangan. Natijada arxivlangan guruhning a'zolik TARIXINI umuman ko'rib bo'lmaydi. | ⚠ ANIQ ZIDDIYAT: `GET /groups/:id` AYNI arxivlangan guruh uchun 200 beradi. Jimgina tuzatilmadi — javob 400 → 200 ga o'zgarardi, ya'ni bu ko'chirish ishi emas, alohida qaror. `test/groups-read-parity.test.mjs` QULFLAB turadi. |
+| B14 | `POST /groups/me/removal-notice/seen` | Express **200** qaytaradi (`res.json`), NestJS `POST` standarti esa **201**. `@HttpCode(200)` bilan tenglashtirildi. | KO'CHIRISHDA TOPILGAN VA TUZATILGAN paritet xatosi. Xulosa: HAR BIR ko'chirilgan `POST` marshrutida status OCHIQ tekshirilishi shart. |
+| B15 | `GET /groups/:id/available-teachers` | Express marshrutida `validate()` CHAQIRILMAGAN — ID sxemadan o'tmaydi, yaroqsiz ID 400 emas **404** beradi. | Ataylab takrorlandi: validator qo'shilsa status jimgina o'zgarardi. |
