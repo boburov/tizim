@@ -2,17 +2,18 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { CommonModule } from './common/common.module.js';
 import { HealthModule } from './health/health.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  * ILDIZ MODUL — FAZA 1 (poydevor).
  *
- * BU YERDA BIZNES MODULI YO'Q — va bo'sh modul ham yaratilmadi.
- * `common/` ning bo'sh pastki papkalari ham yaratilmadi: ular Faza 3 da,
- * ichiga qo'yiladigan narsa paydo bo'lganda tug'iladi (qo'riqchilar,
- * filtrlar, `ZodValidationPipe`). Bo'sh papka arxitekturani "tayyor"
- * ko'rsatadi-yu, hech narsa qilmaydi.
+ * FAZA 2.1: `CommonModule` qo'shildi — RBAC servislari, qo'riqchilar,
+ * auth middleware, xato filtri va zod pipe'i.
+ *
+ * BIZNES MODULI HALI YO'Q. Auth/users/roles marshrutlari Faza 2.3+ da
+ * qo'shiladi; hozircha butun trafik Express'da (5000-port) qoladi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 @Module({
@@ -29,6 +30,7 @@ import { HealthModule } from './health/health.module.js';
       cache: true,
     }),
     PrismaModule,
+    CommonModule,
     HealthModule,
   ],
 })

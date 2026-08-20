@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module.js';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import type { AppConfig } from './config/env.validation.js';
 
 /**
@@ -59,6 +60,14 @@ async function bootstrap(): Promise<void> {
     },
     credentials: true,
   });
+
+  // ── XATO FORMATI: Express `errorHandler` bilan AYNAN bir xil ──
+  //
+  // `{ success:false, message, code?, details? }`. Global filtr bu yerda
+  // XAVFSIZ: NestJS alohida jarayon, ya'ni Express'ga ta'sir qilmaydi.
+  // Global PIPE esa hamon YO'Q — validatsiya zod sxemalari bilan,
+  // marshrut darajasida bo'ladi (Faza 2.3+).
+  app.useGlobalFilters(new AllExceptionsFilter(isProd));
 
   // ── Tartibli to'xtatish ──
   // Buni yoqmasak `PrismaModule.onApplicationShutdown` HECH QACHON
