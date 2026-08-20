@@ -36,7 +36,10 @@ const DEPOSIT_TITLE: Record<string, string> = {
 
 const monthLabel = (year: number, month: number) => `${month}-oy, ${year}`;
 
-interface TimelineEvent {
+// ⚠ `export` SHART: kontroller metodlarining QAYTISH TURI shu
+// interfeysga tayanadi. Eksport qilinmasa TypeScript uni nomlay
+// olmaydi (TS4053) va `nest build` yiqiladi.
+export interface TimelineEvent {
   id: string;
   type: string;
   title: string;

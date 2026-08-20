@@ -73,3 +73,41 @@ export const dateKeyOf = (date: Date | string | number): string | null => {
   const dd = String(d.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 };
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * HAFTA KUNI VA MAHALLIY KUN KALITLARI —
+ * `helpers/attendance.helper.js` ning qolgan sana qismi.
+ *
+ * ⚠ BU YERGA QO'SHILDI, ALOHIDA FAYLGA EMAS: `toUtcMidnight` va
+ * `localTodayMidnight` shu faylda turadi va ular bilan BIR XIL "kun"
+ * ta'rifiga tayanadi. Ikkinchi faylda takrorlansa ikki ta'rif vaqt
+ * o'tib ajralib ketardi — va bu JIMGINA buzardi: davomat kaliti bir
+ * kun siljisa, dars "belgilanmagan" bo'lib qolardi.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+
+/** ⚠ TARTIB O'ZGARMASIN — `Date.getUTCDay()` indeksiga bog'langan. */
+const DAY_INDEX = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
+export type DayOfWeek = (typeof DAY_INDEX)[number];
+
+export const dayOfWeekOf = (date: Date | string | number): DayOfWeek => {
+  const d = new Date(date);
+  return DAY_INDEX[d.getUTCDay()];
+};
+
+const shiftToLocalDate = (instant: Date | string | number): Date =>
+  new Date(new Date(instant).getTime() + TZ_OFFSET_MIN * 60 * 1000);
+
+export const localTodayKey = (now: Date = new Date()): string | null =>
+  dateKeyOf(shiftToLocalDate(now));
+
+export const localDayOfWeek = (now: Date = new Date()): DayOfWeek =>
+  dayOfWeekOf(shiftToLocalDate(now));
+
+/** `parseLocalDay` natijasidan `dateKey` (har doim mos keladi). */
+export const parseLocalDayKey = (input: unknown): string | null => {
+  const d = parseLocalDay(input);
+  return d ? dateKeyOf(d) : null;
+};
