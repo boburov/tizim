@@ -167,22 +167,82 @@ const run = async () => {
     const ghost = await get(NEST, `/api/users/${'a'.repeat(24)}/password`, owner);
     check('mavjud bo\'lmagan foydalanuvchi → 404', ghost.status === 404);
 
-    // ⚠ O'LCHANMADI — VA BU YASHIL EMAS.
+    // ═══════════════════════════════════════════════════════════════
+    // FILIALLARARO PAROL — HTTP YO'LI (FAZA 2.5a da O'LCHANDI).
     //
-    // credentialScope ning ASOSIY holati — "`users.password` ruxsati BOR,
-    // lekin BOSHQA filialdagi odam" — hozirgi fixture bilan tekshirib
-    // bo'lmaydi: bu ruxsat faqat `owner` va `director` rollarida bor va
-    // ikkala direktor ham HAQIQIY hisob (parolini o'qish to'g'ri emas).
+    // Ilgari bu yer `warn(...)` edi: `users.password` ruxsati faqat
+    // `owner` va `director` rollarida bor, ya'ni "ruxsati BOR, lekin
+    // BOSHQA filialdagi" aktyorni yasab bo'lmasdi.
     //
-    // Yuqoridagi "begona filial → 403" testi O'TARDI, lekin NOTO'G'RI
-    // SABABDAN: uni ko'lam emas, RUXSAT qo'riqchisi to'sardi. Ya'ni
-    // ko'lam butunlay buzuq bo'lsa ham o'sha test yashil bo'lardi —
-    // shuning uchun u OLIB TASHLANDI.
+    // YECHIM — YANGI FIXTURE EMAS, MAVJUD MA'LUMOT: direktor hisobi
+    // aynan shunday aktyor. Uning paroli owner endpointidan o'qiladi
+    // (parollar ochiq matnda saqlanadi), so'ng u BOSHQA filialdagi
+    // xodimning parolini so'raydi.
     //
-    // Faza 2.3 dan OLDIN: izolyatsiyalangan fixture kerak — filialga
-    // biriktirilgan, `users.password` ruxsatiga ega sinov roli.
-    warn('credentialScope: filiallararo parol (HTTP)',
-      'fixture yo\'q — `users.password` ruxsatli, filialga bog\'langan sinov roli kerak (Faza 2.3 oldidan)');
+    // ⚠ TEKSHIRUV HAQIQATAN KO'LAMGA YETADI: direktorda `users.password`
+    // BOR, ya'ni ruxsat qo'riqchisi uni O'TKAZADI va 403 ni faqat
+    // `credentialScope` bera oladi. Bazaga hech narsa yozilmaydi.
+    // ═══════════════════════════════════════════════════════════════
+    const dirs = await get(EXPRESS, '/api/users?role=director&limit=5', owner);
+    let scopeToken = null;
+    let scopeTarget = null;
+    for (const d of dirs.body?.data || []) {
+      const dirBranch = String(d.homeBranchId?.id || d.homeBranchId || '');
+      // Nishon: direktor filialida BO'LMAGAN qa fixture xodimi.
+      const target = [aUser, bUser].find((u) => {
+        const b = String(u.homeBranchId?.id || u.homeBranchId || '');
+        return b && dirBranch && b !== dirBranch;
+      });
+      if (!target) continue;
+      const pw = await get(EXPRESS, `/api/users/${d.id}/password`, owner);
+      if (pw.status !== 200) continue;
+      scopeToken = await login(pw.body.data.username, pw.body.data.password);
+      scopeTarget = target;
+      break;
+    }
+
+    if (scopeToken && scopeTarget) {
+      const tid = scopeTarget._id || scopeTarget.id;
+      // ⚠ MUSBAT NAZORAT — SHARTSIZ EMAS, ZARUR.
+      //
+      // "Begona filial → 403" o'z-o'zicha HECH NARSANI isbotlamaydi:
+      // aktyorda ruxsat bo'lmasa ham xuddi shu 403 chiqardi. Shuning
+      // uchun avval direktor O'Z KO'LAMIDAGI xodimning parolini
+      // O'QIY OLISHI ko'rsatiladi — ya'ni ruxsat qo'riqchisi uni
+      // o'tkazadi va keyingi 403 ni FAQAT `credentialScope` bera oladi.
+      //
+      // Nishon direktorning O'Z ko'lamidan olinadi (uning tokeni bilan
+      // so'ralgan ro'yxat aynan shuni beradi).
+      const ownList = await get(NEST, '/api/users?staff=1&limit=50', scopeToken);
+      const ownPeer = (ownList.body?.data || []).find(
+        (u) => String(u.id || u._id) !== String(tid) && u.role !== 'owner',
+      );
+      let control = null;
+      if (ownPeer) {
+        control = await get(NEST, `/api/users/${ownPeer.id || ownPeer._id}/password`, scopeToken);
+      }
+      check("MUSBAT NAZORAT: direktor O'Z ko'lamidagi parolni O'QIYDI → 200",
+        control?.status === 200,
+        control ? `status ${control.status}` : "o'z ko'lamida nishon topilmadi");
+
+      const cross = await get(NEST, `/api/users/${tid}/password`, scopeToken);
+      check('direktor: BEGONA filial paroli → 403 (ko\'lam)',
+        cross.status === 403, `status ${cross.status}`);
+
+      const crossWrite = await fetch(`${NEST}/api/users/${tid}/password`, {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${scopeToken}`,
+        },
+        body: JSON.stringify({ password: 'buyerga_yetmasligi_kerak' }),
+      });
+      check('direktor: BEGONA filial parolini ALMASHTIRA olmaydi → 403',
+        crossWrite.status === 403, `status ${crossWrite.status}`);
+    } else {
+      warn('credentialScope: filiallararo parol (HTTP)',
+        'boshqa filialdagi direktor topilmadi');
+    }
   }
 
   // ─── 7b. credentialScope — SERVIS QATLAMIDA (haqiqiy baza) ──────

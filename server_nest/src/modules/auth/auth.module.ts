@@ -17,6 +17,11 @@ import { authLimiter } from '../../common/middleware/rate-limit.js';
 @Module({
   controllers: [AuthController],
   providers: [AuthService, UserProfileService],
+  // `UserProfileService` — `users` moduliga ham kerak (`GET /:id`,
+  // `PATCH /:id/role`, `PATCH /:id/branches` profil qaytaradi). Profil
+  // qurish mantig'i BITTA joyda qolishi shart: ikkinchi nusxa bo'lsa,
+  // biri to'ldirilib, ikkinchisi eski shaklda qolib ketardi.
+  exports: [UserProfileService],
 })
 export class AuthModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

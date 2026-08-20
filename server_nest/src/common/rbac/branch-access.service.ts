@@ -30,7 +30,10 @@ export interface ScopedUser {
  */
 export const assertTargetInScope = (
   actorAllowedIds: string[] | undefined,
-  canSeeAll: boolean,
+  // ⚠ `undefined` ATAYLAB QABUL QILINADI va FALSY sifatida ishlaydi —
+  // Express'dagi bilan aynan bir xil. Bu FAIL-CLOSED: ko'lam noma'lum
+  // bo'lsa tekshiruv o'tkazib yuborilmaydi, aksincha — bajariladi.
+  canSeeAll: boolean | undefined,
   targetUser: ScopedUser,
 ): void => {
   if (canSeeAll) return;
@@ -58,7 +61,7 @@ export const assertTargetInScope = (
  */
 export const assertCanAssignBranch = (
   actorAllowedIds: string[] | undefined,
-  canSeeAll: boolean,
+  canSeeAll: boolean | undefined,
   targetBranchId: unknown,
 ): void => {
   if (canSeeAll) return;

@@ -13,6 +13,7 @@ import type { AuthenticatedRequest } from '../types/authenticated-request.js';
  */
 
 export const PERMISSIONS_KEY = 'permissions';
+export const PERMISSIONS_ALL_KEY = 'permissions_all';
 export const ROLES_KEY = 'roles';
 export const PERMISSION_OR_SELF_KEY = 'permission_or_self';
 
@@ -22,6 +23,27 @@ export const PERMISSION_OR_SELF_KEY = 'permission_or_self';
  * `PERMISSION_IMPLIES` iyerarxiyasi ham qo'llanadi.
  */
 export const Permissions = (...keys: string[]) => SetMetadata(PERMISSIONS_KEY, keys);
+
+/**
+ * HAR BIR kalit BO'LISHI SHART (AND).
+ *
+ * ⚠ NEGA ALOHIDA DEKORATOR KERAK: Express ba'zi marshrutlarga
+ * `requirePermission(...)` ni IKKI MARTA ketma-ket ulaydi —
+ *
+ *     router.post("/", requireAuth,
+ *       requirePermission(SYSTEM_ADMIN_ACCESS),
+ *       requirePermission(BRANCHES_CREATE), ...)
+ *
+ * — ya'ni semantika AND. `@Permissions(a, b)` esa OR beradi va bu
+ * chegarani JIMGINA yumshatardi: `branches.create` bor-u
+ * `system.admin_access` yo'q filial direktori o'tib ketardi va o'ziga
+ * yangi filial ochib, ko'lamini kengaytira olardi.
+ *
+ * `PERMISSION_IMPLIES` iyerarxiyasi har bir kalitga alohida qo'llanadi —
+ * `@Permissions` bilan bir xil.
+ */
+export const AllPermissions = (...keys: string[]) =>
+  SetMetadata(PERMISSIONS_ALL_KEY, keys);
 
 /** Rol nomi YOKI roleType mos kelsa o'tadi (`requireRole` semantikasi). */
 export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);

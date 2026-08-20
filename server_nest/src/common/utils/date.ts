@@ -40,3 +40,18 @@ export const parseLocalDay = (input: unknown): Date | null => {
   if (Number.isNaN(instant.getTime())) return null;
   return localTodayMidnight(instant);
 };
+
+/**
+ * Berilgan sana MAHALLIY bugundan keyinmi.
+ *
+ * `enrolledAt` / `hiredAt` / `completedAt` tekshiruvlari shunga tayanadi:
+ * kelajakdagi HR sanasi maosh va o'qish davri hisobini buzardi.
+ */
+export const isFutureLocalDay = (
+  input: unknown,
+  now: Date = new Date(),
+): boolean => {
+  const day = parseLocalDay(input);
+  if (day == null) return false;
+  return day.getTime() > localTodayMidnight(now).getTime();
+};

@@ -41,7 +41,9 @@ import { UsersModule } from './modules/users/users.module.js';
     // ── FAZA 2.2: birinchi ko'chirilgan marshrutlar ──
     // Rollar — FAQAT O'QISH (mutatsiyalar Express'da qoladi).
     RolesModule,
-    // Foydalanuvchilar — hozircha FAQAT `GET /:id/password`.
+    // ── FAZA 2.5a: foydalanuvchilar (14 marshrutdan 10 tasi) ──
+    // Qolgan 4 tasi (staff yaratish, arxivlash, tiklash, butunlay
+    // o'chirish) moliya/tasdiq modullariga tayanadi — FAZA 7/8 dan keyin.
     UsersModule,
   ],
 })

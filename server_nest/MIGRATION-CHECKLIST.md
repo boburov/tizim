@@ -46,19 +46,21 @@ Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/sr
 | `helpers/permission.helper.js` | ✅ `common/rbac/permission.service.ts` |
 | `helpers/botStatus.helper.js` | ✅ `common/rbac/bot-status.ts` |
 | `helpers/userProfile.helper.js` | ✅ `modules/auth/user-profile.service.ts` |
-| `helpers/roles.helper.js` | ⬜ **FAZA 2.4** |
+| `helpers/roles.helper.js` | ✅ `common/rbac/roles.helper.ts` |
+| `helpers/studentCompletion.helper.js` | ✅ `common/helpers/student-completion.service.ts` |
+| `utils/pagination.js` | ✅ `common/utils/pagination.ts` |
 | `helpers/actor.helper.js`, `auditLog.helper.js` | ⬜ FAZA 2.7 |
 | `helpers/userRelations.helper.js`, `cascadeDelete.helper.js` | ⬜ FAZA 2.5 |
 | `helpers/group.helper.js`, `membership.helper.js`, `period.helper.js` | ⬜ FAZA 6 |
 | `helpers/attendance.helper.js`, `lessonCancellation.helper.js` | ⬜ FAZA 6 |
-| `helpers/studentFreeze.helper.js`, `studentCompletion.helper.js` | ⬜ FAZA 4 |
+| `helpers/studentFreeze.helper.js` | ⬜ FAZA 4 |
 | `helpers/roomOccupancy.helper.js` | ⬜ FAZA 3 |
 | `helpers/selfSalary.guard.js` | ⬜ FAZA 8 |
 | `helpers/correlationCache.js`, `configMetrics.helper.js` | ⬜ FAZA 9 |
 | `utils/ApiError.js` | ✅ `common/errors/api-error.ts` |
 | `utils/jwt.js`, `hashToken.js`, `credentials.js`, `phone.js`, `serialize.js` | ✅ |
 | `utils/cookie.helper.js` | ✅ `common/utils/cookie.ts` |
-| `utils/money.js`, `pagination.js`, `ApiResponse.js`, `sendXlsx.js` | ⬜ |
+| `utils/money.js`, `ApiResponse.js`, `sendXlsx.js` | ⬜ |
 | `constants/*` (22 fayl) | qisman ✅ (`permissions.ts`); qolgani modul bilan birga |
 
 ## 2. MODUL RO'YXATI — BOG'LIQLIK TARTIBIDA
@@ -71,12 +73,13 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | 2.1 | poydevor | — | — | ✅ |
 | 2.2 | ALS / RBAC / auth middleware | — | — | ✅ |
 | 2.3 | auth | `/api/auth` | 7 | ✅ |
-| 2.4 | roles (+`helpers/roles.helper`) | `/api/roles` | 7 | ⬜ **KEYINGI** |
-| 2.5 | users | `/api/users` | 14 | ⬜ |
+| 2.4 | roles (+`helpers/roles.helper`) | `/api/roles` | 7 | ✅ 7/7 |
+| 2.5a | users (mustaqil marshrutlar) | `/api/users` | 10/14 | ✅ |
+| 2.5b | users (hayot sikli) | `/api/users` | 4/14 | ⬜ FAZA 7/8 dan keyin |
 | 2.6 | botAuth | `/api/bot-auth` | 2 | ⬜ |
 | 2.7 | activityLogs + auditLog middleware | `/api/activity-logs` | 3 | ⬜ |
 
-### FAZA 3 — TASHKILIY TUZILMA
+### FAZA 3 — TASHKILIY TUZILMA  ← **KEYINGI**
 | Modul | Manzil | E | Holat |
 |---|---|---|---|
 | branches | `/api/branches` | 8 | ⬜ |
@@ -159,6 +162,48 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 `leadDailyDigest`, `leadFollowupReminders`, `lessonReminders`,
 `lowAttendanceDigest`, `notificationDeliver`, `notificationSchedule`,
 `storageCleanup`, `ttlCleanup`, `usageHeartbeat` — barchasi ⬜ (FAZA 10).
+
+## 3b. ⚠ BOG'LIQLIK YO'NALISHI — TAVSIYA ETILGAN TARTIB TUZATILDI
+
+Statik tahlil KO'RSATDI: `users` tizimning eng PASTKI qatlami EMAS, eng
+YUQORISI. `users.service.js` quyidagilarga tayanadi:
+
+```
+users ──► finance/studentPayment   (arxivlashda to'lovni qayta hisoblash)
+      ──► teacherSalary            (kompensatsiya, guruh maoshi)
+      ──► expenseApprovals         (ishga olish tasdig'i)
+      ──► openingBalance           (boshlang'ich qoldiq)
+      ──► systemNotifications, archiveReasons
+      ──► userRelations/cascadeDelete (butunlay o'chirish — moliyaviy tarix)
+      ──► buildUserProfile ──► groups + attendance + studentFreeze
+```
+
+Shu sababli `users` BITTA fazada tugamaydi. U IKKI TO'LQINGA bo'lindi:
+
+**2.5a (bajarildi)** — bog'liqligi yo'q yoki kichik yordamchilar bilan
+qoplanadigan 10 marshrut:
+`GET /`, `GET /staff-stats`, `GET /check-availability`, `GET /:id`,
+`GET /:id/group-history`, `GET /:id/password`, `PATCH /:id/password`,
+`PATCH /:id/role`, `PATCH /:id/branches`, `PATCH /:id`.
+
+**2.5b (FAZA 7/8 dan keyin)** — hayot sikli, moliyaga tegadigan 4 marshrut:
+`POST /staff`, `DELETE /:id`, `POST /:id/restore`, `DELETE /:id/permanent`.
+
+### Meros qilib olingan cheklov (Faza 2.3 dan)
+
+`buildUserProfile` O'QUVCHI/O'QITUVCHI uchun NestJS'da 501
+(`PROFILE_NOT_MIGRATED`). Ta'sir qiladigan marshrutlar: `/auth/me`,
+`GET /users/:id`, `PATCH /users/:id/role`, `PATCH /users/:id/branches`.
+Bu `groups` + `attendance` + `studentFreeze` ko'chgach yopiladi va
+`test/users-parity.test.mjs` dagi `expectDivergence` uni KUZATIB turadi —
+farq yo'qolgan kuni test yiqiladi va e'tibor tortadi.
+
+### Natijada FAZA tartibi
+
+Tavsiya etilgan ro'yxat "students → teachers → groups → payments" edi.
+Bog'liqlik grafi esa TESKARISINI talab qiladi: avval barg modullar
+(branches, rooms, courses, holidays...), keyin groups/attendance,
+keyin finance/salary, va ENG OXIRIDA `users` ning qolgan 4 marshruti.
 
 ## 4. QAT'IY CHEKLOVLAR (ko'chirish davomida)
 

@@ -66,6 +66,16 @@ const CASES = [
   { name: 'roles (auth yo\'q → 401)', method: 'GET', path: '/api/roles' },
   { name: 'users/:id/password (404)', method: 'GET',
     path: `/api/users/${'a'.repeat(24)}/password`, auth: true },
+  // ── Faza 2.5a: foydalanuvchilar (o'qish yo'llari) ──
+  // Mutatsiyalar bu yerda EMAS — ular holatni o'zgartiradi va
+  // `test/users-parity.test.mjs` da tiklash bilan sinaladi.
+  { name: 'users (list)', method: 'GET', path: '/api/users?limit=5', auth: true },
+  { name: 'users (staff)', method: 'GET', path: '/api/users?staff=1&limit=5', auth: true },
+  { name: 'users/staff-stats', method: 'GET', path: '/api/users/staff-stats', auth: true },
+  { name: 'users/check-availability', method: 'GET',
+    path: '/api/users/check-availability?username=owner', auth: true },
+  { name: 'users/:id (404)', method: 'GET',
+    path: `/api/users/${'a'.repeat(24)}`, auth: true },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },
@@ -102,6 +112,11 @@ const run = async () => {
   console.log(`  Express: ${EXPRESS}\n  NestJS : ${NEST}\n`);
 
   let compared = 0, diffs = 0, skipped = 0, unreachable = 0;
+  // ⚠ MUSBAT NAZORAT #2: himoyalangan marshrutlardan KAMIDA BITTASI
+  // 200 qaytarishi shart. Tokenning muddati o'tsa hamma tekshiruv 401
+  // bo'lardi — ikkala stekda BIR XIL 401, ya'ni "paritet saqlangan"
+  // degan YASHIL natija chiqardi va aslida hech narsa o'lchanmasdi.
+  let authedOk = 0;
 
   for (const c of CASES) {
     if (c.skip) { skipped += 1; console.log(`  ⏭  ${c.name} — ${c.skip}`); continue; }
@@ -124,6 +139,7 @@ const run = async () => {
     const nb = JSON.stringify(strip(n.body));
     if (eb !== nb) problems.push(`tana farq qiladi:\n      express: ${eb}\n      nest   : ${nb}`);
 
+    if (c.auth && e.status === 200) authedOk += 1;
     if (problems.length) { diffs += 1; console.log(`  ❌ ${c.name}\n      ${problems.join('\n      ')}`); }
     else console.log(`  ✅ ${c.name} — ${e.status}, tana bir xil`);
   }
@@ -135,6 +151,12 @@ const run = async () => {
     console.log('\n  ❌ O\'LCHANMADI: birorta endpoint solishtirilmadi.');
     console.log('     Ikkala stek ham ishlab turishi SHART — aks holda bu test');
     console.log('     "farq yo\'q" deb yolg\'on yashil berardi.\n');
+    process.exit(1);
+  }
+  if (CASES.some((c) => c.auth && !c.skip) && authedOk === 0) {
+    console.log('\n  ❌ O\'LCHANMADI: birorta himoyalangan marshrut 200 qaytarmadi.');
+    console.log('     Token eskirgan bo\'lishi mumkin — yangisini oling:');
+    console.log('     node test/parity.mjs --token <accessToken>\n');
     process.exit(1);
   }
   if (unreachable > 0 || diffs > 0) { console.log(''); process.exit(1); }

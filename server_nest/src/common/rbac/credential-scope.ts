@@ -43,6 +43,20 @@ export const credentialScope = (req: AuthenticatedRequest): CredentialActor => (
     req?.baseRole?.roleType === ROLE_TYPES.OWNER,
 });
 
+/**
+ * Aktyor SHU FILIALDA login/parol o'qiy oladimi.
+ *
+ * `branches.service.list` da ishlatiladi: bitta xodim bir necha filialga
+ * biriktirilgan bo'lishi mumkin va aktyor ularning FAQAT bir qismini
+ * ko'rishi mumkin — shuning uchun qaror ODAM bo'yicha emas, FILIAL
+ * bo'yicha chiqariladi.
+ */
+export const canReadCredentialsIn = (
+  actorBranchIds: string[],
+  isOwner: boolean | undefined,
+  branchId: unknown,
+): boolean => Boolean(isOwner) || actorBranchIds.includes(String(branchId));
+
 @Injectable()
 export class CredentialScopeService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}

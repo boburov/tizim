@@ -25,6 +25,14 @@ import {
   DEFAULT_ROLE_PATH as EXPRESS_DEFAULT_ROLE_PATH,
 } from '../../server/src/constants/roles.js';
 import {
+  PAYROLL_AUDIT_ACTIONS as EXPRESS_PAYROLL_AUDIT_ACTIONS,
+  PAYROLL_AUDIT_ACTION_LABELS as EXPRESS_PAYROLL_AUDIT_ACTION_LABELS,
+} from '../../server/src/constants/payrollAudit.js';
+import {
+  PAYROLL_AUDIT_ACTIONS,
+  PAYROLL_AUDIT_ACTION_LABELS,
+} from '../dist/common/constants/payroll-audit.js';
+import {
   PERMISSIONS,
   ROLES,
   ROLE_TYPES,
@@ -90,6 +98,14 @@ check('yordamchi funksiyalar bir xil javob beradi', () => {
     assert.deepEqual(splitPermissionKey(k), expressSplitPermissionKey(k), `split(${k})`);
   }
 });
+
+// ── FAZA 2.5a: maosh audit lug'ati ──
+// `PATCH /users/:id` `hiredAt` o'zgarganda shu kalitlardan birini yozadi.
+// Kalit ajralib ketsa audit yozuvi noto'g'ri turkumga tushardi.
+check(`PAYROLL_AUDIT_ACTIONS aynan bir xil (${Object.keys(EXPRESS_PAYROLL_AUDIT_ACTIONS).length} ta)`, () =>
+  assert.deepEqual({ ...PAYROLL_AUDIT_ACTIONS }, { ...EXPRESS_PAYROLL_AUDIT_ACTIONS }));
+check('PAYROLL_AUDIT_ACTION_LABELS aynan bir xil', () =>
+  assert.deepEqual({ ...PAYROLL_AUDIT_ACTION_LABELS }, { ...EXPRESS_PAYROLL_AUDIT_ACTION_LABELS }));
 
 console.log(`\n  Natija: ${R.pass} o'tdi, ${R.fail} yiqildi\n`);
 process.exit(R.fail ? 1 : 0);
