@@ -4,6 +4,9 @@ import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { CommonModule } from './common/common.module.js';
 import { HealthModule } from './health/health.module.js';
+import { RolesModule } from './modules/roles/roles.module.js';
+import { UsersModule } from './modules/users/users.module.js';
+import { DiagModule } from './modules/diag/diag.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -12,8 +15,9 @@ import { HealthModule } from './health/health.module.js';
  * FAZA 2.1: `CommonModule` qo'shildi — RBAC servislari, qo'riqchilar,
  * auth middleware, xato filtri va zod pipe'i.
  *
- * BIZNES MODULI HALI YO'Q. Auth/users/roles marshrutlari Faza 2.3+ da
- * qo'shiladi; hozircha butun trafik Express'da (5000-port) qoladi.
+ * FAZA 2.2: birinchi marshrutlar ulandi (rollar o'qish, parol o'qish).
+ * Trafik hamon Express'da (5000-port) — NestJS faqat tekshiruv uchun
+ * 5001-portda turadi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 @Module({
@@ -32,6 +36,13 @@ import { HealthModule } from './health/health.module.js';
     PrismaModule,
     CommonModule,
     HealthModule,
+    // ── FAZA 2.2: birinchi ko'chirilgan marshrutlar ──
+    // Rollar — FAQAT O'QISH (mutatsiyalar Express'da qoladi).
+    RolesModule,
+    // Foydalanuvchilar — hozircha FAQAT `GET /:id/password`.
+    UsersModule,
+    // VAQTINCHA tekshiruv skafoldi — production'da UMUMAN yuklanmaydi.
+    ...(process.env.NODE_ENV === 'production' ? [] : [DiagModule]),
   ],
 })
 export class AppModule {}

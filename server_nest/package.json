@@ -14,7 +14,8 @@
     "postinstall": "prisma generate",
     "test:constants": "node test/constants-parity.test.mjs",
     "test:auth-infra": "node test/auth-infra.test.mjs",
-    "test:parity": "node test/parity.mjs"
+    "test:parity": "node test/parity.mjs",
+    "test:phase22": "node test/phase22-integration.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"

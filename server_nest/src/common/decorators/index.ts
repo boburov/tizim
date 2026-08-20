@@ -1,4 +1,5 @@
 import { SetMetadata, createParamDecorator, ExecutionContext } from '@nestjs/common';
+import type { ZodSchema } from 'zod';
 import type { AuthenticatedRequest } from '../types/authenticated-request.js';
 
 /**
@@ -58,3 +59,48 @@ export const BranchScopeParam = createParamDecorator(
     };
   },
 );
+
+/**
+ * ZOD VALIDATSIYASI — Express `validate()` BILAN AYNAN BIR XIL SHAKLDA.
+ *
+ * Express sxemalari butun so'rovni bitta obyekt sifatida oladi:
+ *     z.object({ body: ..., query: ..., params: ... })
+ *
+ * Shu sababli bu dekorator ham `{ body, query, params }` ni yig'ib beradi.
+ * NEGA MUHIM: xato yo'li (`details[].path`) shundagina Express bilan bir
+ * xil chiqadi — masalan `"params.value"`. Agar faqat bitta bo'lak
+ * tekshirilsa yo'l `"value"` bo'lib qolardi va bu KLIENT SHARTNOMASINI
+ * jimgina o'zgartirardi.
+ *
+ * `ZodError` ATAYLAB tutilmaydi — uni `AllExceptionsFilter` bir joyda
+ * Express formatiga soladi.
+ */
+/**
+ * ⚠ SXEMA O'RAMDA (`{ schema }`) UZATILADI — TO'G'RIDAN-TO'G'RI EMAS.
+ *
+ * NestJS `createParamDecorator` birinchi argument DATA'mi yoki PIPE'mi
+ * ekanini `transform` metodi bor-yo'qligiga qarab hal qiladi. Zod
+ * sxemalarida esa `.transform()` BOR — natijada Nest sxemani PIPE deb
+ * o'ylab, factory'ga `data: undefined` uzatardi va so'rov
+ * "Cannot read properties of undefined (reading 'parse')" bilan 500
+ * berardi.
+ *
+ * Oddiy obyektga o'rash bu to'qnashuvni butunlay yo'q qiladi.
+ * (Bu tuzoq zod + NestJS ishlatadigan HAR QANDAY joyda takrorlanadi.)
+ */
+const ValidatedFactory = createParamDecorator(
+  (carrier: { schema: ZodSchema }, ctx: ExecutionContext) => {
+    const req = ctx.switchToHttp().getRequest<{
+      body?: unknown;
+      query?: unknown;
+      params?: unknown;
+    }>();
+    return carrier.schema.parse({
+      body: req.body,
+      query: req.query,
+      params: req.params,
+    });
+  },
+);
+
+export const Validated = (schema: ZodSchema) => ValidatedFactory({ schema });

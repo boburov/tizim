@@ -56,6 +56,14 @@ const CASES = [
     // NestJS'da qo'shimcha diagnostika bor; Express'da bu manzil YO'Q.
     // Faza 2.3 gacha ataylab solishtirilmaydi.
     skip: 'NestJS-only diagnostika manzili' },
+  // ── Faza 2.2: ko'chirilgan marshrutlar ──
+  { name: 'roles (list)', method: 'GET', path: '/api/roles', auth: true },
+  { name: 'roles/owner', method: 'GET', path: '/api/roles/owner', auth: true },
+  { name: 'roles/director', method: 'GET', path: '/api/roles/director', auth: true },
+  { name: 'roles/__nope__ (404)', method: 'GET', path: '/api/roles/__nope__', auth: true },
+  { name: 'roles (auth yo\'q → 401)', method: 'GET', path: '/api/roles' },
+  { name: 'users/:id/password (404)', method: 'GET',
+    path: `/api/users/${'a'.repeat(24)}/password`, auth: true },
   // ── Faza 2.3+ da to'ldiriladi ──
   // { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
 ];
