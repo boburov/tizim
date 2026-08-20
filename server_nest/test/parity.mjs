@@ -134,6 +134,11 @@ const CASES = [
   { name: 'archive-reasons/report', method: 'GET',
     path: '/api/archive-reasons/report', auth: true },
   { name: 'attendance-settings', method: 'GET', path: '/api/attendance-settings', auth: true },
+  { name: 'holidays (list)', method: 'GET', path: '/api/holidays?limit=5', auth: true },
+  { name: 'holidays/teacher-birthdays', method: 'GET',
+    path: '/api/holidays/teacher-birthdays', auth: true },
+  { name: 'holidays/:id (404)', method: 'GET',
+    path: `/api/holidays/${'a'.repeat(24)}`, auth: true },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },

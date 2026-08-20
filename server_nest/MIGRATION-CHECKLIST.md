@@ -89,7 +89,7 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | branches | `/api/branches` | 8 | ✅ 8/8 |
 | rooms | `/api/rooms` | 5 | ✅ 5/5 |
 | courses | `/api/courses` | 9 | ⬜ **KEYINGI** |
-| holidays | `/api/holidays` | 7 | ⬜ |
+| holidays | `/api/holidays` | 7 | ✅ 7/7 |
 | archiveReasons | `/api/archive-reasons` | 6 | ✅ 6/6 |
 | leadOptions | `/api/lead-options` | 4 | ✅ 4/4 |
 | feedbackTypes | `/api/feedback-types` | 5 | ✅ 5/5 |

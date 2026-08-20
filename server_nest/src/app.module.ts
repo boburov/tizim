@@ -23,6 +23,7 @@ import { FeedbackTypesModule } from './modules/feedback-types/feedback-types.mod
 import { ArchiveReasonsModule } from './modules/archive-reasons/archive-reasons.module.js';
 import { AttendanceSettingsModule } from './modules/attendance-settings/attendance-settings.module.js';
 import { FeedbackModule } from './modules/feedback/feedback.module.js';
+import { HolidaysModule } from './modules/holidays/holidays.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -101,6 +102,8 @@ import { FeedbackModule } from './modules/feedback/feedback.module.js';
     AttendanceSettingsModule,
     // Fikr-mulohaza (aloqa) — bildirishnomalarga tayanadi.
     FeedbackModule,
+    // Bayramlar — PUL YO'LIDA (davomat/to'lov/maosh shunga tayanadi).
+    HolidaysModule,
   ],
 })
 export class AppModule {}

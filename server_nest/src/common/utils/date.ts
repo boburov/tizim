@@ -55,3 +55,21 @@ export const isFutureLocalDay = (
   if (day == null) return false;
   return day.getTime() > localTodayMidnight(now).getTime();
 };
+
+/**
+ * Sanani "YYYY-MM-DD" kalit satriga o'giradi (UTC bo'yicha).
+ *
+ * ⚠ UTC ATAYLAB: saqlanadigan `dateKey` maydonlari ham shu funksiya
+ * orqali hosil qilinadi, ya'ni "bugun" ta'rifi (`localTodayMidnight`
+ * UTC-midnight ko'rinishini beradi) bilan BIR XIL bo'lib qoladi.
+ * Mahalliy `getDate()` ishlatilsa server vaqt zonasiga qarab kalit
+ * siljib ketardi.
+ */
+export const dateKeyOf = (date: Date | string | number): string | null => {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return null;
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};

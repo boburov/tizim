@@ -30,7 +30,8 @@
     "test:bot": "node test/bot-parity.test.mjs",
     "test:catalogs-parity": "node test/catalogs-parity.test.mjs",
     "test:feedback-parity": "node test/feedback-parity.test.mjs",
-    "test:notification-jobs": "node test/notification-jobs.test.mjs"
+    "test:notification-jobs": "node test/notification-jobs.test.mjs",
+    "test:holidays-parity": "node test/holidays-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"
