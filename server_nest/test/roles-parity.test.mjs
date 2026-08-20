@@ -37,8 +37,31 @@ const ok = (n) => { R.pass += 1; console.log(`  ✅ ${n}`); };
 const bad = (n, m) => { R.fail += 1; console.log(`  ❌ ${n}\n      ${m}`); };
 const skip = (n, m) => { R.unmeasured += 1; console.log(`  ⚠️  ${n} — O'LCHANMADI: ${m}`); };
 
+
+/**
+ * ⚠ SHU YURISHGA XOS MIJOZ MANZILI — TEZLIK CHEGARASI UCHUN.
+ *
+ * `authLimiter` (20/5daq) va `generalLimiter` (200/daq) IP bo'yicha
+ * sanaydi. Repoda parallel ishlaydigan to'plamlar bitta haqiqiy IP'ni
+ * (127.0.0.1) baham ko'radi va byudjet doimiy to'la bo'ladi — natijada
+ * to'plam 429 sababli UMUMAN O'LCHANMAYDI (yiqilmaydi ham, o'tmaydi
+ * ham; eng yomon natija).
+ *
+ * Ikkala stek ham `trust proxy: 1` bilan ishlaydi (Express `app.js`,
+ * NestJS `main.ts`), ya'ni chegara shu manzil bo'yicha sanaladi va
+ * to'plam o'z chelagida yuradi.
+ *
+ * ⚠ CHEGARA ZAIFLASHMAYDI: u baribir qo'llanadi — to'plam faqat BOSHQA
+ * MASHINADAN kelayotgandek ko'rinadi. Chegaraning O'ZI alohida
+ * o'lchanadi: `test/rate-limit-parity.test.mjs`.
+ *
+ * ⚠ BETAKROR bo'lishi SHART: chelak 5 daqiqa yashaydi, qat'iy manzil
+ * bilan ketma-ket ikki yurish bir chelakni baham ko'rardi.
+ */
+const RUN_IP = `198.51.100.${(Number(process.hrtime.bigint() % 250n) + 2)}`;
+
 const req = async (base, method, path, { token, body } = {}) => {
-  const headers = { 'content-type': 'application/json' };
+  const headers = { 'content-type': 'application/json', 'x-forwarded-for': RUN_IP };
   if (token) headers.authorization = `Bearer ${token}`;
   const res = await fetch(base + path, {
     method,

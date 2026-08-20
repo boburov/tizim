@@ -10,6 +10,29 @@
  * ⚠ FAQAT O'QIYDI. Bazaga hech narsa yozmaydi.
  * ISHLATISH:  node test/phase22-integration.test.mjs
  */
+
+/**
+ * ⚠ SHU YURISHGA XOS MIJOZ MANZILI — TEZLIK CHEGARASI UCHUN.
+ *
+ * `authLimiter` (20/5daq) va `generalLimiter` (200/daq) IP bo'yicha
+ * sanaydi. Repoda parallel ishlaydigan to'plamlar bitta haqiqiy IP'ni
+ * (127.0.0.1) baham ko'radi va byudjet doimiy to'la bo'ladi — natijada
+ * to'plam 429 sababli UMUMAN O'LCHANMAYDI (yiqilmaydi ham, o'tmaydi
+ * ham; eng yomon natija).
+ *
+ * Ikkala stek ham `trust proxy: 1` bilan ishlaydi (Express `app.js`,
+ * NestJS `main.ts`), ya'ni chegara shu manzil bo'yicha sanaladi va
+ * to'plam o'z chelagida yuradi.
+ *
+ * ⚠ CHEGARA ZAIFLASHMAYDI: u baribir qo'llanadi — to'plam faqat BOSHQA
+ * MASHINADAN kelayotgandek ko'rinadi. Chegaraning O'ZI alohida
+ * o'lchanadi: `test/rate-limit-parity.test.mjs`.
+ *
+ * ⚠ BETAKROR bo'lishi SHART: chelak 5 daqiqa yashaydi, qat'iy manzil
+ * bilan ketma-ket ikki yurish bir chelakni baham ko'rardi.
+ */
+const RUN_IP = `198.51.100.${(Number(process.hrtime.bigint() % 250n) + 2)}`;
+
 const EXPRESS = process.env.EXPRESS_URL || 'http://127.0.0.1:5000';
 const NEST = process.env.NEST_URL || 'http://127.0.0.1:5001';
 
@@ -22,7 +45,7 @@ const check = (n, cond, x = '') => (cond ? ok(n, x) : bad(n, x));
 const login = async (login, password) => {
   const r = await fetch(`${EXPRESS}/api/auth/login`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': RUN_IP },
     body: JSON.stringify({ login, password }),
   });
   const j = await r.json();
@@ -233,6 +256,7 @@ const run = async () => {
         method: 'PATCH',
         headers: {
           'content-type': 'application/json',
+          'x-forwarded-for': RUN_IP,
           authorization: `Bearer ${scopeToken}`,
         },
         body: JSON.stringify({ password: 'buyerga_yetmasligi_kerak' }),

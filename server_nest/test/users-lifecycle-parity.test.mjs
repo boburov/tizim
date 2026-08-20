@@ -60,8 +60,31 @@ const ok = (n) => { R.pass += 1; console.log(`  ✅ ${n}`); };
 const bad = (n, m) => { R.fail += 1; console.log(`  ❌ ${n}\n      ${m}`); };
 const skip = (n, m) => { R.unmeasured += 1; console.log(`  ⚠️  ${n} — O'LCHANMADI: ${m}`); };
 
+
+/**
+ * ⚠ SHU YURISHGA XOS MIJOZ MANZILI — TEZLIK CHEGARASI UCHUN.
+ *
+ * `authLimiter` (20/5daq) va `generalLimiter` (200/daq) IP bo'yicha
+ * sanaydi. Repoda parallel ishlaydigan to'plamlar bitta haqiqiy IP'ni
+ * (127.0.0.1) baham ko'radi va byudjet doimiy to'la bo'ladi — natijada
+ * to'plam 429 sababli UMUMAN O'LCHANMAYDI (yiqilmaydi ham, o'tmaydi
+ * ham; eng yomon natija).
+ *
+ * Ikkala stek ham `trust proxy: 1` bilan ishlaydi (Express `app.js`,
+ * NestJS `main.ts`), ya'ni chegara shu manzil bo'yicha sanaladi va
+ * to'plam o'z chelagida yuradi.
+ *
+ * ⚠ CHEGARA ZAIFLASHMAYDI: u baribir qo'llanadi — to'plam faqat BOSHQA
+ * MASHINADAN kelayotgandek ko'rinadi. Chegaraning O'ZI alohida
+ * o'lchanadi: `test/rate-limit-parity.test.mjs`.
+ *
+ * ⚠ BETAKROR bo'lishi SHART: chelak 5 daqiqa yashaydi, qat'iy manzil
+ * bilan ketma-ket ikki yurish bir chelakni baham ko'rardi.
+ */
+const RUN_IP = `198.51.100.${(Number(process.hrtime.bigint() % 250n) + 2)}`;
+
 const req = async (base, method, path, { token, body } = {}) => {
-  const headers = { 'content-type': 'application/json' };
+  const headers = { 'content-type': 'application/json', 'x-forwarded-for': RUN_IP };
   if (token) headers.authorization = `Bearer ${token}`;
   const res = await fetch(base + path, {
     method,
@@ -805,6 +828,59 @@ const main = async () => {
       await both("`teachers.create` yo'q xodim staff yarata olmaydi (403)", (b) =>
         req(b, 'POST', '/api/users/staff', { token: weakToken, body: staffBody('x') }));
     }
+  }
+
+  // ═══ ⚠ IKKI ENG MUHIM XAVFSIZLIK XOSSASI ═══
+  //
+  // Bu ikkisi `POST /staff` ning butun ma'nosi. Ular bo'lmasa marshrut
+  // "ishlaydi", lekin IMTIYOZ OSHIRISH yo'lini ochib qo'yadi.
+  if (staffCanArchive.includes('users.archive')) {
+    // ── (a) FILIALLARARO: direktor BOSHQA filialga xodim qo'sha olmaydi ──
+    //
+    // NEGA BU ENG MUHIMI: qo'sha olsa, u yaratgan xodimning OCHIQ
+    // MATNDAGI parolini keyin `/users/:id/password` orqali o'qib olardi
+    // — ya'ni begona filialga ishlaydigan hisob YARATIB, unga kirardi.
+    // Bitta tekshiruv (`assertCanAssignBranch`) butun filial
+    // izolyatsiyasini ushlab turadi.
+    await both('direktor BOSHQA filialga xodim qo\'sha olmaydi (403)', (b) =>
+      req(b, 'POST', '/api/users/staff', {
+        token: dirToken,
+        body: staffBody('xb', { homeBranchId: A.id }),
+      }));
+
+    // MUSBAT NAZORAT: O'SHA direktor O'Z filialiga qo'sha OLADI.
+    // Busiz yuqoridagi 403 ruxsat yetishmasligidan ham kelishi mumkin
+    // edi va tekshiruv filial chegarasi haqida HECH NIMA aytmasdi.
+    {
+      const e = await req(EXPRESS, 'POST', '/api/users/staff', {
+        token: dirToken, body: staffBody('own_e', { homeBranchId: B.id }),
+      });
+      const n = await req(NEST, 'POST', '/api/users/staff', {
+        token: dirToken, body: staffBody('own_n', { homeBranchId: B.id }),
+      });
+      if (e.status === 201 && n.status === 201) {
+        ok("MUSBAT NAZORAT: o'sha direktor O'Z filialiga qo'sha OLADI — 201/201");
+      } else {
+        bad(
+          'musbat nazorat (direktor o\'z filialiga)',
+          `express ${e.status} ${JSON.stringify(e.body).slice(0, 160)} · ` +
+            `nest ${n.status} ${JSON.stringify(n.body).slice(0, 160)}`,
+        );
+      }
+    }
+
+    // ── (b) IMTIYOZ OSHIRISH: direktor OWNER rolli xodim yarata olmaydi ──
+    //
+    // `assertCanGrantRole` — o'zida yo'q ruxsatli rolni bera olmaydi.
+    // Bu bo'lmasa direktor o'ziga owner hisobi ochib, keyin uning
+    // parolini o'qib, butun tizimni egallardi.
+    await both("direktor OWNER rolli xodim yarata olmaydi (403)", (b) =>
+      req(b, 'POST', '/api/users/staff', {
+        token: dirToken,
+        body: staffBody('esc', { homeBranchId: B.id, role: 'owner' }),
+      }));
+  } else {
+    skip("`POST /staff` filial va imtiyoz to'siqlari", "`director` rolida `users.archive` yo'q");
   }
 
   // ── ⚠ KUTILGAN FARQ: moliyaviy yon ta'sirlar ko'chirilmagan ──
