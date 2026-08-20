@@ -17,16 +17,30 @@
  * turadi. Route'ni ochish oson va e'tiborsiz qilinadi - servisdagi
  * to'siq esa yagona haqiqiy himoya.
  *
- * IZOLYATSIYA: o'z test bazasini yaratadi va oxirida O'CHIRADI.
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * IZOLYATSIYA. Ilgari test ALOHIDA Mongo bazasini (`..._opened_routes_test`)
+ * yaratib, oxirida `dropDatabase()` qilardi va nom ajratilmagan bo'lsa
+ * ishga tushishdan bosh tortardi. PostgreSQL'da bunday yo'l yo'q
+ * (migratsiya + `DATABASE_URL` ga bog'langan yagona klient), shuning
+ * uchun izolyatsiya PREFIKSLI FIXTURE + kafolatli tozalash bilan
+ * (`tests/helpers/prismaFixtures.js`).
+ *
+ * ⚠ HIMOYA YO'QOLMADI: test HECH QACHON mavjud qatorga tegmaydi —
+ * har bir obyekt shu yurish uchun yaratiladi va `finally` da o'chiriladi.
+ * Xavfsizlik DA'VOLARI umuman o'zgarmadi.
+ *
+ * `Group.schedule` embedded massiv edi; endi u alohida jadval
+ * (`GroupScheduleItem`), shuning uchun `schedule: { create: [...] }`.
  *
  * ISHLATISH:
  *   npm run test:opened-routes
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
-const BASE = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina";
-const DB = BASE.replace(/\/([^/?]+)(\?|$)/, "/bayyina_opened_routes_test$2");
+const fx = createFixtures();
 
 const R = { pass: 0, fail: 0, notes: [] };
 const ok = (n, extra = "") => {
@@ -101,18 +115,6 @@ const mustAllow = async (name, fn) => {
 };
 
 const run = async () => {
-  if (DB === BASE) throw new Error("Test bazasi nomi ajratilmadi - to'xtatildi");
-  mongoose.set("autoIndex", false);
-  await mongoose.connect(DB);
-  if (!mongoose.connection.name.includes("opened_routes_test")) {
-    throw new Error(`Kutilmagan baza: ${mongoose.connection.name}`);
-  }
-  await mongoose.connection.dropDatabase();
-
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const User = (await import("../src/models/user.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
-
   const usersService = await import("../src/modules/users/services/users.service.js");
   const freezeService = await import(
     "../src/modules/studentFreeze/services/studentFreeze.service.js"
@@ -122,34 +124,33 @@ const run = async () => {
   );
 
   // ── Ma'lumot: ikki filial, har birida bitta o'quvchi va bitta o'qituvchi ──
-  const A = await Branch.create({ name: "A filial", isMain: true });
-  const B = await Branch.create({ name: "B filial" });
+  const A = await fx.branch("A-filial");
+  const B = await fx.branch("B-filial");
 
   const mkUser = async (username, role, branchId) =>
-    User.create({
+    fx.user(username, {
       firstName: username,
       lastName: "Test",
-      username,
       passwordHash: "parol-123",
       role,
       homeBranchId: branchId,
     });
 
-  const studentA = await mkUser("student_a", "student", A._id);
-  const studentB = await mkUser("student_b", "student", B._id);
-  const teacherA = await mkUser("teacher_a", "teacher", A._id);
-  const teacherB = await mkUser("teacher_b", "teacher", B._id);
+  const studentA = await mkUser("student_a", "student", A.id);
+  const studentB = await mkUser("student_b", "student", B.id);
+  const teacherA = await mkUser("teacher_a", "teacher", A.id);
+  const teacherB = await mkUser("teacher_b", "teacher", B.id);
 
-  const groupB = await Group.create({
-    name: "B guruh",
-    branchId: B._id,
-    schedule: [{ day: "mon", startTime: "10:00", endTime: "11:00" }],
+  const groupB = await fx.group("B-guruh", B.id, {
+    // `schedule` endi ALOHIDA jadval (`GroupScheduleItem`) — Mongo'da
+    // embedded massiv edi. Bola qatorlar guruh bilan birga o'chadi.
+    schedule: { create: [{ day: "mon", startTime: "10:00", endTime: "11:00" }] },
     startDate: new Date("2026-01-01"),
   });
 
   // A filial direktorining ko'lami: FAQAT A.
   const scopeA = {
-    allowedBranchIds: [String(A._id)],
+    allowedBranchIds: [String(A.id)],
     canSeeAllBranches: false,
   };
   // Owner: hamma filial.
@@ -162,13 +163,13 @@ const run = async () => {
   // ─────────────────────────────────────────────────────────
 
   await mustBlock("A direktori B o'qituvchisini TAHRIRLAY olmaydi", () =>
-    usersService.update(String(teacherB._id), { firstName: "Buzildi" }, null, scopeA),
+    usersService.update(String(teacherB.id), { firstName: "Buzildi" }, null, scopeA),
   );
   await mustAllow("A direktori O'Z o'qituvchisini tahrirlaydi", () =>
-    usersService.update(String(teacherA._id), { firstName: "Yangi" }, null, scopeA),
+    usersService.update(String(teacherA.id), { firstName: "Yangi" }, null, scopeA),
   );
   await mustAllow("Owner B o'qituvchisini tahrirlaydi", () =>
-    usersService.update(String(teacherB._id), { firstName: "Owner" }, null, scopeOwner),
+    usersService.update(String(teacherB.id), { firstName: "Owner" }, null, scopeOwner),
   );
 
   // ─────────────────────────────────────────────────────────
@@ -176,10 +177,10 @@ const run = async () => {
   // ─────────────────────────────────────────────────────────
 
   await mustBlock("A direktori B o'qituvchisini ARXIVLAY olmaydi", () =>
-    usersService.softRemove(String(teacherB._id), { scope: scopeA }),
+    usersService.softRemove(String(teacherB.id), { scope: scopeA }),
   );
   await mustBlock("A direktori B o'qituvchisini TIKLAY olmaydi", () =>
-    usersService.restore(String(teacherB._id), { scope: scopeA }),
+    usersService.restore(String(teacherB.id), { scope: scopeA }),
   );
 
   // ─────────────────────────────────────────────────────────
@@ -189,23 +190,23 @@ const run = async () => {
   // DIQQAT: parolda ko'lam BOSHQACHA hisoblanadi - aktyorning HAQIQIY
   // filiallari bazadan o'qiladi (credentialScope.helper.js), chunki
   // `branches.view_all` allowedBranchIds ro'yxatining o'zini kengaytiradi.
-  const directorA = await mkUser("director_a", "teacher", A._id);
+  const directorA = await mkUser("director_a", "teacher", A.id);
 
   await mustBlock("A direktori B o'qituvchisining parolini O'QIY olmaydi", () =>
-    usersService.getPassword(String(teacherB._id), {
-      actorId: String(directorA._id),
+    usersService.getPassword(String(teacherB.id), {
+      actorId: String(directorA.id),
       isOwner: false,
     }),
   );
   await mustBlock("A direktori B o'qituvchisining parolini ALMASHTIRA olmaydi", () =>
-    usersService.setPassword(String(teacherB._id), "yangi-parol-123", {
-      actorId: String(directorA._id),
+    usersService.setPassword(String(teacherB.id), "yangi-parol-123", {
+      actorId: String(directorA.id),
       isOwner: false,
     }),
   );
   await mustAllow("A direktori O'Z o'qituvchisining parolini o'qiydi", () =>
-    usersService.getPassword(String(teacherA._id), {
-      actorId: String(directorA._id),
+    usersService.getPassword(String(teacherA.id), {
+      actorId: String(directorA.id),
       isOwner: false,
     }),
   );
@@ -215,10 +216,10 @@ const run = async () => {
   await mustBlock(
     "Soxta keng ko'lam berilsa ham parol ochilmaydi (servis ro'yxatga ishonmaydi)",
     () =>
-      usersService.getPassword(String(teacherB._id), {
-        actorId: String(directorA._id),
+      usersService.getPassword(String(teacherB.id), {
+        actorId: String(directorA.id),
         isOwner: false,
-        allowedBranchIds: [String(A._id), String(B._id)],
+        allowedBranchIds: [String(A.id), String(B.id)],
         canSeeAllBranches: true,
       }),
   );
@@ -228,16 +229,16 @@ const run = async () => {
   // ─────────────────────────────────────────────────────────
 
   await mustBlock("A direktori B o'quvchisini MUZLATA olmaydi", () =>
-    freezeService.freeze(String(studentB._id), { scope: scopeA }),
+    freezeService.freeze(String(studentB.id), { scope: scopeA }),
   );
   await mustBlock("A direktori B o'quvchisini muzlatishdan CHIQARA olmaydi", () =>
-    freezeService.unfreeze(String(studentB._id), { scope: scopeA }),
+    freezeService.unfreeze(String(studentB.id), { scope: scopeA }),
   );
   await mustBlock("A direktori B o'quvchisining muzlatish TARIXINI ko'ra olmaydi", () =>
-    freezeService.listForStudent(String(studentB._id), scopeA),
+    freezeService.listForStudent(String(studentB.id), scopeA),
   );
   await mustAllow("A direktori O'Z o'quvchisining tarixini ko'radi", () =>
-    freezeService.listForStudent(String(studentA._id), scopeA),
+    freezeService.listForStudent(String(studentA.id), scopeA),
   );
 
   // ─────────────────────────────────────────────────────────
@@ -245,13 +246,13 @@ const run = async () => {
   // ─────────────────────────────────────────────────────────
 
   await mustBlock("A direktori B o'quvchisining timeline'ini ko'ra olmaydi", () =>
-    historyService.getStudentTimeline(String(studentB._id), { scope: scopeA }),
+    historyService.getStudentTimeline(String(studentB.id), { scope: scopeA }),
   );
   await mustAllow("A direktori O'Z o'quvchisining timeline'ini ko'radi", () =>
-    historyService.getStudentTimeline(String(studentA._id), { scope: scopeA }),
+    historyService.getStudentTimeline(String(studentA.id), { scope: scopeA }),
   );
   await mustBlock("A direktori B guruhining timeline'ini ko'ra olmaydi", () =>
-    historyService.getGroupTimeline(String(groupB._id), { scope: scopeA }),
+    historyService.getGroupTimeline(String(groupB.id), { scope: scopeA }),
   );
 
   // ─────────────────────────────────────────────────────────
@@ -259,30 +260,31 @@ const run = async () => {
   // ─────────────────────────────────────────────────────────
 
   await mustAllow("scope berilmasa tekshiruv o'tkazib yuboriladi (job/seed)", () =>
-    usersService.update(String(teacherB._id), { firstName: "Job" }, null, null),
+    usersService.update(String(teacherB.id), { firstName: "Job" }, null, null),
   );
 
-  // ── Yakun ──
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-
-  console.log(
-    `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
-      `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
-  );
-  if (R.fail) {
-    console.log("\nYiqilganlar:");
-    R.notes.forEach((n) => console.log(`  • ${n}`));
-    process.exit(1);
-  }
 };
 
-run().catch(async (err) => {
-  console.error("\x1b[31mTEST YIQILDI:\x1b[0m", err);
-  try {
-    await mongoose.disconnect();
-  } catch {
-    /* ulanmagan bo'lsa e'tiborsiz */
-  }
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    bad("TEST YIQILDI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
+  })
+  .finally(async () => {
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
+    console.log(
+      `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
+        `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
+    );
+    if (R.fail) {
+      console.log("\nYiqilganlar:");
+      R.notes.forEach((n) => console.log(`  • ${n}`));
+    }
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
+  });
