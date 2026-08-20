@@ -267,9 +267,23 @@ Express'da QOLDI.
 
 ### Meros qilib olingan cheklov (Faza 2.3 dan)
 
-`buildUserProfile` O'QUVCHI/O'QITUVCHI uchun NestJS'da 501
+`buildUserProfile` FAQAT O'QUVCHI uchun NestJS'da 501
 (`PROFILE_NOT_MIGRATED`). Ta'sir qiladigan marshrutlar: `/auth/me`,
 `GET /users/:id`, `PATCH /users/:id/role`, `PATCH /users/:id/branches`.
+
+O'QITUVCHI shoxi **OCHILDI** (`groups` ko'chgach) — 10 ta o'qituvchida
+o'lchandi, 0 farq. O'quvchi uchun to'rtta manbadan uchtasi tayyor,
+to'rtinchisi yo'q:
+
+| Manba | Holat |
+|---|---|
+| `groups.findAllActiveForStudent` | ✅ |
+| `groups.findPendingRemovalNotice` | ✅ |
+| `studentFreeze.getActiveFreeze` | ✅ |
+| `attendance.getStudentSummary` | 🛑 `attendance` moduli YO'Q |
+
+`attendance` ko'chgan kuni `user-profile.service.ts` dagi BITTA `throw`
+o'chiriladi va qolgan uchta chaqiruv qo'shiladi.
 
 ⚠ HAYOT SIKLI MARSHRUTLARI BUNGA TEGMAYDI: `DELETE /:id`,
 `POST /:id/restore` va `DELETE /:id/permanent` profil QURMAYDI — ular
