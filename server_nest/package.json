@@ -23,6 +23,7 @@
     "test:users-parity": "node test/users-parity.test.mjs",
     "test:branches-parity": "node test/branches-parity.test.mjs",
     "test:rooms-parity": "node test/rooms-parity.test.mjs",
+    "test:courses-parity": "node test/courses-parity.test.mjs",
     "test:jobs": "node test/jobs-infra.test.mjs",
     "test:notifications-parity": "node test/notifications-parity.test.mjs",
     "test:notification-catalog-parity": "node test/notification-catalog-parity.test.mjs",
@@ -31,7 +32,8 @@
     "test:catalogs-parity": "node test/catalogs-parity.test.mjs",
     "test:feedback-parity": "node test/feedback-parity.test.mjs",
     "test:notification-jobs": "node test/notification-jobs.test.mjs",
-    "test:holidays-parity": "node test/holidays-parity.test.mjs"
+    "test:holidays-parity": "node test/holidays-parity.test.mjs",
+    "test:search-history-parity": "node test/search-history-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"

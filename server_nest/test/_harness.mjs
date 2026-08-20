@@ -61,10 +61,42 @@ export const normalize = (v, subs = []) => {
   }
   if (typeof v === 'string') {
     let s = v;
-    for (const [from, to] of subs) if (from) s = s.split(from).join(to);
+    for (const sub of subs) {
+      // ── FUNKSIYA SHAKLI ──
+      // Ba'zi qiymatlarni ro'yxat bilan sanab bo'lmaydi: masalan
+      // `validFrom` server tomonda `new Date()` bilan qo'yiladi va
+      // ikkala stekda MILLISEKUND farq qiladi. Funksiya shakli shunday
+      // qiymatlarni QOIDA bo'yicha normallashtiradi.
+      if (typeof sub === 'function') { s = sub(s); continue; }
+      const [from, to] = sub;
+      if (from) s = s.split(from).join(to);
+    }
     return s;
   }
   return v;
+};
+
+/**
+ * "HOZIR" atrofidagi vaqt tamg'asini `<NOW>` ga almashtiradigan qoida.
+ *
+ * ⚠ NEGA KALITNI BUTUNLAY TASHLAB YUBORMAYMIZ (`VOLATILE` kabi):
+ * `validFrom` ning QIYMATI ba'zan tekshirilishi SHART — masalan
+ * kelajakdagi narx (`2099-01-01`) `isPending` bayrog'ini belgilaydi.
+ * Kalit tashlansa o'sha tekshiruv jimgina yo'qolardi.
+ *
+ * Shuning uchun faqat test YURISHI DAVOMIDAGI tamg'alar
+ * normallashtiriladi; uzoq o'tmish va kelajak O'Z HOLICHA solishtiriladi.
+ *
+ * @param windowMs oyna kengligi (standart 10 daqiqa)
+ */
+export const nowStamps = (windowMs = 10 * 60 * 1000) => {
+  const t0 = Date.now();
+  return (s) => {
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s)) return s;
+    const t = Date.parse(s);
+    if (Number.isNaN(t)) return s;
+    return Math.abs(t - t0) <= windowMs ? '<NOW>' : s;
+  };
 };
 
 export const login = async (base, l, p) => {

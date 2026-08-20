@@ -100,8 +100,8 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 |---|---|---|---|
 | leads | `/api/leads` | 16 | ⬜ |
 | studentFreeze | `/api/student-freezes` | 3 | ⬜ |
-| activityHistory | `/api/activity-history` | 2 | ⬜ |
-| search | `/api/search` | 1 | ⬜ |
+| activityHistory | `/api/activity-history` | 2 | ✅ 2/2 |
+| search | `/api/search` | 1 | ✅ 1/1 |
 
 > O'quvchi/o'qituvchi **alohida jadval emas** — `User` + `role`/`roleType`.
 > Shuning uchun "students" va "teachers" modullari `users` ichida (2.5).

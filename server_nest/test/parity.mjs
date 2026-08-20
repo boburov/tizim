@@ -139,6 +139,23 @@ const CASES = [
     path: '/api/holidays/teacher-birthdays', auth: true },
   { name: 'holidays/:id (404)', method: 'GET',
     path: `/api/holidays/${'a'.repeat(24)}`, auth: true },
+  // ── Faza 3: kurslar (o'qish yo'llari) ──
+  { name: 'courses (list)', method: 'GET', path: '/api/courses?limit=5', auth: true },
+  { name: 'courses (includeInactive)', method: 'GET',
+    path: '/api/courses?includeInactive=true&limit=5', auth: true },
+  { name: 'courses/:id (404)', method: 'GET',
+    path: `/api/courses/${'a'.repeat(24)}`, auth: true },
+  { name: 'courses/:id/prices (404)', method: 'GET',
+    path: `/api/courses/${'a'.repeat(24)}/prices`, auth: true },
+  // ⚠ `/resolve/:groupId` `/:id` DAN OLDIN e'lon qilinganini QULFLAYDI:
+  // tartib buzilsa bu «Kurs topilmadi» qaytarardi.
+  { name: 'courses/resolve/:groupId (404 «Guruh topilmadi»)', method: 'GET',
+    path: `/api/courses/resolve/${'a'.repeat(24)}`, auth: true },
+  { name: "courses (auth yo'q → 401)", method: 'GET', path: '/api/courses' },
+  { name: 'search (q=ali)', method: 'GET', path: '/api/search?q=ali', auth: true },
+  { name: "search (qisqa → bo'sh)", method: 'GET', path: '/api/search?q=a', auth: true },
+  { name: 'activity-history/students (404)', method: 'GET',
+    path: `/api/activity-history/students/${'a'.repeat(24)}`, auth: true },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },

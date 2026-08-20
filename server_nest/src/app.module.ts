@@ -24,6 +24,8 @@ import { ArchiveReasonsModule } from './modules/archive-reasons/archive-reasons.
 import { AttendanceSettingsModule } from './modules/attendance-settings/attendance-settings.module.js';
 import { FeedbackModule } from './modules/feedback/feedback.module.js';
 import { HolidaysModule } from './modules/holidays/holidays.module.js';
+import { SearchModule } from './modules/search/search.module.js';
+import { ActivityHistoryModule } from './modules/activity-history/activity-history.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -104,6 +106,9 @@ import { HolidaysModule } from './modules/holidays/holidays.module.js';
     FeedbackModule,
     // Bayramlar — PUL YO'LIDA (davomat/to'lov/maosh shunga tayanadi).
     HolidaysModule,
+    // Global qidiruv (⌘K) va faoliyat tarixi — faqat o'qish.
+    SearchModule,
+    ActivityHistoryModule,
   ],
 })
 export class AppModule {}
