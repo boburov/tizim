@@ -55,6 +55,8 @@ Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/sr
 | `helpers/attendance.helper.js`, `lessonCancellation.helper.js` | ⬜ FAZA 6 |
 | `helpers/studentFreeze.helper.js` | ⬜ FAZA 4 |
 | `helpers/roomOccupancy.helper.js` | ⬜ FAZA 3 |
+| `constants/delegation.js` | ✅ `common/constants/delegation.ts` |
+| `constants/payrollAudit.js` | ✅ `common/constants/payroll-audit.ts` |
 | `helpers/selfSalary.guard.js` | ⬜ FAZA 8 |
 | `helpers/correlationCache.js`, `configMetrics.helper.js` | ⬜ FAZA 9 |
 | `utils/ApiError.js` | ✅ `common/errors/api-error.ts` |
@@ -79,11 +81,11 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | 2.6 | botAuth | `/api/bot-auth` | 2 | ⬜ |
 | 2.7 | activityLogs + auditLog middleware | `/api/activity-logs` | 3 | ⬜ |
 
-### FAZA 3 — TASHKILIY TUZILMA  ← **KEYINGI**
+### FAZA 3 — TASHKILIY TUZILMA
 | Modul | Manzil | E | Holat |
 |---|---|---|---|
-| branches | `/api/branches` | 8 | ⬜ |
-| rooms | `/api/rooms` | 5 | ⬜ |
+| branches | `/api/branches` | 8 | ✅ 8/8 |
+| rooms | `/api/rooms` | 5 | ⬜ **KEYINGI** |
 | courses | `/api/courses` | 9 | ⬜ |
 | holidays | `/api/holidays` | 7 | ⬜ |
 | archiveReasons | `/api/archive-reasons` | 6 | ⬜ |

@@ -20,7 +20,8 @@
     "test:frozen-role": "bash scripts/frozen-role-check.sh",
     "test:auth-parity:session": "node test/auth-parity.test.mjs session",
     "test:roles-parity": "node test/roles-parity.test.mjs",
-    "test:users-parity": "node test/users-parity.test.mjs"
+    "test:users-parity": "node test/users-parity.test.mjs",
+    "test:branches-parity": "node test/branches-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"

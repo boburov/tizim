@@ -76,6 +76,15 @@ const CASES = [
     path: '/api/users/check-availability?username=owner', auth: true },
   { name: 'users/:id (404)', method: 'GET',
     path: `/api/users/${'a'.repeat(24)}`, auth: true },
+  // ── Faza 3: filiallar (o'qish yo'llari) ──
+  { name: 'branches (list)', method: 'GET', path: '/api/branches?limit=5', auth: true },
+  { name: 'branches (withManagers)', method: 'GET',
+    path: '/api/branches?withManagers=true&limit=5', auth: true },
+  { name: 'branches/compare', method: 'GET', path: '/api/branches/compare', auth: true },
+  { name: 'branches/delegation-options', method: 'GET',
+    path: '/api/branches/delegation-options', auth: true },
+  { name: 'branches/:id (404)', method: 'GET',
+    path: `/api/branches/${'a'.repeat(24)}`, auth: true },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },

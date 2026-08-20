@@ -32,6 +32,8 @@ import {
   PAYROLL_AUDIT_ACTIONS,
   PAYROLL_AUDIT_ACTION_LABELS,
 } from '../dist/common/constants/payroll-audit.js';
+import * as EXPRESS_DELEGATION from '../../server/src/constants/delegation.js';
+import * as DELEGATION from '../dist/common/constants/delegation.js';
 import {
   PERMISSIONS,
   ROLES,
@@ -106,6 +108,56 @@ check(`PAYROLL_AUDIT_ACTIONS aynan bir xil (${Object.keys(EXPRESS_PAYROLL_AUDIT_
   assert.deepEqual({ ...PAYROLL_AUDIT_ACTIONS }, { ...EXPRESS_PAYROLL_AUDIT_ACTIONS }));
 check('PAYROLL_AUDIT_ACTION_LABELS aynan bir xil', () =>
   assert.deepEqual({ ...PAYROLL_AUDIT_ACTION_LABELS }, { ...EXPRESS_PAYROLL_AUDIT_ACTION_LABELS }));
+
+// ── FAZA 3: delegatsiya matritsasi ──
+// Ma'lumot qismi generatsiya qilingan, FUNKSIYALAR esa qo'lda ko'chirilgan —
+// aynan shuning uchun ular tasodifiy kirish bilan solishtiriladi.
+check('DELEGATABLE_KINDS aynan bir xil', () =>
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(DELEGATION.DELEGATABLE_KINDS)),
+    JSON.parse(JSON.stringify(EXPRESS_DELEGATION.DELEGATABLE_KINDS)),
+  ));
+check('DELEGATION_MODES / standartlar bir xil', () => {
+  assert.deepEqual({ ...DELEGATION.DELEGATION_MODES }, { ...EXPRESS_DELEGATION.DELEGATION_MODES });
+  assert.equal(DELEGATION.DEFAULT_DELEGATION_MODE, EXPRESS_DELEGATION.DEFAULT_DELEGATION_MODE);
+  assert.equal(DELEGATION.FALLBACK_DELEGATION_MODE, EXPRESS_DELEGATION.FALLBACK_DELEGATION_MODE);
+});
+check('validateDelegation / resolveRule bir xil javob beradi', () => {
+  const kinds = [...Object.keys(EXPRESS_DELEGATION.DELEGATABLE_KINDS), '__nope__'];
+  const modes = [...EXPRESS_DELEGATION.ALL_DELEGATION_MODES, '__bad__', undefined];
+  const limitSets = [
+    {}, { maxAmount: 100 }, { minAmount: 100 }, { maxPercent: 50 },
+    { maxPercent: 150 }, { maxAmount: -1 }, { maxAmount: 100, maxPercent: 10 },
+  ];
+  let cases = 0;
+  for (const kind of kinds) {
+    for (const mode of modes) {
+      for (const limits of limitSets) {
+        const input = { [kind]: { mode, ...limits } };
+        assert.equal(
+          DELEGATION.validateDelegation(input),
+          EXPRESS_DELEGATION.validateDelegation(input),
+          `validateDelegation(${kind}/${mode}/${JSON.stringify(limits)})`,
+        );
+        assert.deepEqual(
+          DELEGATION.resolveRule(input, kind),
+          EXPRESS_DELEGATION.resolveRule(input, kind),
+          `resolveRule(${kind}/${mode})`,
+        );
+        cases += 1;
+      }
+    }
+  }
+  // Bo'sh/null kirish ham.
+  for (const empty of [null, undefined, {}]) {
+    assert.equal(DELEGATION.validateDelegation(empty), EXPRESS_DELEGATION.validateDelegation(empty));
+    assert.deepEqual(
+      DELEGATION.resolveRule(empty, 'staff_hire'),
+      EXPRESS_DELEGATION.resolveRule(empty, 'staff_hire'),
+    );
+  }
+  assert.ok(cases >= 200, `juda kam holat sinaldi: ${cases}`);
+});
 
 console.log(`\n  Natija: ${R.pass} o'tdi, ${R.fail} yiqildi\n`);
 process.exit(R.fail ? 1 : 0);

@@ -7,6 +7,7 @@ import { HealthModule } from './health/health.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
+import { BranchesModule } from './modules/branches/branches.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -45,6 +46,8 @@ import { UsersModule } from './modules/users/users.module.js';
     // Qolgan 4 tasi (staff yaratish, arxivlash, tiklash, butunlay
     // o'chirish) moliya/tasdiq modullariga tayanadi — FAZA 7/8 dan keyin.
     UsersModule,
+    // ── FAZA 3: tashkiliy tuzilma ──
+    BranchesModule,
   ],
 })
 export class AppModule {}
