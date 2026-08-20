@@ -61,13 +61,34 @@ const strip = (v) => {
  * "parol noto'g'ri" kabi CHALG'ITUVCHI sabablar bilan yiqilardi.
  * Shuning uchun 429 ALOHIDA aniqlanadi va test darhol to'xtaydi.
  *
- * YECHIM: ishga tushirishdan oldin ikkala stekni qayta ishga tushiring
- * (hisoblagich xotirada) — `npm run test:auth-parity:fresh`.
+ * YECHIM: to'plam O'Z MIJOZ SHAXSINI oladi — har yurishda betakror
+ * `X-Forwarded-For`. Ikkala stek ham `trust proxy: 1` bilan ishlaydi
+ * (Express `app.js`, NestJS `main.ts`), ya'ni chegara aynan shu manzil
+ * bo'yicha sanaladi va to'plam o'z chelagida yuradi.
+ *
+ * ⚠ BU CHEGARANI ZAIFLASHTIRMAYDI. Chegara baribir qo'llanadi — faqat
+ * to'plam BOSHQA MASHINADAN kelayotgandek ko'rinadi, ya'ni parallel
+ * ishlayotgan boshqa to'plamlarning byudjetini yemaydi va ular ham
+ * buni yemaydi. Chegaraning O'ZI alohida o'lchanadi:
+ * `test/rate-limit-parity.test.mjs`.
+ *
+ * ⚠ 429 ANIQLASH SAQLANADI: agar shunda ham chegaraga urilsa, bu
+ * HAQIQIY signal (mas. `trust proxy` yana yo'qolgan) — test avvalgidek
+ * to'xtaydi va natijani ISHONCHSIZ deb belgilaydi.
  */
 let rateLimited = false;
 
+/**
+ * Shu YURISHGA xos mijoz manzili.
+ *
+ * Betakror bo'lishi SHART: chelak 5 daqiqa yashaydi, qat'iy manzil
+ * bilan ketma-ket ikki yurish bir chelakni baham ko'rardi va ikkinchisi
+ * yana 429 olardi.
+ */
+const RUN_IP = `198.51.100.${(Number(process.hrtime.bigint() % 250n) + 2)}`;
+
 const call = async (base, { method = 'GET', path, body, token, cookie }) => {
-  const headers = { 'content-type': 'application/json' };
+  const headers = { 'content-type': 'application/json', 'x-forwarded-for': RUN_IP };
   if (token) headers.authorization = `Bearer ${token}`;
   if (cookie) headers.cookie = cookie;
   const res = await fetch(base + path, {
