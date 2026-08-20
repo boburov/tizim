@@ -57,7 +57,7 @@ const run = async () => {
 
   // ─── 5. AUTENTIFIKATSIYASIZ SO'ROV HANDLER'GA YETMAYDI ──────────
   console.log('\n\x1b[1m  Autentifikatsiyasiz so\'rov\x1b[0m');
-  for (const p of ['/api/roles', '/api/roles/owner', '/api/users/x/password', '/api/_diag/scope']) {
+  for (const p of ['/api/roles', '/api/roles/owner', '/api/users/x/password', '/api/auth/me']) {
     const r = await get(NEST, p, null);
     check(`${p} → 401`, r.status === 401 && r.body?.success === false);
   }
@@ -76,59 +76,52 @@ const run = async () => {
   const missing = await get(NEST, '/api/roles/__nope__', owner);
   check('mavjud bo\'lmagan rol → 404', missing.status === 404 && missing.body?.message === 'Rol topilmadi');
 
-  // ─── 3 + 4. ALS TO'LIQ HAYOT SIKLI BO'YLAB SAQLANADI ────────────
-  console.log('\n\x1b[1m  ALS: middleware → guard → handler → servis → DB\x1b[0m');
-  const diagA = await get(NEST, '/api/_diag/scope', adminA);
-  const d = diagA.body?.data;
-  check('_diag/scope → 200', diagA.status === 200);
-  check('servis qatlami ALS kontekstini KO\'RDI',
-    d?.observedInService !== undefined && d.observedInService.branchId !== undefined);
-  check('req va servis ko\'lami MOS KELADI (branchId)',
-    String(d?.request?.branchId) === String(d?.observedInService?.branchId),
-    `req=${d?.request?.branchId} servis=${d?.observedInService?.branchId}`);
-  check('req va servis ko\'lami MOS KELADI (allowedBranchIds)',
-    JSON.stringify(d?.request?.allowedBranchIds) === JSON.stringify(d?.observedInService?.allowedBranchIds));
-  check('branchFilter servis qatlamida TO\'LDIRILGAN (bo\'sh emas)',
-    d?.observedInService?.branchFilter && Object.keys(d.observedInService.branchFilter).length > 0,
-    JSON.stringify(d?.observedInService?.branchFilter));
-  check('userBranchCondition servis qatlamida mavjud',
-    d?.observedInService?.userBranchCondition !== undefined);
+  // ─── 3 + 4 + 6. FILIAL KO'LAMI VA IZOLYATSIYA ───────────────────
+  //
+  // ⚠ `_diag/scope` OLIB TASHLANDI (Faza 2.3 talabi) — u vaqtincha
+  // skafold edi. ALS ning servis qatlamigacha yetishi Faza 2.2 da
+  // bevosita isbotlangan; bu yerda o'sha xulq HAQIQIY endpoint
+  // (`/auth/me`) orqali, ya'ni klient ko'radigan yo'l bilan tekshiriladi.
+  console.log('\n\x1b[1m  Filial ko\'lami — /auth/me orqali\x1b[0m');
+  const meA = await get(NEST, '/api/auth/me', adminA);
+  const meB = await get(NEST, '/api/auth/me', adminB);
+  const meOwner = await get(NEST, '/api/auth/me', owner);
+  check('adminA: /auth/me → 200', meA.status === 200);
+  check('adminB: /auth/me → 200', meB.status === 200);
+  check('owner: canSeeAllBranches = true', meOwner.body?.data?.canSeeAllBranches === true);
+  check('adminA: canSeeAllBranches = false', meA.body?.data?.canSeeAllBranches === false);
 
-  // Owner (view_all): filtr bo'sh bo'lishi KUTILADI — bu to'g'ri xatti-harakat.
-  const diagOwner = await get(NEST, '/api/_diag/scope', owner);
-  const dOwner = diagOwner.body?.data;
-  check('owner: canSeeAllBranches = true', dOwner?.observedInService?.canSeeAllBranches === true);
+  const branchesOf = (r) => (r.body?.data?.branches || []).map((b) => b._id).sort();
+  const aBranches = branchesOf(meA);
+  const bBranches = branchesOf(meB);
+  check('adminA faqat O\'Z filial(lar)ini ko\'radi', aBranches.length > 0, aBranches.join(','));
+  check('adminA va adminB ro\'yxatlari BIR XIL EMAS',
+    JSON.stringify(aBranches) !== JSON.stringify(bBranches),
+    `A=${aBranches.join(',')} B=${bBranches.join(',')}`);
 
-  // ─── 6. KONTEKST PARALLEL SO'ROVLAR ORASIDA SIZMAYDI ────────────
-  console.log('\n\x1b[1m  Parallel so\'rovlar: kontekst sizmasligi\x1b[0m');
+  // KONTEKST PARALLEL SO'ROVLAR ORASIDA SIZMAYDI.
   const N = 12;
   const mixed = await Promise.all(
     Array.from({ length: N }, (_, i) =>
-      get(NEST, '/api/_diag/scope', i % 2 === 0 ? adminA : adminB),
+      get(NEST, '/api/auth/me', i % 2 === 0 ? adminA : adminB),
     ),
   );
-  const aScopes = mixed.filter((_, i) => i % 2 === 0).map((r) => r.body?.data?.observedInService?.branchId);
-  const bScopes = mixed.filter((_, i) => i % 2 === 1).map((r) => r.body?.data?.observedInService?.branchId);
-  const aUnique = [...new Set(aScopes)];
-  const bUnique = [...new Set(bScopes)];
-  check('A admini barcha parallel so\'rovda BIR XIL filialni ko\'rdi',
-    aUnique.length === 1, `qiymatlar: ${aUnique.join(',')}`);
-  check('B admini barcha parallel so\'rovda BIR XIL filialni ko\'rdi',
-    bUnique.length === 1, `qiymatlar: ${bUnique.join(',')}`);
-  check('A va B filiallari BIR-BIRIDAN FARQ QILADI (sizish yo\'q)',
-    aUnique[0] !== bUnique[0], `A=${aUnique[0]} B=${bUnique[0]}`);
+  const aSeen = [...new Set(mixed.filter((_, i) => i % 2 === 0).map((r) => branchesOf(r).join(',')))];
+  const bSeen = [...new Set(mixed.filter((_, i) => i % 2 === 1).map((r) => branchesOf(r).join(',')))];
+  check('A barcha parallel so\'rovda BIR XIL ko\'lam oldi', aSeen.length === 1, aSeen.join(' | '));
+  check('B barcha parallel so\'rovda BIR XIL ko\'lam oldi', bSeen.length === 1, bSeen.join(' | '));
+  check('A va B ko\'lamlari aralashmadi (sizish yo\'q)', aSeen[0] !== bSeen[0]);
 
   // ─── 8. KO'LAMDAN TASHQARI x-branch-id XATTI-HARAKATI ───────────
   console.log('\n\x1b[1m  x-branch-id: mavjud xatti-harakat saqlanadi\x1b[0m');
-  const bBranchId = bUnique[0];
-  const aWithB = await get(NEST, '/api/_diag/scope', adminA, { 'x-branch-id': String(bBranchId) });
+  const foreign = bBranches[0];
+  const aWithB = await get(NEST, '/api/auth/me', adminA, { 'x-branch-id': String(foreign) });
   check('ko\'lamdan tashqari x-branch-id → 403 EMAS (e\'tiborsiz)',
     aWithB.status === 200, `status ${aWithB.status}`);
-  check('e\'tiborsiz qoldirilgach A O\'Z filialida qoladi',
-    String(aWithB.body?.data?.observedInService?.branchId) === String(aUnique[0]),
-    `kutilgan ${aUnique[0]}, kelgani ${aWithB.body?.data?.observedInService?.branchId}`);
-  const aWithGarbage = await get(NEST, '/api/_diag/scope', adminA, { 'x-branch-id': 'f'.repeat(24) });
-  check('mavjud bo\'lmagan x-branch-id → 403 EMAS', aWithGarbage.status === 200);
+  check('e\'tiborsiz qoldirilgach A O\'Z ko\'lamida qoladi',
+    JSON.stringify(branchesOf(aWithB)) === JSON.stringify(aBranches));
+  const aGarbage = await get(NEST, '/api/auth/me', adminA, { 'x-branch-id': 'f'.repeat(24) });
+  check('mavjud bo\'lmagan x-branch-id → 403 EMAS', aGarbage.status === 200);
 
   // ─── 7. credentialScope — PAROL AMALLARI ────────────────────────
   console.log('\n\x1b[1m  credentialScope (parol)\x1b[0m');

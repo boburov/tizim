@@ -1,0 +1,37 @@
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import { AuthController } from './auth.controller.js';
+import { AuthService } from './auth.service.js';
+import { UserProfileService } from './user-profile.service.js';
+import { AuthMiddleware } from '../../middleware/auth.middleware.js';
+import { authLimiter } from '../../common/middleware/rate-limit.js';
+
+/**
+ * ⚠ MIDDLEWARE FAQAT HIMOYALANGAN MARSHRUTLARGA ULANADI.
+ *
+ * `/login`, `/refresh`, `/logout` — OCHIQ (Express'da ham `requireAuth`
+ * YO'Q). `/refresh` va `/logout` cookie bilan ishlaydi, access token
+ * bilan emas: muddati o'tgan access token bilan ham sessiyani yangilash
+ * mumkin bo'lishi SHART — aks holda token eskirgan zahoti foydalanuvchi
+ * chiqib ketardi.
+ */
+@Module({
+  controllers: [AuthController],
+  providers: [AuthService, UserProfileService],
+})
+export class AuthModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    // ⚠ TEZLIK CHEGARASI — Express bilan bir xil (20 / 5 daqiqa).
+    // `/login` va `/refresh` da; `/logout` da Express'da ham YO'Q.
+    consumer.apply(authLimiter).forRoutes(
+      { path: 'auth/login', method: RequestMethod.POST },
+      { path: 'auth/refresh', method: RequestMethod.POST },
+    );
+
+    consumer.apply(AuthMiddleware).forRoutes(
+      { path: 'auth/me', method: RequestMethod.GET },
+      { path: 'auth/me', method: RequestMethod.PATCH },
+      { path: 'auth/change-password', method: RequestMethod.POST },
+      { path: 'auth/register-user', method: RequestMethod.POST },
+    );
+  }
+}

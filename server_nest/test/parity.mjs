@@ -64,8 +64,9 @@ const CASES = [
   { name: 'roles (auth yo\'q → 401)', method: 'GET', path: '/api/roles' },
   { name: 'users/:id/password (404)', method: 'GET',
     path: `/api/users/${'a'.repeat(24)}/password`, auth: true },
-  // ── Faza 2.3+ da to'ldiriladi ──
-  // { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
+  // ── Faza 2.3: auth moduli ──
+  { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
+  { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },
 ];
 
 const call = async (base, c) => {

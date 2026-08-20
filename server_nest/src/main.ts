@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { json, urlencoded } from 'express';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import type { AppConfig } from './config/env.validation.js';
@@ -38,6 +39,14 @@ async function bootstrap(): Promise<void> {
   // ── Tana hajmi: Express `app.js` dagi bilan bir xil chegara ──
   app.use(json({ limit: '1mb' }));
   app.use(urlencoded({ extended: true }));
+
+  // ── COOKIE: refresh token IMZOLANGAN cookie'da yuboriladi ──
+  //
+  // Sir Express bilan BIR XIL bo'lishi SHART (`COOKIE_SECRET`): aks
+  // holda bir stek qo'ygan cookie ikkinchisida imzo tekshiruvidan
+  // o'tmasdi va `/auth/refresh` "Sessiya topilmadi" berardi. Ikkala
+  // stek ham bitta `.env` ni o'qigani uchun sir tabiiy ravishda bir xil.
+  app.use(cookieParser(get('COOKIE_SECRET')));
 
   // ── CORS: Express `app.js` mantig'ining aynan ko'chirmasi ──
   const clientUrls = get('CLIENT_URLS');

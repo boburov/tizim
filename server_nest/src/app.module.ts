@@ -4,9 +4,9 @@ import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { CommonModule } from './common/common.module.js';
 import { HealthModule } from './health/health.module.js';
+import { AuthModule } from './modules/auth/auth.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
-import { DiagModule } from './modules/diag/diag.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -36,13 +36,13 @@ import { DiagModule } from './modules/diag/diag.module.js';
     PrismaModule,
     CommonModule,
     HealthModule,
+    // ── FAZA 2.3: auth moduli ──
+    AuthModule,
     // ── FAZA 2.2: birinchi ko'chirilgan marshrutlar ──
     // Rollar — FAQAT O'QISH (mutatsiyalar Express'da qoladi).
     RolesModule,
     // Foydalanuvchilar — hozircha FAQAT `GET /:id/password`.
     UsersModule,
-    // VAQTINCHA tekshiruv skafoldi — production'da UMUMAN yuklanmaydi.
-    ...(process.env.NODE_ENV === 'production' ? [] : [DiagModule]),
   ],
 })
 export class AppModule {}
