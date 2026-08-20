@@ -134,5 +134,196 @@ export const DEFAULT_ROLE_PATH = "/owner";
 
 export const ALL_ROLES = Object.values(ROLES);
 export const ALL_ROLE_TYPES = Object.values(ROLE_TYPES);
+
+/**
+ * `"owner" | "staff" | "teacher" | "student"` — Prisma'dagi `RoleType`
+ * enumi bilan AYNAN bir xil to'plam. Alohida yozilmaydi: `ROLE_TYPES`
+ * dan KELTIRIB CHIQARILADI, ya'ni ikkalasi ajralib keta olmaydi.
+ */
+export type RoleTypeValue = (typeof ROLE_TYPES)[keyof typeof ROLE_TYPES];
 export const isSystemRoleValue = (value: string): boolean =>
   (ALL_ROLES as string[]).includes(value);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MATRITSA METADATA — `server/src/constants/permissions.js` dan ko'chirilgan.
+//
+// UI jadvali: qator = module, ustun = action. Ikkalasi ham ruxsat
+// kalitidan (`"<module>.<action>"`) chiqadi; bu yerda faqat KO'RINISHI
+// (nomi va tartibi) belgilanadi. Yangi ruxsat qo'shilsa jadvalga
+// avtomatik tushadi — zaxira nomi kalitning o'zidan olinadi.
+//
+// `test/constants-parity.test.mjs` bularni ham Express manbasi bilan
+// solishtiradi.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const ACTION_ORDER: string[] = [
+  "create",
+  "read",
+  "update",
+  "delete",
+  "manage",
+  "record",
+  "pay",
+  "send",
+  "respond",
+  "manage_students",
+  "view_all",
+  "approve",
+  "decide_config",
+  "assistant",
+  "config",
+  "admin_access"
+];
+
+export const ACTION_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  "create": "Yaratish",
+  "read": "Ko'rish",
+  "update": "Tahrirlash",
+  "delete": "O'chirish",
+  "manage": "Boshqarish",
+  "record": "Belgilash",
+  "pay": "To'lov",
+  "send": "Yuborish",
+  "respond": "Javob berish",
+  "manage_students": "O'quvchilarni biriktirish",
+  "view_all": "Barchasini ko'rish",
+  "approve": "Tasdiqlash",
+  "decide_config": "Sozlamani tasdiqlash",
+  "assistant": "Assistentdan foydalanish",
+  "config": "Sozlamalarni boshqarish",
+  "admin_access": "To'liq kirish"
+});
+
+export interface ModuleMeta {
+  label: string;
+  order: number;
+}
+
+export const MODULE_META: Readonly<Record<string, ModuleMeta>> = Object.freeze({
+  "admin_dashboard": {
+    "label": "Boshqaruv paneli",
+    "order": 10
+  },
+  "branches": {
+    "label": "Filiallar",
+    "order": 15
+  },
+  "users": {
+    "label": "Foydalanuvchilar",
+    "order": 20
+  },
+  "roles": {
+    "label": "Rollar va ruxsatlar",
+    "order": 30
+  },
+  "students": {
+    "label": "O'quvchilar",
+    "order": 40
+  },
+  "teachers": {
+    "label": "O'qituvchilar",
+    "order": 50
+  },
+  "groups": {
+    "label": "Guruhlar",
+    "order": 60
+  },
+  "courses": {
+    "label": "Kurslar",
+    "order": 65
+  },
+  "classes": {
+    "label": "Sinflar",
+    "order": 70
+  },
+  "leads": {
+    "label": "Lidlar",
+    "order": 80
+  },
+  "attendance": {
+    "label": "Davomat",
+    "order": 90
+  },
+  "grades": {
+    "label": "Baholash",
+    "order": 100
+  },
+  "rating": {
+    "label": "Reyting",
+    "order": 110
+  },
+  "finance": {
+    "label": "Moliya",
+    "order": 120
+  },
+  "salary": {
+    "label": "Maoshlar",
+    "order": 130
+  },
+  "approvals": {
+    "label": "Tasdiqlar",
+    "order": 135
+  },
+  "assignments": {
+    "label": "Vazifalar",
+    "order": 138
+  },
+  "storage": {
+    "label": "Fayl saqlagich",
+    "order": 139
+  },
+  "notifications": {
+    "label": "Bildirishnomalar",
+    "order": 140
+  },
+  "notification_templates": {
+    "label": "Bildirishnoma shablonlari",
+    "order": 150
+  },
+  "holidays": {
+    "label": "Bayramlar",
+    "order": 160
+  },
+  "feedback": {
+    "label": "Feedback",
+    "order": 170
+  },
+  "feedback_types": {
+    "label": "Feedback turlari",
+    "order": 180
+  },
+  "archive_reasons": {
+    "label": "Arxiv sabablari",
+    "order": 190
+  },
+  "activity_logs": {
+    "label": "Faoliyat loglari",
+    "order": 200
+  },
+  "ai": {
+    "label": "AI maslahatchi",
+    "order": 205
+  },
+  "system": {
+    "label": "Tizim",
+    "order": 210
+  }
+});
+
+/** `"users.read"` → `{ module: "users", action: "read" }` */
+export const splitPermissionKey = (key: string): { module: string; action: string } => {
+  const idx = String(key).indexOf('.');
+  if (idx === -1) return { module: String(key), action: 'read' };
+  return { module: key.slice(0, idx), action: key.slice(idx + 1) };
+};
+
+export const getModuleMeta = (module: string): ModuleMeta =>
+  MODULE_META[module] || { label: module, order: 999 };
+
+export const getActionLabel = (action: string): string =>
+  ACTION_LABELS[action] || action;
+
+export const getActionOrder = (action: string): number => {
+  const idx = ACTION_ORDER.indexOf(action);
+  return idx === -1 ? ACTION_ORDER.length : idx;
+};

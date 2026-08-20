@@ -58,6 +58,8 @@ const CASES = [
     skip: 'NestJS-only diagnostika manzili' },
   // ── Faza 2.2: ko'chirilgan marshrutlar ──
   { name: 'roles (list)', method: 'GET', path: '/api/roles', auth: true },
+  // ── Faza 2.4: matritsa (`/:value` DAN OLDIN turishi shart) ──
+  { name: 'roles/matrix', method: 'GET', path: '/api/roles/matrix', auth: true },
   { name: 'roles/owner', method: 'GET', path: '/api/roles/owner', auth: true },
   { name: 'roles/director', method: 'GET', path: '/api/roles/director', auth: true },
   { name: 'roles/__nope__ (404)', method: 'GET', path: '/api/roles/__nope__', auth: true },

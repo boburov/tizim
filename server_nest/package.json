@@ -18,7 +18,8 @@
     "test:phase22": "node test/phase22-integration.test.mjs",
     "test:auth-parity": "node test/auth-parity.test.mjs tokens",
     "test:frozen-role": "bash scripts/frozen-role-check.sh",
-    "test:auth-parity:session": "node test/auth-parity.test.mjs session"
+    "test:auth-parity:session": "node test/auth-parity.test.mjs session",
+    "test:roles-parity": "node test/roles-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"

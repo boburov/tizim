@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { PermissionService } from './rbac/permission.service.js';
 import { BranchAccessService } from './rbac/branch-access.service.js';
 import { CredentialScopeService } from './rbac/credential-scope.js';
+import { RolesHelperService } from './rbac/roles.helper.js';
 import { PermissionsGuard } from './guards/permissions.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
 import { PermissionOrSelfGuard } from './guards/permission-or-self.guard.js';
@@ -34,6 +35,7 @@ import { AuthMiddleware } from '../middleware/auth.middleware.js';
     PermissionService,
     BranchAccessService,
     CredentialScopeService,
+    RolesHelperService,
     PermissionsGuard,
     RolesGuard,
     PermissionOrSelfGuard,
@@ -43,6 +45,7 @@ import { AuthMiddleware } from '../middleware/auth.middleware.js';
     PermissionService,
     BranchAccessService,
     CredentialScopeService,
+    RolesHelperService,
     PermissionsGuard,
     RolesGuard,
     PermissionOrSelfGuard,
