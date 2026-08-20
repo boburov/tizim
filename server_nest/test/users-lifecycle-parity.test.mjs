@@ -149,6 +149,18 @@ const cleanup = async () => {
   }
   await prisma.archiveLog.deleteMany({ where: { reason: { title: { startsWith: 'QA_LC ' } } } });
   await prisma.archiveReason.deleteMany({ where: { title: { startsWith: 'QA_LC ' } } });
+
+  // ⚠ TIZIM BILDIRISHNOMALARI — foydalanuvchi O'CHGACH ham QOLADI.
+  //
+  // `SystemNotification` da `userId` YO'Q: xabar shunchaki matn
+  // ("QALC teacher_twin ... butunlay o'chirildi"). Ya'ni yuqoridagi
+  // `user.deleteMany` ularni OLIB KETMAYDI va ular har yurishda
+  // to'planib borardi. Birinchi tekshiruvda aynan shu 12 ta yetim
+  // qator topildi.
+  //
+  // Fixture'dagi HAR BIR ko'rinadigan ism "QALC" bilan boshlanadi,
+  // shuning uchun bu filtr ANIQ va TO'LIQ.
+  await prisma.systemNotification.deleteMany({ where: { message: { contains: 'QALC' } } });
   return ids.length;
 };
 
@@ -668,7 +680,22 @@ const main = async () => {
       const zero = { user: 0, refreshTokens: 0, activityLogs: 0, archiveLogs: 0, branchAssignments: 0 };
       assert.deepEqual(afterE, zero, `Express qoldiq qoldirdi: ${JSON.stringify(afterE)}`);
       assert.deepEqual(afterN, zero, `NestJS qoldiq qoldirdi: ${JSON.stringify(afterN)}`);
-      ok(`${label} — javob ${e.status}, ikkala stekda ham qoldiq TO'LIQ tozalandi`);
+
+      // ⚠ YON TA'SIR: owner'ga tizim bildirishnomasi. Ikkala stek ham
+      // AYNAN bittadan, AYNAN bir xil matn bilan yozishi kerak —
+      // javob tanasi ({success, message}) buni umuman ko'rsatmaydi.
+      const notes = await prisma.systemNotification.findMany({
+        where: { message: { contains: confirmName } },
+        select: { message: true },
+      });
+      assert.equal(
+        notes.length, 2,
+        `bildirishnoma soni 2 emas (${notes.length}) — ikki stek ikki xil yozdi`,
+      );
+      assert.equal(notes[0].message, notes[1].message, 'bildirishnoma matni farq qildi');
+
+      ok(`${label} — javob ${e.status}, qoldiq TO'LIQ tozalandi, ` +
+        `bildirishnoma bir xil ("${notes[0].message.slice(0, 45)}…")`);
     } catch (err) {
       bad(label, err.message);
     }
@@ -688,12 +715,22 @@ const main = async () => {
   console.log('\x1b[2m  ── baza drifti ──\x1b[0m');
 
   const removed = await cleanup();
-  const leftovers = await prisma.user.count({ where: { username: { startsWith: PREFIX } } });
-  const orphanReasons = await prisma.archiveReason.count({ where: { title: { startsWith: 'QA_LC ' } } });
-  if (leftovers === 0 && orphanReasons === 0) {
+  // ⚠ HAR UCHALASI SANALADI. Ilgari faqat foydalanuvchi va sabab
+  // tekshirilardi — bildirishnomalar esa `userId` ga bog'lanmagani uchun
+  // yetim qolib, har yurishda to'planib borardi va "drift yo'q" degan
+  // xulosa YOLG'ON edi.
+  const left = {
+    users: await prisma.user.count({ where: { username: { startsWith: PREFIX } } }),
+    reasons: await prisma.archiveReason.count({ where: { title: { startsWith: 'QA_LC ' } } }),
+    notifications: await prisma.systemNotification.count({
+      where: { message: { contains: 'QALC' } },
+    }),
+  };
+  const total = Object.values(left).reduce((a, b) => a + b, 0);
+  if (total === 0) {
     ok(`test o'zidan keyin hech narsa qoldirmadi (${removed} ta fixture tozalandi)`);
   } else {
-    bad('baza drifti', `${leftovers} ta foydalanuvchi, ${orphanReasons} ta sabab qoldi`);
+    bad('baza drifti', JSON.stringify(left));
   }
 
   console.log(`\n  Natija: ${R.pass} o'tdi, ${R.fail} yiqildi, ${R.unmeasured} o'lchanmadi\n`);
