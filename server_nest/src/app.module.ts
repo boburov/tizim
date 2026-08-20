@@ -10,6 +10,7 @@ import { UsersModule } from './modules/users/users.module.js';
 import { BranchesModule } from './modules/branches/branches.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -57,6 +58,10 @@ import { RoomsModule } from './modules/rooms/rooms.module.js';
     JobsModule,
     // Xonalar — filialning fizik resursi (`classes.*` ruxsatlari).
     RoomsModule,
+    // ── FAZA 10: aloqa ──
+    // Bildirishnomalar `holidays`/`leads`/`feedback` dan OLDIN keladi —
+    // ular uning servisiga tayanadi.
+    NotificationsModule,
   ],
 })
 export class AppModule {}

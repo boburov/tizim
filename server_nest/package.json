@@ -22,7 +22,9 @@
     "test:roles-parity": "node test/roles-parity.test.mjs",
     "test:users-parity": "node test/users-parity.test.mjs",
     "test:branches-parity": "node test/branches-parity.test.mjs",
-    "test:jobs": "node test/jobs-infra.test.mjs"
+    "test:rooms-parity": "node test/rooms-parity.test.mjs",
+    "test:jobs": "node test/jobs-infra.test.mjs",
+    "test:notifications-parity": "node test/notifications-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"

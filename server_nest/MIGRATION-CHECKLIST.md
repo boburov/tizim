@@ -148,7 +148,7 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 ### FAZA 10 — ALOQA / INTEGRATSIYA / FON
 | Modul | Manzil | E | Holat |
 |---|---|---|---|
-| notifications | `/api/notifications` | 11 | ⬜ |
+| notifications | `/api/notifications` | 11 | ✅ 11/11 |
 | systemNotifications | `/api/system-notifications` | 5 | ⬜ |
 | notificationTemplates | `/api/notification-templates` | 5 | ⬜ |
 | feedback | `/api/feedback` | 9 | ⬜ |
@@ -231,3 +231,7 @@ takrorlandi. Har biri klient shartnomasining bir qismi, shuning uchun
 | B1 | `POST /rooms` | Mavjud BO'LMAGAN `branchId` → **409 `FK_CONSTRAINT`** ("Bog'langan yozuv mavjud..."), 404/400 emas. Sabab: `resolveBranchForWrite` faqat KO'LAMNI tekshiradi, filial BORLIGINI emas; owner uchun `isBranchAllowed()` doim `true`, ID Prisma'ga o'tadi va FK buziladi (P2003). | ATAYLAB EMAS, lekin ZARARSIZ: ko'lam himoyasi buzilmaydi (ko'lamdan tashqari ID baribir 403 oladi). Xabar chalg'ituvchi. `test/rooms-parity.test.mjs` uni QULFLAB turadi. |
 | B2 | `GET /rooms` | Standart `limit` = **200** (umumiy `parsePagination()` 20 beradi) va `meta` da **`pages` YO'Q**. | ATAYLAB: xona tanlagichi butun ro'yxatni bir so'rovda oladi. |
 | B3 | `PATCH /rooms/:id` | Filial almashtirishni to'suvchi tekshiruv `data` yig'ilgandan KEYIN turadi. | Zararsiz — `prisma.update` dan OLDIN, ya'ni hech narsa saqlanmaydi. |
+| B4 | `GET /notifications/stats` | **HAR DOIM 500** (`PrismaClientValidationError`). Sabab: `groupBy({ orderBy: { _count: { _all: "desc" } } })` — Prisma `groupBy` ning `orderBy._count` ida `_all` ni QO'LLAB-QUVVATLAMAYDI, aniq maydon kutadi. Xato so'rov QURILISHIDA yuz beradi, ya'ni ma'lumot bor-yo'qligiga bog'liq emas. | ⚠ HAQIQIY, ISHLAYOTGAN XATO — Express'da ham shunday. NestJS uni AYNAN takrorlaydi (kod ko'chirma). **Jimgina tuzatilmadi**: tuzatish javob shaklini 500 → 200 ga o'zgartiradi, ya'ni bu ko'chirish ishi emas, alohida qaror. `test/notifications-parity.test.mjs` ikkala stekda 500 ekanini qulflab turadi. |
+| B5 | `GET /notifications/:id/recipients` | Mavjud BO'LMAGAN xabar ID'si → **200 + bo'sh ro'yxat**, 404 emas (`getRecipientList` xabar borligini tekshirmaydi). | Zararsiz, lekin shartnomaning bir qismi — test uni qulflab turadi. |
+| B6 | `POST /notifications/inbox/:id/read` | Begona oluvchi yozuvi so'ralsa ham **200 `{ success: true }`** qaytadi (`markRead` `null` qaytarsa ham handler farq qilmaydi). | HIMOYA BUZILMAGAN: `userId` `WHERE` ichida, ya'ni yozuv O'ZGARMAYDI (IDOR yopiq). Faqat javob kodi "muvaffaqiyat" deb ko'rinadi. Test buni JAVOB KODI bilan emas, BAZADAN o'lchaydi. |
+| B7 | Seed o'quvchilari | Parollari 4 belgidan qisqa va `POST /auth/login` VALIDATORI ularni rad etadi — ya'ni seed'dagi o'quvchi bilan tizimga KIRIB BO'LMAYDI. | Ko'chirishga aloqasi yo'q (seed ma'lumoti). Testlar rol chegarasi uchun `qa_staff_a` dan foydalanadi. |

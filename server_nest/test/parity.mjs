@@ -93,6 +93,17 @@ const CASES = [
   { name: 'rooms/:id (404)', method: 'GET',
     path: `/api/rooms/${'a'.repeat(24)}`, auth: true },
   { name: "rooms (auth yo'q → 401)", method: 'GET', path: '/api/rooms' },
+  // ── Faza 10: bildirishnomalar (o'qish yo'llari) ──
+  { name: 'notifications (list)', method: 'GET', path: '/api/notifications?limit=5', auth: true },
+  { name: 'notifications/inbox', method: 'GET', path: '/api/notifications/inbox?limit=5', auth: true },
+  { name: 'notifications/inbox/unread-count', method: 'GET',
+    path: '/api/notifications/inbox/unread-count', auth: true },
+  // ⚠ 500 KUTILADI — Express'da ham shunday (B4). Paritet aynan shuni qulflaydi.
+  { name: 'notifications/stats (B4: 500)', method: 'GET',
+    path: '/api/notifications/stats', auth: true },
+  { name: 'notifications/:id (404)', method: 'GET',
+    path: `/api/notifications/${'a'.repeat(24)}`, auth: true },
+  { name: "notifications (auth yo'q → 401)", method: 'GET', path: '/api/notifications' },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },
