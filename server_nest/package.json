@@ -25,6 +25,7 @@
     "test:journal-parity": "node test/journal-parity.test.mjs",
     "test:finance-report-parity": "node test/finance-report-parity.test.mjs",
     "test:expense-approvals-parity": "node test/expense-approvals-parity.test.mjs",
+    "test:money-parity": "node test/money-parity.test.mjs",
     "test:rooms-parity": "node test/rooms-parity.test.mjs",
     "test:courses-parity": "node test/courses-parity.test.mjs",
     "test:edu-helpers": "node test/education-helpers-parity.test.mjs",
