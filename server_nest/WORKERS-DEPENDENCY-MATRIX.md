@@ -15,8 +15,9 @@ Manba: `server/src/jobs`, `server/src/queues`, `server/src/bot`,
 
 | To'plam | Soni | NestJS holati |
 |---|---|---|
-| pg-boss cron joblari | 23 (24 ta e'lon, `aiReports` 3 ta job beradi) | 2 ta ko'chirildi, 21 ta BLOKLANGAN |
-| Boot catch-up (cron emas) | 3 (`catchUpMonthly`, `processDueGroupEnds`, `accrueToday`) | 0 — BLOKLANGAN |
+| pg-boss cron joblari | 23 (24 ta e'lon, `aiReports` 3 ta job beradi) | 3 ta ko'chirildi, 20 ta BLOKLANGAN |
+| Hodisaga ko'ra ishlaydigan joblar | 3 (`notification.deliver`, `notification.send`, `assignment.deliver`) | 2 ta ko'chirildi, 1 ta BLOKLANGAN |
+| Boot catch-up (cron emas) | 4 (`catchUpMonthly`, `processDueGroupEnds`, `accrueToday`, `reconcileStorage`) | 1 ta ko'chirildi (`reconcileStorage`), 3 ta BLOKLANGAN |
 | BullMQ navbat (Redis) | 1 (`bulk-import`) | 0 — BLOKLANGAN |
 | Telegram bot (jonli yuza) | 2 buyruq + 3 hodisa + 2 yetkazish servisi | ✅ ko'chirildi (POLLING O'CHIQ) |
 | Telegram autentifikatsiya | `/api/bot-auth/verify`, `/api/bot-auth/login` | ✅ ko'chirildi |
@@ -41,8 +42,8 @@ tegadigan asosiy jadvallar. **Filial** = ALS filial konteksti.
 | `daily.attendance-unmarked` | `0 20 * * *` | `attendance.listForGroupOnDate`, `notifications.send` | **attendance**, **groups**, **notifications** | `groups`, `group_schedules`, `attendance`, `group_memberships`, `notifications`, `users` | yo'q | GLOBAL | Telegram | TG xabar (o'qituvchi + owner digest) | ⛔ BLOKLANGAN |
 | `daily.lesson-reminder` | `0 6 * * *` | `notifications.send`, `holidays.holidayKeySetForRange`, `lessonCancellation.helper`, `studentFreeze.helper`, `attendance.helper` | **holidays**, **notifications**, **lessonCancellations**, **groups**, `studentFreeze`✅ | `groups`, `group_schedules`, `group_memberships`, `holidays`, `lesson_cancellations`, `student_freezes`, `users`, `notifications` | yo'q | GLOBAL | Telegram | TG xabar (har o'quvchiga) | ⛔ BLOKLANGAN |
 | `weekly.low-attendance` | `30 9 * * 1` | `attendance.getDashboardStats`, `notifications.send` | **attendance**, **notifications** | `attendance`, `groups`, `attendance_settings`, `users`, `notifications` | yo'q | GLOBAL | Telegram | TG xabar (owner) | ⛔ BLOKLANGAN |
-| `notification.deliver` | hodisaga ko'ra (`scheduler.now`) | `notifications.deliverNotification` → `bot/notificationDeliver` | **notifications** | `notifications`, `notification_recipients`, `bot_users` | yo'q | GLOBAL | Telegram | TG xabar | ⛔ BLOKLANGAN (bot yetkazish qatlami ✅ tayyor) |
-| `notification.send` | `scheduler.schedule(when)` | `notifications.dispatchScheduled` | **notifications** | `notifications`, `notification_recipients` | yo'q | GLOBAL | Telegram | TG xabar | ⛔ BLOKLANGAN |
+| `notification.deliver` | hodisaga ko'ra (`scheduler.now`), qulf 5 daq | `notifications.deliverNotification` → `bot/notificationDeliver` | **notifications** ✅ | `notifications`, `notification_recipients`, `bot_users` | yo'q | GLOBAL | Telegram | TG xabar | ✅ **KO'CHIRILDI** |
+| `notification.send` | `scheduler.at(when)`, qulf 5 daq | `notifications.dispatchScheduled` | **notifications** ✅ | `notifications`, `notification_recipients` | yo'q | GLOBAL | Telegram | TG xabar | ✅ **KO'CHIRILDI** |
 | `assignment.deliver` | hodisaga ko'ra (`scheduler.now`) | `assignments.deliverAssignment` → `bot/assignmentDeliver` | **assignments**, **storage** | `assignments`, `assignment_recipients`, `bot_users`, fayl tizimi | yo'q | GLOBAL | Telegram | TG hujjat | ⛔ BLOKLANGAN (bot yetkazish qatlami ✅ tayyor) |
 
 **Idempotentlik kaliti:** `notifications.send` dagi `dedupeKey`
@@ -108,9 +109,9 @@ hisobot davrlari (O'TGAN TUGAGAN davr, joriy EMAS).
 | Job | Cron | Servislar | NestJS modul talabi | Jadvallar | Ruxsat | Filial | Tashqi API | Yon ta'sir | Holat |
 |---|---|---|---|---|---|---|---|---|---|
 | `daily.ttl-cleanup` | `15 3 * * *` | — (faqat Prisma) | **YO'Q** | `caches`, `refresh_tokens`, `ai_runs`, `ai_usage_logs` | yo'q | GLOBAL | — | Eskirgan qatorlar O'CHIRILADI (90d / 400d / `expiresAt`) | ✅ **KO'CHIRILDI** |
-| `storage.cleanup` | `30 2 * * *` | `storageAdmin.runScheduledCleanup` | **storage** ✅ (ko'chirildi) | `storage_settings`, `assignments`, fayl tizimi | yo'q | GLOBAL | — | FAYL O'CHIRADI (diskdan) | 🟡 servisi TAYYOR — job ro'yxatga qo'shilishi mumkin |
+| `storage.cleanup` | `30 2 * * *`, qulf 30 daq | `storageAdmin.runScheduledCleanup` | **storage** ✅ | `storage_settings`, `assignments`, fayl tizimi | yo'q | GLOBAL | — | FAYL O'CHIRADI (diskdan, qaytmaydi) | ✅ **KO'CHIRILDI** |
 | `usage.heartbeat` | `*/15 * * * *` (+1 marta startupda) | `aiBudget.monthlyUsage` (bitta raw SQL), `entitlements.setEntitlements` | **YO'Q** (leaf bog'liqliklar birga ko'chirildi) | `users`, `groups`, `ai_usage_logs`, `pg_database_size()` | yo'q | GLOBAL | **Admin panel API** | POST heartbeat; javobdan entitlements keshi to'ldiriladi | ✅ **KO'CHIRILDI** |
-| *boot* `reconcileStorage` | startupda | `storage.reconcile` | **storage** | saqlash hisoblagichi + disk | yo'q | GLOBAL | — | Kvota hisoblagichi tekislanadi | ⛔ BLOKLANGAN |
+| *boot* `reconcileStorage` | startupda (`runOnBoot`) | `storage.reconcile` | **storage** ✅ | `storage_usage` + disk | yo'q | GLOBAL | — | Kvota hisoblagichi tekislanadi (idempotent) | ✅ **KO'CHIRILDI** |
 
 ---
 
@@ -244,8 +245,7 @@ Har bir qator: "bu modullar tayyor bo'lgach, bu joblar oilasi ko'chadi".
 | Kutilayotgan NestJS modullari | Ochiladigan job oilasi |
 |---|---|
 | `groups` | `daily.auto-end-groups` + boot catch-up |
-| `notifications` (+`bot_users` yetkazish ✅ tayyor) | `notification.deliver`, `notification.send` |
-| `notifications` + `holidays` | `daily.holiday-greetings` |
+| `holidays` | `daily.holiday-greetings` |
 | `notifications` + `attendance` + `groups` | `daily.attendance-unmarked`, `weekly.low-attendance` |
 | `notifications` + `holidays` + `lessonCancellations` + `groups` | `daily.lesson-reminder` |
 | `notifications` + `leads` + `systemNotifications` | `lead.followup-reminders`, `lead.daily-digest` |

@@ -191,4 +191,17 @@ export class UsageHeartbeatJob implements JobDefinition {
   async run(): Promise<void> {
     await this.send();
   }
+
+  /**
+   * Startupda DARHOL bir marta — 15 daqiqa kutmasdan.
+   *
+   * Sabab Express bilan bir xil: limitlar keshi (`EntitlementsService`)
+   * bo'sh holda ko'tariladi va "cheksiz" deb o'qiladi. Birinchi
+   * heartbeat kelmaguncha tarif chegaralari AMALDA ishlamaydi.
+   */
+  async runOnBoot(): Promise<void> {
+    if (!this.isConfigured()) return;
+    await this.send();
+    this.logger.log('Usage heartbeat yoqildi (har 15 daqiqada)');
+  }
 }

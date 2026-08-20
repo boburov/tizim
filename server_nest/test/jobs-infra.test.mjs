@@ -52,12 +52,16 @@ const expressSchedule = () => {
   //    `JOB_NAME` ni qidirsak, 3 ta AI hisoboti pariteti JIMGINA
   //    tekshirilmay qolardi.
   const constsByFile = new Map();
+  const fileByName = new Map();
+  const srcByFile = new Map();
   for (const file of readdirSync(EXPRESS_JOBS_DIR)) {
     if (!file.endsWith('.js') || file === 'index.js') continue;
     const src = readFileSync(new URL(file, EXPRESS_JOBS_DIR), 'utf8');
+    srcByFile.set(file, src);
     const pairs = [];
     for (const m of src.matchAll(/export const (\w+) = "([a-z]+\.[a-z-]+)"/g)) {
       pairs.push([m[1], m[2]]);
+      fileByName.set(m[2], file);
     }
     if (pairs.length) constsByFile.set(file, pairs);
   }
@@ -78,12 +82,20 @@ const expressSchedule = () => {
   }
 
   // 3) `every("<cron>", ALIAS)` → cron
-  const out = new Map();
+  const crons = new Map();
   for (const m of indexSrc.matchAll(/every\("([^"]+)",\s*(\w+)\)/g)) {
     const jobName = nameByAlias.get(m[2]);
-    if (jobName) out.set(jobName, m[1]);
+    if (jobName) crons.set(jobName, m[1]);
   }
-  return out;
+
+  // 4) `lockLifetime: N * 60 * 1000` → ms
+  const locks = new Map();
+  for (const [name, file] of fileByName) {
+    const m = srcByFile.get(file)?.match(/lockLifetime:\s*(\d+)\s*\*\s*60\s*\*\s*1000/);
+    if (m) locks.set(name, Number(m[1]) * 60 * 1000);
+  }
+
+  return { crons, locks, names: new Set(fileByName.keys()) };
 };
 
 /** ConfigService o'rniga — ro'yxat mantig'ini alohida sinash uchun. */
@@ -103,16 +115,46 @@ const run = async () => {
   try {
     // ═══════════════════════════════════════════════════════════════════
     console.log('\x1b[1m1. Jadval pariteti (Express `jobs/index.js` dan o\'qiladi)\x1b[0m');
-    const express = expressSchedule();
+    const { crons: express, locks: expressLocks, names: expressNames } = expressSchedule();
     check('Express jadvali o\'qildi', express.size === 22, `${express.size} ta cron job`);
 
     for (const job of registry.all()) {
-      const expected = express.get(job.name);
+      // ⚠ HAR BIR ko'chirilgan job Express'da HAM mavjud bo'lishi shart —
+      // aks holda navbat nomi mos kelmagan va ish HECH KIM tomonidan
+      // olinmasdi.
       check(
-        `cron pariteti: ${job.name}`,
-        expected !== undefined && expected === job.cron,
-        `Express="${expected ?? '(topilmadi)'}" Nest="${job.cron}"`,
+        `Express'da mavjud: ${job.name}`,
+        expressNames.has(job.name),
+        expressNames.has(job.name) ? '' : "navbat nomi Express'da topilmadi",
       );
+
+      const expected = express.get(job.name);
+      if (job.cron === null) {
+        // HODISAGA ko'ra ishlaydigan job (`scheduler.now` / `at`).
+        // Express'da ham cron BO'LMASLIGI shart.
+        check(
+          `cron yo'q (hodisaga ko'ra): ${job.name}`,
+          expected === undefined,
+          expected ? `⚠ Express'da cron BOR: "${expected}"` : "ikkala tomonda ham cron yo'q",
+        );
+      } else {
+        check(
+          `cron pariteti: ${job.name}`,
+          expected !== undefined && expected === job.cron,
+          `Express="${expected ?? '(topilmadi)'}" Nest="${job.cron}"`,
+        );
+      }
+
+      // QULF MUDDATI — ish "osilib qolgan" deb sanaladigan vaqt.
+      // Farq qilsa uzoq job o'rtada qayta boshlanardi (dublikat yuborish).
+      const expectedLock = expressLocks.get(job.name);
+      if (expectedLock !== undefined) {
+        check(
+          `lockLifetime pariteti: ${job.name}`,
+          job.lockLifetimeMs === expectedLock,
+          `Express=${expectedLock / 60000}daq Nest=${(job.lockLifetimeMs ?? 0) / 60000}daq`,
+        );
+      }
     }
 
     // Vaqt zonasi: joblarda alohida ko'rsatilmagan bo'lsa `TZ_NAME` dan
@@ -137,7 +179,13 @@ const run = async () => {
     );
 
     const all = registry.all();
-    const mk = (jobs) => new JobsRegistry(scheduler, fakeConfig(jobs), ...all);
+    // Ro'yxat mantig'i alohida nusxada sinaladi — haqiqiy registry'ning
+    // holatiga tegmasdan.
+    const mk = (env) => {
+      const r = new JobsRegistry(scheduler, fakeConfig(env));
+      r.register(...all);
+      return r;
+    };
 
     // Bo'sh ro'yxat → hech biri (fail-closed).
     check(

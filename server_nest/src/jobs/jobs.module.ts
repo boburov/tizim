@@ -3,6 +3,7 @@ import {
   Logger,
   Module,
   type OnApplicationBootstrap,
+  type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerService } from './scheduler.service.js';
@@ -29,25 +30,57 @@ import type { JobDefinition } from './job.types.js';
  * ⚠ RO'YXATGA QO'SHISH ≠ KO'CHIRISH TUGADI. Job bu yerda paydo bo'lishi
  * uchun uning BARCHA biznes servislari NestJS'da tayyor bo'lishi shart —
  * `WORKERS-DEPENDENCY-MATRIX.md` §1 aynan shuni kuzatib boradi.
+ *
+ * ── NEGA OCHIQ RO'YXATGA OLISH (`register`) ──
+ *
+ * Joblar bu yerga KONSTRUKTOR orqali kiritilmaydi. Sabab — halqa
+ * (circular dependency): `NotificationsModule` `SchedulerService` uchun
+ * `JobsModule` ni import qiladi, `notification.deliver` job'i esa
+ * `NotificationsService` ga tayanadi. Konstruktor orqali bog'lansa
+ * `JobsModule ⇄ NotificationsModule` halqasi hosil bo'lardi va
+ * `forwardRef` bilan yamashga to'g'ri kelardi.
+ *
+ * Buning o'rniga har bir job oilasi O'Z modulida turadi va `onModuleInit`
+ * da o'zini ro'yxatga oladi. `onModuleInit` `onApplicationBootstrap` dan
+ * OLDIN ishlaydi, ya'ni ishchilar ishga tushganda ro'yxat to'liq bo'ladi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 @Injectable()
 export class JobsRegistry implements OnApplicationBootstrap {
   private readonly logger = new Logger('Jobs');
 
+  /** Ro'yxatga olingan joblar (nom → ta'rif). */
+  private readonly jobs = new Map<string, JobDefinition>();
+
   constructor(
     private readonly scheduler: SchedulerService,
     private readonly config: ConfigService<AppConfig, true>,
-    private readonly ttlCleanup: TtlCleanupJob,
-    private readonly usageHeartbeat: UsageHeartbeatJob,
   ) {}
+
+  /**
+   * Job oilasini ro'yxatga oladi.
+   *
+   * ⚠ RO'YXATGA OLISH ISHGA TUSHIRISH EMAS. Bu faqat "kodi tayyor"
+   * degani; haqiqatan ishlashi `NEST_WORKER_JOBS` ga bog'liq.
+   */
+  register(...defs: JobDefinition[]): void {
+    for (const def of defs) {
+      const clash = this.jobs.get(def.name);
+      if (clash && clash !== def) {
+        // Bir nom ikki marta — bu ish IKKI MARTA bajarilishi demak.
+        // Jimgina "oxirgisi yutadi" qilib bo'lmaydi.
+        throw new Error(`Job nomi takrorlandi: ${def.name}`);
+      }
+      this.jobs.set(def.name, def);
+    }
+  }
 
   /**
    * NestJS'ga KO'CHIRILGAN joblar. Ro'yxatda turishi — "kodi tayyor"
    * degani; ishga tushishi esa `NEST_WORKER_JOBS` ga bog'liq.
    */
   all(): JobDefinition[] {
-    return [this.ttlCleanup, this.usageHeartbeat];
+    return [...this.jobs.values()];
   }
 
   /** Ochiq ro'yxat bo'yicha filtr. Bo'sh ro'yxat — hech biri. */
@@ -116,18 +149,40 @@ export class JobsRegistry implements OnApplicationBootstrap {
 
     await this.scheduler.start(jobs);
 
-    // ── STARTUPDA BIR MARTA: heartbeat ──
+    // ── BOOT CATCH-UP ──
     //
-    // Express `jobs/index.js` da ham aynan shunday: 15 daqiqa kutmasdan
-    // limitlar keshini darhol to'ldiramiz. `await` QILINMAYDI — startup
-    // tarmoq so'roviga bog'lanib qolmasin.
-    if (
-      jobs.some((j) => j.name === this.usageHeartbeat.name) &&
-      this.usageHeartbeat.isConfigured()
-    ) {
-      this.usageHeartbeat.send().catch(() => null);
-      this.logger.log('Usage heartbeat yoqildi (har 15 daqiqada)');
+    // Express `jobs/index.js` startupda ba'zi ishlarni DARHOL bir marta
+    // bajaradi (heartbeat, o'tkazib yuborilgan oylik generatsiya...).
+    // Job o'zi shu imkoniyatni e'lon qilsa — chaqiramiz.
+    //
+    // ⚠ `await` QILINMAYDI: startup tarmoq so'rovi yoki og'ir hisobga
+    // bog'lanib qolmasin (Express'da ham aynan shunday).
+    for (const job of jobs) {
+      const boot = (job as JobDefinition & { runOnBoot?: () => Promise<void> }).runOnBoot;
+      if (typeof boot !== 'function') continue;
+      Promise.resolve(boot.call(job)).catch((err) =>
+        this.logger.warn(`Boot catch-up bajarilmadi (${job.name}): ${String(err)}`),
+      );
+      this.logger.log(`Boot catch-up ishga tushdi: ${job.name}`);
     }
+  }
+}
+
+/**
+ * TIZIM joblari — biznes moduliga tayanmaydiganlari. Ular shu modulda
+ * qoladi; qolgan oilalar o'z modullarida (`jobs/notifications`,
+ * `jobs/storage`, ...) va o'zlarini `JobsRegistry` ga yozadi.
+ */
+@Injectable()
+export class SystemJobsRegistrar implements OnModuleInit {
+  constructor(
+    private readonly registry: JobsRegistry,
+    private readonly ttlCleanup: TtlCleanupJob,
+    private readonly usageHeartbeat: UsageHeartbeatJob,
+  ) {}
+
+  onModuleInit(): void {
+    this.registry.register(this.ttlCleanup, this.usageHeartbeat);
   }
 }
 
@@ -138,6 +193,7 @@ export class JobsRegistry implements OnApplicationBootstrap {
     TtlCleanupJob,
     UsageHeartbeatJob,
     JobsRegistry,
+    SystemJobsRegistrar,
   ],
   // `SchedulerService` — `notifications`/`assignments` ko'chganda ularga
   // kerak bo'ladi (`scheduler.now(...)`). `EntitlementsService` —

@@ -57,4 +57,18 @@ export interface JobDefinition {
    * degani, ya'ni ish BOSHQA HECH QACHON takrorlanmaydi.
    */
   run(data: Record<string, unknown>): Promise<void>;
+
+  /**
+   * IXTIYORIY boot catch-up.
+   *
+   * Express `jobs/index.js` startupda ba'zi ishlarni cron kutmasdan bir
+   * marta bajaradi: server O'CHIQ turgan paytda o'tkazib yuborilgan
+   * ishlarni to'ldirish uchun (o'tgan oylik generatsiya, kunlik
+   * accrual, tugagan kurslarni arxivlash, heartbeat).
+   *
+   * ⚠ FAQAT ISHCHI REJIMIDA va faqat job ochiq ro'yxatda bo'lsa
+   * chaqiriladi — aks holda u ikkilanish himoyasini chetlab o'tgan
+   * ikkinchi bajarilish bo'lardi.
+   */
+  runOnBoot?(): Promise<void>;
 }

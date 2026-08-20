@@ -7,6 +7,7 @@ import { BOT_STATUS, botStatusOf } from '../../common/rbac/bot-status.js';
 import { userBranchCondition } from '../../common/als/branch-context.js';
 import { SchedulerService } from '../../jobs/scheduler.service.js';
 import { PersonalizeBodyService } from './personalize-body.service.js';
+import { NotificationDeliverService } from '../../bot/notification-deliver.service.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -25,18 +26,18 @@ import { PersonalizeBodyService } from './personalize-body.service.js';
  *  4. O'QILDI/O'QILMADI — `readCount` shartli atomik yangilanish bilan
  *     oshiriladi, ya'ni ikki marta bosish ikki marta sanamaydi.
  *
- * ── KO'CHIRILMAGAN QISM (ATAYLAB) ──
+ * ── FON QISMI (`deliverNotification` / `dispatchScheduled`) ──
  *
- * `deliverNotification` (Telegram push) va `dispatchScheduled` bu yerda
- * YO'Q: ular HTTP marshrutlaridan CHAQIRILMAYDI, faqat fon joblaridan
- * (`notification.deliver`, `notification.send`) ishlaydi va Telegram bot
- * servisiga tayanadi. Ikkalasi ham boshqa fazaning ishi.
+ * Ikkalasi HTTP marshrutlaridan CHAQIRILMAYDI — faqat fon joblaridan
+ * (`notification.deliver`, `notification.send`). Ular Telegram bot
+ * yetkazish qatlamiga tayanadi va u ko'chirilgach shu yerga qo'shildi.
  *
  * ⚠ HTTP SHARTNOMASIGA TA'SIRI YO'Q: `send` ularni faqat "navbatga
  * qo'yish" orqali chaqiradi (fire-and-forget) va navbat holati javobni
  * o'zgartirmaydi. pg-boss navbati IKKALA stek uchun BITTA (bir xil
  * Postgres, bir xil job nomi) — ya'ni NestJS qo'ygan ishni mavjud
- * Express ishchisi oladi.
+ * Express ishchisi ham, NestJS ishchisi ham (yoqilgan bo'lsa) oladi;
+ * ikkalasi BIR VAQTDA ishchi bo'lmasligi kerak.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
@@ -80,6 +81,8 @@ export class NotificationsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(SchedulerService) private readonly scheduler: SchedulerService,
     @Inject(PersonalizeBodyService) private readonly personalize: PersonalizeBodyService,
+    @Inject(NotificationDeliverService)
+    private readonly botDeliver: NotificationDeliverService,
   ) {}
 
   /** Bitta o'qituvchining barcha faol guruhlari ID'lari. */
@@ -302,6 +305,188 @@ export class NotificationsService {
     return new Map(
       bots.map((b) => [String(b.userId), { ...b, status: botStatusOf(b) }]),
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FON YETKAZISH — `notification.deliver` va `notification.send` joblari
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * ⚠ CHEKLANGAN PARALLELLIK. 500 kishilik e'lonni ketma-ket yuborish
+   * daqiqalab cho'zilardi (job qulfi tugab, ish "osilgan" deb qayta
+   * boshlanardi); cheklovsiz `Promise.all` esa Telegram'ning tezlik
+   * chegarasiga urib, hammasini 429 qilardi. 20 — Express'dagi qiymat.
+   */
+  private static readonly DELIVERY_CONCURRENCY = 20;
+
+  private static async runPool<T>(
+    items: T[],
+    concurrency: number,
+    worker: (item: T) => Promise<void>,
+  ): Promise<void> {
+    let idx = 0;
+    const runners = Array.from(
+      { length: Math.min(concurrency, items.length) },
+      async () => {
+        while (idx < items.length) {
+          const cur = idx;
+          idx += 1;
+          await worker(items[cur]);
+        }
+      },
+    );
+    await Promise.all(runners);
+  }
+
+  /**
+   * BOT PUSH — `notification.deliver` job'ining tanasi.
+   *
+   * ⚠⚠ IDEMPOTENTLIK SHU YERDA: faqat `botDeliveredAt IS NULL`
+   * oluvchilar olinadi. Job qayta urinsa (pg-boss `retryLimit`) yoki
+   * jarayon o'rtada yiqilsa, ALLAQACHON yetkazilganlar QAYTA
+   * URILMAYDI. Bu shartni olib tashlash — har qayta urinishda butun
+   * guruhga takroriy Telegram xabari demak.
+   */
+  async deliverNotification(notificationId: string): Promise<void> {
+    const notif = await this.prisma.notification.findUnique({
+      where: { id: String(notificationId) },
+    });
+    if (!notif) return;
+
+    // Telegram kanali tanlanmagan bo'lsa — bot push YO'Q (faqat in-app).
+    const channels = notif.channels?.length ? notif.channels : ['inapp', 'telegram'];
+    if (!channels.includes('telegram')) return;
+
+    const recipients = await this.prisma.notificationRecipient.findMany({
+      where: { notificationId: String(notificationId), botDeliveredAt: null },
+      select: { id: true, userId: true },
+    });
+    if (recipients.length === 0) return;
+
+    // Barcha `BotUser` lar BITTA so'rovda (N+1 yo'q).
+    const userIds = recipients.map((r) => String(r.userId));
+    const botUsers = await this.prisma.botUser.findMany({
+      where: { userId: { in: userIds } },
+      select: { userId: true, chatId: true, telegramId: true, isBlocked: true },
+    });
+    const buByUser = new Map(botUsers.map((b) => [String(b.userId), b]));
+
+    // `{ism}`, `{familiya}`, `{guruh}`, `{markaz}` — har oluvchi uchun.
+    const bodyByUser = await this.personalize.personalizeBulk(notif.body, userIds);
+
+    let delivered = 0;
+    const updates: Array<Promise<unknown>> = [];
+
+    await NotificationsService.runPool(
+      recipients,
+      NotificationsService.DELIVERY_CONCURRENCY,
+      async (r) => {
+        const bu = buByUser.get(String(r.userId));
+        if (!bu || bu.isBlocked || !bu.chatId) {
+          updates.push(
+            this.prisma.notificationRecipient.update({
+              where: { id: r.id },
+              data: { botFailedReason: 'no-bot-link' },
+            }),
+          );
+          return;
+        }
+
+        const res = await this.botDeliver.deliverToChat(
+          // BigInt → Number: Telegram API raqam kutadi, Postgres BigInt beradi.
+          { chatId: Number(bu.chatId), telegramId: Number(bu.telegramId) },
+          {
+            title: notif.title,
+            body: bodyByUser.get(String(r.userId)) ?? notif.body,
+            category: notif.category,
+          },
+        );
+
+        if (res.ok) {
+          delivered += 1;
+          updates.push(
+            this.prisma.notificationRecipient.update({
+              where: { id: r.id },
+              data: { botDeliveredAt: new Date(), botFailedReason: '' },
+            }),
+          );
+        } else if (!res.transient) {
+          // ⚠ O'TKINCHI (transient) NOSOZLIK TERMINAL SIFATIDA
+          // SAQLANMAYDI: bot ishlamayotgani yoki 429 oluvchining aybi
+          // emas. Saqlansa oluvchi "yetkazib bo'lmadi" bo'lib yopilardi,
+          // lekin `botDeliveredAt` hamon `null` — keyingi urinishda
+          // qayta uriniladi va bu TO'G'RI.
+          updates.push(
+            this.prisma.notificationRecipient.update({
+              where: { id: r.id },
+              data: { botFailedReason: res.reason ?? 'send-failed' },
+            }),
+          );
+        }
+      },
+    );
+
+    // `allSettled` — bitta yozuv yiqilsa qolganlari saqlanaversin.
+    if (updates.length) await Promise.allSettled(updates);
+    if (delivered > 0) {
+      await this.prisma.notification.update({
+        where: { id: String(notificationId) },
+        data: { deliveredViaBot: { increment: delivered } },
+      });
+    }
+  }
+
+  /**
+   * REJALASHTIRILGAN XABARNI YUBORISH — `notification.send` job'i.
+   *
+   * ⚠⚠ IDEMPOTENTLIK VA BEKOR QILISH BITTA SHARTDA:
+   * `updateMany({ where: { status: "scheduled" } })` — SHARTLI ATOMIK
+   * o'tish. Ikki marta ishga tushsa ikkinchisi `status !== "scheduled"`
+   * da darhol chiqadi; foydalanuvchi bekor qilgan bo'lsa
+   * (`status = "canceled"`) xabar YUBORILMAYDI.
+   *
+   * Bu shart `cancelScheduled` ning YAGONA haqiqiy tayanchi:
+   * `scheduler.unschedule` cron rejasini o'chiradi, `sendAfter` bilan
+   * qo'yilgan ishni EMAS — ya'ni ish baribir ishga tushadi va aynan shu
+   * yerda to'xtaydi. SHARTNI OLIB TASHLAMANG.
+   */
+  async dispatchScheduled(notificationId: string): Promise<void> {
+    const notif = await this.prisma.notification.findUnique({
+      where: { id: String(notificationId) },
+      include: {
+        audienceGroups: { select: { id: true } },
+        audienceUsers: { select: { id: true } },
+      },
+    });
+    if (!notif || notif.status !== 'scheduled') return;
+
+    // Auditoriya tiklanadi — Prisma'da u alohida maydon/relation'larda.
+    const audience = {
+      type: notif.audienceType,
+      groupIds: (notif.audienceGroups || []).map((g) => String(g.id)),
+      userIds: (notif.audienceUsers || []).map((u) => String(u.id)),
+    };
+
+    const sender = notif.senderId
+      ? {
+          _id: String(notif.senderId),
+          role: notif.senderRole === 'owner' ? ROLES.OWNER : ROLES.TEACHER,
+        }
+      : null;
+
+    const recipientIds = await this.resolveAudience(audience as never, sender);
+    const channels = notif.channels?.length ? notif.channels : ['inapp', 'telegram'];
+
+    const claimed = await this.prisma.notification.updateMany({
+      where: { id: notif.id, status: 'scheduled' },
+      data: { status: 'sent', sentAt: new Date(), recipientsCount: recipientIds.length },
+    });
+    // ⚠ DA'VO QILINMAGAN bo'lsa (boshqa nusxa ulgurgan yoki bekor
+    // qilingan) — oluvchilarni YARATMAYMIZ. Aks holda xabar ikki marta
+    // materializatsiya qilinib, ikkinchi push ketardi.
+    if (claimed.count !== 1) return;
+
+    await this.materializeRecipients(notif.id, recipientIds, channels);
   }
 
   /** ASOSIY YUBORISH. */

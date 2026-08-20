@@ -10,6 +10,8 @@ import { UsersModule } from './modules/users/users.module.js';
 import { BranchesModule } from './modules/branches/branches.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { BotModule } from './bot/bot.module.js';
+import { NotificationJobsModule } from './jobs/notifications/notification-jobs.module.js';
+import { StorageJobsModule } from './jobs/storage/storage-jobs.module.js';
 import { BotAuthModule } from './modules/bot-auth/bot-auth.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
@@ -66,6 +68,11 @@ import { FeedbackModule } from './modules/feedback/feedback.module.js';
     // va `NEST_WORKER_JOBS` bo'sh bo'lsa modul faqat `SchedulerService` ni
     // DI'ga qo'yadi, navbatlarga TEGMAYDI. Express yagona worker.
     JobsModule,
+    // Job OILALARI — har biri o'z modulida va o'zini `JobsRegistry` ga
+    // yozadi. ⚠ Ro'yxatda turishi ishga tushishi degani EMAS:
+    // `NEST_WORKER_JOBS` bo'sh bo'lsa hech biri ishlamaydi.
+    NotificationJobsModule,
+    StorageJobsModule,
     // ── FAZA 10: Telegram bot ──
     // ⚠ Polling standart holda O'CHIQ (`NEST_BOT_POLLING=false`) — bot
     // nusxasi faqat YUBORISH uchun ko'tariladi. Buyruqlarni Express
