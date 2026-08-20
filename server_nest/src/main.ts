@@ -33,6 +33,39 @@ async function bootstrap(): Promise<void> {
 
   const isProd = get('isProd');
 
+  // ═══════════════════════════════════════════════════════════════════
+  // ⚠ `trust proxy` — EXPRESS `app.js` DAN KO'CHIB QOLGAN EDI.
+  //
+  // Express: `app.set("trust proxy", 1)`. Bu `req.ip` ni SOKET manzili
+  // emas, `X-Forwarded-For` ning OXIRGI yozuvidan oladi — ya'ni nginx
+  // qo'shgan HAQIQIY mijoz IP'si.
+  //
+  // ── BU NEGA XAVFSIZLIK MASALASI, "sozlama" EMAS ──
+  //
+  // `req.ip` UCHTA joyda ishlaydi:
+  //   1. `authLimiter` kaliti (login brute-force himoyasi);
+  //   2. `refresh_tokens.ip` (sessiya kimdan ochilgani);
+  //   3. audit jurnali.
+  //
+  // Uni ko'chirmaslik JIMGINA, lekin OG'IR oqibat berardi: nginx ortida
+  // BARCHA foydalanuvchi bitta IP (proksi manzili) ko'rinardi, ya'ni
+  // `authLimiter` ning 20/5daq byudjeti UMUMIY bo'lardi. Bitta odam
+  // 20 marta noto'g'ri parol kiritsa — BUTUN MARKAZ 5 daqiqaga login
+  // qila olmasdi. Bu himoya emas, XIZMATNI RAD ETISH.
+  //
+  // Sessiya va audit yozuvlari ham har doim proksi IP'sini ko'rsatib,
+  // "kim qayerdan kirdi" degan savolga javob bera olmasdi.
+  //
+  // ⚠ QIYMAT EXPRESS BILAN AYNAN BIR XIL (`1`) BO'LISHI SHART. Uni
+  // "qattiqlashtirish" (`false`) yuqoridagi umumiy-byudjet muammosini
+  // qaytaradi; oshirish esa mijoz uzatgan yozuvlarga ishonishni
+  // boshlaydi. Bu — MAHSULOT qarori, ko'chirish qarori emas.
+  //
+  // ⚠ `app.set()` `INestApplication` da YO'Q — u Express'ga xos. Shuning
+  // uchun ostidagi haqiqiy Express nusxasi olinadi.
+  (app.getHttpAdapter().getInstance() as { set: (k: string, v: unknown) => void })
+    .set('trust proxy', 1);
+
   // ── Marshrut prefiksi: Express bilan bir xil (`/api/...`) ──
   app.setGlobalPrefix('api');
 

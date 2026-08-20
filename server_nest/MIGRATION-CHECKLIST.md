@@ -32,7 +32,8 @@ Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/sr
 | `middleware/requirePermissionOrSelf.js` | ✅ `PermissionOrSelfGuard` |
 | `middleware/validate.js` | ✅ `@Validated()` dekoratori |
 | `middleware/errorHandler.js` | ✅ `AllExceptionsFilter` |
-| `middleware/rateLimiter.js` | ✅ `common/middleware/rate-limit.ts` |
+| `middleware/rateLimiter.js` | ✅ `common/middleware/rate-limit.ts` (+ `trust proxy` — pastga qarang) |
+| `app.js::app.set("trust proxy", 1)` | ✅ `main.ts` (⚠ KO'CHIB QOLGAN EDI — xavfsizlik) |
 | `middleware/auditLog.middleware.js` | ⬜ FAZA 2.7 |
 | `middleware/attendanceScope.js` | ⬜ FAZA 6 |
 | `middleware/enforceLimit.js` | ⬜ |
