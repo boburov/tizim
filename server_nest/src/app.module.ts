@@ -11,6 +11,8 @@ import { BranchesModule } from './modules/branches/branches.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
+import { NotificationTemplatesModule } from './modules/notification-templates/notification-templates.module.js';
+import { SystemNotificationsModule } from './modules/system-notifications/system-notifications.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -62,6 +64,10 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     // Bildirishnomalar `holidays`/`leads`/`feedback` dan OLDIN keladi —
     // ular uning servisiga tayanadi.
     NotificationsModule,
+    // Shablonlar — `notifications.send` oynasida tanlanadi.
+    NotificationTemplatesModule,
+    // Tizim oqimi (owner uchun ichki hodisalar).
+    SystemNotificationsModule,
   ],
 })
 export class AppModule {}

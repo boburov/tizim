@@ -82,10 +82,32 @@ const normalize = (v, subs) => {
   return v;
 };
 
-const login = async (base, l, p) => {
-  const r = await req(base, 'POST', '/api/auth/login', { body: { login: l, password: p } });
-  if (r.status !== 200) throw new Error(`login ${l}: ${r.status} ${JSON.stringify(r.body)}`);
-  return r.body.data.accessToken;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * ⚠ LOGIN CHEGARASIGA (429) CHIDAMLI.
+ *
+ * Express login limiteri 5 daqiqada 20 urinishga ruxsat beradi. Bu test
+ * har yurishda bir nechta aktyor uchun token oladi, ya'ni ketma-ket
+ * yurishlarda chegara MUQARRAR ravishda ishga tushadi. Chidamlilik
+ * bo'lmasa 429 test YIQILISHI bo'lib ko'rinardi — aslida kod bilan
+ * bog'liq emas, va bundan ham yomoni, yurish O'RTASIDA uzilib fixture
+ * tozalanmay qolardi.
+ *
+ * Shuning uchun 429 da KUTAMIZ va qayta urinamiz. Boshqa xatolar
+ * (401, 400) DARHOL yiqiladi — ular haqiqiy nosozlik.
+ */
+const login = async (base, l, p, { retries = 4 } = {}) => {
+  for (let attempt = 0; ; attempt += 1) {
+    const r = await req(base, 'POST', '/api/auth/login', { body: { login: l, password: p } });
+    if (r.status === 200) return r.body.data.accessToken;
+    if (r.status !== 429 || attempt >= retries) {
+      throw new Error(`login ${l}: ${r.status} ${JSON.stringify(r.body)}`);
+    }
+    const waitMs = 30_000 * (attempt + 1);
+    console.log(`  ${DIM}⏳ login chegarasi (429) — ${waitMs / 1000}s kutilyapti…${OFF}`);
+    await sleep(waitMs);
+  }
 };
 
 /** Fixture foydalanuvchi uchun token — parol owner huquqi bilan o'qiladi. */
@@ -127,18 +149,27 @@ const main = async () => {
   let qaRestore = null;
 
   /** `qa_staff_a` ning roli va filial birikmalarini TIKLAYDI (idempotent). */
+  /**
+   * ⚠ TIKLASH API'GA TAYANMAYDI — TO'G'RIDAN-TO'G'RI BAZAGA YOZADI.
+   *
+   * Tozalash yo'li test yiqilgan sabab bilan BIR XIL sababdan
+   * yiqilmasligi kerak. API orqali tiklashda login chegarasi (429) yoki
+   * token muddati fixture'ni ELEVATSIYADA qoldirardi — bu bir marta
+   * haqiqatan sodir bo'ldi (`qa_staff_a` `roleType:"owner"` li
+   * vaqtinchalik rolda qolib ketdi).
+   */
   const restoreQa = async () => {
     if (!qaRestore) return;
-    await req(EXPRESS, 'PATCH', `/api/users/${qaTarget.id}/role`, {
-      token: ownerToken, body: { role: qaRestore.role },
+    await prisma.user.update({
+      where: { id: qaTarget.id },
+      data: { role: qaRestore.role, homeBranchId: qaRestore.homeBranchId },
     });
-    await req(EXPRESS, 'PATCH', `/api/users/${qaTarget.id}/branches`, {
-      token: ownerToken,
-      body: {
-        homeBranchId: qaRestore.homeBranchId,
-        branchAssignments: qaRestore.branchAssignments,
-      },
-    });
+    for (const a of qaRestore.branchAssignments) {
+      await prisma.userBranchAssignment.updateMany({
+        where: { userId: qaTarget.id, branchId: a.branchId },
+        data: { role: a.role },
+      });
+    }
   };
 
   const both = async (name, fn, subsOf = () => []) => {
@@ -682,6 +713,11 @@ const main = async () => {
       const r = await req(EXPRESS, 'DELETE', `/api/roles/${sr.value}`, { token: ownerToken });
       if (r.status === 200) cleaned += 1;
     }
+    // ⚠ ZAXIRA YO'L: API rad etsa rol bazada qolib ketardi.
+    const forcedRoles = await prisma.role.deleteMany({
+      where: { label: { startsWith: PREFIX } },
+    });
+    cleaned += forcedRoles.count;
 
     // 2) Prefiksli xabarlar — shu yurishdagi va oldingi yurishlardan qolgani.
     const strays = await prisma.notification.findMany({

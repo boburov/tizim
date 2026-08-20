@@ -24,7 +24,8 @@
     "test:branches-parity": "node test/branches-parity.test.mjs",
     "test:rooms-parity": "node test/rooms-parity.test.mjs",
     "test:jobs": "node test/jobs-infra.test.mjs",
-    "test:notifications-parity": "node test/notifications-parity.test.mjs"
+    "test:notifications-parity": "node test/notifications-parity.test.mjs",
+    "test:notification-catalog-parity": "node test/notification-catalog-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"
