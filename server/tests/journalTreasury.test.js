@@ -116,6 +116,11 @@ const run = async () => {
   // beradi — port o'zgarishi FAQAT shu blok bilan cheklanadi.
   const withLegacy = (row) => ({ ...row, _id: row.id });
 
+  // BAZAVIY SURAT: test hech narsa qilmasdan OLDIN bazada nechta
+  // nomuvozanat yozuv bor. Yakuniy tekshiruv shunga nisbatan
+  // o'lchanadi (quyida, "9) YAKUNIY TEKSHIRUV").
+  const baselineUnbalanced = (await journal.findUnbalanced({ limit: 1000 })).length;
+
   const A = withLegacy(await prisma.branch.create({
     data: { name: `${TAG} A filial`, code: `${TAG}A` },
   }));
@@ -273,9 +278,30 @@ const run = async () => {
     "boshqa filial qoldig'i ko'rinyapti",
   );
   const balAll = await asOwner(() => journal.treasuryBalances());
+  // ⚠ ILGARI BU YERDA `...size === 2` TURGAN EDI.
+  //
+  // U owner IKKALA FILIALNI ko'rishini emas, BAZADA BOSHQA HECH QANDAY
+  // filial yo'qligini o'lchardi — ya'ni tekshiruv o'z fiksturasidan
+  // tashqaridagi holatga bog'liq edi va ishlab turgan (yoki qoldiq
+  // qolgan) bazada HAR DOIM yiqilardi. Sinalayotgan xususiyat esa
+  // butunlay boshqa narsa: OWNER KO'LAMI FILIAL KO'LAMIDAN KENG.
+  //
+  // Endi aynan o'sha ikki narsa o'lchanadi:
+  //   a) owner o'z fiksturasining IKKALA filialini ham ko'radi;
+  //   b) owner ko'rgan to'plam filial direktori ko'rganidan QAT'IY keng
+  //      (musbat nazorat: ikkalasi teng chiqsa ko'lam ajratilmagan).
+  const ownerBranchIds = new Set(balAll.map((b) => String(b.branchId)));
   check(
     "Owner ikkala filialni ko'radi",
-    new Set(balAll.map((b) => String(b.branchId))).size === 2,
+    ownerBranchIds.has(String(A._id)) && ownerBranchIds.has(String(B._id)),
+    `owner ko'rgan filiallar: ${[...ownerBranchIds].join(", ") || "(bo'sh)"}`,
+  );
+  const dirBranchIds = new Set(balA.map((b) => String(b.branchId)));
+  check(
+    "Owner ko'lami direktornikidan KENG",
+    ownerBranchIds.size > dirBranchIds.size &&
+      [...dirBranchIds].every((id) => ownerBranchIds.has(id)),
+    `owner: ${ownerBranchIds.size}, direktor: ${dirBranchIds.size}`,
   );
 
   // ─────────────────────────────────────────────────────────
@@ -535,11 +561,22 @@ const run = async () => {
   console.log("\n\x1b[1m9) YAKUNIY TEKSHIRUV\x1b[0m");
   // ─────────────────────────────────────────────────────────
 
+  // ⚠ `reconcile()` KO'LAMSIZ — u BUTUN bazani tekshiradi. Shuning
+  // uchun "nomuvozanat yo'q" ni MUTLAQ NOL bilan o'lchash bu testni
+  // begona qoldiqqa bog'lab qo'yardi. O'lchanishi kerak bo'lgan narsa
+  // esa boshqa: SHU TEST bajargan ~40 amaldan keyin nomuvozanat
+  // PAYDO BO'LMADI. Shuning uchun boshlanishdagi surat bilan
+  // solishtiriladi — invariant susaymaydi, aksincha aniqlashadi.
   const rec = await journal.reconcile();
   check(
     "reconcile() - hech qanday nomuvozanat yo'q",
-    rec.ok,
-    JSON.stringify({ unbalanced: rec.unbalancedEntries.length, inter: rec.interBranch.mismatches }),
+    rec.unbalancedEntries.length === baselineUnbalanced &&
+      rec.interBranch.mismatches.length === 0,
+    JSON.stringify({
+      boshlanishda: baselineUnbalanced,
+      hozir: rec.unbalancedEntries.length,
+      inter: rec.interBranch.mismatches,
+    }),
   );
 
   // Bazaga TO'G'RIDAN-TO'G'RI nomuvozanat yozuv kiritamiz - tekshiruv
@@ -550,7 +587,7 @@ const run = async () => {
   // o'tish uchun); Postgres'da esa oddiy `create` yetarli, chunki
   // muvozanat qoidasi SERVISDA, bazada emas.
   const someAccount = await prisma.account.findFirst({ where: { branchId: A._id } });
-  await prisma.journalEntry.create({
+  const broken = await prisma.journalEntry.create({
     data: {
       branchId: A._id,
       date: new Date(),
@@ -571,8 +608,28 @@ const run = async () => {
   const recBad = await journal.reconcile();
   check(
     "Chetlab o'tilgan buzuq yozuv TOPILADI",
-    !recBad.ok && recBad.unbalancedEntries.length === 1,
-    `topilgan: ${recBad.unbalancedEntries.length}`,
+    !recBad.ok &&
+      recBad.unbalancedEntries.length === baselineUnbalanced + 1 &&
+      recBad.unbalancedEntries.some((e) => String(e.id) === String(broken.id)),
+    `topilgan: ${recBad.unbalancedEntries.length}, kutilgan: ${baselineUnbalanced + 1}`,
+  );
+
+  // ⚠ ATAYLAB BUZILGAN YOZUV DARHOL O'CHIRILADI.
+  //
+  // U oxirdagi `cleanup()` ga QOLDIRILMAYDI: bu yozuvning butun
+  // vazifasi — `reconcile()` ni qizartirish, ya'ni u bazada qolsa
+  // MOLIYA TO'PLAMINING QOLGAN QISMINI ham qizartiradi
+  // (`test:fintx`, `test:fin-ops`, `test:fin-entry`,
+  // `test:fin-analytics` — hammasi `reconcile().ok` ni tekshiradi).
+  // Zarari fikstura filialiga bog'liq emas, shuning uchun tozalash
+  // ham unga bog'lanmaydi.
+  await prisma.journalLine.deleteMany({ where: { entryId: broken.id } });
+  await prisma.journalEntry.delete({ where: { id: broken.id } });
+  const recAfter = await journal.reconcile();
+  check(
+    "Buzuq yozuv o'chirildi — jurnal boshlang'ich holatga qaytdi",
+    recAfter.unbalancedEntries.length === baselineUnbalanced,
+    `qolgan: ${recAfter.unbalancedEntries.length}, kutilgan: ${baselineUnbalanced}`,
   );
 
   // ── Yakun ──
@@ -584,7 +641,21 @@ const run = async () => {
   if (R.fail) {
     console.log("\nYiqilganlar:");
     R.notes.forEach((n) => console.log(`  • ${n}`));
-    process.exit(1);
+    // ⚠ BU YERDA `process.exit(1)` TURGAN EDI VA U TOZALASHNI
+    // O'TKAZIB YUBORARDI. Node darhol to'xtaydi, ya'ni quyidagi
+    // `.finally(cleanup)` UMUMAN ISHLAMASDI: har yiqilgan ishga
+    // tushirish bazada 2 filial, ularning hisoblari va ATAYLAB
+    // buzilgan jurnal yozuvini QOLDIRARDI.
+    //
+    // Natija o'z-o'zini kuchaytiruvchi edi: qolgan buzuq yozuv
+    // KEYINGI ishga tushirishdagi `reconcile()` ni ham yiqitardi,
+    // u yana erta chiqardi, yana qoldiq qolardi. Bir necha
+    // ishga tushirishdan keyin `test:fintx`, `test:fin-ops`,
+    // `test:fin-entry` va `test:fin-analytics` ham shu BITTA
+    // qoldiq sababli qizarib turardi.
+    //
+    // Chiqish kodi `.finally` da baribir beriladi — bu yerda
+    // chiqishning hech qanday keragi yo'q.
   }
 };
 
