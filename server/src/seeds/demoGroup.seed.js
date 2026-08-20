@@ -119,7 +119,8 @@ const seed = async () => {
 
   // ── Xulosa ──
   const payments = await prisma.studentPayment.findMany({
-    where: { groupId: groupId, isDeleted: false },
+    // ⚠ `isDeleted` YO'Q: `StudentPayment` da bunday ustun mavjud emas.
+    where: { groupId: groupId },
     select: { expectedAmount: true, paidAmount: true },
   });
   const expected = payments.reduce((s, p) => s + (p.expectedAmount || 0), 0);
