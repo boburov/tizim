@@ -117,6 +117,11 @@ const CASES = [
     path: '/api/system-notifications/unread-count', auth: true },
   { name: "system-notifications (auth yo'q → 401)", method: 'GET',
     path: '/api/system-notifications' },
+  // ── Faza 10: saqlagich ──
+  { name: 'storage/usage', method: 'GET', path: '/api/storage/usage', auth: true },
+  { name: 'storage/settings', method: 'GET', path: '/api/storage/settings', auth: true },
+  { name: 'storage/files', method: 'GET', path: '/api/storage/files?limit=5', auth: true },
+  { name: "storage/usage (auth yo'q → 401)", method: 'GET', path: '/api/storage/usage' },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },

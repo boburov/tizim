@@ -13,6 +13,7 @@ import { RoomsModule } from './modules/rooms/rooms.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { NotificationTemplatesModule } from './modules/notification-templates/notification-templates.module.js';
 import { SystemNotificationsModule } from './modules/system-notifications/system-notifications.module.js';
+import { StorageModule } from './modules/storage/storage.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -68,6 +69,8 @@ import { SystemNotificationsModule } from './modules/system-notifications/system
     NotificationTemplatesModule,
     // Tizim oqimi (owner uchun ichki hodisalar).
     SystemNotificationsModule,
+    // Fayllar/biriktirmalar — kvota, tozalash, egalik.
+    StorageModule,
   ],
 })
 export class AppModule {}

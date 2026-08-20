@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import path from 'node:path';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -148,6 +149,23 @@ export const buildConfig = (raw: RawEnv) => {
     // Chegaralar BAYTGA aylantiriladi (Express bilan bir xil).
     STORAGE_QUOTA_BYTES: Math.round(raw.STORAGE_QUOTA_GB * 1024 * 1024 * 1024),
     MAX_UPLOAD_BYTES: Math.round(raw.MAX_UPLOAD_MB * 1024 * 1024),
+    /**
+     * ⚠ FAYL PAPKASI — EXPRESS BILAN AYNAN BIR XIL USULDA YECHILADI
+     * (`path.resolve(process.cwd(), ...)`).
+     *
+     * ⚠⚠ IKKI STEK BOSHQA PAPKADAN ISHGA TUSHADI (`server/` va
+     * `server_nest/`), ya'ni NISBIY qiymatda ular IKKI XIL papkani
+     * ko'rsatadi: `server/uploads` va `server_nest/uploads`. Baza esa
+     * BITTA — natijada NestJS orqali o'chirilgan fayl diskda QOLIB
+     * ketardi (`unlink` xatosi yutiladi), kvota hisoblagichi esa
+     * kamayardi. Ya'ni joy "bo'shadi" deb ko'rinardi, aslida yo'q.
+     *
+     * Shuning uchun ikki stek birga ishlaganda `UPLOAD_DIR` MUTLAQ yo'l
+     * bo'lishi SHART (yoki ikkalasi bir xil `cwd` dan yurishi kerak).
+     * `StorageService` ishga tushganda buni tekshiradi va
+     * ogohlantiradi.
+     */
+    UPLOAD_DIR: path.resolve(process.cwd(), raw.UPLOAD_DIR || 'uploads'),
   };
 };
 

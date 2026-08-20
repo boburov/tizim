@@ -152,7 +152,7 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | systemNotifications | `/api/system-notifications` | 5 | ✅ 5/5 |
 | notificationTemplates | `/api/notification-templates` | 5 | ✅ 5/5 |
 | feedback | `/api/feedback` | 9 | ⬜ |
-| storage | `/api/storage` | 7 | ⬜ |
+| storage | `/api/storage` | 7 | ✅ 7/7 |
 | imports (+ `queues/importQueue`) | `/api/imports` | 11 | ⬜ |
 | bot (Telegram, 11 handler) | — | — | ⬜ |
 | jobs (24 ta) | — | — | ⬜ |
@@ -237,3 +237,5 @@ takrorlandi. Har biri klient shartnomasining bir qismi, shuning uchun
 | B7 | Seed o'quvchilari | Parollari 4 belgidan qisqa va `POST /auth/login` VALIDATORI ularni rad etadi — ya'ni seed'dagi o'quvchi bilan tizimga KIRIB BO'LMAYDI. | Ko'chirishga aloqasi yo'q (seed ma'lumoti). Testlar rol chegarasi uchun `qa_staff_a` dan foydalanadi. |
 | B8 | `system_notifications` 100 talik cheklovi | Oshgan qatorlar `deleteMany` bilan QATTIQ o'chiriladi (eng eskisidan). | ⚠ EVICTION SHOXI PARITET TESTIDA O'LCHANMAGAN — uni ataylab ishga tushirish REAL bildirishnomalarni o'chirardi (jadvalda 98 ta haqiqiy yozuv bor). Test cheklovdan OSHMAYDI va yakunda eng eski yozuv joyidaligini tekshiradi. Kod Express bilan bir xil (ko'chirma). |
 | B9 | `GET /notification-templates` | `orderBy: { createdAt: "desc" }` — IKKILAMCHI TARTIB YO'Q. Seed'da bir xil `createdAt` li qatorlar BOR, ya'ni ular orasidagi tartib KAFOLATLANMAGAN va bir xil so'rov turli tartibda qaytishi mumkin (sahifalashda qator takrorlanishi/tushib qolishi mumkin). | Ikkala stekda BIR XIL kamchilik. `notifications` inbox'ida bu ataylab `[{createdAt}, {id}]` bilan yopilgan — bu yerda esa yopilmagan. Tuzatish tartibni o'zgartiradi, ya'ni alohida qaror. Test solishtirishdan oldin `id` bo'yicha saralaydi. |
+| B10 | `UPLOAD_DIR` (ko'chirish davri) | Express `server/` dan, NestJS `server_nest/` dan yuradi va `UPLOAD_DIR` NISBIY bo'lsa ular IKKI XIL papkani ko'radi — baza esa BITTA. O'shanda NestJS o'chirgan fayl diskda QOLIB ketardi (`unlink` xatosi yutiladi), kvota hisoblagichi esa kamayardi: joy "bo'shadi" deb ko'rinib, aslida bo'shamasdi. | ⚠ NESTJS TOMONDA TUZATILDI: `env.validation.ts` uni Express kabi `path.resolve(cwd, ...)` bilan yechadi, `StorageService` ishga tushganda papka yo'qligini ogohlantiradi, `.env.example` da MUTLAQ yo'l talab qilinishi yozildi. Test diskdagi faylning haqiqatan o'chganini tekshiradi. |
+| B11 | Fayl o'chirilganda faqat `assignment.fileId` nollanadi | `StoredFile` ga `Expense.receipt`, `JournalEntry.attachment`, `Refund.receipt` ham ishora qiladi, lekin `runCleanup`/`removeFileById` FAQAT `assignment` havolasini uzadi. | Yumshoq o'chirish bo'lgani uchun FK buzilmaydi — havola o'chirilgan faylga ishora qilib turaveradi. Express xulqi AYNAN shunday; o'zgartirish moliya modullariga tegadi, ya'ni alohida qaror. |
