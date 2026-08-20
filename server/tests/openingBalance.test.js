@@ -45,7 +45,21 @@
  * yarim ko'chirilgan test ishlamaydiganidan xavfliroq.
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
+
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Test ilgari MAVJUD filialni qayta ishlatardi. Endi O'Z filialini
+ * yaratadi: moliya oqimlari qo'sh yozuv jurnaliga post qiladi va
+ * filial uchun hisob varaqlarini ochadi — mavjud filialda ular
+ * tozalanmay qolardi.
+ *
+ * Jurnal tozalash MANTIG'I saqlandi (u ataylab manba hujjat ID'lari
+ * bo'yicha ishlaydi), lekin endi umumiy fixture reyestriga tayanadi.
+ */
+const fx = createFixtures();
 
 const DB = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina";
 
@@ -76,22 +90,6 @@ const run = async () => {
   const { connectDB } = await import("../src/config/db.js");
   await connectDB();
 
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
-  const GroupFee = (await import("../src/models/groupFee.model.js")).default;
-  const User = (await import("../src/models/user.model.js")).default;
-  const GroupMembership = (await import("../src/models/groupMembership.model.js")).default;
-  const StudentPayment = (await import("../src/models/studentPayment.model.js")).default;
-  const StudentDeposit = (await import("../src/models/studentDeposit.model.js")).default;
-  const DepositTransaction = (await import("../src/models/depositTransaction.model.js")).default;
-  const PaymentTransaction = (await import("../src/models/paymentTransaction.model.js")).default;
-  const JournalEntry = (await import("../src/models/journalEntry.model.js")).default;
-  const OpeningBalance = (await import("../src/models/openingBalance.model.js")).default;
-  const StaffPayroll = (await import("../src/models/staffPayroll.model.js")).default;
-  const StaffPayrollAdjustment = (
-    await import("../src/models/staffPayrollAdjustment.model.js")
-  ).default;
-
   const { runWithBranchContext } = await import(
     "../src/helpers/branchContext.helper.js"
   );
@@ -106,9 +104,7 @@ const run = async () => {
   );
 
   // ─────────────────────── FIXTURE ───────────────────────
-  const branch =
-    (await Branch.findOne({ isDeleted: false }).lean()) ||
-    (await Branch.create({ name: `${TAG} filial` }));
+  const branch = await fx.branch(`${TAG}-filial`);
 
   const now = new Date();
   const Y = now.getUTCFullYear();
@@ -117,9 +113,7 @@ const run = async () => {
   // oylik qarz yaratadi (aynan foydalanuvchi tasvirlagan ssenariy).
   const groupStart = new Date(Date.UTC(Y, now.getUTCMonth() - 3, 5));
 
-  const group = await Group.create({
-    branchId: branch._id,
-    name: `${TAG} guruh ${Date.now()}`,
+  const group = await fx.group(`${TAG}-guruh`, branch.id, {
     startDate: groupStart,
     isActive: true,
   });
@@ -128,69 +122,92 @@ const run = async () => {
   // 6 oyga tarif - backfill har oy uchun shu narxni topsin.
   for (let i = -4; i <= 1; i += 1) {
     const d = new Date(Date.UTC(Y, now.getUTCMonth() + i, 1));
-    await GroupFee.updateOne(
-      { group: group._id, year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 },
-      { $set: { amount: FEE, source: "manual" } },
-      { upsert: true },
-    );
+    const fee = await prisma.groupFee.upsert({
+      where: {
+        groupId_year_month: {
+          groupId: group.id,
+          year: d.getUTCFullYear(),
+          month: d.getUTCMonth() + 1,
+        },
+      },
+      update: { amount: FEE, source: "manual" },
+      create: {
+        groupId: group.id,
+        year: d.getUTCFullYear(),
+        month: d.getUTCMonth() + 1,
+        amount: FEE,
+        source: "manual",
+      },
+    });
+    fx.track("groupFee", fee.id);
   }
 
   const mkStudent = async (suffix) =>
-    User.create({
+    fx.user(`${TAG}_s${suffix}`, {
       firstName: TAG,
       lastName: `Student${suffix}`,
-      username: `${TAG}_s${suffix}_${Date.now()}`,
       passwordHash: "test1234",
       role: "student",
-      homeBranchId: branch._id,
+      homeBranchId: branch.id,
       enrolledAt: groupStart,
     });
 
   const ctx = {
-    branchId: String(branch._id),
-    allowedBranchIds: [String(branch._id)],
+    branchId: String(branch.id),
+    allowedBranchIds: [String(branch.id)],
     canSeeAllBranches: false,
     userId: null,
   };
   const inBranch = (fn) => runWithBranchContext(ctx, fn);
 
   const createdUsers = [];
+
+  /**
+   * TOZALASH.
+   *
+   * ⚠ JURNAL YOZUVLARI TARTIBI MUHIM (mantiq o'zgarmadi): avval MANBA
+   * hujjatlarning ID'lari yig'iladi, keyin ular bo'yicha jurnal
+   * topiladi. Manba o'chirilgach uning ID'sini topib bo'lmaydi va
+   * jurnal yozuvi YETIM qolardi — `journalVerify` esa har safar
+   * "farq bor" deb qichqirardi.
+   *
+   * Jurnalni O'CHIRISH `JOURNAL_IMMUTABLE` ni buzmaydi: qo'riqchi faqat
+   * TAHRIRNI to'sadi (`config/prisma.js`).
+   */
   const cleanup = async () => {
-    const ids = createdUsers.map((u) => u._id);
+    const uids = [...(fx.registry.get("user") || [])];
+    const pairs = [
+      ["paymentTransaction", { studentId: { in: uids } }],
+      ["depositTransaction", { studentId: { in: uids } }],
+      ["openingBalance", { userId: { in: uids } }],
+      ["studentPayment", { studentId: { in: uids } }],
+      ["studentDeposit", { studentId: { in: uids } }],
+      ["groupMembership", { studentId: { in: uids } }],
+      ["staffPayrollAdjustment", { employeeId: { in: uids } }],
+      ["staffPayroll", { employeeId: { in: uids } }],
+      ["journalEntry", { branchId: branch.id }],
+    ];
+    for (const [model, where] of pairs) {
+      const rows = await prisma[model].findMany({ where, select: { id: true } }).catch(() => []);
+      for (const r of rows) fx.track(model, r.id);
+    }
+    const entryIds = [...(fx.registry.get("journalEntry") || [])];
+    if (entryIds.length) {
+      const lines = await prisma.journalLine
+        .findMany({ where: { entryId: { in: entryIds } }, select: { id: true } })
+        .catch(() => []);
+      for (const l of lines) fx.track("journalLine", l.id);
+    }
+    const accounts = await prisma.account
+      .findMany({ where: { branchId: branch.id }, select: { id: true } })
+      .catch(() => []);
+    for (const a of accounts) fx.track("account", a.id);
 
-    // JURNAL YOZUVLARI (Faza 4).
-    //
-    // Bu test ISHCHI bazada ishlaydi va o'z yozuvlarini o'zi tozalaydi.
-    // Moliya oqimlari endi jurnalga ham yozadi, ya'ni to'lov/depozit
-    // o'chirilganda unga bog'liq jurnal yozuvi YETIM qolardi - va
-    // journalVerify har safar "farq bor" deb qichqirardi.
-    //
-    // Shuning uchun avval MANBA hujjatlarning ID'lari yig'iladi, keyin
-    // ular bo'yicha jurnal tozalanadi. Tartib muhim: manba o'chirilgach
-    // uning ID'sini topib bo'lmaydi.
-    const [payIds, depIds] = await Promise.all([
-      PaymentTransaction.find({ student: { $in: ids } }).distinct("_id"),
-      DepositTransaction.find({ student: { $in: ids } }).distinct("_id"),
-    ]);
-    await JournalEntry.deleteMany({
-      $or: [
-        { refModel: "PaymentTransaction", refId: { $in: payIds } },
-        { refModel: "DepositTransaction", refId: { $in: depIds } },
-      ],
-    });
-
-    await Promise.all([
-      OpeningBalance.deleteMany({ user: { $in: ids } }),
-      StudentPayment.deleteMany({ student: { $in: ids } }),
-      DepositTransaction.deleteMany({ student: { $in: ids } }),
-      StudentDeposit.deleteMany({ student: { $in: ids } }),
-      GroupMembership.deleteMany({ student: { $in: ids } }),
-      StaffPayrollAdjustment.deleteMany({ employee: { $in: ids } }),
-      StaffPayroll.deleteMany({ employee: { $in: ids } }),
-      User.deleteMany({ _id: { $in: ids } }),
-    ]);
-    await GroupFee.deleteMany({ group: group._id });
-    await Group.deleteOne({ _id: group._id });
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
   };
 
   console.log(`\n\x1b[1mBOSHLANG'ICH QOLDIQ - MOLIYA TESTI\x1b[0m`);
@@ -205,13 +222,12 @@ const run = async () => {
 
     const groupsSvc = await import("../src/modules/groups/services/groups.service.js");
     await inBranch(() =>
-      groupsSvc.addStudent(group._id, s1._id, { joinedAt: groupStart }),
+      groupsSvc.addStudent(group.id, s1.id, { joinedAt: groupStart }),
     );
 
-    const plansBefore = await StudentPayment.find({
-      student: s1._id,
-      isOpening: false,
-    }).lean();
+    const plansBefore = await prisma.studentPayment.findMany({
+      where: { studentId: s1.id, isOpening: false },
+    });
     const billedTotal = plansBefore.reduce((s, p) => s + p.expectedAmount, 0);
 
     if (plansBefore.length >= 3) {
@@ -227,20 +243,21 @@ const run = async () => {
     const ADVANCE = 700_000;
     await inBranch(() =>
       openingSvc.create({
-        user: s1._id,
+        user: s1.id,
         role: "student",
         amount: ADVANCE,
-        group: group._id,
-        branchId: branch._id,
+        group: group.id,
+        branchId: branch.id,
         joinedAt: groupStart,
       }),
     );
 
-    const plansAfter = await StudentPayment.find({ student: s1._id, isOpening: false })
-      .sort({ year: 1, month: 1 })
-      .lean();
-    const paidTotal = plansAfter.reduce((s, p) => s + p.paidAmount, 0);
-    const deposit = await StudentDeposit.findOne({ student: s1._id }).lean();
+    const plansAfter = await prisma.studentPayment.findMany({
+      where: { studentId: s1.id, isOpening: false },
+      orderBy: [{ year: "asc" }, { month: "asc" }],
+    });
+    const paidTotal = plansAfter.reduce((acc, p) => acc + Number(p.paidAmount), 0);
+    const deposit = await prisma.studentDeposit.findFirst({ where: { studentId: s1.id } });
 
     eq("Avans to'liq taqsimlandi", paidTotal, ADVANCE);
     eq("Depozitda qoldiq qolmadi", deposit?.balance || 0, 0);
@@ -276,7 +293,9 @@ const run = async () => {
       bad("Taqsimot eng eskisidan ketma-ket bordi", "oylar sakrab yopilgan");
     }
 
-    const depTxn = await DepositTransaction.findOne({ student: s1._id, type: "topup" }).lean();
+    const depTxn = await prisma.depositTransaction.findFirst({
+      where: { studentId: s1.id, type: "topup" },
+    });
     if (depTxn?.isOpening) ok("Depozit yozuvi isOpening bayrog'i bilan");
     else bad("Depozit yozuvi isOpening bayrog'i bilan", "bayroq qo'yilmagan");
 
@@ -285,11 +304,11 @@ const run = async () => {
 
     const second = await inBranch(() =>
       openingSvc.create({
-        user: s1._id,
+        user: s1.id,
         role: "student",
         amount: ADVANCE,
-        group: group._id,
-        branchId: branch._id,
+        group: group.id,
+        branchId: branch.id,
         joinedAt: groupStart,
       }),
     );
@@ -297,13 +316,14 @@ const run = async () => {
     eq("Ikkinchi urinish 'duplicate' qaytardi", second.status, "duplicate");
 
     const paidAfterRetry = (
-      await StudentPayment.find({ student: s1._id, isOpening: false }).lean()
-    ).reduce((s, p) => s + p.paidAmount, 0);
+      await prisma.studentPayment.findMany({
+        where: { studentId: s1.id, isOpening: false },
+      })
+    ).reduce((acc, p) => acc + Number(p.paidAmount), 0);
     eq("To'langan summa o'zgarmadi", paidAfterRetry, ADVANCE);
 
-    const topupCount = await DepositTransaction.countDocuments({
-      student: s1._id,
-      type: "topup",
+    const topupCount = await prisma.depositTransaction.count({
+      where: { studentId: s1.id, type: "topup" },
     });
     eq("Depozitga faqat bitta yozuv tushdi", topupCount, 1);
 
@@ -313,37 +333,34 @@ const run = async () => {
     const s2 = await mkStudent(2);
     createdUsers.push(s2);
     await inBranch(() =>
-      groupsSvc.addStudent(group._id, s2._id, { joinedAt: groupStart }),
+      groupsSvc.addStudent(group.id, s2.id, { joinedAt: groupStart }),
     );
 
     const DEBT = 300_000;
     await inBranch(() =>
       openingSvc.create({
-        user: s2._id,
+        user: s2.id,
         role: "student",
         amount: -DEBT,
-        group: group._id,
-        branchId: branch._id,
+        group: group.id,
+        branchId: branch.id,
         joinedAt: groupStart,
       }),
     );
 
-    const openingRow = await StudentPayment.findOne({
-      student: s2._id,
-      isOpening: true,
-    }).lean();
+    const openingRow = await prisma.studentPayment.findFirst({
+      where: { studentId: s2.id, isOpening: true },
+    });
 
     if (!openingRow) {
       bad("Boshlang'ich qarz qatori yaratildi", "topilmadi");
     } else {
       eq("Qarz summasi to'g'ri", openingRow.expectedAmount, DEBT);
 
-      const oldestNormal = await StudentPayment.findOne({
-        student: s2._id,
-        isOpening: false,
-      })
-        .sort({ year: 1, month: 1 })
-        .lean();
+      const oldestNormal = await prisma.studentPayment.findFirst({
+        where: { studentId: s2.id, isOpening: false },
+        orderBy: [{ year: "asc" }, { month: "asc" }],
+      });
       const openIdx = openingRow.year * 12 + openingRow.month;
       const normIdx = oldestNormal.year * 12 + oldestNormal.month;
       if (openIdx < normIdx) {
@@ -361,9 +378,9 @@ const run = async () => {
       // To'lov kelganda BIRINCHI shu qarzga tushishi kerak.
       const depositSvc = await import("../src/modules/deposits/services/deposit.service.js");
       await inBranch(() =>
-        depositSvc.topup(s2._id, { amount: DEBT, method: "cash" }, null),
+        depositSvc.topup(s2.id, { amount: DEBT, method: "cash" }, null),
       );
-      const openingAfterPay = await StudentPayment.findById(openingRow._id).lean();
+      const openingAfterPay = await prisma.studentPayment.findUnique({ where: { id: openingRow.id } });
       eq("Kelgan pul avval eski qarzni yopdi", openingAfterPay.paidAmount, DEBT);
     }
 
@@ -371,13 +388,13 @@ const run = async () => {
     console.log("\n\x1b[1m4) Kunlik recalc boshlang'ich qarzni o'chirmaydi\x1b[0m");
 
     if (openingRow) {
-      await inBranch(() => paymentSvc.recalc(openingRow._id));
-      const afterRecalc = await StudentPayment.findById(openingRow._id).lean();
+      await inBranch(() => paymentSvc.recalc(openingRow.id));
+      const afterRecalc = await prisma.studentPayment.findUnique({ where: { id: openingRow.id } });
       eq("recalc'dan keyin summa saqlandi", afterRecalc.expectedAmount, DEBT);
 
       // recalcForStudent - butun o'quvchi bo'ylab (eng keng yo'l).
-      await inBranch(() => paymentSvc.recalcForStudent(s2._id));
-      const afterFull = await StudentPayment.findById(openingRow._id).lean();
+      await inBranch(() => paymentSvc.recalcForStudent(s2.id));
+      const afterFull = await prisma.studentPayment.findUnique({ where: { id: openingRow.id } });
       eq("recalcForStudent'dan keyin ham saqlandi", afterFull.expectedAmount, DEBT);
     }
 
@@ -389,47 +406,35 @@ const run = async () => {
     const testYear = Y;
     const testMonth = M;
 
-    await StudentPayment.create({
-      branchId: branch._id,
-      student: s3._id,
-      group: group._id,
-      year: testYear,
-      month: testMonth,
-      baseFee: FEE,
-      expectedAmount: FEE,
-      isOpening: false,
-    });
-    try {
-      await StudentPayment.create({
-        branchId: branch._id,
-        student: s3._id,
-        group: group._id,
-        year: testYear,
-        month: testMonth,
-        baseFee: DEBT,
-        expectedAmount: DEBT,
-        isOpening: true,
+    const mkPlan = async (over) => {
+      const row = await prisma.studentPayment.create({
+        data: {
+          branchId: branch.id,
+          studentId: s3.id,
+          groupId: group.id,
+          year: testYear,
+          month: testMonth,
+          ...over,
+        },
       });
+      return fx.track("studentPayment", row.id), row;
+    };
+
+    await mkPlan({ baseFee: FEE, expectedAmount: FEE, isOpening: false });
+    try {
+      await mkPlan({ baseFee: DEBT, expectedAmount: DEBT, isOpening: true });
       ok("Ikkala qator birga yozildi (indeks isOpening bilan)");
     } catch (e) {
-      bad("Ikkala qator birga yozildi", `E${e.code}: indeks migratsiyasi bajarilmagan?`);
+      bad("Ikkala qator birga yozildi", `${e.code}: indeks migratsiyasi bajarilmagan?`);
     }
 
     // Ikkinchi ODDIY qator esa RAD ETILISHI shart (asosiy himoya joyida).
     try {
-      await StudentPayment.create({
-        branchId: branch._id,
-        student: s3._id,
-        group: group._id,
-        year: testYear,
-        month: testMonth,
-        baseFee: FEE,
-        expectedAmount: FEE,
-        isOpening: false,
-      });
+      await mkPlan({ baseFee: FEE, expectedAmount: FEE, isOpening: false });
       bad("Takroriy oddiy plan rad etildi", "IKKI BARAVAR HISOB xavfi - indeks ishlamayapti");
     } catch (e) {
-      if (e.code === 11000) ok("Takroriy oddiy plan rad etildi (E11000)");
+      // ⚠ Mongo `E11000` → Postgres/Prisma `P2002` (unique cheklov).
+      if (e.code === "P2002") ok("Takroriy oddiy plan rad etildi (P2002)");
       else bad("Takroriy oddiy plan rad etildi", `boshqa xato: ${e.message}`);
     }
 
@@ -440,26 +445,24 @@ const run = async () => {
       "../src/modules/financeReport/services/financeReport.service.js"
     );
     // Ichki funksiya eksport qilinmagan - aggregatsiyani AYNAN takrorlaymiz.
-    const [agg] = await StudentPayment.aggregate([
-      { $match: { student: s3._id, year: testYear, month: testMonth } },
-      {
-        $group: {
-          _id: null,
-          billed: {
-            $sum: {
-              $cond: [
-                { $eq: [{ $ifNull: ["$isOpening", false] }, true] },
-                0,
-                "$expectedAmount",
-              ],
-            },
-          },
-          outstanding: {
-            $sum: { $max: [{ $subtract: ["$expectedAmount", "$paidAmount"] }, 0] },
-          },
-        },
+    // ⚠ Mongo `aggregate` quvuri → Prisma o'qish + JS arifmetikasi.
+    // Ichki funksiya eksport qilinmagan, shuning uchun HISOB QOIDASI
+    // aynan takrorlanadi: `isOpening` qatorlar `billed` ga KIRMAYDI,
+    // lekin `outstanding` ga kiradi.
+    const planRows = await prisma.studentPayment.findMany({
+      where: { studentId: s3.id, year: testYear, month: testMonth },
+      select: { isOpening: true, expectedAmount: true, paidAmount: true },
+    });
+    const agg = planRows.reduce(
+      (acc, p) => {
+        const exp = Number(p.expectedAmount);
+        const paid = Number(p.paidAmount);
+        acc.billed += p.isOpening ? 0 : exp;
+        acc.outstanding += Math.max(exp - paid, 0);
+        return acc;
       },
-    ]);
+      { billed: 0, outstanding: 0 },
+    );
     eq("Hisoblangan (billed) faqat oddiy plan", agg.billed, FEE);
     eq("Qoldiq (outstanding) ikkalasini qamraydi", agg.outstanding, FEE + DEBT);
     if (typeof finReport.summary === "function") ok("financeReport moduli yuklandi");
@@ -467,13 +470,12 @@ const run = async () => {
     // ═══════════════ 7. XODIM: qarz oylikdan katta - qoldiq ko'chadi ═══════
     console.log("\n\x1b[1m7) Xodim qarzi oylikdan katta bo'lsa qoldiq yo'qolmaydi\x1b[0m");
 
-    const emp = await User.create({
+    const emp = await fx.user(`${TAG}_e`, {
       firstName: TAG,
       lastName: "Staff1",
-      username: `${TAG}_e_${Date.now()}`,
       passwordHash: "test1234",
       role: "owner",
-      homeBranchId: branch._id,
+      homeBranchId: branch.id,
     });
     createdUsers.push(emp);
 
@@ -481,35 +483,32 @@ const run = async () => {
     const prevYear = M === 1 ? Y - 1 : Y;
 
     // Oylik 2 mln, qarz 3 mln → 1 mln keyingi oyga ko'chishi kerak.
-    await StaffPayroll.create({
-      employee: emp._id,
-      branchId: branch._id,
+    const payroll = await prisma.staffPayroll.create({
+      data: {
+      employeeId: emp.id,
+      branchId: branch.id,
       year: prevYear,
       month: prevMonth,
       fixedAmount: 2_000_000,
       openingDebtTotal: 3_000_000,
       openingDebtApplied: 2_000_000,
       finalAmount: 0,
+      },
     });
+    fx.track("staffPayroll", payroll.id);
 
     const carry1 = await payrollSvc.carryOverOpeningDebt(Y, M);
-    const carried = await StaffPayrollAdjustment.find({
-      employee: emp._id,
-      year: Y,
-      month: M,
-      kind: "opening_debt",
-    }).lean();
+    const carried = await prisma.staffPayrollAdjustment.findMany({
+      where: { employeeId: emp.id, year: Y, month: M, kind: "opening_debt" },
+    });
 
     eq("Qoldiq ko'chirildi", carried.length, 1);
-    if (carried[0]) eq("Ko'chirilgan summa to'g'ri", carried[0].amount, 1_000_000);
+    if (carried[0]) eq("Ko'chirilgan summa to'g'ri", Number(carried[0].amount), 1_000_000);
 
     // IKKINCHI MARTA ishga tushirish IKKI BARAVAR ushlamasligi shart.
     await payrollSvc.carryOverOpeningDebt(Y, M);
-    const carriedAgain = await StaffPayrollAdjustment.countDocuments({
-      employee: emp._id,
-      year: Y,
-      month: M,
-      kind: "opening_debt",
+    const carriedAgain = await prisma.staffPayrollAdjustment.count({
+      where: { employeeId: emp.id, year: Y, month: M, kind: "opening_debt" },
     });
     eq("Qayta ishga tushirish takror yozmadi", carriedAgain, 1);
     if (carry1.employeeIds.length) ok("Ko'chirilgan xodimlar ro'yxati qaytdi");
@@ -521,7 +520,7 @@ const run = async () => {
       "../src/modules/staffPayroll/services/staffAdjustment.service.js"
     );
     try {
-      await staffAdj.remove(carried[0]._id, { _id: null });
+      await staffAdj.remove(carried[0].id, { _id: null });
       bad("Xodim boshlang'ich qatorini o'chirib bo'lmaydi", "o'chirildi!");
     } catch (e) {
       if (/Boshlang'ich qoldiqni o'chirib bo'lmaydi/.test(e.message)) {
@@ -531,11 +530,30 @@ const run = async () => {
       }
     }
 
-    const obDoc = await OpeningBalance.findOne({ user: s1._id });
-    obDoc.amount = 999;
-    await obDoc.save();
-    const obReloaded = await OpeningBalance.findOne({ user: s1._id }).lean();
-    eq("Summa immutable - o'zgarmadi", obReloaded.amount, ADVANCE);
+    // ⚠ ILGARI BU MONGOOSE `immutable: true` MAYDONI EDI — u
+    // o'zgarishni JIMGINA e'tiborsiz qoldirardi. Prisma'da model qatlami
+    // yo'q, shuning uchun himoya `config/prisma.js` kengaytmasiga
+    // ko'chirildi va u JIMGINA emas, OCHIQ rad etadi
+    // (`OPENING_BALANCE_IMMUTABLE`) — jurnal qo'riqchisi bilan bir uslub.
+    //
+    // DA'VO O'ZGARMADI (hatto kuchaydi): summani o'zgartirib bo'lmaydi.
+    const obDoc = await prisma.openingBalance.findFirst({ where: { userId: s1.id } });
+    let immutableErr = null;
+    try {
+      await prisma.openingBalance.update({
+        where: { id: obDoc.id },
+        data: { amount: 999 },
+      });
+    } catch (e) {
+      immutableErr = e;
+    }
+    if (immutableErr?.code === "OPENING_BALANCE_IMMUTABLE") {
+      ok("Summani o'zgartirish RAD ETILDI", immutableErr.message);
+    } else {
+      bad("Summani o'zgartirish rad etilishi kerak", `xato: ${immutableErr?.message || "yo'q"}`);
+    }
+    const obReloaded = await prisma.openingBalance.findFirst({ where: { userId: s1.id } });
+    eq("Summa immutable - o'zgarmadi", Number(obReloaded.amount), ADVANCE);
   } finally {
     await cleanup();
   }
@@ -546,12 +564,12 @@ const run = async () => {
   );
   if (R.fail) R.notes.forEach((n) => console.log(`  \x1b[31m•\x1b[0m ${n}`));
 
-  await mongoose.disconnect();
+  await prisma.$disconnect().catch(() => {});
   process.exit(R.fail ? 1 : 0);
 };
 
 run().catch(async (err) => {
   console.error("\x1b[31mTest yiqildi:\x1b[0m", err);
-  await mongoose.disconnect().catch(() => null);
+  await prisma.$disconnect().catch(() => null);
   process.exit(1);
 });

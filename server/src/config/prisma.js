@@ -153,6 +153,30 @@ const withDecimalNormalization = (client) =>
 const IMMUTABLE_MODELS = new Set(["JournalEntry", "JournalLine"]);
 const MUTATING_OPS = new Set(["update", "updateMany", "upsert"]);
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BOSHLANG'ICH QOLDIQ SUMMASI — O'ZGARMAS.
+//
+// Mongo davrida `openingBalance.model.js` da maydon `immutable: true` edi
+// va Mongoose uni JIMGINA e'tiborsiz qoldirardi. Ko'chishda model qatlami
+// yo'qolgach himoya ham yo'qoldi — `tests/openingBalance.test.js` ning
+// oxirgi tekshiruvi ("Summa immutable - o'zgarmadi") aynan shuni sinaydi.
+//
+// NEGA MUHIM: boshlang'ich qoldiq — o'quvchi/xodim bilan hisob-kitobning
+// BOSHLANG'ICH NUQTASI. U keyinchalik o'zgartirilsa, undan keyin
+// yaratilgan hamma qator (to'lov rejasi, taqsimot, ko'chirilgan qarz)
+// boshqa asosga tayanib qoladi va balans JIMGINA noto'g'ri bo'ladi.
+//
+// ⚠ JIMGINA E'TIBORSIZ QOLDIRISH O'RNIGA XATO TASHLANADI — jurnal
+// qo'riqchisi bilan bir xil uslub. Sabab o'sha izohda: xavfli holat
+// jimgina tahrir, chunki uni hech kim sezmaydi. Ishlab chiqarish kodida
+// `amount` ni yangilaydigan yo'l YO'Q (tekshirildi), ya'ni bu hech
+// qanday mavjud oqimni buzmaydi.
+// ═══════════════════════════════════════════════════════════════════════════
+const openingAmountTouched = (args) => {
+  const has = (d) => d && typeof d === "object" && d.amount !== undefined;
+  return has(args?.data) || has(args?.update) || (Array.isArray(args?.data) && args.data.some(has));
+};
+
 const withJournalImmutability = (client) =>
   client.$extends({
     name: "journal-immutability",
@@ -164,6 +188,17 @@ const withJournalImmutability = (client) =>
               409,
               "Jurnal yozuvi o'zgarmas. Tuzatish uchun storno (reverse) ishlating",
               { code: "JOURNAL_IMMUTABLE" },
+            );
+          }
+          if (
+            model === "OpeningBalance" &&
+            MUTATING_OPS.has(operation) &&
+            openingAmountTouched(args)
+          ) {
+            throw new ApiError(
+              409,
+              "Boshlang'ich qoldiq summasi o'zgarmas. Tuzatish uchun yangi yozuv kiriting",
+              { code: "OPENING_BALANCE_IMMUTABLE" },
             );
           }
           return query(args);
