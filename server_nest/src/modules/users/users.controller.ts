@@ -1,13 +1,24 @@
-import { Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import {
   AllPermissions,
   Permissions,
+  Roles,
   Validated,
 } from '../../common/decorators/index.js';
 import { AllPermissionsGuard } from '../../common/guards/all-permissions.guard.js';
-import { PERMISSIONS } from '../../common/constants/permissions.js';
+import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
 import { credentialScope } from '../../common/rbac/credential-scope.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
@@ -19,6 +30,8 @@ import {
   setPasswordSchema,
   setRoleSchema,
   setBranchesSchema,
+  archiveActionSchema,
+  permanentDeleteSchema,
   type IdRequest,
   type ListRequest,
   type CheckAvailabilityRequest,
@@ -26,10 +39,12 @@ import {
   type SetPasswordRequest,
   type SetRoleRequest,
   type SetBranchesRequest,
+  type ArchiveActionRequest,
+  type PermanentDeleteRequest,
 } from './users.validators.js';
 
 /**
- * Express `users.routes.js` — FAZA 2.5a da 14 marshrutdan 10 tasi.
+ * Express `users.routes.js` — 14 marshrutdan 13 tasi.
  *
  * ⚠ E'LON TARTIBI Express bilan AYNAN bir xil bo'lishi SHART. Aniq
  * yo'llar `/:id` DAN OLDIN turadi, aks holda `/:id` ularni yutib
@@ -37,9 +52,14 @@ import {
  *   PATCH /:id/branches → PATCH /:id dan oldin
  *   GET   /staff-stats, /check-availability → GET /:id dan oldin
  *
- * ⚠ HALI KO'CHIRILMAGAN (moliya/tasdiq modullariga tayanadi — servis
- * izohiga qarang): `POST /staff`, `DELETE /:id`, `POST /:id/restore`,
- * `DELETE /:id/permanent`. Ular Express'da qoladi.
+ * ⚠ HALI KO'CHIRILMAGAN — FAQAT BITTA: `POST /staff`. U UCHTA
+ * ko'chirilmagan modulga tayanadi va UCHALASI HAM JAVOB TANASINI
+ * o'zgartiradi (`expenseApprovals` → 202/403, `openingBalance` →
+ * `openingBalanceError`, `teacherSalary` → stavka). Yarim ko'chirish
+ * uch mustaqil o'qda farq bergan bo'lardi. U Express'da qoladi.
+ *
+ * ⚠ `DELETE /:id/permanent` OWNER-ONLY — u ALOHIDA kontrollerda
+ * (`RolesGuard`), fayl oxiriga qarang.
  *
  * ⚠ IKKI RUXSAT BIRDAN: Express `PATCH /:id/branches` ga
  * `requirePermission(USERS_READ)` VA `requirePermission(ROLES_UPDATE)`
@@ -184,6 +204,109 @@ export class UsersController {
       canSeeAllBranches: req.canSeeAllBranches,
     });
     return { success: true, data: user, message: 'Saqlandi' };
+  }
+
+  // ───────────────────────── HAYOT SIKLI ────────────────────────────────
+
+  /**
+   * ARXIVLASH (soft delete).
+   *
+   * Chegara SERVIS qatlamida (`assertTargetInScope`) — marshrut qatlamida
+   * ruxsat bor-yo'qligi, servisda esa "kimga" tekshiriladi.
+   *
+   * ⚠ JAVOBDA `data` YO'Q: Express handler servis natijasini ATAYLAB
+   * tashlab yuboradi va faqat `{ success, message }` qaytaradi.
+   */
+  @Delete(':id')
+  @Permissions(PERMISSIONS.USERS_ARCHIVE)
+  async remove(
+    @Validated(archiveActionSchema) v: ArchiveActionRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    await this.users.softRemove(v.params.id, {
+      reasonId: v.body?.reasonId,
+      archiveDate: v.body?.archiveDate,
+      by: req.user as never,
+      scope: {
+        allowedBranchIds: req.allowedBranchIds,
+        canSeeAllBranches: req.canSeeAllBranches,
+      },
+    });
+    return { success: true, message: "O'chirildi" };
+  }
+
+  /**
+   * ARXIVDAN QAYTARISH.
+   *
+   * ⚠ `POST` — `PATCH` emas. Amal idempotent ko'rinsa ham, Express
+   * shartnomasi shunday va klient shunga bog'langan.
+   *
+   * ⚠⚠ `@HttpCode(200)` SHART. NestJS `POST` uchun STANDART 201 qaytaradi,
+   * Express `res.json()` esa 200 beradi. Buni yozmaslik JIMGINA
+   * shartnoma buzilishi bo'lardi: tana bir xil, status boshqacha —
+   * `status === 200` ni tekshiradigan klient "tiklanmadi" deb o'ylardi.
+   * (Aynan shu farqni `users-lifecycle-parity` testi ushladi.)
+   */
+  @Post(':id/restore')
+  @HttpCode(200)
+  @Permissions(PERMISSIONS.USERS_ARCHIVE)
+  async restore(
+    @Validated(archiveActionSchema) v: ArchiveActionRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = await this.users.restore(v.params.id, {
+      reasonId: v.body?.reasonId,
+      by: req.user as never,
+      scope: {
+        allowedBranchIds: req.allowedBranchIds,
+        canSeeAllBranches: req.canSeeAllBranches,
+      },
+    });
+    return { success: true, data, message: 'Tiklandi' };
+  }
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * `DELETE /users/:id/permanent` — ALOHIDA KONTROLLER (OWNER-ONLY).
+ *
+ * NEGA ALOHIDA: bu YAGONA foydalanuvchi marshruti bo'lib, u ruxsatga
+ * emas, ROLGA bog'langan (`requireRole(ROLES.OWNER)`). `UsersController`
+ * sinf darajasida `PermissionsGuard` bilan qoplangan; ikki xil
+ * avtorizatsiya qoidasini bir sinfda aralashtirish "qaysi qo'riqchi qaysi
+ * metodga tegishli" degan savolni tug'dirardi.
+ *
+ * NEGA OWNER-ONLY BO'LIB QOLADI (ataylab ochilmadi): sabab globallik
+ * emas, QAYTARIB BO'LMASLIK. `permanentRemove` o'quvchining to'lov
+ * tarixini, o'qituvchining maosh yozuvlarini va bog'liq hujjatlarni
+ * butunlay o'chiradi. Arxivlash (`DELETE /:id`) kundalik ehtiyojni to'liq
+ * qoplaydi va u QAYTARILADI.
+ *
+ * ⚠ `RolesGuard` `@Roles(OWNER)` ni `system.admin_access` ruxsati bilan
+ * ham o'tkazadi — bu Express `requireRole` bilan AYNAN bir xil va
+ * ataylab shunday (qarang: `roles.guard.ts`).
+ *
+ * ⚠ MARSHRUT TO'QNASHUVI YO'Q: `/:id` bitta segmentga mos keladi, ya'ni
+ * `/:id/permanent` ni yutmaydi. Shunga qaramay kontroller `UsersModule`
+ * da `UsersController` DAN OLDIN ro'yxatdan o'tkaziladi — bu faylning
+ * qolgan qismidagi "aniqroq yo'l oldinda" qoidasi bilan bir xil bo'lsin.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+@Controller('users')
+@UseGuards(RolesGuard)
+export class UserPermanentDeleteController {
+  constructor(private readonly users: UsersService) {}
+
+  @Delete(':id/permanent')
+  @Roles(ROLES.OWNER)
+  async permanentRemove(
+    @Validated(permanentDeleteSchema) v: PermanentDeleteRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    await this.users.permanentRemove(v.params.id, req.user, {
+      confirmName: v.body?.confirmName,
+    });
+    return { success: true, message: "Butunlay o'chirildi" };
   }
 }
 

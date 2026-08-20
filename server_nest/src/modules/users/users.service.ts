@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { ROLES, ROLE_TYPES } from '../../common/constants/permissions.js';
@@ -7,9 +7,11 @@ import { hashPassword } from '../../common/utils/password.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import {
   toUtcMidnight,
+  localTodayMidnight,
   parseLocalDay,
   isFutureLocalDay,
 } from '../../common/utils/date.js';
+import { FINANCE_TXN_OPTIONS } from '../../common/utils/finance-txn.js';
 import {
   assertTargetInScope,
   assertCanAssignBranch,
@@ -27,6 +29,9 @@ import {
   type RoleCatalogEntry,
 } from '../../common/rbac/roles.helper.js';
 import { StudentCompletionService } from '../../common/helpers/student-completion.service.js';
+import { UserRelationsService } from '../../common/helpers/user-relations.service.js';
+import { ArchiveLogService } from '../../common/helpers/archive-log.service.js';
+import { SystemNotificationService } from '../../common/helpers/system-notification.service.js';
 import { UserProfileService } from '../auth/user-profile.service.js';
 import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
 import {
@@ -116,7 +121,31 @@ export class UsersService {
     private readonly profiles: UserProfileService,
     private readonly freezes: StudentFreezeService,
     private readonly payrollAudit: PayrollAuditService,
+    private readonly relations: UserRelationsService,
+    private readonly archiveLog: ArchiveLogService,
+    private readonly systemNotifications: SystemNotificationService,
   ) {}
+
+  private readonly logger = new Logger('UsersService');
+
+  /**
+   * ⚠ KO'CHIRILMAGAN YON TA'SIR — JIMGINA O'TKAZIB YUBORILMAYDI.
+   *
+   * Express shu nuqtada `teacherSalary` hisoblash dvigatelini chaqiradi
+   * (best-effort: `try/catch` + `logger.warn`). U FAZA 8 da ko'chadi.
+   * Chaqiruv o'rnini bo'sh qoldirish farqni KO'RINMAS qilardi, shuning
+   * uchun har safar barqaror belgili WARN yoziladi — jurnalda
+   * `DEFERRED_EFFECT` bo'yicha qidirib topiladi.
+   *
+   * ⚠ JAVOB TANASIGA TA'SIR QILMAYDI: Express'da ham bu chaqiruvning
+   * natijasi javobga chiqmaydi, shuning uchun paritet buzilmaydi.
+   */
+  private deferredEffect(what: string, ctx: Record<string, unknown>) {
+    this.logger.warn(
+      `DEFERRED_EFFECT ${what} — FAZA 8 (teacherSalary) ko'chmagan. ` +
+        `Kontekst: ${JSON.stringify(ctx)}`,
+    );
+  }
 
   // ═══════════════════════════════════════════════════════════════════
   // ICHKI YORDAMCHILAR
@@ -842,5 +871,417 @@ export class UsersService {
     });
 
     return this.profiles.build(saved as never);
+  }
+  // ═══════════════════════════════════════════════════════════════════
+  // HAYOT SIKLI — ARXIVLASH / TIKLASH / BUTUNLAY O'CHIRISH (FAZA 2.5b)
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * ARXIVLASH (soft delete).
+   *
+   * ── ⚠ O'QUVCHI SHOXI KO'CHIRILMADI — VA BU ATAYLAB ──
+   *
+   * Express fayli o'quvchi uchun to'liq bir shox saqlaydi (a'zolikni
+   * yopish, sababni snapshot qilish, to'lovni qayta proratsiya qilish),
+   * LEKIN u ERISHIB BO'LMAYDIGAN kod: undan 15 qator YUQORIDA
+   * `role === student` SHARTSIZ 400 bilan to'siladi. Express izohi buni
+   * ochiq aytadi ("HOZIRDA ERISHIB BO'LMAYDI ... ATAYLAB SAQLANDI").
+   *
+   * Uni bu yerga ko'chirish `assertPeriodInvariants` (groups) va
+   * `financePayment.recalcForStudent` (finance) ni talab qilardi — ikkalasi
+   * ham ko'chirilmagan. Ya'ni natija "ko'chirilgandek ko'rinib, aslida
+   * ishlamaydigan" kod bo'lardi — Express izohi aynan shundan qochgan edi.
+   *
+   * `test/users-lifecycle-parity.test.mjs` to'siqning O'ZINI o'lchaydi:
+   * o'quvchi ikkala stekda ham 400 oladi. Siyosat o'zgarib to'siq
+   * olib tashlansa — o'sha test yiqiladi va bu shox eslab qolinadi.
+   */
+  async softRemove(
+    id: string,
+    {
+      reasonId,
+      archiveDate,
+      by,
+      scope,
+    }: {
+      reasonId?: string;
+      archiveDate?: Date | string | null;
+      by?: { id?: string; _id?: unknown } | null;
+      scope?: Partial<BranchScope> | null;
+    } = {},
+  ) {
+    const user = await this.getById(id);
+    if (user.role === ROLES.OWNER) {
+      throw new ApiError(403, "Owner foydalanuvchini o'chirib bo'lmaydi");
+    }
+
+    // FILIAL HIMOYASI — boshqa filial xodimini arxivlab bo'lmaydi.
+    if (scope) {
+      assertTargetInScope(scope.allowedBranchIds, scope.canSeeAllBranches, user as never);
+    }
+
+    // O'quvchi arxivlanmaydi — u tizimda doim faol obyekt bo'lib qoladi.
+    // Vaqtincha to'xtatish uchun "Muzlatish" (StudentFreeze), chiqib ketish
+    // esa guruhdan chiqarish (`GroupMembership.leftAt`) orqali qayd etiladi.
+    if (user.role === ROLES.STUDENT) {
+      throw new ApiError(
+        400,
+        "O'quvchini arxivlab bo'lmaydi. Vaqtincha to'xtatish uchun \"Muzlatish\"dan foydalaning yoki guruhdan chiqaring.",
+      );
+    }
+
+    // Arxiv sanasi — berilsa o'sha kun (UTC midnight), aks holda mahalliy
+    // "bugun".
+    const archivedAt = archiveDate ? toUtcMidnight(archiveDate) : localTodayMidnight();
+    if (archivedAt.getTime() > localTodayMidnight().getTime()) {
+      throw new ApiError(400, "Arxiv sanasi kelajakda bo'lishi mumkin emas");
+    }
+
+    // ─── XODIM / O'QITUVCHI SHOXI ───
+
+    // O'qituvchining faol guruhi bo'lsa arxivlab bo'lmaydi
+    // (almashtirish/chiqarish kerak).
+    await this.assertTeacherHasNoActiveGroup(user, 'arxivlang');
+
+    const data: Record<string, unknown> = { isActive: false, archivedAt };
+
+    // ISHDAN BO'SHASH: o'qituvchi uchun arxivlash = ishdan bo'shash.
+    // `terminatedAt` EXCLUSIVE — shu kundan boshlab maosh hisoblanmaydi.
+    //
+    // NEGA MUHIM: fiksa oylik (`kind="base"`) `TeacherCompensation` dan
+    // AVTOMATIK hisoblanadi va u guruhga bog'liq EMAS. Ya'ni guruhlari
+    // bo'shatilgan bo'lsa ham, `terminatedAt` qo'yilmasa o'qituvchiga har
+    // oy maosh hisoblanib boraverardi — "ishdan ketgan odamga maosh".
+    if (user.role === ROLES.TEACHER) {
+      data.terminatedAt = archivedAt;
+      if (reasonId) {
+        const reason = await this.prisma.archiveReason.findUnique({
+          where: { id: String(reasonId) },
+          select: { title: true },
+        });
+        if (reason) data.terminationReason = reason.title;
+      }
+    }
+
+    const saved = await this.prisma.user.update({
+      where: { id: user.id },
+      data,
+      include: SCOPE_INCLUDE,
+    });
+
+    // Ochiq maosh stavkasini YOPAMIZ — bu sof Prisma amali va u Express'da
+    // ham shunday (servis chaqiruvi emas), shuning uchun AYNAN ko'chirildi.
+    // Best-effort: xato bo'lsa arxivlash bekor QILINMAYDI (xodim allaqachon
+    // saqlangan), tungi job qolganini tuzatadi.
+    if (user.role === ROLES.TEACHER) {
+      try {
+        await this.prisma.teacherCompensation.updateMany({
+          where: { teacherId: user.id, effectiveTo: null, isDeleted: false },
+          data: { effectiveTo: archivedAt },
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Ishdan bo'shatishda maosh stavkasi yopilmadi (user=${user.id}): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+      // Express: `compensationService.recomputeFrom(user.id, archivedAt)`.
+      this.deferredEffect('teacherCompensation.recomputeFrom', {
+        userId: user.id,
+        from: archivedAt.toISOString(),
+      });
+    }
+
+    return withLegacyId(saved);
+  }
+
+  /**
+   * ARXIVDAN QAYTARISH.
+   *
+   * ISHGA QAYTARISH: `terminatedAt` olib tashlanadi, lekin YOPILGAN maosh
+   * stavkasi AVTOMATIK ochilmaydi — qaytgan o'qituvchi bilan yangi
+   * shartnoma tuzilishi mumkin va eski stavkani jimgina tiklash noto'g'ri
+   * bo'lardi. Owner uni profil sahifasidan qayta belgilaydi.
+   *
+   * ⚠ ROL TO'SIG'I YO'Q (Express'da ham): arxivlash o'quvchiga taqiqlangan
+   * bo'lsa-da, TIKLASH har qanday rolda ishlaydi. Sabab: bazada tarixiy
+   * yoki qo'lda arxivlangan o'quvchilar bo'lishi mumkin va ular uchun
+   * qaytish yo'li ochiq qolishi kerak.
+   */
+  async restore(
+    id: string,
+    {
+      reasonId,
+      by,
+      scope,
+    }: {
+      reasonId?: string;
+      by?: { id?: string; _id?: unknown } | null;
+      scope?: Partial<BranchScope> | null;
+    } = {},
+  ) {
+    const user = await this.getById(id);
+
+    // FILIAL HIMOYASI — arxivlash bilan bir xil chegara: boshqa filialning
+    // arxivlangan xodimini tiklab, uni o'z ro'yxatiga chiqarib olish
+    // mumkin edi.
+    if (scope) {
+      assertTargetInScope(scope.allowedBranchIds, scope.canSeeAllBranches, user as never);
+    }
+
+    const wasTerminated = Boolean((user as any).terminatedAt);
+
+    const saved = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isActive: true,
+        archivedAt: null,
+        terminatedAt: null,
+        terminationReason: '',
+      },
+      include: SCOPE_INCLUDE,
+    });
+
+    if (saved.role === ROLES.TEACHER && wasTerminated) {
+      try {
+        const active = await this.activeCompensation(saved.id);
+        if (!active) {
+          const name = `${saved.firstName} ${saved.lastName || ''}`.trim();
+          await this.systemNotifications.create({
+            message: `${name} ishga qaytarildi, lekin maosh stavkasi yopiq holatda. Uni qayta belgilang - aks holda maosh 0 bo'lib hisoblanadi.`,
+            link: `/users/${saved.id}`,
+          });
+        }
+      } catch {
+        // bildirishnoma yuborilmasa ham qaytarish buzilmasin
+      }
+    }
+
+    if (saved.role === ROLES.STUDENT) {
+      // `archivedAt` olib tashlangach yakunlash sanasi a'zolik tarixiga
+      // ko'ra qayta hisoblanadi (faol a'zolik yo'q bo'lsa max `leftAt` da
+      // qoladi).
+      await this.completion.safeRecompute(saved.id);
+      try {
+        await this.archiveLog.logAction({
+          user: saved.id,
+          action: 'restore',
+          reasonId,
+          by: (by?.id || (by?._id as string | undefined)) ?? null,
+        });
+      } catch {
+        // log yozilmasa ham qaytarish buzilmasin
+      }
+    }
+
+    return withLegacyId(saved);
+  }
+
+  /**
+   * `teacherSalary/teacherCompensation.getActive` NING ICHKI KO'CHIRMASI.
+   *
+   * ⚠ NEGA ICHKARIDA: bu SOF O'QISH (Prisma + sana solishtiruvi) va u
+   * `restore()` dagi bildirishnoma shartini hal qiladi. Butun
+   * `teacherSalary` modulini (2 700 qator hisoblash dvigateli) kutib
+   * turish shu bitta shart uchun o'zini oqlamaydi; shartni tashlab
+   * ketish esa owner'ni "maosh 0 bo'lib hisoblanadi" ogohlantirishisiz
+   * qoldirardi.
+   *
+   * ⚠ FAZA 8 KO'CHIRILGANDA: bu metod O'CHIRILADI va o'sha modulning
+   * `getActive` iga ulanadi.
+   */
+  private async activeCompensation(teacherId: string, onDate: Date | null = null) {
+    const t = (onDate ? toUtcMidnight(onDate) : localTodayMidnight()).getTime();
+    const rows = await this.prisma.teacherCompensation.findMany({
+      where: { teacherId: String(teacherId), isDeleted: false },
+      orderBy: { effectiveFrom: 'desc' },
+    });
+    const found = rows.find((r: any) => {
+      const s = toUtcMidnight(r.effectiveFrom).getTime();
+      const e = r.effectiveTo ? toUtcMidnight(r.effectiveTo).getTime() : Infinity;
+      return s <= t && t < e;
+    });
+    return found ? withLegacyId(found) : null;
+  }
+
+  /**
+   * BUTUNLAY (hard) O'CHIRISH — yozuv va bog'liq ma'lumotlar TIKLAB
+   * BO'LMAYDIGAN tarzda drop qilinadi.
+   *
+   *  - O'quvchi: to'lov, depozit, a'zolik, davomat, baho... o'chadi.
+   *  - O'qituvchi: maosh hisoblari, maosh to'lovlari (chiqim), dars
+   *    davrlari, HR davomat/yo'qliklar o'chadi; guruhlar va ular ichidagi
+   *    o'quvchilar SAQLANADI (o'qituvchi `Group.teachers` dan chiqariladi).
+   *
+   * Ikkalasi uchun ham to'liq ism (`confirmName`) tasdiq sifatida talab
+   * etiladi. Owner o'chirilmaydi.
+   */
+  async permanentRemove(
+    id: string,
+    _currentUser: unknown,
+    { confirmName }: { confirmName?: string } = {},
+  ) {
+    const user = await this.getById(id);
+    if (user.role === ROLES.OWNER) {
+      throw new ApiError(403, "Owner foydalanuvchini o'chirib bo'lmaydi");
+    }
+
+    const isStudent = user.role === ROLES.STUDENT;
+    const isTeacher = user.role === ROLES.TEACHER;
+
+    // ─── O'QITUVCHINI BUTUNLAY O'CHIRISH: DEYARLI HAR DOIM TAQIQLANADI ───
+    //
+    // Maoshlar TO'LIQ to'langan bo'lsa ham, o'chirish `SalaryTransaction`
+    // yozuvlarini olib ketardi — ya'ni o'tgan yilning CHIQIMI yo'q bo'lib,
+    // o'sha oyning foydasi OSHIB ketardi. Bu buxgalteriya emas, tarixni
+    // tahrirlash.
+    //
+    // Shuning uchun o'chirish FAQAT "hech qachon ishlamagan" xodim uchun
+    // ochiq (noto'g'ri yaratilgan hisob).
+    if (isTeacher) {
+      await this.assertTeacherHasNoActiveGroup(user, "o'chiring");
+
+      // ─── MATERIALLIK: qator MAVJUDLIGI emas, undagi PUL tekshiriladi ───
+      //
+      // Oylik cron har oy HAR BIR o'qituvchiga `base`/`group` qatorini
+      // avtomatik ochadi — hech qachon dars bermagan xodimda ham bir
+      // yildan keyin 12 ta BO'SH qator paydo bo'ladi. Qatorlarni
+      // shunchaki sanash bunday hisobni o'chirishning ILOJINI
+      // QOLDIRMASDI. Endi faqat HAQIQIY moliyaviy iz to'sadi.
+      const [salaryRows, txnCount, periodCount] = await Promise.all([
+        this.prisma.teacherSalary.findMany({
+          where: {
+            teacherId: user.id,
+            OR: [{ expectedAmount: { not: 0 } }, { paidAmount: { gt: 0 } }],
+          },
+          select: { expectedAmount: true, paidAmount: true },
+        }),
+        this.prisma.salaryTransaction.count({ where: { teacherId: user.id } }),
+        // Haqiqiy dars tarixi = kamida bir kun davom etgan (yoki hali
+        // ochiq) davr. Ochilgan kuniyoq yopilgan davr (start === end) bir
+        // kunlik ham maosh hosil qilmaydi — xato kiritma, tarix emas.
+        //
+        // Ustunni ustunga solishtirish uchun Prisma "field reference"
+        // ishlatiladi.
+        this.prisma.teacherGroupPeriod.count({
+          where: {
+            teacherId: user.id,
+            isDeleted: false,
+            OR: [
+              { endDate: null },
+              { endDate: { gt: this.prisma.teacherGroupPeriod.fields.startDate } },
+            ],
+          },
+        }),
+      ]);
+
+      // DAVOMAT ATAYLAB SANALMAYDI. `Attendance.recordedById` — "kim
+      // belgiladi" degan audit maydoni, moliyaviy iz emas.
+
+      const traces: string[] = [];
+      if (salaryRows.length) traces.push(`${salaryRows.length} ta maosh yozuvi`);
+      if (txnCount) traces.push(`${txnCount} ta maosh to'lovi`);
+      if (periodCount) traces.push(`${periodCount} ta dars berish davri`);
+
+      if (traces.length) {
+        // To'lanmagan qoldiq — owner uchun ENG muhim raqam: "Hisobni
+        // yopish" aynan shuni nolga tushiradi.
+        const outstanding = salaryRows.reduce(
+          (sum: number, r: any) =>
+            sum + Math.max((r.expectedAmount || 0) - (r.paidAmount || 0), 0),
+          0,
+        );
+        const hint = outstanding
+          ? ` Hozircha ${outstanding.toLocaleString('ru-RU')} so'm to'lanmagan maosh turibdi - ` +
+            `avval "Hisobni yopish" orqali uni nolga tushiring, so'ng arxivlang.`
+          : '';
+        throw new ApiError(
+          400,
+          `Bu o'qituvchida tarix bor (${traces.join(', ')}). Uni butunlay o'chirib bo'lmaydi - ` +
+            `o'chirilsa o'tgan oylarning chiqimi yo'qolib, foyda hisoboti yolg'on bo'lardi. ` +
+            `Buning o'rniga ARXIVLANG: tarix saqlanadi, o'qituvchi ro'yxatlardan yo'qoladi.${hint}`,
+        );
+      }
+    }
+
+    // O'quvchini o'chirish sharti: hech qanday guruhga biriktirilmagan
+    // bo'lsin (faol a'zolik bo'lmasin).
+    if (isStudent) {
+      const inGroup = await this.prisma.groupMembership.findFirst({
+        where: { studentId: user.id, leftAt: null, isDeleted: false },
+        select: { id: true },
+      });
+      if (inGroup) {
+        throw new ApiError(
+          400,
+          "O'quvchi guruhga biriktirilgan. Avval uni guruh(lar)dan chiqaring, so'ng o'chiring.",
+        );
+      }
+    }
+
+    if (isStudent || isTeacher) {
+      const fullName = `${user.firstName} ${user.lastName}`.trim();
+      if (!confirmName || confirmName.trim() !== fullName) {
+        throw new ApiError(
+          400,
+          "Tasdiqlash uchun foydalanuvchining to'liq ismini to'g'ri kiriting",
+        );
+      }
+
+      // Barcha o'chirishlarni BITTA tranzaksiyada. Postgres'da atomiklik
+      // kafolatlangan: yo hammasi o'chadi, yo hech nima. Yarim o'chirilgan
+      // o'quvchi (to'lovi yo'q, a'zoligi bor) holat mumkin emas.
+      const groupIds: string[] = await this.prisma.$transaction(async (tx: any) => {
+        const gids = isStudent
+          ? await this.relations.hardDeleteStudentData(user.id, { tx })
+          : await this.relations.hardDeleteTeacherData(user.id, { tx });
+        await this.relations.purgeUserResidualData(user.id, { tx });
+        await tx.user.delete({ where: { id: user.id } });
+        return gids;
+      }, FINANCE_TXN_OPTIONS);
+
+      // Express: har bir `groupId` uchun `teacherSalaryService.recalcForGroup`.
+      //  - O'quvchi o'chsa: guruh kirimi kamayadi → o'qituvchi maoshlari
+      //    qayta hisoblanishi SHART.
+      //  - O'qituvchi o'chsa: amalda no-op (maoshlar o'zaro bog'liq emas).
+      if (groupIds.length) {
+        this.deferredEffect('teacherSalary.recalcForGroup', {
+          userId: user.id,
+          groupIds,
+        });
+      }
+
+      // Owner uchun tizim bildirishnomasi (best-effort).
+      const roleLabel = isStudent ? "o'quvchi" : "o'qituvchi";
+      try {
+        await this.systemNotifications.create({
+          message: `${fullName} (${roleLabel}) tizimdan butunlay o'chirildi`,
+        });
+      } catch {
+        // bildirishnoma yozilmasa ham o'chirish buzilmasin
+      }
+
+      return { id: user.id, _id: user.id };
+    }
+
+    // Kutilmagan rollar (himoya): bog'liqlik bo'lsa o'chirib bo'lmaydi.
+    const blockers = await this.relations.findUserBlockingRelations(user.id);
+    if (blockers.length > 0) {
+      const detail = blockers.map((b) => `${b.label} (${b.count})`).join(', ');
+      throw new ApiError(
+        409,
+        `Bu foydalanuvchini butunlay o'chirib bo'lmaydi: u quyidagi ma'lumotlarga bog'liq — ${detail}. Avval bu yozuvlarni o'chiring yoki foydalanuvchini arxivlang.`,
+        { code: 'USER_HAS_RELATIONS', details: blockers },
+      );
+    }
+
+    // Bog'liqlik yo'q — qoldiq sessiya/audit ma'lumotini tozalab, yozuvni
+    // o'chiramiz.
+    await this.prisma.$transaction(async (tx: any) => {
+      await this.relations.purgeUserResidualData(user.id, { tx });
+      await tx.user.delete({ where: { id: user.id } });
+    }, FINANCE_TXN_OPTIONS);
+    return { id: user.id, _id: user.id };
   }
 }

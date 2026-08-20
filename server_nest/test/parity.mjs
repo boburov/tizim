@@ -76,6 +76,16 @@ const CASES = [
     path: '/api/users/check-availability?username=owner', auth: true },
   { name: 'users/:id (404)', method: 'GET',
     path: `/api/users/${'a'.repeat(24)}`, auth: true },
+  // ── Faza 2.5b: hayot sikli (FAQAT 404 — holat o'zgartirmaydigan yo'l) ──
+  // Haqiqiy arxivlash/tiklash/o'chirish bu yerda EMAS: ular bazani
+  // o'zgartiradi va `test/users-lifecycle-parity.test.mjs` da o'z
+  // fixture'i bilan, tozalash kafolati ostida sinaladi.
+  { name: 'users/:id arxivlash (404)', method: 'DELETE',
+    path: `/api/users/${'a'.repeat(24)}`, auth: true },
+  { name: 'users/:id/restore (404)', method: 'POST',
+    path: `/api/users/${'a'.repeat(24)}/restore`, auth: true },
+  { name: 'users/:id/permanent (404)', method: 'DELETE',
+    path: `/api/users/${'a'.repeat(24)}/permanent`, auth: true },
   // ── Faza 3: filiallar (o'qish yo'llari) ──
   { name: 'branches (list)', method: 'GET', path: '/api/branches?limit=5', auth: true },
   { name: 'branches (withManagers)', method: 'GET',
@@ -156,6 +166,28 @@ const CASES = [
   { name: "search (qisqa → bo'sh)", method: 'GET', path: '/api/search?q=a', auth: true },
   { name: 'activity-history/students (404)', method: 'GET',
     path: `/api/activity-history/students/${'a'.repeat(24)}`, auth: true },
+  // ── Faza 5a: guruhlar (o'qish yo'llari, 9/24) ──
+  { name: 'groups (list)', method: 'GET', path: '/api/groups?limit=5', auth: true },
+  { name: 'groups (archived)', method: 'GET',
+    path: '/api/groups?archived=1&limit=5', auth: true },
+  { name: 'groups (archived=xato → 400)', method: 'GET',
+    path: '/api/groups?archived=xato', auth: true },
+  { name: 'groups/:id (404)', method: 'GET',
+    path: `/api/groups/${'a'.repeat(24)}`, auth: true },
+  { name: 'groups/:id/history (404)', method: 'GET',
+    path: `/api/groups/${'a'.repeat(24)}/history`, auth: true },
+  { name: 'groups/:id/teacher-periods (404 emas — bo\'sh)', method: 'GET',
+    path: `/api/groups/${'a'.repeat(24)}/teacher-periods`, auth: true },
+  { name: 'groups/:id/available-teachers (404)', method: 'GET',
+    path: `/api/groups/${'a'.repeat(24)}/available-teachers`, auth: true },
+  // ⚠ `/me/*` `/:id` DAN OLDIN e'lon qilinganini QULFLAYDI: tartib
+  // buzilsa "me" guruh ID'si deb o'qilib 404 chiqardi. Owner uchun
+  // ikkala marshrut ham 403 beradi — lekin AYNAN 403, 404 EMAS.
+  { name: 'groups/me/active (owner → 403, 404 EMAS)', method: 'GET',
+    path: '/api/groups/me/active', auth: true },
+  { name: 'groups/me/teach (owner → 403, 404 EMAS)', method: 'GET',
+    path: '/api/groups/me/teach', auth: true },
+  { name: "groups (auth yo'q → 401)", method: 'GET', path: '/api/groups' },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },

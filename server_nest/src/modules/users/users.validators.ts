@@ -7,11 +7,13 @@ import { z } from 'zod';
  * (`details[].path`, masalan `"body.password"`) Express bilan bir xil
  * chiqishi uchun.
  *
- * ⚠ FAZA 2.5a: `createStaffSchema` BU YERDA YO'Q. `POST /users/staff`
- * tasdiqlar (`expenseApprovals`), maosh shartnomasi (`teacherSalary`) va
+ * ⚠ `createStaffSchema` BU YERDA YO'Q. `POST /users/staff` tasdiqlar
+ * (`expenseApprovals`), maosh shartnomasi (`teacherSalary`) va
  * boshlang'ich qoldiq (`openingBalance`) modullariga tayanadi — ular
- * hali ko'chirilmagan. Sxemani "oldindan" yozib qo'yish uni marshrutsiz
- * qoldirardi va keyin ikkinchi manba bo'lib ajralib ketardi.
+ * hali ko'chirilmagan va UCHALASI HAM JAVOB TANASIGA ta'sir qiladi
+ * (202 tasdiq, `openingBalanceError`). Sxemani "oldindan" yozib qo'yish
+ * uni marshrutsiz qoldirardi va keyin ikkinchi manba bo'lib ajralib
+ * ketardi.
  */
 
 /** `update.validator.js` dagi `idSchema`. */
@@ -115,6 +117,40 @@ export const setBranchesSchema = z.object({
   }),
 });
 
+/**
+ * `archive.validator.js` — arxivlash / qaytarish.
+ *
+ * ⚠ `body` DA `.default({})` BOR: Express `validate()` tanasi umuman
+ * yuborilmagan so'rovni ham o'tkazadi (`DELETE` odatda tanasiz keladi).
+ * Uni tashlab ketish "Required" 400 berardi va klient arxivlay olmasdi.
+ */
+export const archiveActionSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+  body: z
+    .object({
+      reasonId: z.string().min(1).optional(),
+      // Arxivlash sanasi (ixtiyoriy). Berilmasa — bugun.
+      archiveDate: z.coerce.date().nullable().optional(),
+    })
+    .default({}),
+});
+
+/**
+ * `update.validator.js` dagi `permanentDeleteSchema`.
+ *
+ * `confirmName` — o'quvchi/o'qituvchi uchun to'liq ism tasdig'i. Sxema uni
+ * MAJBURIY qilmaydi: yo'qligi 400 ni SERVIS qatlamida beradi (xato matni
+ * u yerda aniqroq va Express bilan bir xil).
+ */
+export const permanentDeleteSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+  body: z
+    .object({
+      confirmName: z.string().optional(),
+    })
+    .default({}),
+});
+
 export type IdRequest = z.infer<typeof idSchema>;
 export type ListRequest = z.infer<typeof listSchema>;
 export type CheckAvailabilityRequest = z.infer<typeof checkAvailabilitySchema>;
@@ -122,3 +158,5 @@ export type UpdateRequest = z.infer<typeof updateSchema>;
 export type SetPasswordRequest = z.infer<typeof setPasswordSchema>;
 export type SetRoleRequest = z.infer<typeof setRoleSchema>;
 export type SetBranchesRequest = z.infer<typeof setBranchesSchema>;
+export type ArchiveActionRequest = z.infer<typeof archiveActionSchema>;
+export type PermanentDeleteRequest = z.infer<typeof permanentDeleteSchema>;

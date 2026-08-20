@@ -26,6 +26,7 @@
     "test:rooms-parity": "node test/rooms-parity.test.mjs",
     "test:courses-parity": "node test/courses-parity.test.mjs",
     "test:edu-helpers": "node test/education-helpers-parity.test.mjs",
+    "test:groups-read-parity": "node test/groups-read-parity.test.mjs",
     "test:jobs": "node test/jobs-infra.test.mjs",
     "test:notifications-parity": "node test/notifications-parity.test.mjs",
     "test:notification-catalog-parity": "node test/notification-catalog-parity.test.mjs",
@@ -35,7 +36,9 @@
     "test:feedback-parity": "node test/feedback-parity.test.mjs",
     "test:notification-jobs": "node test/notification-jobs.test.mjs",
     "test:holidays-parity": "node test/holidays-parity.test.mjs",
-    "test:search-history-parity": "node test/search-history-parity.test.mjs"
+    "test:search-history-parity": "node test/search-history-parity.test.mjs",
+    "test:users-lifecycle-parity": "node test/users-lifecycle-parity.test.mjs",
+    "probe:bot-auth": "node --env-file=../server/.env test/bot-auth-blocker.probe.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"
