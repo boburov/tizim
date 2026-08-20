@@ -833,6 +833,10 @@ export const processDueGroupEnds = async () => {
 
 // Butunlay o'chirish - guruh va unga bog'liq BARCHA yozuvlar
 // (a'zolik, davomat, baho, to'lov, maosh, narx, dars davri...) fizik o'chadi.
+//
+// DIQQAT: MOLIYAVIY TARIXI BOR GURUH O'CHIRILMAYDI. Jurnalda yozuvi bo'lsa
+// `409 GROUP_HAS_FINANCIAL_HISTORY` qaytadi va arxivlash tavsiya etiladi
+// (batafsil sabab pastdagi tekshiruv ustidagi izohda).
 // Tasdiqlash uchun guruh nomini to'g'ri yozish shart (qaytarib bo'lmaydi).
 // MOLIYAVIY IZCHILLIK: o'quvchi/o'qituvchi hard-delete kabi, kirim/chiqim yozuvlari
 // hisobotlardan toza chiqadi. YAGONA majburiy tuzatuv - depozitdan qoplangan
@@ -865,6 +869,50 @@ export const permanentRemove = async (id, currentUser, { confirmName } = {}) => 
         "Guruhda o'quvchilar bor. Avval o'quvchilarni chiqaring yoki kursni yakunlang, so'ngra o'chiring",
       );
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MOLIYAVIY TARIX — O'CHIRISHNI TO'SADI (ARXIVLASH BOR).
+  //
+  // Jurnalda izi bor guruh HECH QACHON o'chirilmaydi. Sabab quyidagi
+  // yozuvda: `journal_entries.groupId` `RESTRICT`
+  // (`20260820120000_restrict_journal_and_salary_ownership_fks`), chunki
+  // ilgari u `SET NULL` edi va guruhni o'chirish jurnal yozuvining
+  // EGASINI jimgina o'chirib yuborardi. Summalar joyida qolgani uchun
+  // na muvozanat tekshiruvi, na `reconcile()` buni topardi — faqat
+  // "bu pul QAYSI guruhga tegishli edi" degan javob yo'qolardi.
+  //
+  // NEGA BU YERDA, FK'ning O'ZIGA TASHLAB QO'YILMAYDI: FK xatosi
+  // tranzaksiyaning O'RTASIDA, depozitlar allaqachon qaytarilgandan
+  // KEYIN chiqadi va foydalanuvchiga tushunarsiz
+  // "Foreign key constraint violated" bo'lib ko'rinadi. Tranzaksiya
+  // qaytariladi, ya'ni ma'lumot buzilmaydi — lekin xabar hech narsa
+  // tushuntirmaydi. Bu tekshiruv esa OLDINDAN, hech narsaga tegmasdan
+  // aniq sabab va aniq yechim beradi.
+  //
+  // NEGA JURNALNI O'CHIRIB YUBORMAYMIZ: jurnal — o'zgarmas moliyaviy
+  // daftar. `hardDeleteGroupData()` guruhning OPERATSION yozuvlarini
+  // (to'lov rejasi, maosh, tarif) tozalaydi, lekin jurnalga ATAYLAB
+  // tegmaydi. Kaskad qilish daftarni buzardi.
+  //
+  // YECHIM — ARXIVLASH. Bu kodbazada guruhni arxivlash = KURSNI YAKUNLASH
+  // (`update({ endDate })` → `reconcileGroupEnd`, `autoEndGroups` jobi ham
+  // shuni qiladi). Guruh faol ro'yxatdan chiqadi, moliyaviy tarixi esa
+  // JOYIDA qoladi. Guruh uchun boshqa "soft-delete" yo'li yo'q —
+  // `isDeleted` faqat kaskad orqali (o'quvchi/filial o'chganda) qo'yiladi.
+  // ═══════════════════════════════════════════════════════════════════════
+  const journalEntries = await prisma.journalEntry.count({
+    where: { groupId: group.id },
+  });
+  if (journalEntries > 0) {
+    throw new ApiError(
+      409,
+      `Bu guruhda moliyaviy tarix bor (${journalEntries} ta jurnal yozuvi) - ` +
+        `uni butunlay o'chirib bo'lmaydi, chunki moliyaviy daftar o'zgarmas. ` +
+        `Guruhni ARXIVLANG (kursni yakunlang): u faol ro'yxatdan chiqadi, ` +
+        `tarixi esa to'liq saqlanadi`,
+      { code: "GROUP_HAS_FINANCIAL_HISTORY", details: { journalEntries } },
+    );
   }
 
   const name = (group.name || "").trim();

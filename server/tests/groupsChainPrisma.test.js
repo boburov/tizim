@@ -710,35 +710,109 @@ const run = async () => {
     },
   );
 
+  // MOLIYAVIY TARIXI BOR GURUH O'CHIRILMAYDI.
+  //
+  // g2 da to'lov bo'lgan, ya'ni jurnalda yozuv bor. Ilgari `permanentRemove`
+  // ishlab ketardi va jurnal yozuvining `groupId` si JIMGINA null bo'lardi
+  // (`SET NULL`) - ya'ni pul qaysi guruhga tegishli ekani yo'qolardi.
+  // Endi FK `RESTRICT` va servis buni OLDINDAN, tushunarli xato bilan
+  // to'sadi (`GROUP_HAS_FINANCIAL_HISTORY`).
   await mustPass(
-    "guruhni butunlay o'chirish: depozit qaytariladi, guruh yo'qoladi (ATOMIK)",
+    "moliyaviy tarixi bor guruh butunlay o'chirilmaydi (arxivlash tavsiya etiladi)",
     async () => {
-      const balBefore = await deposits.balanceFor(s1.id);
       // g2 ni yakunlaymiz (aktiv kursda o'quvchi bo'lsa o'chirib bo'lmaydi).
       await inA(() => groups.update(g2.id, { endDate: new Date(Date.UTC(2025, 7, 31)) }));
 
-      // NOTO'G'RI TASDIQ NOMI - o'chirishdan OLDIN tekshiriladi, chunki
-      // muvaffaqiyatli o'chirishdan keyin guruh umuman qolmaydi.
+      // BAZAVIY O'LCHOV KURSNI YAKUNLAGANDAN KEYIN OLINADI.
+      //
+      // Yakunlash a'zoliklarni yopadi va to'lovlarni qayta hisoblaydi -
+      // ya'ni depozit balansi O'ZI o'zgarishi mumkin (ortiqcha to'lov
+      // qaytadi). Bu o'chirishga umuman aloqasi yo'q. O'lchovni undan
+      // OLDIN olsak, shu tabiiy o'zgarish "o'chirish tegib ketdi" bo'lib
+      // ko'rinardi - test aynan shuni ushlagan edi.
+      const balBefore = await deposits.balanceFor(s1.id);
+      const journalBefore = await prisma.journalEntry.count({ where: { groupId: g2.id } });
+
+      // TO'G'RI nom bilan ham o'chirilmaydi - moliyaviy tarix to'sadi.
+      //
+      // DIQQAT: tasdiq nomi tekshiruvi bu yerda SINALMAYDI. Moliyaviy
+      // tarix qo'riqchisi undan OLDIN turadi (ataylab: umuman mumkin
+      // bo'lmagan amalni tasdiqlatishning ma'nosi yo'q). Tasdiq nomi
+      // pastda - tarixi YO'Q guruhda, ya'ni u haqiqatan yetib boradigan
+      // joyda - tekshiriladi.
+      let err = null;
+      try {
+        await inA(() => groups.permanentRemove(g2.id, { id: null }, { confirmName: `Gamma ${S}` }));
+      } catch (e) {
+        err = e;
+      }
+
+      return {
+        err,
+        journalBefore,
+        journalAfter: await prisma.journalEntry.count({ where: { groupId: g2.id } }),
+        stillThere: await prisma.group.count({ where: { id: g2.id } }),
+        balBefore,
+        balAfter: await deposits.balanceFor(s1.id),
+      };
+    },
+    ({ err, journalBefore, journalAfter, stillThere, balBefore, balAfter }) => {
+      if (journalBefore === 0) return "sinov noto'g'ri: g2 da jurnal yozuvi yo'q";
+      if (!err) return "guruh o'chib ketdi - moliyaviy tarix to'smadi";
+      if (err.code !== "GROUP_HAS_FINANCIAL_HISTORY") {
+        return `boshqa xato: ${err.code || err.message}`;
+      }
+      if (err.statusCode !== 409) return `kutilgan 409, kelgani ${err.statusCode}`;
+      if (err.details?.journalEntries !== journalBefore) {
+        return `details.journalEntries mos emas: ${err.details?.journalEntries} != ${journalBefore}`;
+      }
+      // ENG MUHIMI: hech narsaga TEGILMAGAN bo'lishi kerak.
+      if (stillThere !== 1) return "guruh yo'qoldi";
+      if (journalAfter !== journalBefore) {
+        return `jurnal o'zgardi: ${journalBefore} → ${journalAfter}`;
+      }
+      if (balAfter !== balBefore) return `depozit o'zgardi: ${balBefore} → ${balAfter}`;
+      return null;
+    },
+  );
+
+  // MOLIYAVIY TARIXI YO'Q GURUH avvalgidek butunlay o'chadi.
+  // (Yuqoridagi tekshiruv o'chirish yo'lini butunlay yopib qo'ymasligi
+  // kerak - shuning uchun bu qamrov ATAYLAB saqlanadi.)
+  await mustPass(
+    "moliyaviy tarixi yo'q guruh butunlay o'chadi (tasdiq nomi ham tekshiriladi)",
+    async () => {
+      const g3 = await inA(() =>
+        groups.create(
+          {
+            name: `Delta ${S}`,
+            branchId: bA.id,
+            teachers: [t1.id],
+            startDate: new Date(Date.UTC(2025, 0, 1)),
+            schedule: [{ day: "mon", startTime: "09:00", endTime: "10:30" }],
+          },
+          { id: null },
+        ),
+      );
+      const id = g3.id ?? g3._id;
+      const journal = await prisma.journalEntry.count({ where: { groupId: id } });
+      await inA(() => groups.update(id, { endDate: new Date(Date.UTC(2025, 7, 31)) }));
+
+      // NOTO'G'RI TASDIQ NOMI - bu yerda qo'riqchi haqiqatan yetib boradi.
       let confirmGuard = "o'tib ketdi";
       try {
-        await inA(() => groups.permanentRemove(g2.id, { id: null }, { confirmName: "Xato nom" }));
+        await inA(() => groups.permanentRemove(id, { id: null }, { confirmName: "Xato nom" }));
       } catch (e) {
         confirmGuard = e.message;
       }
 
-      await inA(() => groups.permanentRemove(g2.id, { id: null }, { confirmName: `Gamma ${S}` }));
-      const gone = await prisma.group.count({ where: { id: g2.id } });
-      const plansGone = await prisma.studentPayment.count({ where: { groupId: g2.id } });
-      const txGone = await prisma.paymentTransaction.count({ where: { groupId: g2.id } });
-      const balAfter = await deposits.balanceFor(s1.id);
-      return { balBefore, balAfter, gone, plansGone, txGone, confirmGuard };
+      await inA(() => groups.permanentRemove(id, { id: null }, { confirmName: `Delta ${S}` }));
+      return { journal, confirmGuard, gone: await prisma.group.count({ where: { id } }) };
     },
-    ({ balBefore, balAfter, gone, plansGone, txGone, confirmGuard }) => {
+    ({ journal, confirmGuard, gone }) => {
+      if (journal !== 0) return `sinov noto'g'ri: yangi guruhda ${journal} ta jurnal yozuvi bor`;
       if (!/guruh nomini/i.test(confirmGuard)) return `tasdiq nomi to'silmadi: ${confirmGuard}`;
       if (gone !== 0) return "guruh o'chmadi";
-      if (plansGone !== 0) return `${plansGone} ta to'lov qatori qoldi`;
-      if (txGone !== 0) return `${txGone} ta tranzaksiya qoldi`;
-      if (balAfter < balBefore) return `depozit kamaydi: ${balBefore} → ${balAfter}`;
       return null;
     },
   );

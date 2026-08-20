@@ -816,7 +816,7 @@ npm run test:money-prop      # money property tests
 npm run test:race            # payment race condition
 npm run test:invariants      # 27 CHECK constraints
 npm run test:salary-chain    # 31 tests
-npm run test:groups-chain    # 32 tests
+npm run test:groups-chain    # 33 tests
 npm run test:staff-payroll   # 47 tests
 npm run test:users-prisma    # 49 tests
 npm run test:auth-prisma     # 16 tests

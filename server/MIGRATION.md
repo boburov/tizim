@@ -161,6 +161,34 @@ tarzda yo'qoladi.
 
 ---
 
+### 🔒 GURUHNI O'CHIRISH: MOLIYAVIY TARIX TO'SADI
+
+`journal_entries.groupId` `RESTRICT` bo'lgach, jurnalda izi bor guruhni
+o'chirish FK xatosi bilan yiqila boshladi — va xato tranzaksiyaning
+O'RTASIDA, depozitlar allaqachon qaytarilgandan keyin chiqardi.
+
+`groups.permanentRemove()` endi buni OLDINDAN tekshiradi:
+
+```
+DELETE guruh
+   ↓
+moliyaviy tarix (journal_entries.groupId) bormi?
+   ↓  ha
+409 GROUP_HAS_FINANCIAL_HISTORY   →  arxivlang (kursni yakunlang)
+```
+
+Javob: `{ success:false, code:"GROUP_HAS_FINANCIAL_HISTORY",
+details:{ journalEntries:<son> } }`.
+
+Qo'riqchi TASDIQ NOMIDAN OLDIN turadi — ataylab: umuman mumkin bo'lmagan
+amalni tasdiqlatishning ma'nosi yo'q.
+
+Tarixi YO'Q guruh avvalgidek butunlay o'chadi (depozit qaytarish +
+atomik o'chirish yo'li saqlangan). Ikkala holat ham
+`npm run test:groups-chain` da qadalgan.
+
+---
+
 ### ⏳ QOLGAN ISH: 27 ta eski test
 
 `tests/` da 27 fayl hali `mongoose` va `src/models/` ga tayanadi. Ular
@@ -721,7 +749,7 @@ npm run test:auth-prisma      #  16  login / refresh / parol
 npm run test:users-prisma     #  49  CRUD / arxiv / hard-delete
 npm run test:group-periods    #  20  dars davrlari, stavka rezolveri
 npm run test:salary-chain     #  31  o'qituvchi maoshi + jurnal
-npm run test:groups-chain     #  32  guruh, jadval versiyalash
+npm run test:groups-chain     #  33  guruh, jadval versiyalash, moliyaviy tarix qo'riqchisi
 npm run test:staff-payroll    #  47  xodim oyligi + filial qo'riqchisi
 npm run test:invariants       #  44  validatsiya invariantlari (servis + CHECK)
 npm run test:expenses-chain      # 35  chiqim + tasdiq zanjiri
