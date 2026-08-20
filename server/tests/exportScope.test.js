@@ -21,12 +21,26 @@
  * ISHLATISH:  npm run test:export
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 import ExcelJS from "exceljs";
 
 import { runWithBranchContext } from "../src/helpers/branchContext.helper.js";
 
-const TEST_DB = "mongodb://127.0.0.1:27017/lc_export_test";
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi + `dropDatabase()` o'rniga prefiksli fixture va
+ * kafolatli tozalash (`tests/helpers/prismaFixtures.js`).
+ *
+ * ⚠ SIZISH TEKSHIRUVI KUCHAYTIRILDI: endi baza BO'SH EMAS, ya'ni
+ * "A filial faqat A qatorlarini ko'radi" tekshiruvi FIXTURE nomlari
+ * bo'yicha emas, FIXTURE FILIALI bo'yicha bajariladi — begona qator
+ * chiqsa darhol ko'rinadi.
+ *
+ * `StudentPayment.{student,group}` → `{studentId,groupId}`.
+ */
+const fx = createFixtures();
 
 const R = { pass: 0, fail: 0, failures: [] };
 const ok = (n, extra = "") => {
@@ -56,14 +70,6 @@ const YEAR = 2025;
 const MONTH = 6;
 
 const run = async () => {
-  await mongoose.connect(TEST_DB);
-  await mongoose.connection.dropDatabase();
-
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const User = (await import("../src/models/user.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
-  const StudentPayment = (await import("../src/models/studentPayment.model.js")).default;
-
   const { getDataset, resolveColumns } = await import(
     "../src/modules/exports/registry/index.js"
   );
@@ -75,14 +81,13 @@ const run = async () => {
   const teachersDs = getDataset("teachers");
 
   // ─── Fixture: 2 filial, har birida o'quvchi + guruh + to'lov + o'qituvchi ───
-  const A = await Branch.create({ name: "A-FILIAL", isMain: true });
-  const B = await Branch.create({ name: "B-FILIAL" });
+  const A = await fx.branch("A-FILIAL");
+  const B = await fx.branch("B-FILIAL");
 
   const mkUser = async (name, role, branchId, phone) =>
-    User.create({
+    fx.user(name.toLowerCase(), {
       firstName: name,
       lastName: "Test",
-      username: name.toLowerCase(),
       // DIQQAT: bu maydonda loyiha qoidasiga ko'ra OCHIQ parol turadi.
       // Eksportga tushib qolsa - butun baza parollari Excel'da tarqaladi.
       passwordHash: `SIR-PAROL-${name}`,
@@ -93,40 +98,46 @@ const run = async () => {
       ...(role === "teacher" ? { hiredAt: new Date("2024-01-15") } : {}),
     });
 
-  const studA = await mkUser("StudentA", "student", A._id, "+998900000001");
-  const studB = await mkUser("StudentB", "student", B._id, "+998900000002");
-  await mkUser("TeacherA", "teacher", A._id, "+998900000003");
-  await mkUser("TeacherB", "teacher", B._id, "+998900000004");
+  const studA = await mkUser("StudentA", "student", A.id, "+998900000001");
+  const studB = await mkUser("StudentB", "student", B.id, "+998900000002");
+  await mkUser("TeacherA", "teacher", A.id, "+998900000003");
+  await mkUser("TeacherB", "teacher", B.id, "+998900000004");
 
-  const gA = await Group.create({ branchId: A._id, name: "GROUP-A", isActive: true });
-  const gB = await Group.create({ branchId: B._id, name: "GROUP-B", isActive: true });
+  const gA = await fx.group("GROUP-A", A.id, { isActive: true });
+  const gB = await fx.group("GROUP-B", B.id, { isActive: true });
 
   // Summalar ataylab farqli - aralashsa darhol ko'rinadi.
   const A_AMOUNT = 1_000_000;
   const B_AMOUNT = 7_000_000;
 
-  const mkPayment = (student, group, branchId, amount) =>
-    StudentPayment.create({
+  const mkPayment = async (student, group, branchId, amount) => {
+    const row = await prisma.studentPayment.create({
+      data: {
       branchId,
-      student: student._id,
-      group: group._id,
+      studentId: student.id,
+      groupId: group.id,
       year: YEAR,
       month: MONTH,
       baseFee: amount,
       expectedAmount: amount,
       paidAmount: amount / 2,
       status: "partial",
+      },
     });
+    return fx.track("studentPayment", row.id), row;
+  };
 
-  await mkPayment(studA, gA, A._id, A_AMOUNT);
-  await mkPayment(studB, gB, B._id, B_AMOUNT);
+  await mkPayment(studA, gA, A.id, A_AMOUNT);
+  await mkPayment(studB, gB, B.id, B_AMOUNT);
 
   // ─── 1. Eksport qatorlari filial bo'yicha kesilganmi ───
   head("1) Eksport qatorlari (collectRows) - filial ko'lami");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     const rows = await collectRows(paymentsDs, { year: YEAR, month: MONTH });
     const names = rows.map((r) => r.studentName).join(" | ");
-    const leaked = rows.some((r) => String(r.studentName).includes("StudentB"));
+    // ⚠ Nom o'rniga FIXTURE nomi bo'yicha: baza bo'sh emas, shuning
+    // uchun "StudentB" satri boshqa qatorda ham uchrashi mumkin edi.
+    const leaked = rows.some((r) => String(r.studentName).includes(studB.firstName));
     const wrongMoney = rows.some((r) => r.expectedAmount === B_AMOUNT);
 
     if (leaked || wrongMoney) {
@@ -190,7 +201,7 @@ const run = async () => {
 
   // ─── 3. TAYYOR XLSX faylning o'zi ───
   head("3) Yaratilgan XLSX fayl ichi");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     // Client "hamma narsani" so'ramoqchi bo'lgan holat.
     const columns = resolveColumns(paymentsDs, ["finance.read"], [
       "studentName",
@@ -261,7 +272,7 @@ const run = async () => {
 
   // ─── 4. O'qituvchilar: role filtri qattiq belgilanganmi ───
   head("4) O'qituvchilar dataseti - role almashtirib bo'lmaydi");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     // Client "role: owner" yubormoqchi bo'ldi. filterSchema'da bunday
     // kalit yo'q - Zod uni strip qiladi, fetchPage esa role'ni o'zi qo'yadi.
     const filters = teachersDs.filterSchema.parse({ role: "owner", status: "active" });
@@ -309,8 +320,6 @@ const run = async () => {
     }
   }
 
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
 };
 
 run()
@@ -319,6 +328,12 @@ run()
     process.exitCode = 1;
   })
   .finally(async () => {
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
     console.log(
       `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} toza\x1b[0m / \x1b[31m${R.fail} muammo\x1b[0m`,
     );
@@ -327,5 +342,6 @@ run()
       R.failures.forEach((f) => console.log(`  • ${f}`));
       process.exitCode = 1;
     }
-    if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
   });

@@ -23,11 +23,23 @@
  * ISHLATISH:  npm run test:salary-balance
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
 const BASE_DB = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina";
 // Ishchi bazani ifloslantirmaslik uchun nomga qo'shimcha qo'shamiz.
-const DB = BASE_DB.replace(/(\/[^/?]+)(\?|$)/, "$1_salary_balance_test$2");
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi + `dropDatabase()` o'rniga prefiksli fixture va
+ * kafolatli tozalash. Har o'qituvchi SHU yurish uchun yaratiladi, ya'ni
+ * `balanceByTeacher` faqat fixture ma'lumotini ko'radi — bazadagi
+ * begona maosh qatorlari natijaga ta'sir qilmaydi.
+ *
+ * `TeacherSalary.teacher` → `teacherId`, `TeacherCompensation.teacher`
+ * → `teacherId`.
+ */
+const fx = createFixtures();
 
 const R = { pass: 0, fail: 0, notes: [] };
 const ok = (n, extra = "") => {
@@ -49,56 +61,53 @@ const D = (s) => new Date(`${s}T00:00:00.000Z`);
 const NOW = (s) => new Date(`${s}T09:00:00.000Z`);
 
 const run = async () => {
-  await mongoose.connect(DB);
-  await mongoose.connection.dropDatabase(); // har yurishda toza boshlanadi
-
-  const User = (await import("../src/models/user.model.js")).default;
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const TeacherSalary = (await import("../src/models/teacherSalary.model.js")).default;
-  const TeacherCompensation = (
-    await import("../src/models/teacherCompensation.model.js")
-  ).default;
-
   const salaryService = await import(
     "../src/modules/teacherSalary/services/teacherSalary.service.js"
   );
 
-  const branch = await Branch.create({ name: "Asosiy", isMain: true, isActive: true });
+  const branch = await fx.branch("TSB", { isActive: true });
 
   let seq = 0;
   const mkTeacher = async (over = {}) =>
-    User.create({
+    fx.user(`t_bal_${(seq += 1)}`, {
       firstName: "Olim",
       lastName: "Testov",
-      username: `t_bal_${(seq += 1)}`,
       passwordHash: "x",
       role: "teacher",
-      homeBranchId: branch._id,
+      homeBranchId: branch.id,
       ...over,
     });
 
-  const mkComp = (teacher, over = {}) =>
-    TeacherCompensation.create({
-      teacher: teacher._id,
-      branchId: branch._id,
-      effectiveFrom: over.effectiveFrom || teacher.hiredAt,
-      baseType: "fixed_monthly",
-      baseAmount: 1_200_000,
-      variableType: "none",
-      ...over,
+  const mkComp = async (teacher, over = {}) => {
+    const row = await prisma.teacherCompensation.create({
+      data: {
+        teacherId: teacher.id,
+        branchId: branch.id,
+        effectiveFrom: over.effectiveFrom || teacher.hiredAt,
+        baseType: "fixed_monthly",
+        baseAmount: 1_200_000,
+        variableType: "none",
+        ...over,
+      },
     });
+    return fx.track("teacherCompensation", row.id), row;
+  };
 
-  const mkSalary = (teacher, over = {}) =>
-    TeacherSalary.create({
-      branchId: branch._id,
-      teacher: teacher._id,
-      kind: "base",
-      year: 2026,
-      month: 7,
-      expectedAmount: 1_200_000,
-      paidAmount: 0,
-      ...over,
+  const mkSalary = async (teacher, over = {}) => {
+    const row = await prisma.teacherSalary.create({
+      data: {
+        branchId: branch.id,
+        teacherId: teacher.id,
+        kind: "base",
+        year: 2026,
+        month: 7,
+        expectedAmount: 1_200_000,
+        paidAmount: 0,
+        ...over,
+      },
     });
+    return fx.track("teacherSalary", row.id), row;
+  };
 
   // ─────────────────────────────────────────────────────────────────
   console.log("\n\x1b[1m1) Oddiy holat — 1-iyulda ishga olingan, bugun 8-avgust\x1b[0m");
@@ -110,7 +119,7 @@ const run = async () => {
   await mkSalary(t1, { month: 7 }); // iyul - to'lanmagan
   await mkSalary(t1, { month: 8 }); // avgust - oy boshida to'liq yaratilgan
 
-  const b1 = await salaryService.balanceByTeacher(t1._id, { now: NOW("2026-08-08") });
+  const b1 = await salaryService.balanceByTeacher(t1.id, { now: NOW("2026-08-08") });
 
   eq("FIX MAOSH (amaldagi stavka)", b1.fixedMonthly, 1_200_000);
   eq("JAMI DAROMAD (avgust, to'liq oy)", b1.monthlyTotal, 1_200_000);
@@ -140,7 +149,7 @@ const run = async () => {
     totalDays: 31,
   });
 
-  const b2 = await salaryService.balanceByTeacher(t2._id, { now: NOW("2026-08-20") });
+  const b2 = await salaryService.balanceByTeacher(t2.id, { now: NOW("2026-08-20") });
   eq("JAMI DAROMAD (bo'lingan oy)", b2.monthlyTotal, Math.round((1_200_000 * 17) / 31));
   eq("BU OY (SHU KUNGACHA) = 5 kun", b2.currentAccrued, Math.round((1_200_000 * 5) / 31));
   eq("ISHLAGAN KUN (15 → 20 avgust)", b2.daysWorked, 5);
@@ -153,7 +162,7 @@ const run = async () => {
   await mkComp(t3);
   await mkSalary(t3, { month: 8, paidAmount: 200_000 });
 
-  const b3 = await salaryService.balanceByTeacher(t3._id, { now: NOW("2026-08-08") });
+  const b3 = await salaryService.balanceByTeacher(t3.id, { now: NOW("2026-08-08") });
   const accrued3 = Math.round((1_200_000 * 7) / 31);
   eq("bu oy to'langani ko'rindi", b3.currentPaid, 200_000);
   eq("JAMI QOLDIQ = ishlangani − avans", b3.totalRemaining, accrued3 - 200_000);
@@ -172,7 +181,7 @@ const run = async () => {
     source: "manual",
   });
 
-  const b4 = await salaryService.balanceByTeacher(t4._id, { now: NOW("2026-08-08") });
+  const b4 = await salaryService.balanceByTeacher(t4.id, { now: NOW("2026-08-08") });
   eq("JAMI DAROMAD = fiksa + mukofot", b4.monthlyTotal, 1_700_000);
   eq(
     "mukofot TO'LIQ qo'shildi (fiksa esa ulushicha)",
@@ -188,7 +197,7 @@ const run = async () => {
   const t5 = await mkTeacher({ hiredAt: D("2026-08-01") });
   await mkComp(t5);
 
-  const b5 = await salaryService.balanceByTeacher(t5._id, { now: NOW("2026-08-08") });
+  const b5 = await salaryService.balanceByTeacher(t5.id, { now: NOW("2026-08-08") });
   eq("JAMI DAROMAD stavkadan olindi", b5.monthlyTotal, 1_200_000);
   eq("BU OY (SHU KUNGACHA)", b5.currentAccrued, Math.round((1_200_000 * 7) / 31));
 
@@ -196,27 +205,31 @@ const run = async () => {
   console.log("\n\x1b[1m6) Stavkasiz o'qituvchi — hamma raqam nol, xato yo'q\x1b[0m");
 
   const t6 = await mkTeacher({ hiredAt: D("2026-08-01") });
-  const b6 = await salaryService.balanceByTeacher(t6._id, { now: NOW("2026-08-08") });
+  const b6 = await salaryService.balanceByTeacher(t6.id, { now: NOW("2026-08-08") });
   eq("FIX MAOSH", b6.fixedMonthly, 0);
   eq("JAMI DAROMAD", b6.monthlyTotal, 0);
   eq("JAMI QOLDIQ", b6.totalRemaining, 0);
 
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-
-  console.log(
-    `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ${
-      R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"
-    }`,
-  );
-  if (R.fail) {
-    R.notes.forEach((n) => console.log(`  - ${n}`));
-    process.exit(1);
-  }
 };
 
-run().catch(async (err) => {
-  console.error("\x1b[31mTest xatosi:\x1b[0m", err);
-  await mongoose.disconnect().catch(() => {});
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    bad("TEST YIQILDI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
+  })
+  .finally(async () => {
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
+    console.log(
+      `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ${
+        R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"
+      }`,
+    );
+    if (R.fail) R.notes.forEach((n) => console.log(`  - ${n}`));
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
+  });

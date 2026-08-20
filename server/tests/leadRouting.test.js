@@ -16,10 +16,26 @@
  *   npm run test:lead-routing
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
-const BASE = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina";
-const DB = BASE.replace(/\/([^/?]+)(\?|$)/, "/bayyina_routing_test$2");
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi o'rniga prefiksli fixture + kafolatli tozalash.
+ *
+ * ⚠ "ASOSIY FILIAL" FIXTURE'DA YARATILMAYDI. Yo'naltirish qoidasi
+ * topilmasa lid ASOSIY filialga tushadi (`matchedBy: "main_branch"`) —
+ * bu bazadagi HAQIQIY asosiy filial. Ikkinchi `isMain: true` filial
+ * yaratish bazani buzardi va `resolveMainBranchId()` qaysi birini
+ * tanlashi noaniq bo'lardi.
+ *
+ * Shuning uchun A = BAZADAGI mavjud asosiy filial (faqat O'QILADI),
+ * B = fixture filiali (qoida nishoni).
+ */
+const fx = createFixtures();
+/** Tozalashda kerak — fixture filialiga bog'langan qoidalarni o'chirish uchun. */
+let fxBranchId = null;
 
 const R = { pass: 0, fail: 0, notes: [] };
 const ok = (n, extra = "") => {
@@ -41,32 +57,44 @@ const grab = async (fn) => {
 };
 
 const run = async () => {
-  if (DB === BASE) throw new Error("Test bazasi nomi ajratilmadi - to'xtatildi");
-  mongoose.set("autoIndex", false);
-  await mongoose.connect(DB);
-  if (!mongoose.connection.name.includes("routing_test")) {
-    throw new Error(`Kutilmagan baza: ${mongoose.connection.name}`);
+  const routingModule = await import("../src/modules/leads/services/leadRouting.service.js");
+  // `routing.create` LeadRoutingRule YOZADI — har bir yozuvni reyestrga
+  // olamiz, aks holda tozalash ularni ko'rmasdi.
+  const routing = {
+    ...routingModule,
+    create: async (...args) => {
+      const r = await routingModule.create(...args);
+      if (r?.id || r?._id) fx.track("leadRoutingRule", r.id || r._id);
+      return r;
+    },
+  };
+
+  // A — BAZADAGI haqiqiy asosiy filial (yaratilmaydi, faqat o'qiladi).
+  const A = await prisma.branch.findFirst({
+    where: { isMain: true, isDeleted: false },
+    select: { id: true, name: true },
+  });
+  if (!A) throw new Error("Bazada asosiy filial yo'q — `ensureMainBranch()` yurgazilmagan?");
+
+  // ⚠ MUSBAT NAZORAT: bazada oldindan yo'naltirish qoidasi bo'lsa,
+  // "qoidasiz holat" tekshiruvi NOTO'G'RI natija berardi.
+  const existingRules = await prisma.leadRoutingRule.count();
+  if (existingRules > 0) {
+    bad(
+      "boshlang'ich holat toza",
+      `bazada ${existingRules} ta yo'naltirish qoidasi bor — "qoidasiz holat" tekshiruvi ma'nosiz`,
+    );
   }
-  await mongoose.connection.dropDatabase();
 
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const User = (await import("../src/models/user.model.js")).default;
-  const LeadOption = (await import("../src/models/leadOption.model.js")).default;
-  const LeadRoutingRule = (await import("../src/models/leadRoutingRule.model.js")).default;
-  await LeadRoutingRule.syncIndexes();
+  const B = await fx.branch("Yunusobod");
+  fxBranchId = B.id;
 
-  const routing = await import("../src/modules/leads/services/leadRouting.service.js");
-
-  const A = await Branch.create({ name: "Chilonzor", isMain: true });
-  const B = await Branch.create({ name: "Yunusobod" });
-
-  const admin = await User.create({
+  const admin = await fx.user("admin_b", {
     firstName: "Admin",
     lastName: "B",
-    username: "admin_b",
     passwordHash: "p",
     role: "teacher",
-    homeBranchId: B._id,
+    homeBranchId: B.id,
   });
 
   // ─────────────────────────────────────────────────────────
@@ -76,7 +104,7 @@ const run = async () => {
   const noRule = await routing.route({ source: "telegram_nomalum" });
   check(
     "Qoida yo'q -> ASOSIY filialga tushadi",
-    String(noRule.branchId) === String(A._id) && noRule.matchedBy === "main_branch",
+    String(noRule.branchId) === String(A.id) && noRule.matchedBy === "main_branch",
     `matchedBy=${noRule.matchedBy}`,
   );
   check(
@@ -89,20 +117,20 @@ const run = async () => {
   // ─────────────────────────────────────────────────────────
 
   await routing.create({
-    branchId: String(B._id),
+    branchId: String(B.id),
     sourceKey: "telegram_yunusobod",
-    assigneeId: String(admin._id),
+    assigneeId: String(admin.id),
   });
 
   const bySource = await routing.route({ source: "telegram_yunusobod" });
   check(
     "Manba bo'yicha to'g'ri filialga tushdi",
-    String(bySource.branchId) === String(B._id) && bySource.matchedBy === "source",
+    String(bySource.branchId) === String(B.id) && bySource.matchedBy === "source",
     `matchedBy=${bySource.matchedBy}`,
   );
   check(
     "Qoidadagi xodimga biriktirildi",
-    String(bySource.assigneeId) === String(admin._id),
+    String(bySource.assigneeId) === String(admin.id),
     "aks holda lid filialda egasiz qolardi",
   );
 
@@ -110,7 +138,7 @@ const run = async () => {
   const upper = await routing.route({ source: "TELEGRAM_YUNUSOBOD" });
   check(
     "Katta harfli manba ham topiladi",
-    String(upper.branchId) === String(B._id),
+    String(upper.branchId) === String(B.id),
     "normalizatsiyasiz qoida bir holatda ishlab, boshqasida jimgina o'tkazib yuborardi",
   );
 
@@ -122,12 +150,12 @@ const run = async () => {
   console.log("\n\x1b[1m3) ZAXIRA QOIDA\x1b[0m");
   // ─────────────────────────────────────────────────────────
 
-  await routing.create({ branchId: String(B._id), isFallback: true });
+  await routing.create({ branchId: String(B.id), isFallback: true });
 
   const fb = await routing.route({ source: "instagram" });
   check(
     "Zaxira qoida ishladi",
-    String(fb.branchId) === String(B._id) && fb.matchedBy === "fallback",
+    String(fb.branchId) === String(B.id) && fb.matchedBy === "fallback",
     `matchedBy=${fb.matchedBy}`,
   );
 
@@ -139,7 +167,7 @@ const run = async () => {
   );
 
   const dupFallback = await grab(() =>
-    routing.create({ branchId: String(A._id), isFallback: true }),
+    routing.create({ branchId: String(A.id), isFallback: true }),
   );
   check(
     "Ikkinchi zaxira qoida RAD ETILADI",
@@ -151,7 +179,7 @@ const run = async () => {
   console.log("\n\x1b[1m4) VALIDATSIYA\x1b[0m");
   // ─────────────────────────────────────────────────────────
 
-  const noSource = await grab(() => routing.create({ branchId: String(A._id) }));
+  const noSource = await grab(() => routing.create({ branchId: String(A.id) }));
   check(
     "Manbasiz oddiy qoida RAD ETILADI",
     noSource.err !== null,
@@ -160,7 +188,7 @@ const run = async () => {
 
   const fallbackWithSource = await grab(() =>
     routing.create({
-      branchId: String(A._id),
+      branchId: String(A.id),
       isFallback: true,
       sourceKey: "x",
     }),
@@ -168,13 +196,14 @@ const run = async () => {
   check("Zaxira + manba birga RAD ETILADI", fallbackWithSource.err !== null);
 
   const dupSource = await grab(() =>
-    routing.create({ branchId: String(B._id), sourceKey: "telegram_yunusobod" }),
+    routing.create({ branchId: String(B.id), sourceKey: "telegram_yunusobod" }),
   );
   check("Takroriy manba+filial RAD ETILADI", dupSource.err?.statusCode === 409);
 
   const badBranch = await grab(() =>
     routing.create({
-      branchId: String(new mongoose.Types.ObjectId()),
+      // Mavjud bo'lmagan filial — Prisma kaliti 24 belgili hex SATR.
+      branchId: "f".repeat(24),
       sourceKey: "x",
     }),
   );
@@ -184,17 +213,29 @@ const run = async () => {
   console.log("\n\x1b[1m5) MANBA - LeadOption ObjectId bilan\x1b[0m");
   // ─────────────────────────────────────────────────────────
 
-  const opt = await LeadOption.create({ kind: "source", name: "Instagram" });
+  // ⚠ QOIDA KALITI VARIANT NOMIDAN KELTIRIB CHIQARILADI.
+  //
+  // `resolveSourceKey()` LeadOption ID sini uning NOMIGA aylantiradi
+  // (`name.trim().toLowerCase()`). Fixture nomi suffiks bilan bo'lgani
+  // uchun kalitni qattiq "instagram" deb yozib bo'lmaydi — aks holda
+  // qoida hech qachon mos kelmasdi va test o'zining fixture'i tufayli
+  // yiqilardi (mantiq esa to'g'ri ishlayotgan bo'lardi).
+  const optName = `Instagram-${fx.suffix}`;
+  const optKey = optName.trim().toLowerCase();
+  const opt = await prisma.leadOption.create({
+    data: { kind: "source", name: optName },
+  });
+  fx.track("leadOption", opt.id);
   await routing.create({
-    branchId: String(A._id),
-    sourceKey: "instagram",
+    branchId: String(A.id),
+    sourceKey: optKey,
     priority: 10,
   });
 
-  const byOption = await routing.route({ source: String(opt._id) });
+  const byOption = await routing.route({ source: String(opt.id) });
   check(
     "LeadOption ID manba nomiga aylantiriladi",
-    String(byOption.branchId) === String(A._id) && byOption.matchedBy === "source",
+    String(byOption.branchId) === String(A.id) && byOption.matchedBy === "source",
     `matchedBy=${byOption.matchedBy} — bot ID, operator matn yuboradi; ikkalasi ham ishlashi kerak`,
   );
 
@@ -210,39 +251,45 @@ const run = async () => {
     "ro'yxatda tartib yechim tartibini aks ettirishi kerak",
   );
 
-  const target = rules.find((r) => r.sourceKey === "instagram");
-  await routing.update(String(target._id), { isActive: false });
-  const afterDisable = await routing.route({ source: "instagram" });
+  // ⚠ Kalit fixture suffiksi bilan — qattiq "instagram" deb qidirilsa
+  // `target` `undefined` bo'lardi.
+  const target = rules.find((r) => r.sourceKey === optKey);
+  await routing.update(String(target.id), { isActive: false });
+  const afterDisable = await routing.route({ source: optKey });
   check(
     "Nofaol qoida qo'llanmaydi - zaxiraga tushadi",
     afterDisable.matchedBy === "fallback",
     `matchedBy=${afterDisable.matchedBy}`,
   );
 
-  await routing.remove(String(target._id));
+  await routing.remove(String(target.id));
   check("Qoida o'chirildi", (await routing.list()).length === 2);
 
-  // ── Yakun ──
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-
-  console.log(
-    `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
-      `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
-  );
-  if (R.fail) {
-    console.log("\nYiqilganlar:");
-    R.notes.forEach((n) => console.log(`  • ${n}`));
-    process.exit(1);
-  }
 };
 
-run().catch(async (err) => {
-  console.error("\x1b[31mTEST YIQILDI:\x1b[0m", err);
-  try {
-    await mongoose.disconnect();
-  } catch {
-    /* ulanmagan bo'lsa e'tiborsiz */
-  }
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    bad("TEST YIQILDI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
+  })
+  .finally(async () => {
+    // ⚠ Qoidalarni AVVAL o'chiramiz: ular filialga FK bilan bog'langan.
+    await prisma.leadRoutingRule.deleteMany({ where: { branchId: { in: [String(fxBranchId)] } } })
+      .catch(() => {});
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
+    console.log(
+      `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
+        `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
+    );
+    if (R.fail) {
+      console.log("\nYiqilganlar:");
+      R.notes.forEach((n) => console.log(`  • ${n}`));
+    }
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
+  });

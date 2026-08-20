@@ -75,6 +75,17 @@ const DELETE_ORDER = [
   "staffSalaryTransaction", "staffKpiAssignment", "kpiRule", "staffCompensation",
   "payrollAuditLog",
   // ── kassa / jurnal ──
+  //
+  // ⚠ JURNAL YOZUVLARI: `JOURNAL_IMMUTABLE` qo'riqchisi faqat TAHRIRNI
+  // (`update`/`updateMany`/`upsert`) to'sadi — O'CHIRISH ATAYLAB ochiq
+  // (qarang `config/prisma.js` izohi: "Demo/test tozalash skriptlari
+  // unga tayanadi va o'chirish KO'RINADI").
+  //
+  // Bu SHART: to'lov servisi har tranzaksiya uchun jurnal yozuvi
+  // POSTLAYDI, ya'ni testdan keyin ular qolib ketsa dev bazada soxta
+  // moliyaviy iz to'planardi va fixture guruh/filiallarini FK RESTRICT
+  // tufayli umuman o'chirib bo'lmasdi.
+  "journalLine", "journalEntry",
   "cashTransfer", "shift", "openingBalance",
   // ── o'quvchi holati ──
   "studentFreeze",
