@@ -31,3 +31,19 @@ export const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: "Juda ko'p urinish, biroz kuting" },
 });
+
+/**
+ * Bot `initData` tekshiruvi: 40 urinish / 1 daqiqa.
+ *
+ * ⚠ `authLimiter` DAN KENGROQ va bu ATAYLAB: mini-ilova ochilganda
+ * `/verify` avtomatik chaqiriladi va Telegram ba'zan sahifani qayta
+ * yuklaydi. 20/5daq bo'lsa oddiy foydalanuvchi ham chegaraga urilardi.
+ * `/login` esa (parol bilan) qat'iy `authLimiter` ostida qoladi.
+ */
+export const botVerifyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Juda ko'p urinish, biroz kuting" },
+});

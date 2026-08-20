@@ -9,6 +9,8 @@ import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { BranchesModule } from './modules/branches/branches.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
+import { BotModule } from './bot/bot.module.js';
+import { BotAuthModule } from './modules/bot-auth/bot-auth.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { NotificationTemplatesModule } from './modules/notification-templates/notification-templates.module.js';
@@ -59,6 +61,15 @@ import { StorageModule } from './modules/storage/storage.module.js';
     // va `NEST_WORKER_JOBS` bo'sh bo'lsa modul faqat `SchedulerService` ni
     // DI'ga qo'yadi, navbatlarga TEGMAYDI. Express yagona worker.
     JobsModule,
+    // ── FAZA 10: Telegram bot ──
+    // ⚠ Polling standart holda O'CHIQ (`NEST_BOT_POLLING=false`) — bot
+    // nusxasi faqat YUBORISH uchun ko'tariladi. Buyruqlarni Express
+    // qabul qilishda davom etadi; `bot_locks` qulfi oxirgi to'siq.
+    BotModule,
+    // ── FAZA 2.6: Telegram mini-ilova autentifikatsiyasi ──
+    // Marshrutlar OCHIQ (initData imzosi = autentifikatsiya), lekin
+    // tezlik chegaralari Express bilan aynan bir xil.
+    BotAuthModule,
     // Xonalar — filialning fizik resursi (`classes.*` ruxsatlari).
     RoomsModule,
     // ── FAZA 10: aloqa ──

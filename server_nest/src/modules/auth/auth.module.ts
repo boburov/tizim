@@ -21,7 +21,12 @@ import { authLimiter } from '../../common/middleware/rate-limit.js';
   // `PATCH /:id/role`, `PATCH /:id/branches` profil qaytaradi). Profil
   // qurish mantig'i BITTA joyda qolishi shart: ikkinchi nusxa bo'lsa,
   // biri to'ldirilib, ikkinchisi eski shaklda qolib ketardi.
-  exports: [UserProfileService],
+  // `AuthService` — `bot-auth` moduliga kerak (`issueTokens` /
+  // `sanitizeUser`). Token berish mantig'i BITTA joyda qolishi shart:
+  // ikkinchi nusxa bo'lsa refresh TTL yoki `sub` shakli jimgina
+  // uzoqlashardi va bot orqali kirgan sessiya oddiysidan boshqacha
+  // yashardi.
+  exports: [UserProfileService, AuthService],
 })
 export class AuthModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
