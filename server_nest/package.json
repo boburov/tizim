@@ -27,7 +27,8 @@
     "test:notifications-parity": "node test/notifications-parity.test.mjs",
     "test:notification-catalog-parity": "node test/notification-catalog-parity.test.mjs",
     "test:storage-parity": "node test/storage-parity.test.mjs",
-    "test:bot": "node test/bot-parity.test.mjs"
+    "test:bot": "node test/bot-parity.test.mjs",
+    "test:catalogs-parity": "node test/catalogs-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"
