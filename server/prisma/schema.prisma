@@ -55,6 +55,41 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// IKKINCHI KLIENT — `server_nest/` (NestJS poydevori) uchun.
+//
+// NEGA KERAK: NestJS ilovasi AYNAN SHU sxemadan foydalanadi (sxema — yagona
+// haqiqat manbai, nusxa YO'Q). Lekin `prisma generate` standart holda
+// klientni SXEMA JOYLASHGAN joyga nisbatan yozadi — ya'ni `server_nest` dan
+// chaqirilganda ham u `server/node_modules/@prisma/client` ga tushardi va
+// NestJS tomonda generatsiya qilinmagan bo'sh klient qolardi.
+//
+// Shuning uchun NestJS klientining manzili OCHIQ ko'rsatiladi. Bu blok
+// FAQAT build sozlamasi: birorta model, bog'lanish, enum yoki indeks
+// o'zgarmaydi va migratsiya HOSIL QILMAYDI (generatorlar migratsiyaga
+// kirmaydi).
+//
+// NATIJA: bitta sxema → ikkita klient, ular DOIM bir xil tuzilmani biladi.
+// Ko'chirish davrida ikkala ilova ham bir vaqtda ishlagani uchun bu muhim:
+// sxema o'zgarsa ikkalasi ham birdan yangilanadi.
+//
+// MANZIL `node_modules/.prisma/client` — ATAYLAB (va Prisma'ning O'ZI shuni
+// talab qiladi: `@prisma/client` ga yozish taqiqlangan, chunki u paketning
+// o'zi). `@prisma/client` dan import qilinganda Prisma so'rovni shu yerga
+// AVTOMATIK yo'naltiradi, ya'ni kodda hech narsa o'zgarmaydi.
+//
+// `src/` ichiga chiqarilmadi: u holda TypeScript `rootDir`/emit yo'llari
+// bilan to'qnashardi va klient `dist/` ga nusxalanmay qolardi.
+//
+// DIQQAT: `server/` da `prisma generate` chaqirilganda bu klient ham
+// qayta yaratiladi (bir necha soniya va ~20 MB disk). Kerak bo'lmasa
+// faqat birinchisini yaratish mumkin: `prisma generate --generator client`.
+// ═══════════════════════════════════════════════════════════════════════════
+generator nestClient {
+  provider = "prisma-client-js"
+  output   = "../../server_nest/node_modules/.prisma/client"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")

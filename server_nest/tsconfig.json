@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "removeComments": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2022",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "sourceMap": true,
+    "incremental": true,
+    // Kesh dist/ ICHIDA turishi SHART. nest-cli.json da deleteOutDir:true -
+    // ya'ni har build dist/ ni o'chiradi. Kesh tashqarida tursa tsc
+    // "hammasi tayyor" deb HECH NARSA chiqarmaydi: build xatosiz tugaydi,
+    // lekin dist/ yaratilmaydi va `npm start` yiqiladi.
+    // (Aynan shu tuzoq admin_server'da bosilgan - o'sha yechim.)
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "skipLibCheck": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
