@@ -20,10 +20,23 @@
  *   npm run test:handover
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
 const BASE_DB = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina";
-const DB = BASE_DB.replace(/(\/[^/?]+)(\?|$)/, "$1_handover_test$2");
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi + `dropDatabase()` o'rniga prefiksli fixture va
+ * kafolatli tozalash (`tests/helpers/prismaFixtures.js`). Xavfsizlik va
+ * biznes DA'VOLARI o'zgarmadi — faqat ma'lumotga murojaat qatlami.
+ *
+ * Bog'lanish maydonlari qayta nomlandi: `teacher` → `teacherId`,
+ * `group` → `groupId`, `student` → `studentId` va h.k.
+ */
+const fx = createFixtures();
+/** Tozalashda kerak (servis yaratgan qatorlarni topish uchun). */
+let fxBranchId = null;
 
 const R = { pass: 0, fail: 0, notes: [] };
 const ok = (n, extra = "") => {
@@ -51,53 +64,41 @@ const expectThrow = async (fn) => {
 const D = (s) => new Date(`${s}T00:00:00.000Z`);
 
 const run = async () => {
-  await mongoose.connect(DB);
-  await mongoose.connection.dropDatabase();
-
-  const User = (await import("../src/models/user.model.js")).default;
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
-  const TeacherSalary = (await import("../src/models/teacherSalary.model.js")).default;
-  const TeacherGroupPeriod = (
-    await import("../src/models/teacherGroupPeriod.model.js")
-  ).default;
-  const TeacherCompensation = (
-    await import("../src/models/teacherCompensation.model.js")
-  ).default;
-
   const periodService = await import(
     "../src/modules/groups/services/teacherGroupPeriod.service.js"
   );
 
-  const branch = await Branch.create({ name: "Asosiy", isMain: true, isActive: true });
-  const owner = await User.create({
+  const branch = await fx.branch("Asosiy-hand", { isActive: true });
+  fxBranchId = branch.id;
+  const owner = await fx.user("owner_hand", {
     firstName: "Ega",
     lastName: "Egayev",
-    username: "owner_hand",
     passwordHash: "x",
     role: "owner",
-    homeBranchId: branch._id,
+    homeBranchId: branch.id,
   });
 
   let seq = 0;
   // Har o'qituvchining O'Z standart stavkasi (guruh boshiga oylik).
   const mkTeacher = async (first, perGroupRate) => {
-    const u = await User.create({
+    const u = await fx.user(`t_hand_${(seq += 1)}`, {
       firstName: first,
       lastName: "Testov",
-      username: `t_hand_${(seq += 1)}`,
       passwordHash: "x",
       role: "teacher",
-      homeBranchId: branch._id,
+      homeBranchId: branch.id,
     });
-    await TeacherCompensation.create({
-      teacher: u._id,
-      branchId: branch._id,
+    const comp = await prisma.teacherCompensation.create({
+      data: {
+      teacherId: u.id,
+      branchId: branch.id,
       effectiveFrom: D("2026-01-01"),
       baseType: "none",
       variableType: "per_group",
       variableRate: perGroupRate,
+      },
     });
+    fx.track("teacherCompensation", comp.id);
     return u;
   };
 
@@ -111,12 +112,11 @@ const run = async () => {
     { day: "thu", startTime: "09:00", endTime: "11:00" },
   ];
   const mkGroup = async (name) =>
-    Group.create({
-      branchId: branch._id,
-      name,
-      course: new mongoose.Types.ObjectId(),
+    fx.group(name, branch.id, {
+      // `course` ATAYLAB berilmaydi — ixtiyoriy FK, soxta ID
+      // `groups_courseId_fkey` ni buzardi.
       startDate: D("2026-07-01"),
-      schedule: [SLOTS[gseq++ % SLOTS.length]],
+      schedule: { create: [SLOTS[gseq++ % SLOTS.length]] },
       isActive: true,
     });
 
@@ -135,8 +135,8 @@ const run = async () => {
   for (const g of [g1, g2, g3]) {
     await periodService.create(
       {
-        teacher: leaving._id,
-        group: g._id,
+        teacher: leaving.id,
+        group: g.id,
         startDate: D("2026-07-01"),
         inheritStandardRate: true,
       },
@@ -151,9 +151,9 @@ const run = async () => {
   const orphanErr = await expectThrow(() =>
     periodService.handover(
       {
-        teacher: leaving._id,
+        teacher: leaving.id,
         handoverDate: "2026-07-21",
-        assignments: [{ toTeacher: aziza._id, groups: [String(g1._id)] }],
+        assignments: [{ toTeacher: aziza.id, groups: [String(g1.id)] }],
       },
       owner,
     ),
@@ -168,11 +168,11 @@ const run = async () => {
   const dupErr = await expectThrow(() =>
     periodService.handover(
       {
-        teacher: leaving._id,
+        teacher: leaving.id,
         handoverDate: "2026-07-21",
         assignments: [
-          { toTeacher: aziza._id, groups: [String(g1._id), String(g2._id), String(g3._id)] },
-          { toTeacher: bekzod._id, groups: [String(g1._id)] },
+          { toTeacher: aziza.id, groups: [String(g1.id), String(g2.id), String(g3.id)] },
+          { toTeacher: bekzod.id, groups: [String(g1.id)] },
         ],
       },
       owner,
@@ -183,10 +183,10 @@ const run = async () => {
   const selfErr = await expectThrow(() =>
     periodService.handover(
       {
-        teacher: leaving._id,
+        teacher: leaving.id,
         handoverDate: "2026-07-21",
         assignments: [
-          { toTeacher: leaving._id, groups: [String(g1._id), String(g2._id), String(g3._id)] },
+          { toTeacher: leaving.id, groups: [String(g1.id), String(g2.id), String(g3.id)] },
         ],
       },
       owner,
@@ -195,10 +195,12 @@ const run = async () => {
   check("o'ziga topshirish — rad etildi", selfErr !== null);
 
   // Hech narsa yozilmaganini tasdiqlaymiz (yarim topshirish bo'lmasin).
-  const stillOpen = await TeacherGroupPeriod.countDocuments({
-    teacher: leaving._id,
-    endDate: null,
-    isDeleted: { $ne: true },
+  const stillOpen = await prisma.teacherGroupPeriod.count({
+    where: {
+      teacherId: leaving.id,
+      endDate: null,
+      isDeleted: false,
+    },
   });
   check("rad etilgan urinishlardan keyin hech narsa o'zgarmagan", stillOpen === 3, `ochiq davr: ${stillOpen}`);
 
@@ -207,11 +209,11 @@ const run = async () => {
 
   const res = await periodService.handover(
     {
-      teacher: leaving._id,
+      teacher: leaving.id,
       handoverDate: "2026-07-21",
       assignments: [
-        { toTeacher: aziza._id, groups: [String(g1._id), String(g2._id)] },
-        { toTeacher: bekzod._id, groups: [String(g3._id)] },
+        { toTeacher: aziza.id, groups: [String(g1.id), String(g2.id)] },
+        { toTeacher: bekzod.id, groups: [String(g3.id)] },
       ],
     },
     owner,
@@ -220,45 +222,47 @@ const run = async () => {
   check("3 ta yangi davr ochildi", res.opened === 3, `${res.opened}`);
 
   const azizaGroups = await periodService.activeGroupIdsForTeacher(
-    aziza._id,
+    aziza.id,
     D("2026-07-25"),
   );
   check("Aziza 2 ta guruh oldi", azizaGroups.length === 2, `${azizaGroups.length}`);
   const bekzodGroups = await periodService.activeGroupIdsForTeacher(
-    bekzod._id,
+    bekzod.id,
     D("2026-07-25"),
   );
   check("Bekzod 1 ta guruh oldi", bekzodGroups.length === 1, `${bekzodGroups.length}`);
   const leavingAfter = await periodService.activeGroupIdsForTeacher(
-    leaving._id,
+    leaving.id,
     D("2026-07-25"),
   );
   check("ketayotganda guruh qolmadi", leavingAfter.length === 0, `${leavingAfter.length}`);
 
   // Guruh keshi ham yangilangan bo'lishi kerak (UI shuni ko'rsatadi).
-  const g1After = await Group.findById(g1._id).lean();
+  // ⚠ `Group.teachers` endi KO'P-KO'PGA bog'lanish (Mongo'da ID massivi
+  // edi) — u `include` bilan OCHIQ so'ralishi kerak, aks holda Prisma
+  // uni umuman qaytarmaydi va tekshiruv `undefined` ga urilardi.
+  const g1After = await prisma.group.findUnique({
+    where: { id: g1.id },
+    include: { teachers: { select: { id: true } } },
+  });
+  const teacherIds = (g1After?.teachers || []).map((t) => String(t.id));
   check(
     "Group.teachers keshi yangi o'qituvchini ko'rsatyapti",
-    g1After.teachers.map(String).includes(String(aziza._id)) &&
-      !g1After.teachers.map(String).includes(String(leaving._id)),
-    `kesh: ${g1After.teachers.map(String)}`,
+    teacherIds.includes(String(aziza.id)) && !teacherIds.includes(String(leaving.id)),
+    `kesh: ${teacherIds}`,
   );
 
   // ─────────────────────────────────────────────────────────────────
   console.log("\n\x1b[1m3) Maosh kunlar bo'yicha bo'lindi (iyul = 31 kun)\x1b[0m");
 
   const salaryOf = async (teacherId, groupId) =>
-    TeacherSalary.findOne({
-      teacher: teacherId,
-      group: groupId,
-      year: 2026,
-      month: 7,
-      kind: "group",
-    }).lean();
+    prisma.teacherSalary.findFirst({
+      where: { teacherId, groupId, year: 2026, month: 7, kind: "group" },
+    });
 
   // Eski: [1-iyul, 21-iyul) = 20 kun. Yangi: [21-iyul, ...] = 11 kun.
-  const oldSal = await salaryOf(leaving._id, g1._id);
-  const newSal = await salaryOf(aziza._id, g1._id);
+  const oldSal = await salaryOf(leaving.id, g1.id);
+  const newSal = await salaryOf(aziza.id, g1.id);
 
   check("eski o'qituvchiga 20 kun yozildi", oldSal?.payableDays === 20, `${oldSal?.payableDays}`);
   check("yangi o'qituvchiga 11 kun yozildi", newSal?.payableDays === 11, `${newSal?.payableDays}`);
@@ -294,9 +298,9 @@ const run = async () => {
   const againErr = await expectThrow(() =>
     periodService.handover(
       {
-        teacher: leaving._id,
+        teacher: leaving.id,
         handoverDate: "2026-07-21",
-        assignments: [{ toTeacher: aziza._id, groups: [String(g1._id)] }],
+        assignments: [{ toTeacher: aziza.id, groups: [String(g1.id)] }],
       },
       owner,
     ),
@@ -304,8 +308,6 @@ const run = async () => {
   check("guruhi qolmagan o'qituvchini qayta topshirish — rad etildi", againErr !== null);
 
   // ─────────────────────────────────────────────────────────────────
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
 
   console.log(
     `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
@@ -318,7 +320,37 @@ const run = async () => {
   process.exit(R.fail ? 1 : 0);
 };
 
-run().catch((err) => {
-  console.error("Test ishga tushmadi:", err);
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    bad("TEST YIQILDI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
+  })
+  .finally(async () => {
+    // Servis yaratgan davr va maosh qatorlarini ham tozalaymiz.
+    // ⚠ `TeacherGroupPeriod` da `branchId` YO'Q — u guruh orqali
+    // bog'lanadi (`resourceScope` reyestrida ham `via-group`).
+    const fxGroups = await prisma.group
+      .findMany({ where: { branchId: fxBranchId || "" }, select: { id: true } })
+      .catch(() => []);
+    const periods = await prisma.teacherGroupPeriod
+      .findMany({ where: { groupId: { in: fxGroups.map((g) => g.id) } }, select: { id: true } })
+      .catch(() => []);
+    for (const r of periods) fx.track("teacherGroupPeriod", r.id);
+    const salaries = await prisma.teacherSalary
+      .findMany({ where: { branchId: fxBranchId || "" }, select: { id: true } })
+      .catch(() => []);
+    for (const r of salaries) fx.track("teacherSalary", r.id);
+
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
+    console.log(
+      `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
+        `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
+    );
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
+  });

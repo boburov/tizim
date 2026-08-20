@@ -131,19 +131,31 @@ export const createFixtures = () => {
       .create({ data: { name: `${name}-${suffix}`, ...data } })
       .then((r) => (track("branch", r.id), r));
 
-  const user = async (username, data = {}) =>
+  /**
+   * ⚠ `data.username` ATAYLAB E'TIBORGA OLINMAYDI.
+   *
+   * Ilgari u `...data` yoyilmasi bilan suffiksli nomni BOSIB KETARDI:
+   * ko'chirilgan testda `fx.user("owner_hand", { username: "owner_hand" })`
+   * yozilib qolsa, foydalanuvchi SUFFIKSSIZ yaratilardi va keyingi yurish
+   * "Unique constraint failed on `username`" bilan yiqilardi — sababi
+   * esa umuman ko'rinmasdi.
+   *
+   * Nom DOIM birinchi argumentdan + suffiksdan quriladi.
+   */
+  const user = async (username, { username: _ignored, ...data } = {}) =>
     prisma.user
       .create({
         data: {
           firstName: data.firstName ?? "T",
           lastName: data.lastName ?? username,
-          username: `${username}-${suffix}`,
           // ⚠ OCHIQ MATN — tizim parollarni shunday saqlaydi
           // (`helpers/password.helper.js`). Bu test soddalashtirishi EMAS.
           passwordHash: data.passwordHash ?? "Sinov12345!",
           role: data.role ?? "student",
           isActive: data.isActive ?? true,
           ...data,
+          // ⚠ SPREADDAN KEYIN: hech qanday `data` maydoni buni bosa olmaydi.
+          username: `${username}-${suffix}`,
         },
       })
       .then((r) => (track("user", r.id), r));
