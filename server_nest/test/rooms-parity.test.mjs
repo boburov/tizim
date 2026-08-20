@@ -4,8 +4,11 @@
  *
  * ── BAZA GIGIYENASI ──
  *
- * Yaratiladigan narsalar: `__parity_` prefiksli XONALAR (ikkala stekda) va
- * bitta vaqtinchalik ROL. Hammasi `finally` da tozalanadi.
+ * Yaratiladigan narsalar, hammasi `__parity_` prefiksi bilan:
+ *   • XONA — har bir stekda bittadan (API orqali)
+ *   • GURUH — o'chirish to'sig'i uchun fixture (Prisma orqali, QATTIQ o'chadi)
+ *   • ROL  — zaif aktyor uchun vaqtinchalik rol
+ * Hammasi `finally` da tozalanadi va yakunda QAYTA TEKSHIRILADI.
  *
  * ⚠ Xona `softRemove` bilan o'chadi, ya'ni `isDeleted:true` qatori qoladi.
  * U barcha so'rovlardan (`isDeleted:false`) chetda va Express'da ham xuddi
@@ -13,12 +16,28 @@
  * (`branchId, name` WHERE `isDeleted=false`) ham o'chirilgan qatorni
  * hisobga olmaydi, ya'ni takroriy yurishlar to'qnashmaydi.
  *
- * ⚠⚠ BUZG'UNCHI TEKSHIRUV XAVFSIZLIK TO'RI BILAN ⚠⚠
- * "Faol guruhi bor xonani o'chirib bo'lmaydi" tekshiruvi HAQIQIY xonaga
- * `DELETE` yuboradi. Nishon TAXMIN QILINMAYDI — `groupCount > 0` ochiq
- * o'lchanadi (bu aynan `softRemove` qaraydigan shart). Bundan tashqari
- * `finally` da nishon holati QAYTA O'QILADI va agar to'siq ishlamay xona
- * o'chib qolgan bo'lsa — TIKLANADI va test YIQILADI.
+ * ── IKKI TEST SIFATI QOIDASI ──
+ *
+ * ⚠ 1. BUZG'UNCHI TEKSHIRUV NISHONI TAXMIN QILINMAYDI.
+ * "Faol guruhi bor xonani o'chirib bo'lmaydi" tekshiruvi HAQIQIY `DELETE`
+ * yuboradi. Ilgari bu yerda bazadagi tayyor xona qidirilardi va topilmasa
+ * tekshiruv O'TKAZIB YUBORILARDI — ya'ni to'siq HECH QACHON o'lchanmasdi.
+ * Endi shart O'ZIMIZ QURAMIZ: sinov xonasiga sinov guruhi biriktiriladi.
+ * Nishon ham, guruh ham BIZNIKI — ishlab chiqarish ma'lumotiga tegilmaydi.
+ * Bundan tashqari `finally` da xona holati qayta o'qiladi: to'siq
+ * ishlamagan bo'lsa xona TIKLANADI va test YIQILADI.
+ *
+ * ⚠ 2. MUSBAT NAZORAT HAQIQATAN MUSBAT BO'LISHI SHART.
+ * Zaif aktyorning `classes.read` bilan 200 olishi — pastdagi 403 larning
+ * MA'NOSI. Aktyor umuman kira olmasa, hamma javob 403 bo'lardi va ikkala
+ * stek "bir xil" chiqib, tekshiruv YASHIL bo'lardi — aslida hech narsa
+ * o'lchanmasdan.
+ *
+ * ⚠ ROL FAQAT `user.role` ORQALI BERILMAYDI. Amaldagi rol
+ * `resolveRoleForBranch` bilan aniqlanadi va u FILIAL BIRIKMASIDAGI
+ * (`branchAssignments[].role`) rolni USTUN qo'yadi. Faqat `user.role` ni
+ * o'zgartirish JIMGINA e'tiborsiz qolardi — aynan shu sabab birinchi
+ * yurishda musbat nazorat 403 bergan edi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import assert from 'node:assert/strict';
@@ -28,9 +47,10 @@ const EXPRESS = process.env.EXPRESS_URL || 'http://127.0.0.1:5000';
 const NEST = process.env.NEST_URL || 'http://127.0.0.1:5001';
 const PREFIX = '__parity_';
 
-const DIM = '[2m';
-const BOLD = '[1m';
-const OFF = '[0m';
+const ESC = String.fromCharCode(27);
+const DIM = `${ESC}[2m`;
+const BOLD = `${ESC}[1m`;
+const OFF = `${ESC}[0m`;
 
 const R = { pass: 0, fail: 0, unmeasured: 0 };
 const ok = (n) => { R.pass += 1; console.log(`  ✅ ${n}`); };
@@ -91,10 +111,10 @@ const main = async () => {
 
   const stamp = String(process.hrtime.bigint()).slice(-9);
   const created = { [EXPRESS]: null, [NEST]: null };
+  const fixtureGroupIds = [];
   let parityRoleValue = null;
   let qaStaff = null;
-  let qaOriginalRole = null;
-  let destructiveTarget = null;
+  let qaRestore = null;
 
   const nameOf = (b) => `${PREFIX}${b === EXPRESS ? 'e' : 'n'}${stamp}`;
   const subs = (b) => [
@@ -279,31 +299,93 @@ const main = async () => {
           token: ownerToken,
           body: { note: 'x' },
         }), subs);
+
+      // ═══════════════════════════════════════════════════════════════
+      // ⚠⚠ BUZG'UNCHI TEKSHIRUV — SHARTNI O'ZIMIZ QURAMIZ ⚠⚠
+      //
+      // `softRemove` shu shartga qaraydi:
+      //     group.count({ roomId, isActive: true, isDeleted: false }) > 0
+      //
+      // Shuning uchun har bir stekning O'Z sinov xonasiga sinov guruhi
+      // biriktiriladi. Ilgari bazadan tayyor nishon qidirilardi va
+      // topilmasa tekshiruv o'tkazib yuborilardi — to'siq hech qachon
+      // o'lchanmasdi. Endi shart DOIM bajariladi va nishon BIZNIKI.
+      // ═══════════════════════════════════════════════════════════════
+      head("o'chirish to'sig'i (buzg'unchi, o'z fixture'imiz bilan)");
+
+      try {
+        for (const b of [EXPRESS, NEST]) {
+          const g = await prisma.group.create({
+            data: {
+              branchId: branchA.id,
+              name: `${PREFIX}grp${b === EXPRESS ? 'e' : 'n'}${stamp}`,
+              roomId: created[b],
+              isActive: true,
+            },
+            select: { id: true },
+          });
+          fixtureGroupIds.push(g.id);
+        }
+
+        // MUSBAT NAZORAT: guruh HAQIQATAN sanaldimi. `groupCount` — aynan
+        // to'siq qaraydigan shartning o'lchovi. 0 bo'lsa pastdagi 400
+        // boshqa sababdan kelib chiqqan bo'lardi.
+        const counts = await Promise.all([EXPRESS, NEST].map(async (b) => {
+          const r = await req(b, 'GET', `/api/rooms?includeInactive=true&search=${nameOf(b)}`, {
+            token: ownerToken,
+          });
+          return (r.body?.data || [])[0]?.groupCount ?? 0;
+        }));
+        try {
+          assert.deepEqual(counts, [1, 1]);
+          ok('MUSBAT NAZORAT: fixture guruh sanaldi (groupCount=1, ikkala stekda)');
+        } catch {
+          bad('fixture guruh sanalmadi', `express=${counts[0]} nest=${counts[1]}`);
+        }
+
+        await both('DELETE faol guruhli xona → 400', (b) =>
+          req(b, 'DELETE', `/api/rooms/${created[b]}`, { token: ownerToken }), subs);
+
+        // ⚠ TO'SIQ HAQIQATAN USHLAB QOLDIMI — bazadan o'qib tekshiramiz.
+        const stillAlive = await prisma.room.findMany({
+          where: { id: { in: [created[EXPRESS], created[NEST]] } },
+          select: { id: true, isDeleted: true },
+        });
+        if (stillAlive.length === 2 && stillAlive.every((r) => !r.isDeleted)) {
+          ok("to'siq ushlab qoldi: ikkala xona ham o'chmagan");
+        } else {
+          bad("TO'SIQ ISHLAMADI", `xonalar holati: ${JSON.stringify(stillAlive)}`);
+        }
+
+        // Guruhlarni QATTIQ o'chiramiz — endi xona bo'shaydi.
+        await prisma.group.deleteMany({ where: { id: { in: fixtureGroupIds } } });
+        fixtureGroupIds.length = 0;
+
+        // MUSBAT NAZORAT: guruh olingach O'CHIRISH ISHLAYDI. Aks holda
+        // yuqoridagi 400 "har doim 400" bo'lib chiqardi va to'siq
+        // ma'nosini yo'qotardi.
+        const afterCounts = await Promise.all([EXPRESS, NEST].map(async (b) => {
+          const r = await req(b, 'GET', `/api/rooms?includeInactive=true&search=${nameOf(b)}`, {
+            token: ownerToken,
+          });
+          return (r.body?.data || [])[0]?.groupCount ?? -1;
+        }));
+        try {
+          assert.deepEqual(afterCounts, [0, 0]);
+          ok('MUSBAT NAZORAT: guruh olingach groupCount=0');
+        } catch {
+          bad('guruh olinmadi', `express=${afterCounts[0]} nest=${afterCounts[1]}`);
+        }
+      } catch (err) {
+        skip("o'chirish to'sig'i", err.message);
+        if (fixtureGroupIds.length) {
+          await prisma.group.deleteMany({ where: { id: { in: fixtureGroupIds } } });
+          fixtureGroupIds.length = 0;
+        }
+      }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ⚠⚠ BUZG'UNCHI TEKSHIRUV — NISHON OLDINDAN O'LCHANADI ⚠⚠
-    //
-    // "Faol guruhi bor xonani o'chirib bo'lmaydi" — bu HAQIQIY xonaga
-    // yuborilgan `DELETE`. Nishon nom bo'yicha TAXMIN QILINMAYDI:
-    // `groupCount > 0` ro'yxat javobidan o'qiladi va u aynan
-    // `softRemove` qaraydigan shart (`roomId, isActive, isDeleted:false`).
-    // Shart bajariladigan xona topilmasa — O'TKAZIB YUBORILADI.
-    // ═══════════════════════════════════════════════════════════════
-    head("o'chirish to'sig'i (buzg'unchi)");
-
-    destructiveTarget = (anyList.body?.data || []).find(
-      (r) => (r.groupCount || 0) > 0 && !String(r.name || '').startsWith(PREFIX),
-    );
-    if (destructiveTarget) {
-      console.log(`      (nishon: "${destructiveTarget.name}" — ${destructiveTarget.groupCount} faol guruh)`);
-      await both('DELETE faol guruhli xona → 400', (b) =>
-        req(b, 'DELETE', `/api/rooms/${destructiveTarget.id}`, { token: ownerToken }), subs);
-    } else {
-      skip("faol guruhli xonani o'chirish", 'groupCount>0 xona topilmadi — TAXMIN QILINMADI');
-    }
-
-    // ═══════════════ IMTIYOZ / KO'LAM HIMOYASI ═══════════════
+    // ═══════════════ RUXSAT VA FILIAL KO'LAMI ═══════════════
     head("ruxsat va filial ko'lami himoyasi");
 
     try {
@@ -328,23 +410,56 @@ const main = async () => {
       });
       qaStaff = (users.body?.data || []).find((u) => u.username === 'qa_staff_a');
       if (!qaStaff) throw new Error('qa_staff_a topilmadi');
-      qaOriginalRole = qaStaff.role;
+
+      // TIKLASH NUQTASI — rol VA filial birikmalari birga saqlanadi.
+      const full = await req(EXPRESS, 'GET', `/api/users/${qaStaff.id}`, { token: ownerToken });
+      qaRestore = {
+        role: full.body.data.role,
+        homeBranchId: full.body.data.homeBranchId,
+        branchAssignments: (full.body.data.branchAssignments || []).map((a) => ({
+          branchId: a.branchId,
+          role: a.role,
+        })),
+      };
 
       const pw = await req(EXPRESS, 'GET', `/api/users/${qaStaff.id}/password`, {
         token: ownerToken,
       });
       if (pw.status !== 200) throw new Error("qa_staff_a paroli o'qilmadi");
 
+      // ⚠ IKKALA JOYDA HAM: `user.role` VA `branchAssignments[].role`.
+      // Amaldagi rolni `resolveRoleForBranch` beradi va u BIRIKMANI
+      // ustun qo'yadi — faqat `user.role` ni o'zgartirish e'tiborsiz
+      // qolardi va musbat nazorat 403 bo'lib yolg'on "paritet" berardi.
       const assign = await req(EXPRESS, 'PATCH', `/api/users/${qaStaff.id}/role`, {
         token: ownerToken, body: { role: parityRoleValue },
       });
       if (assign.status !== 200) throw new Error(`rol biriktirilmadi: ${assign.status}`);
+      const rebind = await req(EXPRESS, 'PATCH', `/api/users/${qaStaff.id}/branches`, {
+        token: ownerToken,
+        body: {
+          homeBranchId: qaRestore.homeBranchId,
+          branchAssignments: qaRestore.branchAssignments.map((a) => ({
+            branchId: a.branchId,
+            role: parityRoleValue,
+          })),
+        },
+      });
+      if (rebind.status !== 200) throw new Error(`filial birikmasi yangilanmadi: ${rebind.status}`);
 
       const weakToken = await login(EXPRESS, pw.body.data.username, pw.body.data.password);
 
-      // MUSBAT NAZORAT: aktyor HAQIQATAN xonalarni o'qiy oladi — ya'ni
-      // pastdagi 403 lar "umuman kira olmaydi" dan EMAS, aynan yozish
-      // ruxsati yo'qligidan kelib chiqadi.
+      // ⚠ MUSBAT NAZORAT O'LCHANADI, TAXMIN QILINMAYDI: aktyor
+      // HAQIQATAN 200 olishi kerak. 200 bo'lmasa pastdagi 403 lar
+      // "umuman kira olmaydi" dan kelib chiqadi va HECH NARSA isbotlamaydi.
+      const posE = await req(EXPRESS, 'GET', '/api/rooms?limit=3', { token: weakToken });
+      const posN = await req(NEST, 'GET', '/api/rooms?limit=3', { token: weakToken });
+      if (posE.status !== 200 || posN.status !== 200) {
+        throw new Error(
+          `musbat nazorat 200 BERMADI (express=${posE.status}, nest=${posN.status}) — ` +
+            "salbiy tekshiruvlar ma'nosiz bo'lardi",
+        );
+      }
       await both("MUSBAT NAZORAT: `classes.read` xonalarni O'QIYDI → 200", (b) =>
         req(b, 'GET', '/api/rooms?limit=3', { token: weakToken }), subs);
 
@@ -360,9 +475,6 @@ const main = async () => {
         req(b, 'DELETE', `/api/rooms/${created[b] || 'a'.repeat(24)}`, { token: weakToken }), subs);
 
       // ── FILIAL KO'LAMI: ruxsatsiz filial so'ralsa 403 ──
-      //
-      // `qa_staff_a` ning ko'lamidan TASHQARIDAGI filial topilsa
-      // sinaladi; topilmasa TAXMIN QILINMAYDI.
       const weakBranches = await req(EXPRESS, 'GET', '/api/branches?limit=50', { token: weakToken });
       const weakIds = new Set((weakBranches.body?.data || []).map((b) => String(b.id)));
       const foreign = branches.find((b) => !weakIds.has(String(b.id)));
@@ -370,6 +482,13 @@ const main = async () => {
         console.log(`      (begona filial: "${foreign.name}")`);
         await both("begona filial so'ralsa → 403", (b) =>
           req(b, 'GET', `/api/rooms?branchId=${foreign.id}`, { token: weakToken }), subs);
+        // MUSBAT NAZORAT: O'Z filialini so'rash ISHLAYDI — ya'ni
+        // yuqoridagi 403 `branchId` parametrining o'zidan emas.
+        const own = [...weakIds][0];
+        if (own) {
+          await both("MUSBAT NAZORAT: o'z filiali so'ralsa → 200", (b) =>
+            req(b, 'GET', `/api/rooms?branchId=${own}`, { token: weakToken }), subs);
+        }
       } else {
         skip("begona filial ko'lami", "qa_staff_a ko'lamidan tashqari filial yo'q — TAXMIN QILINMADI");
       }
@@ -393,17 +512,38 @@ const main = async () => {
     // ═══════════════ TOZALASH ═══════════════
     let cleaned = 0;
 
-    if (qaStaff && qaOriginalRole) {
-      const r = await req(EXPRESS, 'PATCH', `/api/users/${qaStaff.id}/role`, {
-        token: ownerToken, body: { role: qaOriginalRole },
-      });
-      if (r.status === 200) cleaned += 1;
+    // 1) Fixture guruhlar (agar oraliqda yiqilgan bo'lsa qolib ketardi).
+    const strayGroups = await prisma.group.findMany({
+      where: { name: { startsWith: PREFIX } }, select: { id: true },
+    });
+    if (strayGroups.length) {
+      await prisma.group.deleteMany({ where: { id: { in: strayGroups.map((g) => g.id) } } });
+      cleaned += strayGroups.length;
     }
+
+    // 2) qa_staff_a — rol VA filial birikmalari tiklanadi.
+    if (qaStaff && qaRestore) {
+      const a = await req(EXPRESS, 'PATCH', `/api/users/${qaStaff.id}/role`, {
+        token: ownerToken, body: { role: qaRestore.role },
+      });
+      if (a.status === 200) cleaned += 1;
+      const b2 = await req(EXPRESS, 'PATCH', `/api/users/${qaStaff.id}/branches`, {
+        token: ownerToken,
+        body: {
+          homeBranchId: qaRestore.homeBranchId,
+          branchAssignments: qaRestore.branchAssignments,
+        },
+      });
+      if (b2.status === 200) cleaned += 1;
+    }
+
+    // 3) Vaqtinchalik rol.
     if (parityRoleValue) {
       const r = await req(EXPRESS, 'DELETE', `/api/roles/${parityRoleValue}`, { token: ownerToken });
       if (r.status === 200) cleaned += 1;
     }
-    // Prefiksli xonalar — ikkala stekda, oldingi yurishdan qolganlari bilan.
+
+    // 4) Prefiksli xonalar — ikkala stekda, oldingi yurishdan qolganlari bilan.
     for (const base of [EXPRESS, NEST]) {
       const all = await req(base, 'GET', '/api/rooms?includeInactive=true&limit=500', {
         token: ownerToken,
@@ -415,27 +555,17 @@ const main = async () => {
         }
       }
     }
-    console.log(`\n  🧹 tozalandi: ${cleaned} ta obyekt`);
-
-    // ── XAVFSIZLIK TO'RI: buzg'unchi nishon TIRIKMI ──
+    // 5) ⚠ QATTIQ O'CHIRISH — "BAZA SILJIMASIN" TALABI.
     //
-    // To'siq ishlamagan bo'lsa xona jimgina o'chib ketardi. Bu yerda
-    // holat QAYTA O'QILADI, TIKLANADI va test YIQILADI.
-    if (destructiveTarget) {
-      const row = await prisma.room.findUnique({
-        where: { id: destructiveTarget.id },
-        select: { id: true, name: true, isDeleted: true },
-      });
-      if (row?.isDeleted) {
-        await prisma.room.update({
-          where: { id: row.id },
-          data: { isDeleted: false, deletedAt: null, deletedBy: null },
-        });
-        bad("TO'SIQ ISHLAMADI", `"${row.name}" o'chib ketgan edi — TIKLANDI`);
-      } else {
-        ok(`buzg'unchi nishon tirik: "${destructiveTarget.name}"`);
-      }
-    }
+    // API `softRemove` ishlatadi, ya'ni `isDeleted:true` qatorlari qolardi.
+    // Ular so'rovlardan chetda bo'lsa-da, HAR YURISHDA 2 tadan to'planib
+    // borardi — bu jimgina siljish. Qatorlar BIZNIKI (`__parity_` prefiksi,
+    // shu yurishda yaratilgan) va fixture guruhlari allaqachon olib
+    // tashlangan, ya'ni ularga hech qanday havola qolmagan.
+    const hard = await prisma.room.deleteMany({ where: { name: { startsWith: PREFIX } } });
+    cleaned += hard.count;
+
+    console.log(`\n  🧹 tozalandi: ${cleaned} ta obyekt`);
 
     // ── YAKUNIY HOLAT ──
     const leftovers = await req(EXPRESS, 'GET', '/api/rooms?includeInactive=true&limit=500', {
@@ -444,13 +574,24 @@ const main = async () => {
     const remaining = (leftovers.body?.data || []).filter((r) =>
       String(r.name || '').startsWith(PREFIX),
     );
+    const groupsLeft = await prisma.group.count({ where: { name: { startsWith: PREFIX } } });
     const staffNow = qaStaff
       ? await req(EXPRESS, 'GET', `/api/users/${qaStaff.id}`, { token: ownerToken })
       : null;
     try {
       assert.equal(remaining.length, 0, `${remaining.length} ta sinov xonasi qoldi`);
-      if (staffNow) assert.equal(staffNow.body?.data?.role, qaOriginalRole, 'qa_staff_a roli');
-      ok('sinov obyektlari qolmadi, fixture roli tiklandi');
+      assert.equal(groupsLeft, 0, `${groupsLeft} ta sinov guruhi qoldi`);
+      if (staffNow && qaRestore) {
+        assert.equal(staffNow.body?.data?.role, qaRestore.role, 'qa_staff_a roli');
+        assert.deepEqual(
+          (staffNow.body?.data?.branchAssignments || []).map((a) => ({
+            branchId: a.branchId, role: a.role,
+          })),
+          qaRestore.branchAssignments,
+          'qa_staff_a filial birikmalari',
+        );
+      }
+      ok('sinov obyektlari qolmadi, fixture roli va birikmalari tiklandi');
     } catch (err) {
       bad("tozalash to'liq bo'lmadi", err.message);
     }
