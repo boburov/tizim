@@ -240,7 +240,15 @@ export const createFixtures = () => {
       try {
         await prisma[model].deleteMany({ where: { id: { in: [...ids] } } });
       } catch (err) {
-        problems.push(`${model}: ${err.message.split("\n")[0]}`);
+        // ⚠ Prisma xato matnining BIRINCHI qatori BO'SH — `split("\n")[0]`
+        // hech narsa bermasdi va tozalash muammosi "ko'rinmas" bo'lardi.
+        // Cheklov nomi eng foydali ma'lumot: qaysi jadval ushlab turganini
+        // aynan o'sha aytadi.
+        const constraint =
+          err?.meta?.constraint ||
+          String(err?.message || "").match(/constraint: `([^`]+)`/)?.[1] ||
+          String(err?.message || "").replace(/\s+/g, " ").trim().slice(0, 120);
+        problems.push(`${model}: ${constraint}`);
       }
     }
     // Reyestrda bo'lgan, lekin `DELETE_ORDER` da yo'q model — dasturchi
