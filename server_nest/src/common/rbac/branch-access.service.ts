@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../errors/api-error.js';
 import { PERMISSIONS } from '../constants/permissions.js';
 import { hasPermission } from './permission.service.js';
+import { getBranchContext, isBranchAllowed } from '../als/branch-context.js';
 
 /**
  * `server/src/helpers/branchAccess.helper.js` NING KO'CHIRMASI.
@@ -264,4 +265,117 @@ export class BranchAccessService {
 
     return { branchId: null, allowedBranchIds, canSeeAllBranches: false };
   }
+
+  /**
+   * Markazda FAQAT BITTA filial bormi — bo'lsa o'sha filial ID'si.
+   *
+   * `take: 2`: aniq sonini bilish shart emas, "bittami yoki ko'pmi" yetarli.
+   *
+   * FILIALSIZ BAZA ham shu yerda hal qilinadi: markazda kamida bitta
+   * filial bo'lishi invariant, lekin baza server ostida tozalanishi
+   * mumkin (`npm run db:reset`). O'shanda yozishni "filial tanlanmagan"
+   * deb rad etish o'rniga invariantni TIKLAYMIZ — aks holda markaz
+   * server qayta ishga tushmaguncha hech narsa yarata olmasdi.
+   *
+   * ⚠ KESHLANMAYDI: `isMultiBranch()` dan farqli, bu funksiya YOZISH
+   * yo'lida turadi va noto'g'ri keshlangan qiymat yangi yozuvni
+   * XATO FILIALGA tushirardi.
+   */
+  private async resolveSoleBranchId(): Promise<string | null> {
+    const branches = await this.prisma.branch.findMany({
+      where: { isDeleted: false },
+      select: { id: true },
+      take: 2,
+    });
+
+    if (branches.length === 0) {
+      const main = await this.ensureMainBranch();
+      return main?.id ? String(main.id) : null;
+    }
+
+    return branches.length === 1 ? String(branches[0].id) : null;
+  }
+
+  /**
+   * YOZISH uchun filialni aniqlaydi —
+   * `helpers/branchContext.helper.js::resolveBranchForWrite` KO'CHIRMASI.
+   *
+   * Yangi hujjat (xona, guruh, lid) DOIM aniq bitta filialga tegishli.
+   * Manba tartibi:
+   *   1. Formada OCHIQ tanlangan filial (`requestedBranchId`)
+   *   2. Aktiv filial (`x-branch-id` konteksti)
+   *   3. Markazda yagona filial bo'lsa — o'sha
+   *   4. Foydalanuvchining asosiy filiali (kontekstsiz job/seed uchun)
+   *
+   * ⚠ XATOLAR `ApiError` BO'LISHI SHART, oddiy `Error` + `statusCode`
+   * EMAS — aks holda xato filtri statusni o'qimay 500 qaytarardi va
+   * "Avval aniq filialni tanlang" xabari foydalanuvchiga YETIB
+   * BORMASDI.
+   *
+   * ⚠ BOSQICH TARTIBI O'ZGARTIRILMASIN. Har bir shox aniq sabab bilan;
+   * xususan (1) dagi `isBranchAllowed` — IMTIYOZ OSHIRISHDAN HIMOYA:
+   * usiz A filial direktori so'rov tanasini qo'lda tahrirlab B filialga
+   * yozib qo'yardi.
+   */
+  async resolveBranchForWrite(
+    user?: { homeBranchId?: string | null } | null,
+    requestedBranchId: unknown = null,
+  ): Promise<string> {
+    const ctx = getBranchContext();
+
+    // 1) OCHIQ TANLANGAN filial.
+    if (requestedBranchId) {
+      if (!isBranchAllowed(requestedBranchId)) {
+        throw new ApiError(403, "Bu filialga yozish huquqingiz yo'q");
+      }
+      return String(requestedBranchId);
+    }
+
+    // 2) Aniq filial tanlangan — eng oddiy holat.
+    if (ctx?.branchId) return String(ctx.branchId);
+
+    // 3) YAGONA FILIAL: "Barcha filiallar" va "o'sha filial" ayni bir
+    // narsa, ya'ni noaniqlik YO'Q — so'rashning ma'nosi ham yo'q.
+    const soleId = await this.resolveSoleBranchId();
+    if (soleId && isBranchAllowed(soleId)) return String(soleId);
+
+    // 4) "BARCHA FILIALLAR" rejimida yozish TAQIQLANADI (filial bir
+    // nechta). Ilgari bu yerda foydalanuvchining uy filialiga jimgina
+    // tushardik — lekin owner konsolidatsiya ko'rinishida turib guruh
+    // yaratsa, u KUTMAGAN filialga tushib qolardi.
+    if (ctx && ctx.canSeeAllBranches) {
+      throw new ApiError(
+        400,
+        '«Barcha filiallar» rejimida yaratib bo\'lmaydi. Avval aniq filialni tanlang',
+      );
+    }
+
+    // Kontekstsiz (seed/job) — foydalanuvchining asosiy filiali.
+    if (user?.homeBranchId) return String(user.homeBranchId);
+
+    // Faqat bitta filialga kirishi bo'lsa — o'sha.
+    if (ctx?.allowedBranchIds?.length === 1) return String(ctx.allowedBranchIds[0]);
+
+    throw new ApiError(400, "Filial tanlanmagan - yozish uchun aniq filial kerak");
+  }
+
+  /**
+   * GURUHDAN filialni oladi (moliya yozuvlari uchun).
+   *
+   * NEGA foydalanuvchidan EMAS: to'lov/maosh yozuvi DOIM guruhga
+   * tegishli, guruh esa aniq bitta filialda. Filialni foydalanuvchi
+   * kontekstidan olsak, owner "barcha filiallar" rejimida turib to'lov
+   * qilganda yoki fon vazifasi ishlaganda NOTO'G'RI filial yozilardi.
+   */
+  async resolveBranchFromGroup(groupId: string): Promise<string> {
+    const group = await this.prisma.group.findUnique({
+      where: { id: String(groupId) },
+      select: { branchId: true },
+    });
+    if (!group?.branchId) {
+      throw new ApiError(400, "Guruhning filiali aniqlanmadi");
+    }
+    return String(group.branchId);
+  }
+
 }

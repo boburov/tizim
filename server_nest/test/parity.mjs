@@ -85,6 +85,14 @@ const CASES = [
     path: '/api/branches/delegation-options', auth: true },
   { name: 'branches/:id (404)', method: 'GET',
     path: `/api/branches/${'a'.repeat(24)}`, auth: true },
+  // ── Faza 3: xonalar (o'qish yo'llari) ──
+  { name: 'rooms (list)', method: 'GET', path: '/api/rooms?limit=5', auth: true },
+  { name: 'rooms (includeInactive)', method: 'GET',
+    path: '/api/rooms?includeInactive=true&limit=5', auth: true },
+  { name: 'rooms (search)', method: 'GET', path: '/api/rooms?search=101', auth: true },
+  { name: 'rooms/:id (404)', method: 'GET',
+    path: `/api/rooms/${'a'.repeat(24)}`, auth: true },
+  { name: "rooms (auth yo'q → 401)", method: 'GET', path: '/api/rooms' },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },

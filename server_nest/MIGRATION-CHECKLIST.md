@@ -40,6 +40,8 @@ Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/sr
 | `middleware/requireDatasetPermission.js` | ⬜ FAZA 9 (exports) |
 | `middleware/requireImporterPermission.js` | ⬜ FAZA 10 (imports) |
 | `helpers/branchAccess.helper.js` | ✅ `common/rbac/branch-access.service.ts` |
+| `branchContext.helper::resolveBranchForWrite` / `resolveBranchFromGroup` | ✅ `BranchAccessService` (prisma kerak — ALS moduliga sig'maydi) |
+| `utils/serialize::withPopulatedShape` | ✅ `common/utils/serialize.ts` |
 | `helpers/branchContext.helper.js` | ✅ `common/als/branch-context.ts` |
 | `helpers/branchIntent.guard.js` | ✅ `common/rbac/branch-intent.ts` |
 | `helpers/credentialScope.helper.js` | ✅ `common/rbac/credential-scope.ts` |
@@ -54,7 +56,7 @@ Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/sr
 | `helpers/group.helper.js`, `membership.helper.js`, `period.helper.js` | ⬜ FAZA 6 |
 | `helpers/attendance.helper.js`, `lessonCancellation.helper.js` | ⬜ FAZA 6 |
 | `helpers/studentFreeze.helper.js` | ⬜ FAZA 4 |
-| `helpers/roomOccupancy.helper.js` | ⬜ FAZA 3 |
+| `helpers/roomOccupancy.helper.js` | ⬜ FAZA 3 (`/rooms` marshrutlarida ISHLATILMAYDI — u `branchAnalytics` uchun) |
 | `constants/delegation.js` | ✅ `common/constants/delegation.ts` |
 | `constants/payrollAudit.js` | ✅ `common/constants/payroll-audit.ts` |
 | `helpers/selfSalary.guard.js` | ⬜ FAZA 8 |
@@ -85,8 +87,8 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | Modul | Manzil | E | Holat |
 |---|---|---|---|
 | branches | `/api/branches` | 8 | ✅ 8/8 |
-| rooms | `/api/rooms` | 5 | ⬜ **KEYINGI** |
-| courses | `/api/courses` | 9 | ⬜ |
+| rooms | `/api/rooms` | 5 | ✅ 5/5 |
+| courses | `/api/courses` | 9 | ⬜ **KEYINGI** |
 | holidays | `/api/holidays` | 7 | ⬜ |
 | archiveReasons | `/api/archive-reasons` | 6 | ⬜ |
 | leadOptions | `/api/lead-options` | 4 | ⬜ |
@@ -217,3 +219,15 @@ keyin finance/salary, va ENG OXIRIDA `users` ning qolgan 4 marshruti.
 3. Moliyaviy yozuvlar **o'zgarmas** (`JOURNAL_IMMUTABLE`).
 4. API shartnomasi (URL/metod/tana/status/xato kodi) **aynan** saqlanadi.
 5. Har modul: parity testi Express'ga qarshi ✅ bo'lmaguncha keyingisiga o'tilmaydi.
+
+## 5. KO'CHIRISHDA TOPILGAN XATTI-HARAKATLAR (o'zgartirilmadi)
+
+Quyidagilar Express'da SHU HOLICHA ishlaydi va NestJS'da AYNAN
+takrorlandi. Har biri klient shartnomasining bir qismi, shuning uchun
+"tuzatish" alohida qaror talab qiladi — jimgina o'zgartirilmadi.
+
+| # | Joy | Xatti-harakat | Baho |
+|---|---|---|---|
+| B1 | `POST /rooms` | Mavjud BO'LMAGAN `branchId` → **409 `FK_CONSTRAINT`** ("Bog'langan yozuv mavjud..."), 404/400 emas. Sabab: `resolveBranchForWrite` faqat KO'LAMNI tekshiradi, filial BORLIGINI emas; owner uchun `isBranchAllowed()` doim `true`, ID Prisma'ga o'tadi va FK buziladi (P2003). | ATAYLAB EMAS, lekin ZARARSIZ: ko'lam himoyasi buzilmaydi (ko'lamdan tashqari ID baribir 403 oladi). Xabar chalg'ituvchi. `test/rooms-parity.test.mjs` uni QULFLAB turadi. |
+| B2 | `GET /rooms` | Standart `limit` = **200** (umumiy `parsePagination()` 20 beradi) va `meta` da **`pages` YO'Q**. | ATAYLAB: xona tanlagichi butun ro'yxatni bir so'rovda oladi. |
+| B3 | `PATCH /rooms/:id` | Filial almashtirishni to'suvchi tekshiruv `data` yig'ilgandan KEYIN turadi. | Zararsiz — `prisma.update` dan OLDIN, ya'ni hech narsa saqlanmaydi. |

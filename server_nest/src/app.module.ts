@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { BranchesModule } from './modules/branches/branches.module.js';
+import { RoomsModule } from './modules/rooms/rooms.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -48,6 +49,8 @@ import { BranchesModule } from './modules/branches/branches.module.js';
     UsersModule,
     // ── FAZA 3: tashkiliy tuzilma ──
     BranchesModule,
+    // Xonalar — filialning fizik resursi (`classes.*` ruxsatlari).
+    RoomsModule,
   ],
 })
 export class AppModule {}

@@ -45,4 +45,42 @@ export const withLegacyId = <T>(entity: T): T => {
 /** Ro'yxat uchun qulaylik. */
 export const withLegacyIds = <T>(list: T[]): T[] => list.map(withLegacyId);
 
+/**
+ * POPULATE SHAKLINI TIKLAYDI.
+ *
+ * Mongo `.populate("branchId")` maydonning O'ZINI obyektga aylantirardi:
+ *     { branchId: { _id, name, code } }
+ *
+ * Prisma esa `branchId` ni skalyar satr qoldirib, obyektni ALOHIDA nomga
+ * qo'yadi:
+ *     { branchId: "6a80...", branch: { id, name, code } }
+ *
+ * Frontend `row.branchId?.name` o'qiydi va `undefined` oladi — jadvalda
+ * "Filial" ustuni bo'sh qoladi. Bu funksiya relation'ni eski nomga
+ * qaytaradi.
+ *
+ * ⚠ `row[relation] !== undefined` SHARTI MUHIM: relation `include`
+ * qilinmagan bo'lsa skalyar `branchId` O'Z HOLICHA qoladi. Shartsiz
+ * yozilsa u `undefined` bilan bosib ketilardi va klient filial ID'sini
+ * butunlay yo'qotardi.
+ *
+ * @param row Prisma yozuvi
+ * @param map { relationNomi: eskiMaydonNomi } — masalan { branch: "branchId" }
+ */
+export const withPopulatedShape = <T extends Record<string, unknown>>(
+  row: T | null | undefined,
+  map: Record<string, string>,
+): Record<string, unknown> | null | undefined => {
+  if (!row) return row as null | undefined;
+  const out = withLegacyId(row) as Record<string, unknown>;
+  for (const [relation, legacyField] of Object.entries(map)) {
+    if (row[relation] !== undefined) {
+      out[legacyField] = row[relation]
+        ? withLegacyId(row[relation] as Record<string, unknown>)
+        : null;
+    }
+  }
+  return out;
+};
+
 export default withLegacyId;
