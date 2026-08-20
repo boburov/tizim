@@ -23,25 +23,61 @@ import type { JobDefinition } from './job.types.js';
  * va ikki ilova bir xil navbatni boshqacha sozlasa, oxirgi ishga
  * tushgani boshqasining siyosatini JIMGINA bosib ketardi.
  *
- * ── ⚠ IKKILANISH HIMOYASI ──
+ * ── ⚠ IKKI XIL ROL: ISHLAB CHIQARUVCHI va ISHCHI ──
  *
- * Bu servis o'zi HECH NARSANI ro'yxatga olmaydi. `register()` ga nima
- * berilsa, o'shani oladi; nimani berish esa `JobsModule` da, ochiq
- * ro'yxat (`NEST_WORKER_JOBS`) bo'yicha hal qilinadi. Shuning uchun
- * "tasodifan hamma job yoqilib ketdi" holati bu yerda MUMKIN EMAS.
+ * Bu farq migratsiyaning eng muhim nuqtasi.
+ *
+ *   PRODUSER (ishlab chiqaruvchi) — navbatga ish QO'YADI (`now`, `at`).
+ *     Bu DUBLIKAT EMAS: bitta HTTP so'rov → bitta yozuv. NestJS
+ *     qo'ygan ishni Express'ning ishchisi olib bajaradi, ya'ni
+ *     migratsiya davomida zanjir UZILMAYDI.
+ *
+ *   ISHCHI (worker) — navbatdan ish OLADI va cron jadvalini yuritadi.
+ *     ANA SHU ikkilanishga olib keladi va aynan shu `NEST_WORKERS_ENABLED`
+ *     + `NEST_WORKER_JOBS` bilan yopilgan.
+ *
+ * Shuning uchun produser rejimida pg-boss ATAYLAB cheklangan holda
+ * ulanadi:
+ *     supervise: false   — texnik xizmatni (eskirgan ishlarni tozalash)
+ *                          Express bajaradi, ikki nusxa kerak emas;
+ *     schedule:  false   — ⚠ ENG MUHIMI: cron soati YURITILMAYDI, ya'ni
+ *                          NestJS jarayoni `pgboss.schedule` dagi
+ *                          yozuvlar bo'yicha ish YARATMAYDI. Busiz
+ *                          Express ro'yxatga olgan 22 ta cron NestJS
+ *                          tomonidan ham ishga tushirilardi — kuniga
+ *                          ikki marta bildirishnoma, ikki marta accrual;
+ *     migrate/createSchema: false
+ *                        — sxema Express'niki; uni ikkinchi ilova
+ *                          ko'chirmasligi kerak.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 @Injectable()
 export class SchedulerService implements OnApplicationShutdown {
   private readonly logger = new Logger('Scheduler');
   private boss: PgBoss | null = null;
-  private started = false;
+  /** pg-boss ulangan (`start()` chaqirilgan). */
+  private connected = false;
+  /** ⚠ Bu jarayon ishchi sifatida ishlayaptimi (navbatdan ish OLADI). */
+  private workersStarted = false;
 
   constructor(private readonly config: ConfigService<AppConfig, true>) {}
 
-  /** Ishga tushganmi — `JobsModule` va testlar shu bo'yicha qaror qiladi. */
+  /**
+   * ⚠ "ISHCHI rejimida ishga tushganmi" — "ulanganmi" EMAS.
+   * Testlar va tashxis aynan shu farqni tekshiradi.
+   */
   isStarted(): boolean {
-    return this.started;
+    return this.workersStarted;
+  }
+
+  /** pg-boss ulanganmi (produser rejimi ham shu). */
+  isConnected(): boolean {
+    return this.connected;
+  }
+
+  /** Bu jarayon ishchi bo'lishi kerakmi (sozlama bo'yicha). */
+  private workersEnabled(): boolean {
+    return Boolean(this.config.get('NEST_WORKERS_ENABLED', { infer: true }));
   }
 
   /**
@@ -51,16 +87,44 @@ export class SchedulerService implements OnApplicationShutdown {
    */
   private instance(): PgBoss {
     if (this.boss) return this.boss;
+
+    const asWorker = this.workersEnabled();
     const boss = new PgBoss({
       connectionString: this.config.get('DATABASE_URL', { infer: true }),
       // ⚠ Express bilan BIR XIL sxema. Boshqasi bo'lsa Nest o'zining
-      // alohida navbat to'plamini yaratardi va ikkala ilova bir xil
-      // cronni MUSTAQIL ravishda ishga tushirardi — aynan biz to'sayotgan
-      // ikkilanish.
+      // alohida navbat to'plamini yaratardi va NestJS qo'ygan ishni
+      // Express'ning ishchisi HECH QACHON ko'rmasdi.
       schema: 'pgboss',
-    });
+      // ⚠ PRODUSER CHEKLOVLARI — yuqoridagi izohga qarang.
+      // `asWorker` bo'lsa standart (to'liq) rejim.
+      ...(asWorker
+        ? {}
+        : { supervise: false, schedule: false, migrate: false, createSchema: false }),
+    } as never);
     boss.on('error', (err: unknown) => this.logger.error('pg-boss xatosi', err));
     this.boss = boss;
+    return boss;
+  }
+
+  /**
+   * Ulanishni kafolatlaydi (bir marta).
+   *
+   * ⚠ ISH QO'YISH UCHUN HAM `start()` SHART: `send()`/`sendAfter()`
+   * ulanmagan nusxada ishlamaydi. Shuning uchun produserlar ham shu
+   * yerdan o'tadi — lekin yuqoridagi cheklovlar bilan, ya'ni ulanish
+   * ularni ISHCHIGA aylantirmaydi.
+   */
+  private async ensureConnected(): Promise<PgBoss> {
+    const boss = this.instance();
+    if (this.connected) return boss;
+    await boss.start();
+    this.connected = true;
+    if (!this.workersEnabled()) {
+      this.logger.log(
+        "pg-boss PRODUSER rejimida ulandi (cron va ishchi YO'Q) — " +
+          "ishni Express'ning ishchisi bajaradi",
+      );
+    }
     return boss;
   }
 
@@ -71,7 +135,7 @@ export class SchedulerService implements OnApplicationShutdown {
    * shu navbatlarning EGASI" degani.
    */
   async start(jobs: readonly JobDefinition[]): Promise<void> {
-    if (this.started) return;
+    if (this.workersStarted) return;
     if (jobs.length === 0) {
       // Bo'sh ro'yxat bilan `boss.start()` qilish ma'nosiz bo'lardi:
       // migratsiya ishlaydi, ulanish hovuzi ochiladi — natija esa nol.
@@ -81,8 +145,7 @@ export class SchedulerService implements OnApplicationShutdown {
       return;
     }
 
-    const boss = this.instance();
-    await boss.start();
+    const boss = await this.ensureConnected();
 
     for (const job of jobs) {
       // pg-boss v10+ da navbat OLDIN yaratilishi shart.
@@ -110,7 +173,7 @@ export class SchedulerService implements OnApplicationShutdown {
       }
     }
 
-    this.started = true;
+    this.workersStarted = true;
     this.logger.log(
       `Rejalashtiruvchi ishga tushdi (pg-boss) — ${jobs.length} ta job: ` +
         jobs.map((j) => j.name).join(', '),
@@ -140,27 +203,48 @@ export class SchedulerService implements OnApplicationShutdown {
     };
   }
 
-  /** Express `scheduler.now(name, data)` — darhol bajarish. */
+  /**
+   * Express `scheduler.now(name, data)` — darhol bajarish uchun navbatga.
+   *
+   * ⚠ PRODUSER AMALI. NestJS ishchi bo'lmasa ham ishlaydi va bu TO'G'RI:
+   * ishni Express'ning ishchisi oladi. Chaqiruvchi xatoni O'ZI ushlashi
+   * kerak (Express'da ham `scheduleDelivery` shunday qilgan) — navbat
+   * yo'q bo'lsa so'rov yiqilmasligi lozim.
+   */
   async now(name: string, data: Record<string, unknown> | null = null) {
-    return this.instance().send(name, data as never);
+    const boss = await this.ensureConnected();
+    return boss.send(name, data as never);
   }
 
   /** Express `scheduler.schedule(when, name, data)` — belgilangan vaqtda. */
   async at(when: Date | string | number, name: string, data: Record<string, unknown> | null = null) {
+    const boss = await this.ensureConnected();
     const date = when instanceof Date ? when : new Date(when);
-    return this.instance().sendAfter(name, data as never, null as never, date);
+    return boss.sendAfter(name, data as never, null as never, date);
   }
 
-  /** Express `scheduler.cancel({ name })` — rejani bekor qilish. */
+  /**
+   * Express `scheduler.cancel({ name })` — CRON rejasini bekor qilish.
+   *
+   * ⚠ BU `sendAfter` BILAN QO'YILGAN BITTA ISHNI BEKOR QILMAYDI —
+   * `boss.unschedule` faqat `pgboss.schedule` (cron) yozuvini o'chiradi.
+   * Express'da ham xuddi shunday, ya'ni rejalashtirilgan xabarni
+   * "bekor qilish" AMALDA ish darajasida emas, HANDLER darajasida
+   * ishlaydi: `dispatchScheduled` status `scheduled` bo'lmasa jimgina
+   * chiqadi. Bu bog'liqlikni buzmang — aks holda bekor qilingan xabar
+   * baribir yuborilardi.
+   */
   async unschedule(name: string): Promise<void> {
     if (!name) return;
-    await this.instance().unschedule(name).catch(() => null);
+    const boss = await this.ensureConnected();
+    await boss.unschedule(name).catch(() => null);
   }
 
   async stop(): Promise<void> {
-    if (!this.started || !this.boss) return;
+    if (!this.connected || !this.boss) return;
     await this.boss.stop({ graceful: true });
-    this.started = false;
+    this.connected = false;
+    this.workersStarted = false;
     this.logger.log("Rejalashtiruvchi to'xtatildi");
   }
 

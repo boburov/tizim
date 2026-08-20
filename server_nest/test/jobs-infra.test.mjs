@@ -28,10 +28,11 @@ import { TtlCleanupJob } from '../dist/jobs/system/ttl-cleanup.job.js';
 import { UsageHeartbeatJob } from '../dist/jobs/system/usage-heartbeat.job.js';
 import { EntitlementsService, UNLIMITED } from '../dist/common/entitlements/entitlements.service.js';
 
-const R = { pass: 0, fail: 0 };
+const R = { pass: 0, fail: 0, skip: 0 };
 const ok = (n, x = '') => { R.pass += 1; console.log(`  ✅ ${n}${x ? ` — ${x}` : ''}`); };
 const bad = (n, x = '') => { R.fail += 1; console.log(`  ❌ ${n}${x ? ` — ${x}` : ''}`); };
 const check = (n, cond, x = '') => (cond ? ok(n, x) : bad(n, x));
+const skipTest = (n, x = '') => { R.skip += 1; console.log(`  ⏭️  ${n}${x ? ` — ${x}` : ''}`); };
 
 const EXPRESS_JOBS_DIR = new URL('../../server/src/jobs/', import.meta.url);
 
@@ -329,6 +330,63 @@ const run = async () => {
     check('null payload holatni BUZMAYDI', ent.getLimit('user_count') === 10);
     ent.set({ subscriptionActive: false });
     check('obuna ochiq rad etilishi mumkin', ent.get().subscriptionActive === false);
+
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('\n\x1b[1m5. PRODUSER rejimi (ishchi EMAS)\x1b[0m');
+
+    // SHARTNI OLDIN O'LCHAYMIZ: `pgboss` sxemasi Express tomonidan
+    // yaratilgan bo'lishi kerak — NestJS produser rejimida
+    // `migrate:false, createSchema:false` bilan ulanadi va sxemani
+    // O'ZI yaratmaydi (u Express'niki).
+    const [{ t: pgbossInstalled }] = await prisma.$queryRaw`
+      SELECT to_regclass('pgboss.version')::text AS t
+    `;
+
+    if (!pgbossInstalled) {
+      skipTest('produser rejimi testlari', "`pgboss` sxemasi yo'q (Express hali yurmagan)");
+    } else {
+      const schedulesBefore = Number(
+        (await prisma.$queryRaw`SELECT COUNT(*)::int AS c FROM pgboss.schedule`)[0].c,
+      );
+
+      // Mavjud bo'lmagan navbatga qo'yish — ulanishni ISBOTLAYDI, lekin
+      // haqiqiy ish YARATMAYDI (Express ishchisi bekorga uyg'onmaydi).
+      let produced = null;
+      try {
+        await scheduler.now(`nest-producer-probe-${process.pid}`, { probe: true });
+        produced = 'accepted';
+      } catch (err) {
+        produced = String(err?.message || err);
+      }
+
+      check(
+        'produser BAZAGA ULANDI',
+        scheduler.isConnected() === true,
+        `probe: ${produced.slice(0, 60)}`,
+      );
+      check(
+        "⚠ ulanish uni ISHCHIGA AYLANTIRMADI",
+        scheduler.isStarted() === false,
+        'navbatdan ish OLMAYDI',
+      );
+
+      const schedulesAfter = Number(
+        (await prisma.$queryRaw`SELECT COUNT(*)::int AS c FROM pgboss.schedule`)[0].c,
+      );
+      check(
+        'NestJS birorta CRON jadvalini yozmadi',
+        schedulesAfter === schedulesBefore,
+        `${schedulesBefore} → ${schedulesAfter}`,
+      );
+
+      // Express ro'yxatga olgan cronlar joyida turibdi — ya'ni NestJS
+      // ularni "unschedule" qilib yubormagan.
+      check(
+        "Express cronlari tegilmagan",
+        schedulesAfter >= express.size,
+        `${schedulesAfter} ta reja, Express ${express.size} ta job`,
+      );
+    }
   } finally {
     // O'ZI YOZGANINI TOZALAYDI (ttl job o'chirmaganlarini).
     await prisma.cache.deleteMany({ where: { key: { in: created.cacheKeys } } }).catch(() => null);
@@ -341,7 +399,7 @@ const run = async () => {
     await app.close();
   }
 
-  console.log(`\n  Jami: ${R.pass} ✅  ${R.fail} ❌\n`);
+  console.log(`\n  Jami: ${R.pass} ✅  ${R.fail} ❌  ${R.skip} ⏭️\n`);
   process.exitCode = R.fail === 0 ? 0 : 1;
 };
 

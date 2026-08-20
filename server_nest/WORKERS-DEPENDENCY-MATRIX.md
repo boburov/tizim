@@ -108,8 +108,8 @@ hisobot davrlari (O'TGAN TUGAGAN davr, joriy EMAS).
 | Job | Cron | Servislar | NestJS modul talabi | Jadvallar | Ruxsat | Filial | Tashqi API | Yon ta'sir | Holat |
 |---|---|---|---|---|---|---|---|---|---|
 | `daily.ttl-cleanup` | `15 3 * * *` | — (faqat Prisma) | **YO'Q** | `caches`, `refresh_tokens`, `ai_runs`, `ai_usage_logs` | yo'q | GLOBAL | — | Eskirgan qatorlar O'CHIRILADI (90d / 400d / `expiresAt`) | ✅ **KO'CHIRILDI** |
+| `storage.cleanup` | `30 2 * * *` | `storageAdmin.runScheduledCleanup` | **storage** ✅ (ko'chirildi) | `storage_settings`, `assignments`, fayl tizimi | yo'q | GLOBAL | — | FAYL O'CHIRADI (diskdan) | 🟡 servisi TAYYOR — job ro'yxatga qo'shilishi mumkin |
 | `usage.heartbeat` | `*/15 * * * *` (+1 marta startupda) | `aiBudget.monthlyUsage` (bitta raw SQL), `entitlements.setEntitlements` | **YO'Q** (leaf bog'liqliklar birga ko'chirildi) | `users`, `groups`, `ai_usage_logs`, `pg_database_size()` | yo'q | GLOBAL | **Admin panel API** | POST heartbeat; javobdan entitlements keshi to'ldiriladi | ✅ **KO'CHIRILDI** |
-| `storage.cleanup` | `30 2 * * *` | `storageAdmin.runScheduledCleanup` | **storage** | `storage_settings`, `assignments`, fayl tizimi | yo'q | GLOBAL | — | FAYL O'CHIRADI (diskdan) | ⛔ BLOKLANGAN |
 | *boot* `reconcileStorage` | startupda | `storage.reconcile` | **storage** | saqlash hisoblagichi + disk | yo'q | GLOBAL | — | Kvota hisoblagichi tekislanadi | ⛔ BLOKLANGAN |
 
 ---
@@ -169,22 +169,47 @@ UZILMAYDI), `viaBot` belgisi, muzlatilgan rol tekshiruvi.
 
 ## 4. IKKILANISHNING OLDINI OLISH (duplicate execution)
 
-Ikki qatlamli himoya. **Ikkalasi ham standart holda YOPIQ.**
+### 4.1 ⚠ PRODUSER ≠ ISHCHI — eng muhim farq
+
+| Rol | Nima qiladi | Ikkilanish beradimi | NestJS'da |
+|---|---|---|---|
+| **PRODUSER** | Navbatga ish QO'YADI (`scheduler.now` / `at`) | **YO'Q** — bitta HTTP so'rov → bitta yozuv | ✅ HAR DOIM yoqiq |
+| **ISHCHI (worker)** | Navbatdan ish OLADI va bajaradi | **HA** | ⛔ `NEST_WORKERS_ENABLED` bilan yopiq |
+| **CRON SOATI** | Jadval bo'yicha ish YARATADI | **HA — eng xavflisi** | ⛔ pg-boss `schedule: false` |
+
+NestJS produser sifatida ishlashi SHART: `notifications` moduli
+ko'chirilgan va u `notification.deliver` ni navbatga qo'yadi. Agar
+qo'ya olmasa, NestJS orqali yuborilgan xabar Telegram'ga UMUMAN
+yetmasdi. Qo'ygan ishni **Express'ning ishchisi** oladi — zanjir
+uzilmaydi va hech narsa ikki marta bajarilmaydi.
+
+Shuning uchun produser rejimida pg-boss ATAYLAB cheklangan holda ulanadi:
+
+```
+supervise: false      texnik xizmatni Express bajaradi
+schedule:  false      ⚠ CRON SOATI YURITILMAYDI — busiz Express
+                      ro'yxatga olgan 22 ta cron NestJS tomonidan HAM
+                      ishga tushardi (kuniga ikki marta accrual)
+migrate / createSchema: false
+                      `pgboss` sxemasi Express'niki; ikkinchi ilova
+                      uni ko'chirmaydi
+```
+
+### 4.2 Bayroqlar — ikkalasi ham standart holda YOPIQ
 
 1. **`NEST_WORKERS_ENABLED` (standart `false`)** — `JobsModule` navbat
-   ham yaratmaydi, `boss.start()` ham chaqirmaydi, cron ham ro'yxatga
-   olmaydi. Ya'ni Nest jarayoni pg-boss `pgboss` sxemasiga UMUMAN
-   tegmaydi. Express — yagona worker.
+   yaratmaydi, `boss.work()` chaqirmaydi va cron jadvalini YOZMAYDI.
+   Express — yagona ishchi va yagona cron egasi.
 2. **`NEST_BOT_POLLING` (standart `false`)** — bot nusxasi yaratiladi
    (yuborish uchun), lekin `startPolling()` chaqirilmaydi. Yoqilgan
    taqdirda ham `bot_locks` jadvalidagi `poller` qulfi Express bilan
-   BIR XIL (id, TTL, holder) — ya'ni ikkinchi poller qulfni ololmay
-   "faqat yuborish" rejimida qoladi. Telegram 409 Conflict yuzaga kelmaydi.
+   BIR XIL (id, TTL, holder shakli) — ikkinchi poller qulfni ololmay
+   "faqat yuborish" rejimida qoladi. Telegram 409 Conflict bo'lmaydi.
 
-Qo'shimcha: `NEST_WORKERS_ENABLED=true` bo'lsa ishga tushishda
-`pgboss.schedule` jadvalidan **begona egalik** tekshiriladi va
-`NEST_WORKER_JOBS` ro'yxatidagi joblardan boshqasi ro'yxatga olinmaydi
-(izolyatsiya rejimi) — ya'ni "hammasini birdan yoqib yuborish" tasodifan
+`NEST_WORKERS_ENABLED=true` bo'lsa ham FAQAT `NEST_WORKER_JOBS`
+ro'yxatidagi joblar ro'yxatga olinadi (izolyatsiya rejimi); bo'sh
+ro'yxat — hech biri (fail-closed), noma'lum nom esa jimgina emas,
+XATO bilan loglanadi. Ya'ni "hammasini birdan yoqib yuborish" tasodifan
 sodir bo'lmaydi.
 
 Kesib o'tish (cutover) tartibi, oila bo'yicha:
