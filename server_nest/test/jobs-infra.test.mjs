@@ -173,6 +173,20 @@ const run = async () => {
       scheduler.isStarted() === false,
       'pg-boss sxemasiga tegilmadi',
     );
+
+    // ⚠ pg-boss BAYROQLARI — ikkilanish himoyasining ko'rinmas qismi.
+    // Ular konstruktor ichida yashiringan bo'lsa, birontasi tasodifan
+    // olib tashlanganini hech narsa sezmasdi.
+    const opts = scheduler.bossOptions();
+    check('sxema Express bilan bir xil', opts.schema === 'pgboss');
+    check(
+      "⚠ CRON SOATI O'CHIQ (`schedule: false`)",
+      opts.schedule === false,
+      "busiz NestJS Express'ning 22 ta croniga IKKINCHI ega bo'lardi",
+    );
+    check("texnik xizmat O'CHIQ (`supervise: false`)", opts.supervise === false);
+    check("sxema ko'chirish O'CHIQ (`migrate: false`)", opts.migrate === false);
+    check("sxema yaratish O'CHIQ (`createSchema: false`)", opts.createSchema === false);
     check(
       'NEST_WORKERS_ENABLED standarti = false',
       String(process.env.NEST_WORKERS_ENABLED ?? 'false') !== 'true',

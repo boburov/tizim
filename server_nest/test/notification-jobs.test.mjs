@@ -27,7 +27,10 @@ import { AppModule } from '../dist/app.module.js';
 import { PrismaService } from '../dist/prisma/prisma.service.js';
 import { NotificationsService } from '../dist/modules/notifications/notifications.service.js';
 import { PersonalizeBodyService } from '../dist/modules/notifications/personalize-body.service.js';
-import { SchedulerService } from '../dist/jobs/scheduler.service.js';
+// ⚠ `SchedulerService` IMPORT QILINMAYDI: bu testda uning o'rniga
+// sanaydigan soxta qo'yiladi. Shunda (a) `pgboss` sxemasiga umuman
+// tegilmaydi va (b) "yetkazish navbatga NECHA MARTA qo'yildi" ANIQ
+// o'lchanadi — dublikat push aynan shu son orqali ko'rinadi.
 import { NotificationDeliverJob } from '../dist/jobs/notifications/notification-deliver.job.js';
 import { NotificationSendJob } from '../dist/jobs/notifications/notification-send.job.js';
 import { hashPassword } from '../dist/common/utils/password.js';
@@ -62,7 +65,13 @@ const run = async () => {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
   const prisma = app.get(PrismaService);
   const personalize = app.get(PersonalizeBodyService);
-  const scheduler = app.get(SchedulerService);
+
+  const enqueued = [];
+  const scheduler = {
+    async now(name, data) { enqueued.push({ name, data }); },
+    async at(when, name, data) { enqueued.push({ name, data, when }); },
+    async unschedule() {},
+  };
 
   const stub = makeStub();
   // ⚠ HAQIQIY servis, SOXTA yetkazish qatlami. Idempotentlik mantig'i
@@ -271,6 +280,57 @@ const run = async () => {
       '⚠ QAYTA yurish oluvchilarni ko\'paytirmadi',
       recips2 === recips1,
       `${recips1} → ${recips2}`,
+    );
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ⚠ POYGA (race): IKKI ISHCHI BIR VAQTDA — `claimed.count !== 1`
+    //
+    // Bu qo'riqchi KETMA-KET yurishda ko'rinmaydi (uni tashqi
+    // `status !== "scheduled"` sharti ushlaydi). U FAQAT ikki nusxa
+    // BIR VAQTDA yurganda ishlaydi — ya'ni aynan cutover paytida,
+    // Express va NestJS ikkalasi ham ishchi bo'lib qolsa.
+    //
+    // Ikkalasi ham tashqi shartdan O'TADI (ikkalasi `scheduled` ni
+    // ko'radi), lekin `updateMany` FAQAT BITTASIGA `count: 1` beradi.
+    // Da'vo qilmagani oluvchilarni materializatsiya QILMASLIGI shart —
+    // aks holda yetkazish navbatga IKKI MARTA tushardi va o'quvchi
+    // bir xil xabarni ikki marta olardi.
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('\n\x1b[1m4. Poyga: ikki ishchi bir vaqtda (claim)\x1b[0m');
+
+    const raced = await prisma.notification.create({
+      data: {
+        title: 'Poyga', body: 'R', category: 'other', audienceType: 'auto_system',
+        channels: ['inapp', 'telegram'], status: 'scheduled', senderRole: 'system',
+        scheduleAt: new Date(Date.now() - 1000),
+        audienceUsers: { connect: [{ id: uFresh.id }, { id: uNoLink.id }] },
+      },
+      select: { id: true },
+    });
+    created.notifIds.push(raced.id);
+
+    enqueued.length = 0;
+    await Promise.all([
+      sendJob.run({ notificationId: raced.id }),
+      sendJob.run({ notificationId: raced.id }),
+    ]);
+
+    const racedDeliveries = enqueued.filter((e) => e.name === 'notification.deliver').length;
+    check(
+      '⚠ ikki parallel ishchi → yetkazish navbatga FAQAT BIR MARTA qo\'yildi',
+      racedDeliveries === 1,
+      `${racedDeliveries} ta navbat yozuvi`,
+    );
+    const racedRecips = await prisma.notificationRecipient.count({
+      where: { notificationId: raced.id },
+    });
+    check('poygada oluvchilar ko\'paymadi', racedRecips === 2, `${racedRecips} ta`);
+    const racedNotif = await prisma.notification.findUnique({
+      where: { id: raced.id }, select: { status: true, recipientsCount: true },
+    });
+    check(
+      'poygadan keyin holat izchil',
+      racedNotif.status === 'sent' && racedNotif.recipientsCount === 2,
     );
 
     // ── BEKOR QILINGAN xabar YUBORILMAYDI ──

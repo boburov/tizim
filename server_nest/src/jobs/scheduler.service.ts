@@ -85,11 +85,19 @@ export class SchedulerService implements OnApplicationShutdown {
    * bo'lganda `PgBoss` obyekti UMUMAN yaratilmaydi va `pgboss` sxemasiga
    * bitta ham so'rov ketmaydi.
    */
-  private instance(): PgBoss {
-    if (this.boss) return this.boss;
-
+  /**
+   * pg-boss uchun amaldagi sozlamalar.
+   *
+   * ⚠ ALOHIDA METOD — TEST QILINISHI UCHUN. Bu yerdagi to'rt bayroq
+   * ikkilanish himoyasining bir qismi va ular konstruktor ichida
+   * "ko'rinmas" bo'lib qolsa, birontasi tasodifan olib tashlanganini
+   * hech qanday test sezmasdi (`schedule: false` yo'qolsa NestJS
+   * Express'ning 22 ta croniga ikkinchi ega bo'lardi — va bu faqat
+   * ertasi kuni, ikki marta bajarilgan ish orqali bilinardi).
+   */
+  bossOptions(): Record<string, unknown> {
     const asWorker = this.workersEnabled();
-    const boss = new PgBoss({
+    return {
       connectionString: this.config.get('DATABASE_URL', { infer: true }),
       // ⚠ Express bilan BIR XIL sxema. Boshqasi bo'lsa Nest o'zining
       // alohida navbat to'plamini yaratardi va NestJS qo'ygan ishni
@@ -100,7 +108,13 @@ export class SchedulerService implements OnApplicationShutdown {
       ...(asWorker
         ? {}
         : { supervise: false, schedule: false, migrate: false, createSchema: false }),
-    } as never);
+    };
+  }
+
+  private instance(): PgBoss {
+    if (this.boss) return this.boss;
+
+    const boss = new PgBoss(this.bossOptions() as never);
     boss.on('error', (err: unknown) => this.logger.error('pg-boss xatosi', err));
     this.boss = boss;
     return boss;
