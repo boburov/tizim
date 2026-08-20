@@ -35,6 +35,14 @@ export const SCOPE = Object.freeze({
   VIA_USER: "via-user",
   // branchId YO'Q, IKKI yo'ldan biri bilan (guruh YOKI foydalanuvchi)
   VIA_GROUP_OR_USER: "via-group-or-user",
+  // branchId YO'Q, OTA YOZUV orqali bog'lanadi (guruh ham, foydalanuvchi
+  // ham emas - masalan `journalLine` -> `journalEntry`).
+  //
+  // NEGA ALOHIDA TUR KERAK BO'LDI: bunday qatorni `global` deb belgilash
+  // XATO bo'lardi (u filialga tegishli), `via-group`/`via-user` esa
+  // noto'g'ri yo'lni ko'rsatardi. Filtrlash DOIM otani yuklash orqali
+  // ketadi - ya'ni bola qatorni ota-siz so'rash o'z-o'zidan xato.
+  VIA_PARENT: "via-parent",
   // Butun markazga umumiy taksonomiya/sozlama - filtrlanmaydi.
   GLOBAL: "global",
   // Filial o'lchovi YO'Q va bo'lishi ham SHART emas (infratuzilma).
@@ -65,6 +73,13 @@ export const RESOURCE_SCOPE = Object.freeze({
   // qolardi. Route `leads.manage` bilan himoyalangan.
   leadRoutingRule: SCOPE.BRANCH,
   openingBalance: SCOPE.BRANCH,
+  // QAYTARIM - `branchId` MAJBURIY: pul qaysi filial kassasidan
+  // chiqqanini bilmasdan qaytarib bo'lmaydi.
+  refund: SCOPE.BRANCH,
+  // FOYDALANUVCHI <-> FILIAL bog'lanishi. Bu jadval ko'lamning O'ZINI
+  // belgilaydi, lekin `branchId` maydoni bor - demak u ham filtrlanadi
+  // (masalan "shu filialga biriktirilganlar" ro'yxati).
+  userBranchAssignment: SCOPE.BRANCH,
   // XONA - filialning FIZIK resursi (Faza 3). Kursdan farqli ravishda
   // filialga bog'langan: "3-xona" har filialda boshqa xona.
   room: SCOPE.BRANCH,
@@ -93,6 +108,17 @@ export const RESOURCE_SCOPE = Object.freeze({
   // shu filial uchun istisno. branchFilter() bilan kesilsa bazaviy qator
   // yo'qolib, filialda narx umuman topilmasdi (coursePrice.service.js).
   coursePrice: SCOPE.BRANCH_OPTIONAL,
+  // BYUDJET - `branchId` NULL bo'lishi mumkin: markaz butun tarmoq
+  // uchun bitta byudjet tuzishi mumkin va u HAMMAGA ko'rinishi kerak.
+  budget: SCOPE.BRANCH_OPTIONAL,
+  // TAKRORLANUVCHI CHIQIM va uning oylik hodisalari - xuddi shunday:
+  // `branchId` null bo'lsa chiqim butun markazniki (ijara, litsenziya).
+  recurringExpense: SCOPE.BRANCH_OPTIONAL,
+  recurringExpenseOccurrence: SCOPE.BRANCH_OPTIONAL,
+  // MOLIYAVIY AUDIT IZI - `branchId` null bo'lishi mumkin (tarmoq
+  // darajasidagi amal). Iz HECH QACHON o'chirilmaydi, shuning uchun
+  // uni filtrlash faqat KO'RSATISH uchun.
+  financialAuditLog: SCOPE.BRANCH_OPTIONAL,
 
   // ── IKKI FILIALGA TEGISHLI ──
   // Inkassatsiyada IKKI filial bor: jo'natuvchi va qabul qiluvchi.
@@ -114,6 +140,9 @@ export const RESOURCE_SCOPE = Object.freeze({
   teacherAbsence: SCOPE.VIA_GROUP,
   teacherAttendance: SCOPE.VIA_GROUP,
   teacherGroupPeriod: SCOPE.VIA_GROUP,
+  // DARS JADVALI - guruhning ajralmas qismi (Mongo'da embedded massiv
+  // edi, Prisma'da alohida jadval).
+  groupScheduleItem: SCOPE.VIA_GROUP,
 
   // ── FOYDALANUVCHI ORQALI ──
   activityLog: SCOPE.VIA_USER,
@@ -150,6 +179,14 @@ export const RESOURCE_SCOPE = Object.freeze({
   role: SCOPE.GLOBAL,
   storageSettings: SCOPE.GLOBAL,
   systemNotification: SCOPE.GLOBAL,
+
+  // ── OTA YOZUV ORQALI (guruh ham, foydalanuvchi ham emas) ──
+  //
+  // Bularning HAMMASI moliyaviy: ular otasi bilan birga o'qiladi va
+  // ALOHIDA so'ralmaydi. Shuning uchun ko'lam otada hal qilinadi.
+  budgetLine: SCOPE.VIA_PARENT, // -> budget
+  debtWriteOffBreakdown: SCOPE.VIA_PARENT, // -> debtWriteOff (via-group)
+  journalLine: SCOPE.VIA_PARENT, // -> journalEntry (branch)
 
   // ── INFRATUZILMA (filial o'lchovi ma'nosiz) ──
   botLock: SCOPE.INFRA,
