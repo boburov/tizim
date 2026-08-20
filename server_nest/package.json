@@ -23,6 +23,7 @@
     "test:users-parity": "node test/users-parity.test.mjs",
     "test:branches-parity": "node test/branches-parity.test.mjs",
     "test:journal-parity": "node test/journal-parity.test.mjs",
+    "test:finance-report-parity": "node test/finance-report-parity.test.mjs",
     "test:rooms-parity": "node test/rooms-parity.test.mjs",
     "test:courses-parity": "node test/courses-parity.test.mjs",
     "test:edu-helpers": "node test/education-helpers-parity.test.mjs",

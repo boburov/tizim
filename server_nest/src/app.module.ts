@@ -27,6 +27,7 @@ import { HolidaysModule } from './modules/holidays/holidays.module.js';
 import { SearchModule } from './modules/search/search.module.js';
 import { ActivityHistoryModule } from './modules/activity-history/activity-history.module.js';
 import { JournalModule } from './modules/journal/journal.module.js';
+import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -114,6 +115,8 @@ import { JournalModule } from './modules/journal/journal.module.js';
     // Jurnal BIRINCHI ko'chiriladi: qolgan hamma moliya moduli
     // (to'lov, depozit, chiqim, maosh, qaytarim) unga yozadi.
     JournalModule,
+    // Moliya hisoboti — KPI, dinamika, guruh kesimi, ledger, write-off.
+    FinanceReportModule,
   ],
 })
 export class AppModule {}
