@@ -112,7 +112,7 @@ export class SalaryTransactionService {
    * ── ENDI ──
    *
    * `applyPaidDelta` `tx` ni HURMAT QILADI, ya'ni yuqoridagi atomiklik
-   * da'vosi HAQIQATAN bajariladi. `test/teacher-salary-atomicity.test.mjs`
+   * da'vosi HAQIQATAN bajariladi. `test/money-atomicity.test.mjs`
    * buni IKKALA stekda o'lchaydi.
    */
   private async writeSalaryTransaction({

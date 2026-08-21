@@ -729,7 +729,32 @@ export const historyByEmployee = async (employeeId, { limit = 12 } = {}) => {
  * `updatedAt`: Prisma'ning `@updatedAt` KLIENT tomonida ishlaydi, xom
  * SQL uni chetlab o'tadi - ochiq yoziladi.
  */
-export const applyPaidDelta = async (payrollId, delta, { capToRemaining = false } = {}) => {
+export const applyPaidDelta = async (
+  payrollId,
+  delta,
+  { capToRemaining = false, tx = null } = {},
+) => {
+  // ═══════════════════════════════════════════════════════════════════
+  // B20 (XODIMLAR MAOSHI SHOXI) — TRANZAKSIYADAN CHIQIB KETISH TUZATILDI.
+  //
+  // Imzo ilgari `tx` ni UMUMAN QABUL QILMASDI, chaqiruvchi
+  // (`staffSalaryTransaction.writeTransaction`) esa uni
+  // `{ capToRemaining: true, tx }` bilan uzatardi — ya'ni argument
+  // JIMGINA tashlab yuborilardi va xom `UPDATE` GLOBAL klientda,
+  // ochiq tranzaksiyadan TASHQARIDA bajarilardi.
+  //
+  // OQIBATI: `staffSalaryTransaction.create` yoki `postStaffPayroll`
+  // yiqilsa to'lov qatori va jurnal ROLLBACK bo'lardi, `paidAmount` esa
+  // O'SGANICHA qolardi — maosh "to'langan" ko'rinib, unga mos PUL
+  // YOZUVI bo'lmasdi.
+  //
+  // `tx` berilmasa xatti-harakat AVVALGIDEK (global klient), ya'ni
+  // tranzaksiyasiz chaqiruvchi (`remove()`) ta'sirlanmaydi.
+  //
+  // ⚠ IKKALA STEKDA BIR VAQTDA
+  // (`server_nest/src/modules/staff-payroll/staff-payroll.service.ts`).
+  // ═══════════════════════════════════════════════════════════════════
+  const db = tx || prisma;
   const id = String(payrollId);
   const d = Number(delta) || 0;
 
@@ -747,17 +772,17 @@ export const applyPaidDelta = async (payrollId, delta, { capToRemaining = false 
 
   const affected =
     capToRemaining && d > 0
-      ? await prisma.$executeRaw`
+      ? await db.$executeRaw`
           UPDATE "staff_payrolls" ${setClause}
           WHERE "id" = ${id}
             AND "paidAmount" + ${d}::numeric <= "finalAmount"
         `
-      : await prisma.$executeRaw`
+      : await db.$executeRaw`
           UPDATE "staff_payrolls" ${setClause}
           WHERE "id" = ${id}
         `;
 
   if (affected === 0) return null;
-  const row = await prisma.staffPayroll.findUnique({ where: { id } });
+  const row = await db.staffPayroll.findUnique({ where: { id } });
   return row ? withLegacyId(row) : null;
 };

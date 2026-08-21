@@ -27,7 +27,7 @@
     "test:fixture-residue": "node --env-file=../server/.env test/fixture-residue.test.mjs",
     "test:upload-dir-parity": "node --env-file=../server/.env test/upload-dir-parity.test.mjs",
     "test:branch-scope-security": "node --env-file=../server/.env test/branch-scope-security.test.mjs",
-    "test:teacher-salary-atomicity": "node --env-file=../server/.env test/teacher-salary-atomicity.test.mjs",
+    "test:money-atomicity": "node --env-file=../server/.env test/money-atomicity.test.mjs",
     "test:journal-parity": "node test/journal-parity.test.mjs",
     "test:finance-report-parity": "node test/finance-report-parity.test.mjs",
     "test:expense-approvals-parity": "node test/expense-approvals-parity.test.mjs",

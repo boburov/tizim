@@ -66,17 +66,16 @@ export class StaffSalaryTransactionService {
    * yozamiz. Tartib ATAYLAB shunday — ikki marta bosilgan tugma
    * qoldiqdan oshib keta olmaydi (`capToRemaining`).
    *
-   * ⚠⚠ MA'LUM CHEKLOV (EXPRESS BILAN AYNAN BIR XIL):
-   * `applyPaidDelta` xom `UPDATE` ni GLOBAL klientda bajaradi va
-   * tranzaksiya klientini QABUL QILMAYDI. Express'da ham chaqiruv
-   * `{ capToRemaining: true, tx }` shaklida, lekin `tx` funksiya
-   * imzosida YO'Q va e'tiborga OLINMAYDI. Ya'ni `paidAmount` o'zgarishi
-   * tranzaksiyadan TASHQARIDA sodir bo'ladi va keyingi bosqich
-   * (`postStaffPayroll`) yiqilsa ROLLBACK QILINMAYDI.
+   * ⚠⚠ B20 — TUZATILDI (ikkala stekda bir vaqtda). `applyPaidDelta`
+   * ilgari `tx` ni QABUL QILMASDI: chaqiruv `{ capToRemaining: true,
+   * tx }` shaklida edi-yu, argument jimgina tashlab yuborilardi va
+   * `paidAmount` o'zgarishi tranzaksiyadan TASHQARIDA sodir bo'lardi.
+   * Keyingi bosqich (`postStaffPayroll`, audit) yiqilsa qator va jurnal
+   * qaytarilardi, `paidAmount` esa o'sganicha qolardi.
    *
-   * Bu ATAYLAB takrorlanmoqda: imzoni "tuzatish" xatti-harakatni
-   * o'zgartirardi va ikki stek ajralib ketardi. Kamchilik hisobotga
-   * chiqarilgan.
+   * Endi `tx` UZATILADI va xom `UPDATE` ayni shu tranzaksiyada
+   * bajariladi — rollback `paidAmount` ni ham qaytaradi.
+   * `test/staff-payroll-atomicity.test.mjs` da o'lchangan.
    */
   private async writeTransaction({
     payroll, day, amount, method, note, createdBy, expenseApprovalId = null,
@@ -96,6 +95,7 @@ export class StaffSalaryTransactionService {
     const created = await this.prisma.$transaction(async (tx) => {
       const updated = await this.payroll.applyPaidDelta(payroll.id, amount, {
         capToRemaining: true,
+        tx: tx as never,
       });
       if (!updated) {
         const remaining = Math.max(

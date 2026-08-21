@@ -11,6 +11,10 @@ import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { KpiEngineService, type AppliedRule } from './kpi-engine.service.js';
 import { PayrollAuditService, PAYROLL_AUDIT_ACTIONS } from './payroll-audit.service.js';
 import { monthRange } from './kpi-triggers.service.js';
+// Tranzaksiya klientining yagona ta'rifi `journal.service.ts` da —
+// `applyPaidDelta` xom SQL ni AYNI o'sha klientda bajarishi shart
+// (B20). Takroriy ta'rif ikki joyda ajralib ketardi.
+import type { TxClient } from '../journal/journal.service.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -748,19 +752,34 @@ export class StaffPayrollService {
    * hisoblanadi — shuning uchun bitta ifoda ikki marta takrorlanadi,
    * xom `paidAmount + delta` EMAS.
    *
-   * ⚠⚠ EXPRESS BILAN BIR XIL: `tx` QABUL QILINMAYDI. Chaqiruvchi
-   * (`staff-salary-transaction.service`) uni `{ tx }` bilan chaqiradi,
-   * lekin Express'da ham u E'TIBORGA OLINMAYDI va xom `UPDATE` global
-   * klientda, tranzaksiyadan TASHQARIDA bajariladi. Bu qasddan
-   * takrorlanmoqda: imzoni "tuzatish" xatti-harakatni o'zgartirardi.
-   * Batafsil izoh servis faylida.
+   * ⚠⚠ B20 (XODIMLAR MAOSHI SHOXI) — TUZATILDI. Imzo ilgari `tx` ni
+   * QABUL QILMASDI, chaqiruvchi (`staff-salary-transaction.service`)
+   * esa uni `{ capToRemaining: true, tx }` bilan uzatardi: argument
+   * JIMGINA tashlab yuborilardi va xom `UPDATE` GLOBAL klientda, ochiq
+   * tranzaksiyadan TASHQARIDA bajarilardi. Ya'ni `staffSalaryTransaction`
+   * qatori yoki jurnal yiqilsa ular ROLLBACK bo'lardi, `paidAmount` esa
+   * o'sganicha qolardi — maosh "to'langan" ko'rinib, PUL YOZUVI
+   * bo'lmasdi.
+   *
+   * `tx` berilmasa xatti-harakat AVVALGIDEK (global klient) — ya'ni
+   * tranzaksiyasiz chaqiruvchi (`remove()`) ta'sirlanmaydi.
+   *
+   * ⚠ IKKALA STEKDA BIR VAQTDA
+   * (`server/src/modules/staffPayroll/services/staffPayroll.service.js`).
    * ═══════════════════════════════════════════════════════════════════
    */
   async applyPaidDelta(
     payrollId: string,
     delta: number,
-    { capToRemaining = false }: { capToRemaining?: boolean } = {},
+    {
+      capToRemaining = false,
+      tx = null,
+    }: { capToRemaining?: boolean; tx?: TxClient | null } = {},
   ): Promise<unknown> {
+    // `tx` berilgan bo'lsa XOM SQL HAM, keyingi o'qish HAM o'sha
+    // tranzaksiyada bajarilishi shart — aks holda rollback ularni
+    // qaytara olmaydi.
+    const db: TxClient = tx ?? (this.prisma as unknown as TxClient);
     const id = String(payrollId);
     const d = Number(delta) || 0;
 
@@ -778,18 +797,18 @@ export class StaffPayrollService {
 
     const affected =
       capToRemaining && d > 0
-        ? await this.prisma.$executeRaw`
+        ? await db.$executeRaw`
             UPDATE "staff_payrolls" ${setClause}
             WHERE "id" = ${id}
               AND "paidAmount" + ${d}::numeric <= "finalAmount"
           `
-        : await this.prisma.$executeRaw`
+        : await db.$executeRaw`
             UPDATE "staff_payrolls" ${setClause}
             WHERE "id" = ${id}
           `;
 
     if (affected === 0) return null;
-    const row = await this.prisma.staffPayroll.findUnique({ where: { id } });
+    const row = await db.staffPayroll.findUnique({ where: { id } });
     return row ? withLegacyId(row) : null;
   }
 }
