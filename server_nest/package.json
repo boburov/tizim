@@ -32,6 +32,7 @@
     "test:courses-parity": "node test/courses-parity.test.mjs",
     "test:edu-helpers": "node test/education-helpers-parity.test.mjs",
     "test:groups-read-parity": "node test/groups-read-parity.test.mjs",
+    "test:attendance-parity": "node test/attendance-parity.test.mjs",
     "test:jobs": "node test/jobs-infra.test.mjs",
     "test:notifications-parity": "node test/notifications-parity.test.mjs",
     "test:notification-catalog-parity": "node test/notification-catalog-parity.test.mjs",
