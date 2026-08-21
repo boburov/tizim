@@ -200,11 +200,21 @@ export const createReporter = (title) => {
    * @param fn      `(base) => Promise<{status, body}>`
    * @param subsOf  `(base) => [[from, to], ...]` — stekka xos almashtirishlar
    */
-  const both = async (name, fn, subsOf = () => []) => {
+  /**
+   * @param onEach `(base, res) => void` — javob KELGANDA, lekin
+   *        solishtirishdan OLDIN chaqiriladi. Testga stekka xos
+   *        qiymatlarni (bazada generatsiya qilingan ID'lar) yig'ib
+   *        olish imkonini beradi — ular `subsOf()` da belgiga
+   *        almashtiriladi. Usiz har bir chaqiruvni qo'lda o'rash
+   *        kerak bo'lardi va bu qavslarni chalkashtirardi.
+   */
+  const both = async (name, fn, subsOf = () => [], onEach = null) => {
     let e, n;
     try {
       e = await fn(EXPRESS);
+      if (onEach) onEach(EXPRESS, e);
       n = await fn(NEST);
+      if (onEach) onEach(NEST, n);
     } catch (err) {
       skip(name, err.message);
       return {};

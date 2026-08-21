@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { toUtcMidnight } from '../../common/utils/date.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -55,4 +56,77 @@ export class StudentFreezeService {
     for (const r of rows) map.set(String(r.studentId), r as ActiveFreeze);
     return map;
   }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // DAVOMAT INTEGRATSIYASI — `helpers/studentFreeze.helper.js` dan.
+  //
+  // ⚠ FAQAT DAVOMATGA TEGISHLI IKKI FUNKSIYA KO'CHIRILDI.
+  // `loadFreezeWindows` / `loadFreezeWindowsByStudent` / `isFrozenOn`
+  // TO'LOV proratsiyasi uchun va ular `finance` moduli bilan BIRGA
+  // ko'chadi — hozir ko'chirilsa ishlatilmaydigan nusxa qolib, vaqt
+  // o'tib asl nusxadan ajralib ketardi.
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Muzlatish oynasini davomat "exemption" shakliga aylantiradi.
+   *
+   * ⚠⚠ CHEGARA SEMANTIKASI BIR KUNGA FARQ QILADI ⚠⚠
+   *   muzlatish : `[startDate, endDate)` — endDate EXCLUSIVE
+   *               (chiqarish kuni ARTIQ muzlatilmagan)
+   *   exemption : `[startDate, endDate]` — endDate INCLUSIVE
+   *
+   * Shu sababli oxirgi muzlatilgan kun = `endDate - 1 kun`. Ayirilmasa
+   * o'quvchi muzlatishdan CHIQQAN kuni ham "exempt" bo'lib qolardi va
+   * o'sha kun davomat foizidan tushib ketardi.
+   *
+   * `daysOfWeek: []` = HAMMA kun (to'liq muzlatish).
+   */
+  freezeToExemption(f: { studentId: string; startDate: Date; endDate: Date | null }) {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    return {
+      // Prisma ustuni `studentId`; chaqiruvchilar (attendance) eski
+      // `student` nomini o'qiydi — IKKALASI ham beriladi.
+      studentId: f.studentId,
+      student: f.studentId,
+      isActive: true,
+      startDate: f.startDate,
+      endDate: f.endDate
+        ? new Date(toUtcMidnight(f.endDate).getTime() - DAY_MS)
+        : null,
+      daysOfWeek: [] as string[],
+      __source: 'freeze',
+    };
+  }
+
+  /**
+   * HAQIQIY exemption'lar + muzlatishdan olingan PSEUDO-exemption'lar.
+   *
+   * ⚠ BO'SH RO'YXAT = "HECH KIM" (fail-closed), `undefined` EMAS.
+   * `{ studentId: { in: [] } }` hech nima qaytaradi; filtrni tushirib
+   * qoldirish esa BUTUN jadvalni qaytarardi — ya'ni bir o'quvchining
+   * muzlatishi hammaga qo'llanardi.
+   */
+  async loadExemptionsWithFreezes(studentIds: string | string[]) {
+    const ids = (Array.isArray(studentIds) ? studentIds : [studentIds])
+      .filter(Boolean)
+      .map(String);
+    const where =
+      ids.length === 1 ? { studentId: ids[0] } : { studentId: { in: ids } };
+
+    const [exemptions, freezes] = await Promise.all([
+      this.prisma.attendanceExemption.findMany({
+        where: { ...where, isActive: true },
+      }),
+      this.prisma.studentFreeze.findMany({ where: { ...where, isDeleted: false } }),
+    ]);
+
+    // Haqiqiy exemption'da ham `student` taxallusi kerak — chaqiruvchi
+    // `ex.student` bo'yicha guruhlaydi.
+    const normalized = exemptions.map((e) => ({ ...e, student: e.studentId }));
+    return [
+      ...normalized,
+      ...freezes.map((f) => this.freezeToExemption(f)),
+    ] as Record<string, any>[];
+  }
+
 }

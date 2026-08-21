@@ -5,11 +5,16 @@ import { CredentialScopeService } from './rbac/credential-scope.js';
 import { RolesHelperService } from './rbac/roles.helper.js';
 import { StudentCompletionService } from './helpers/student-completion.service.js';
 import { MembershipService } from './helpers/membership.service.js';
+import { CorrelationCacheService } from './helpers/correlation-cache.service.js';
 import { UserRelationsService } from './helpers/user-relations.service.js';
 import { PermissionsGuard } from './guards/permissions.guard.js';
 import { AllPermissionsGuard } from './guards/all-permissions.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
 import { PermissionOrSelfGuard } from './guards/permission-or-self.guard.js';
+import {
+  GroupAccessGuard,
+  StudentAccessGuard,
+} from './guards/attendance-scope.guard.js';
 import { AuthMiddleware } from '../middleware/auth.middleware.js';
 
 /**
@@ -42,11 +47,14 @@ import { AuthMiddleware } from '../middleware/auth.middleware.js';
     RolesHelperService,
     StudentCompletionService,
     MembershipService,
+    CorrelationCacheService,
     UserRelationsService,
     PermissionsGuard,
     AllPermissionsGuard,
     RolesGuard,
     PermissionOrSelfGuard,
+    GroupAccessGuard,
+    StudentAccessGuard,
     AuthMiddleware,
   ],
   exports: [
@@ -56,11 +64,14 @@ import { AuthMiddleware } from '../middleware/auth.middleware.js';
     RolesHelperService,
     StudentCompletionService,
     MembershipService,
+    CorrelationCacheService,
     UserRelationsService,
     PermissionsGuard,
     AllPermissionsGuard,
     RolesGuard,
     PermissionOrSelfGuard,
+    GroupAccessGuard,
+    StudentAccessGuard,
     AuthMiddleware,
   ],
 })

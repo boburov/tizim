@@ -35,7 +35,7 @@ Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/sr
 | `middleware/rateLimiter.js` | ✅ `common/middleware/rate-limit.ts` (+ `trust proxy` — pastga qarang) |
 | `app.js::app.set("trust proxy", 1)` | ✅ `main.ts` (⚠ KO'CHIB QOLGAN EDI — xavfsizlik) |
 | `middleware/auditLog.middleware.js` | ⬜ FAZA 2.7 |
-| `middleware/attendanceScope.js` | ⬜ FAZA 6 |
+| `middleware/attendanceScope.js` | ✅ `common/guards/attendance-scope.guard.ts` |
 | `middleware/enforceLimit.js` | ⬜ |
 | `middleware/uploadAttachment.js`, `uploadSheet.js` | ⬜ FAZA 10 (multer) |
 | `middleware/requireDatasetPermission.js` | ⬜ FAZA 9 (exports) |
@@ -63,13 +63,14 @@ Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/sr
 | `helpers/period.helper.js` | ✅ `common/utils/period.ts` |
 | `helpers/attendance.helper.js` | ✅ `common/utils/attendance.ts` + `date.ts` |
 | `helpers/lessonCancellation.helper.js` | ⬜ FAZA 6 |
-| `helpers/studentFreeze.helper.js` | ⬜ FAZA 4 |
+| `helpers/studentFreeze.helper.js` | qisman ✅ — davomat qismi (`loadExemptionsWithFreezes`) `StudentFreezeService` da; to'lov qismi (`loadFreezeWindows*`) moliya bilan birga |
 | `helpers/roomOccupancy.helper.js` | ⬜ FAZA 3 (`/rooms` marshrutlarida ISHLATILMAYDI — u `branchAnalytics` uchun) |
 | `constants/delegation.js` | ✅ `common/constants/delegation.ts` |
 | `constants/payrollAudit.js` | ✅ `common/constants/payroll-audit.ts` |
 | `constants/ledger.js`, `constants/treasury.js` | ✅ `common/constants/{ledger,treasury}.ts` (FAZA 7) |
 | `helpers/selfSalary.guard.js` | ⬜ FAZA 8 |
-| `helpers/correlationCache.js`, `configMetrics.helper.js` | ⬜ FAZA 9 |
+| `helpers/correlationCache.js` | ✅ `common/helpers/correlation-cache.service.ts` |
+| `configMetrics.helper.js` | ⬜ FAZA 9 |
 | `utils/ApiError.js` | ✅ `common/errors/api-error.ts` |
 | `utils/jwt.js`, `hashToken.js`, `credentials.js`, `phone.js`, `serialize.js` | ✅ |
 | `utils/cookie.helper.js` | ✅ `common/utils/cookie.ts` |
@@ -152,7 +153,7 @@ keraksiz deb e'lon qilinishi kerak. Ikkalasi ham MAHSULOT QARORI.
 |---|---|---|---|
 | groups (5a — o'qish) | `/api/groups` | 9/24 | ✅ |
 | groups (5b — yozish) | `/api/groups` | 15/24 | ⬜ MOLIYA/MAOSHDAN KEYIN |
-| attendance | `/api/attendance` | 11 | ⬜ |
+| attendance | `/api/attendance` | 11 | ✅ 11/11 |
 | teacherAttendance | `/api/teacher-attendance` | 2 | ⬜ |
 | attendanceExemptions | `/api/attendance-exemptions` | 4 | ⬜ |
 | lessonCancellations | `/api/lesson-cancellations` | 3 | ⬜ |
@@ -353,3 +354,7 @@ takrorlandi. Har biri klient shartnomasining bir qismi, shuning uchun
 | B13 | `GET /groups/:id/history` | Guruh TUGAGAN bo'lsa **400** ("Kurs tugagan..."), 200 EMAS. Sabab: handler `ensureGroup()` dan o'tadi, u esa YOZUV amallari uchun mo'ljallangan. Natijada arxivlangan guruhning a'zolik TARIXINI umuman ko'rib bo'lmaydi. | ⚠ ANIQ ZIDDIYAT: `GET /groups/:id` AYNI arxivlangan guruh uchun 200 beradi. Jimgina tuzatilmadi — javob 400 → 200 ga o'zgarardi, ya'ni bu ko'chirish ishi emas, alohida qaror. `test/groups-read-parity.test.mjs` QULFLAB turadi. |
 | B14 | `POST /groups/me/removal-notice/seen` | Express **200** qaytaradi (`res.json`), NestJS `POST` standarti esa **201**. `@HttpCode(200)` bilan tenglashtirildi. | KO'CHIRISHDA TOPILGAN VA TUZATILGAN paritet xatosi. Xulosa: HAR BIR ko'chirilgan `POST` marshrutida status OCHIQ tekshirilishi shart. |
 | B15 | `GET /groups/:id/available-teachers` | Express marshrutida `validate()` CHAQIRILMAGAN — ID sxemadan o'tmaydi, yaroqsiz ID 400 emas **404** beradi. | Ataylab takrorlandi: validator qo'shilsa status jimgina o'zgarardi. |
+| B16 | `attendance.service::consecutiveAbsences()` | **HAR CHAQIRUVDA YIQILADI.** Prisma'ga MONGO filtri uzatiladi: `{ student: id, isDeleted: { $ne: true }, dateKey: { $lte: … } }` → `PrismaClientValidationError` ("Argument `student`: Invalid value provided"). Xato `notifyConsecutiveAbsences` da `.catch()` bilan yutiladi. NATIJA: ketma-ket qoldirish ogohlantirishi `consecutiveAbsencesAlert = 3` bo'lsa ham **HECH QACHON yuborilmaydi**. Tekshirib ko'rilgan (ikkala shox ham yiqiladi). | ⚠ HAQIQIY XATO, ATAYLAB EMAS (Mongo qoldig'i). NestJS'da `consecutiveAbsences()` TO'G'RI yozilgan (bila turib buzuq kod ko'chirilmaydi), lekin ogohlantirish `EXPRESS_NOTIFICATION_IS_DEAD` bayrog'i bilan ATAYLAB o'chirilgan — aks holda ko'chirish paytida egalarga kutilmagan xabarlar oqimi ketardi. **Yoqish alohida qaror**: Express ham tuzatilib, ikkalasi BIR VAQTDA yoqilishi kerak. `test/attendance-parity.test.mjs` 3 marta ketma-ket "absent" dan keyin `notifications` jadvali O'SMASLIGINI qulflab turadi. |
+| B17 | `attendance.service::getDashboardStats()` — `groupBreakdown` | `groupMemberships` `select: { groupId, studentId, student }` bilan olinadi (`joinedAt`/`leftAt` SO'RALMAGAN), keyin esa `m.joinedAt` / `m.leftAt` o'qiladi — ikkalasi ham `undefined`. `computeClassDays` da `undefined > from` HAR DOIM `false` → `effFrom = from`, `effTo = to`. Ya'ni **har bir o'quvchi butun oraliq davomida a'zo deb hisoblanadi** va oraliq o'rtasida qo'shilgan/chiqqan o'quvchining dars kunlari SHISHIRILADI. | ⚠ HAQIQIY XATO: `GET /attendance/groups/:id/summary` AYNI ma'lumot uchun BOSHQA son beradi. TypeScript ko'chirishda buni ushlab qoldi. `select` ga ikki maydon qo'shilsa dashboard raqamlari O'ZGARADI — bu ko'chirish ishi emas, alohida qaror. NestJS Express xatti-harakatini AYNAN takrorlaydi (`as never` bilan). |
+| B18 | `getGroupMonthly` / `getGroupSummary` javobidagi `group._id` | Express `{ _id: group._id, … }` yozadi, lekin `ensureGroup()` Prisma qatorini qaytaradi va unda `_id` YO'Q (faqat `id`). `_id` `undefined` bo'lgani uchun `JSON.stringify` kalitni butunlay TASHLAB KETADI — javobda `group: { name, schedule }` qoladi va **klient guruh ID'sini bu yerdan ola olmaydi**. | Zararsiz, lekin shartnomaning bir qismi. `group.id` ga o'zgartirilsa javobga YANGI kalit qo'shilardi. `listForGroupOnDate` esa `_id: group.id` yozadi — ya'ni bir modul ichida ikki xil. Ataylab saqlandi. |
+| B19 | `teacherAbsence.service::setPresent()` | `setAbsent()` dan farqli: guruh MAVJUDLIGI tekshirilmaydi (`loadGroup` chaqirilmaydi) va kelajak-kun to'sig'i YO'Q. Mavjud bo'lmagan guruh uchun ham `{ removed: false }` (200) qaytadi, 404 EMAS. | Ataylab takrorlandi — "belgini olib tashlash" idempotent amal. |

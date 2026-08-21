@@ -31,4 +31,13 @@ export interface AuthenticatedRequest extends Request {
   allowedBranchIds?: string[];
   canSeeAllBranches?: boolean;
   branchRole?: string | null;
+  /**
+   * `StudentAccessGuard` hisoblab qo'yadigan GURUH CHEKLOVI.
+   *   `null` = cheklov yo'q (owner / o'quvchi o'zini so'raganda)
+   *   `[]`   = hech narsa ko'rinmaydi (fail-closed)
+   *
+   * ⚠ Servis qatlami buni HISOBGA OLISHI SHART — aks holda o'qituvchi
+   * o'zi o'qitmaydigan guruhlardagi davomatni ham ko'rardi (A-1).
+   */
+  scopeGroupIds?: string[] | null;
 }

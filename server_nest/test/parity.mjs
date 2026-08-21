@@ -188,6 +188,27 @@ const CASES = [
   { name: 'groups/me/teach (owner → 403, 404 EMAS)', method: 'GET',
     path: '/api/groups/me/teach', auth: true },
   { name: "groups (auth yo'q → 401)", method: 'GET', path: '/api/groups' },
+  // ── Faza 6: davomat (11/11 marshrut) ──
+  { name: 'attendance/groups/:id (404)', method: 'GET',
+    path: `/api/attendance/groups/${'a'.repeat(24)}?date=2026-08-10`, auth: true },
+  { name: 'attendance/groups/:id (sanasiz → 400)', method: 'GET',
+    path: `/api/attendance/groups/${'a'.repeat(24)}`, auth: true },
+  { name: 'attendance/groups/:id/monthly (404)', method: 'GET',
+    path: `/api/attendance/groups/${'a'.repeat(24)}/monthly?year=2026&month=8`, auth: true },
+  { name: 'attendance/groups/:id/monthly (month=13 → 400)', method: 'GET',
+    path: `/api/attendance/groups/${'a'.repeat(24)}/monthly?year=2026&month=13`, auth: true },
+  { name: 'attendance/dashboard', method: 'GET',
+    path: '/api/attendance/dashboard?fromDate=2026-08-01&toDate=2026-08-07&limit=3', auth: true },
+  { name: 'attendance/dashboard (sanasiz → 400)', method: 'GET',
+    path: '/api/attendance/dashboard', auth: true },
+  // ⚠ `/teacher/me/summary` `/students/:id` va `/groups/:id` DAN
+  // MUSTAQIL yo'l — owner uchun AYNAN 403 (404 EMAS) bo'lishi
+  // marshrut tartibi buzilmaganini qulflaydi.
+  { name: 'attendance/teacher/me/summary (owner → 403)', method: 'GET',
+    path: '/api/attendance/teacher/me/summary?fromDate=2026-08-01&toDate=2026-08-07',
+    auth: true },
+  { name: "attendance (auth yo'q → 401)", method: 'GET',
+    path: '/api/attendance/dashboard' },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },
