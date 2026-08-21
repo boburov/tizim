@@ -53,6 +53,7 @@ import { OpeningBalanceModule } from './modules/opening-balance/opening-balance.
 import { LedgerModule } from './modules/ledger/ledger.module.js';
 import { LessonCancellationsModule } from './modules/lesson-cancellations/lesson-cancellations.module.js';
 import { StudentFreezeModule } from './modules/student-freeze/student-freeze.module.js';
+import { ExportsModule } from './modules/exports/exports.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -195,6 +196,8 @@ import { StudentFreezeModule } from './modules/student-freeze/student-freeze.mod
     // shuning uchun ildizga OCHIQ qo'shildi: bilvosita bog'liqlik
     // yo'qolsa marshrutlar jimgina 404 bo'lib qolardi.
     StudentFreezeModule,
+    // Excel eksport (2/2) — ruxsat HAR BIR dataset'ning O'ZIDA.
+    ExportsModule,
   ],
 })
 export class AppModule {}

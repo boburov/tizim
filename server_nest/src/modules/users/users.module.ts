@@ -56,6 +56,10 @@ import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
     UsersController,
   ],
   providers: [UsersService],
+  // ⚠ EKSPORT MODULI uchun: `teachers`/`staff` dataset'lari AYNI
+  // `list()` ni chaqiradi (filial sharti `userBranchCondition` bilan).
+  // Ikkinchi nusxa yozilsa eksport jimgina begona filialni ochardi.
+  exports: [UsersService],
 })
 export class UsersModule implements NestModule, OnModuleInit {
   constructor(
