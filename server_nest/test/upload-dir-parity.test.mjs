@@ -39,7 +39,10 @@
  * ISHLATISH:  node --env-file=../server/.env test/upload-dir-parity.test.mjs
  * ═══════════════════════════════════════════════════════════════════════════
  */
-import { readFileSync, existsSync, statSync, realpathSync } from 'node:fs';
+import {
+  readFileSync, existsSync, statSync, realpathSync,
+  mkdirSync, writeFileSync, rmSync,
+} from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
@@ -138,7 +141,57 @@ try {
     take: 25,
   });
   if (!files.length) {
-    skip('bazadagi fayllar', "birorta `StoredFile` yo'q — yo'lni bazaga qarshi tasdiqlab bo'lmadi");
+    // ── ⚠ BO'SH BAZA — TEKSHIRUVNI O'TKAZIB YUBORMAYMIZ ──
+    //
+    // Ilgari bu yerda `skip` turardi va 1–3 tekshiruvi YOLG'ON YASHIL
+    // bo'lib qolardi: ikkala stek BIR XIL, LEKIN NOTO'G'RI papkani
+    // ko'rsatsa ham hammasi o'tardi. Aynan shu holat o'lchandi
+    // (bazada bitta ham `StoredFile` yo'q edi).
+    //
+    // Endi test O'Z fikstursini yaratadi: kanonik papkaga HAQIQIY fayl
+    // yoziladi va unga `StoredFile` qatori bog'lanadi. Shundan keyin
+    // yo'l BAZAGA qarshi tasdiqlanadi. Yakunda ikkalasi ham
+    // o'chiriladi va QOLDIQ O'LCHANADI.
+    const relPath = path.join('__parity_updir', `${Date.now()}.bin`);
+    const abs = path.join(expressDir, relPath);
+    let row = null;
+    try {
+      mkdirSync(path.dirname(abs), { recursive: true });
+      writeFileSync(abs, Buffer.from('parity'));
+      row = await prisma.storedFile.create({
+        data: {
+          originalName: '__parity_updir.bin',
+          storedName: path.basename(relPath),
+          relPath,
+          mimeType: 'application/octet-stream',
+          size: 6,
+          purpose: 'assignment',
+        },
+        select: { id: true },
+      });
+
+      // ⚠ BAZADAN QAYTA O'QILADI — xotiradagi qiymatni emas, HAQIQIY
+      // yozuvni tekshiramiz.
+      const saved = await prisma.storedFile.findUnique({
+        where: { id: row.id }, select: { relPath: true } });
+      if (existsSync(path.join(expressDir, saved.relPath))) {
+        ok(`bazadagi yo'l kanonik papkada topildi (fikstura): ${saved.relPath}`);
+      } else {
+        bad('BAZADAGI YO\'L TOPILMADI',
+          `${saved.relPath} → ${expressDir} ostida yo'q — kanonik yo'l NOTO'G'RI`);
+      }
+    } catch (err) {
+      bad('fikstura yaratilmadi', err.message);
+    } finally {
+      try { rmSync(abs, { force: true }); } catch { /* yo'q bo'lsa mayli */ }
+      try { rmSync(path.dirname(abs), { recursive: true, force: true }); } catch { /* mayli */ }
+      if (row) await prisma.storedFile.deleteMany({ where: { id: row.id } });
+      const left = row
+        ? await prisma.storedFile.count({ where: { id: row.id } })
+        : 0;
+      if (left === 0 && !existsSync(abs)) ok("fikstura tozalandi — QOLDIQ YO'Q (o'lchandi)");
+      else bad('fikstura QOLDIG\'I', `qator: ${left}, fayl: ${existsSync(abs)}`);
+    }
   } else {
     const missing = files.filter((f) => !existsSync(path.join(expressDir, f.relPath)));
     if (missing.length === files.length) {
