@@ -69,12 +69,12 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-request
  *
  * ── ⚠ MEROS QILIB OLINGAN CHEKLOV (FAZA 2.3 dan) ──
  *
- * `UserProfileService.build()` O'QUVCHI va O'QITUVCHI uchun 501
- * (`PROFILE_NOT_MIGRATED`) qaytaradi — profilga guruh/davomat/muzlatish
- * kerak. Shu sababli `GET /:id`, `PATCH /:id/role`, `PATCH /:id/branches`
- * XODIM nishonida Express bilan aynan bir xil ishlaydi, o'quvchi/
- * o'qituvchi nishonida esa 501 beradi. Bu YANGI cheklov emas —
- * `/auth/me` da allaqachon mavjud va cutover shartlari ro'yxatida turadi.
+ * ✅ CHEKLOV OLIB TASHLANDI. Ilgari `UserProfileService.build()`
+ * O'QUVCHI va O'QITUVCHI uchun 501 (`PROFILE_NOT_MIGRATED`) qaytarardi —
+ * profilga guruh/davomat/muzlatish kerak edi. Ular ko'chirilgach barcha
+ * shoxlar ochildi va `GET /:id`, `PATCH /:id/role`,
+ * `PATCH /:id/branches` HAR uchala nishon turida ham Express bilan
+ * AYNAN bir xil ishlaydi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 

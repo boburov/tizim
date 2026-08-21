@@ -172,7 +172,12 @@ export const waitForStacks = async (timeoutMs = 30000) => {
     while (Date.now() - t0 < timeoutMs) {
       try {
         const r = await fetch(`${base}/api/health`);
-        if (r.ok) { up = true; break; }
+        // ⚠ 429 HAM "TIRIK" DEGANI. Umumiy chegara (200/daq) ketma-ket
+        // yurgizilgan to'plamlarda `/api/health` ni ham rad etadi —
+        // o'shanda bu funksiya "stek javob bermadi" deb BUTUN to'plamni
+        // yiqitardi, holbuki server ISHLAB TURIBDI. Aynan shu holat
+        // o'lchandi: 66 ta to'plam ketma-ket yurganda.
+        if (r.ok || r.status === 429) { up = true; break; }
       } catch { /* hali ko'tarilmadi */ }
       await new Promise((r) => setTimeout(r, 400));
     }

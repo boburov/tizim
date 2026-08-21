@@ -1,20 +1,28 @@
 # EXPRESS → NESTJS — TO'LIQ KO'CHIRISH RO'YXATI
 
-Holat sanasi: 2026-08-20. Manba: `server/src` (Express), maqsad: `server_nest/src`.
+Holat sanasi: **2026-08-22** (yakuniy chiqarish darvozasi). Manba: `server/src` (Express), maqsad: `server_nest/src`.
 
-## 0. HAJM (audit natijasi)
+## 0. HAJM — YAKUNIY HOLAT (2026-08-22)
 
 | O'lchov | Express (`server/src`) | NestJS (`server_nest/src`) |
 |---|---|---|
-| Fayl (`.js` / `.ts`) | 816 | 46 |
-| Qator | 80 132 | 3 567 |
-| Biznes moduli | 47 | 3 (auth, roles*, users*) |
-| Marshrut e'loni | **388** | 8 |
-| Fon jobi | 24 | 0 |
-| Navbat (queue) | 1 (`importQueue`, Redis/pg-boss) | 0 |
-| Telegram bot | 11 handler + 3 servis | 0 |
+| Ro'yxatdan o'tgan marshrut | **399** | **399** (+1 ataylab: `GET /api/health/db`) |
+| Biznes moduli | 47 | 47 (60 ta modul `AppModule` dan erishiladi) |
+| Kontroller | — | 52 (manba = qurilma) |
+| Fon jobi | 25 | **25** (cron 25/25 AYNAN mos) |
+| Navbat (queue) | 1 (`bulk-import`) | 1 (⚠ FAQAT PRODUSER) |
+| Telegram bot | 11 handler + 3 servis | ✅ (⚠ polling O'CHIQ) |
 
-`*` — qisman (faqat o'qish yo'llari).
+⚠ **MARSHRUT MATRITSASI MANBADAN EMAS, RO'YXATDAN o'qiladi**
+(`test/route-matrix.mjs`): Express `_router.stack` va NestJS'ning
+`dist/` dan ko'tarilgan adapteri. Ya'ni "modul yozilgan, lekin
+`AppModule` ga qo'shilmagan" holat KO'RINADI.
+
+⚠ **RO'YXATDA TURISH = ISHGA TUSHISH EMAS.** Kesishuv davrida
+joblarni EXPRESS yuritadi (`NEST_WORKERS_ENABLED=false`), bot
+buyruqlarini ham Express qabul qiladi (`NEST_BOT_POLLING=false`),
+import navbatini ham Express iste'mol qiladi. NestJS shu davrda
+FAQAT HTTP xizmat qiladi.
 
 ## 1. UMUMIY QATLAM (modul emas, lekin ko'chirilishi shart)
 
@@ -354,11 +362,11 @@ takrorlandi. Har biri klient shartnomasining bir qismi, shuning uchun
 | B23 | `leadRouting.create` | `const sourceKey = isFallback ? null : …` ternari `sourceKey` ni ALLAQACHON nullaydi, shuning uchun keyingi `if (isFallback && sourceKey) throw 400` HECH QACHON bajarilmaydi — **O'LIK KOD**. Haqiqiy xulq: zaxira qoidada `sourceKey` JIMGINA e'tiborsiz qoldiriladi va qoida YARATILADI (201, `sourceKey=null`). | Zararsiz (zaxira qoidada manba baribir ishlatilmaydi), lekin xato XABARI hech qachon ko'rinmaydi. Ko'chirishda AYNAN takrorlandi. `test/leads-parity.test.mjs` haqiqiy natijani (201 + null) qulflaydi — "400 kutiladi" deb YOZILMAGAN, aks holda yorliq yolg'on bo'lardi. |
 | B24 | `GET /admin-dashboard/retention`, `GET /admin-dashboard/churned-students` | **FILIAL KO'LAMI UMUMAN YO'Q EDI** — `retention.service` da ko'lam helperi 0 marta ishlatilardi (qo'shnisida 18 marta). Filial direktori BUTUN TASHKILOTNING chiqib ketgan o'quvchilarini (ism, familiya, **login**, guruh, o'qituvchi) ko'rardi. | ✅ **IKKALA STEKDA TUZATILDI.** O'LCHANGAN: filialga biriktirilgan direktor `churned-students` dan **46** ta qator olardi — owner bilan AYNAN bir xil. Endi qo'shni `adminDashboard.service` ishlatadigan AYNI `branchGroupFilter('groupId')` qo'llanadi. TASDIQLANDI: direktor o'z filialining **0** tasini (bazadan mustaqil hisoblangan son), owner 46 tasini oladi. ⚠ **KLIENT RAQAMLARI O'ZGARDI** — filial direktorining retention foizi va churn ro'yxati endi faqat o'z filialiga tegishli. `test/branch-scope-security.test.mjs` (sabotaj bilan tekshirilgan, ikkala stek alohida o'lchanadi). |
 | B25 | UMUMIY TEZLIK CHEGARASI (butun API) | Express `app.js:50` da `generalLimiter` **GLOBAL** (200 so'rov / 60s). NestJS'da `common/middleware/rate-limit.ts` da e'lon qilingan, lekin **ULANMAGAN** edi. | ✅ **TUZATILDI.** O'LCHANGAN: bitta IP'dan 230 so'rov — express 201-so'rovda 429, nest 230/230 ta 200. `main.ts` da `app.use(generalLimiter)` `enableCors()` DAN KEYIN ulandi (Express tartibi: cors → … → generalLimiter, ya'ni preflight byudjetni yemaydi). Kalit `req.ip` — `trust proxy: 1` ga tayanadi. TASDIQLANDI: ikkala stek ham 201-so'rovda 429, tana va `ratelimit-limit` AYNAN bir xil. `test/rate-limit-parity.test.mjs` musbat (chegara ishlaydi) + manfiy (boshqa IP ta'sirlanmaydi) shoxlarni o'lchaydi; sabotaj bilan tekshirilgan. |
-| B26 | `GET /finance-analytics/discounts` → `byKind` kesimi | `discount.service.js` da: `const bc = branchClause('d."studentId"', null) === Prisma.empty ? Prisma.empty : Prisma.empty;` — ternarning **IKKALA TARMOG'I ham `Prisma.empty`**, ya'ni `branchClause` natijasi tashlab yuboriladi. Ustun nomi ham xato (`d."studentId"` filial ustuni emas). | ⚠ FILIAL KO'LAMI YO'Q: aniq `?branchId=` berilmasa bu kesim BUTUN TASHKILOT chegirma turlarini qaytaradi. Sizadigan narsa faqat AGREGAT sonlar (kind, type, count, students) — ism ham, summa ham yo'q, shuning uchun ta'sir past. Fayldagi qolgan hamma kesim (`byBranch`/`byCourse`/`byGroup`) ko'lamni TO'G'RI qo'llaydi. **Ko'chirishda TUZATILMADI** (xatti-harakat o'zgarmasligi kerak); test buni "ko'lam ishlayapti" deb emas, MA'LUM SIZISH deb qulflaydi. |
-| B27 | `GET /finance-analytics/budget` | `expense.service.js` → `getBudgetPerformance`: `prisma.budget.findFirst({ where: { ..., ...(branchId ? { branchId } : {}) } })` — `?branchId=` berilmasa byudjet tanlashda filial filtri UMUMAN yo'q. | ⚠ PLAN va FAKT TURLI FILIALGA TEGISHLI BO'LISHI MUMKIN: faktik summa `journalWhere` orqali ko'lamda qoladi, byudjet esa `findFirst` bilan butun tashkilotdan olinadi (`periodType` bo'yicha saralangan birinchisi). Filial direktori boshqa filialning byudjet raqamlarini o'z fakti bilan yonma-yon ko'rishi mumkin. **TUZATILMADI**, qayd etildi. |
-| B28 | `GET /finance-analytics/expenses/breakdown` | Non-operating yozuv turlari ro'yxati SQL ichida QO'LDA takrorlangan (`'owner_investment','owner_withdrawal','account_transfer',…`), `journalWhere`/`NON_OPERATING_ENTRY_KINDS` ishlatilmagan. Sabab: so'rov IKKI davrni bitta o'qishda qamraydi va `journalWhere` ning bitta-oraliq shakli to'g'ri kelmaydi. | ⚠ AJRALIB KETISH XAVFI: `constants/ledger` ga yangi non-operating turi qo'shilsa, u BARCHA hisobotdan chiqariladi-yu, AYNAN SHU kesimga kirib qoladi — "chiqimlar" jamisi boshqa ekrandan farq qila boshlaydi va buni hech narsa tutmaydi. Ko'chirishda BIRLASHTIRILMADI (xatti-harakat xavfi), izoh bilan qayd etildi. |
-| B29 | `GET /finance-analytics/intelligence/alerts/:alertId?explain=true` | Express izohni `modules/ai` dan oladi (`gemini.service.js` → `generateFinanceExplanation`, `aiBudget.service.js` → `openBudget`). Bu modul NestJS'ga KO'CHIRILMAGAN va Agent 4 ko'lamiga kirmaydi. | 🚧 QISMAN BLOKLANGAN. Marshrutning O'ZI ko'chirilgan va ishlaydi: deterministik izoh (asosiy yo'l) va KESHDAGI AI izohi Express bilan AYNAN bir xil. Faqat "keshda yo'q + AI sozlangan" holatda Express LLM ga boradi, NestJS esa deterministik matn qaytaradi. Mantiq NUSXA KO'CHIRILMADI (aks holda AI oylik limiti ikki joyda alohida sanalib, limit ishlamay qolardi) — o'rniga `explanation.service.ts` da tor `FinanceNarrationPort` interfeysi qoldirilgan; `ai` ko'chirilgach FAQAT shu port ulanadi. ⚠ Hozirgi muhitda Express ham LLM ga yetib bormayapti (`source: "deterministic"`, `Cache` da bitta ham `fin-explain:` yozuvi yo'q), shuning uchun bu yo'l HALI O'LCHANMAGAN — `ai` ko'chirilgach QAYTA o'lchash SHART. |
-| B30 | `GET /finance-analytics/intelligence*`, `/alerts`, `/intelligence/briefing` | `collectContext()` BITTA so'rovda 12 ta tahlil servisini `Promise.all` bilan parallel chaqiradi; ularning har biri bir nechta `$queryRaw` yuboradi. Ya'ni bitta HTTP so'rov o'nlab bir vaqtli baza ulanishini talab qiladi. Express'da AYNAN shunday — bu ko'chirish kiritgan narsa EMAS. | ⚠ OPERATSION: ulanish hovuzi to'lganda bu marshrutlar **500** qaytaradi (`FATAL: sorry, too many clients already`). Ishlab chiqishda o'lchandi: `max_connections=100` to'lganda 4 ta intellekt marshruti 500 berdi, hovuz bo'shagach O'SHA KOD 163/163 yashil bo'ldi — ya'ni mantiqiy nuqson emas. ⚠ CUTOVER'DA MUHIM: Express va NestJS YONMA-YON ishlaganda hovuz bosimi IKKI BAROBAR bo'ladi. Kesishuv davrida `max_connections` yoki Prisma `connection_limit` qayta ko'rilishi kerak. |
+| B26 | ✅ **TUZATILDI (ikkala stekda)** — `finance-analytics/discounts` → `byKind` | `const bc = branchClause('d."studentId"', null) === Prisma.empty ? Prisma.empty : Prisma.empty;` — ternarning IKKALA TARMOG'I ham bo'sh, ya'ni ko'lam natijasi TASHLAB YUBORILARDI; ustun nomi ham xato edi. Aniq `?branchId=` berilmasa kesim BUTUN TASHKILOT chegirmalarini qaytarardi. | ✅ Endi bitta `EXISTS` ikkala holatni ham qamraydi (`Discount` da `branchId` yo'q — u guruh orqali filialga bog'lanadi). Aniq filial ham, ALS ko'lami ham `branchClause('g2."branchId"', branchId)` dan keladi. `finance-analytics-parity`: 164/164. |
+| B27 | ✅ **TUZATILDI (ikkala stekda)** — `finance-analytics/budget` | Faktik summa `journalWhere` orqali ko'lamda qolardi, byudjet esa `findFirst` bilan BUTUN TASHKILOTDAN olinardi — plan va fakt TURLI filialga tegishli bo'lishi mumkin edi. | ✅ `budgetBranchScope()`: ALS ko'lamidagi filiallar VA markaziy (`branchId: null`) byudjet. ⚠ `null` ATAYLAB QO'SHILDI — sxema izohida `NULL = butun markaz bo'yicha byudjet` deb yozilgan; uni chiqarib tashlash markaziy byudjetni har bir filial ekranidan yo'qotardi. Saralash `branchId: "asc"` — Postgres'da NULL'lar oxirida, ya'ni FILIALGA XOS byudjet markaziysidan USTUN (ilgari qaysi biri tanlanishi ANIQ EMAS edi). |
+| B28 | ✅ **TUZATILDI (ikkala stekda)** — `expenses/breakdown` | Non-operating tur ro'yxati SQL ichida QO'LDA takrorlangan edi. | ✅ `NON_OPERATING_ENTRY_KINDS` ishlatiladi. Ilgari `constants/ledger` ga yangi tur qo'shilsa, u barcha hisobotdan chiqarilardi-yu AYNAN SHU kesimga kirib qolardi. |
+| B29 | ✅ **YOPILDI — AI KO'PRIGI ULANDI** | `ExplanationService.narrationPort` `null` edi (AI moduli ko'chirilmagani uchun): `?explain=true` va kesh bo'sh bo'lganda NestJS `deterministic`, Express esa `ai` qaytarardi. | ✅ Port `AiModule` EKSPORT QILGAN AYNI nusxalarga ulangan (`GeminiService` + `AiBudgetService`) — ikkinchi nusxa oylik AI limitini ikki joyda alohida sanardi. ⚠ `spend()` ATAYLAB bo'sh: sarf `gemini.service` ichida ALLAQACHON yoziladi (`recordUsage`). ⚠ **BU MUHITDA `GEMINI_API_KEY` BO'SH**, ya'ni ikkala stek ham `deterministic` qaytaradi va paritet "mos keldi" deydi — bu AI YO'LI ISHLADI degani EMAS. Shuning uchun ko'prik ALOHIDA o'lchanadi: `test/ai-explain-wiring.probe.mjs` soxta kalit bilan ikkala stekni LLM shoxiga kirishga majburlaydi va `AiUsageLog` yozuvi paydo bo'lishini tekshiradi (ikkalasida ham `ok=false`, `kind=narration` — ko'prik ULANGAN). |
+| B30 | ⚠ **OPERATSION — KOD NUQSONI EMAS (O'LCHANDI)** — `finance-analytics/intelligence*` | `collectContext()` BITTA so'rovda 12 ta tahlil servisini `Promise.all` bilan chaqiradi. Express'da AYNAN shunday. | ⚠ **O'LCHANDI (2026-08-22):** bitta `/intelligence` so'rovi Express'da PIK **10**, NestJS'da PIK **22** faol ulanish; 6 ta parallel so'rov (ikkala stek) — PIK **33**, 71 ms, 6/6 × 200. `max_connections=100`, yukdan keyin jami **82**. ⚠ **SERIALIZATSIYA QILINMADI** — kod to'g'ri va tez; xavf HOVUZ SHIFTIDA. **CUTOVER TAVSIYASI:** har stek `DATABASE_URL` iga OCHIQ `connection_limit` qo'yilsin (yig'indisi `max_connections` dan past bo'lsin; `pgboss` 10 ta ulanishni oladi). ⚠ `.env` `.gitignore` da — bu KOD emas, JOYLASHTIRISH qarori. |
 | B13 | `GET /groups/:id/history` | Guruh TUGAGAN bo'lsa **400** ("Kurs tugagan..."), 200 EMAS. Sabab: handler `ensureGroup()` dan o'tadi, u esa YOZUV amallari uchun mo'ljallangan. Natijada arxivlangan guruhning a'zolik TARIXINI umuman ko'rib bo'lmaydi. | ⚠ ANIQ ZIDDIYAT: `GET /groups/:id` AYNI arxivlangan guruh uchun 200 beradi. Jimgina tuzatilmadi — javob 400 → 200 ga o'zgarardi, ya'ni bu ko'chirish ishi emas, alohida qaror. `test/groups-read-parity.test.mjs` QULFLAB turadi. |
 | B14 | `POST /groups/me/removal-notice/seen` | Express **200** qaytaradi (`res.json`), NestJS `POST` standarti esa **201**. `@HttpCode(200)` bilan tenglashtirildi. | KO'CHIRISHDA TOPILGAN VA TUZATILGAN paritet xatosi. Xulosa: HAR BIR ko'chirilgan `POST` marshrutida status OCHIQ tekshirilishi shart. |
 | B15 | `GET /groups/:id/available-teachers` | Express marshrutida `validate()` CHAQIRILMAGAN — ID sxemadan o'tmaydi, yaroqsiz ID 400 emas **404** beradi. | Ataylab takrorlandi: validator qo'shilsa status jimgina o'zgarardi. |
@@ -367,15 +375,31 @@ takrorlandi. Har biri klient shartnomasining bir qismi, shuning uchun
 | B18 | `getGroupMonthly` / `getGroupSummary` javobidagi `group._id` | Express `{ _id: group._id, … }` yozadi, lekin `ensureGroup()` Prisma qatorini qaytaradi va unda `_id` YO'Q (faqat `id`). `_id` `undefined` bo'lgani uchun `JSON.stringify` kalitni butunlay TASHLAB KETADI — javobda `group: { name, schedule }` qoladi va **klient guruh ID'sini bu yerdan ola olmaydi**. | Zararsiz, lekin shartnomaning bir qismi. `group.id` ga o'zgartirilsa javobga YANGI kalit qo'shilardi. `listForGroupOnDate` esa `_id: group.id` yozadi — ya'ni bir modul ichida ikki xil. Ataylab saqlandi. |
 | B19 | `teacherAbsence.service::setPresent()` | `setAbsent()` dan farqli: guruh MAVJUDLIGI tekshirilmaydi (`loadGroup` chaqirilmaydi) va kelajak-kun to'sig'i YO'Q. Mavjud bo'lmagan guruh uchun ham `{ removed: false }` (200) qaytadi, 404 EMAS. | Ataylab takrorlandi — "belgini olib tashlash" idempotent amal. |
 | B20 | ⚠️ **JIDDIY** — `teacherSalary.applyPaidDelta()` TRANZAKSIYADAN CHIQIB KETARDI | Imzo `tx` ni QABUL QILIB, uni JIMGINA TASHLAB YUBORARDI; xom `UPDATE` GLOBAL klientda, tranzaksiyadan tashqarida bajarilardi. | ✅ **IKKALA STEKDA TUZATILDI.** QAYTA O'LCHANDI (musbat nazorat bilan): tranzaksiya ICHIDA `paidAmount=50000`, ROLLBACK'DAN KEYIN ham **50000** — yozuv omon qolardi. Endi `{ capToRemaining, tx }` qabul qilinadi va `tx` berilsa xom SQL HAM, keyingi o'qish HAM o'sha tranzaksiyada bajariladi (`tx` berilmasa xatti-harakat avvalgidek). TASDIQLANDI: rollback'dan keyin `paidAmount=0`, ikkala stekda. `test/money-atomicity.test.mjs` (sabotaj bilan tekshirilgan). **QAYTA TEKSHIRILDI (yakuniy faza):** `studentPayment.applyPaidDelta` `tx` ni ALLAQACHON hurmat qilardi (ikkala stekda) — nuqson u yerda YO'Q edi. `staffPayroll` da esa BOR edi va **ENDI IKKALA STEKDA TUZATILDI**: `applyPaidDelta({ capToRemaining, tx })` va chaqiruvchi `staffSalaryTransaction.writeTransaction` `tx` ni uzatadi. `test/money-atomicity.test.mjs` uchala yo'lni × ikki stekni (6 o'lchov) qamraydi va sabotaj bilan tekshirilgan: Express `staffPayroll` da `db = tx || prisma` → `db = prisma` qilinganda test QIZIL bo'ldi (`paidAmount=50000` rollback'dan omon qoldi). |
-| B21 | `salaryTransaction.remove()` jurnalni STORNO QILMAYDI | To'lovda `postTeacherPayroll` jurnal yozuvi yaratiladi; bekor qilishda `SalaryTransaction` soft-delete bo'lib `paidAmount` kamayadi, jurnal yozuvi esa O'Z HOLICHA qoladi. **TASDIQLANDI:** `remove()` tanasida jurnalga oid birorta chaqiruv YO'Q — ikkala stekda ham (0 ta moslik). | ⬜ **ATAYLAB O'ZGARTIRILMADI — EGA QARORI KERAK.** Bu paritet farqi EMAS (ikkala stek bir xil). Jurnal `JOURNAL_IMMUTABLE` — ya'ni to'g'ri yechim yozuvni o'chirish emas, **STORNO yozuvi qo'shish**. Bu yangi buxgalteriya oqimi: qaysi hisob, qaysi kategoriya, qaysi sana va qanday `postingKey` ishlatilishi HAL QILINISHI kerak, va u moliya hisobotlariga YANGI qatorlar qo'shadi. Xato tuzatish emas, mahsulot qarori. ⚠ Hozircha chiqim hisoboti bekor qilingan to'lovni ham ko'rsatib turadi. |
+| B21 | ✅ **HAL QILINDI — STORNO** | To'lov/chiqim bekor qilinganda jurnal TEGILMAY qolardi va bekor qilingan chiqim P&L da ABADIY chiqim, bekor qilingan to'lov esa ABADIY daromad bo'lib turardi (kassa qoldig'i ham yolg'on). | ✅ **QAROR: STORNO, QAYTARIM EMAS.** Qaytarim (`postRefund`) — "to'lov BO'LGAN, keyin pul qaytarildi"; bekor qilish esa "operatsiya UMUMAN BO'LMAGAN". `journal.reverse` allaqachon mavjud edi, LEKIN uni birorta biznes yo'li chaqirmasdi. Endi: `reverse(entryId, { postingKey, tx })` IDEMPOTENT (unique indeks; poyga P2002 bilan ushlanadi) va chaqiruvchi TRANZAKSIYASIDA; `financialTransaction.reverseByRef` manba hujjatning BARCHA yozuvlarini teskari aylantiradi (`findMany` — bitta hujjat ataylab bir nechta yozuv tug'dirishi mumkin). BESHTA yo'l ATOMAR: o'qituvchi maoshi, xodim maoshi, chiqim, depozit amali, o'quvchi to'lovi (batch bo'ylab). ⚠ **ESKI MA'LUMOT TUZATILMADI** — ilgari bekor qilingan yozuvlar uchun alohida backfill kerak (ONGLI qaror + tarixiy hisobotlarni qayta hisoblash). `test/journal-storno.test.mjs` (28/28): storno yaratiladi, ASL yozuv o'zgarmaydi, debet=kredit, FILIAL SOF QOLDIG'I NOLGA qaytadi (musbat nazorat bilan), takroriy `reverse()` ikkinchi yozuv yaratmaydi. |
 | B22 | `TeacherSalary` da `isDeleted` ustuni YO'Q | `SalaryTransaction` da BOR — filtrlar assimetrik. | ✅ **TEKSHIRILDI — NUQSON EMAS, O'ZGARTIRILMADI.** O'LCHANDI: (1) sxemada `TeacherSalary.isDeleted` yo'q, `SalaryTransaction.isDeleted` bor; (2) ikkala stekdagi kodda `teacherSalary` so'roviga `isDeleted` filtri qo'llash urinishi **0 marta**. Ya'ni assimetriya hech qayerda xatoga olib kelmaydi. `TeacherSalary` — HOSILA jadval: u o'chirilmaydi, `recalcStatus` bilan qayta hisoblanadi, shuning uchun unda soft-delete ustuni bo'lishi NOTO'G'RI bo'lardi. |
+| B31 | ⬜ (raqam ishlatilmagan) | — | — |
+| B32 | ✅ **TUZATILDI (ikkala stekda)** — `GET /lesson-cancellations` | Ro'yxatga FILIAL KO'LAMI qo'llanmagan edi: ko'lamlangan xodim BUTUN TASHKILOTNING bekor qilingan darslarini ko'rardi. | ✅ `branchGroupFilter('groupId')` qo'shildi. Sabotaj bilan tekshirilgan regressiya testi bor. |
+| B33 | ✅ **TUZATILDI (Express)** — `POST /leads/:id/convert` | `getById(lead._id)` — Prisma qatorida `_id` YO'Q, ya'ni chaqiruv HAR DOIM 500 berardi. ⚠ **ISH BAJARILGANDAN KEYIN**: lid allaqachon o'quvchiga aylantirilgan bo'lardi, klient esa xato ko'rardi va qayta urinardi. | ✅ `getById(lead.id)`. NestJS ko'chirmasi to'g'ri edi — bu Express tomonidagi yolg'iz nuqson. |
+| B34 | ✅ **TUZATILDI (ikkala stekda)** — `groupInsight` DETEKTORLARI O'LIK EDI | `String(group._id)` = `"undefined"` (Prisma qatorida `_id` yo'q) → `size` HAR DOIM nol, `complaints.get()` HAR DOIM `undefined`. Ya'ni **`group_underfilled` va `group_complaints` insight'lari HECH QACHON yaratilmagan**. | ✅ `group.id ?? group._id`. ⚠ **XULQ O'ZGARADI**: bu ikki detektor endi HAQIQATAN ishlaydi va yangi insight'lar paydo bo'ladi — bu kutilgan natija, kodning O'Z niyati. |
+| B35 | ✅ **TUZATILDI (ikkala stekda)** — `courseInsight` NOTO'G'RI TALAB RAQAMI | `demandByCourse` kaliti `String(course._id)` = `"undefined"` → butun jadval BITTA kalitga yig'ilardi va **HAR BIR kurs OXIRGI yo'nalishning talab raqamini olardi**. Jimgina NOTO'G'RI ma'lumot. | ✅ `course.id ?? course._id`. |
+| B36 | ✅ **TUZATILDI (ikkala stekda)** — `teacherInsight` DETEKTORLARI O'LIK EDI | `const tid = String(teacher._id)` = `"undefined"` → `signals.get(tid)` `undefined` → sikl HAR BIR o'qituvchida `continue` qilardi. Ya'ni **uchala o'qituvchi insight'i (`attendance_issue`, `low_load`, `top_performer`) HECH QACHON yaratilmagan**. Bundan tashqari `loadMonthlyByTeacher` ham `"undefined"` kalitiga yozardi. | ✅ `teacher.id ?? teacher._id` (5 joyda). ⚠ **XULQ O'ZGARADI** — B34 bilan bir xil sabab. |
+| B37 | ✅ **TUZATILDI (NestJS)** — `EntitlementsService` IKKI NUSXA BO'LARDI | U `JobsModule` da e'lon qilingan edi. AI moduli ham unga tayangach IKKINCHI nusxa paydo bo'lardi: heartbeat javobi BIR nusxaga yozilib, tarif darvozasi BOSHQASINI o'qirdi — u esa har doim bo'sh, ya'ni `isFeatureEnabled` har doim "ha" (ochiq yiqilish). **Paywall JIMGINA o'chib qolardi.** | ✅ `CommonModule` (`@Global`) ga ko'chdi — YAGONA nusxa. `JobsModule` uni endi provayder qilmaydi. |
+| B38 | ⚠️ **JIDDIY — TUZATILDI (ikkala stekda)** — PARALLEL BEKOR QILISH BALANSNI MANFIYGA TUSHIRARDI | `findFirst({ isDeleted: false })` va keyingi `update` ORASIDA poyga: o'nta so'rov ham qatorni "bekor qilinmagan" deb o'qib, o'ntasi ham manfiy deltani qo'llardi. Prisma tranzaksiyasi TO'SMAYDI (Postgres standarti READ COMMITTED). **O'LCHANDI: bitta to'lovga 10 ta parallel `DELETE` → `paidAmount` = −27 000 000.** Ko'chirish kiritgan narsa EMAS — `applyPaidDelta(-amount)` guardsiz holda anchadan beri turardi. | ✅ SHARTLI-ATOMIK "band qilish": `update` → `updateMany({ where: { id, isDeleted: false } })`, `count === 0` bo'lsa 404. Faqat shartni YUTGAN so'rov balansga tegadi. Beshta yo'lda ham. ⚠ O'quvchi to'lovida yutmagan so'rov o'sha BO'LAKNI jimgina o'tkazib yuboradi — batch'ning qolgan bo'laklari boshqa so'rovga tegishli bo'lishi mumkin. `test/money-concurrency.test.mjs` (31/31). |
+| B39 | ✅ **TUZATILDI (ikkala stekda)** — `GET /finance/student-payments` SARALASH BARQARORLIGI | `orderBy: { createdAt: "desc" }` — `createdAt` YAGONA EMAS (oylik generatsiya bir necha planni AYNI millisekundda yaratadi). Postgres tie holatida tartibni KAFOLATLAMAYDI: sahifalashda qator TUSHIB QOLISHI yoki TAKRORLANISHI mumkin. | ✅ `{ id: "desc" }` ikkinchi kalit. O'LCHANDI: shu sababdan `finance-core-parity` tasodifan qizil bo'lgan; tuzatishdan keyin uch marta ketma-ket 51/51 yashil. ⚠ B9 (`notification-templates`) da AYNI naqsh HAMON bor va u ATAYLAB tegilmagan — o'sha yerdagi izohga qarang. |
 
 ---
 
-## 6. KO'CHIRISHDAN KEYINGI XATO TUZATISH FAZASI (2026-08-21)
+## 6. KO'CHIRISHDAN KEYINGI XATO TUZATISH FAZASI (2026-08-21 … 08-22)
 
-⚠ **KO'CHIRISH TUGAGANI YO'Q.** Bu bo'lim faqat shu fazada tuzatilgan
+✅ **MARSHRUT KO'CHIRISH TUGADI: 399/399.** Bu bo'lim tuzatilgan
 xatolarni va ATAYLAB o'zgartirilmagan qarorlarni qayd etadi.
+
+⚠ **"KO'CHIRILDI" ≠ "EXPRESS O'CHIRILDI".** Kesishuv davrida NestJS
+FAQAT HTTP xizmat qiladi; joblar, bot pollingi va import navbatini
+EXPRESS yuritadi. Uchalasi ham OCHIQ bayroq bilan boshqariladi
+(`NEST_WORKERS_ENABLED`, `NEST_BOT_POLLING`, worker ro'yxati) va
+`test/jobs-infra.test.mjs` NestJS birorta cron jadvalini
+yozmasligini qulflab turadi.
 
 ### 6.1 XATTI-HARAKAT O'ZGARISHLARI (klientga aytilishi SHART)
 
@@ -399,21 +423,36 @@ ko'rsatilgan raqam boshqa filiallarning ma'lumotini ham o'z ichiga olardi.
 
 | # | Nima | Nega tegilmadi |
 |---|---|---|
-| B21 | maosh to'lovi bekor qilinganda jurnal STORNO qilinmaydi | Jurnal `JOURNAL_IMMUTABLE`. To'g'ri yechim — STORNO yozuvi qo'shish, ya'ni YANGI buxgalteriya oqimi (hisob, kategoriya, sana, `postingKey` hal qilinishi kerak) va u hisobotlarga yangi qatorlar qo'shadi. Paritet farqi EMAS. |
 | B22 | `TeacherSalary` da `isDeleted` yo'q | Nuqson emas: hosila jadval o'chirilmaydi, qayta hisoblanadi. Kodda unga `isDeleted` filtri qo'llash urinishi 0 marta. |
-| — | `applyPaidDelta` ning AYNI tranzaksiya nuqsoni `staffPayroll` va `studentPayment` da | Bu ishning doirasidan TASHQARIDA (ko'chirishlari boshqa agentlarda). **Naqsh bir xil, ya'ni ikkalasi ham B20 ga o'xshash pul xavfsizligi xavfini ko'taradi.** |
-| — | `salaryTransaction.remove()` ATOMIK EMAS | Soft-delete va `applyPaidDelta(-amount)` alohida amallar, tranzaksiyasiz. Ikkinchisi yiqilsa to'lov o'chib, `paidAmount` kamaymay qoladi. Ro'yxatdagi xatolardan EMAS — shu fazada TOPILDI. B20 tuzatilgach uni bitta `$transaction` ga o'rash MUMKIN bo'ldi. |
+| B4 | `GET /notifications/stats` HAR DOIM 500 | Tuzatish javob shaklini 500 → 200 ga o'zgartiradi — ko'chirish ishi emas, mahsulot qarori. Ikkala stekda BIR XIL; test 500 ni qulflaydi. |
+| B9 | `notification-templates` saralashda ikkilamchi kalit yo'q | B39 da AYNI naqsh moliya ro'yxatida tuzatildi (u yerda paritet testi buni TUTDI). Bu yerda tartib o'zgarishi klient ro'yxatini siljitadi — alohida qaror. |
+| B13 | arxivlangan guruh `GET /groups/:id/history` → 400 | `GET /groups/:id` AYNI guruh uchun 200 beradi — aniq ziddiyat, lekin tuzatish javob kodini o'zgartiradi. |
+| B16 | Express `consecutiveAbsences()` HAR CHAQIRUVDA yiqiladi (Mongo qoldig'i) | NestJS'da TO'G'RI yozilgan, lekin ogohlantirish `EXPRESS_NOTIFICATION_IS_DEAD` bayrog'i bilan ATAYLAB o'chirilgan — aks holda kesishuv davrida egalarga kutilmagan xabarlar oqimi ketardi. **Yoqish alohida qaror: Express ham tuzatilib, ikkalasi BIR VAQTDA yoqilishi kerak.** |
+| B17 | `getDashboardStats().groupBreakdown` dars kunlarini SHISHIRADI | `select` ga `joinedAt`/`leftAt` qo'shilsa dashboard raqamlari O'ZGARADI. |
+| B21 (eski) | — | ✅ **HAL QILINDI** (yuqoridagi jadvalga qarang). ⚠ **QOLGAN ISH:** ilgari bekor qilingan yozuvlar uchun jurnal backfill'i — u tarixiy hisobotlarni qayta hisoblaydi, ya'ni ONGLI qaror. |
+| B30 | `intelligence` marshrutlari 12 servisni parallel chaqiradi | KOD nuqsoni EMAS (o'lchandi). **Cutover'da `connection_limit` sozlanishi kerak** — bu joylashtirish qarori. |
 
 ### 6.3 QO'SHILGAN QO'RIQCHILAR
 
 | Test | Nimani qulflaydi |
 |---|---|
-| `test/rate-limit-parity.test.mjs` (kengaytirildi) | umumiy chegara ISHLAYDI + chelak MIJOZGA XOS + 429 tanasi/sarlavhasi paritetda |
-| `test/module-registration.test.mjs` (qayta yozildi) | modul `AppModule` dan erishiladi — MANBADA HAM, **QURILMADA HAM**; takroriy import/kontroller; parser ko'r nuqtalari (`@Controller("...")`, izohga olingan modul, bir faylda bir nechta `@Module`) |
-| `test/fixture-residue.test.mjs` (yangi) | to'plamlardan KEYIN bazada sinov qatori qolmaganini, QA fixture'lari bazaviy rolida ekanini va muzlatilgan rol yo'qligini — **to'plamlardan TASHQARIDA** o'lchaydi |
-| `test/upload-dir-parity.test.mjs` (yangi) | ikkala stek AYNI fayl papkasini ko'rsatishini |
-| `test/branch-scope-security.test.mjs` (yangi) | to'rtta filial ko'lami sizishi YOPIQ ekanini (musbat + manfiy nazorat, ikkala stek alohida) |
-| `test/money-atomicity.test.mjs` (yangi) | B20 — rollback `paidAmount` ni ham qaytarishini |
+| `test/route-matrix.mjs` | RO'YXATDAN o'qilgan marshrut tengligi (399/399) — manba fayllardan EMAS |
+| `test/module-registration.test.mjs` | modul `AppModule` dan erishiladi — MANBADA HAM, QURILMADA HAM (60/60 modul, 52/52 kontroller) |
+| `test/rate-limit-parity.test.mjs` | umumiy chegara ISHLAYDI + chelak MIJOZGA XOS + 429 tanasi/sarlavhasi paritetda |
+| `test/fixture-residue.test.mjs` | to'plamlardan KEYIN bazada sinov qatori qolmagani (84 model, 27 maydon) |
+| `test/db-invariants.test.mjs` | 23 ta baza invarianti: jurnal muvozanati, manfiy balans, ortiqcha to'lov, yetim qator, `StorageUsage` drifti, takrorlangan a'zolik |
+| `test/upload-dir-parity.test.mjs` | ikkala stek AYNI fayl papkasini ko'rsatishi |
+| `test/branch-scope-security.test.mjs` | to'rtta filial ko'lami sizishi YOPIQ (musbat + manfiy nazorat) |
+| `test/money-atomicity.test.mjs` | B20 — rollback `paidAmount` ni ham qaytarishi (3 yo'l × 2 stek) |
+| `test/journal-storno.test.mjs` | B21 — storno yaratiladi, ASL yozuv o'zgarmaydi, sof qoldiq NOLGA qaytadi, takroriy `reverse()` ikkinchi yozuv yaratmaydi |
+| `test/money-concurrency.test.mjs` | B38 — 20 ta parallel to'lovdan bittasi; 10 ta parallel bekor qilishda BITTA storno va `paidAmount` AYNAN nol |
+| `test/staff-payroll-concurrency.test.mjs` | xodim maoshi bo'yicha AYNI invariantlar (88 o'lchov) |
+| `test/file-security.test.mjs` | imzo (magic bytes), kengaytma oq ro'yxati, MIME mosligi, EGALIK, kvota va disk qoldig'i |
+| `test/ai-parity.test.mjs` | AI 15 marshruti + filial ko'lami + holat o'zgartirish (ko'zgu fikstura, baza holati bilan) |
+| `test/ai-explain-wiring.probe.mjs` | B29 — AI ko'prigi HAQIQATAN ulanganini (soxta kalit bilan LLM shoxiga majburlab) |
+| `test/jobs-infra.test.mjs` | 25/25 cron mosligi, `lockLifetime`, vaqt zonasi va **NestJS birorta cron jadvalini YOZMASLIGI** |
 
 Har bir qo'riqchi **ATAYLAB BUZIB** tekshirildi: qo'riqchi olib
-tashlanganda test QIZIL bo'lishi o'lchandi.
+tashlanganda test QIZIL bo'lishi o'lchandi. Sabotaj har safar TOZA
+`dist` dan qurildi — eski emit "bypass isbotlandi" degan YOLG'ON
+natija berardi.

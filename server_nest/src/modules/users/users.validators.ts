@@ -8,10 +8,10 @@ import { z } from 'zod';
  * chiqishi uchun.
  *
  * ⚠ `createStaffSchema` `compensation` va `openingBalance` ni QABUL
- * QILADI, garchi ular NestJS'da 501 ga olib kelsa ham. Ularni sxemadan
- * OLIB TASHLASH xatoni 400 ga aylantirardi — ya'ni "hali ko'chirilmagan"
- * o'rniga "noto'g'ri so'rov" deb yolg'on aytardi va klient formani
- * tuzatishga urinardi. Chegara VALIDATSIYADA emas, SERVISDA.
+ * QILADI va ular ENDI HAQIQATAN BAJARILADI (ilgari 501 berardi).
+ * Sxemada saqlanishi ATAYLAB edi: ularni olib tashlash xatoni 400 ga
+ * aylantirardi — "hali ko'chirilmagan" o'rniga "noto'g'ri so'rov" deb
+ * yolg'on aytardi. Chegara VALIDATSIYADA emas, SERVISDA.
  */
 
 /** `update.validator.js` dagi `idSchema`. */

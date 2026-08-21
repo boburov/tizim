@@ -249,8 +249,10 @@ export class SalaryTransactionService {
    * to'lamaymiz, mavjudini qaytaramiz. Ikkinchi himoya —
    * `expenseApprovalId` qisman unique indeksi.
    *
-   * ⚠ HALI HTTP ORQALI CHAQIRILMAYDI: `expense-approvals` `approve`
-   * marshruti 501 bilan yopiq (bajaruvchilar to'liq ko'chmaguncha).
+   * ✅ HTTP ORQALI CHAQIRILADI: bajaruvchi `TeacherSalaryModule`
+   * `onModuleInit` da ro'yxatga olingan (10/10 bajaruvchi ulangan),
+   * ya'ni `expense-approvals` `approve` marshrutidagi 501 shoxi endi
+   * ERISHIB BO'LMAYDIGAN holatda.
    */
   async executeApproved(approval: Record<string, any>) {
     const approvalId = String(approval.id ?? approval._id);

@@ -18,7 +18,7 @@ import { StudentFreezeService } from '../student-freeze/student-freeze.service.j
  *
  *   owner / direktor / resepshin / custom staff → ✅ TO'LIQ
  *   o'qituvchi                                   → ✅ TO'LIQ (`groups` ko'chgach ochildi)
- *   o'quvchi                                     → 🛑 501 `PROFILE_NOT_MIGRATED`
+ *   o'quvchi                                     → ✅ ochiq (moliya zanjiri ko'chirilgach)
  *
  * ── NEGA O'QUVCHI HAMON YOPIQ ──
  *
@@ -34,7 +34,8 @@ import { StudentFreezeService } from '../student-freeze/student-freeze.service.j
  * yadrosi. UCHTA manba tayyor bo'lsa ham, TO'RTINCHISIZ javob
  * `attendanceSummary` maydonisiz chiqardi.
  *
- * ⚠ SHUNING UCHUN JIMGINA BO'SH QAYTARILMAYDI — ochiq 501 beriladi.
+ * ⚠ SHUNING UCHUN JIMGINA BO'SH QAYTARILMAYDI — ilgari ochiq 501
+ * berilardi; endi barcha shoxlar ochiq.
  * Bo'sh yoki chala qaytarish `/auth/me` shartnomasini buzib, klientda
  * "davomatim yo'q" degan YOLG'ON holat ko'rsatardi. `attendance`
  * ko'chgan kuni shu bitta `throw` o'chiriladi va qolgan uchta chaqiruv

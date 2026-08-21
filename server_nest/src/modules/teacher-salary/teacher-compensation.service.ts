@@ -455,10 +455,11 @@ export class TeacherCompensationService {
   /**
    * Tasdiqlangan stavka so'rovini bajaradi.
    *
-   * ⚠ HALI HTTP ORQALI CHAQIRILMAYDI: `expense-approvals` moduli
-   * `approve` marshrutini 501 (`APPROVAL_EXECUTORS_NOT_MIGRATED`) bilan
-   * yopib turibdi — bajaruvchilarning HAMMASI ko'chmaguncha. Bu metod
-   * TAYYOR va o'sha kuni ulanadi.
+   * ✅ HTTP ORQALI CHAQIRILADI: bajaruvchilarning HAMMASI (10/10)
+   * ro'yxatga olingan, ya'ni `APPROVAL_EXECUTORS_NOT_MIGRATED` 501
+   * shoxi endi ERISHIB BO'LMAYDIGAN holatda. U ATAYLAB QOLDIRILDI —
+   * kelajakda YANGI tasdiq turi qo'shilib, bajaruvchisi unutilsa,
+   * so'rov JIMGINA "tasdiqlangan" bo'lib qolmasligi uchun.
    */
   async executeApprovedCompensation(approval: Record<string, any>) {
     const p = approval?.payload || {};
