@@ -162,7 +162,7 @@ keraksiz deb e'lon qilinishi kerak. Ikkalasi ham MAHSULOT QARORI.
 ### FAZA 7 — MOLIYA (eng ehtiyotkorlik talab qiladigan)
 | Modul | Manzil | E | Holat |
 |---|---|---|---|
-| finance | `/api/finance` | 13 | ⬜ |
+| finance | `/api/finance` | 13 | 🟡 yadro ko'chdi (`financialTransaction`, `dimensionResolver`, `money`) — marshrutlar `studentPayment`/`discount`/`groupFee` ni kutmoqda |
 | deposits | `/api/deposits` | 8 | ⬜ |
 | expenses | `/api/expenses` | 10 | ⬜ |
 | expenseApprovals | `/api/expense-approvals`, `/api/approvals` | 10 | 🟡 8/10 (`approve`, `bulk-approve` — bajaruvchilar kutilmoqda) |

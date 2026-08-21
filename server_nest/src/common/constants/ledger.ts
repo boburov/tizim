@@ -162,7 +162,15 @@ export const INTER_BRANCH_KINDS = [
 ] as const;
 
 // To'lov kanali -> hisob turi. PaymentTransaction.method bilan bog'lash uchun.
-export const METHOD_TO_ACCOUNT = {
+// ⚠ TUR `Record<string, string>` — `as const` EMAS.
+//
+// Bu jadval XOM qiymat bilan indekslanadi (`expense.method`,
+// `trx.method` — bazadan kelgan satr). `as const` bilan TypeScript
+// faqat sanab o'tilgan kalitlarni qabul qilardi va har chaqiruv joyida
+// qo'lda `as never` kerak bo'lardi — ya'ni tur xavfsizligi emas, tur
+// SHOVQINI paydo bo'lardi. `NORMAL_SIDE` ham AYNAN shu sababdan
+// shunday e'lon qilingan.
+export const METHOD_TO_ACCOUNT: Record<string, string> = {
   cash: ACCOUNT_KINDS.CASH,
   card: ACCOUNT_KINDS.TERMINAL,
   terminal: ACCOUNT_KINDS.TERMINAL,
@@ -173,7 +181,7 @@ export const METHOD_TO_ACCOUNT = {
   uzcard: ACCOUNT_KINDS.UZCARD,
   humo: ACCOUNT_KINDS.HUMO,
   other: ACCOUNT_KINDS.OTHER,
-} as const;
+};
 
 // JURNAL YOZUVI TURLARI - "bu pul nega harakatlandi".
 export const ENTRY_KINDS = {

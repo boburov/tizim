@@ -310,11 +310,27 @@ const run = async () => {
   // ─────────────────────────────────────────────────────────────────
   section('1) SUMMARY — KPI');
   // ─────────────────────────────────────────────────────────────────
+  // ⚠ FORMULA TEKSHIRUVI FILIALGA KO'LAMLANGAN.
+  //
+  // Owner sarlavhasiz BARCHA filialni ko'radi. Ikkala stekning
+  // fiksturasi bir xil davrni (2031-07) ishlatgani uchun ko'lamsiz
+  // xulosa IKKALASINI ham qo'shib yuboradi va aniq raqamli tekshiruv
+  // rostan IKKI BAROBAR chiqadi. Bu aynan sodir bo'ldi: uzilib qolgan
+  // ishga tushirish fiksturasi bazada qolib, keyingi ishga tushirishda
+  // hamma raqam ikkilandi.
+  //
+  // Ko'lamsiz solishtiruv YUQORIDA (`both`) baribir qilinadi — u
+  // paritetni o'lchaydi. Bu yer esa FORMULANI o'lchaydi va shuning
+  // uchun faqat O'Z fiksturasiga qaraydi.
   const s1 = await both(`GET /summary?year=${Y}&month=${M}`, asOwner(`/summary?year=${Y}&month=${M}`));
   nonEmpty('summary daromadi', s1.e, (d) => d?.income?.collected);
 
-  if (s1.e?.body?.data) {
-    const d = s1.e.body.data;
+  const scoped = await both(
+    `GET /summary?year=${Y}&month=${M} (A filialga ko'lamlangan)`,
+    asDir(`/summary?year=${Y}&month=${M}`, dirTokenA, brA.id));
+
+  if (scoped.e?.body?.data) {
+    const d = scoped.e.body.data;
     // Formulalar — Express javobidan O'QIB tekshiriladi (NestJS bilan
     // paritet yuqorida allaqachon tasdiqlangan).
     const eq = (n, a, b) => (a === b ? ok(`${n} — ${a}`) : bad(n, `kutilgan ${b}, keldi ${a}`));

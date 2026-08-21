@@ -30,6 +30,7 @@ import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module
 import { JournalModule } from './modules/journal/journal.module.js';
 import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
 import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-approvals.module.js';
+import { FinanceModule } from './modules/finance/finance.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -123,6 +124,10 @@ import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-appr
     FinanceReportModule,
     // Tasdiqlar — IKKI manzil: /expense-approvals (eski) va /approvals.
     ExpenseApprovalsModule,
+    // Moliya yadrosi — MARSHRUTSIZ. `financialTransaction` pul yozishning
+    // yagona nuqtasi; chiqim/depozit/amallar modullari unga tayanadi.
+    // Bu yerda ro'yxatga olinishi DI grafini ishga tushishda TEKSHIRADI.
+    FinanceModule,
   ],
 })
 export class AppModule {}
