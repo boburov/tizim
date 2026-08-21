@@ -37,6 +37,7 @@ import { CoursesModule } from './modules/courses/courses.module.js';
 import { GroupsModule } from './modules/groups/groups.module.js';
 import { AttendanceModule } from './modules/attendance/attendance.module.js';
 import { TeacherSalaryModule } from './modules/teacher-salary/teacher-salary.module.js';
+import { StaffPayrollModule } from './modules/staff-payroll/staff-payroll.module.js';
 import { AttendanceExemptionsModule } from './modules/attendance-exemptions/attendance-exemptions.module.js';
 import { TeacherAttendanceModule } from './modules/teacher-attendance/teacher-attendance.module.js';
 import { GradesModule } from './modules/grades/grades.module.js';
@@ -155,6 +156,7 @@ import { LedgerModule } from './modules/ledger/ledger.module.js';
     AttendanceModule,
     // ── FAZA 8.1: o'qituvchi maoshi (15/15 marshrut) ──
     TeacherSalaryModule,
+    StaffPayrollModule,
     // Davomatdan ozod davrlari (4/4).
     AttendanceExemptionsModule,
     // O'qituvchi davomati (2/2) — maoshga ta'sir qiladi, faqat manage.

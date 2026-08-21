@@ -418,6 +418,38 @@ export class BranchAccessService {
   }
 
   /**
+   * ═════════════════════════════════════════════════════════════════════
+   * NISHON FOYDALANUVCHI JORIY KO'LAMDAMI — `branchContext.helper.js`
+   * dagi `assertUserInBranchScope` NING KO'CHIRMASI.
+   *
+   * `assertTargetInScope` dan FARQI: u allaqachon YUKLANGAN hujjatni
+   * tekshiradi, bu esa BAZADAN o'qiydi. Chaqiruvchi faqat ID ni
+   * bilganda (`params.employeeId`, `body.employee`) aynan shu kerak —
+   * hujjatni oldindan yuklash "topilmadi" va "begona" holatlarini
+   * chalkashtirardi.
+   *
+   * ⚠ 404 EMAS, 403: yozuv bor yoki yo'qligini oshkor qilmaymiz.
+   * Xabar ikkala holatda ham bir xil.
+   * ═════════════════════════════════════════════════════════════════════
+   */
+  async assertUserInBranchScope(userId: unknown, message?: string): Promise<void> {
+    const cond = userBranchCondition();
+    // Super Admin yoki kontekstsiz (job/seed) — cheklov yo'q.
+    if (!cond) return;
+    if (!userId) {
+      throw new ApiError(403, message || "Bu filial bo'yicha amal bajarib bo'lmaydi");
+    }
+
+    const found = await this.prisma.user.findFirst({
+      where: { AND: [{ id: String(userId) }, cond] } as never,
+      select: { id: true },
+    });
+    if (!found) {
+      throw new ApiError(403, message || "Bu filial bo'yicha amal bajarib bo'lmaydi");
+    }
+  }
+
+  /**
    * GURUHDAN filialni oladi (moliya yozuvlari uchun).
    *
    * NEGA foydalanuvchidan EMAS: to'lov/maosh yozuvi DOIM guruhga

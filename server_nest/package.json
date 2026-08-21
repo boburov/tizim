@@ -36,6 +36,8 @@
     "test:grades-parity": "node test/grades-parity.test.mjs",
     "test:assignments-parity": "node test/assignments-parity.test.mjs",
     "test:teacher-periods-parity": "node test/teacher-periods-parity.test.mjs",
+    "test:staff-payroll-parity": "node test/staff-payroll-parity.test.mjs",
+    "test:staff-payroll-concurrency": "node test/staff-payroll-concurrency.test.mjs",
     "test:rooms-parity": "node test/rooms-parity.test.mjs",
     "test:courses-parity": "node test/courses-parity.test.mjs",
     "test:edu-helpers": "node test/education-helpers-parity.test.mjs",

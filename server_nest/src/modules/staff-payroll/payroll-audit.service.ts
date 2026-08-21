@@ -1,17 +1,19 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { PAYROLL_AUDIT_ACTIONS } from '../../common/constants/payroll-audit.js';
+import { ApiError } from '../../common/errors/api-error.js';
+import { withLegacyIds } from '../../common/utils/serialize.js';
+import {
+  PAYROLL_AUDIT_ACTIONS,
+  PAYROLL_AUDIT_ACTION_LABELS,
+} from '../../common/constants/payroll-audit.js';
 
 export { PAYROLL_AUDIT_ACTIONS };
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * MAOSH AUDIT JURNALI — ⚠ QISMAN KO'CHIRILGAN (faqat `record`).
- *
- * `server/src/modules/staffPayroll/services/payrollAudit.service.js` dagi
- * SO'ROV metodlari (`list`, o'zgarmaslik qo'riqchisi) FAZA 8 da ko'chadi.
- * Hozir faqat YOZISH kerak: `PATCH /users/:id` da `hiredAt` o'zgarsa
- * uning izi qolishi shart.
+ * MAOSH AUDIT JURNALI —
+ * `server/src/modules/staffPayroll/services/payrollAudit.service.js`
+ * NING TO'LIQ EKVIVALENTI (`record` + `assertMutable` + `timeline`).
  *
  * NEGA IZ MUHIM: HR sanasi moliyaga to'g'ridan-to'g'ri ta'sir qilmaydi,
  * lekin keyinchalik maosh qayta hisoblanganda natijani O'ZGARTIRADI.
@@ -118,5 +120,93 @@ export class PayrollAuditService {
       if (tx) throw err;
       return null;
     }
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════
+   * O'ZGARMASLIK QO'RIQCHISI — modulning YAGONA to'siq nuqtasi.
+   *
+   * Qulflangan, yopilgan yoki TO'LANGAN oy o'zgarmaydi. To'langanlik
+   * ham kiritilgan: pul chiqib bo'lgan oyning summasini keyin
+   * o'zgartirish kassa bilan hisobot orasida farq tug'diradi.
+   *
+   * ⚠ RAD ETILGAN URINISH HAM AUDITGA TUSHADI: "nega o'zgarmadi?"
+   * degan savolga javob bo'lishi kerak, jimgina qaytib ketmasligi.
+   * ═══════════════════════════════════════════════════════════════════
+   */
+  async assertMutable(
+    payroll: {
+      employeeId?: string; employee?: unknown;
+      year?: number; month?: number;
+      id?: string; _id?: string;
+      lifecycle?: string; paidAmount?: unknown; finalAmount?: unknown;
+    } | null | undefined,
+    { action, actor, reason }: {
+      action?: string;
+      actor?: PayrollAuditInput['actor'];
+      reason?: string;
+    } = {},
+  ): Promise<void> {
+    if (!payroll) return;
+
+    const locked = payroll.lifecycle === 'finalized';
+    const paid = ((payroll.paidAmount as unknown as number) || 0) > 0;
+    if (!locked && !paid) return;
+
+    await this.record({
+      employee: payroll.employeeId || payroll.employee,
+      year: payroll.year ?? null,
+      month: payroll.month ?? null,
+      action: PAYROLL_AUDIT_ACTIONS.BLOCKED,
+      targetType: 'staffPayroll',
+      targetId: payroll.id || payroll._id,
+      oldValue: {
+        lifecycle: payroll.lifecycle,
+        paidAmount: payroll.paidAmount,
+        finalAmount: payroll.finalAmount,
+      },
+      reason,
+      actor,
+      meta: { attemptedAction: action },
+    });
+
+    throw new ApiError(
+      400,
+      locked
+        ? "Bu oy yopilgan - o'zgartirish uchun avval qulfni oching."
+        : "Bu oy uchun to'lov qilingan - o'zgartirish uchun avval to'lovni bekor qiling.",
+    );
+  }
+
+  /** Xodimning moliyaviy TAYMLAYNI (audit tarixi). */
+  async timeline(
+    employeeId: string,
+    { limit = 100, year, month }: {
+      limit?: unknown; year?: unknown; month?: unknown;
+    } = {},
+  ) {
+    const where: Record<string, unknown> = { employeeId: String(employeeId) };
+    if (year) where.year = Number(year);
+    if (month) where.month = Number(month);
+
+    const rows = await this.prisma.payrollAuditLog.findMany({
+      where: where as never,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Number(limit) || 100, 300),
+      include: {
+        actor: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    return withLegacyIds(
+      rows.map((r) => ({
+        ...r,
+        actionLabel:
+          (PAYROLL_AUDIT_ACTION_LABELS as Record<string, string>)[r.action] || r.action,
+        actorName: r.actor
+          ? `${r.actor.firstName || ''} ${r.actor.lastName || ''}`.trim()
+          : r.actorLabel || 'Tizim',
+      })),
+    );
   }
 }
