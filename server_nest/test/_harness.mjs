@@ -219,6 +219,35 @@ export const createReporter = (title) => {
       skip(name, err.message);
       return {};
     }
+    // ═══════════════════════════════════════════════════════════════════
+    // ⚠ TEZLIK CHEGARASI (429) — BU TEKSHIRUV EMAS, O'LCHOVSIZLIK.
+    //
+    // Express'da umumiy chegara 200 so'rov/daqiqa (`generalLimiter`).
+    // Paritet to'plamlari ketma-ket (yoki ikki agent bir vaqtda)
+    // ishlaganda oyna tugaydi va IKKI XIL YOLG'ON tug'iladi:
+    //
+    //   • IKKALA stek ham 429 → `deepEqual` MUVAFFAQIYATLI bo'ladi va
+    //     tekshiruv YASHIL chiqadi — hech narsa o'lchanmagan holda.
+    //     (Yuqoridagi `mintToken` izohi aynan shu holatni tasvirlaydi,
+    //     lekin faqat LOGIN yo'li uchun hal qilingan edi.)
+    //
+    //   • BITTASI 429 → soxta QIZIL. O'lchandi: `attendance-parity`
+    //     37 ta "yiqildi" berdi va HAMMASIDA `express: 429` turardi —
+    //     NestJS javoblari to'g'ri edi.
+    //
+    // Ikkalasi ham xato xulosa. Shuning uchun 429 ko'rinsa tekshiruv
+    // O'LCHANMADI deb belgilanadi.
+    //
+    // ⚠ BU TEKSHIRUVNI SUSAYTIRMAYDI: `finish()` o'lchanmagan
+    // tekshiruvda ham YIQILADI (`R.fail || R.unmeasured`). Ya'ni
+    // natija baribir qizil — faqat SABABI to'g'ri ko'rsatiladi va
+    // "429 ustida paritet saqlandi" degan yolg'on yashil YO'Q bo'ladi.
+    // ═══════════════════════════════════════════════════════════════════
+    if (e.status === 429 || n.status === 429) {
+      skip(name, `tezlik chegarasi — express=${e.status}, nest=${n.status}`);
+      return { e, n };
+    }
+
     const en = { status: e.status, body: normalize(e.body, subsOf(EXPRESS)) };
     const nn = { status: n.status, body: normalize(n.body, subsOf(NEST)) };
     if (e.status >= 200 && e.status < 300) R.successes += 1;
