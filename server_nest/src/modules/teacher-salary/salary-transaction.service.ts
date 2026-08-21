@@ -1,0 +1,303 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { ApiError } from '../../common/errors/api-error.js';
+import { withLegacyId } from '../../common/utils/serialize.js';
+import { EXPENSE_KINDS } from '../../common/constants/approvals.js';
+import { branchFilter, isBranchAllowed } from '../../common/als/branch-context.js';
+import { assertGroupActive } from '../../common/helpers/group-state.js';
+import { parseLocalDay, localTodayMidnight } from '../../common/utils/date.js';
+import { FINANCE_TXN_OPTIONS } from '../../common/utils/finance-txn.js';
+import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { FinancialTransactionService } from '../finance/financial-transaction.service.js';
+import { TeacherSalaryService } from './teacher-salary.service.js';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O'QITUVCHIGA MAOSH TO'LOVI (chiqim) —
+ * `salaryTransaction.service.js` KO'CHIRMASI.
+ *
+ * ⚠ QOLDIQDAN (`expected - paid`) ORTIQ to'lashga YO'L QO'YILMAYDI —
+ * cheklov SHARTLI-ATOMIK update bilan tekshiriladi, shuning uchun
+ * parallel double-click ham capdan o'tib keta OLMAYDI (C3).
+ *
+ * ⚠ UMUMIY TEKSHIRUVLAR: to'g'ridan-to'g'ri to'lovda ham, TASDIQLANGAN
+ * so'rovni bajarishda ham AYNAN SHU qoidalar qo'llanadi. Tasdiq paytida
+ * QAYTA chaqiriladi — so'rov berilgandan keyin guruh arxivlangan yoki
+ * qoldiq o'zgargan bo'lishi mumkin.
+ *
+ * ⚠ `TeacherSalary` da `isDeleted` USTUNI YO'Q, `SalaryTransaction` da
+ * esa BOR — shuning uchun filtrlar ASSIMETRIK.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const actorId = (u: any) => u?.id || u?._id || null;
+
+@Injectable()
+export class SalaryTransactionService {
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    private readonly approvals: ExpenseApprovalsService,
+    private readonly financialTx: FinancialTransactionService,
+    private readonly salaries: TeacherSalaryService,
+  ) {}
+
+  private async validateSalaryPayment({
+    salaryId, paidAt,
+  }: { salaryId: string; paidAt?: unknown }) {
+    const salary = await this.prisma.teacherSalary.findUnique({
+      where: { id: String(salaryId) },
+    });
+    if (!salary) throw new ApiError(404, 'Maosh topilmadi');
+
+    /**
+     * ⚠ GURUHSIZ QATORLAR (markaz darajasi): fiksa oylik
+     * (`kind:"base"`), KPI mukofoti, ushlanma va boshlang'ich qoldiq
+     * guruhga BOG'LANMAYDI.
+     *
+     * Ilgari bu yerda guruh SHARTSIZ talab qilinardi va natijada markaz
+     * darajasidagi HAR QANDAY qatorga to'lov "Guruh topilmadi" (404)
+     * bilan rad etilardi — ya'ni fiksa oylikni tizim orqali TO'LAB
+     * BO'LMASDI.
+     */
+    let group: Record<string, any> | null = null;
+    if (salary.groupId) {
+      group = await this.prisma.group.findUnique({
+        where: { id: salary.groupId },
+        select: {
+          id: true, isActive: true, isDeleted: true, branchId: true, endDate: true,
+        },
+      });
+      assertGroupActive(group as never);
+    }
+
+    /**
+     * ⚠ FILIAL: guruh bo'lsa undan MEROS, bo'lmasa maosh qatorining
+     * O'ZIDAN. Foydalanuvchi kontekstidan OLINMAYDI — owner "barcha
+     * filiallar" rejimida to'lasa NOTO'G'RI filial yozilardi.
+     */
+    const branchId = group ? group.branchId : salary.branchId;
+    if (!branchId) throw new ApiError(400, 'Maoshning filiali aniqlanmadi');
+
+    const day = paidAt ? parseLocalDay(paidAt) : localTodayMidnight();
+    if (!day) throw new ApiError(400, "Noto'g'ri to'lov sanasi");
+    // Kelajak sanaga chiqim yozib bo'lmaydi (kassa kunlik hisobi
+    // buzilmasin).
+    if (day.getTime() > localTodayMidnight().getTime()) {
+      throw new ApiError(400, "To'lov sanasi kelajakda bo'lishi mumkin emas");
+    }
+
+    return { salary, group, branchId, day };
+  }
+
+  /**
+   * Balansni oshirib, tranzaksiyani yozadi. IKKALA yo'l ham shuni
+   * ishlatadi.
+   *
+   * ⚠⚠⚠ TRANZAKSIYA CHEGARASI — HUJJATLANGAN EXPRESS XATOSI ⚠⚠⚠
+   *
+   * Quyida `applyPaidDelta` ga `tx` UZATILADI, lekin u ISHLATILMAYDI:
+   * Express imzosi faqat `capToRemaining` ni oladi va xom SQL GLOBAL
+   * klientda bajariladi. Ya'ni BALANS YANGILANISHI SHU
+   * TRANZAKSIYADAN TASHQARIDA qoladi.
+   *
+   * OQIBATI (tekshirib ko'rilgan): pastdagi `create`/`postTeacherPayroll`
+   * yiqilsa tranzaksiya rollback bo'ladi, `paidAmount` esa O'SGANICHA
+   * QOLADI — maosh "to'langan" ko'rinadi, to'lov yozuvi va jurnal
+   * yozuvi esa YO'Q.
+   *
+   * Yuqoridagi izohda "atomik: balans + tranzaksiya + jurnal + audit
+   * BITTA amalda" deyilgan — bu Express'da AMALDA SHUNDAY EMAS.
+   * Xatti-harakat AYNAN takrorlandi (paritet uchun) va
+   * `MIGRATION-CHECKLIST.md` da eng yuqori jiddiylik bilan yozildi.
+   */
+  private async writeSalaryTransaction({
+    salary, branchId, day, amount, method, note, createdBy,
+    expenseApprovalId = null,
+  }: {
+    salary: Record<string, any>;
+    branchId: string;
+    day: Date;
+    amount: number;
+    method: string;
+    note?: string;
+    createdBy?: string | null;
+    expenseApprovalId?: string | null;
+  }) {
+    const created = await this.prisma.$transaction(async (tx) => {
+      const updated = await this.salaries.applyPaidDelta(salary.id, amount, {
+        capToRemaining: true,
+        tx,
+      });
+      if (!updated) {
+        const remaining = Math.max(
+          0,
+          (Number(salary.expectedAmount) || 0) - (Number(salary.paidAmount) || 0),
+        );
+        throw new ApiError(
+          400, `To'lov qoldiqdan oshib ketadi (qoldiq: ${remaining} so'm)`,
+        );
+      }
+
+      const row = await tx.salaryTransaction.create({
+        data: {
+          branchId,
+          salaryId: salary.id,
+          teacherId: salary.teacherId,
+          groupId: salary.groupId,
+          year: salary.year,
+          month: salary.month,
+          amount,
+          // ⚠ `PaymentMethod` enumi — validator faqat cash|card ga
+          // ruxsat beradi, lekin ustun kengroq (click/payme/uzcard).
+          method: method as never,
+          paidAt: day,
+          note: note || '',
+          createdById: createdBy ? String(createdBy) : null,
+          expenseApprovalId: expenseApprovalId ? String(expenseApprovalId) : null,
+        },
+      });
+
+      // ⚠ JURNAL — `financialTransaction` YAGONA nuqtasi orqali. Ilgari
+      // u nomsiz `expense` edi va chiqim kategoriyalari hisobotida
+      // markazning eng katta xarajati KO'RINMASDI.
+      await this.financialTx.postTeacherPayroll(
+        { salaryTransactionId: row.id },
+        createdBy ? { id: createdBy } : null,
+        { tx },
+      );
+      return row;
+    }, FINANCE_TXN_OPTIONS);
+
+    return withLegacyId(created);
+  }
+
+  async create(
+    { salaryId, amount, method, paidAt, note }: Record<string, any>,
+    currentUser: any,
+  ) {
+    const { salary, branchId, day } = await this.validateSalaryPayment({
+      salaryId, paidAt,
+    });
+
+    /**
+     * ⚠ FILIAL: boshqa filial o'qituvchisiga to'lab bo'lmaydi.
+     *
+     * Bu tekshiruv `validateSalaryPayment` ICHIDA emas, ATAYLAB shu
+     * yerda: `executeApproved` ham o'sha funksiyani chaqiradi, lekin
+     * tasdiqlash OWNER kontekstida bo'ladi va u yerda ko'lam boshqacha —
+     * o'sha yo'l `approval.branchId` bilan ALOHIDA tekshiriladi.
+     *
+     * ⚠ Ahamiyati faqat KO'RINISH emas: har filialning O'Z chiqim limiti
+     * bor, shuning uchun begona filialga to'lash o'sha filial limitini
+     * ham AYLANIB O'TARDI.
+     *
+     * ⚠ 404 (403 EMAS) — mavjudligini oshkor qilmaymiz.
+     */
+    if (!isBranchAllowed(branchId)) {
+      throw new ApiError(404, 'Maosh topilmadi');
+    }
+
+    // ⚠ CHIQIM LIMITI: summa filial limitidan oshsa — pul HOZIR
+    // CHIQMAYDI, "tasdiq kutilmoqda" so'rovi yaratiladi. Balansga
+    // TEGILMAYDI.
+    const { needsApproval, threshold } = await this.approvals.checkExpenseLimit({
+      branchId,
+      amount,
+      permissions: currentUser?.permissions,
+    });
+
+    if (needsApproval) {
+      const teacher = await this.prisma.user.findUnique({
+        where: { id: salary.teacherId },
+        select: { firstName: true, lastName: true },
+      });
+      const approval = await this.approvals.createRequest({
+        branchId,
+        kind: EXPENSE_KINDS.SALARY_PAYMENT,
+        amount,
+        threshold,
+        payload: {
+          salaryId: String(salary.id), method, paidAt: day, note: note || '',
+        },
+        subjectName: teacher
+          ? `${teacher.firstName} ${teacher.lastName || ''}`.trim()
+          : "O'qituvchi",
+        contextName: `${salary.month}/${salary.year} maosh`,
+        currentUser,
+      });
+      // Chaqiruvchi (kontroller) buni ko'rib 202 qaytaradi.
+      return { pendingApproval: true, approval };
+    }
+
+    return this.writeSalaryTransaction({
+      salary, branchId, day, amount, method, note,
+      createdBy: actorId(currentUser),
+    });
+  }
+
+  /**
+   * TASDIQLANGAN so'rovni bajaradi.
+   *
+   * ⚠ AYNAN BIR MARTA: avval shu so'rov bo'yicha tranzaksiya
+   * bor-yo'qligi tekshiriladi. Bor bo'lsa — jarayon o'tgan safar
+   * tranzaksiyani yozib, holatni yangilashga ULGURMAGAN. Qayta
+   * to'lamaymiz, mavjudini qaytaramiz. Ikkinchi himoya —
+   * `expenseApprovalId` qisman unique indeksi.
+   *
+   * ⚠ HALI HTTP ORQALI CHAQIRILMAYDI: `expense-approvals` `approve`
+   * marshruti 501 bilan yopiq (bajaruvchilar to'liq ko'chmaguncha).
+   */
+  async executeApproved(approval: Record<string, any>) {
+    const approvalId = String(approval.id ?? approval._id);
+    const existing = await this.prisma.salaryTransaction.findFirst({
+      where: { expenseApprovalId: approvalId },
+    });
+    if (existing) return withLegacyId(existing);
+
+    const { salaryId, method, paidAt, note } = approval.payload || {};
+
+    // ⚠ QAYTA VALIDATSIYA: so'rov va tasdiq orasida holat o'zgargan
+    // bo'lishi mumkin (guruh arxivlangan, qoldiq kamaygan).
+    // Payload'ga ISHONMAYMIZ.
+    const { salary, branchId, day } = await this.validateSalaryPayment({
+      salaryId, paidAt,
+    });
+
+    if (String(branchId) !== String(approval.branchId)) {
+      throw new ApiError(400, "Maoshning filiali o'zgargan");
+    }
+
+    return this.writeSalaryTransaction({
+      salary, branchId, day,
+      amount: approval.amount,
+      method, note,
+      createdBy: approval.requestedById || approval.requestedBy,
+      expenseApprovalId: approvalId,
+    });
+  }
+
+  /**
+   * To'lovni bekor qiladi (soft-delete), balansni ATOMIK kamaytiradi.
+   *
+   * ⚠ FILIAL: boshqa filial to'lovini bekor qilib bo'lmaydi
+   * (`SalaryTransaction` da `branchId` bor → to'g'ridan-to'g'ri filtr).
+   *
+   * ⚠ EXPRESS XATTI-HARAKATI: bekor qilishda JURNAL YOZUVI
+   * STORNO QILINMAYDI (`postTeacherPayroll` ning teskarisi
+   * chaqirilmaydi) — faqat `SalaryTransaction` soft-delete bo'ladi va
+   * `paidAmount` kamayadi. Hujjatlangan, o'zgartirilmagan.
+   */
+  async remove(id: string, currentUser: any) {
+    const trx = await this.prisma.salaryTransaction.findFirst({
+      where: { id: String(id), ...branchFilter(), isDeleted: false },
+    });
+    if (!trx) throw new ApiError(404, 'Tranzaksiya topilmadi');
+    await this.prisma.salaryTransaction.update({
+      where: { id: trx.id },
+      data: {
+        isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser),
+      },
+    });
+    await this.salaries.applyPaidDelta(trx.salaryId, -Number(trx.amount));
+    return { id: trx.id, _id: trx.id };
+  }
+}

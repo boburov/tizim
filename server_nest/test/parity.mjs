@@ -209,6 +209,33 @@ const CASES = [
     auth: true },
   { name: "attendance (auth yo'q → 401)", method: 'GET',
     path: '/api/attendance/dashboard' },
+  // ── Faza 8.1: o'qituvchi maoshi (15/15 marshrut) ──
+  { name: 'teacher-salary/salaries', method: 'GET',
+    path: '/api/teacher-salary/salaries?limit=5', auth: true },
+  { name: 'teacher-salary/salaries (limit=999 → 400)', method: 'GET',
+    path: '/api/teacher-salary/salaries?limit=999', auth: true },
+  { name: 'teacher-salary/salaries/:id (404)', method: 'GET',
+    path: `/api/teacher-salary/salaries/${'a'.repeat(24)}`, auth: true },
+  // ⚠ `by-teacher/:id/balance` `/salaries/:id` DAN OLDIN e'lon
+  // qilinganini QULFLAYDI — tartib buzilsa "by-teacher" maosh ID'si
+  // deb o'qilib, boshqa xato chiqardi.
+  { name: 'teacher-salary/salaries/by-teacher/:id (404)', method: 'GET',
+    path: `/api/teacher-salary/salaries/by-teacher/${'a'.repeat(24)}`, auth: true },
+  { name: 'teacher-salary/salaries/by-teacher/:id/balance (404)', method: 'GET',
+    path: `/api/teacher-salary/salaries/by-teacher/${'a'.repeat(24)}/balance`,
+    auth: true },
+  { name: 'teacher-salary/obligations?year=2026', method: 'GET',
+    path: '/api/teacher-salary/obligations?year=2026', auth: true },
+  { name: 'teacher-salary/obligations (yilsiz → 400)', method: 'GET',
+    path: '/api/teacher-salary/obligations', auth: true },
+  { name: 'teacher-salary/compensations/by-teacher/:id', method: 'GET',
+    path: `/api/teacher-salary/compensations/by-teacher/${'a'.repeat(24)}`,
+    auth: true },
+  // ⚠ `/me/finance` `/salaries/:id` DAN OLDIN — owner uchun AYNAN 403.
+  { name: 'teacher-salary/me/finance (owner → 403)', method: 'GET',
+    path: '/api/teacher-salary/me/finance', auth: true },
+  { name: "teacher-salary (auth yo'q → 401)", method: 'GET',
+    path: '/api/teacher-salary/salaries' },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },
