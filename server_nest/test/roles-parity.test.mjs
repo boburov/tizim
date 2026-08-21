@@ -158,6 +158,17 @@ const main = async () => {
       skip(name, err.message);
       return { e, n };
     }
+    // ⚠ 429 — TEKSHIRUV EMAS, O'LCHOVSIZLIK (`_harness.mjs` bilan bir xil
+    // qoida). Ikkala stekda ham `generalLimiter` bor (200/daq): byudjet
+    // tugasa ikkalasi AYNI 429 qaytaradi va `deepEqual` MUVAFFAQIYATLI
+    // bo'lardi — hech narsa o'lchanmagan holda YASHIL. Bittasi 429
+    // bo'lsa esa SOXTA QIZIL. Ikkalasi ham xato xulosa.
+    //
+    // ⚠ TEST SUSAYMAYDI: `unmeasured` yakunda baribir YIQITADI.
+    if (e.status === 429 || n.status === 429) {
+      skip(name, `tezlik chegarasi — express=${e.status}, nest=${n.status}`);
+      return { e, n };
+    }
     const en = { status: e.status, body: normalize(e.body, subsOf(EXPRESS)) };
     const nn = { status: n.status, body: normalize(n.body, subsOf(NEST)) };
     try {

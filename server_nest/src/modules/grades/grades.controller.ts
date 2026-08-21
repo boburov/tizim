@@ -116,8 +116,24 @@ export class GradesController {
    * tekshiriladi. Bu yerga validator QO'SHILSA, noto'g'ri sana uchun
    * Express 200 qaytarganda NestJS 400 qaytarib, paritet buzilardi.
    */
+  /**
+   * ⚠ XAVFSIZLIK TUZATISHI — `@StudentAccess('id')` QO'SHILDI (ikkala
+   * stekda BIR VAQTDA).
+   *
+   * `@PermissionOrSelf` faqat "bo'limga kira oladimi?" degan savolga
+   * javob beradi. "AYNAN SHU o'quvchi uningmi?" so'ralmasdi, ya'ni
+   * `rating.read` ruxsatli filial xodimi BEGONA FILIAL o'quvchisining
+   * reytingini o'qiy olardi.
+   *
+   * O'LCHANDI (taxmin emas): ko'lamlangan aktyorga `rating.read`
+   * berilganda begona o'quvchi uchun express=200, nest=200.
+   *
+   * Qo'shni `students/:id/summary` (AYNI ma'lumot turi) `@StudentAccess`
+   * ni ALLAQACHON ishlatadi — bu qoldirib ketilgan joy edi.
+   */
   @Get('rating/students/:id')
   @PermissionOrSelf(PERMISSIONS.RATING_READ, 'id')
+  @StudentAccess('id')
   async studentRank(@Req() req: AuthenticatedRequest) {
     const q = req.query as Record<string, unknown>;
     const data = await this.rating.getStudentRank(String(req.params.id), {

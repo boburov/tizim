@@ -92,6 +92,13 @@ const writeSalaryTransaction = async ({
   // qaytarishning o'zi yiqilsa maosh "to'langan" bo'lib qolardi.
   // Endi tranzaksiya buni kafolatlaydi.
   //
+  // ⚠ B20: bu da'vo UZOQ VAQT NOTO'G'RI EDI. `applyPaidDelta` `tx` ni
+  // QABUL QILARDI, lekin uni TASHLAB YUBORARDI va xom `UPDATE` global
+  // klientda, tranzaksiyadan TASHQARIDA bajarilardi. O'LCHANDI:
+  // tranzaksiya bekor qilinganda `paidAmount` 0 → 50000 bo'lib QOLDI.
+  // ENDI `tx` hurmat qilinadi va atomiklik HAQIQATAN bajariladi
+  // (`server_nest/test/teacher-salary-atomicity.test.mjs` o'lchaydi).
+  //
   // Jurnal yozuvi ENDI "Maosh" kategoriyasiga va o'qituvchiga
   // bog'lanadi (Faza 7) — ilgari u nomsiz `expense` edi va chiqim
   // kategoriyalari hisobotida markazning eng katta xarajati

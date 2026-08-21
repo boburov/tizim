@@ -12,6 +12,12 @@
  * biri javob bermasa — bu MUVAFFAQIYAT emas, XATO. Bo'sh tekshiruv
  * "hammasi bir xil" degan yolg'on natija berardi.
  *
+ * ⚠ TEZLIK CHEGARASI (429) MUVAFFAQIYAT EMAS. Ilgari bu yerda 429
+ * tekshiruvi UMUMAN YO'Q edi: byudjet tugasa IKKALA stek ham bir xil
+ * 429 + bir xil tana qaytarardi va tsikl uni "✅ tana bir xil" deb
+ * yozardi. Ya'ni to'plam qanchalik ko'p qulflansa, shunchalik YASHIL
+ * ko'rinardi. Endi 429 O'LCHANMADI deb sanaladi va yakunda YIQILADI.
+ *
  * BEQAROR MAYDONLAR (`VOLATILE`) solishtiruvdan chiqariladi: token,
  * vaqt tamg'asi, latency. Ular har chaqiruvda boshqacha bo'ladi va
  * ularni solishtirish shovqindan boshqa narsa bermaydi.
@@ -20,6 +26,29 @@
  */
 const EXPRESS = process.env.EXPRESS_URL || 'http://127.0.0.1:5000';
 const NEST = process.env.NEST_URL || 'http://127.0.0.1:5001';
+
+/**
+ * ⚠ SHU YURISHGA XOS MIJOZ MANZILI — boshqa paritet to'plamlaridagi
+ * naqshning aynan o'zi (`branches-parity`, `roles-parity`, ...).
+ *
+ * Bu ro'yxatda 140+ tekshiruv bor va HAR BIRI ikkala stekka bittadan
+ * so'rov yuboradi. Umumiy chegara 200/daq — ya'ni to'plam 127.0.0.1
+ * dan yurganda O'ZINI chegaraga urardi, ustiga qo'shni to'plamlar ham
+ * shu chelakni yeydi. Betakror manzil bilan to'plam o'z chelagida
+ * yuradi va ENDPOINTLARNI o'lchaydi, chegarani emas.
+ *
+ * ⚠ CHEGARA ZAIFLASHMAYDI — u baribir qo'llanadi; to'plam faqat boshqa
+ * mashinadan kelayotgandek ko'rinadi. Chegaraning O'ZI
+ * `test/rate-limit-parity.test.mjs` da o'lchanadi.
+ *
+ * `PARITY_RUN_IP` — ATAYLAB qulflangan chelakni ko'rsatish uchun:
+ * u bilan 429 yo'lini QAYTA TIKLASH mumkin (qo'riqchini sinovdan
+ * o'tkazish). Aks holda "429 endi yiqiladi" degan da'vo isbotsiz
+ * qolardi.
+ */
+const RUN_IP =
+  process.env.PARITY_RUN_IP ||
+  `198.51.100.${(Number(process.hrtime.bigint() % 250n) + 2)}`;
 
 const argv = process.argv.slice(2);
 const tokenArg = argv.indexOf('--token');
@@ -284,7 +313,7 @@ const CASES = [
 ];
 
 const call = async (base, c) => {
-  const headers = { 'content-type': 'application/json' };
+  const headers = { 'content-type': 'application/json', 'x-forwarded-for': RUN_IP };
   if (c.auth && TOKEN) headers.authorization = `Bearer ${TOKEN}`;
   const t0 = Date.now();
   try {
@@ -313,7 +342,7 @@ const run = async () => {
   console.log('\n\x1b[1mPARITET: Express ↔ NestJS\x1b[0m');
   console.log(`  Express: ${EXPRESS}\n  NestJS : ${NEST}\n`);
 
-  let compared = 0, diffs = 0, skipped = 0, unreachable = 0;
+  let compared = 0, diffs = 0, skipped = 0, unreachable = 0, throttled = 0;
   // ⚠ MUSBAT NAZORAT #2: himoyalangan marshrutlardan KAMIDA BITTASI
   // 200 qaytarishi shart. Tokenning muddati o'tsa hamma tekshiruv 401
   // bo'lardi — ikkala stekda BIR XIL 401, ya'ni "paritet saqlangan"
@@ -332,6 +361,24 @@ const run = async () => {
       continue;
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // ⚠ 429 — BU TEKSHIRUV EMAS, O'LCHOVSIZLIK.
+    //
+    // Ikkala stekda ham `generalLimiter` bor (200/daq). Byudjet tugasa
+    // ikkalasi ham AYNI 429 + AYNI tanani qaytaradi va pastdagi
+    // solishtiruv "farq yo'q" deb YASHIL berardi — hech narsa
+    // o'lchanmagan holda. Bittasi 429 bo'lsa esa SOXTA QIZIL chiqadi.
+    //
+    // Ikkalasi ham xato xulosa, shuning uchun tekshiruv
+    // SOLISHTIRILMAYDI va yakunda yurish YIQILADI (`throttled`).
+    // ═══════════════════════════════════════════════════════════════
+    if (e.status === 429 || n.status === 429) {
+      throttled += 1;
+      console.log(`  ⚠️  ${c.name} — O'LCHANMADI: tezlik chegarasi ` +
+        `(express=${e.status}, nest=${n.status})`);
+      continue;
+    }
+
     compared += 1;
     const problems = [];
     if (e.status !== n.status) problems.push(`status ${e.status} ≠ ${n.status}`);
@@ -346,7 +393,8 @@ const run = async () => {
     else console.log(`  ✅ ${c.name} — ${e.status}, tana bir xil`);
   }
 
-  console.log(`\n  Solishtirildi: ${compared} · farq: ${diffs} · o'tkazib yuborildi: ${skipped} · yetib bo'lmadi: ${unreachable}`);
+  console.log(`\n  Solishtirildi: ${compared} · farq: ${diffs} · o'tkazib yuborildi: ${skipped} · ` +
+    `yetib bo'lmadi: ${unreachable} · chegara tufayli o'lchanmadi: ${throttled}`);
 
   // ⚠ MUSBAT NAZORAT: hech narsa solishtirilmagan bo'lsa — bu YASHIL EMAS.
   if (compared === 0) {
@@ -359,6 +407,14 @@ const run = async () => {
     console.log('\n  ❌ O\'LCHANMADI: birorta himoyalangan marshrut 200 qaytarmadi.');
     console.log('     Token eskirgan bo\'lishi mumkin — yangisini oling:');
     console.log('     node test/parity.mjs --token <accessToken>\n');
+    process.exit(1);
+  }
+  // ⚠ O'LCHANMAGAN TEKSHIRUV YASHIL BERMAYDI. 429 "muvaffaqiyat" emas:
+  // u tekshiruv BAJARILMAGANINI bildiradi va shu holatda "paritet
+  // saqlangan" deb yozish yolg'on bo'lardi.
+  if (throttled > 0) {
+    console.log(`\n  ❌ ${throttled} ta tekshiruv TEZLIK CHEGARASI tufayli o'lchanmadi.`);
+    console.log('     Chegara oynasi (60s) tugashini kuting va qayta yuriting.\n');
     process.exit(1);
   }
   if (unreachable > 0 || diffs > 0) { console.log(''); process.exit(1); }

@@ -140,20 +140,27 @@ export class ActivityLogsService {
   }
 
   /**
-   * ⚠ FILIAL KO'LAMI ATAYLAB TEKSHIRILMAYDI — Express AYNAN SHUNDAY.
+   * XAVFSIZLIK TUZATISHI — FILIAL KO'LAMI QO'SHILDI (ikkala stekda
+   * BIR VAQTDA: `server/src/modules/activityLogs/services/`).
    *
-   * `getById` da hech qanday `branchUserFilter` yo'q: `activity_logs.read`
-   * ruxsati bo'lgan har kim ISTALGAN logni id bo'yicha o'qiy oladi,
-   * ro'yxat esa filial bo'yicha cheklangan. Bu FARQ Express'da mavjud
-   * (`services/activityLogs.service.js::getById`).
+   * Ilgari `getById` da HECH QANDAY `branchUserFilter` yo'q edi:
+   * `activity_logs.read` ruxsati bor har kim ISTALGAN logni id bo'yicha
+   * o'qiy olardi, `list` va `getStats` esa CHEKLANGAN edi.
    *
-   * BU YERDA TUZATILMADI — paritet shart, "yaxshilash" ikki stekni
-   * ajratib yuborardi va paritet testi buni yiqitardi. Farq hisobotda
-   * alohida qayd etilgan; qarorni tizim egasi qabul qiladi.
+   * O'LCHANDI (taxmin emas): ko'lamlangan aktyor uchun
+   *   • `GET /activity-logs?userId=<begona>` → 0 ta qator;
+   *   • `GET /activity-logs/<o'sha logning id'si>` → 200.
+   * Ya'ni ro'yxat YASHIRGAN yozuv id bilan o'qib olinardi — IDOR.
+   *
+   * ⚠ 404, 403 EMAS: 403 yozuv MAVJUDLIGINI tasdiqlab, id bo'yicha
+   * sanab chiqishga yo'l ochardi. Mavjud bo'lmagan id ham AYNI 404.
    */
   async getById(id: string) {
-    const doc = await this.prisma.activityLog.findUnique({
-      where: { id: String(id) },
+    const scope = await this.branchAccess.branchUserFilter('userId');
+    const doc = await this.prisma.activityLog.findFirst({
+      where: Object.keys(scope).length
+        ? { AND: [{ id: String(id) }, scope as Prisma.ActivityLogWhereInput] }
+        : { id: String(id) },
       include: { user: { select: USER_SELECT } },
     });
     if (!doc) throw new ApiError(404, 'Log topilmadi');

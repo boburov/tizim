@@ -10,6 +10,7 @@ import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 import { assertPeriodInvariants } from '../../common/utils/period.js';
 import { assertGroupActive } from '../../common/helpers/group-state.js';
 import { assertNotSelfSalary } from '../../common/rbac/self-salary.guard.js';
+import { branchFilter } from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
 
@@ -441,8 +442,33 @@ export class TeacherGroupPeriodService {
     return ids;
   }
 
-  /** Guruhning barcha davrlari (timeline) — o'qituvchi ma'lumoti bilan. */
+  /**
+   * Guruhning barcha davrlari (timeline) — o'qituvchi ma'lumoti bilan.
+   *
+   * XAVFSIZLIK TUZATISHI — FILIAL KO'LAMI QO'SHILDI (ikkala stekda
+   * BIR VAQTDA: `server/src/modules/groups/services/`).
+   *
+   * Ilgari ko'lam UMUMAN yo'q edi: `groups.read` ruxsatli xodim BEGONA
+   * FILIAL guruhining o'qituvchi timeline'ini o'qiy olardi.
+   *
+   * O'LCHANDI, bitta aktyor va bitta guruh ID'si bilan:
+   *   GET /groups/<begona>                  → 404
+   *   GET /groups/<begona>/teacher-periods  → 200
+   *
+   * Ya'ni guruhning O'ZI rad etilar, ichki timeline'i ochiq turardi.
+   * `GroupsService.getById` AYNI `branchFilter()` + 404 naqshini
+   * ALLAQACHON qo'llaydi — bu qoldirib ketilgan joy edi.
+   *
+   * ⚠ 404, 403 EMAS — guruh MAVJUDLIGI ham oshkor qilinmaydi.
+   * ⚠ Kontekstsiz chaqiruvda `branchFilter()` `{}` qaytaradi.
+   */
   async listByGroup(groupId: string) {
+    const owner = await this.prisma.group.findFirst({
+      where: { id: String(groupId), ...branchFilter() },
+      select: { id: true },
+    });
+    if (!owner) throw new ApiError(404, 'Guruh topilmadi');
+
     const rows = await this.prisma.teacherGroupPeriod.findMany({
       where: { groupId: String(groupId), isDeleted: false },
       include: {

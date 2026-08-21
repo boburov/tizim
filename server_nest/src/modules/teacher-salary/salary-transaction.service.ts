@@ -92,22 +92,28 @@ export class SalaryTransactionService {
    * Balansni oshirib, tranzaksiyani yozadi. IKKALA yo'l ham shuni
    * ishlatadi.
    *
-   * ⚠⚠⚠ TRANZAKSIYA CHEGARASI — HUJJATLANGAN EXPRESS XATOSI ⚠⚠⚠
+   * ⚠ TRANZAKSIYA CHEGARASI — B20 TUZATILDI (ikkala stekda BIR VAQTDA).
    *
-   * Quyida `applyPaidDelta` ga `tx` UZATILADI, lekin u ISHLATILMAYDI:
-   * Express imzosi faqat `capToRemaining` ni oladi va xom SQL GLOBAL
-   * klientda bajariladi. Ya'ni BALANS YANGILANISHI SHU
-   * TRANZAKSIYADAN TASHQARIDA qoladi.
+   * ── QANDAY EDI ──
    *
-   * OQIBATI (tekshirib ko'rilgan): pastdagi `create`/`postTeacherPayroll`
-   * yiqilsa tranzaksiya rollback bo'ladi, `paidAmount` esa O'SGANICHA
-   * QOLADI — maosh "to'langan" ko'rinadi, to'lov yozuvi va jurnal
-   * yozuvi esa YO'Q.
+   * Quyida `applyPaidDelta` ga `tx` UZATILARDI, lekin u ISHLATILMASDI:
+   * imzo faqat `capToRemaining` ni olardi va xom SQL GLOBAL klientda
+   * bajarilardi. Ya'ni BALANS YANGILANISHI SHU TRANZAKSIYADAN
+   * TASHQARIDA qolardi va yuqoridagi "atomik: balans + tranzaksiya +
+   * jurnal + audit BITTA amalda" degan da'vo AMALDA NOTO'G'RI edi.
    *
-   * Yuqoridagi izohda "atomik: balans + tranzaksiya + jurnal + audit
-   * BITTA amalda" deyilgan — bu Express'da AMALDA SHUNDAY EMAS.
-   * Xatti-harakat AYNAN takrorlandi (paritet uchun) va
-   * `MIGRATION-CHECKLIST.md` da eng yuqori jiddiylik bilan yozildi.
+   * O'LCHANDI: tranzaksiya ataylab bekor qilinganda `paidAmount`
+   * 0 → 50000 bo'lib QOLDI (rollback unga ta'sir qilmadi).
+   *
+   * OQIBATI: pastdagi `create`/`postTeacherPayroll` yiqilsa to'lov
+   * qatori va jurnal ROLLBACK bo'lardi, `paidAmount` esa o'sganicha
+   * qolardi — maosh "to'langan" ko'rinib, PUL YOZUVI bo'lmasdi.
+   *
+   * ── ENDI ──
+   *
+   * `applyPaidDelta` `tx` ni HURMAT QILADI, ya'ni yuqoridagi atomiklik
+   * da'vosi HAQIQATAN bajariladi. `test/teacher-salary-atomicity.test.mjs`
+   * buni IKKALA stekda o'lchaydi.
    */
   private async writeSalaryTransaction({
     salary, branchId, day, amount, method, note, createdBy,

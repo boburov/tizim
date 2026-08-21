@@ -10,7 +10,7 @@ import {
 } from "../../../helpers/attendance.helper.js";
 import { assertPeriodInvariants } from "../../../helpers/period.helper.js";
 import { assertGroupActive } from "../../../helpers/group.helper.js";
-import { resolveBranchFromGroup } from "../../../helpers/branchContext.helper.js";
+import { branchFilter, resolveBranchFromGroup } from "../../../helpers/branchContext.helper.js";
 import { assertNotSelfSalary } from "../../../helpers/selfSalary.guard.js";
 import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 
@@ -317,7 +317,36 @@ export const activeGroupIdsForTeacher = async (teacher, onDate = null) => {
   return ids;
 };
 
+/**
+ * XAVFSIZLIK TUZATISHI — FILIAL KO'LAMI QO'SHILDI.
+ *
+ * Ilgari bu yerda ko'lam UMUMAN yo'q edi: `groups.read` ruxsati bor
+ * xodim BEGONA FILIAL guruhining o'qituvchi davrlarini (kim, qachondan,
+ * qaysi stavkada dars bergani) o'qiy olardi.
+ *
+ * O'LCHANDI (taxmin emas), bitta aktyor, bitta guruh ID'si bilan:
+ *   GET /groups/<begona>                  → 404  ("Guruh topilmadi")
+ *   GET /groups/<begona>/teacher-periods  → 200  (davrlar berildi)
+ * Ikkala stekda ham AYNAN shunday edi.
+ *
+ * Ya'ni guruhning O'ZI ko'lamdan tashqarida deb rad etilar, uning ichki
+ * timeline'i esa ochiq turardi. Bu qoldirib ketilgan joy — `getById`
+ * (`groups.service.js`) AYNI `branchFilter()` + 404 naqshini
+ * ALLAQACHON qo'llaydi.
+ *
+ * ⚠ 404, 403 EMAS — `getById` bilan bir xil: guruh MAVJUDLIGI ham
+ * oshkor qilinmaydi.
+ *
+ * ⚠ KONTEKSTSIZ CHAQIRUV (job/seed) TA'SIRLANMAYDI: `branchFilter()`
+ * ALS konteksti bo'lmaganda `{}` qaytaradi.
+ */
 export const listByGroup = async (group) => {
+  const owner = await prisma.group.findFirst({
+    where: { id: String(group), ...branchFilter() },
+    select: { id: true },
+  });
+  if (!owner) throw new ApiError(404, "Guruh topilmadi");
+
   const rows = await prisma.teacherGroupPeriod.findMany({
     where: { groupId: String(group), isDeleted: false },
     include: {

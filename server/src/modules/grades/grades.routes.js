@@ -59,10 +59,25 @@ router.patch(
 );
 
 // O'quvchining reytingdagi o'rni (umumiy + guruh) - o'zi yoki ruxsatli
+//
+// XAVFSIZLIK TUZATISHI: `requireStudentAccess` QO'SHILDI.
+//
+// `requirePermissionOrSelf` faqat "shu bo'limga umuman kira oladimi?"
+// degan savolga javob beradi. "AYNAN SHU o'quvchi uningmi?" degan
+// IKKINCHI savol so'ralmasdi - ya'ni `rating.read` ruxsati bor filial
+// xodimi BOSHQA FILIAL o'quvchisining reytingini o'qiy olardi.
+//
+// O'LCHANDI: filialga biriktirilgan aktyorga `rating.read` berilganda
+// begona filial o'quvchisi uchun IKKALA stek ham 200 qaytardi.
+//
+// Qo'shni marshrut (`/students/:id/summary`, AYNI ma'lumot turi)
+// `requireStudentAccess` ni ALLAQACHON chaqiradi - ya'ni bu qoldirib
+// ketilgan joy, ataylab qilingan farq emas.
 router.get(
   "/rating/students/:id",
   requireAuth,
   requirePermissionOrSelf(PERMISSIONS.RATING_READ, (req) => req.params.id),
+  requireStudentAccess((req) => req.params.id),
   studentRank,
 );
 

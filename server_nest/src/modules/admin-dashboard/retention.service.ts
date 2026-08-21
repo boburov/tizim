@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -14,27 +15,40 @@ import { PrismaService } from '../../prisma/prisma.service.js';
  *  • Sabab = `leftReasonTitle` surati (yo'q bo'lsa "Sababsiz").
  *
  * ═══════════════════════════════════════════════════════════════════════════
- * ⚠⚠ MA'LUM KAMCHILIK — FILIAL KO'LAMI BU SERVISDA YO'Q (B24) ⚠⚠
+ * ⚠⚠ B24 — FILIAL KO'LAMI QO'SHILDI (IKKALA STEKDA BIR VAQTDA) ⚠⚠
+ *
+ * ── QANDAY EDI ──
  *
  * `/retention` va `/churned-students` HECH QANDAY filial filtri
- * qo'llamaydi: `buildLeftRange` faqat `leftReason`/`leftAt`/`isDeleted`
- * bo'yicha filtrlaydi. Ya'ni filial direktori BUTUN TASHKILOTNING
- * chiqib ketgan o'quvchilarini — ism, familiya, login, guruh nomi va
- * o'qituvchisi bilan — ko'radi.
+ * qo'llamasdi: `buildLeftRange` faqat `leftReason`/`leftAt`/`isDeleted`
+ * bo'yicha filtrlardi. Ya'ni filial direktori BUTUN TASHKILOTNING
+ * chiqib ketgan o'quvchilarini — ism, familiya, LOGIN, guruh nomi va
+ * o'qituvchisi bilan — ko'rardi.
  *
- * Qo'shni servislar buni ATAYLAB qo'shgan:
- *   `adminDashboard.service.js`  — 18 marta ko'lam helperi
- *   `studentStats.service.js`    — ochiq izoh bilan TUZATILGAN
- * Bu fayl esa chetda qolgan.
+ * O'LCHANDI (taxmin emas): filialga biriktirilgan direktor uchun
+ * `GET /admin-dashboard/churned-students` → 46 ta qator, owner uchun ham
+ * AYNAN 46 ta. Ikkala stekda ham bir xil.
  *
- * ⚠ BU YERDA TUZATILMADI — sabab: ko'chirish ishi xatti-harakatni
- * O'ZGARTIRMASLIGI kerak. Filtr qo'shilsa NestJS Express'dan boshqa
- * (kamroq) natija qaytarardi, ya'ni paritet ataylab buzilardi va
- * xatolik "ko'chirish regressiyasi" bo'lib ko'rinardi.
+ * Qo'shni servislar ko'lamni ALLAQACHON qo'llardi:
+ *   `admin-dashboard.service.ts`  — 18 marta ko'lam helperi
+ *   `student-stats.service.ts`    — ochiq izoh bilan
+ * Bu fayl chetda qolgan edi.
  *
- * Test bu holatni QULFLAYDI va uni "ko'lam ishlayapti" deb EMAS,
- * "MA'LUM SIZISH" deb belgilaydi. Tuzatish alohida qaror va u
- * `MIGRATION-CHECKLIST.md` (B24) da qayd etilgan.
+ * ── NIMA O'ZGARDI ──
+ *
+ * Ikkala so'rov ham `branchGroupFilter('groupId')` bilan cheklanadi —
+ * AYNI qo'shni `admin-dashboard.service.ts` ishlatadigan chaqiruv, ya'ni
+ * ko'lam qoidasi ikki joyda ikki xil bo'lib qolmaydi.
+ *
+ * ⚠ EXPRESS BILAN BIR VAQTDA o'zgartirildi
+ * (`server/src/modules/adminDashboard/services/retention.service.js`) —
+ * aks holda paritet buzilardi va tuzatish "regressiya" bo'lib ko'rinardi.
+ *
+ * ⚠ BU KLIENT RAQAMLARINI O'ZGARTIRADI: filial direktori endi FAQAT
+ * o'z filialining churn'ini ko'radi. ATAYLAB qilingan xatti-harakat
+ * o'zgarishi — `MIGRATION-CHECKLIST.md` (B24) da qayd etilgan.
+ *
+ * ⚠ Kontekstsiz chaqiruvda (job/seed) `branchGroupFilter` `{}` qaytaradi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
@@ -79,7 +93,18 @@ const buildDurationBuckets = (durations: number[]) => {
 
 @Injectable()
 export class RetentionService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(BranchAccessService) private readonly branchAccess: BranchAccessService,
+  ) {}
+
+  /** `buildLeftRange` + FILIAL KO'LAMI. Kalitlar to'qnashmaydi. */
+  private async scopedLeftRange(fromDate?: Date | string, toDate?: Date | string) {
+    return {
+      ...(await this.branchAccess.branchGroupFilter('groupId')),
+      ...this.buildLeftRange(fromDate, toDate),
+    };
+  }
 
   /**
    * `leftAt` diapazon filtri.
@@ -100,7 +125,7 @@ export class RetentionService {
   /** Tark etgan a'zoliklarni guruh (+o'qituvchilar) bilan yuklaydi. */
   private async loadChurnedMemberships(fromDate?: Date | string, toDate?: Date | string) {
     const rows = await this.prisma.groupMembership.findMany({
-      where: this.buildLeftRange(fromDate, toDate) as never,
+      where: (await this.scopedLeftRange(fromDate, toDate)) as never,
       select: {
         id: true,
         joinedAt: true,
@@ -127,7 +152,7 @@ export class RetentionService {
     fromDate?: Date | string; toDate?: Date | string;
   } = {}) {
     const rows = await this.prisma.groupMembership.findMany({
-      where: this.buildLeftRange(fromDate, toDate) as never,
+      where: (await this.scopedLeftRange(fromDate, toDate)) as never,
       select: {
         id: true,
         joinedAt: true,

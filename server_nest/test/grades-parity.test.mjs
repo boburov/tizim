@@ -661,28 +661,41 @@ const run = async () => {
   await mirror("GET /rating/students/:id (o'quvchi O'ZI)", (base, f) =>
     call(base, 'GET', `/api/grades/rating/students/${f.s1.id}`, { as: 's1' }));
   /**
-   * ⚠⚠ MAVJUD KAMCHILIK — O'LCHANDI, TUZATILMADI ⚠⚠
+   * ⚠ KAMCHILIK TUZATILDI — IKKALA STEKDA BIR VAQTDA.
+   *
+   * ── QANDAY EDI ──
    *
    * `/rating/students/:id` da FAQAT `requirePermissionOrSelf(RATING_READ)`
-   * bor, `requireStudentAccess` YO'Q. Seed esa `student` roliga
-   * `rating.read` ni BERADI — ya'ni `hasPermission` shoxi ishlaydi va
-   * "faqat o'zi" sharti UMUMAN tekshirilmaydi.
+   * bor edi, `requireStudentAccess` YO'Q. Seed esa `student` roliga
+   * `rating.read` ni BERADI — ya'ni `hasPermission` shoxi ishlab, "faqat
+   * o'zi" sharti UMUMAN tekshirilmasdi.
    *
-   * Natija: o'quvchi BOSHQA o'quvchining reytingdagi o'rnini,
-   * o'rtacha bahosini va davomat foizini o'qiy oladi. Bu Express'da
-   * ALLAQACHON shunday — shuning uchun NestJS ham AYNAN shunday
-   * qiladi va bu yerda 200 QOTIRILADI.
+   * NATIJA: o'quvchi BOSHQA o'quvchining reytingdagi o'rnini, o'rtacha
+   * bahosini va davomat foizini o'qiy olardi. Bu tekshiruv o'sha holatni
+   * (200) QULFLAB turardi.
    *
-   * Tuzatish (`requireStudentAccess` qo'shish) xatti-harakatni
-   * o'zgartiradi va o'quvchi panelini sindirishi mumkin — shuning
-   * uchun ALOHIDA qaror sifatida hisobotga chiqarilgan.
+   * Xodim yo'li ham ochiq edi: filialga biriktirilgan, `rating.read`
+   * ruxsatli aktyor BEGONA FILIAL o'quvchisi uchun ham 200 olardi
+   * (o'lchangan, ikkala stekda).
+   *
+   * ── ENDI ──
+   *
+   * Qo'shni marshrut (`/students/:id/summary`, AYNI ma'lumot turi)
+   * ALLAQACHON ishlatadigan qo'riqchi qo'shildi:
+   *   Express — `requireStudentAccess((req) => req.params.id)`
+   *   NestJS  — `@StudentAccess('id')`
+   *
+   * ⚠ TEKSHIRUV OLIB TASHLANMADI, TESKARISIGA AYLANTIRILDI: endi 403
+   * QOTIRILADI. Qo'riqchi kelajakda olib tashlansa test darhol qizil
+   * bo'ladi. Xodim (filial) shoxi `test/branch-scope-security.test.mjs`
+   * da alohida o'lchanadi.
    */
   const rs2 = await mirror(
-    "GET /rating/students/:id (begona o'quvchi — Express 200 QOLDIRILGAN)",
+    "GET /rating/students/:id (begona o'quvchi → 403)",
     (base, f) => call(base, 'GET', `/api/grades/rating/students/${f.s1.id}`,
       { as: 's2' }));
-  eq('kamchilik qotirildi: begona reyting 200 (express)', rs2.e?.status, 200);
-  eq('kamchilik qotirildi: begona reyting 200 (nest)', rs2.n?.status, 200);
+  eq('begona o\'quvchi reytingi rad etildi (express)', rs2.e?.status, 403);
+  eq('begona o\'quvchi reytingi rad etildi (nest)', rs2.n?.status, 403);
 
   // ── SOZLAMALAR ──
   await mirror('GET /rating/settings', (base) =>

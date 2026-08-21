@@ -13,6 +13,11 @@ import { BranchAccessService } from '../../common/rbac/branch-access.service.js'
 import { deriveStatus, daysInMonth } from '../../common/utils/proration.js';
 import { localTodayMidnight, toUtcMidnight } from '../../common/utils/date.js';
 import { TeacherGroupPeriodService } from '../groups/teacher-group-period.service.js';
+// ⚠ `Prisma.TransactionClient` EMAS — kengaytirilgan klient (omit +
+// decimal normalizatsiyasi) standart turga mos kelmaydi. Loyihada
+// yagona ta'rif `journal.service.ts` da (`TxClient`) va u klientning
+// O'ZIDAN keltirib chiqarilgan.
+import type { TxClient } from '../journal/journal.service.js';
 import {
   segmentPeriod,
   baseSegmentsForMonth,
@@ -380,11 +385,42 @@ export class TeacherSalaryService {
    * Hujjat: `MIGRATION-CHECKLIST.md` (B-jadval).
    * ═══════════════════════════════════════════════════════════════════
    */
+  /**
+   * ═══════════════════════════════════════════════════════════════════
+   * B20 TUZATILDI — `tx` ENDI HURMAT QILINADI (ikkala stekda BIR VAQTDA).
+   *
+   * Imzo `tx` ni QABUL QILARDI, lekin uni JIMGINA TASHLAB YUBORARDI
+   * (`tx?: unknown`, destrukturizatsiyada yo'q) va xom `UPDATE` GLOBAL
+   * klientda, tranzaksiyadan TASHQARIDA bajarilardi.
+   *
+   * O'LCHANDI (Express nusxasida, AYNI imzo):
+   *   tranzaksiya ICHIDA → paidAmount = 50000
+   *   ROLLBACK'DAN KEYIN → paidAmount = 50000   ← OMON QOLDI
+   *
+   * OQIBATI: `salaryTransaction.create` yoki `postTeacherPayroll`
+   * yiqilsa to'lov qatori va jurnal ROLLBACK bo'lardi, `paidAmount` esa
+   * o'sganicha qolardi — maosh "to'langan" ko'rinib, PUL YOZUVI
+   * bo'lmasdi.
+   *
+   * ⚠ `tx` berilmasa xatti-harakat AVVALGIDEK (global klient), ya'ni
+   * tranzaksiyasiz chaqiruvchilar (`remove()`) ta'sirlanmaydi.
+   *
+   * ⚠ AYNI NUQSON `staff-payroll` va `student-payment` da HAM bor —
+   * ular bu ishning doirasidan tashqarida va ATAYLAB TEGILMADI.
+   * ═══════════════════════════════════════════════════════════════════
+   */
   async applyPaidDelta(
     salaryId: string,
     delta: number,
-    { capToRemaining = false }: { capToRemaining?: boolean; tx?: unknown } = {},
+    {
+      capToRemaining = false,
+      tx = null,
+    }: { capToRemaining?: boolean; tx?: TxClient | null } = {},
   ) {
+    // `tx` berilgan bo'lsa XOM SQL HAM, keyingi o'qish HAM o'sha
+    // tranzaksiyada bajarilishi shart — aks holda rollback ularni
+    // qaytara olmaydi.
+    const db: TxClient = tx ?? (this.prisma as unknown as TxClient);
     const id = String(salaryId);
     const d = Number(delta) || 0;
 
@@ -405,18 +441,18 @@ export class TeacherSalaryService {
     `;
 
     const affected = capToRemaining
-      ? await this.prisma.$executeRaw`
+      ? await db.$executeRaw`
           UPDATE "teacher_salaries" ${setClause}
           WHERE "id" = ${id}
             AND COALESCE("paidAmount", 0) + ${d}::numeric <= "expectedAmount"
         `
-      : await this.prisma.$executeRaw`
+      : await db.$executeRaw`
           UPDATE "teacher_salaries" ${setClause}
           WHERE "id" = ${id}
         `;
 
     if (affected === 0) return null;
-    return this.prisma.teacherSalary.findUnique({ where: { id } });
+    return db.teacherSalary.findUnique({ where: { id } });
   }
 
   /** Faol tranzaksiyalar yig'indisidan `paidAmount`/status ni tiklaydi. */

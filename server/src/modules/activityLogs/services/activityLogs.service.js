@@ -130,9 +130,33 @@ export const list = async ({
   return { items: items.map(enrich), total, page, limit };
 };
 
+/**
+ * XAVFSIZLIK TUZATISHI — FILIAL KO'LAMI QO'SHILDI.
+ *
+ * Ilgari bu yerda HECH QANDAY ko'lam yo'q edi: `activity_logs.read`
+ * ruxsati bor har kim ISTALGAN logni id bo'yicha o'qiy olardi, `list`
+ * va `getStats` esa `branchUserFilter` bilan CHEKLANGAN edi.
+ *
+ * O'LCHANDI (taxmin emas): filialga biriktirilgan aktyor uchun
+ *   • `GET /activity-logs?userId=<begona>` → 0 ta qator (ro'yxat ko'lamli)
+ *   • `GET /activity-logs/<o'sha logning id'si>` → 200 (log to'liq berildi)
+ * Ikkala stekda ham AYNAN shunday edi.
+ *
+ * Ya'ni ro'yxat yashirgan yozuvni id bilan o'qib olish mumkin edi —
+ * klassik IDOR. Ko'lam qoidasi `list` BILAN AYNI (`branchUserFilter`),
+ * shuning uchun bu "yangi siyosat" emas, mavjud siyosatni qoldirib
+ * ketilgan joyga qo'llash.
+ *
+ * ⚠ KO'LAMDAN TASHQARI LOG UCHUN 404 ("Log topilmadi"), 403 EMAS:
+ * 403 yozuv MAVJUDLIGINI tasdiqlardi va id bo'yicha sanab chiqishga
+ * yo'l ochardi. Mavjud bo'lmagan id ham AYNI 404 ni beradi.
+ */
 export const getById = async (id) => {
-  const doc = await prisma.activityLog.findUnique({
-    where: { id: String(id) },
+  const scope = await branchUserFilter("userId");
+  const doc = await prisma.activityLog.findFirst({
+    where: Object.keys(scope).length
+      ? { AND: [{ id: String(id) }, scope] }
+      : { id: String(id) },
     include: { user: { select: USER_SELECT } },
   });
   if (!doc) throw new ApiError(404, "Log topilmadi");

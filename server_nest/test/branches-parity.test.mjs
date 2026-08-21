@@ -13,16 +13,46 @@
  * `createWithDirector` da filial yaratilishidan OLDIN turadi, ya'ni
  * muvaffaqiyatsiz so'rov HECH NARSA qoldirmaydi.
  *
- * ⚠ Filial `softRemove` bilan o'chadi, ya'ni `isDeleted:true` qatori
- * qoladi. Bu barcha so'rovlardan (`isDeleted:false`) chetda va Express'da
- * ham xuddi shunday — yangi xatti-harakat emas.
+ * ⚠ Filial `softRemove` bilan o'chadi, ya'ni API orqali o'chirilgan qator
+ * `isDeleted:true` bo'lib BAZADA QOLADI.
+ *
+ * ── O'LCHANGAN NUQSON: TOZALASH QOLDIQ TO'PLAGAN ──
+ *
+ * Ilgari tozalash ham, YAKUNIY TEKSHIRUV ham API orqali borardi:
+ *
+ *   • `DELETE /branches/:id` — YUMSHOQ o'chirish, qator qoladi;
+ *   • `GET /branches?includeInactive=true` — `isDeleted:true` ni
+ *     QAYTARMAYDI, ya'ni tekshiruv aynan o'zi qidirishi kerak bo'lgan
+ *     narsaga KO'R edi va har doim "0 ta qoldi" deb yozardi.
+ *
+ * NATIJA (bazadan o'lchandi): 2 kunlik yurishlardan `__parity_` prefiksli
+ * 28 ta filial qatori to'planib qolgan — bazadagi 40 filialning 70%.
+ * Ular boshqa to'plamlarning `branch.count()` siljish tekshiruvlarini
+ * ham ifloslantiradi.
+ *
+ * ── TUZATISH ──
+ *
+ * Tozalash va tekshiruv API'DAN EMAS, BAZADAN yuritiladi:
+ *   1. `qa_staff_a` roli VA `branchAssignments` Prisma bilan tiklanadi
+ *      (amaldagi rol birikmadan kelib chiqadi — faqat `user.role` ni
+ *      qaytarish YETMAYDI);
+ *   2. `__parity_` filiallari QATTIQ o'chiriladi (`isDeleted` ga
+ *      qaramasdan);
+ *   3. yakuniy tekshiruv qatorlarni BAZADAN sanaydi.
+ *
+ * ⚠ NEGA API EMAS: test API xatosi tufayli yiqilsa, AYNI xato tozalashni
+ * ham yiqitadi va fixture ko'tarilgan huquqda QOLIB KETADI.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import assert from 'node:assert/strict';
+import { PrismaClient } from '@prisma/client';
 
 const EXPRESS = process.env.EXPRESS_URL || 'http://127.0.0.1:5000';
 const NEST = process.env.NEST_URL || 'http://127.0.0.1:5001';
 const PREFIX = '__parity_';
+
+/** ⚠ TOZALASH API'GA TAYANMAYDI — pastdagi `finally` ga qarang. */
+const prisma = new PrismaClient();
 
 const R = { pass: 0, fail: 0, unmeasured: 0 };
 const ok = (n) => { R.pass += 1; console.log(`  ✅ ${n}`); };
@@ -112,6 +142,17 @@ const main = async () => {
     let e, n;
     try { e = await fn(EXPRESS); n = await fn(NEST); }
     catch (err) { skip(name, err.message); return {}; }
+    // ⚠ 429 — TEKSHIRUV EMAS, O'LCHOVSIZLIK (`_harness.mjs` bilan bir xil
+    // qoida). Ikkala stekda ham `generalLimiter` bor (200/daq): byudjet
+    // tugasa ikkalasi AYNI 429 qaytaradi va `deepEqual` MUVAFFAQIYATLI
+    // bo'lardi — hech narsa o'lchanmagan holda YASHIL. Bittasi 429
+    // bo'lsa esa SOXTA QIZIL. Ikkalasi ham xato xulosa.
+    //
+    // ⚠ TEST SUSAYMAYDI: `unmeasured` yakunda baribir YIQITADI.
+    if (e.status === 429 || n.status === 429) {
+      skip(name, `tezlik chegarasi — express=${e.status}, nest=${n.status}`);
+      return { e, n };
+    }
     const en = { status: e.status, body: normalize(e.body, subsOf(EXPRESS)) };
     const nn = { status: n.status, body: normalize(n.body, subsOf(NEST)) };
     try { assert.deepEqual(nn, en); ok(`${name} — ${e.status}`); }
@@ -408,7 +449,19 @@ const main = async () => {
       });
       qaStaff = (users.body?.data || []).find((u) => u.username === 'qa_staff_a');
       if (!qaStaff) throw new Error('qa_staff_a topilmadi');
-      qaOriginalRole = qaStaff.role;
+      // ⚠ ASL HOLAT BAZADAN OLINADI, API javobidan EMAS: amaldagi rol
+      // `branchAssignments[].role` dan kelib chiqadi va API javobida u
+      // ko'rinmasligi mumkin. Faqat `user.role` ni eslab qolish tiklashni
+      // TO'LIQSIZ qilardi — foydalanuvchi birikmadagi kuchli rolda
+      // qolib ketardi.
+      qaOriginalRole = await prisma.user.findUnique({
+        where: { id: qaStaff.id },
+        select: {
+          role: true,
+          branchAssignments: { select: { id: true, role: true } },
+        },
+      });
+      if (!qaOriginalRole) throw new Error('qa_staff_a bazada topilmadi');
 
       const pw = await req(EXPRESS, 'GET', `/api/users/${qaStaff.id}/password`, {
         token: ownerToken,
@@ -460,57 +513,97 @@ const main = async () => {
     await both('DELETE /branches/:id (404)', (b) =>
       req(b, 'DELETE', `/api/branches/${'a'.repeat(24)}`, { token: ownerToken }), subs);
   } finally {
-    // ═══════════════ TOZALASH ═══════════════
+    // ═══════════════════════════════════════════════════════════════════
+    // TOZALASH — API'DAN EMAS, BAZADAN.
+    //
+    // ⚠ NEGA: bu to'plam API'ning O'ZINI sinaydi. Tozalash ham o'sha
+    // API orqali borsa, sinovdan o'tayotgan nuqson AYNI PAYTDA
+    // tozalashni ham yiqitadi va fixture ko'tarilgan huquqda qoladi —
+    // ya'ni eng yomon holatda qo'riqchi ochiq qolib ketardi.
+    // ═══════════════════════════════════════════════════════════════════
     let cleaned = 0;
-    // 1) qa_staff_a rolini tiklaymiz (aks holda u sinov rolida qolardi).
+    const cleanupErrors = [];
+
+    // ── 1) `qa_staff_a` — ROL VA BIRIKMALAR ──
+    // ⚠ AMALDAGI ROL BIRIKMADAN KELIB CHIQADI: faqat `user.role` ni
+    // qaytarish YETMAYDI, `branchAssignments[].role` USTUN turadi.
     if (qaStaff && qaOriginalRole) {
-      const r = await req(EXPRESS, 'PATCH', `/api/users/${qaStaff.id}/role`, {
-        token: ownerToken,
-        body: { role: qaOriginalRole },
-      });
-      if (r.status === 200) cleaned += 1;
-    }
-    // 2) Vaqtinchalik rol.
-    if (parityRoleValue) {
-      const r = await req(EXPRESS, 'DELETE', `/api/roles/${parityRoleValue}`, {
-        token: ownerToken,
-      });
-      if (r.status === 200) cleaned += 1;
-    }
-    // 3) Prefiksli filiallar — ikkala stekda ham, oldingi yurishdan
-    //    qolganlari bilan birga.
-    for (const base of [EXPRESS, NEST]) {
-      const all = await req(base, 'GET', '/api/branches?includeInactive=true&limit=500', {
-        token: ownerToken,
-      });
-      for (const b of all.body?.data || []) {
-        if (String(b.name || '').startsWith(PREFIX)) {
-          const d = await req(base, 'DELETE', `/api/branches/${b.id}`, { token: ownerToken });
-          if (d.status === 200) cleaned += 1;
+      try {
+        await prisma.user.update({
+          where: { id: qaStaff.id },
+          data: { role: qaOriginalRole.role },
+        });
+        for (const a of qaOriginalRole.branchAssignments) {
+          await prisma.userBranchAssignment.update({
+            where: { id: a.id },
+            data: { role: a.role },
+          });
         }
+        cleaned += 1;
+      } catch (err) {
+        cleanupErrors.push(`fixture roli tiklanmadi: ${err.message}`);
       }
+    }
+
+    // ── 2) Vaqtinchalik rol ──
+    if (parityRoleValue) {
+      try {
+        const r = await prisma.role.deleteMany({ where: { value: parityRoleValue } });
+        cleaned += r.count;
+      } catch (err) {
+        cleanupErrors.push(`sinov roli o'chmadi: ${err.message}`);
+      }
+    }
+
+    // ── 3) Prefiksli filiallar — QATTIQ o'chirish ──
+    // ⚠ API'dagi `DELETE` YUMSHOQ o'chiradi (`isDeleted:true`), ya'ni
+    // qator BAZADA QOLADI. Ilgari aynan shu tufayli 28 ta qoldiq
+    // to'plangan edi. Bu yerda qator HAQIQATAN o'chiriladi.
+    try {
+      const del = await prisma.branch.deleteMany({
+        where: { name: { startsWith: PREFIX } },
+      });
+      cleaned += del.count;
+    } catch (err) {
+      // FK bo'lsa jimgina yutilmaydi — pastdagi tekshiruv baribir ushlaydi.
+      cleanupErrors.push(`filiallar o'chmadi: ${err.message}`);
     }
     console.log(`\n  🧹 tozalandi: ${cleaned} ta obyekt`);
 
-    // ── YAKUNIY HOLAT TEKSHIRUVI ──
-    const leftovers = await req(EXPRESS, 'GET', '/api/branches?includeInactive=true&limit=500', {
-      token: ownerToken,
-    });
-    const remaining = (leftovers.body?.data || []).filter((b) =>
-      String(b.name || '').startsWith(PREFIX),
-    );
-    const staffNow = qaStaff
-      ? await req(EXPRESS, 'GET', `/api/users/${qaStaff.id}`, { token: ownerToken })
-      : null;
+    // ═══════════════════════════════════════════════════════════════════
+    // YAKUNIY HOLAT — BAZADAN O'LCHANADI.
+    //
+    // ⚠ Ilgari bu tekshiruv `GET /branches?includeInactive=true` ga
+    // tayanardi, u esa `isDeleted:true` qatorlarni QAYTARMAYDI. Ya'ni
+    // tekshiruv o'zi qidirishi kerak bo'lgan yagona narsaga KO'R edi va
+    // 28 ta qoldiq ustida ham "0 ta qoldi" deb yozib turgan.
+    // ═══════════════════════════════════════════════════════════════════
     try {
-      assert.equal(remaining.length, 0, `${remaining.length} ta sinov filiali qoldi`);
-      if (staffNow) {
-        assert.equal(staffNow.body?.data?.role, qaOriginalRole, 'qa_staff_a roli');
+      for (const e of cleanupErrors) throw new Error(e);
+
+      const remaining = await prisma.branch.count({
+        where: { name: { startsWith: PREFIX } },
+      });
+      assert.equal(remaining, 0, `${remaining} ta sinov filiali BAZADA qoldi`);
+
+      if (qaStaff && qaOriginalRole) {
+        const now = await prisma.user.findUnique({
+          where: { id: qaStaff.id },
+          select: { role: true, branchAssignments: { select: { role: true } } },
+        });
+        assert.equal(now.role, qaOriginalRole.role, 'qa_staff_a `user.role`');
+        // ⚠ BIRIKMA HAM TEKSHIRILADI: sinov roli u yerda qolsa
+        // foydalanuvchi AMALDA ko'tarilgan huquqda yurardi va
+        // `user.role` bir xil bo'lgani uchun buni hech narsa ko'rsatmasdi.
+        const stuck = now.branchAssignments.filter((a) => a.role === parityRoleValue);
+        assert.equal(stuck.length, 0, `${stuck.length} ta birikma sinov rolida qoldi`);
       }
-      ok('sinov obyektlari qolmadi, fixture roli tiklandi');
+      ok('sinov obyektlari BAZADA qolmadi, fixture roli va birikmalari tiklandi');
     } catch (err) {
       bad('tozalash to\'liq bo\'lmadi', err.message);
     }
+
+    await prisma.$disconnect();
   }
 
   console.log(`\n  Natija: ${R.pass} o'tdi, ${R.fail} yiqildi, ${R.unmeasured} o'lchanmadi\n`);

@@ -6,6 +6,7 @@ import { json, urlencoded } from 'express';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
+import { generalLimiter } from './common/middleware/rate-limit.js';
 import type { AppConfig } from './config/env.validation.js';
 
 /**
@@ -102,6 +103,43 @@ async function bootstrap(): Promise<void> {
     },
     credentials: true,
   });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // B25 — UMUMIY TEZLIK CHEGARASI (`generalLimiter`).
+  //
+  // Express `app.js:50`: `app.use(generalLimiter)` — 200 so'rov / 60s,
+  // BUTUN ilovaga (`/api` prefiksidan ham tashqarida). NestJS'da
+  // `common/middleware/rate-limit.ts` da E'LON QILINGAN edi, lekin
+  // HECH QAYERGA ULANMAGAN — ya'ni NestJS'da umumiy chegara YO'Q edi.
+  //
+  // O'LCHANDI (taxmin emas): bitta IP'dan 230 so'rov —
+  //   express: 201-so'rovda 429 (`ratelimit-limit: 200, remaining: 0`)
+  //   nest   : 230/230 ta 200 — chegara umuman ishlamadi.
+  //
+  // ── JOYLASHUV NEGA AYNAN SHU YERDA ──
+  //
+  // Express tartibi: cors → compression → json → urlencoded →
+  // cookieParser → generalLimiter → `/api` router. Ya'ni CORS
+  // `generalLimiter` DAN OLDIN turadi va preflight (`OPTIONS`)
+  // so'rovi `cors` da 204 bilan TUGAYDI — `next()` chaqirilmaydi,
+  // demak preflight chegara byudjetini YEMAYDI.
+  //
+  // `app.enableCors()` (yuqorida) cors middleware'ini O'SHA ZAHOTI
+  // ostidagi Express nusxasiga qo'yadi. Shuning uchun bu satr undan
+  // KEYIN turishi SHART: aks holda NestJS'da preflight byudjetni
+  // yeb, Express'da esa yemasdi — jimgina chegara farqi.
+  //
+  // ⚠ Kalit `req.ip` — ya'ni yuqoridagi `trust proxy: 1` ga TAYANADI.
+  // U olib tashlansa chegara nginx ortida UMUMIY bo'lib qolardi
+  // (bitta mijoz butun markazni bloklardi). `test/rate-limit-parity`
+  // ikkalasini ham (chegara ISHLAYDI + BOSHQA IP ta'sirlanmaydI)
+  // o'lchaydi.
+  //
+  // ⚠ HISOBLAGICH JARAYONGA XOS: ikki stek birga ishlaganda umumiy
+  // byudjet ikki barobar ko'rinadi. Cutover'dan keyin yagona jarayon
+  // qoladi va chegara yana aniq bo'ladi.
+  // ═══════════════════════════════════════════════════════════════════
+  app.use(generalLimiter);
 
   // ── XATO FORMATI: Express `errorHandler` bilan AYNAN bir xil ──
   //

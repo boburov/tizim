@@ -15,15 +15,22 @@
  * bazani o'qiydi. Ularni "beqaror" deb chiqarib tashlash aynan eng
  * qiziq hisobni o'lchovsiz qoldirardi.
  *
- * ── ⚠ B24: `/retention` VA `/churned-students` DA FILIAL KO'LAMI YO'Q ──
+ * ── B24: `/retention` VA `/churned-students` KO'LAMI — TUZATILDI ──
  *
- * Bu Express'dagi MAVJUD kamchilik (qo'shni servislarda ko'lam bor,
- * bu ikkitasida yo'q). Ko'chirishda TUZATILMADI — aks holda NestJS
- * Express'dan boshqa natija qaytarib, paritet ataylab buzilardi.
+ * Ilgari bu ikki marshrut filial filtrini UMUMAN qo'llamasdi (qo'shni
+ * servislarda ko'lam bor edi, bu ikkitasida yo'q) va test uni "MA'LUM
+ * SIZISH" deb QULFLAB turardi: ko'lamli aktyor owner bilan AYNAN bir
+ * xil ma'lumot olishi TASDIQLANARDI.
  *
- * Test uni "ko'lam ishlayapti" deb EMAS, "MA'LUM SIZISH" deb
- * belgilaydi va `overview` bilan YONMA-YON qo'yadi: birinchisi
- * ko'lamni qo'llaydi, ikkinchisi yo'q. Shunda farq o'lchangan bo'ladi.
+ * Ko'chirishdan keyingi xato tuzatish fazasida u IKKALA STEKDA BIR
+ * VAQTDA tuzatildi (`branchGroupFilter('groupId')`). Shu sababli
+ * bu yerdagi tekshiruv AKSIGA O'GIRILDI: endi ko'lamli aktyor
+ * owner'dan KAMROQ ko'rishi talab qilinadi.
+ *
+ * ⚠ TEKSHIRUV OLIB TASHLANMADI, TESKARISIGA AYLANTIRILDI — ya'ni
+ * ko'lam kelajakda yana yo'qolsa test darhol qizil bo'ladi.
+ * Chuqurroq o'lchov (bazadan mustaqil hisoblangan kutilgan son,
+ * musbat/manfiy nazorat) — `test/branch-scope-security.test.mjs`.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import assert from 'node:assert/strict';
@@ -438,17 +445,19 @@ const main = async () => {
       }
 
       // ═══════════════════════════════════════════════════════════
-      // ⚠⚠ B24 — MA'LUM SIZISH, "KO'LAM ISHLAYAPTI" EMAS
-      //
-      // `/retention` va `/churned-students` filial filtrini UMUMAN
-      // qo'llamaydi. Bu Express'dagi mavjud kamchilik va u
-      // ko'chirishda ATAYLAB tuzatilmadi (aks holda paritet buzilardi).
-      //
-      // Quyida ko'lamli aktyor va owner AYNAN BIR XIL natija olishi
-      // TASDIQLANADI — ya'ni sizish HUJJATLASHTIRILGAN holatda.
-      // Yuqoridagi `overview` esa ko'lamni QO'LLAYDI — farq shu.
       // ═══════════════════════════════════════════════════════════
-      head('B24 — `/retention` va `/churned-students` da ko\'lam YO\'Q');
+      // B24 — KO'LAM ENDI QO'LLANADI (ilgari UMUMAN yo'q edi).
+      //
+      // Bu tekshiruv ilgari TESKARISINI qulflardi: ko'lamli aktyor va
+      // owner AYNAN bir xil ma'lumot olishi TASDIQLANARDI. Sizish
+      // ikkala stekda bir vaqtda yopilgach, shart AKSIGA o'girildi.
+      //
+      // ⚠ "FARQ BOR" YETARLI EMAS: aktyor xato tufayli bo'sh javob
+      // olsa ham farq chiqardi. Shuning uchun avval OWNER javobi
+      // BO'SH EMASLIGI talab qilinadi — ya'ni marshrutning o'zi
+      // ishlayotgani isbotlanadi (musbat nazorat).
+      // ═══════════════════════════════════════════════════════════
+      head('B24 — `/retention` va `/churned-students` ko\'lami QO\'LLANADI');
 
       for (const p of ['retention', 'churned-students']) {
         await both(`ko'lamli aktyor: GET /${p} (paritet)`, (b) =>
@@ -460,17 +469,28 @@ const main = async () => {
         const asScoped = await req(EXPRESS, 'GET', `/api/admin-dashboard/${p}`, {
           token: scopedToken,
         });
+
+        // MUSBAT NAZORAT: owner javobi mazmunli bo'lishi SHART.
+        const ownerBody = JSON.stringify(normalize(asOwner.body) ?? null);
+        if (asOwner.status !== 200 || ownerBody.length < 20) {
+          skip(`/${p} B24`, `owner javobi o'lchovsiz (status ${asOwner.status})`);
+          continue;
+        }
+
         try {
-          assert.deepEqual(normalize(asScoped.body), normalize(asOwner.body));
+          assert.notDeepEqual(normalize(asScoped.body), normalize(asOwner.body));
           note(
-            `B24 TASDIQLANDI: /${p} ko'lamli aktyorga ham OWNER bilan AYNAN ` +
-              `bir xil ma'lumot qaytardi (filial filtri YO'Q)`,
+            `/${p}: ko'lamli aktyor owner'dan BOSHQA (kamroq) ma'lumot oldi — ` +
+              `ilgari AYNAN bir xil edi (B24)`,
           );
-          ok(`/${p}: ma'lum sizish QULFLANDI (Express xulqi saqlangan)`);
-        } catch (err) {
-          // Agar farq chiqsa — demak Express o'zgargan yoki men
-          // ko'lam qo'shib qo'yganman. Ikkalasi ham diqqat talab qiladi.
-          bad(`/${p} B24 holati o'zgardi`, err.message);
+          ok(`/${p}: filial ko'lami QO'LLANDI`);
+        } catch {
+          // Teng bo'lsa — ko'lam yana yo'qolgan.
+          bad(
+            `/${p} B24 QAYTDI`,
+            "ko'lamli aktyor owner bilan AYNAN bir xil ma'lumot oldi — " +
+              'filial filtri yana qo\'llanmayapti',
+          );
         }
       }
 

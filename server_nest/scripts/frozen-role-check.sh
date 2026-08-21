@@ -37,12 +37,32 @@ restart_nest() {
   return 1
 }
 
+# ⚠ TIKLASH NATIJASI TEKSHIRILADI VA CHIQISH KODIGA TA'SIR QILADI.
+#
+# Ilgari bu yerda faqat `unfreeze HTTP <kod>` ekranga yozilardi: 403/500
+# kelsa ham skript 0 kod bilan tugardi va ROL MUZLATILGAN QOLARDI.
+# O'shanda `qa_staff_a` bilan login 403 beradi, ya'ni o'sha rolga
+# tayanadigan HAR BIR paritet to'plami o'lchovsiz bo'lib qoladi — sabab
+# esa butunlay boshqa joydan qidirilardi.
+RESTORE_FAILED=0
+
 cleanup() {
+  rc=$?
   echo; echo "── tozalash: rolni muzlatishdan chiqaramiz ──"
-  setfrozen '{"isFrozen":false}' | sed 's/^/  unfreeze HTTP /'
+  echo "  unfreeze HTTP $(setfrozen '{"isFrozen":false}')"
+  # ⚠ YAKUNIY HOLAT BAZADAN o'qiladi, API javobidan EMAS: bu skript
+  # aynan login/rol yo'lini sinaydi va o'sha yo'l buzilgan bo'lsa API
+  # orqali tiklash ham yiqilardi.
+  node --env-file=../server/.env scripts/unfreeze-assert.mjs "$ROLE" || RESTORE_FAILED=1
   echo
   restart_nest && echo "  nest qayta ishga tushdi" || echo "  ⚠ nest ko'tarilmadi"
-  node test/frozen-role-assert.mjs thawed | grep -E '✅|❌'
+  node test/frozen-role-assert.mjs thawed | grep -E '✅|❌' || RESTORE_FAILED=1
+  if [ "$RESTORE_FAILED" -ne 0 ]; then
+    echo
+    echo "  ❌ FIXTURE TIKLANISHI NUQSONLI — natija YASHIL bo'lolmaydi."
+    exit 1
+  fi
+  exit $rc
 }
 trap cleanup EXIT
 
