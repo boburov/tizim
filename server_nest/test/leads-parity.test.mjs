@@ -1,17 +1,21 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * FAZA 4 — LIDLAR MODULI PARITETI (14/16 marshrut + yo'naltirish dvigateli).
+ * LIDLAR MODULI PARITETI (16/16 marshrut + yo'naltirish dvigateli).
  *
- * ── ⚠ IKKI MARSHRUT ATAYLAB YO'Q ──
+ * ── ⚠ ILGARI IKKI MARSHRUT BLOKLANGAN EDI ──
  *
  *   POST /leads/:id/convert
  *   POST /leads/convert-bulk
  *
- * Ular `GroupsService.addStudent` ga tayanadi va `groups` NestJS'da
- * HOZIRCHA FAQAT O'QISH (yozish metodlari yo'q — tekshirildi). Mantiq
- * NUSXALANMADI. Test ularning NestJS'da UMUMAN E'LON QILINMAGANINI
- * (404) tasdiqlaydi — ya'ni "scaffold qilingan, lekin ishlamaydi"
- * holatidan farqlanadi.
+ * Ular `GroupsService.addStudent` ga tayanadi va u ko'chirilmagunicha
+ * NestJS'da UMUMAN E'LON QILINMAGAN edi (404 — "scaffold qilingan,
+ * lekin ishlamaydi" holatidan farqlash uchun). `groups` yozish yo'llari
+ * ko'chirilgach ikkalasi ham OCHILDI.
+ *
+ * ⚠ Test o'sha paytda `n.status === 404` ni TALAB qilardi va marshrut
+ * ochilgach YOLG'ON QIZIL bera boshladi — ya'ni ko'chirishning
+ * TUGAGANINI jazolardi. Endi u XATO YO'LLARINI paritet sifatida
+ * o'lchaydi.
  *
  * ── ⚠ YO'NALTIRISH DVIGATELI HTTP ORQALI YETIB BO'LMAYDI ──
  *
@@ -301,23 +305,36 @@ const main = async () => {
 
   try {
     // ═══════════════════════════════════════════════════════════════
-    //  A. BLOKLANGAN MARSHRUTLAR — SCAFFOLD EMAS, UMUMAN YO'Q
+    //  A. ILGARI BLOKLANGAN MARSHRUTLAR — ENDI PARITETDA
+    //
+    // ⚠ BU BO'LIM TESKARISIGA O'ZGARDI. Ilgari u NestJS'da bu ikki
+    // marshrut E'LON QILINMAGANINI (404) talab qilardi — `GroupsService
+    // .addStudent` hali ko'chirilmagani uchun. U ko'chirilgach ikkala
+    // marshrut ham ochildi va test YOLG'ON QIZIL bera boshladi: ya'ni
+    // u ko'chirishning TUGAGANINI jazolardi.
+    //
+    // Endi u XATO YO'LLARINI PARITET sifatida o'lchaydi (mavjud
+    // bo'lmagan lid, bo'sh ro'yxat). MUVAFFAQIYATLI konvertatsiya bu
+    // yerda ATAYLAB o'lchanmaydi — u foydalanuvchi, a'zolik va moliya
+    // yozuvlarini yaratadi, ya'ni ko'zgu fikstura talab qiladi va
+    // `users-lifecycle-parity` da alohida qamralgan.
     // ═══════════════════════════════════════════════════════════════
-    head("bloklangan marshrutlar (`groups.addStudent` yo'q)");
+    head('ilgari bloklangan marshrutlar — endi PARITETDA (xato yo\'llari)');
 
     for (const [label, path, body] of [
-      ['POST /leads/convert-bulk', '/api/leads/convert-bulk', { leads: [] }],
-      ['POST /leads/:id/convert', `/api/leads/${'a'.repeat(24)}/convert`, {}],
+      ['POST /leads/convert-bulk (bo\'sh ro\'yxat)', '/api/leads/convert-bulk', { leads: [] }],
+      ['POST /leads/:id/convert (mavjud emas)', `/api/leads/${'a'.repeat(24)}/convert`, {}],
     ]) {
       const e = await req(EXPRESS, 'POST', path, { token: ownerToken, body });
       const n = await req(NEST, 'POST', path, { token: ownerToken, body });
       try {
-        assert.equal(n.status, 404, `NestJS ${n.status} berdi (404 kutilgan)`);
-        assert.notEqual(e.status, 404, `Express ham 404 berdi — marshrut yo'qmi?`);
-        ok(`${label} — NestJS'da E'LON QILINMAGAN (404), Express ${e.status}`);
+        assert.notEqual(e.status, 404, 'Express 404 berdi — marshrut yo\'qmi?');
+        assert.notEqual(n.status, 404, 'NestJS 404 berdi — marshrut ro\'yxatdan o\'tmaganmi?');
+        assert.equal(n.status, e.status,
+          `status farq qildi: express=${e.status}, nest=${n.status}`);
+        ok(`${label} — ikkala stek ham ${e.status}`);
       } catch (err) { bad(label, err.message); }
     }
-    note("bu ikkisi `GroupsService.addStudent` ko'chgach ochiladi — mantiq nusxalanmadi");
 
     // ═══════════════════════════════════════════════════════════════
     //  A2. ⚠ EXPRESS'DAGI O'LIK KOD — AYNAN TAKRORLANGAN (B23)
