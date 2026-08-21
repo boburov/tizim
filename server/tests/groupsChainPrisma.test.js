@@ -97,14 +97,22 @@ const cleanup = async () => {
     await prisma.teacherCompensation.deleteMany({ where: { teacherId: { in: uids } } });
     await prisma.groupMembership.deleteMany({ where: scope });
   }
-  if (gids.length) {
-    await prisma.groupFee.deleteMany({ where: { groupId: { in: gids } } });
-    await prisma.groupScheduleItem.deleteMany({ where: { groupId: { in: gids } } });
-    for (const g of gids) {
-      await prisma.group.update({ where: { id: g }, data: { teachers: { set: [] } } }).catch(() => {});
-    }
-    await prisma.group.deleteMany({ where: { id: { in: gids } } });
-  }
+  // ⚠ JURNAL GURUHDAN OLDIN O'CHADI — TARTIBNI ALMASHTIRMANG.
+  //
+  // `journal_entries.groupId` guruhga TASHQI KALIT bilan bog'langan.
+  // Ilgari bu blok guruh o'chirilgandan KEYIN turardi va natijada:
+  //
+  //   prisma.group.deleteMany() → Foreign key constraint violated on
+  //   the constraint: `journal_entries_groupId_fkey`
+  //
+  // Xato `finally` dagi `.catch()` ichida YUTILARDI, ya'ni test
+  // YASHIL tugardi-yu, tozalash YARIM QOLARDI: har yurishda 2 filial,
+  // 3 guruh, 6 foydalanuvchi, 41 jurnal yozuvi va 3 hisob bazada
+  // qolib ketardi. Bir kunda 24 ta "Guruh A/B ..." filiali va bazadagi
+  // 184 jurnal yozuvining 164 tasi shu tariqa to'plangan edi.
+  //
+  // Endi tartib bolalardan otalarga: jurnal → hisob → guruh → odam →
+  // filial.
   if (branches.length) {
     const entries = await prisma.journalEntry.findMany({
       where: { branchId: { in: branches } }, select: { id: true },
@@ -115,6 +123,14 @@ const cleanup = async () => {
     }
     await prisma.journalLine.deleteMany({ where: { account: { branchId: { in: branches } } } });
     await prisma.account.deleteMany({ where: { branchId: { in: branches } } });
+  }
+  if (gids.length) {
+    await prisma.groupFee.deleteMany({ where: { groupId: { in: gids } } });
+    await prisma.groupScheduleItem.deleteMany({ where: { groupId: { in: gids } } });
+    for (const g of gids) {
+      await prisma.group.update({ where: { id: g }, data: { teachers: { set: [] } } }).catch(() => {});
+    }
+    await prisma.group.deleteMany({ where: { id: { in: gids } } });
   }
   if (uids.length) await prisma.user.deleteMany({ where: { id: { in: uids } } });
   if (branches.length) await prisma.branch.deleteMany({ where: { id: { in: branches } } });
@@ -860,7 +876,31 @@ run()
     R.fail += 1;
   })
   .finally(async () => {
-    await cleanup().catch((e) => console.error("tozalash xatosi:", e.message));
+    // ⚠ TOZALASH XATOSI TESTNI YIQITADI.
+    //
+    // Ilgari bu yerda faqat `console.error` bor edi: tozalash tashqi
+    // kalit xatosi bilan to'xtasa ham test YASHIL tugardi va qoldiq
+    // jimgina to'planardi. "O'zidan keyin tozalaydi" degan kafolat
+    // TEKSHIRILMASA — u kafolat emas, umid.
+    let cleanupError = null;
+    await cleanup().catch((e) => { cleanupError = e; });
+
+    // Tozalash "tugadim" deganiga ISHONMAYMIZ — o'lchaymiz.
+    const leftBranches = created.branches.length
+      ? await prisma.branch.count({ where: { id: { in: created.branches } } })
+      : 0;
+    const leftJournal = created.branches.length
+      ? await prisma.journalEntry.count({ where: { branchId: { in: created.branches } } })
+      : 0;
+
+    if (cleanupError || leftBranches || leftJournal) {
+      console.error(
+        `\nTOZALASH TUGALLANMADI: ${leftBranches} filial, ${leftJournal} jurnal yozuvi qoldi` +
+        (cleanupError ? `\n  sabab: ${cleanupError.message}` : ""),
+      );
+      R.fail += 1;
+    }
+
     await prisma.$disconnect();
     process.exit(R.fail > 0 ? 1 : 0);
   });
