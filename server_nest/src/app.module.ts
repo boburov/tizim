@@ -29,13 +29,13 @@ import { HolidaysModule } from './modules/holidays/holidays.module.js';
 import { SearchModule } from './modules/search/search.module.js';
 import { ActivityHistoryModule } from './modules/activity-history/activity-history.module.js';
 import { LeadsModule } from './modules/leads/leads.module.js';
+import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
 import { GroupsModule } from './modules/groups/groups.module.js';
 import { AttendanceModule } from './modules/attendance/attendance.module.js';
 import { TeacherSalaryModule } from './modules/teacher-salary/teacher-salary.module.js';
 import { AttendanceExemptionsModule } from './modules/attendance-exemptions/attendance-exemptions.module.js';
-import { TeacherAttendanceModule } from './modules/teacher-attendance/teacher-attendance.module.js';
 import { TeacherAttendanceModule } from './modules/teacher-attendance/teacher-attendance.module.js';
 import { JournalModule } from './modules/journal/journal.module.js';
 import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
@@ -44,6 +44,7 @@ import { FinanceModule } from './modules/finance/finance.module.js';
 import { FinanceOpsModule } from './modules/finance-ops/finance-ops.module.js';
 import { ExpensesModule } from './modules/expenses/expenses.module.js';
 import { DepositsModule } from './modules/deposits/deposits.module.js';
+import { OpeningBalanceModule } from './modules/opening-balance/opening-balance.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -131,6 +132,8 @@ import { DepositsModule } from './modules/deposits/deposits.module.js';
     ActivityHistoryModule,
     // Lidlar (14/16) — `convert*` `groups.addStudent` ga tayanadi.
     LeadsModule,
+    // Rahbariyat paneli (6/6) — faqat o'qish.
+    AdminDashboardModule,
     // Faoliyat loglari — faqat o'qish (yozuvni Express `auditLog` yaratadi).
     ActivityLogsModule,
     // Kurs katalogi + narx matritsasi (global katalog, owner yozadi).
@@ -144,8 +147,6 @@ import { DepositsModule } from './modules/deposits/deposits.module.js';
     TeacherSalaryModule,
     // Davomatdan ozod davrlari (4/4).
     AttendanceExemptionsModule,
-    // O'qituvchi davomati (2/2) — maoshga ta'sir qiladi, faqat manage.
-    TeacherAttendanceModule,
     // O'qituvchi davomati (2/2) — maoshga ta'sir qiladi, faqat manage.
     TeacherAttendanceModule,
     // ── FAZA 7: MOLIYA ──
@@ -166,6 +167,8 @@ import { DepositsModule } from './modules/deposits/deposits.module.js';
     ExpensesModule,
     // O'quvchi depoziti (oldindan to'lov / garov) — 8/8 marshrut.
     DepositsModule,
+    // Boshlang'ich qoldiq (tizimga o'tishda kiritilgan qarz/avans) — 3/3.
+    OpeningBalanceModule,
   ],
 })
 export class AppModule {}

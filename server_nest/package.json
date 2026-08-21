@@ -38,6 +38,7 @@
     "test:edu-helpers": "node test/education-helpers-parity.test.mjs",
     "test:groups-read-parity": "node test/groups-read-parity.test.mjs",
     "test:attendance-parity": "node test/attendance-parity.test.mjs",
+    "test:teacher-salary-parity": "node test/teacher-salary-parity.test.mjs",
     "test:jobs": "node test/jobs-infra.test.mjs",
     "test:notifications-parity": "node test/notifications-parity.test.mjs",
     "test:notification-catalog-parity": "node test/notification-catalog-parity.test.mjs",
@@ -54,7 +55,9 @@
     "test:rate-limit-parity": "node test/rate-limit-parity.test.mjs",
     "test:leads-parity": "node test/leads-parity.test.mjs",
     "test:schedule-jobs": "node test/schedule-jobs.test.mjs",
-    "test:deposits-parity": "node test/deposits-parity.test.mjs"
+    "test:deposits-parity": "node test/deposits-parity.test.mjs",
+    "test:admin-dashboard-parity": "node test/admin-dashboard-parity.test.mjs",
+    "test:opening-balance-parity": "node test/opening-balance-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"
