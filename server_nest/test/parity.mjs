@@ -256,6 +256,28 @@ const CASES = [
     path: '/api/admin-dashboard/churned-students', auth: true },
   { name: 'branch-analytics/rooms', method: 'GET',
     path: '/api/branch-analytics/rooms', auth: true },
+  // ── Moliya tahlili (30 marshrut) — bu yerda VAKIL tanlov.
+  // To'liq qamrov `test/finance-analytics-parity.test.mjs` da: u
+  // ruxsat darajalarini, filial ko'lamini va qo'riqchilarni ham
+  // o'lchaydi. Quyidagilar qo'shni agentlar uchun REGRESSIYA to'sig'i.
+  { name: 'finance-analytics/summary', method: 'GET',
+    path: '/api/finance-analytics/summary', auth: true },
+  { name: 'finance-analytics/revenue/by/course', method: 'GET',
+    path: '/api/finance-analytics/revenue/by/course', auth: true },
+  { name: 'finance-analytics/expenses/breakdown', method: 'GET',
+    path: '/api/finance-analytics/expenses/breakdown', auth: true },
+  { name: 'finance-analytics/cash-flow', method: 'GET',
+    path: '/api/finance-analytics/cash-flow', auth: true },
+  { name: 'finance-analytics/receivables', method: 'GET',
+    path: '/api/finance-analytics/receivables', auth: true },
+  { name: 'finance-analytics/teachers', method: 'GET',
+    path: '/api/finance-analytics/teachers', auth: true },
+  // ⚠ `rooms` — `RoomOccupancyService` YAGONA manba ekanini ushlab
+  // turadi: nusxa paydo bo'lsa bandlik foizi ajralib ketadi.
+  { name: 'finance-analytics/rooms', method: 'GET',
+    path: '/api/finance-analytics/rooms', auth: true },
+  { name: 'finance-analytics/entries', method: 'GET',
+    path: '/api/finance-analytics/entries?limit=10', auth: true },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },

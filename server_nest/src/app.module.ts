@@ -31,6 +31,7 @@ import { ActivityHistoryModule } from './modules/activity-history/activity-histo
 import { LeadsModule } from './modules/leads/leads.module.js';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
 import { BranchAnalyticsModule } from './modules/branch-analytics/branch-analytics.module.js';
+import { FinanceAnalyticsModule } from './modules/finance-analytics/finance-analytics.module.js';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
 import { GroupsModule } from './modules/groups/groups.module.js';
@@ -140,6 +141,9 @@ import { LedgerModule } from './modules/ledger/ledger.module.js';
     AdminDashboardModule,
     // Filial tahlili — FAQAT xona bandligi (`/rooms`).
     BranchAnalyticsModule,
+    // Moliya tahlili — 30 ta marshrut, faqat o'qish. Xona bandligini
+    // `BranchAnalyticsModule` dagi `RoomOccupancyService` dan oladi.
+    FinanceAnalyticsModule,
     // Faoliyat loglari — faqat o'qish (yozuvni Express `auditLog` yaratadi).
     ActivityLogsModule,
     // Kurs katalogi + narx matritsasi (global katalog, owner yozadi).

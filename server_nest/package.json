@@ -63,7 +63,8 @@
     "test:opening-balance-parity": "node test/opening-balance-parity.test.mjs",
     "test:ledger-parity": "node test/ledger-parity.test.mjs",
     "test:room-utilization-parity": "node test/room-utilization-parity.test.mjs",
-    "test:student-payment-parity": "node test/student-payment-parity.test.mjs"
+    "test:student-payment-parity": "node test/student-payment-parity.test.mjs",
+    "test:finance-analytics-parity": "node test/finance-analytics-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"
