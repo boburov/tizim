@@ -37,6 +37,14 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import assert from 'node:assert/strict';
+import { PrismaClient } from '@prisma/client';
+import { mintToken } from './_harness.mjs';
+
+const prisma = new PrismaClient();
+/** Shu yurishga xos fikstura yorlig'i — tozalash aynan shunga tayanadi. */
+const PROBE_TAG = `__parity_up${process.hrtime.bigint() % 100000n}`;
+/** Shu yurish yaratgan fikstura — yakunda o'chiriladi. */
+const probe = { userId: null, branchId: null };
 
 const EXPRESS = process.env.EXPRESS_URL || 'http://127.0.0.1:5000';
 const NEST = process.env.NEST_URL || 'http://127.0.0.1:5001';
@@ -112,6 +120,31 @@ const strip = (v) => {
   return v;
 };
 
+/**
+ * Fikstura direktorini (va kerak bo'lsa filialni) o'chiradi va
+ * QOLDIQNI O'LCHAYDI — yutilgan FK xatosi jimgina qoldiq qoldirardi.
+ */
+const cleanupProbe = async () => {
+  if (!probe.userId && !probe.branchId) return;
+  try {
+    if (probe.userId) {
+      await prisma.userBranchAssignment.deleteMany({ where: { userId: probe.userId } })
+        .catch(() => null);
+      await prisma.user.deleteMany({ where: { id: probe.userId } });
+    }
+    if (probe.branchId) {
+      await prisma.branch.deleteMany({ where: { id: probe.branchId } });
+    }
+    const left =
+      (probe.userId ? await prisma.user.count({ where: { id: probe.userId } }) : 0) +
+      (probe.branchId ? await prisma.branch.count({ where: { id: probe.branchId } }) : 0);
+    if (left === 0) ok("fikstura tozalandi — QOLDIQ YO'Q (o'lchandi)");
+    else bad('fikstura QOLDIG\'I', `${left} ta yozuv qoldi`);
+  } catch (err) {
+    bad('fikstura tozalanmadi', err.message);
+  }
+};
+
 const login = async (base, creds) => {
   const r = await req(base, 'POST', '/api/auth/login', { body: creds });
   if (r.status !== 200) {
@@ -144,31 +177,51 @@ const main = async () => {
 
   // Direktor — BOSHQA filialdagi, `users.password` ruxsati BOR aktyor.
   // Aynan shu kombinatsiya `credentialScope` ni haqiqiy sharoitda sinaydi.
+  // ── ⚠ AKTYOR SEED'DAN EMAS, SHU YERDA YARATILADI ──
+  //
+  // Ilgari test mavjud direktorlarni aylanib chiqib, `GET
+  // /users/:id/password` 200 qaytarganini tanlardi. U SEED holatiga
+  // bog'liq edi va o'lchangan holatda BIRORTASI mos kelmadi
+  // ("boshqa filialdagi direktor topilmadi") — ya'ni `credentialScope`
+  // XAVFSIZLIK tekshiruvi JIMGINA o'tkazib yuborilardi.
+  //
+  // ⚠ O'TKAZIB YUBORILGAN XAVFSIZLIK TEKSHIRUVI — ENG YOMON TURDAGI
+  // "yashil": u hech narsani isbotlamaydi, lekin hisobotda ko'rinmaydi.
+  // Shuning uchun aktyor endi FIKSTURA sifatida yaratiladi va yakunda
+  // o'chiriladi (qoldiq O'LCHANADI).
   let directorToken = null;
   let directorBranchName = null;
   try {
-    const dirs = await req(EXPRESS, 'GET', '/api/users?role=director&limit=5', {
-      token: ownerToken,
+    const targetBranch = String(qaAdminA.homeBranchId?.id || qaAdminA.homeBranchId || '');
+    // Nishondan BOSHQA filial — mavjudini olamiz, bo'lmasa yaratamiz.
+    let other = await prisma.branch.findFirst({
+      where: { isDeleted: false, id: { not: targetBranch || undefined } },
+      select: { id: true, name: true },
     });
-    for (const d of dirs.body?.data || []) {
-      const pw = await req(EXPRESS, 'GET', `/api/users/${d.id}/password`, {
-        token: ownerToken,
+    if (!other) {
+      other = await prisma.branch.create({
+        data: { name: `${PROBE_TAG} filial`, code: PROBE_TAG.slice(-8) },
+        select: { id: true, name: true },
       });
-      if (pw.status !== 200) continue;
-      // Nishon (qa_staff_a / qa_admin_a) BOSHQA filialda bo'lishi shart.
-      const dirBranch = String(d.homeBranchId?.id || d.homeBranchId || '');
-      const targetBranch = String(qaAdminA.homeBranchId?.id || qaAdminA.homeBranchId || '');
-      if (dirBranch && targetBranch && dirBranch !== targetBranch) {
-        directorToken = await login(EXPRESS, {
-          login: pw.body.data.username,
-          password: pw.body.data.password,
-        });
-        directorBranchName = d.homeBranchId?.name || dirBranch;
-        break;
-      }
+      probe.branchId = other.id;
     }
+    const dir = await prisma.user.create({
+      data: {
+        firstName: 'Dir', lastName: PROBE_TAG,
+        username: `${PROBE_TAG.toLowerCase()}_dir`,
+        passwordHash: 'x', role: 'director',
+        homeBranchId: other.id, isActive: true,
+      },
+      select: { id: true, role: true },
+    });
+    probe.userId = dir.id;
+    // ⚠ TOKEN TO'G'RIDAN IMZOLANADI: `authLimiter` (20 urinish / 5 daq)
+    // bu to'plamning boshqa tekshiruvlariga kerak — uni login bilan
+    // yeb qo'ymaymiz.
+    directorToken = mintToken(dir);
+    directorBranchName = other.name;
   } catch (e) {
-    console.log(`  (direktor tokeni olinmadi: ${e.message})`);
+    console.log(`  (direktor fikstura yaratilmadi: ${e.message})`);
   }
 
   // `users.read` BOR, `roles.update` YO'Q aktyor — AND semantikasi uchun.
@@ -602,8 +655,20 @@ const main = async () => {
     bad('nishon foydalanuvchi holati tiklanmadi', err.message);
   }
 
+  // ── FIKSTURA TOZALASH (qoldiq O'LCHANADI) ──
+  //
+  // ⚠ API ORQALI EMAS, BAZADAN: bu to'plam aynan foydalanuvchi
+  // marshrutlarini sinaydi va ular buzilsa tozalash ham yiqilardi.
+  await cleanupProbe();
+
   console.log(`\n  Natija: ${R.pass} o'tdi, ${R.fail} yiqildi, ${R.unmeasured} o'lchanmadi\n`);
+  await prisma.$disconnect();
   process.exit(R.fail || R.unmeasured ? 1 : 0);
 };
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch(async (e) => {
+  await cleanupProbe().catch(() => null);
+  await prisma.$disconnect().catch(() => null);
+  console.error(e);
+  process.exit(1);
+});

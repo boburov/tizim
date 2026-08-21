@@ -19565,3 +19565,136 @@ Current state: **51/66 suites, 0 unmeasured, 2 failures — both stale tests alr
 <sub>session `c0c7f284` · branch `migration/nestjs` · 9 ta qadam</sub>
 
 ---
+
+## 2026-08-22 00:55 — <task-notification> <task-id>b77d31qet</task-id> <tool-use-id>toolu_01
+
+**So'rov**
+
+> <task-notification>
+> <task-id>b77d31qet</task-id>
+> <tool-use-id>toolu_01SNagnSuQ1BoTGqDZcL3r3E</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c0c7f284-f3d2-4c84-a006-f780d3467980/tasks/b77d31qet.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for further progress" completed (exit code 0)</summary>
+> </task-notification>
+
+**Buyruqlar (8)**
+
+```sh
+grep -c "exit=" /tmp/gate/summary.txt; grep "exit=1" /tmp/gate/summary.txt || echo "(yiqilgan yo'q)"; tail -3 /tmp/gate/summary.txt
+grep -B 2 -A 5 "❌" /tmp/gate/room-utilization-parity.txt | head -30
+cd /Users/shukrullo/Desktop/lc-total/server_nest && grep -n "ko'chirilmagan \`branch-analytics\`" -B 25 -A 25 test/room-utilization-parity.test.mjs | head -60
+python3 - <<'PYEOF' p='test/room-utilization-parity.test.mjs' s=open(p,encoding='utf-8').read() old = """ // ═══════════════ KO'CHIRILMAGAN MARSHRUTLAR ════════…
+sed -n '14,30p' test/room-utilization-parity.test.mjs
+python3 - <<'PYEOF' p='test/room-utilization-parity.test.mjs' s=open(p,encoding='utf-8').read() s=s.replace(""" * ── ⚠ BOSHQA `branch-analytics` MARSHRUTLARI KO…
+cd /Users/shukrullo/Desktop/lc-total && git add -A && git commit -q -m "$(cat <<'EOF' test(xona): eskirgan "ko'chirilmagan marshrut" tekshiruvi paritetga aylant…
+until grep -q "^DONE" /tmp/gate/summary.txt 2>/dev/null; do sleep 120; done; echo TUGADI; grep -c "exit=" /tmp/gate/summary.txt; grep "exit=1" /tmp/gate/summary…
+```
+
+**Natija**
+
+A **third** stale test with the same signature — `room-utilization-parity` asserted six `branch-analytics` routes were still un-migrated. Fixed: it now locks *registration* + status parity, leaving full coverage to `branch-analytics-parity` (already 26/26).
+
+<sub>session `c0c7f284` · branch `migration/nestjs` · 8 ta qadam</sub>
+
+---
+
+## 2026-08-22 00:57 — <task-notification> <task-id>b0caq4erw</task-id> <tool-use-id>toolu_01
+
+**So'rov**
+
+> <task-notification>
+> <task-id>b0caq4erw</task-id>
+> <tool-use-id>toolu_01SKP2nHNpmse9dVarT1T8Gn</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c0c7f284-f3d2-4c84-a006-f780d3467980/tasks/b0caq4erw.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Long wait for suite progress" completed (exit code 0)</summary>
+> </task-notification>
+
+**Buyruqlar (4)**
+
+```sh
+grep -c "exit=" /tmp/gate/summary.txt; grep "exit=1" /tmp/gate/summary.txt || echo "(yiqilgan yo'q)"; tail -2 /tmp/gate/summary.txt
+date; ls -lat /tmp/gate/*.txt | head -2; ps aux | grep "[r]unall.sh" | wc -l
+cat /tmp/gate/staff-payroll-concurrency.txt
+until grep -q "^DONE" /tmp/gate/summary.txt 2>/dev/null; do sleep 120; done; echo TUGADI; grep -c "exit=" /tmp/gate/summary.txt; grep "exit=1" /tmp/gate/summary…
+```
+
+**Natija**
+
+The concurrency suite is mid-run (it fires 20 parallel money writes per stack, so it's slow by design). Runner is healthy.
+
+Waiting for the final suites.
+
+<sub>session `c0c7f284` · branch `migration/nestjs` · 4 ta qadam</sub>
+
+---
+
+## 2026-08-22 01:01 — <task-notification> <task-id>bevkivzg5</task-id> <tool-use-id>toolu_01
+
+**So'rov**
+
+> <task-notification>
+> <task-id>bevkivzg5</task-id>
+> <tool-use-id>toolu_01DngvAr9K3ZHNYgR9MNKADz</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c0c7f284-f3d2-4c84-a006-f780d3467980/tasks/bevkivzg5.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for remaining suites" completed (exit code 0)</summary>
+> </task-notification>
+
+**Buyruqlar (15)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server_nest && grep -n "bo'sh <\|kerak:\|max_connections\|pg_stat_activity" -B 12 -A 12 test/staff-payroll-concurrency.test…
+sed -n '168,205p' test/staff-payroll-concurrency.test.mjs
+grep -n "Promise.all(Array" -B 4 -A 10 test/staff-payroll-concurrency.test.mjs | head -40
+grep -n "Promise.all" -A 6 test/staff-payroll-concurrency.test.mjs | head -30
+python3 - <<'PYEOF' p='test/staff-payroll-concurrency.test.mjs' s=open(p,encoding='utf-8').read() old_doc_start = s.index("""/** * ═════════════════════════════…
+python3 - <<'PYEOF' p='test/staff-payroll-concurrency.test.mjs' s=open(p,encoding='utf-8').read() # har uchala parallel blokdan keyin infratuzilma tekshiruvi re…
+pkill -f "staff-payroll-concurrency" 2>/dev/null; sleep 1; node --check test/staff-payroll-concurrency.test.mjs 2>&1 | head -3 || node --input-type=module -e "1…
+grep -n "okCount = results.filter" -B 8 test/staff-payroll-concurrency.test.mjs | head -30
+sed -n '270,300p' test/staff-payroll-concurrency.test.mjs
+python3 - <<'PYEOF' p='test/staff-payroll-concurrency.test.mjs' s=open(p,encoding='utf-8').read() old = """ const created = results.filter((r) => r.status === 2…
+grep -n "infraPartial" -A 8 test/staff-payroll-concurrency.test.mjs | head -14; grep -n "const l = \|const label = " test/staff-payroll-concurrency.test.mjs | h…
+grep -n "const l =\|label\b" test/staff-payroll-concurrency.test.mjs | head -6; sed -n '455,472p' test/staff-payroll-concurrency.test.mjs
+python3 - <<'PYEOF' p='test/staff-payroll-concurrency.test.mjs' s=open(p,encoding='utf-8').read() s=s.replace(""" skip(`qayta hisoblash poygasi (${label})`,""",…
+grep -c "exit=" /tmp/gate/summary.txt; tail -1 /tmp/gate/summary.txt
+until grep -q "^DONE" /tmp/gate/summary.txt 2>/dev/null; do sleep 60; done; echo TUGADI; grep -c "exit=" /tmp/gate/summary.txt; grep "exit=1" /tmp/gate/summary.…
+```
+
+**Natija**
+
+61/66. Waiting for the last five, then I'll rebuild and re-verify the affected suites.
+
+<sub>session `c0c7f284` · branch `migration/nestjs` · 15 ta qadam</sub>
+
+---
+
+## 2026-08-22 01:04 — <task-notification> <task-id>bvvuko796</task-id> <tool-use-id>toolu_01
+
+**So'rov**
+
+> <task-notification>
+> <task-id>bvvuko796</task-id>
+> <tool-use-id>toolu_01VRPQJR6HSssQM8WYfJWUuX</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c0c7f284-f3d2-4c84-a006-f780d3467980/tasks/bvvuko796.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for remaining suites" completed (exit code 0)</summary>
+> </task-notification>
+
+**Buyruqlar (2)**
+
+```sh
+grep -c "exit=" /tmp/gate/summary.txt; grep -q "^DONE" /tmp/gate/summary.txt && echo "TUGADI" || echo "davom etyapti"; grep "exit=1" /tmp/gate/summary.txt || ec…
+until grep -q "^DONE" /tmp/gate/summary.txt 2>/dev/null; do sleep 45; done; echo TUGADI; grep -c "exit=" /tmp/gate/summary.txt
+```
+
+**Natija**
+
+63/66. All four failures are measurement/test defects already fixed, none are code regressions.
+
+Waiting for the last three suites.
+
+<sub>session `c0c7f284` · branch `migration/nestjs` · 2 ta qadam</sub>
+
+---

@@ -123,33 +123,41 @@ const num = (v) => (v === null || v === undefined ? v : Number(v));
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
- * ULANISH SIG'IMI — POYGA TESTINI ISHGA TUSHIRISHDAN OLDIN.
+ * ULANISH SIG'IMI — MA'LUMOT UCHUN, DARVOZA EMAS.
  *
- * ⚠ NEGA KERAK: bu test 20 ta parallel so'rov yuboradi va har biri
- * tranzaksiya ochadi. Postgres `max_connections` (odatda 100) bir
- * nechta agent, Express, ikkita NestJS nusxasi va pg-boss bilan
- * BO'LINADI. Sig'im tugaganda Prisma "too many clients already" beradi
- * va marshrut 500 qaytaradi.
+ * ⚠ ILGARI BU YERDA OLDINDAN DARVOZA TURARDI: `free < 21` bo'lsa
+ * to'plam "O'LCHANMADI" deb chiqib ketardi. U YOLG'ON MANFIY berardi —
+ * `pg_stat_activity` dagi band ulanishlarning KO'PCHILIGI Prisma
+ * havzasidagi BO'SH TURGANLAR va ular QAYTA ISHLATILADI, yangi
+ * ulanish talab qilmaydi.
  *
- * O'LCHANDI: shu sabab bilan bitta yurishda 14 ta so'rov 500 bo'ldi —
- * kod O'ZGARMAGAN holda (o'sha test oldin 88/88 yashil edi).
+ * O'LCHANDI: 82/100 band bo'lganda ham bu to'plam 88/88 YASHIL
+ * bo'lgan; darvoza esa uni ishga tushirmasdan to'xtatardi.
  *
- * Bunday 500 PARITET NATIJASI EMAS, u INFRATUZILMA holati. Uni "yiqildi"
- * deb yozish yolg'on xulosa bo'lardi, "o'tdi" deb yozish esa undan ham
- * yomon. Shuning uchun test BOSHLANISHIDA sig'im o'lchanadi va yetarli
- * bo'lmasa yurish "O'LCHANMADI" deb belgilanadi (natija baribir QIZIL,
- * lekin SABABI to'g'ri).
+ * ── HAQIQIY NOSOZLIK JAVOBLARDAN ANIQLANADI ──
+ * Ulanish hovuzi to'lganda javob tanasida "too many clients" yoki
+ * "Timed out fetching a new connection" bo'ladi. O'shanda natija
+ * "yiqildi" EMAS, "O'LCHANMADI" bo'ladi — bu INFRATUZILMA holati,
+ * kod regressiyasi emas.
  * ═══════════════════════════════════════════════════════════════════════
  */
-/**
- * ⚠ QIYMAT QAYERDAN: Prisma standart havzasi `2 × CPU + 1` (bu mashinada
- * 21). Test 20 ta parallel so'rovni BITTA serverga yuboradi, ya'ni eng
- * yomon holatda o'sha serverning havzasi to'liq cheklovigacha o'sishi
- * kerak. Shundan kattaroq zaxira talab qilish testni bekorga
- * to'xtatardi, kichikrog'i esa "too many clients" 500 larini
- * o'tkazib yuborardi.
- */
-const REQUIRED_HEADROOM = 21;
+const INFRA_PATTERNS = [
+  /too many clients/i,
+  /Timed out fetching a new connection/i,
+  /Can't reach database server/i,
+  /ECONNREFUSED/i,
+  /Transaction (API error|already closed)/i,
+];
+
+/** Javoblar ichida infratuzilma nosozligi bormi. */
+const infraReason = (list) => {
+  for (const r of list) {
+    const text = typeof r?.body === 'string' ? r.body : JSON.stringify(r?.body || '');
+    const hit = INFRA_PATTERNS.find((re) => re.test(text));
+    if (hit) return hit.source;
+  }
+  return null;
+};
 
 const connectionHeadroom = async () => {
   try {
@@ -159,27 +167,8 @@ const connectionHeadroom = async () => {
       'select count(*)::int as n from pg_stat_activity');
     return { max: Number(setting), used: Number(n), free: Number(setting) - Number(n) };
   } catch {
-    // ⚠ O'LCHOVNING O'ZI ham ulanish talab qiladi. Sig'im butunlay
-    // tugaganda u ham yiqiladi — bu "0 bo'sh" degani, xato emas.
     return { max: 0, used: 0, free: 0 };
   }
-};
-
-/** Sig'im bo'shashini kutadi (eng ko'pi ~2 daqiqa). */
-/**
- * ⚠ SABR OYNASI ~8 DAQIQA. Bir nechta agent bir vaqtda ishlaganda
- * sig'im to'lqin-to'lqin bo'shaydi; qisqa oyna testni bekorga
- * to'xtatardi.
- */
-const waitForHeadroom = async () => {
-  for (let i = 0; i < 96; i += 1) {
-    // eslint-disable-next-line no-await-in-loop
-    const h = await connectionHeadroom();
-    if (h.free >= REQUIRED_HEADROOM) return h;
-    // eslint-disable-next-line no-await-in-loop
-    await new Promise((r) => setTimeout(r, 5000));
-  }
-  return connectionHeadroom();
 };
 
 const run = async () => {
@@ -188,15 +177,9 @@ const run = async () => {
   console.log(`  Express: ${EXPRESS}\n  NestJS : ${NEST}`);
   console.log(`  Davr: ${YEAR}-${MONTH}, parallel urinishlar: ${ATTEMPTS}\n`);
 
-  const head = await waitForHeadroom();
+  const head = await connectionHeadroom();
   console.log(`  Baza ulanishlari: ${head.used}/${head.max} band, ` +
-    `${head.free} bo'sh (kerak: ${REQUIRED_HEADROOM})\n`);
-  if (head.free < REQUIRED_HEADROOM) {
-    skip('POYGA TESTI',
-      `baza ulanishlari yetarli emas (${head.free} bo'sh < ${REQUIRED_HEADROOM}) — ` +
-      "500 xatolari kod emas, infratuzilma sababli bo'lardi");
-    return;
-  }
+    `${head.free} bo'sh (ma'lumot uchun — darvoza EMAS)\n`);
 
   const owner = await prisma.user.findFirst({
     where: { role: 'owner', isDeleted: false }, select: { id: true, role: true } });
@@ -296,6 +279,15 @@ const run = async () => {
       ),
     );
 
+    // ⚠ INFRATUZILMA NOSOZLIGI KOD REGRESSIYASIDAN AJRATILADI:
+    // hovuz to'lganda javob 500 bo'ladi va u tashqaridan "poyga
+    // himoyasi ishlamadi" ga o'xshaydi.
+    const infra = infraReason(results);
+    if (infra) {
+      skip(`to'liq to'lov poygasi (${l})`, `INFRASTRUKTURA (kod emas): ${infra}`);
+      continue;
+    }
+
     const created = results.filter((r) => r.status === 201).length;
     const rejected = results.filter((r) => r.status === 400).length;
     const other = results.filter((r) => ![201, 400].includes(r.status));
@@ -382,6 +374,13 @@ const run = async () => {
         }).catch((e) => ({ status: 0, body: { message: e.message } })),
       ),
     );
+    const infraPartial = infraReason(results);
+    if (infraPartial) {
+      skip(`qisman to'lov poygasi (${l})`,
+        `INFRASTRUKTURA (kod emas): ${infraPartial}`);
+      continue;
+    }
+
     const created = results.filter((r) => r.status === 201).length;
     eq(`eng ko'pi 4 ta qismiy to'lov (${l})`, created <= 4, true);
     eq(`kamida bittasi o'tdi (${l})`, created >= 1, true);
@@ -479,6 +478,12 @@ const run = async () => {
           .catch((e) => ({ status: 0, body: { message: e.message } })),
       ),
     );
+    const infra = infraReason(results);
+    if (infra) {
+      skip(`qayta hisoblash poygasi (${l})`,
+        `INFRASTRUKTURA (kod emas): ${infra}`);
+      continue;
+    }
     const okCount = results.filter((r) => r.status === 200).length;
     eq(`parallel qayta hisoblar o'tdi (${l})`, okCount >= 1, true);
 
