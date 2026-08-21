@@ -77,6 +77,7 @@
     "test:branch-analytics-parity": "node --env-file=../server/.env test/branch-analytics-parity.test.mjs",
     "test:exports-parity": "node --env-file=../server/.env test/exports-parity.test.mjs",
     "test:imports-parity": "node --env-file=../server/.env test/imports-parity.test.mjs",
+    "test:ai-parity": "node --env-file=../server/.env test/ai-parity.test.mjs",
     "test:route-matrix": "node --env-file=../server/.env test/route-matrix.mjs"
   },
   "prisma": {
