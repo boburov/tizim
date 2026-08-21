@@ -3,6 +3,7 @@ import { GroupsController } from './groups.controller.js';
 import { GroupsService } from './groups.service.js';
 import { TeacherGroupPeriodService } from './teacher-group-period.service.js';
 import { ExpenseApprovalsModule } from '../expense-approvals/expense-approvals.module.js';
+import { SystemNotificationsModule } from '../system-notifications/system-notifications.module.js';
 import { ApprovalExecutorRegistry } from '../../common/approvals/approval-executor.registry.js';
 import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
@@ -13,14 +14,25 @@ import { AuthMiddleware } from '../../middleware/auth.middleware.js';
  * Ikkala servis ham EKSPORT qilinadi: `attendance`, `grades`,
  * `student-freeze` va `buildUserProfile` ularga tayanadi.
  *
- * ⚠ `TeacherSalaryModule` IMPORT QILINMAYDI — u O'ZI `GroupsModule`
- * ni import qiladi va teskari yo'nalish modul AYLANASINI tug'dirardi.
- * Maosh qayta hisobi `TeacherGroupPeriodService` ichida `ModuleRef`
- * bilan KECH bog'lanadi (Express ham o'sha joyda dinamik `import()`
- * ishlatadi).
+ * ⚠ `TeacherSalaryModule`, `FinanceModule`, `DepositsModule` va
+ * `OpeningBalanceModule` IMPORT QILINMAYDI — ularning HAMMASI (to'g'ridan
+ * yoki `FinanceModule` orqali) `GroupsModule` ga tayanadi va teskari
+ * yo'nalish modul AYLANASINI tug'dirardi.
+ *
+ * Yozish yo'llari ularga `ModuleRef` (`strict: false`) orqali KECH
+ * bog'lanadi — batafsil sabab `groups.service.ts` dagi `lazy()` izohida.
+ * Express ham aynan shu joylarda dinamik `import()` ishlatadi.
+ *
+ * ⚠ `MEMBERSHIP_BACKDATE` bajaruvchisi ham shu yerda ro'yxatga olinadi:
+ * orqaga sana bilan o'quvchi qo'shish QARZ yaratadi va tasdiqdan
+ * o'tishi kerak.
  */
 @Module({
-  imports: [ExpenseApprovalsModule],
+  imports: [
+    ExpenseApprovalsModule,
+    // Guruh BUTUNLAY o'chirilganda owner'ga tizim yozuvi qoldiriladi.
+    SystemNotificationsModule,
+  ],
   controllers: [GroupsController],
   providers: [GroupsService, TeacherGroupPeriodService],
   exports: [GroupsService, TeacherGroupPeriodService],
@@ -29,6 +41,7 @@ export class GroupsModule implements NestModule, OnModuleInit {
   constructor(
     private readonly executors: ApprovalExecutorRegistry,
     private readonly periods: TeacherGroupPeriodService,
+    private readonly groups: GroupsService,
   ) {}
 
   /**
@@ -42,6 +55,9 @@ export class GroupsModule implements NestModule, OnModuleInit {
   onModuleInit(): void {
     this.executors.register(APPROVAL_KINDS.SALARY_TERMS, (a) =>
       this.periods.executeApprovedSalaryTerms(a),
+    );
+    this.executors.register(APPROVAL_KINDS.MEMBERSHIP_BACKDATE, (a) =>
+      this.groups.executeApprovedBackdate(a),
     );
   }
 

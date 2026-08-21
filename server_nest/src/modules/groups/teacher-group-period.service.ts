@@ -35,11 +35,11 @@ import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.
  * endi ko'chirilgan: `self-salary.guard`, `ExpenseApprovalsService`
  * va `TeacherSalaryService` (maosh qayta hisobi).
  *
- * ⚠ `assignTeacher` / `unassignTeacher` / `reopenPeriod` ATAYLAB
- * QOLDIRILDI: ularni HTTP marshruti chaqirmaydi (faqat `groups`
- * servisining yozish yo'llari — ular ALOHIDA to'lqinda, moliyaga
- * bog'liq). Ularni hozir ko'chirish ISHLATILMAYDIGAN ikkinchi manba
- * yaratardi.
+ * ✅ `assignTeacher` / `unassignTeacher` / `reopenPeriod` ENDI SHU
+ * FAYLDA: ularni HTTP marshruti chaqirmaydi, faqat `groups` servisining
+ * YOZISH yo'llari (`create`, `update`, `reconcileGroupEnd`) — va o'sha
+ * to'lqin endi ko'chirildi. Ilgari ular ataylab qoldirilgan edi:
+ * chaqiruvchisiz ko'chirish ISHLATILMAYDIGAN ikkinchi manba yaratardi.
  *
  * ⚠ MAOSH SERVISI `ModuleRef` ORQALI, OCHIQ IMPORT EMAS.
  * `TeacherSalaryModule` `GroupsModule` NI IMPORT QILADI — teskari
@@ -638,6 +638,121 @@ export class TeacherGroupPeriodService {
     await this.syncGroupTeachersCache(group);
     await this.recomputeForRange(teacher, group, candidate.startDate, candidate.endDate);
     return withLegacyId(doc);
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════
+   * O'QITUVCHINI GURUHGA BIRIKTIRISH (ochiq davr ochadi).
+   *
+   * ⚠ IDEMPOTENT: ochiq davr ALLAQACHON bo'lsa o'sha qaytariladi va
+   * YANGISI YARATILMAYDI — aks holda bitta o'qituvchining bir guruhda
+   * ikkita ochiq davri paydo bo'lib, maosh IKKI MARTA hisoblanardi.
+   *
+   * ⚠ `inheritStandardRate: true` — davrga stavka YOZILMAYDI. Sababi
+   * `create()` izohida: stavkasiz yaratilgan davr `salaryType:"fixed",
+   * fixedAmount:0` bilan yozilsa o'qituvchi shu guruhda NOL maoshga
+   * qulflanib qolardi.
+   * ═══════════════════════════════════════════════════════════════════
+   */
+  async assignTeacher(
+    group: string,
+    teacher: string,
+    { startDate }: { startDate?: Date | string | null } = {},
+    currentUser: Actor | null = null,
+  ) {
+    const open = await this.prisma.teacherGroupPeriod.findFirst({
+      where: {
+        teacherId: String(teacher),
+        groupId: String(group),
+        endDate: null,
+        isDeleted: false,
+      },
+    });
+    if (open) return withLegacyId(open); // allaqachon aktiv
+
+    const grp = await this.prisma.group.findUnique({
+      where: { id: String(group) },
+      select: { startDate: true },
+    });
+    const start = startDate
+      ? toUtcMidnight(startDate)
+      : grp?.startDate
+        ? toUtcMidnight(grp.startDate)
+        : localTodayMidnight();
+    return this.create(
+      { group, teacher, startDate: start, inheritStandardRate: true },
+      currentUser,
+    );
+  }
+
+  /**
+   * ARXIVDAN CHIQARISHDA: arxiv YOPGAN davrni qayta ochadi
+   * (`endDate = null`).
+   *
+   * ⚠ BITTA OCHIQ DAVR INVARIANTI: shu (o'qituvchi, guruh) juftida
+   * boshqa ochiq davr bo'lsa HECH NARSA qilinmaydi — ikki ochiq davr
+   * maoshni ikki marta hisoblardi.
+   */
+  async reopenPeriod(id: string, currentUser: Actor | null = null) {
+    const doc = await this.prisma.teacherGroupPeriod.findUnique({
+      where: { id: String(id) },
+    });
+    if (!doc || doc.isDeleted || doc.endDate === null) {
+      return doc ? withLegacyId(doc) : null;
+    }
+    const open = await this.prisma.teacherGroupPeriod.findFirst({
+      where: {
+        teacherId: doc.teacherId,
+        groupId: doc.groupId,
+        endDate: null,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    if (open) return withLegacyId(doc);
+
+    const saved = await this.prisma.teacherGroupPeriod.update({
+      where: { id: doc.id },
+      data: { endDate: null, updatedById: actorId(currentUser) },
+    });
+    await this.syncGroupTeachersCache(doc.groupId);
+    await this.recomputeForRange(doc.teacherId, doc.groupId, doc.startDate, null);
+    return withLegacyId(saved);
+  }
+
+  /**
+   * O'QITUVCHINI GURUHDAN CHIQARADI (ochiq davrni `endDate` da yopadi).
+   *
+   * ⚠ `endDate` EXCLUSIVE — chaqiruvchi (`prorateTeachersOnEnd`) unga
+   * `end + 1 kun` beradi, shunda oxirgi ISH KUNI `end` bo'lib qoladi.
+   * Bir kunlik siljish maoshda bir dars soatiga teng.
+   *
+   * @returns yopilgan davr yoki `null` (ochiq davr yo'q edi)
+   */
+  async unassignTeacher(
+    group: string,
+    teacher: string,
+    { endDate }: { endDate?: Date | string | null } = {},
+    currentUser: Actor | null = null,
+  ) {
+    const open = await this.prisma.teacherGroupPeriod.findFirst({
+      where: {
+        teacherId: String(teacher),
+        groupId: String(group),
+        endDate: null,
+        isDeleted: false,
+      },
+    });
+    if (!open) return null;
+
+    const end = endDate ? toUtcMidnight(endDate) : localTodayMidnight();
+    const saved = await this.prisma.teacherGroupPeriod.update({
+      where: { id: open.id },
+      data: { endDate: end, updatedById: actorId(currentUser) },
+    });
+    await this.syncGroupTeachersCache(group);
+    await this.recomputeForRange(teacher, group, open.startDate, end);
+    return withLegacyId(saved);
   }
 
   async update(

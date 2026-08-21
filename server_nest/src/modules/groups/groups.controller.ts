@@ -9,6 +9,7 @@ import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 import { salaryTermsMetrics } from '../../common/helpers/config-metrics.js';
 import { actorOf } from '../../common/helpers/actor.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
+import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { Permissions, Validated } from '../../common/decorators/index.js';
 import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
 import { ApiError } from '../../common/errors/api-error.js';
@@ -19,6 +20,16 @@ import {
   idParamSchema,
   historyQuerySchema,
   membershipListSchema,
+  createSchema,
+  updateSchema,
+  permanentDeleteSchema,
+  addStudentSchema,
+  backdatePreviewSchema,
+  addStudentsBulkSchema,
+  updateMembershipSchema,
+  studentParamsSchema,
+  membershipByIdSchema,
+  membershipUpdateSchema,
   teacherPeriodListSchema,
   teacherPeriodCreateSchema,
   teacherPeriodUpdateSchema,
@@ -28,6 +39,16 @@ import {
   type IdParamRequest,
   type HistoryRequest,
   type MembershipListRequest,
+  type CreateRequest,
+  type UpdateRequest,
+  type PermanentDeleteRequest,
+  type AddStudentRequest,
+  type BackdatePreviewRequest,
+  type AddStudentsBulkRequest,
+  type UpdateMembershipRequest,
+  type StudentParamsRequest,
+  type MembershipByIdRequest,
+  type MembershipUpdateRequest,
   type TeacherPeriodListRequest,
   type TeacherPeriodCreateRequest,
   type TeacherPeriodUpdateRequest,
@@ -70,6 +91,7 @@ export class GroupsController {
     private readonly groups: GroupsService,
     private readonly periods: TeacherGroupPeriodService,
     private readonly approvals: ExpenseApprovalsService,
+    private readonly branchAccess: BranchAccessService,
   ) {}
 
   // ══════════════ "MENING" MARSHRUTLARI — `/:id` DAN OLDIN ══════════════
@@ -144,10 +166,217 @@ export class GroupsController {
     return { success: true, data: items, meta: buildMeta({ page, limit, total }) };
   }
 
+  /** ⚠ 201 — Express `res.status(201)` yozadi. */
+  @Post()
+  @HttpCode(201)
+  @Permissions(PERMISSIONS.GROUPS_CREATE)
+  async create(
+    @Validated(createSchema) v: CreateRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = await this.groups.create(v.body, actorOf(req));
+    return { success: true, data, message: 'Guruh yaratildi' };
+  }
+
   @Get(':id')
   @Permissions(PERMISSIONS.GROUPS_READ)
   async getById(@Validated(idParamSchema) v: IdParamRequest) {
     return { success: true, data: await this.groups.getById(v.params.id) };
+  }
+
+  @Patch(':id')
+  @Permissions(PERMISSIONS.GROUPS_UPDATE)
+  async update(@Validated(updateSchema) v: UpdateRequest) {
+    const data: any = await this.groups.update(v.params.id, v.body);
+    // ⚠ `priceChange` — Express handler'idagi shox. Servis uni HECH
+    // QACHON qaytarmaydi (o'lik kod), lekin xabar shakli klient
+    // shartnomasining bir qismi, shuning uchun AYNAN takrorlanadi.
+    let message = 'Saqlandi';
+    const pc = data?.priceChange;
+    if (pc && pc.repriced > 0) {
+      message = `Saqlandi - joriy oy uchun ${pc.repriced} ta hisob yangi narxga moslandi`;
+    }
+    return { success: true, data, message };
+  }
+
+  /**
+   * BUTUNLAY O'CHIRISH — qaytarib bo'lmaydi.
+   *
+   * ⚠ Javobda `data` YO'Q (Express ham faqat `{ success, message }`
+   * yozadi) — servis natijasi ATAYLAB tashlanadi.
+   */
+  @Delete(':id/permanent')
+  @Permissions(PERMISSIONS.GROUPS_DELETE)
+  async permanentRemove(
+    @Validated(permanentDeleteSchema) v: PermanentDeleteRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    await this.groups.permanentRemove(v.params.id, actorOf(req), {
+      confirmName: v.body?.confirmName,
+    });
+    return { success: true, message: "Guruh butunlay o'chirildi" };
+  }
+
+  /** ⚠ 200 — Express `res.json()` yozadi, NestJS POST standarti 201. */
+  @Post(':id/undelete')
+  @HttpCode(200)
+  @Permissions(PERMISSIONS.GROUPS_DELETE)
+  async undelete(@Validated(idParamSchema) v: IdParamRequest) {
+    const data = await this.groups.restoreDeleted(v.params.id);
+    return { success: true, data, message: 'Guruh qaytarildi' };
+  }
+
+  // ═══════════════════════ O'QUVCHI QO'SHISH ═══════════════════════
+
+  /**
+   * ORQAGA SANA TA'SIRINI OLDINDAN KO'RSATADI — HECH NARSA SAQLAMAYDI.
+   *
+   * UI "Qo'shish" tugmasidan OLDIN shuni chaqiradi va foydalanuvchiga
+   * "Bu amal 3 oy uchun 4 200 000 so'm qarz yaratadi" tasdig'ini
+   * ko'rsatadi.
+   */
+  @Get(':id/students/backdate-preview')
+  @Permissions(PERMISSIONS.GROUPS_MANAGE_STUDENTS)
+  async backdatePreview(@Validated(backdatePreviewSchema) v: BackdatePreviewRequest) {
+    const data = await this.groups.previewBackdate(v.params.id, {
+      joinedAt: v.query.joinedAt,
+      leftAt: v.query.leftAt,
+    });
+    return { success: true, data };
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════
+   * O'QUVCHINI GURUHGA QO'SHISH.
+   *
+   * ⚠ ORQAGA SANA (backdate) QO'RIQCHISI: `joinedAt` o'tgan oyga
+   * qo'yilsa tizim o'sha oylar uchun AVTOMATIK QARZ yaratadi. Ilgari bu
+   * JIMGINA sodir bo'lardi — o'quvchi ogohlantirishsiz to'satdan 3
+   * oylik qarzdor bo'lib qolardi.
+   *
+   * Endi: o'tgan oylarga qarz yaratiladigan bo'lsa va summa filial
+   * limitidan oshsa — a'zolik DARHOL yaratilmaydi, owner tasdig'iga
+   * yuboriladi (202). Bu chegirmaning TESKARISI va aynan shunday
+   * nazoratga muhtoj: qarzni sun'iy yaratib, keyin uni "yomon qarz" deb
+   * hisobdan chiqarish yo'li ochiq qolardi.
+   *
+   * ⚠ GATE ATAYLAB KONTROLLERDA: servisning `addStudent()` i ICHKI
+   * oqimlardan (transfer, import, tasdiqni bajarish) ham chaqiriladi —
+   * u yerda qayta tasdiq so'rash CHEKSIZ AYLANMA hosil qilardi.
+   * ═══════════════════════════════════════════════════════════════════
+   */
+  @Post(':id/students')
+  @HttpCode(201)
+  @Permissions(PERMISSIONS.GROUPS_MANAGE_STUDENTS)
+  async addStudent(
+    @Validated(addStudentSchema) v: AddStudentRequest,
+    @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const groupId = v.params.id;
+    const { studentId, joinedAt, leftAt } = v.body;
+
+    const preview = await this.groups.previewBackdate(groupId, { joinedAt, leftAt });
+
+    if (preview.isBackdated) {
+      const { needsApproval } = await this.approvals.checkExpenseLimit({
+        branchId: await this.branchAccess.resolveBranchFromGroup(groupId),
+        amount: preview.estimatedDebt,
+        permissions: req.permissions,
+      });
+
+      if (needsApproval) {
+        const approval = await this.groups.requestBackdate(
+          groupId, studentId, v.body, actorOf(req),
+        );
+        // ⚠ `@HttpCode(201)` ni BEKOR QILAMIZ: bu shox 202 qaytaradi.
+        res.status(202);
+        return {
+          success: true,
+          data: approval,
+          message:
+            `Bu amal ${preview.pastMonthCount} oy uchun qarz yaratadi. ` +
+            "Tasdiqlash uchun yuborildi - owner tasdiqlagach o'quvchi qo'shiladi.",
+        };
+      }
+    }
+
+    const data = await this.groups.addStudent(groupId, studentId, { joinedAt, leftAt });
+
+    return {
+      success: true,
+      data,
+      // ⚠ Qarz yaratilgan bo'lsa foydalanuvchi buni KO'RISHI kerak —
+      // jimgina "qo'shildi" deb yozib qo'yish chalkashlikning asosiy
+      // manbai edi.
+      message: preview.isBackdated
+        ? `O'quvchi qo'shildi. ${preview.pastMonthCount} oy uchun qarz yozildi.`
+        : "O'quvchi qo'shildi",
+      meta: preview.isBackdated ? { backdate: preview } : undefined,
+    };
+  }
+
+  /**
+   * Bir nechta o'quvchini bir martada qo'shish.
+   *
+   * ⚠ IKKI XIL MUVAFFAQIYAT STATUSI:
+   *   200 — dars TO'QNASHUVI topildi, HECH KIM qo'shilmadi (tasdiq kerak);
+   *   201 — qo'shildi.
+   */
+  @Post(':id/students/bulk')
+  @HttpCode(201)
+  @Permissions(PERMISSIONS.GROUPS_MANAGE_STUDENTS)
+  async addStudentsBulk(
+    @Validated(addStudentsBulkSchema) v: AddStudentsBulkRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const data = await this.groups.addStudentsBulk(v.params.id, v.body.studentIds, {
+      joinedAt: v.body.joinedAt,
+      leftAt: v.body.leftAt,
+      force: v.body.force,
+    });
+
+    if (data.requiresConfirmation) {
+      res.status(200);
+      return {
+        success: true, data,
+        message: "Ba'zi o'quvchilarning bu vaqtda darsi bor",
+      };
+    }
+
+    const addedCount = data.added.length;
+    const failedCount = data.failed.length;
+    const message = failedCount
+      ? `${addedCount} ta o'quvchi qo'shildi, ${failedCount} tasi qo'shilmadi`
+      : `${addedCount} ta o'quvchi qo'shildi`;
+    return { success: true, data, message };
+  }
+
+  @Patch(':id/students/:studentId')
+  @Permissions(PERMISSIONS.GROUPS_MANAGE_STUDENTS)
+  async updateMembership(@Validated(updateMembershipSchema) v: UpdateMembershipRequest) {
+    const data = await this.groups.updateMembership(v.params.id, v.params.studentId, {
+      joinedAt: v.body.joinedAt,
+      leftAt: v.body.leftAt,
+    });
+    return { success: true, data, message: "A'zolik sanalari yangilandi" };
+  }
+
+  @Delete(':id/students/:studentId')
+  @Permissions(PERMISSIONS.GROUPS_MANAGE_STUDENTS)
+  async removeStudent(
+    @Validated(studentParamsSchema) v: StudentParamsRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const result: any = await this.groups.removeStudent(
+      v.params.id, v.params.studentId,
+      { reasonId: v.body?.reasonId, writeOff: Boolean(v.body?.writeOff) },
+      actorOf(req),
+    );
+    const message = result?.writeOff
+      ? `O'quvchi chiqarildi. ${result.writeOff.amount.toLocaleString('uz-UZ')} so'm undirilmagan to'lov sifatida hisobdan chiqarildi.`
+      : "O'quvchi guruhdan chiqarildi";
+    return { success: true, data: { writeOff: result?.writeOff || null }, message };
   }
 
   // ═══════════════════════ A'ZOLIK VA TARIX ═══════════════════════
@@ -157,6 +386,25 @@ export class GroupsController {
   async membershipList(@Validated(membershipListSchema) v: MembershipListRequest) {
     const data = await this.groups.listMemberships(v.params.id, v.params.studentId);
     return { success: true, data };
+  }
+
+  /** O'qish davrini ID bo'yicha tahrirlash (TARIXIY davr ham). */
+  @Patch(':id/memberships/:membershipId')
+  @Permissions(PERMISSIONS.GROUPS_MANAGE_STUDENTS)
+  async membershipUpdate(@Validated(membershipUpdateSchema) v: MembershipUpdateRequest) {
+    const data = await this.groups.updateMembershipById(
+      v.params.id, v.params.membershipId, v.body,
+    );
+    return { success: true, data, message: "O'qish davri yangilandi" };
+  }
+
+  @Delete(':id/memberships/:membershipId')
+  @Permissions(PERMISSIONS.GROUPS_MANAGE_STUDENTS)
+  async membershipRemove(@Validated(membershipByIdSchema) v: MembershipByIdRequest) {
+    const data = await this.groups.removeMembershipById(
+      v.params.id, v.params.membershipId,
+    );
+    return { success: true, data, message: "O'qish davri o'chirildi" };
   }
 
   @Get(':id/history')

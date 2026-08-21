@@ -20,13 +20,13 @@ import { PrismaService } from '../../prisma/prisma.service.js';
  * Ya'ni TO'LOVLAR har doim PLAN/MAOSH qatoridan OLDIN o'chiriladi.
  * Quyidagi ketma-ketlik TASODIFIY EMAS — o'zgartirmang.
  *
- * ── ⚠ NIMA KO'CHIRILMADI: `hardDeleteGroupData` ──
+ * ── ✅ `hardDeleteGroupData` ENDI SHU YERDA ──
  *
- * Express fayli GURUH kaskadini ham saqlaydi, lekin uni FAQAT
- * `groups.service.permanentRemove` chaqiradi va u boshqa ish
- * to'lqiniga (FAZA 5) tegishli. Uni "oldindan" ko'chirish chaqiruvchisiz
- * kod qoldirardi va guruh moduli kelganda ikkinchi manba bo'lib ajralib
- * ketardi. `groups` ko'chirilganda O'SHA to'lqin uni shu faylga qo'shadi.
+ * Uni FAQAT `groups.service.permanentRemove` chaqiradi. Ilgari u
+ * ataylab qoldirilgan edi (chaqiruvchisiz kod ikkinchi manba bo'lib
+ * ajralib ketardi); `groups` yozish yo'llari ko'chirilgach o'sha
+ * to'lqin uni shu faylga qo'shdi — Express bilan BIR XIL faylda,
+ * ya'ni tartib ham bir joyda saqlanadi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
@@ -286,5 +286,62 @@ export class UserRelationsService {
     }
 
     return groupIds;
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════
+   * GURUHGA OID BARCHA YOZUVLARNI FIZIK O'CHIRADI (hard cascade).
+   *
+   * ⚠ TARTIB MAJBURIY — bola qator OTA'sidan OLDIN. Eng og'ir bog'lanish:
+   *     payment_transactions.paymentId → student_payments  (RESTRICT)
+   *     salary_transactions.salaryId   → teacher_salaries  (RESTRICT)
+   * Ya'ni TO'LOVLAR har doim PLAN/MAOSH qatoridan OLDIN o'chiriladi.
+   *
+   * ⚠ JURNALGA TEGILMAYDI: u o'zgarmas moliyaviy daftar
+   * (`journal_entries.groupId` — RESTRICT). Chaqiruvchi
+   * (`permanentRemove`) jurnal yozuvi bor guruhni OLDINDAN 409 bilan
+   * to'sadi, shunda FK xatosi tranzaksiya o'rtasida chiqmaydi.
+   *
+   * @returns guruhda a'zoligi bo'lgan o'quvchi ID'lari (yakunlash
+   *          sanasini qayta hisoblash uchun)
+   * ═══════════════════════════════════════════════════════════════════
+   */
+  async hardDeleteGroupData(groupId: string, { tx }: { tx?: Db } = {}): Promise<string[]> {
+    const id = String(groupId);
+    const client = this.db(tx);
+
+    const memberRows = await client.groupMembership.findMany({
+      where: { groupId: id },
+      select: { studentId: true },
+      distinct: ['studentId'],
+    });
+    const studentIds = memberRows
+      .map((r: { studentId: unknown }) => String(r.studentId))
+      .filter(Boolean);
+
+    // ── MOLIYA (kirim): bolalardan boshlab ──
+    await client.paymentTransaction.deleteMany({ where: { groupId: id } });
+    // `debt_write_offs.groupId` → `groups` (RESTRICT): guruh o'chishi uchun
+    // yomon qarz yozuvlari ham ketishi shart (breakdown CASCADE bilan).
+    await client.debtWriteOff.deleteMany({ where: { groupId: id } });
+    await client.studentPayment.deleteMany({ where: { groupId: id } });
+    await client.groupFee.deleteMany({ where: { groupId: id } });
+    await client.discount.deleteMany({ where: { groupId: id } });
+
+    // ── MOLIYA (chiqim) ──
+    await client.salaryTransaction.deleteMany({ where: { groupId: id } });
+    await client.teacherSalary.deleteMany({ where: { groupId: id } });
+    await client.teacherGroupPeriod.deleteMany({ where: { groupId: id } });
+
+    // ── DOMEN ──
+    await client.groupMembership.deleteMany({ where: { groupId: id } });
+    await client.attendance.deleteMany({ where: { groupId: id } });
+    await client.grade.deleteMany({ where: { groupId: id } });
+    await client.teacherAbsence.deleteMany({ where: { groupId: id } });
+    await client.feedback.deleteMany({ where: { groupId: id } });
+    // `lesson_cancellations.groupId` → `groups` (RESTRICT).
+    await client.lessonCancellation.deleteMany({ where: { groupId: id } });
+
+    return studentIds;
   }
 }
