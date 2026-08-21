@@ -1,6 +1,13 @@
-import { Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller, Delete, Get, HttpCode, Patch, Post, Req, Res, UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { GroupsService } from './groups.service.js';
 import { TeacherGroupPeriodService } from './teacher-group-period.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
+import { salaryTermsMetrics } from '../../common/helpers/config-metrics.js';
+import { actorOf } from '../../common/helpers/actor.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Permissions, Validated } from '../../common/decorators/index.js';
 import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
@@ -13,11 +20,19 @@ import {
   historyQuerySchema,
   membershipListSchema,
   teacherPeriodListSchema,
+  teacherPeriodCreateSchema,
+  teacherPeriodUpdateSchema,
+  teacherPeriodRemoveSchema,
+  teacherPeriodHandoverSchema,
   type ListRequest,
   type IdParamRequest,
   type HistoryRequest,
   type MembershipListRequest,
   type TeacherPeriodListRequest,
+  type TeacherPeriodCreateRequest,
+  type TeacherPeriodUpdateRequest,
+  type TeacherPeriodRemoveRequest,
+  type TeacherPeriodHandoverRequest,
 } from './groups.validators.js';
 
 /**
@@ -54,6 +69,7 @@ export class GroupsController {
   constructor(
     private readonly groups: GroupsService,
     private readonly periods: TeacherGroupPeriodService,
+    private readonly approvals: ExpenseApprovalsService,
   ) {}
 
   // ══════════════ "MENING" MARSHRUTLARI — `/:id` DAN OLDIN ══════════════
@@ -178,5 +194,123 @@ export class GroupsController {
     @Validated(teacherPeriodListSchema) v: TeacherPeriodListRequest,
   ) {
     return { success: true, data: await this.periods.listByGroup(v.params.id) };
+  }
+
+  // ══════════════ DARS BERISH DAVRLARI — YOZISH ══════════════
+
+  /**
+   * Yangi dars berish davri.
+   *
+   * ⚠ TASDIQ GATE'i KONTROLLERDA, SERVISDA EMAS — Express'da ham
+   * shunday. Servisning `create()` i ICHKI oqimlardan ham chaqiriladi
+   * (guruhni arxivdan chiqarish, `assignTeacher`, seed) va u yerda
+   * tasdiq so'rash noto'g'ri bo'lardi.
+   *
+   * ⚠ BU TUR UCHUN `auto` REJIMI YO'Q — eng ko'pi `threshold`.
+   * Sabab `constants/delegation`da: direktor o'zini o'qituvchi
+   * sifatida ham yozdirib, cheksiz `auto` bilan O'Z stavkasini o'zi
+   * belgilay olardi.
+   *
+   * ⚠ 202 = "qabul qilindi, lekin hali BAJARILMADI". Yozuv
+   * YARATILMAYDI — tasdiqlanmagan stavka maosh hisobiga kirib
+   * ketmasin.
+   */
+  @Post(':id/teacher-periods')
+  @HttpCode(201)
+  @Permissions(PERMISSIONS.GROUPS_UPDATE)
+  async teacherPeriodCreate(
+    @Validated(teacherPeriodCreateSchema) v: TeacherPeriodCreateRequest,
+    @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const group = v.params.id;
+    const { needsApproval } = await this.approvals.checkConfigApproval({
+      permissions: req.permissions,
+      kind: APPROVAL_KINDS.SALARY_TERMS,
+      metrics: salaryTermsMetrics(v.body as Record<string, unknown>),
+    });
+
+    if (needsApproval) {
+      const approval = await this.periods.requestSalaryTerms(
+        { op: 'create', group, body: v.body as Record<string, unknown> },
+        actorOf(req),
+      );
+      // ⚠ `@HttpCode(201)` ni BEKOR QILAMIZ: bu shox 202 qaytaradi.
+      res.status(202);
+      return {
+        success: true,
+        data: approval,
+        message: "Tasdiqlash uchun yuborildi. Owner tasdiqlagach qo'llanadi.",
+      };
+    }
+
+    const data = await this.periods.create(
+      { ...(v.body as Record<string, unknown>), group } as never,
+      actorOf(req),
+    );
+    return { success: true, data, message: "Dars berish davri qo'shildi" };
+  }
+
+  /** Qarang: `teacherPeriodCreate` — bir xil tasdiq qoidasi. */
+  @Patch(':id/teacher-periods/:periodId')
+  @Permissions(PERMISSIONS.GROUPS_UPDATE)
+  async teacherPeriodUpdate(
+    @Validated(teacherPeriodUpdateSchema) v: TeacherPeriodUpdateRequest,
+    @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { periodId } = v.params;
+    const { needsApproval } = await this.approvals.checkConfigApproval({
+      permissions: req.permissions,
+      kind: APPROVAL_KINDS.SALARY_TERMS,
+      metrics: salaryTermsMetrics(v.body as Record<string, unknown>),
+    });
+
+    if (needsApproval) {
+      const approval = await this.periods.requestSalaryTerms(
+        { op: 'update', periodId, body: v.body as Record<string, unknown> },
+        actorOf(req),
+      );
+      res.status(202);
+      return {
+        success: true,
+        data: approval,
+        message: "Tasdiqlash uchun yuborildi. Owner tasdiqlagach qo'llanadi.",
+      };
+    }
+
+    const data = await this.periods.update(periodId, v.body as never, actorOf(req));
+    return { success: true, data, message: 'Dars berish davri yangilandi' };
+  }
+
+  @Delete(':id/teacher-periods/:periodId')
+  @Permissions(PERMISSIONS.GROUPS_UPDATE)
+  async teacherPeriodRemove(
+    @Validated(teacherPeriodRemoveSchema) v: TeacherPeriodRemoveRequest,
+  ) {
+    const data = await this.periods.remove(v.params.periodId);
+    return { success: true, data, message: "Dars berish davri o'chirildi" };
+  }
+
+  /**
+   * OMMAVIY TOPSHIRISH (ishdan bo'shatish).
+   *
+   * ⚠ TASDIQ GATE'i ATAYLAB YO'Q (`teacherPeriodCreate` dan farqli):
+   * u yerdagi tasdiq MAOSH STAVKASI o'zgarishi uchun edi. Bu yerda
+   * stavka belgilanmaydi — qabul qiluvchi O'Z shartnomasi bo'yicha
+   * oladi.
+   */
+  @Post('teacher-handover/:teacherId')
+  @HttpCode(200)
+  @Permissions(PERMISSIONS.GROUPS_UPDATE)
+  async teacherPeriodHandover(
+    @Validated(teacherPeriodHandoverSchema) v: TeacherPeriodHandoverRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = await this.periods.handover(
+      { teacher: v.params.teacherId, ...(v.body as Record<string, unknown>) } as never,
+      actorOf(req),
+    );
+    return { success: true, data, message: `${data.opened} ta guruh topshirildi` };
   }
 }
