@@ -15,7 +15,7 @@ Manba: `server/src/jobs`, `server/src/queues`, `server/src/bot`,
 
 | To'plam | Soni | NestJS holati |
 |---|---|---|
-| pg-boss cron joblari | 23 (24 ta e'lon, `aiReports` 3 ta job beradi) | 3 ta ko'chirildi, 20 ta BLOKLANGAN |
+| pg-boss cron joblari | 23 (24 ta e'lon, `aiReports` 3 ta job beradi) | **6 ta ko'chirildi**, 17 ta BLOKLANGAN |
 | Hodisaga ko'ra ishlaydigan joblar | 3 (`notification.deliver`, `notification.send`, `assignment.deliver`) | 2 ta ko'chirildi, 1 ta BLOKLANGAN |
 | Boot catch-up (cron emas) | 4 (`catchUpMonthly`, `processDueGroupEnds`, `accrueToday`, `reconcileStorage`) | 1 ta ko'chirildi (`reconcileStorage`), 3 ta BLOKLANGAN |
 | BullMQ navbat (Redis) | 1 (`bulk-import`) | 0 — BLOKLANGAN |
@@ -38,10 +38,10 @@ tegadigan asosiy jadvallar. **Filial** = ALS filial konteksti.
 
 | Job | Cron (Asia/Tashkent) | Servislar | NestJS modul talabi | Jadvallar | Ruxsat | Filial | Tashqi API | Yon ta'sir | Holat |
 |---|---|---|---|---|---|---|---|---|---|
-| `daily.holiday-greetings` | `30 8 * * *` | `holidays.getTodayHolidays/isAlreadySentToday/markSent`, `notifications.send` | **holidays**, **notifications** | `holidays`, `notifications`, `notification_recipients`, `users`, `bot_users` | yo'q (tizim) | GLOBAL | Telegram | TG xabar (barcha o'quvchi+o'qituvchi) | ⛔ BLOKLANGAN |
-| `daily.attendance-unmarked` | `0 20 * * *` | `attendance.listForGroupOnDate`, `notifications.send` | **attendance**, **groups**, **notifications** | `groups`, `group_schedules`, `attendance`, `group_memberships`, `notifications`, `users` | yo'q | GLOBAL | Telegram | TG xabar (o'qituvchi + owner digest) | ⛔ BLOKLANGAN |
-| `daily.lesson-reminder` | `0 6 * * *` | `notifications.send`, `holidays.holidayKeySetForRange`, `lessonCancellation.helper`, `studentFreeze.helper`, `attendance.helper` | **holidays**, **notifications**, **lessonCancellations**, **groups**, `studentFreeze`✅ | `groups`, `group_schedules`, `group_memberships`, `holidays`, `lesson_cancellations`, `student_freezes`, `users`, `notifications` | yo'q | GLOBAL | Telegram | TG xabar (har o'quvchiga) | ⛔ BLOKLANGAN |
-| `weekly.low-attendance` | `30 9 * * 1` | `attendance.getDashboardStats`, `notifications.send` | **attendance**, **notifications** | `attendance`, `groups`, `attendance_settings`, `users`, `notifications` | yo'q | GLOBAL | Telegram | TG xabar (owner) | ⛔ BLOKLANGAN |
+| `daily.holiday-greetings` | `30 8 * * *` | `holidays.getTodayHolidays/isAlreadySentToday/markSent`, `notifications.send` | **holidays** ✅, **notifications** ✅ | `holidays`, `notifications`, `notification_recipients`, `users`, `bot_users` | yo'q (tizim) | GLOBAL | Telegram | TG xabar (barcha o'quvchi+o'qituvchi) | ✅ **KO'CHIRILDI** |
+| `daily.attendance-unmarked` | `0 20 * * *` | `attendance.listForGroupOnDate`, `notifications.send` | **attendance** ✅, **notifications** ✅ | `groups`, `group_schedules`, `attendance`, `group_memberships`, `notifications`, `users` | yo'q | GLOBAL | Telegram | TG xabar (o'qituvchi + owner digest) | ✅ **KO'CHIRILDI** |
+| `daily.lesson-reminder` | `0 6 * * *` | `notifications.send`, `holidays.holidayKeySetForRange`, **`lessonCancellation.helper`**, `studentFreeze.helper`, `attendance.helper` | holidays ✅, notifications ✅, studentFreeze ✅, attendance helper ✅ — **YETISHMAYDIGANI: `lessonCancellations`** | `groups`, `group_schedules`, `group_memberships`, `holidays`, `lesson_cancellations`, `student_freezes`, `users`, `notifications` | yo'q | GLOBAL | Telegram | TG xabar (har o'quvchiga) | ⛔ BLOKLANGAN — `loadCancelledLessonKeys`/`isCancelledSession` yo'q. Ularsiz BEKOR QILINGAN darsga eslatma ketardi |
+| `weekly.low-attendance` | `30 9 * * 1` | `attendance.getDashboardStats`, `notifications.send` | **attendance** ✅, **notifications** ✅ | `attendance`, `groups`, `attendance_settings`, `users`, `notifications` | yo'q | GLOBAL | Telegram | TG xabar (owner) | ✅ **KO'CHIRILDI** |
 | `notification.deliver` | hodisaga ko'ra (`scheduler.now`), qulf 5 daq | `notifications.deliverNotification` → `bot/notificationDeliver` | **notifications** ✅ | `notifications`, `notification_recipients`, `bot_users` | yo'q | GLOBAL | Telegram | TG xabar | ✅ **KO'CHIRILDI** |
 | `notification.send` | `scheduler.at(when)`, qulf 5 daq | `notifications.dispatchScheduled` | **notifications** ✅ | `notifications`, `notification_recipients` | yo'q | GLOBAL | Telegram | TG xabar | ✅ **KO'CHIRILDI** |
 | `assignment.deliver` | hodisaga ko'ra (`scheduler.now`) | `assignments.deliverAssignment` → `bot/assignmentDeliver` | **assignments**, **storage** | `assignments`, `assignment_recipients`, `bot_users`, fayl tizimi | yo'q | GLOBAL | Telegram | TG hujjat | ⛔ BLOKLANGAN (bot yetkazish qatlami ✅ tayyor) |
@@ -57,8 +57,8 @@ tegadigan asosiy jadvallar. **Filial** = ALS filial konteksti.
 
 | Job | Cron | Servislar | NestJS modul talabi | Jadvallar | Ruxsat | Filial | Tashqi API | Yon ta'sir | Holat |
 |---|---|---|---|---|---|---|---|---|---|
-| `lead.followup-reminders` | `*/5 * * * *` | `leads.dueReminders/markReminderNotified`, `leadNotify.notifyLeadReminder`, `systemNotifications.create` | **leads**, **notifications**, **systemNotifications** | `leads`, `notifications`, `system_notifications`, `users`, `bot_users` | yo'q | GLOBAL | Telegram | TG xabar + panel bildirishnomasi; `markReminderNotified` FAQAT yuborilgandan KEYIN | ⛔ BLOKLANGAN |
-| `lead.daily-digest` | `0 9 * * *` | `leads.remindersUpTo`, `leadNotify.sendDailyDigest` | **leads**, **notifications** | `leads`, `notifications`, `users` | yo'q | GLOBAL | Telegram | TG digest (xodim bo'yicha) | ⛔ BLOKLANGAN |
+| `lead.followup-reminders` | `*/5 * * * *` | `leads.dueReminders/markReminderNotified`, **`leadNotify.notifyLeadReminder`**, `systemNotifications.create` | leads ✅, notifications ✅, systemNotifications ✅ — **YETISHMAYDIGANI: `leads/leadNotify.service` (119 qator)** | `leads`, `notifications`, `system_notifications`, `users`, `bot_users` | yo'q | GLOBAL | Telegram | TG xabar + panel bildirishnomasi; `markReminderNotified` FAQAT yuborilgandan KEYIN | ⛔ BLOKLANGAN |
+| `lead.daily-digest` | `0 9 * * *` | `leads.remindersUpTo`, **`leadNotify.sendDailyDigest`** | leads ✅, notifications ✅ — **YETISHMAYDIGANI: `leads/leadNotify.service`** | `leads`, `notifications`, `users` | yo'q | GLOBAL | Telegram | TG digest (xodim bo'yicha) | ⛔ BLOKLANGAN |
 
 ### 1.3 MOLIYA / MAOSH OILASI  ⚠ PUL YOZADI
 
@@ -242,10 +242,14 @@ qayd etildi.
 
 Har bir qator: "bu modullar tayyor bo'lgach, bu joblar oilasi ko'chadi".
 
-| Kutilayotgan NestJS modullari | Ochiladigan job oilasi |
+| Kutilayotgan NestJS modullari / servislar | Ochiladigan job oilasi |
 |---|---|
-| `groups` | `daily.auto-end-groups` + boot catch-up |
-| `holidays` | `daily.holiday-greetings` |
+| `groups.processDueGroupEnds` (groups hozir FAQAT O'QISH) | `daily.auto-end-groups` + boot catch-up |
+| `leads/leadNotify.service` (119 qator, leads egasiga tegishli) | `lead.followup-reminders`, `lead.daily-digest` |
+| `lessonCancellations` helperlari | `daily.lesson-reminder` |
+| `finance/report.regenerate` + `finance/studentPayment.accrueMonth` + `deposits` | `monthly.generate-finance`, `daily.accrue-finance` + boot catch-up'lar |
+| `teacherSalary/salaryReport.regenerate` | `monthly.generate-salary`, boot `catchUpMonthly` |
+| `staffPayroll.generateMonth` (hozir faqat `payroll-audit`) | `monthly.generate-staff-payroll` |
 | `notifications` + `attendance` + `groups` | `daily.attendance-unmarked`, `weekly.low-attendance` |
 | `notifications` + `holidays` + `lessonCancellations` + `groups` | `daily.lesson-reminder` |
 | `notifications` + `leads` + `systemNotifications` | `lead.followup-reminders`, `lead.daily-digest` |
