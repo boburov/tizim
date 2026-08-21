@@ -1,8 +1,12 @@
-node_modules
+node_modules/
+dist/
 .env
-*.log
-dist
-.DS_Store
-.idea
-.vscode
+*.tsbuildinfo
+
+# ⚠ FOYDALANUVCHI YUKLAGAN FAYLLAR — HECH QACHON GIT'GA TUSHMASIN.
+#
+# Ilgari bu papka `server/` (Express) da edi va o'sha yerdagi
+# `.gitignore` uni to'sardi. Cutover'da papka ko'chirilganda to'siq
+# ORTDA QOLDI va 5 ta fayl (o'quvchi hujjatlari, PDF) indeksga tushib
+# ketdi — ular git tarixiga abadiy kirib qolardi.
 uploads

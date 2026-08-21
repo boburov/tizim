@@ -19813,3 +19813,132 @@ Tuzatilgan xatolar: **B21, B26–B29, B32–B40** — ular orasida ikkita filial
 <sub>session `c0c7f284` · branch `migration/nestjs` · 4 ta qadam</sub>
 
 ---
+
+## 2026-08-22 01:23 — endi branchni gitga merge qilib serverni ochirib server nestni orginal
+
+**So'rov**
+
+> endi branchni gitga merge qilib serverni ochirib server nestni orginal server sifatida qoldiring va superadmin panelda login qilganda tanlash uchun filiallar berilmasin
+
+**Buyruqlar (54)**
+
+```sh
+ls -d */ && echo "=== git ===" && git branch -a | cat && echo "=== PORTLAR ===" && grep -rn "PORT" server/.env server_nest/.env 2>/dev/null | head -5
+grep -rn "5000\|5001\|API_URL\|VITE_" client/.env* client/vite.config.* 2>/dev/null | head -10; echo "=== server_nest port manbai ==="; grep -rn "PORT" server_n…
+grep -rln "superadmin\|super_admin\|SUPERADMIN" client/src admin_client/src 2>/dev/null | head -10; echo "=== filial tanlash (login) ==="; grep -rln "branchSele…
+ls client/src/superadmin/ 2>/dev/null; echo "=== workspaces.js — superadmin ==="; grep -n "superadmin" -B 5 -A 15 client/src/shared/workspaces/workspaces.js | h…
+grep -rln "branch" client/src/shared/layouts/ client/src/superadmin/layout/ 2>/dev/null | head; echo "=== login sahifasi ==="; find client/src -iname "*login*" …
+grep -rn "branch" client/src/features/auth/pages/LoginPage.jsx | head -10; echo "=== login mutation ==="; sed -n '1,60p' client/src/features/auth/hooks/useLogin…
+cat client/src/shared/lib/branch/activeBranch.js 2>/dev/null | head -60; echo "=== useActiveBranch ==="; find client/src -name "useActiveBranch*" | head -2
+cat client/src/shared/hooks/useActiveBranch.js | head -80
+grep -rln "BranchPicker\|Filialni tanlang" client/src | head -5; echo "=== AuthGuard ==="; grep -rn "BranchPicker\|needsBranchChoice\|mustChooseBranch" client/s…
+sed -n '1,95p' client/src/shared/components/guards/AuthGuard.jsx
+grep -n "AuthGuard\|superadmin\|/org" client/src/app/routes.jsx | head -20; echo "=== useWorkspace ==="; find client/src -name "useWorkspace*" -o -name "*worksp…
+sed -n '1,60p' client/src/shared/hooks/useWorkspace.js
+sed -n '80,160p' client/src/shared/hooks/useActiveBranch.js
+grep -n "x-branch-id" -A 30 server_nest/src/middleware/auth.middleware.ts | grep -n "canSeeAllBranches\|ALL_BRANCHES\|branchId =" | head -10; echo "=== to'liq b…
+grep -n "requestedBranchId" -A 60 server_nest/src/common/rbac/branch-access.service.ts | grep -n "ALL_BRANCHES\|requestedBranchId\|return {" | head -15; echo "=…
+sed -n '208,275p' server_nest/src/common/rbac/branch-access.service.ts
+grep -n "isBranchIdValid" -A 20 client/src/shared/lib/branch/activeBranch.js | head -25
+python3 - <<'PYEOF' p='client/src/shared/components/guards/AuthGuard.jsx' s=open(p,encoding='utf-8').read() s = s.replace("""// Router import { Navigate, Outlet…
+npm run build 2>&1 | tail -6
+cd /Users/shukrullo/Desktop/lc-total && grep -n "NEST_PORT\|NEST_WORKERS_ENABLED\|NEST_WORKER_JOBS\|NEST_BOT_POLLING\|^PORT" server/.env
+grep -n "NEST_PORT\|NEST_WORKERS_ENABLED\|NEST_WORKER_JOBS\|NEST_BOT_POLLING\|REDIS_URL" server_nest/src/config/env.validation.ts | head -10; echo "=== start sk…
+grep -n "REDIS_URL\|REDIS_PREFIX" server/.env || echo "(REDIS_URL .env da YO'Q — navbat o'chiq, sinxron yo'l)"; echo "=== Nest'da import WORKER bormi ==="; grep…
+sed -n '140,200p' server/src/queues/importQueue.js
+grep -n "IMPORT_QUEUE_CONCURRENCY" server_nest/src/config/env.validation.ts server/src/config/env.js | head -3; grep -n "NEST_IMPORT_WORKER" server_nest/src/con…
+cd server_nest && python3 - <<'PYEOF' p='src/config/env.validation.ts' s=open(p,encoding='utf-8').read() old = " NEST_BOT_POLLING: boolish(false)," assert old i…
+# … yana 29 ta
+```
+
+**Natija**
+
+Uchta ish bor va ikkitasi qaytarib bo'lmaydigan. Avval joylashuvni aniqlab olaman — nima "asosiy server" ekanini taxmin qilmayman.
+
+Serverni tekshirdim: `x-branch-id` yuborilmasa va foydalanuvchida `branches.view_all` bo'lsa — ko'lam **allaqachon butun tashkilot**. Ya'ni superadmin uchun tanlov mantiqan ortiqcha.
+
+Endi 3-bandni bajaraman: superadmin uchun tanlov ekrani ko'rsatilmaydi va ko'lam ochiq "barcha filiallar" qilib qo'yiladi.
+
+Klient quriladi. Endi kesishuvni tugatish — Nest'ni asosiy server qilish.
+
+Kesishuvni bajarishdan oldin bitta xavfni tekshirishim shart: import navbatini kim iste'mol qiladi.
+
+`REDIS_URL` sozlanmagan — navbat bu muhitda o'chiq. Lekin Express o'chgach Nest o'zi ishlab chiqargan navbatni **iste'mol qila olmaydi** — bu teshikni yopishim kerak.
+
+Navbat teshigi yopildi. Endi kesishuv sozlamalari — Express to'xtatiladi va Nest 5000-portga o'tadi.
+
+`connection_limit` izoh qatoriga tushib qolibdi — haqiqiy `DATABASE_URL` ga qo'yaman.
+
+Endi Express'ni to'xtatib, Nest'ni 5000-portda ko'taraman.
+
+NestJS 5000-portda ishlayapti. Yolg'on bo'lib qolgan bootstrap xabarini tuzataman.
+
+Nest yagona server sifatida ishlayapti. Endi haqiqiy tekshiruv — parity testlari endi ishlamaydi (Express yo'q), shuning uchun ishlashini boshqacha o'lchayman.
+
+Bu uchtasi mening noto'g'ri yozgan manzillarim bo'lishi mumkin — tekshiraman.
+
+18/18 marshrut javob berdi. Endi smoke vositasini tartibga solib, merge qilaman.
+
+Endi merge — `migration/nestjs` → `main`.
+
+Merge tugadi. Bitta hujjat endi yolg'on bo'lib qoldi — `server/CLAUDE.md` hamon Express'ni backend deb ta'riflaydi.
+
+Uchala ish ham bajarildi.
+
+## 1. Merge — bajarildi (lokal)
+
+`migration/nestjs` → `main`, 114 commit, `--no-ff` merge commit bilan. Ishchi daraxt toza.
+
+**⚠ `origin/main` ga PUSH QILMADIM.** Siz "merge"
+
+…(qisqartirildi)
+
+<sub>session `c0c7f284` · branch `main` · 55 ta qadam</sub>
+
+---
+
+## 2026-08-22 01:42 — hozir main server qyasi
+
+**So'rov**
+
+> hozir main server qyasi
+
+**Buyruqlar (2)**
+
+```sh
+echo "=== 5000-portda nima ==="; lsof -ti:5000 | while read pid; do ps -o pid,command -p $pid | tail -1; done; echo; echo "=== 5001-portda nima ==="; lsof -ti:5…
+echo "=== jarayonning ish papkasi ==="; lsof -p 57252 -a -d cwd 2>/dev/null | tail -1; echo; echo "=== serverning o'zi nima deydi ==="; node -e " fetch('http://…
+```
+
+**Natija**
+
+Taxmin qilmay, hozirgi holatni o'lchayman.
+
+## Asosiy server: **`server_nest/` (NestJS)**
+
+O'lchangan holat:
+
+| | |
+|---|---|
+| **5000-port** | `node dist/main.js` — PID 57252 |
+| **Ish papkasi** | `/Users/shukrullo/Desktop/lc-total/server_nest` |
+| **5001-port** | bo'sh |
+| **Express** (`server/src/index.js`) | **ishlamayapti** |
+| Sog'liq | `GET /api/health` → 200 |
+
+Klient `VITE_API_URL=http://localhost:5000/api` ga qarab turibdi — ya'ni **klient tomonida hech narsa o'zgartirilmagan**, u endi Nest'ga boradi.
+
+Nest shu bilan birga quyidagilarni ham o'z zimmasiga oldi:
+- **25/25 fon ishi** (pg-boss rejalashtiruvchisi)
+- **Telegram bot pollingi**
+- **Import navbati** (worker yoqilgan)
+
+## Ikkita ogohlantirish
+
+**Express'ni ishga tushirmang.** Uning `PORT` i ham 5000 — port band bo'lgani uchun ko'tarilmaydi. Agar boshqa portda ko'tarilsa, u **cronlarni ikkinchi marta ro'yxatga oladi** va oylik moliya/maosh generatsiyasi ikki marta yurishi mumkin.
+
+**Bu jarayon terminalda fon rejimida turibdi** — mashina o'chsa yoki terminal yopilsa server ham to'xtaydi. Doimiy ishlashi uchun uni `pm2`/`systemd` kabi jarayon boshqaruvchisiga o'tkazish kerak. Buni hali qilmadim — aytsangiz sozlab beraman.
+
+<sub>session `c0c7f284` · branch `main` · 2 ta qadam</sub>
+
+---
