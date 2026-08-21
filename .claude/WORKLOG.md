@@ -19284,3 +19284,169 @@ Mavjud `PayrollAuditService.record` va `FinancialTransactionService.postStaffPay
 <sub>session `7accafc7` · branch `migration/nestjs` · 140 ta qadam</sub>
 
 ---
+
+## 2026-08-21 22:53 — This session is being continued from a previous conversation that ran 
+
+**So'rov**
+
+> This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+>
+> Summary:
+> 1. **Primary Request and Intent:**
+>
+> The user designated me as the **FINAL MIGRATION / RELEASE-GATE agent** for an Express → NestJS migration of a Uzbek education-center ERP (`/Users/shukrullo/Desktop/lc-total`, branch `migration/nestjs`). The goal: *finish* the migration completely and leave the repo production-ready. Verbatim constraints that must remain in force:
+>
+> - **ABSOLUTE RULES**: (1) Do not fake migration status. (2) Do not create scaffolding/501 endpoints merely to increase route counts. (3) Do not duplicate business logic that already exists in common/helpers/common/utils. (4) Do not weaken guards to make parity pass. (5) Do not modify Express behavior merely to make Nest parity pass unless explicitly fixing a confirmed shared bug in BOTH stacks. (6) Every money mutation must preserve: debit=credit, no negative balance where forbidden, no overpayment, idempotency, branch isolation, transactional atomicity, no double accounting. (7) Every authorization guard must have a deliberate bypass/mutation test. (8) Every m
+> …
+
+**Buyruqlar (504)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total && echo "=== EXPRESS AI ===" && find server/src/modules/ai -type f | sort && echo && echo "=== NEST AI ===" && find server_…
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/ai && wc -l signals/*.js services/*.js validators/*.js handlers/*.js ai.routes.js prompts/*.js | sort -n
+grep -h "^import" signals/*.js services/*.js prompts/*.js validators/*.js | sed 's/.*from //' | tr -d "';" | sort | uniq -c | sort -rn
+cd /Users/shukrullo/Desktop/lc-total/server_nest/src && echo "=== common/constants ===" && ls common/constants/ && echo "=== common/utils ===" && ls common/util…
+cd /Users/shukrullo/Desktop/lc-total && ls server_nest/src/common/entitlements/ && echo "---- express entitlements exports ----" && grep -n "^export" server/src…
+echo "=== ai.routes.js ===" && cat server/src/modules/ai/ai.routes.js
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/ai/handlers && for f in *.js; do echo "════ $f ════"; cat "$f"; done
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/ai && for f in signals/*.js services/*.js; do echo "── $f"; grep -n "^import\|^} from\|^ .*,$" "$f" | gr…
+sed -n '1,90p' signals/student.signal.js
+cd /Users/shukrullo/Desktop/lc-total && grep -n "^export" server_nest/src/common/als/branch-context.ts && echo "=== calendar ===" && grep -n "^export" server_ne…
+echo "=== branchGroupMatchStage in nest? ===" && grep -rn "branchGroupMatchStage\|branchGroupFilter" server_nest/src/common/als/branch-context.ts && echo "=== e…
+echo "=== nest branchGroup* ===" && grep -rn "branchGroup" server_nest/src/ | head -10; echo "=== express branchGroupMatchStage ===" && sed -n '/branchGroupMatc…
+sed -n '350,400p' server_nest/src/common/rbac/branch-access.service.ts; echo "=== express calendar exports ==="; grep -n "^export" server/src/constants/calendar…
+sed -n '1,60p' server/src/constants/calendar.js && echo "=== nest ai-usage.ts ===" && cat server_nest/src/common/utils/ai-usage.ts && echo "=== express constant…
+cd /Users/shukrullo/Desktop/lc-total/server_nest/src && python3 - <<'PYEOF' import io p='common/constants/calendar.ts' s=open(p,encoding='utf-8').read() add = '…
+python3 - <<'PYEOF' p='common/rbac/branch-access.service.ts' s=open(p,encoding='utf-8').read() anchor = """ async branchGroupFilter(field = 'group'): Promise<Re…
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/ai && for f in signals/*.js services/*.js; do echo -n "$f: "; grep -o "branchGroupMatchStage\|branchUser…
+cat > /tmp/aiport.py <<'PYEOF' """ AI MODULINI Express (JS) → NestJS (TS) GA KO'CHIRUVCHI MEXANIK VOSITA. ⚠ NEGA MEXANIK, QO'LDA EMAS: AI dvigateli ~11 000 qato…
+cd /Users/shukrullo/Desktop/lc-total && cat > /tmp/ai_signals.json <<'PYEOF' [ { "src": "server/src/modules/ai/signals/student.signal.js", "dst": "server_nest/s…
+head -30 server_nest/src/modules/ai/signals/health.signal.ts && echo "..........." && sed -n '1,12p' server/src/modules/ai/signals/health.signal.js
+grep -n "^export const\|^const" server/src/modules/ai/signals/pulse.signal.js && echo "=== finance ===" && grep -n "^export const\|^const" server/src/modules/ai…
+python3 - <<'PYEOF' p='/tmp/aiport.py' s=open(p,encoding='utf-8').read() s=s.replace(""" names = {mm['name'] for mm in methods}""", """ keep = set(cfg.get('keep…
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/ai/signals && sed -n '14,50p' pulse.signal.js && echo "=== finance rawBranchClause ===" && sed -n '30,60…
+cd /Users/shukrullo/Desktop/lc-total && python3 - <<'PYEOF' import json cfg = json.load(open('/tmp/ai_signals.json')) by = {c['class']: c for c in cfg} by['Stud…
+cd /Users/shukrullo/Desktop/lc-total/server_nest && npx tsc -p tsconfig.json --noEmit 2>&1 | head -40 && echo "--- total ---" && npx tsc -p tsconfig.json --noEm…
+# … yana 479 ta
+```
+
+**Natija**
+
+Now I'll add the missing shared constants/helpers to Nest.
+
+Now re-running with `keep` lists and proper cross-file symbol ownership.
+
+Now the stateful services. Starting with the leaf ones.
+
+Type-clean. Now verifying no business-logic drift crept in during the port.
+
+Now the controller and module.
+
+Now an AI parity test against both fresh builds.
+
+Now implementing the STORNO flow — first the journal layer in both stacks.
+
+Now the `reverseByRef` helper in both stacks' financial-transaction layer.
+
+Now adding `reverseByRef` to both stacks.
+
+Now wiring STORNO into the removal paths — starting with teacher salary.
+
+Now the staff payroll removal path in both stacks.
+
+Now the expense removal path.
+
+Now the deposit transaction removal path.
+
+Now a regression test for the STORNO flow, verifying journal balance in both stacks.
+
+Now writing the STORNO regression test using the same mirror fixture pattern.
+
+Fixing B26 and B27 in both stacks.
+
+Now B27 — budget branch scope.
+
+Now B28 — the duplicated non-operating entry-kind list.
+
+Now porting the seven AI jobs into Nest.
+
+All dependencies are present. Porting the remaining nine jobs.
+
+Now the last job — lesson reminders.
+
+Now the modules registering these jobs.
+
+Now writing the file-security test with mutation checks.
+
+Now the mutation tests for file security.
+
+Now the student payment void path, which loops over a batch.
+
+Now verifying the B38 fix didn't break the existing money suites.
+
+Porting the missing validator and user-limit guard into Nest.
+
+Now wiring the validator and the tariff user-limit into the Nest controller.
+
+I'll report where things stand while the full suite finishes.
+
+**Since the last summary — completed:**
+
+| Item | Result |
+|---|---|
+| **AI module** (15 routes, ~11.7k lines) | Migrated mechanically; verified b
+
+…(qisqartirildi)
+
+<sub>session `c0c7f284` · branch `migration/nestjs` · 509 ta qadam</sub>
+
+---
+
+## 2026-08-22 00:41 — <task-notification> <task-id>bnwn4avgw</task-id> <tool-use-id>toolu_01
+
+**So'rov**
+
+> <task-notification>
+> <task-id>bnwn4avgw</task-id>
+> <tool-use-id>toolu_016mFss5LhGArCzbEuNZbazu</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/c0c7f284-f3d2-4c84-a006-f780d3467980/tasks/bnwn4avgw.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for suite progress" completed (exit code 0)</summary>
+> </task-notification>
+
+**Buyruqlar (18)**
+
+```sh
+cat /tmp/gate/summary.txt | wc -l; grep "exit=1" /tmp/gate/summary.txt
+sleep 420; cat /tmp/gate/summary.txt | wc -l; grep "exit=1" /tmp/gate/summary.txt
+git log --oneline | head -12 && echo "--- o'zgargan fayllar (bu sessiya) ---" && git diff --stat 289395f~1 HEAD | tail -3
+cat /tmp/gate/summary.txt | wc -l; tail -5 /tmp/gate/summary.txt
+until grep -q "^DONE" /tmp/gate/summary.txt 2>/dev/null; do sleep 60; done; echo TUGADI; wc -l < /tmp/gate/summary.txt
+cat /tmp/gate/summary.txt | wc -l; tail -3 /tmp/gate/summary.txt
+ps aux | grep -c "[r]unall.sh"; ps aux | grep "[n]ode --env-file" | grep test | head -2
+sleep 200; cat /tmp/gate/summary.txt | wc -l; tail -2 /tmp/gate/summary.txt
+ls -la /tmp/gate/*.txt | tail -3; ps aux | grep "[n]ode --env-file" | head -2
+date; tail -1 /tmp/gate/summary.txt; grep -c "grades" /tmp/gate/summary.txt; tail -3 /tmp/gate/grades-parity.txt
+until grep -q "^DONE" /tmp/gate/summary.txt 2>/dev/null; do sleep 45; done; echo TUGADI; grep -c "exit=" /tmp/gate/summary.txt
+sleep 500; grep -c "exit=" /tmp/gate/summary.txt; grep "exit=1" /tmp/gate/summary.txt
+grep -c "exit=" /tmp/gate/summary.txt; grep "exit=1" /tmp/gate/summary.txt; tail -2 /tmp/gate/summary.txt
+until grep -q "^DONE" /tmp/gate/summary.txt 2>/dev/null; do sleep 60; done; echo TUGADI; grep -c "exit=" /tmp/gate/summary.txt; grep "exit=1" /tmp/gate/summary.…
+sleep 900; grep -c "exit=" /tmp/gate/summary.txt; grep "exit=1" /tmp/gate/summary.txt || echo "(yiqilgan yo'q)"
+grep -c "exit=" /tmp/gate/summary.txt; tail -2 /tmp/gate/summary.txt
+date; ls -la /tmp/gate/*.txt | tail -2; ps aux | grep "[n]ode --env-file" | grep -v "dist/main" | head -2 || echo "(test jarayoni yo'q)"
+until grep -q "^DONE" /tmp/gate/summary.txt 2>/dev/null; do sleep 90; done; echo TUGADI; grep -c "exit=" /tmp/gate/summary.txt
+```
+
+**Natija**
+
+The gate run is at 29/66 with only the already-fixed `auth-parity` failing. I'll wait for it to finish before rebuilding (a rebuild would restart `:5001` mid-suite and poison the remaining results).
+
+Run is healthy and progressing (30/66, `grades-parity` 171/171). Waiting for completion.
+
+Still running (31/66). Waiting for the remaining suites.
+
+The runner is alive and mid-suite (`groups-write-parity` is one of the longest). I'll wait for the completion signal rather than polling further.
+
+<sub>session `c0c7f284` · branch `migration/nestjs` · 18 ta qadam</sub>
+
+---
