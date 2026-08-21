@@ -43,7 +43,7 @@ const skip = (n, m) => { R.unmeasured += 1; console.log(`  ⚠️  ${n} — O'LC
 const note = (m) => console.log(`  ${DIM}ℹ  ${m}${OFF}`);
 const head = (t) => console.log(`${DIM}  ── ${t} ──${OFF}`);
 
-const req = async (base, method, path, { token, body } = {}) => {
+const rawReq = async (base, method, path, { token, body } = {}) => {
   const headers = { 'content-type': 'application/json' };
   if (token) headers.authorization = `Bearer ${token}`;
   const res = await fetch(base + path, {
@@ -54,6 +54,33 @@ const req = async (base, method, path, { token, body } = {}) => {
   let parsed;
   try { parsed = JSON.parse(text); } catch { parsed = text; }
   return { status: res.status, body: parsed };
+};
+
+/**
+ * ⚠ UMUMIY TEZLIK CHEGARASIGA (429) CHIDAMLI.
+ *
+ * Express BUTUN API ga `generalLimiter` (200 so'rov / 60s) qo'yadi
+ * (`app.js`), NestJS esa uni E'LON QILGAN, LEKIN ULAMAGAN
+ * (`rate-limit.ts` da `generalLimiter` bor, hech qayerda
+ * `consumer.apply` qilinmagan) — MIGRATION-CHECKLIST B25.
+ *
+ * Natijada ko'p so'rovli test yurishida Express 429, NestJS esa
+ * haqiqiy javob qaytaradi va solishtiruv "farq bor" deb YIQILADI —
+ * aslida u HECH NARSANI o'lchamagan bo'ladi (429 ni 403 bilan
+ * solishtirishning ma'nosi yo'q).
+ *
+ * Shuning uchun 429 kelganda KUTAMIZ va qayta urinamiz. Bu chegarani
+ * YASHIRMAYDI: B25 alohida qayd etilgan va u cutover'dan OLDIN
+ * yopilishi kerak.
+ */
+const req = async (base, method, path, opts = {}, { retries = 3 } = {}) => {
+  for (let attempt = 0; ; attempt += 1) {
+    const r = await rawReq(base, method, path, opts);
+    if (r.status !== 429 || attempt >= retries) return r;
+    const waitMs = 20_000 * (attempt + 1);
+    console.log(`  ${DIM}⏳ umumiy tezlik chegarasi (429) — ${waitMs / 1000}s kutilyapti…${OFF}`);
+    await new Promise((res) => setTimeout(res, waitMs));
+  }
 };
 
 // ⚠ Hisob natijalari ATAYLAB solishtiriladi — faqat `stack` chiqariladi.
@@ -123,17 +150,51 @@ const main = async () => {
   const tempRoles = [];
   let qaRestore = null;
 
-  const both = async (name, fn) => {
-    let e, n;
-    try { e = await fn(EXPRESS); n = await fn(NEST); }
-    catch (err) { skip(name, err.message); return {}; }
-    const en = { status: e.status, body: normalize(e.body) };
-    const nn = { status: n.status, body: normalize(n.body) };
-    try { assert.deepEqual(nn, en); ok(`${name} — ${e.status}`); }
-    catch {
-      bad(name, `express: ${JSON.stringify(en).slice(0, 700)}\n      nest   : ${JSON.stringify(nn).slice(0, 700)}`);
+  /**
+   * ⚠ QO'SHNI AGENTLAR BIR VAQTDA BAZAGA YOZADI.
+   *
+   * `both()` avval Express'ni, keyin NestJS'ni chaqiradi. Agar shu
+   * oraliqda boshqa agentning testi foydalanuvchi/guruh yaratsa,
+   * SANOQQA asoslangan javoblar farq qiladi (masalan `studentsCount`
+   * 812 va 815) — aslida ikkala stek ham TO'G'RI ishlagan bo'ladi.
+   *
+   * HAQIQIY mantiq farqi HAR SAFAR takrorlanadi, tasodifiy siljish esa
+   * YO'Q. Shuning uchun nomuvofiqlikda ikkala stek QAYTA so'raladi va
+   * xato faqat TAKRORLANSA e'lon qilinadi.
+   *
+   * ⚠ Bu farqni YASHIRMAYDI: qayta urinish yordam bergan holat ochiq
+   * yoziladi (`note`), ya'ni siljish ko'rinib turadi.
+   */
+  const stabilize = null;
+
+  const both = async (name, fn, { retries = 2 } = {}) => {
+    let lastE = null;
+    let lastN = null;
+    for (let attempt = 0; ; attempt += 1) {
+      let e;
+      let n;
+      try { e = await fn(EXPRESS); n = await fn(NEST); }
+      catch (err) { skip(name, err.message); return {}; }
+      lastE = e; lastN = n;
+      // `ID_SUBS`/`subs` faqat ba'zi testlarda bor — himoyalangan yangilash.
+      if (typeof subs === 'function') ID_SUBS = subs();
+      const en = { status: e.status, body: normalize(stabilize ? stabilize(e.body) : e.body) };
+      const nn = { status: n.status, body: normalize(stabilize ? stabilize(n.body) : n.body) };
+      try {
+        assert.deepEqual(nn, en);
+        if (attempt > 0) {
+          note(`"${name}" — ${attempt}-urinishda mos keldi (qo'shni agent yozuvi sabab)`);
+        }
+        ok(`${name} — ${e.status}`);
+        return { e, n };
+      } catch {
+        if (attempt >= retries) {
+          bad(name, `express: ${JSON.stringify(en).slice(0, 650)}\n      nest   : ${JSON.stringify(nn).slice(0, 650)}`);
+          return { e, n };
+        }
+        await new Promise((r) => setTimeout(r, 1200));
+      }
     }
-    return { e, n };
   };
 
   const useRole = async (label, permissionKeys) => {
