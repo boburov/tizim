@@ -170,7 +170,7 @@ keraksiz deb e'lon qilinishi kerak. Ikkalasi ham MAHSULOT QARORI.
 | journal | `/api/journal` | 9 | ✅ 9/9 |
 | ledger | `/api/ledger` | 2 | ⬜ |
 | openingBalance | `/api/opening-balance` | 3 | ⬜ |
-| financeOps | `/api/finance-ops` | 8 | ⬜ |
+| financeOps | `/api/finance-ops` | 8 | ✅ 8/8 |
 | financeReport | `/api/finance-report` | 5 | ✅ 5/5 |
 
 ### FAZA 8 — MAOSH

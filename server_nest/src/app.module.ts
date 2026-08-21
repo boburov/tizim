@@ -31,6 +31,7 @@ import { JournalModule } from './modules/journal/journal.module.js';
 import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
 import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-approvals.module.js';
 import { FinanceModule } from './modules/finance/finance.module.js';
+import { FinanceOpsModule } from './modules/finance-ops/finance-ops.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -128,6 +129,8 @@ import { FinanceModule } from './modules/finance/finance.module.js';
     // yagona nuqtasi; chiqim/depozit/amallar modullari unga tayanadi.
     // Bu yerda ro'yxatga olinishi DI grafini ishga tushishda TEKSHIRADI.
     FinanceModule,
+    // Moliyaviy amallar — qaytarim / o'tkazma / egasi puli / byudjet.
+    FinanceOpsModule,
   ],
 })
 export class AppModule {}

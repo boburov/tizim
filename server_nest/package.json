@@ -28,6 +28,7 @@
     "test:expense-approvals-parity": "node test/expense-approvals-parity.test.mjs",
     "test:money-parity": "node test/money-parity.test.mjs",
     "test:fintx-parity": "node test/financial-transaction-parity.test.mjs",
+    "test:finance-ops-parity": "node test/finance-ops-parity.test.mjs",
     "test:rooms-parity": "node test/rooms-parity.test.mjs",
     "test:courses-parity": "node test/courses-parity.test.mjs",
     "test:edu-helpers": "node test/education-helpers-parity.test.mjs",
