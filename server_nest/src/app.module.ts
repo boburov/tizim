@@ -26,6 +26,7 @@ import { FeedbackModule } from './modules/feedback/feedback.module.js';
 import { HolidaysModule } from './modules/holidays/holidays.module.js';
 import { SearchModule } from './modules/search/search.module.js';
 import { ActivityHistoryModule } from './modules/activity-history/activity-history.module.js';
+import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module.js';
 import { JournalModule } from './modules/journal/journal.module.js';
 import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
 import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-approvals.module.js';
@@ -112,6 +113,8 @@ import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-appr
     // Global qidiruv (⌘K) va faoliyat tarixi — faqat o'qish.
     SearchModule,
     ActivityHistoryModule,
+    // Faoliyat loglari — faqat o'qish (yozuvni Express `auditLog` yaratadi).
+    ActivityLogsModule,
     // ── FAZA 7: MOLIYA ──
     // Jurnal BIRINCHI ko'chiriladi: qolgan hamma moliya moduli
     // (to'lov, depozit, chiqim, maosh, qaytarim) unga yozadi.

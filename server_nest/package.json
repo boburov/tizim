@@ -22,6 +22,7 @@
     "test:roles-parity": "node test/roles-parity.test.mjs",
     "test:users-parity": "node test/users-parity.test.mjs",
     "test:branches-parity": "node test/branches-parity.test.mjs",
+    "test:activity-logs-parity": "node test/activity-logs-parity.test.mjs",
     "test:journal-parity": "node test/journal-parity.test.mjs",
     "test:finance-report-parity": "node test/finance-report-parity.test.mjs",
     "test:expense-approvals-parity": "node test/expense-approvals-parity.test.mjs",
