@@ -729,6 +729,17 @@ export class DepositsService {
 
     const deposit = await this.getOrCreate(txn.studentId);
     await this.prisma.$transaction(async (tx) => {
+      // ⚠ SHARTLI-ATOMIK (B38): `findFirst` va yozuv ORASIDAGI poygada
+      // balans BIR NECHA MARTA o'zgarardi. Bekor qilishni EN BOSHIDA
+      // "band qilamiz"; yutmagan so'rov 404 oladi.
+      const claimed = await tx.depositTransaction.updateMany({
+        where: { id: txn.id, isDeleted: false },
+        data: {
+          isDeleted: true, deletedAt: new Date(), deletedBy: this.actorId(currentUser),
+        },
+      });
+      if (claimed.count === 0) throw new ApiError(404, 'Tranzaksiya topilmadi');
+
       if (txn.type === 'topup') {
         // Pul kelmagan deb hisoblaymiz — balansdan ayiramiz (agar
         // qoplanmagan bo'lsa). Qoplangan bo'lsa balans yetmaydi va yozuv
@@ -746,14 +757,6 @@ export class DepositsService {
         await this.applyBalanceDelta(
           deposit.id, txn.amount as any, { tx: tx as never });
       }
-      await tx.depositTransaction.update({
-        where: { id: txn.id },
-        data: {
-          isDeleted: true,
-          deletedAt: new Date(),
-          deletedBy: this.actorId(currentUser),
-        },
-      });
       await this.financialTx.reverseByRef(
         { refModel: 'DepositTransaction', refId: txn.id },
         currentUser,

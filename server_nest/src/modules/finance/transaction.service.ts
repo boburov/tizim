@@ -272,14 +272,25 @@ export class TransactionService {
 
       const removed: string[] = [];
       for (const t of batch) {
+        // ⚠ SHARTLI-ATOMIK (B38): `findFirst`/`findMany` va yozuv
+        // ORASIDA boshqa so'rov ham qatorni "bekor qilinmagan" deb
+        // o'qishi mumkin va `applyPaidDelta` BIR NECHA MARTA ishlab,
+        // `paidAmount` ni MANFIYGA tushirardi (o'lchangan: 10 ta
+        // parallel `DELETE` da maosh balansi −27 000 000 bo'lgan).
+        //
+        // Yutmagan so'rov shu bo'lakni JIMGINA o'tkazib yuboradi:
+        // batch'ning qolgan bo'laklari boshqa so'rovga tegishli
+        // bo'lishi mumkin va butun amalni yiqitish noto'g'ri bo'lardi.
         // eslint-disable-next-line no-await-in-loop
-        await tx.paymentTransaction.update({
-          where: { id: t.id },
+        const claimed = await tx.paymentTransaction.updateMany({
+          where: { id: t.id, isDeleted: false },
           data: {
             isDeleted: true, deletedAt: new Date(),
             deletedBy: this.actorId(currentUser),
           },
         });
+        if (claimed.count === 0) continue;
+
         // eslint-disable-next-line no-await-in-loop
         await this.payments.applyPaidDelta(t.paymentId, -Number(t.amount), { tx });
 

@@ -410,10 +410,14 @@ export class ExpenseService {
   async remove(id: string, currentUser?: Actor | null) {
     const doc = await this.loadForWrite(id);
     await this.prisma.$transaction(async (tx) => {
-      await tx.expense.update({
-        where: { id: doc.id },
+      // ⚠ SHARTLI-ATOMIK (B38): parallel `DELETE` da faqat BITTASI
+      // stornoni yozsin.
+      const claimed = await tx.expense.updateMany({
+        where: { id: doc.id, isDeleted: false },
         data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
       });
+      if (claimed.count === 0) throw new ApiError(404, 'Chiqim topilmadi');
+
       await this.financialTx.reverseByRef(
         { refModel: 'Expense', refId: doc.id },
         currentUser,

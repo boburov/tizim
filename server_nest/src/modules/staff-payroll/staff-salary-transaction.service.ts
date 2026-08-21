@@ -273,10 +273,16 @@ export class StaffSalaryTransactionService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.staffSalaryTransaction.update({
-        where: { id: doc.id },
+      // ⚠ SHARTLI-ATOMIK (B38): `findFirst` va yozuv ORASIDA boshqa
+      // so'rov ham qatorni "bekor qilinmagan" deb o'qishi mumkin va
+      // `applyPaidDelta` BIR NECHA MARTA ishlab, balansni MANFIYGA
+      // tushirardi. Faqat shartni YUTGAN so'rov davom etadi.
+      const claimed = await tx.staffSalaryTransaction.updateMany({
+        where: { id: doc.id, isDeleted: false },
         data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
       });
+      if (claimed.count === 0) throw new ApiError(404, "To'lov topilmadi");
+
       await this.payroll.applyPaidDelta(
         doc.payrollId, -(doc.amount as unknown as number), { tx: tx as never });
       await this.financialTx.reverseByRef(

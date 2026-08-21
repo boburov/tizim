@@ -1072,7 +1072,14 @@ export class StudentPaymentService {
           student: { select: SAFE_STUDENT_SELECT },
           group: { select: { id: true, name: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        // ⚠ IKKINCHI KALIT (`id`) ATAYLAB: `createdAt` YAGONA EMAS —
+        // oylik generatsiya bir necha planni AYNI millisekundda
+        // yaratadi. Yagona bo'lmagan saralash kaliti bilan Postgres
+        // tartibni KAFOLATLAMAYDI: bir xil so'rov har safar boshqa
+        // tartib berishi va sahifalashda qator TUSHIB QOLISHI yoki
+        // TAKRORLANISHI mumkin. O'LCHANGAN: paritet testi shu sababdan
+        // tasodifan qizil bo'lgan.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),

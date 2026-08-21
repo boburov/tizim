@@ -257,7 +257,18 @@ export const executeApproved = async (approval) => {
  * Ilgari jurnal TEGILMAY qolardi va bekor qilingan to'lov P&L da
  * ABADIY chiqim bo'lib turardi (kassa qoldig'i esa o'sha summa qadar
  * kam ko'rsatardi). Endi `reverseByRef` teskari yozuv qo'shadi — asl
- * yozuv O'ZGARMAS qoladi (`JOURNAL_IMMUTABLE`), audit izi to'liq.
+ * yozuv O'ZGARMAS qoladi (`JOURNAL_IMMUTABLE`), audit izi to'liq. *
+ * ── ⚠ IKKI MARTA BEKOR QILISH POYGASI (B38) ──
+ * Yuqoridagi `findFirst` va quyidagi yozuv ORASIDA boshqa so'rov ham
+ * o'sha qatorni "bekor qilinmagan" deb o'qishi mumkin. O'LCHANGAN:
+ * bitta to'lovga 10 ta parallel `DELETE` yuborilganda `paidAmount`
+ * −27 000 000 ga tushdi — ya'ni `applyPaidDelta` O'N MARTA ishladi.
+ *
+ * Himoya — SHARTLI-ATOMIK `updateMany` (`isDeleted: false` shartini
+ * YOZUV bilan bir amalda tekshiradi). Faqat SHU shart bajarilgan
+ * so'rov davom etadi; qolganlari 404 oladi. Jurnal stornosi
+ * `postingKey` bilan allaqachon idempotent edi — buzilgan joyi
+ * BALANS edi.
  */
 export const remove = async (id, currentUser) => {
   // FILIAL: boshqa filial to'lovini bekor qilib bo'lmaydi (SalaryTransaction'da
@@ -268,10 +279,13 @@ export const remove = async (id, currentUser) => {
   if (!trx) throw new ApiError(404, "Tranzaksiya topilmadi");
 
   await runFinanceTxn(async (tx) => {
-    await tx.salaryTransaction.update({
-      where: { id: trx.id },
+    const claimed = await tx.salaryTransaction.updateMany({
+      where: { id: trx.id, isDeleted: false },
       data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
     });
+    // Boshqa so'rov allaqachon bekor qilgan — BALANSGA TEGMAYMIZ.
+    if (claimed.count === 0) throw new ApiError(404, "Tranzaksiya topilmadi");
+
     await teacherSalaryService.applyPaidDelta(trx.salaryId, -trx.amount, { tx });
     await financialTx.reverseByRef(
       { refModel: "SalaryTransaction", refId: trx.id },

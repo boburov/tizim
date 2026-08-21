@@ -384,10 +384,15 @@ export const update = async (id, body, currentUser) => {
 export const remove = async (id, currentUser) => {
   const doc = await loadForWrite(id);
   await runFinanceTxn(async (tx) => {
-    await tx.expense.update({
-      where: { id: doc.id },
+    // ⚠ SHARTLI-ATOMIK (B38): parallel `DELETE` da faqat BITTASI
+    // stornoni yozsin. (Jurnal `postingKey` bilan idempotent, lekin
+    // ortiqcha ish va audit shovqinini ham oldini olamiz.)
+    const claimed = await tx.expense.updateMany({
+      where: { id: doc.id, isDeleted: false },
       data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
     });
+    if (claimed.count === 0) throw new ApiError(404, "Chiqim topilmadi");
+
     await financialTx.reverseByRef(
       { refModel: "Expense", refId: doc.id },
       currentUser,

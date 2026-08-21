@@ -305,12 +305,15 @@ export class SalaryTransactionService {
     if (!trx) throw new ApiError(404, 'Tranzaksiya topilmadi');
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.salaryTransaction.update({
-        where: { id: trx.id },
+      const claimed = await tx.salaryTransaction.updateMany({
+        where: { id: trx.id, isDeleted: false },
         data: {
           isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser),
         },
       });
+      // Boshqa so'rov allaqachon bekor qilgan — BALANSGA TEGMAYMIZ.
+      if (claimed.count === 0) throw new ApiError(404, 'Tranzaksiya topilmadi');
+
       await this.salaries.applyPaidDelta(trx.salaryId, -Number(trx.amount), {
         tx: tx as never,
       });

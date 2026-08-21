@@ -599,6 +599,15 @@ export const removeDepositTxn = async (id, currentUser) => {
   // HAQIQATAN qaytdi", storno esa "operatsiya BO'LMAGAN".
   const deposit = await getOrCreate(txn.studentId);
   await runFinanceTxn(async (tx) => {
+    // ⚠ SHARTLI-ATOMIK (B38): `findFirst` va yozuv ORASIDAGI poygada
+    // balans BIR NECHA MARTA o'zgarardi. Bekor qilishni EN BOSHIDA
+    // "band qilamiz"; yutmagan so'rov 404 oladi va balansga TEGMAYDI.
+    const claimed = await tx.depositTransaction.updateMany({
+      where: { id: txn.id, isDeleted: false },
+      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+    });
+    if (claimed.count === 0) throw new ApiError(404, "Tranzaksiya topilmadi");
+
     if (txn.type === "topup") {
       // Pul kelmagan deb hisoblaymiz - balansdan ayiramiz (agar qoplanmagan bo'lsa).
       const balUpd = await applyBalanceDelta(deposit.id, -txn.amount, { tx });
@@ -609,10 +618,6 @@ export const removeDepositTxn = async (id, currentUser) => {
       // withdraw bekor - pul qaytib keldi.
       await applyBalanceDelta(deposit.id, txn.amount, { tx });
     }
-    await tx.depositTransaction.update({
-      where: { id: txn.id },
-      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
-    });
     await financialTx.reverseByRef(
       { refModel: "DepositTransaction", refId: txn.id },
       currentUser,
