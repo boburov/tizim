@@ -1,6 +1,10 @@
-import { collectCourseSignals } from "../signals/course.signal.js";
-import { loadGroups } from "../signals/group.signal.js";
-import { demandByDirection } from "../signals/lead.signal.js";
+import { Injectable } from '@nestjs/common';
+import { CourseSignalService } from './signals/course.signal.js';
+import { GroupSignalService } from './signals/group.signal.js';
+import { LeadSignalService } from './signals/lead.signal.js';
+import { InsightWriterService } from './insight-writer.service.js';
+import { AiConfigService } from './ai-config.service.js';
+
 import {
   buildFactors,
   weightedScore,
@@ -8,36 +12,16 @@ import {
   sampleConfidence,
   norm,
   readMap,
-} from "../scoring/common.scoring.js";
-import { DEFAULT_THRESHOLDS } from "../../../constants/aiDefaults.js";
+} from "./scoring/common.scoring.js";
+import { DEFAULT_THRESHOLDS } from "../../common/constants/ai.js";
 import { narrate } from "./narration.service.js";
-import {
-  buildInsight,
-  closeStale,
-  mkStats,
-  writeIfConfident,
-  fmtMoney,
-} from "./insightWriter.service.js";
-import { resolveConfig } from "./aiConfig.service.js";
+import { buildInsight, mkStats, fmtMoney } from './insight-writer.service.js';
 
-// KURS DETEKTORLARI:
-//   1. course_attendance_drop - kursda davomat pasaydi (xavf)
-//   2. course_demand          - talab yuqori, joy yo'q → guruh ochish (imkoniyat)
-//   3. course_marketing       - kurs yaxshi ishlaydi, lekin lid kam (imkoniyat)
-//
-// Bu detektor "yana bitta IELTS kechki guruhi ochilsinmi?" va "CEFR uchun
-// marketingni oshirish kerakmi?" degan savollarga javob beradi. Ikkalasi
-// ham Course modeli va Course.leadDirection bog'lanishi tufayli mumkin -
-// ular bo'lmasa savol umuman hisoblanmasdi.
-//
-// "Kursi belgilanmagan" guruhlar bucket'i ATAYLAB o'tkazib yuboriladi:
-// u kurs emas, migratsiya qoldig'i. Unga tavsiya berish ("Kursi
-// belgilanmagan kursiga yana guruh ochingiz") ma'nosiz bo'lardi.
-
+/** KURS INSIGHT'LARI — `services/courseInsight.service.js` ning ko'chirmasi. */
 const COURSE_KINDS = ["course_attendance_drop", "course_demand", "course_marketing"];
 
 /** DETEKTOR 1: kursda davomat pasayishi. */
-const detectAttendanceDrop = ({ course, sig, thresholds }) => {
+const detectAttendanceDrop = ({ course, sig, thresholds }: any) => {
   const { attendance, enrollment, revenue } = sig;
   if (attendance.recentRate == null || attendance.priorRate == null) return null;
   // 8% dan kam nisbiy pasayish - normal tebranish.
@@ -144,7 +128,7 @@ const detectAttendanceDrop = ({ course, sig, thresholds }) => {
  * Aynan shu ikki shartning kesishmasi "yana guruh ochish" qarorini
  * asoslaydi.
  */
-const detectDemand = ({ course, sig, demand, medianGroupSize, thresholds }) => {
+const detectDemand = ({ course, sig, demand, medianGroupSize, thresholds }: any) => {
   if (!demand || demand.open < 3) return null;
   const { enrollment } = sig;
   if (enrollment.groups === 0) return null;
@@ -255,7 +239,7 @@ const detectDemand = ({ course, sig, demand, medianGroupSize, thresholds }) => {
  * Teskari holatni (lid ko'p, mahsulot yomon) marketing bilan hal qilish
  * pulni yo'qotish bo'lardi, shuning uchun sifat sharti MAJBURIY.
  */
-const detectMarketing = ({ course, sig, demand, medianGroupSize, thresholds }) => {
+const detectMarketing = ({ course, sig, demand, medianGroupSize, thresholds }: any) => {
   const { attendance, enrollment, revenue } = sig;
   // Sifat sharti: davomat yaxshi va ketish past.
   if (attendance.recentRate == null || attendance.recentRate < 0.8) return null;
@@ -376,25 +360,37 @@ const detectMarketing = ({ course, sig, demand, medianGroupSize, thresholds }) =
   };
 };
 
-/**
- * Bitta filial uchun kurs insight'larini qayta hisoblaydi.
- *
- * @param {string} branchId
- * @param {Array} groups - guruh detektori allaqachon yuklagan ro'yxat
- *   (qayta o'qishdan qochish uchun). Berilmasa o'zi yuklaydi.
- * @param {number} medianGroupSize - filial medianasi (guruh detektoridan)
- */
-export const recomputeCourseInsights = async (
-  branchId,
+export { COURSE_KINDS };
+
+@Injectable()
+export class CourseInsightService {
+  constructor(
+    private readonly courses: CourseSignalService,
+    private readonly groups: GroupSignalService,
+    private readonly leads: LeadSignalService,
+    private readonly writer: InsightWriterService,
+    private readonly aiConfig: AiConfigService,
+  ) {}
+
+  /**
+   * Bitta filial uchun kurs insight'larini qayta hisoblaydi.
+   *
+   * @param {string} branchId
+   * @param {Array} groups - guruh detektori allaqachon yuklagan ro'yxat
+   *   (qayta o'qishdan qochish uchun). Berilmasa o'zi yuklaydi.
+   * @param {number} medianGroupSize - filial medianasi (guruh detektoridan)
+   */
+  async recomputeCourseInsights(
+  branchId: any,
   now = new Date(),
   { groups = null, medianGroupSize = 0 } = {},
-) => {
-  const config = await resolveConfig(branchId);
+) {
+  const config = await this.aiConfig.resolveConfig(branchId);
   const thresholds = readMap(config.thresholds, DEFAULT_THRESHOLDS);
 
-  const groupList = groups || (await loadGroups(branchId));
+  const groupList = groups || (await this.groups.loadGroups(branchId));
 
-  const stats = {
+  const stats: any = {
     scanned: 0,
     attendanceDrop: mkStats(),
     demand: mkStats(),
@@ -403,17 +399,17 @@ export const recomputeCourseInsights = async (
   if (!groupList.length) return stats;
 
   const [{ signals }, demandRows] = await Promise.all([
-    collectCourseSignals(groupList, now),
-    demandByDirection(now),
+    this.courses.collectCourseSignals(groupList, now),
+    this.leads.demandByDirection(now),
   ]);
 
   // Yo'nalish → kurs bog'lanishi orqali talab ma'lumotini kursga ulaymiz.
   const demandByCourse = new Map();
-  for (const d of demandRows) {
+  for (const d of (demandRows) as any[]) {
     if (d.course) demandByCourse.set(String(d.course.id ?? d.course._id), d);
   }
 
-  const stillOpen = {
+  const stillOpen: any = {
     course_attendance_drop: new Set(),
     course_demand: new Set(),
     course_marketing: new Set(),
@@ -436,7 +432,7 @@ export const recomputeCourseInsights = async (
 
     for (const { stat, found } of candidates) {
       if (!found) continue;
-      await writeIfConfident({
+      await this.writer.writeIfConfident({
         candidate: buildInsight({ branchId, now, ...found }),
         confidenceFloor: config.confidenceFloor,
         stats: stats[stat],
@@ -446,7 +442,7 @@ export const recomputeCourseInsights = async (
   }
 
   for (const kind of COURSE_KINDS) {
-    const closed = await closeStale(branchId, [kind], stillOpen[kind], now);
+    const closed = await this.writer.closeStale(branchId, [kind], stillOpen[kind], now);
     const statKey =
       kind === "course_attendance_drop"
         ? "attendanceDrop"
@@ -457,6 +453,5 @@ export const recomputeCourseInsights = async (
   }
 
   return stats;
-};
-
-export { COURSE_KINDS };
+}
+}

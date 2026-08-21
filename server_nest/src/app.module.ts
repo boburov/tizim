@@ -55,6 +55,7 @@ import { LessonCancellationsModule } from './modules/lesson-cancellations/lesson
 import { StudentFreezeModule } from './modules/student-freeze/student-freeze.module.js';
 import { ExportsModule } from './modules/exports/exports.module.js';
 import { ImportsModule } from './modules/imports/imports.module.js';
+import { AiModule } from './modules/ai/ai.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -202,6 +203,9 @@ import { ImportsModule } from './modules/imports/imports.module.js';
     // Excel import (11/11) — ruxsat YOZISH huquqiga bog'langan
     // (eksportdan eng muhim farqi).
     ImportsModule,
+    // AI maslahatchi (15/15) — tarif darvozasi MODUL ichida
+    // (`AiFeatureMiddleware`), `AuthMiddleware` dan OLDIN.
+    AiModule,
   ],
 })
 export class AppModule {}

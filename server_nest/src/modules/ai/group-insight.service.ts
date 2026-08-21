@@ -1,5 +1,10 @@
-import prisma from "../../../config/prisma.js";
-import { collectGroupSignals, DAY_LABELS } from "../signals/group.signal.js";
+import { Inject, Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { GroupSignalService } from './signals/group.signal.js';
+import { InsightWriterService } from './insight-writer.service.js';
+import { AiConfigService } from './ai-config.service.js';
+
+import { DAY_LABELS } from './signals/group.signal.js';
 import {
   buildFactors,
   weightedScore,
@@ -7,20 +12,15 @@ import {
   sampleConfidence,
   norm,
   readMap,
-} from "../scoring/common.scoring.js";
-import { DEFAULT_THRESHOLDS } from "../../../constants/aiDefaults.js";
+} from "./scoring/common.scoring.js";
+import { DEFAULT_THRESHOLDS } from "../../common/constants/ai.js";
 import { narrate } from "./narration.service.js";
-import {
-  buildInsight,
-  closeStale,
-  mkStats,
-  writeIfConfident,
-} from "./insightWriter.service.js";
-import { resolveConfig } from "./aiConfig.service.js";
+import { buildInsight, mkStats } from './insight-writer.service.js';
 
+/** GURUH INSIGHT'LARI — `services/groupInsight.service.js` ning ko'chirmasi. */
 const GROUP_KINDS = ["group_underfilled", "group_complaints", "slot_opportunity"];
 
-const detectUnderfilled = ({ group, size, median, sampleSize, thresholds }) => {
+const detectUnderfilled = ({ group, size, median, sampleSize, thresholds }: any) => {
   if (sampleSize < 4 || median <= 0) return null;
   if (size.active === 0) return null;
 
@@ -112,7 +112,7 @@ const detectUnderfilled = ({ group, size, median, sampleSize, thresholds }) => {
   };
 };
 
-const detectComplaints = ({ group, complaints, thresholds }) => {
+const detectComplaints = ({ group, complaints, thresholds }: any) => {
   if (!complaints || complaints.recent === 0) return null;
   if (complaints.recent < 2) return null;
   if (complaints.delta <= 0) return null;
@@ -197,7 +197,7 @@ const detectComplaints = ({ group, complaints, thresholds }) => {
   };
 };
 
-const detectSlotOpportunity = ({ slots, thresholds, branchName }) => {
+const detectSlotOpportunity = ({ slots, thresholds, branchName }: any) => {
   if (!slots?.busiest || slots.busiest.sessions < 3) return null;
   if (!slots.quiet.length) return null;
 
@@ -244,14 +244,14 @@ const detectSlotOpportunity = ({ slots, thresholds, branchName }) => {
 
   const score = weightedScore(factors);
   const confidence = sampleConfidence({
-    observed: slots.days.reduce((a, d) => a + d.sessions, 0),
+    observed: slots.days.reduce((a: any,d: any) => a + d.sessions, 0),
     minSample: 5,
     fullSample: 30,
   });
 
   const quietList = slots.quiet
     .slice(0, 3)
-    .map((d) => `${d.label} (${d.sessions} dars)`)
+    .map((d: any) => `${d.label} (${d.sessions} dars)`)
     .join(", ");
 
   return {
@@ -270,8 +270,8 @@ const detectSlotOpportunity = ({ slots, thresholds, branchName }) => {
     sourceRefs: [
       {
         model: "Group",
-        ids: slots.busiest.groups.map((g) => g.groupId).slice(0, 20),
-        total: slots.days.reduce((a, d) => a + d.sessions, 0),
+        ids: slots.busiest.groups.map((g: any) => g.groupId).slice(0, 20),
+        total: slots.days.reduce((a: any,d: any) => a + d.sessions, 0),
         href: "/owner/groups",
       },
     ],
@@ -304,17 +304,28 @@ const detectSlotOpportunity = ({ slots, thresholds, branchName }) => {
   };
 };
 
-export const recomputeGroupInsights = async (branchId, now = new Date()) => {
-  const config = await resolveConfig(branchId);
+export { GROUP_KINDS, DAY_LABELS };
+
+@Injectable()
+export class GroupInsightService {
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    private readonly signals: GroupSignalService,
+    private readonly writer: InsightWriterService,
+    private readonly aiConfig: AiConfigService,
+  ) {}
+
+  async recomputeGroupInsights(branchId: any,now: any = new Date()) {
+  const config = await this.aiConfig.resolveConfig(branchId);
   const thresholds = readMap(config.thresholds, DEFAULT_THRESHOLDS);
 
-  const branch = await prisma.branch.findUnique({
+  const branch = await this.prisma.branch.findUnique({
     where: { id: branchId },
     select: { name: true },
   });
   const branchName = branch?.name || "Filial";
 
-  const signals = await collectGroupSignals(branchId, now);
+  const signals: any = await this.signals.collectGroupSignals(branchId, now);
   const stats = {
     scanned: signals.groups.length,
     underfilled: mkStats(),
@@ -325,7 +336,7 @@ export const recomputeGroupInsights = async (branchId, now = new Date()) => {
 
   const stillOpen = { group_underfilled: new Set(), group_complaints: new Set() };
 
-  for (const group of signals.groups) {
+  for (const group of (signals.groups) as any[]) {
     const gid = String(group.id ?? group._id);
     const size = signals.size.byGroup.get(gid) || {
       active: 0,
@@ -342,7 +353,7 @@ export const recomputeGroupInsights = async (branchId, now = new Date()) => {
       thresholds,
     });
     if (underfilled) {
-      await writeIfConfident({
+      await this.writer.writeIfConfident({
         candidate: buildInsight({ branchId, now, ...underfilled }),
         confidenceFloor: config.confidenceFloor,
         stats: stats.underfilled,
@@ -356,7 +367,7 @@ export const recomputeGroupInsights = async (branchId, now = new Date()) => {
       thresholds,
     });
     if (complaints) {
-      await writeIfConfident({
+      await this.writer.writeIfConfident({
         candidate: buildInsight({ branchId, now, ...complaints }),
         confidenceFloor: config.confidenceFloor,
         stats: stats.complaints,
@@ -367,23 +378,23 @@ export const recomputeGroupInsights = async (branchId, now = new Date()) => {
 
   const slotFound = detectSlotOpportunity({ slots: signals.slots, thresholds, branchName });
   if (slotFound) {
-    await writeIfConfident({
+    await this.writer.writeIfConfident({
       candidate: buildInsight({ branchId, subjectId: branchId, now, ...slotFound }),
       confidenceFloor: config.confidenceFloor,
       stats: stats.slots,
       stillOpen: null,
     });
   } else {
-    stats.slots.closed = await closeStale(branchId, ["slot_opportunity"], new Set(), now);
+    stats.slots.closed = await this.writer.closeStale(branchId, ["slot_opportunity"], new Set(), now);
   }
 
-  stats.underfilled.closed = await closeStale(
+  stats.underfilled.closed = await this.writer.closeStale(
     branchId,
     ["group_underfilled"],
     stillOpen.group_underfilled,
     now,
   );
-  stats.complaints.closed = await closeStale(
+  stats.complaints.closed = await this.writer.closeStale(
     branchId,
     ["group_complaints"],
     stillOpen.group_complaints,
@@ -391,6 +402,5 @@ export const recomputeGroupInsights = async (branchId, now = new Date()) => {
   );
 
   return { ...stats, signals };
-};
-
-export { GROUP_KINDS, DAY_LABELS };
+}
+}

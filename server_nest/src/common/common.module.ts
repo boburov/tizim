@@ -18,6 +18,7 @@ import {
   StudentAccessGuard,
 } from './guards/attendance-scope.guard.js';
 import { AuthMiddleware } from '../middleware/auth.middleware.js';
+import { EntitlementsService } from './entitlements/entitlements.service.js';
 
 /**
  * Umumiy infratuzilma — RBAC servislari, qo'riqchilar va auth middleware.
@@ -60,6 +61,14 @@ import { AuthMiddleware } from '../middleware/auth.middleware.js';
     GroupAccessGuard,
     StudentAccessGuard,
     AuthMiddleware,
+    // ⚠ TARIF KESHI SHU YERDA — GLOBAL, YAGONA NUSXA.
+    //
+    // Ilgari u `JobsModule` da edi. AI moduli ham unga tayangach IKKINCHI
+    // NUSXA paydo bo'lardi: heartbeat javobi BIRINCHI nusxaga yozilardi,
+    // paywall esa IKKINCHISINI o'qirdi — u esa har doim bo'sh, ya'ni
+    // `isFeatureEnabled` har doim "ha" (ochiq yiqilish). Natijada tarif
+    // darvozasi JIMGINA o'chib qolardi va buni hech narsa ko'rsatmasdi.
+    EntitlementsService,
   ],
   exports: [
     PermissionService,
@@ -79,6 +88,7 @@ import { AuthMiddleware } from '../middleware/auth.middleware.js';
     GroupAccessGuard,
     StudentAccessGuard,
     AuthMiddleware,
+    EntitlementsService,
   ],
 })
 export class CommonModule {}

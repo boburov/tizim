@@ -9,7 +9,6 @@ import { ConfigService } from '@nestjs/config';
 import { SchedulerService } from './scheduler.service.js';
 import { TtlCleanupJob } from './system/ttl-cleanup.job.js';
 import { UsageHeartbeatJob } from './system/usage-heartbeat.job.js';
-import { EntitlementsService } from '../common/entitlements/entitlements.service.js';
 import type { AppConfig } from '../config/env.validation.js';
 import type { JobDefinition } from './job.types.js';
 
@@ -189,15 +188,18 @@ export class SystemJobsRegistrar implements OnModuleInit {
 @Module({
   providers: [
     SchedulerService,
-    EntitlementsService,
     TtlCleanupJob,
     UsageHeartbeatJob,
     JobsRegistry,
     SystemJobsRegistrar,
   ],
   // `SchedulerService` — `notifications`/`assignments` ko'chganda ularga
-  // kerak bo'ladi (`scheduler.now(...)`). `EntitlementsService` —
-  // `enforceLimit` middleware'iga.
-  exports: [SchedulerService, EntitlementsService, JobsRegistry],
+  // kerak bo'ladi (`scheduler.now(...)`).
+  //
+  // ⚠ `EntitlementsService` BU YERDAN OLIB TASHLANDI va `CommonModule`
+  // (`@Global`) ga ko'chdi: AI moduli ham unga tayanadi va ikkinchi
+  // nusxa paydo bo'lsa tarif darvozasi jimgina o'chib qolardi
+  // (heartbeat bir nusxaga yozib, paywall boshqasini o'qirdi).
+  exports: [SchedulerService, JobsRegistry],
 })
 export class JobsModule {}

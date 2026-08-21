@@ -393,6 +393,19 @@ export class BranchAccessService {
   }
 
   /**
+   * Yuqoridagining MASSIV shakli — `AND: [...]` ichiga to'g'ridan
+   * qo'yish uchun (`branchGroupMatchStage`, Express'dagi nom).
+   *
+   * ⚠ Ko'lam cheklanmaganda `[]` qaytaradi, `[{}]` EMAS: AI signal
+   * so'rovlari natijani `AND: stage` sifatida uzatadi va bo'sh massiv
+   * "filtr yo'q" degani.
+   */
+  async branchGroupMatchStage(field = 'group'): Promise<Record<string, unknown>[]> {
+    const f = await this.branchGroupFilter(field);
+    return Object.keys(f).length === 0 ? [] : [f];
+  }
+
+  /**
    * O'QUVCHI/FOYDALANUVCHI ORQALI filialga bog'langan modellar uchun filtr.
    *
    * Yuqoridagining egizagi, lekin BOSHQA yo'l bilan: yozuv guruhga
