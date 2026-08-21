@@ -50,7 +50,9 @@
     "probe:bot-auth": "node --env-file=../server/.env test/bot-auth-blocker.probe.mjs",
     "mint-token": "node --env-file=../server/.env test/mint-token.mjs",
     "test:rate-limit-parity": "node test/rate-limit-parity.test.mjs",
-    "test:schedule-jobs": "node test/schedule-jobs.test.mjs"
+    "test:leads-parity": "node test/leads-parity.test.mjs",
+    "test:schedule-jobs": "node test/schedule-jobs.test.mjs",
+    "test:deposits-parity": "node test/deposits-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"

@@ -140,7 +140,7 @@ keraksiz deb e'lon qilinishi kerak. Ikkalasi ham MAHSULOT QARORI.
 ### FAZA 4 — O'QUVCHILAR
 | Modul | Manzil | E | Holat |
 |---|---|---|---|
-| leads | `/api/leads` | 16 | ⬜ |
+| leads | `/api/leads` | 16 | 🟡 14/16 (`convert*` bloklangan) |
 | studentFreeze | `/api/student-freezes` | 3 | ⬜ |
 | activityHistory | `/api/activity-history` | 2 | ✅ 2/2 |
 | search | `/api/search` | 1 | ✅ 1/1 |

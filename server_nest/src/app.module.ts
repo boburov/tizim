@@ -29,6 +29,7 @@ import { FeedbackModule } from './modules/feedback/feedback.module.js';
 import { HolidaysModule } from './modules/holidays/holidays.module.js';
 import { SearchModule } from './modules/search/search.module.js';
 import { ActivityHistoryModule } from './modules/activity-history/activity-history.module.js';
+import { LeadsModule } from './modules/leads/leads.module.js';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module.js';
 import { JournalModule } from './modules/journal/journal.module.js';
 import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
@@ -123,6 +124,8 @@ import { ExpensesModule } from './modules/expenses/expenses.module.js';
     // Global qidiruv (⌘K) va faoliyat tarixi — faqat o'qish.
     SearchModule,
     ActivityHistoryModule,
+    // Lidlar (14/16) — `convert*` `groups.addStudent` ga tayanadi.
+    LeadsModule,
     // Faoliyat loglari — faqat o'qish (yozuvni Express `auditLog` yaratadi).
     ActivityLogsModule,
     // ── FAZA 7: MOLIYA ──
