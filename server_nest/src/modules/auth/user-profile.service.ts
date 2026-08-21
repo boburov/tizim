@@ -6,6 +6,8 @@ import { ROLES } from '../../common/constants/permissions.js';
 import { BOT_STATUS, botStatusOf } from '../../common/rbac/bot-status.js';
 import { PermissionService } from '../../common/rbac/permission.service.js';
 import { GroupsService } from '../groups/groups.service.js';
+import { AttendanceService } from '../attendance/attendance.service.js';
+import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
 
 /**
  * `helpers/userProfile.helper.js` — `/auth/me` javobidagi `profile`.
@@ -61,6 +63,8 @@ export class UserProfileService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
     private readonly groups: GroupsService,
+    private readonly attendance: AttendanceService,
+    private readonly freezes: StudentFreezeService,
   ) {}
 
   /**
@@ -107,13 +111,49 @@ export class UserProfileService {
     const botStatus = telegram?.status || BOT_STATUS.NOT_LINKED;
 
     if (user.role === ROLES.STUDENT) {
-      throw new ApiError(
-        501,
-        "O'quvchi profili NestJS'ga hali ko'chirilmagan (`attendance` " +
-          "moduli kerak: getStudentSummary). Express (5000-port) to'liq " +
-          'ishlaydi.',
-        { code: 'PROFILE_NOT_MIGRATED', details: { role: user.role } },
+      // ═══════════════════════════════════════════════════════════════
+      // ✅ O'QUVCHI SHOXI OCHILDI (ilgari 501 `PROFILE_NOT_MIGRATED`).
+      //
+      // To'rtta manba KERAK edi va endi TO'RTALASI HAM ko'chirilgan:
+      //   groups.findAllActiveForStudent    ✅
+      //   groups.findPendingRemovalNotice   ✅
+      //   attendance.getStudentSummary      ✅ (oxirgi bo'lib ko'chdi)
+      //   studentFreeze.getActiveFreeze     ✅
+      //
+      // ⚠ Express bu yerda DINAMIK `import()` ishlatadi ("circular
+      // dependency oldini olish"); NestJS'da modul grafi buni o'zi hal
+      // qiladi — `AttendanceModule` `AuthModule` ni import QILMAYDI,
+      // ya'ni aylana yo'q.
+      // ═══════════════════════════════════════════════════════════════
+      const activeGroups = await this.groups.findAllActiveForStudent(String(user.id));
+
+      // Guruhdan chiqarilgan bo'lsa — login qilganda BIR MARTA modal.
+      const removalNotice = await this.groups.findPendingRemovalNotice(String(user.id));
+
+      // ⚠ ORALIQ AYNAN EXPRESS'DAGIDEK: joriy oyning birinchi kunidan
+      // oxirgi kunining 23:59:59.999 gacha. Chegarani "soddalashtirish"
+      // oxirgi kundagi davomatni tushirib qoldirardi.
+      const now = new Date();
+      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const monthEnd = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999),
       );
+      const attendanceSummary = await this.attendance.getStudentSummary(
+        String(user.id), { fromDate: monthStart, toDate: monthEnd },
+      );
+
+      const activeFreeze = await this.freezes.getActiveFreeze(String(user.id));
+
+      return {
+        ...base,
+        activeGroups,
+        attendanceSummary,
+        removalNotice,
+        isFrozen: !!activeFreeze,
+        activeFreeze: activeFreeze || null,
+        telegram,
+        botStatus,
+      };
     }
 
     if (user.role === ROLES.TEACHER) {

@@ -5,6 +5,10 @@ import { UserProfileService } from './user-profile.service.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
 import { authLimiter } from '../../common/middleware/rate-limit.js';
 import { GroupsModule } from '../groups/groups.module.js';
+import { AttendanceModule } from '../attendance/attendance.module.js';
+import { StudentFreezeModule } from '../student-freeze/student-freeze.module.js';
+import { TeacherSalaryModule } from '../teacher-salary/teacher-salary.module.js';
+import { OpeningBalanceModule } from '../opening-balance/opening-balance.module.js';
 
 /**
  * ⚠ MIDDLEWARE FAQAT HIMOYALANGAN MARSHRUTLARGA ULANADI.
@@ -21,7 +25,20 @@ import { GroupsModule } from '../groups/groups.module.js';
   // QILMAYDI (u faqat `AuthMiddleware` ni ishlatadi, u esa global
   // `CommonModule` dan keladi). Guruhlar moduli o'z izohida aynan shu
   // iste'molchini oldindan e'lon qilgan.
-  imports: [GroupsModule],
+  imports: [
+    GroupsModule,
+    // ⚠ O'QUVCHI PROFILI uchun: joriy oy davomat xulosasi va muzlatish
+    // holati. AYLANA YO'Q — `AttendanceModule` ham,
+    // `StudentFreezeModule` ham `AuthModule` ni import QILMAYDI
+    // (Express bu joyda dinamik `import()` ishlatadi).
+    AttendanceModule,
+    StudentFreezeModule,
+    // ⚠ `registerUser` ning IXTIYORIY yon ta'sirlari: maosh stavkasi
+    // (`setCompensation`) va boshlang'ich qoldiq (`create`). AYLANA
+    // YO'Q — ularning birortasi `AuthModule` ni import qilmaydi.
+    TeacherSalaryModule,
+    OpeningBalanceModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, UserProfileService],
   // `UserProfileService` — `users` moduliga ham kerak (`GET /:id`,

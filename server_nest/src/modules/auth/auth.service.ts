@@ -21,6 +21,8 @@ import {
 import { getActiveBranchId } from '../../common/als/branch-context.js';
 import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
 import { UserProfileService } from './user-profile.service.js';
+import { TeacherCompensationService } from '../teacher-salary/teacher-compensation.service.js';
+import { OpeningBalanceService } from '../opening-balance/opening-balance.service.js';
 import type { AppConfig } from '../../config/env.validation.js';
 import type { ResolvedRole } from '../../common/rbac/permission.service.js';
 
@@ -36,6 +38,11 @@ export class AuthService {
     private readonly permissions: PermissionService,
     private readonly branchAccess: BranchAccessService,
     private readonly profiles: UserProfileService,
+    // ⚠ IXTIYORIY YON TA'SIRLAR (`registerUser`): maosh stavkasi va
+    // boshlang'ich qoldiq. Ikkalasi ham O'Z modulida qoladi — bu yerda
+    // MANTIQ NUSXALANMAYDI.
+    private readonly compensations: TeacherCompensationService,
+    private readonly openingBalances: OpeningBalanceService,
     config: ConfigService<AppConfig, true>,
   ) {
     this.jwt = {
@@ -375,35 +382,16 @@ export class AuthService {
     } = {},
   ) {
     // ═══════════════════════════════════════════════════════════════════
-    // ⚠⚠ KO'CHIRILMAGAN YON TA'SIRLAR — JIMGINA TASHLAB KETILMAYDI ⚠⚠
+    // ✅ IXTIYORIY YON TA'SIRLAR ENDI BAJARILADI (ilgari 501
+    // `REGISTER_SIDE_EFFECTS_NOT_MIGRATED`).
     //
-    // Express `registerUser` ikkita IXTIYORIY yon ta'sir bajaradi:
-    //   • `compensation`   → teacherCompensation.setCompensation
-    //   • `openingBalance` → openingBalance.create
+    //   • `compensation`   → `TeacherCompensationService.setCompensation`
+    //   • `openingBalance` → `OpeningBalanceService.create`
     //
-    // Ikkalasi ham ko'chirilmagan MOLIYA zanjiriga tayanadi
-    // (teacherSalary 1151 qator; deposits + staffPayroll). Bu Faza F ishi.
-    //
-    // Ularni JIMGINA o'tkazib yuborish PUL MA'LUMOTINI YO'QOTARDI —
-    // aynan Express kodi ehtiyot bo'ladigan holat (u xatoni
-    // `openingBalanceError` bo'lib javobga qaytaradi). Shuning uchun
-    // bu yerda OCHIQ rad etiladi.
+    // Ikkalasi ham moliya zanjiriga tayanadi va u ko'chirilgach shox
+    // ochildi. Ular metodning OXIRIDA, foydalanuvchi YARATILGANDAN
+    // KEYIN bajariladi — Express'dagi bilan AYNAN bir joyda.
     // ═══════════════════════════════════════════════════════════════════
-    if (body.compensation || body.openingBalance) {
-      throw new ApiError(
-        501,
-        "Maosh stavkasi va boshlang'ich qoldiq bilan xodim qo'shish " +
-          "NestJS'ga hali ko'chirilmagan (moliya moduli kerak). " +
-          'Express (5000-port) to\'liq ishlaydi.',
-        {
-          code: 'REGISTER_SIDE_EFFECTS_NOT_MIGRATED',
-          details: {
-            compensation: Boolean(body.compensation),
-            openingBalance: Boolean(body.openingBalance),
-          },
-        },
-      );
-    }
 
     const phone = body.phone ? normalizePhone(body.phone) : null;
     if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
@@ -462,6 +450,71 @@ export class AuthService {
     }
 
     const user = await this.prisma.user.create({ data: doc as never });
-    return this.sanitizeUser(user as never);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ISHGA OLISHDA MAOSH (ikki bosqichli formaning 2-qadami).
+    //
+    // ⚠ BEST-EFFORT: stavkadagi xato XODIM YARATILISHINI bekor QILMAYDI —
+    // u allaqachon saqlangan va bu yerda tranzaksiya YO'Q. Xato bo'lsa
+    // o'qituvchi "maoshi belgilanmagan" holatda qoladi va profil
+    // sahifasida ogohlantirish ko'rinadi (= "keyinroq belgilayman").
+    // ═══════════════════════════════════════════════════════════════════
+    if (body.role === ROLES.TEACHER && body.compensation) {
+      try {
+        await this.compensations.setCompensation(
+          {
+            ...body.compensation,
+            teacher: (user as { id: string }).id,
+            branchId: homeBranchId,
+            // ⚠ Stavka ISHGA OLINGAN kundan boshlanadi — aks holda
+            // oradagi kunlar stavkasiz qolib, maosh 0 chiqardi.
+            effectiveFrom: body.compensation.effectiveFrom || doc.hiredAt,
+          },
+          { _id: scope.userId || null },
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Ishga olishda maosh stavkasi belgilanmadi (${(user as { id: string }).id}) — ` +
+            `profil orqali kiritish kerak: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // BOSHLANG'ICH QOLDIQ — odam tizimga kirishidan OLDINGI qarzdorlik.
+    //
+    // ⚠ XATO ODAM YARATILISHINI BEKOR QILMAYDI (tranzaksiya yo'q), LEKIN
+    // PUL JIMGINA YO'QOLMASLIGI kerak — shuning uchun xato javobga
+    // `openingBalanceError` bo'lib qaytadi va owner uni
+    // `/api/opening-balance` orqali qayta kiritadi.
+    // ═══════════════════════════════════════════════════════════════════
+    const result: any = this.sanitizeUser(user as never);
+    if (body.openingBalance) {
+      try {
+        await this.openingBalances.create(
+          {
+            user: (user as { id: string }).id,
+            role: body.role,
+            amount: body.openingBalance,
+            branchId: homeBranchId,
+            // ⚠ Guruh HALI YO'Q: o'quvchi qarzi guruhga qo'shilishni
+            // KUTADI (`materializePendingForStudent`).
+            group: null,
+            joinedAt: (doc.enrolledAt as Date) || null,
+            note: body.openingBalanceNote || '',
+          },
+          { currentUser: { _id: scope.userId || null } },
+        );
+      } catch (err) {
+        this.logger.error(
+          `Boshlang'ich qoldiq yozilmadi (${(user as { id: string }).id}, ` +
+            `${body.openingBalance}) — qo'lda kiritish kerak: ${(err as Error).message}`,
+        );
+        result.openingBalanceError =
+          "Boshlang'ich qoldiq yozilmadi. Uni profil sahifasidan qayta kiriting.";
+      }
+    }
+
+    return result;
   }
 }

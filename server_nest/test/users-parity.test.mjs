@@ -325,15 +325,40 @@ const main = async () => {
   }
 
   if (student) {
-    // ⚠ KUTILGAN FARQ TORAYDI: ilgari o'quvchi HAM, o'qituvchi HAM 501
-    // edi. `groups` ko'chgach o'qituvchi ochildi (yuqorida o'lchandi),
-    // o'quvchi esa HAMON yopiq — `attendance.getStudentSummary` yo'q.
-    // Farq yo'qolgan kuni bu test yiqiladi va cheklov yopilgani ko'rinadi.
-    await expectDivergence(
-      "GET /users/:id (O'QUVCHI — `attendance` hali ko'chirilmagan)",
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ KUTILGAN FARQ YOPILDI.
+    //
+    // Ilgari o'quvchi HAM, o'qituvchi HAM 501 (`PROFILE_NOT_MIGRATED`)
+    // edi. `groups` ko'chgach o'qituvchi ochildi, `attendance` va
+    // `student-freeze` ko'chgach esa o'quvchi ham ochildi — o'shanda bu
+    // test AYNAN REJALASHTIRILGANIDEK yiqildi va e'tibor tortdi.
+    //
+    // ⚠ MUSBAT NAZORAT quyida: profil BO'SH bo'lsa `deepEqual` baribir
+    // yashil berardi, shuning uchun o'quvchiga XOS maydonlar
+    // (`activeGroups`, `attendanceSummary`, `isFrozen`) HAQIQATAN
+    // qaytganini ochiq talab qilamiz.
+    // ═══════════════════════════════════════════════════════════════
+    const stu = await both(
+      "GET /users/:id (O'QUVCHI — profil endi ikkala stekda ochiq)",
       (b) => req(b, 'GET', `/api/users/${student.id}`, { token: ownerToken }),
-      { expressStatus: 200, nestStatus: 501, nestCode: 'PROFILE_NOT_MIGRATED' },
     );
+    {
+      const d = stu?.e?.body?.data;
+      const missing = ['activeGroups', 'attendanceSummary', 'isFrozen']
+        .filter((k) => d?.[k] === undefined);
+      if (!d) {
+        skip("o'quvchi profili musbat nazorati", "javob tanasi yo'q");
+      } else if (missing.length) {
+        bad(
+          "o'quvchi profili TO'LIQ EMAS",
+          `yetishmayotgan maydonlar: ${missing.join(', ')} — ` +
+            'bo\'sh profilning tengligi hech nimani isbotlamaydi',
+        );
+      } else {
+        ok("MUSBAT NAZORAT: o'quvchi profilida activeGroups + " +
+          'attendanceSummary + isFrozen bor');
+      }
+    }
     await both("GET /users/:id/group-history (o'quvchi)", (b) =>
       req(b, 'GET', `/api/users/${student.id}/group-history?limit=5`, { token: ownerToken }));
   } else {

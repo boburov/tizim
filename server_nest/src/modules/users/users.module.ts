@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, OnModuleInit } from '@nestjs/common';
 import {
   UsersController,
   UserBranchesController,
@@ -12,6 +12,10 @@ import { StaffPayrollModule } from '../staff-payroll/staff-payroll.module.js';
 import { ExpenseApprovalsModule } from '../expense-approvals/expense-approvals.module.js';
 import { ArchiveReasonsModule } from '../archive-reasons/archive-reasons.module.js';
 import { SystemNotificationsModule } from '../system-notifications/system-notifications.module.js';
+import { TeacherSalaryModule } from '../teacher-salary/teacher-salary.module.js';
+import { OpeningBalanceModule } from '../opening-balance/opening-balance.module.js';
+import { ApprovalExecutorRegistry } from '../../common/approvals/approval-executor.registry.js';
+import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 
 /**
  * ⚠ KONTROLLER TARTIBI MUHIM: `UserBranchesController` (`PATCH
@@ -40,6 +44,11 @@ import { SystemNotificationsModule } from '../system-notifications/system-notifi
     // va owner bildirishnomasi (ishga qaytarish / butunlay o'chirish).
     ArchiveReasonsModule,
     SystemNotificationsModule,
+    // ⚠ `POST /staff` ning IXTIYORIY yon ta'sirlari: maosh stavkasi
+    // (`setCompensation`) va boshlang'ich qoldiq (`create`). AYLANA
+    // YO'Q — ularning birortasi `UsersModule` ni import qilmaydi.
+    TeacherSalaryModule,
+    OpeningBalanceModule,
   ],
   controllers: [
     UserBranchesController,
@@ -48,7 +57,24 @@ import { SystemNotificationsModule } from '../system-notifications/system-notifi
   ],
   providers: [UsersService],
 })
-export class UsersModule implements NestModule {
+export class UsersModule implements NestModule, OnModuleInit {
+  constructor(
+    private readonly executors: ApprovalExecutorRegistry,
+    private readonly users: UsersService,
+  ) {}
+
+  /**
+   * ISHGA OLISH tasdig'ining BAJARUVCHISI (`staff_hire`).
+   *
+   * ⚠ Bajaruvchi so'rovchining huquqlarini QAYTA hisoblaydi —
+   * imtiyoz oshirishdan himoya (`executeApprovedHire` izohiga qarang).
+   */
+  onModuleInit(): void {
+    this.executors.register(APPROVAL_KINDS.STAFF_HIRE, (a) =>
+      this.users.executeApprovedHire(a),
+    );
+  }
+
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply(AuthMiddleware)

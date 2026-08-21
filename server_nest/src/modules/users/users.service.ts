@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
-import { ROLES, ROLE_TYPES } from '../../common/constants/permissions.js';
+import { PermissionService, hasPermission } from '../../common/rbac/permission.service.js';
+import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
+import { ROLES, ROLE_TYPES, PERMISSIONS } from '../../common/constants/permissions.js';
 import { normalizePhone } from '../../common/utils/phone.js';
 import { hashPassword } from '../../common/utils/password.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
@@ -34,6 +36,8 @@ import { UserRelationsService } from '../../common/helpers/user-relations.servic
 import { ArchiveReasonsService } from '../archive-reasons/archive-reasons.service.js';
 import { SystemNotificationsService } from '../system-notifications/system-notifications.service.js';
 import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { TeacherCompensationService } from '../teacher-salary/teacher-compensation.service.js';
+import { OpeningBalanceService } from '../opening-balance/opening-balance.service.js';
 import { UserProfileService } from '../auth/user-profile.service.js';
 import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
 import {
@@ -131,6 +135,12 @@ export class UsersService {
     private readonly archiveReasons: ArchiveReasonsService,
     private readonly systemNotifications: SystemNotificationsService,
     private readonly approvals: ExpenseApprovalsService,
+    // ⚠ ISHGA OLISHNING IXTIYORIY YON TA'SIRLARI — o'z modullaridan.
+    private readonly compensations: TeacherCompensationService,
+    private readonly openingBalances: OpeningBalanceService,
+    // `staff_hire` bajaruvchisi so'rovchining huquqlarini QAYTA hisoblaydi.
+    private readonly permissions: PermissionService,
+    private readonly branchAccess: BranchAccessService,
   ) {}
 
   private readonly logger = new Logger('UsersService');
@@ -1299,37 +1309,23 @@ export class UsersService {
    * XODIM (direktor/administrator/o'qituvchi) yaratish — login/parol +
    * filial + rol.
    *
-   * ── ⚠ KO'CHIRILMAGAN YON TA'SIRLAR — JIMGINA TASHLAB KETILMAYDI ──
+   * ── ✅ IXTIYORIY YON TA'SIRLAR ENDI BAJARILADI ──
    *
-   * Express ikkita IXTIYORIY yon ta'sir bajaradi va ikkalasi ham
-   * ko'chirilmagan MOLIYA zanjiriga tayanadi:
+   * Ilgari ular 501 (`REGISTER_SIDE_EFFECTS_NOT_MIGRATED`) bilan OCHIQ
+   * rad etilardi, chunki ikkalasi ham ko'chirilmagan moliya zanjiriga
+   * tayanardi:
    *
-   *   `compensation`   → teacherSalary/teacherCompensation.setCompensation
-   *   `openingBalance` → openingBalance.create
+   *   `compensation`   → `TeacherCompensationService.setCompensation`
+   *   `openingBalance` → `OpeningBalanceService.create`
    *
-   * Ikkinchisi JAVOB TANASIGA ham chiqadi: xato bo'lsa Express
-   * `profile.openingBalanceError` maydonini qo'shadi. Ya'ni uni jimgina
-   * o'tkazib yuborish PUL MA'LUMOTINI YO'QOTARDI — aynan Express kodi
-   * ehtiyot bo'ladigan holat.
+   * Ikkinchisi JAVOB TANASIGA ham chiqadi (`profile.openingBalanceError`),
+   * ya'ni uni jimgina o'tkazib yuborish PUL MA'LUMOTINI yo'qotardi —
+   * aynan Express kodi ehtiyot bo'ladigan holat.
    *
-   * Shuning uchun OCHIQ 501. Bu `POST /auth/register-user` da allaqachon
-   * qabul qilingan naqsh (`REGISTER_SIDE_EFFECTS_NOT_MIGRATED`) —
-   * ikkalasi bir xil ikki yon ta'sirga ega opasingdi.
-   *
-   * ⚠⚠ 501 QAYERDA TURGANI MUHIM — U BARCHA VALIDATSIYADAN KEYIN.
-   *
-   * `register-user` da bu tekshiruv metodning ENG BOSHIDA turadi, ya'ni
-   * login band bo'lsa ham `openingBalance` bilan 501 qaytadi (Express
-   * esa 409 berardi). Bu yerda u ATAYLAB PASTGA tushirildi — barcha
-   * tekshiruvlardan KEYIN, birinchi YOZUVDAN OLDIN:
-   *
-   *   • noto'g'ri kirish + openingBalance → Express bilan AYNAN bir xil
-   *     xato (400/403/409);
-   *   • to'g'ri kirish + openingBalance   → 501, va HECH NARSA YOZILMAYDI.
-   *
-   * Boshiga qo'yish soddaroq bo'lardi, lekin pastga qo'yish paritetni
-   * KENGROQ saqlaydi. Yozuvdan KEYIN qo'yish esa mumkin emas: xodim
-   * yaratilib, so'ng 501 qaytarilsa yarim holat qolardi.
+   * ⚠ TASDIQ TAKRORLANMAYDI: bu yerga yetib kelish uchun ishga olish
+   * so'rovining O'ZI allaqachon tasdiqdan o'tgan (yoki foydalanuvchida
+   * tasdiqdan ozod qiluvchi ruxsat bor). Ikkinchi marta tasdiq so'rash
+   * xodimni "yaratilgan, lekin maoshsiz" holatda qoldirardi.
    */
   async createStaff(
     body: Record<string, any>,
@@ -1394,9 +1390,6 @@ export class UsersService {
       branchAssignments.push({ branchId: String(a.branchId), role: a.role || null });
     }
 
-    // ⚠ SHU YERDA — barcha tekshiruvlardan KEYIN, birinchi yozuvdan OLDIN.
-    this.assertHireSideEffectsMigrated(body);
-
     const passwordHash = await hashPassword(body.password);
 
     const user = await this.prisma.user.create({
@@ -1421,31 +1414,60 @@ export class UsersService {
       include: SCOPE_INCLUDE,
     });
 
-    return this.profiles.build(user as never);
-  }
-
-  /**
-   * `compensation` / `openingBalance` bilan kelgan so'rovni OCHIQ rad
-   * etadi. Xato SHAKLI `POST /auth/register-user` dagi bilan AYNAN bir
-   * xil — ikkala marshrut bir xil ikki yon ta'sirga ega va klient ularni
-   * bir xilda ushlashi kerak.
-   */
-  private assertHireSideEffectsMigrated(body: Record<string, any>) {
-    if (body.compensation || body.openingBalance) {
-      throw new ApiError(
-        501,
-        "Maosh stavkasi va boshlang'ich qoldiq bilan xodim qo'shish " +
-          "NestJS'ga hali ko'chirilmagan (moliya moduli kerak). " +
-          "Express (5000-port) to'liq ishlaydi.",
-        {
-          code: 'REGISTER_SIDE_EFFECTS_NOT_MIGRATED',
-          details: {
-            compensation: Boolean(body.compensation),
-            openingBalance: Boolean(body.openingBalance),
+    // ── ISHGA OLISHDA OYLIK ──
+    // ⚠ BEST-EFFORT: stavkadagi xato XODIM YARATILISHINI bekor QILMAYDI
+    // (tranzaksiya yo'q). Owner stavkani profil sahifasidan qayta
+    // kiritadi.
+    if (body.role === ROLES.TEACHER && body.compensation) {
+      try {
+        await this.compensations.setCompensation(
+          {
+            ...body.compensation,
+            teacher: user.id,
+            branchId: body.compensation.branchId ?? branch.id,
+            effectiveFrom: body.compensation.effectiveFrom || user.hiredAt,
           },
-        },
-      );
+          currentUser as never,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Ishga olishda maosh stavkasi belgilanmadi (${user.id}) — ` +
+            `profil orqali kiritish kerak: ${(err as Error).message}`,
+        );
+      }
     }
+
+    // ── BOSHLANG'ICH QOLDIQ ──
+    // Maosh stavkasi bilan BIR XIL naqsh: xato xodim yaratilishini bekor
+    // qilmaydi, lekin javobda OCHIQ ko'rinadi — pul jimgina yo'qolmasin.
+    const profile: any = await this.profiles.build(user as never);
+    if (body.openingBalance) {
+      try {
+        await this.openingBalances.create(
+          {
+            user: user.id,
+            // ⚠ O'qituvchi bo'lmagan HAR QANDAY rol (direktor,
+            // administrator, buxgalter, custom rol…) XODIM hisobida
+            // yuritiladi.
+            role: body.role === ROLES.TEACHER ? ROLES.TEACHER : 'staff',
+            amount: body.openingBalance,
+            branchId: branch.id,
+            group: null,
+            note: body.openingBalanceNote || '',
+          },
+          { currentUser },
+        );
+      } catch (err) {
+        this.logger.error(
+          `Boshlang'ich qoldiq yozilmadi (${user.id}, ${body.openingBalance}) — ` +
+            `qo'lda kiritish kerak: ${(err as Error).message}`,
+        );
+        profile.openingBalanceError =
+          "Boshlang'ich qoldiq yozilmadi. Uni profil sahifasidan qayta kiriting.";
+      }
+    }
+
+    return profile;
   }
 
   /**
@@ -1497,5 +1519,55 @@ export class UsersService {
       requestNote: body.requestNote,
       currentUser: currentUser as never,
     });
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════
+   * TASDIQLANGAN ISHGA OLISH SO'ROVINI BAJARADI (`staff_hire`).
+   *
+   * ⚠⚠ IMTIYOZ OSHIRISHDAN HIMOYA — ENG MUHIM QISM.
+   *
+   * `createStaff` SO'ROVCHINING huquqlari bilan chaqiriladi,
+   * TASDIQLOVCHINING emas. Aks holda direktor "owner rolidagi
+   * foydalanuvchi yarat" deb so'rov yuborib, e'tiborsiz owner
+   * tasdiqlasa — TO'LIQ IMTIYOZ OSHIRISH sodir bo'lardi.
+   *
+   * ⚠ Huquqlar BAJARISH paytida QAYTA hisoblanadi: so'rovdan keyin
+   * so'rovchining roli o'zgargan (yoki muzlatilgan) bo'lishi mumkin.
+   * ═══════════════════════════════════════════════════════════════════
+   */
+  async executeApprovedHire(approval: any) {
+    // ⚠ Ikkala nom ham qabul qilinadi: `requestedById` (Prisma) va
+    // `requestedBy` (Mongoose davridan qolgan payload).
+    const requesterId = approval?.requestedById || approval?.requestedBy;
+    // ⚠ Prisma `findUnique({ where: { id: undefined } })` ni XATO deb
+    // hisoblaydi — bo'sh ID OLDINDAN ushlanadi (aks holda 500 chiqardi).
+    if (!requesterId) {
+      throw new ApiError(400, "So'rovchi topilmadi - so'rov bajarilmadi");
+    }
+
+    const requester = await this.prisma.user.findUnique({
+      where: { id: String(requesterId) },
+      include: SCOPE_INCLUDE,
+    });
+    if (!requester) {
+      throw new ApiError(400, "So'rovchi topilmadi - so'rov bajarilmadi");
+    }
+
+    const permissions = await this.permissions.collectPermissions(requester.role);
+    const allowedBranchIds = await this.branchAccess.resolveAllowedBranchIds(
+      requester as never, permissions,
+    );
+
+    return this.createStaff(approval.payload || {}, {
+      id: requester.id,
+      _id: requester.id,
+      permissions,
+      allowedBranchIds,
+      // ⚠ `requireAuth` bilan AYNAN bir xil hisoblanadi — aks holda
+      // ko'lam tekshiruvi bajarish paytida so'rov paytidagidan farq
+      // qilardi.
+      canSeeAllBranches: hasPermission(permissions, PERMISSIONS.BRANCHES_VIEW_ALL),
+    } as never);
   }
 }

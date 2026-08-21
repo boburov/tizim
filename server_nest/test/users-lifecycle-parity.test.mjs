@@ -883,39 +883,60 @@ const main = async () => {
     skip("`POST /staff` filial va imtiyoz to'siqlari", "`director` rolida `users.archive` yo'q");
   }
 
-  // ── ⚠ KUTILGAN FARQ: moliyaviy yon ta'sirlar ko'chirilmagan ──
+  // ═══════════════════════════════════════════════════════════════════
+  // ✅ KUTILGAN FARQ YOPILDI — moliyaviy yon ta'sirlar KO'CHIRILDI.
   //
-  // `compensation` / `openingBalance` bilan Express 201 qaytaradi (va
-  // xato bo'lsa `openingBalanceError` qo'shadi), NestJS esa OCHIQ 501.
-  // Pul jimgina yo'qolmasligi uchun — `POST /auth/register-user` da
-  // allaqachon qabul qilingan naqsh. Farq yo'qolsa test yiqiladi.
+  // Ilgari `compensation` / `openingBalance` bilan Express 201, NestJS
+  // esa OCHIQ 501 (`REGISTER_SIDE_EFFECTS_NOT_MIGRATED`) qaytarardi.
+  // `openingBalance` va `teacherCompensation` ko'chgach shox ochildi va
+  // bu test AYNAN REJALASHTIRILGANIDEK yiqilib, e'tibor tortdi.
   //
-  // ⚠⚠ HAR STEKKA BOSHQA LOGIN. Express shoxi HAQIQATAN xodim yaratadi
-  // (u 201 qaytaradi), shuning uchun bir xil login bilan NestJS 409
-  // olardi va "501 kelmadi" degan YOLG'ON yiqilish chiqardi — birinchi
-  // yurishda aynan shunday bo'ldi.
+  // ⚠⚠ HAR STEKKA BOSHQA LOGIN — ikkalasi ham HAQIQATAN xodim yaratadi
+  // va bir xil login bilan ikkinchisi 409 olardi.
   //
-  // ⚠ AYNI PAYTDA bu 409 NestJS'ning 501 i TO'G'RI JOYDA turganini ham
-  // isbotlaydi: u login tekshiruvidan KEYIN ishlaydi, ya'ni noto'g'ri
-  // kirish Express bilan bir xil xato beradi.
-  await expectDivergence(
-    "POST /users/staff (openingBalance bilan — pul jimgina yo'qolmaydi)",
-    (b) => req(b, 'POST', '/api/users/staff', {
-      token: ownerToken,
-      body: staffBody(b === EXPRESS ? 'ob_e' : 'ob_n', { openingBalance: 100000 }),
-    }),
-    { expressStatus: 201, nestStatus: 501, nestCode: 'REGISTER_SIDE_EFFECTS_NOT_MIGRATED' },
-  );
-
-  // MUSBAT NAZORAT: NestJS 501 i AYNAN `openingBalance` sababli — bir
-  // xil tanadan uni OLIB TASHLASA 201 keladi. Aks holda 501 boshqa
-  // sababdan (mas. ruxsat) kelayotgan bo'lishi mumkin edi.
+  // ⚠ ENDI ENG MUHIMI STATUS EMAS, PUL: `OpeningBalance` qatori
+  // HAQIQATAN yozilganini BAZADAN o'lchaymiz. Faqat 201/201 ni
+  // solishtirish "pul yozildi" degani EMAS — yon ta'sir best-effort va
+  // jimgina o'tkazib yuborilishi mumkin edi.
+  // ═══════════════════════════════════════════════════════════════════
   {
-    const r = await req(NEST, 'POST', '/api/users/staff', {
-      token: ownerToken, body: staffBody('ob_ctl'),
-    });
-    if (r.status === 201) ok("MUSBAT NAZORAT: `openingBalance` siz o'sha tana NestJS'da 201");
-    else bad('501 sababi', `openingBalance siz ham ${r.status}: ${JSON.stringify(r.body).slice(0, 200)}`);
+    const obRes = {};
+    for (const b of [EXPRESS, NEST]) {
+      const suffix = b === EXPRESS ? 'ob_e' : 'ob_n';
+      // eslint-disable-next-line no-await-in-loop
+      obRes[b] = await req(b, 'POST', '/api/users/staff', {
+        token: ownerToken,
+        body: staffBody(suffix, { openingBalance: 100000 }),
+      });
+    }
+    if (obRes[EXPRESS].status === 201 && obRes[NEST].status === 201) {
+      ok('POST /users/staff (openingBalance bilan) — ikkala stek 201');
+    } else {
+      bad(
+        'POST /users/staff (openingBalance bilan)',
+        `express=${obRes[EXPRESS].status}, nest=${obRes[NEST].status}`,
+      );
+    }
+
+    for (const [label, b] of [['express', EXPRESS], ['nest', NEST]]) {
+      const id = obRes[b]?.body?.data?.id || obRes[b]?.body?.data?._id;
+      if (!id) { skip(`${label}: boshlang'ich qoldiq`, "xodim yaratilmadi"); continue; }
+      // eslint-disable-next-line no-await-in-loop
+      const row = await prisma.openingBalance.findFirst({
+        where: { userId: String(id) },
+        select: { amount: true, role: true },
+      });
+      if (!row) {
+        bad(
+          `${label}: BOSHLANG'ICH QOLDIQ YOZILMADI`,
+          "201 qaytdi, lekin `opening_balances` da qator YO'Q — pul jimgina yo'qoldi",
+        );
+      } else if (Number(row.amount) !== 100000) {
+        bad(`${label}: qoldiq summasi`, `kutilgan 100000, keldi ${row.amount}`);
+      } else {
+        ok(`${label}: boshlang'ich qoldiq BAZADA — 100000 (${row.role})`);
+      }
+    }
   }
 
   // ── HAQIQIY YARATISH — EGIZAK (username unique, shuning uchun ikkita) ──

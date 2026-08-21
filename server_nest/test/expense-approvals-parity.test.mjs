@@ -21,14 +21,19 @@
  *   6. KONKURENTLIK: 20 bir vaqtdagi `reject` — FAQAT BITTASI o'tadi.
  *   7. FILIAL IZOLYATSIYASI: musbat va manfiy nazorat bilan.
  *
- * ── ATAYLAB KUTILGAN FARQ ──
+ * ── ✅ ATAYLAB KUTILGAN FARQ YOPILDI ──
  *
- * `POST /:id/approve` KO'CHIRILMAGAN turlarda NestJS'da 501
- * (`APPROVAL_EXECUTORS_NOT_MIGRATED`): bajaruvchilar o'n modulda va
- * ular hali ko'chirilmagan. Farq `expectDivergence` bilan KUZATILADI —
- * bajaruvchilar ko'chgan kuni test YIQILADI va e'tibor tortadi.
- * (Aynan shu naqsh `users-parity` da `PROFILE_NOT_MIGRATED` uchun
- * ishlatilgan.)
+ * Ilgari `POST /:id/approve` KO'CHIRILMAGAN turlarda NestJS'da 501
+ * (`APPROVAL_EXECUTORS_NOT_MIGRATED`) qaytarardi va farq
+ * `expectDivergence` bilan KUZATILARDI. Bajaruvchilar (10/10)
+ * ko'chgach test AYNAN REJALASHTIRILGANIDEK YIQILDI va e'tibor tortdi —
+ * shu bo'lim endi FARQNI emas, PARITETNI o'lchaydi.
+ *
+ * ⚠ 501 shoxi KODDA QOLDI (`ExpenseApprovalsService.approve`): u
+ * ro'yxatga olinmagan HAR QANDAY tur uchun himoya bo'lib turadi va
+ * so'rovni `pending` holatida SAQLAB qoladi. Quyida bajaruvchilar
+ * ro'yxati TO'LIQLIGI ochiq o'lchanadi — biror tur tushib qolsa test
+ * yana qizil bo'ladi.
  *
  * ISHLATISH:  node test/expense-approvals-parity.test.mjs
  * ═══════════════════════════════════════════════════════════════════════════
@@ -680,16 +685,16 @@ const run = async () => {
   }
 
   /**
-   * ⚠ KO'CHIRILMAGAN TUR — HAMON ATAYLAB FARQ.
+   * ✅ `group_fee_set` — ILGARI ATAYLAB FARQ EDI, ENDI PARITET.
    *
-   * `group_fee_set` bajaruvchisi `finance/groupFee` da va u hali
-   * ko'chirilmagan. Express uni bajaradi (payload bo'sh → 400),
-   * NestJS esa 501 qaytaradi.
+   * Bajaruvchisi `finance/groupFee` da va u ko'chirilgach ikkala stek
+   * ham bajarishga urinadi. Bo'sh payload'da ikkalasi ham AYNI xatoni
+   * beradi.
    *
-   * ⚠⚠ ENG MUHIM QISMI — SO'ROV HOLATI. NestJS mavjudlikni HOLAT
-   * O'ZGARISHIDAN OLDIN tekshiradi, ya'ni so'rov `pending` bo'lib
-   * QOLADI va Express orqali bemalol tasdiqlanadi. Express tartibini
-   * ko'r-ko'rona takrorlaganda u `failed` bo'lib BUZILARDI.
+   * ⚠ STATUS 404 — 400 EMAS. Bo'sh payload'da `groupFee` bajaruvchisi
+   * "Guruh topilmadi" (404) beradi, `approve` esa `err.statusCode` ni
+   * QAYTA UZATADI. Ya'ni status BAJARUVCHI xatosidan keladi,
+   * tasdiqlash oqimidan emas — bu O'LCHANDI, taxmin qilinmadi.
    */
   const unmigrated = {};
   for (const base of [EXPRESS, NEST]) {
@@ -698,15 +703,9 @@ const run = async () => {
       kind: 'group_fee_set', category: 'configuration', amount: null,
     });
   }
-  await expectDivergence("POST /:id/approve (`group_fee_set` — ko'chirilmagan)",
+  await mirror("POST /:id/approve (`group_fee_set` — endi IKKALASIDA bajariladi)",
     (base) => call(base, 'POST',
-      `/api/expense-approvals/${unmigrated[base].id}/approve`, { body: {} }),
-    // ⚠ EXPRESS 404 — 400 EMAS. Bo'sh payload'da `groupFee` bajaruvchisi
-    // "Guruh topilmadi" (404) beradi, `approve` esa `err.statusCode` ni
-    // QAYTA UZATADI (`err?.statusCode || 400`). Ya'ni status BAJARUVCHI
-    // xatosidan keladi, tasdiqlash oqimidan emas — bu O'LCHANDI, taxmin
-    // qilinmadi.
-    { expressStatus: 404, nestStatus: 501, nestCode: 'APPROVAL_EXECUTORS_NOT_MIGRATED' });
+      `/api/expense-approvals/${unmigrated[base].id}/approve`, { body: {} }));
 
   {
     const eRow = await prisma.approval.findUnique({
@@ -714,18 +713,65 @@ const run = async () => {
     const nRow = await prisma.approval.findUnique({
       where: { id: unmigrated[NEST].id } });
     eq("express: bajarish yiqildi → 'failed'", eRow.status, 'failed');
-    // ⚠ AYNAN SHU XOSSA HIMOYA QILINADI: NestJS so'rovni TEGMAY qoldiradi.
-    eq("nest: so'rov TEGILMADI → 'pending' (Express'da tasdiqlanadi)",
-      nRow.status, 'pending');
+    // ⚠ ILGARI BU YERDA `pending` KUTILARDI (NestJS turni bajara
+    // olmasdi). Endi ikkala stek ham AYNI holatga o'tadi.
+    eq("nest: bajarish yiqildi → 'failed' (Express bilan bir xil)",
+      nRow.status, 'failed');
   }
 
-  await expectDivergence("POST /bulk-approve (ko'chirilmagan tur)",
+  await mirror("POST /bulk-approve (bajarish yiqiladi)",
     (base) => call(base, 'POST', '/api/expense-approvals/bulk-approve',
-      { body: { ids: [unmigrated[base].id] } }),
-    // ⚠ `bulk` HAR BIR ID ni ALOHIDA yiqitadi va 200 qaytaradi (qisman
-    // muvaffaqiyat NORMAL holat) — ikkala stekda ham 200, farq
-    // `failed[].reason` da. Shuning uchun status bo'yicha farq YO'Q.
-    { expressStatus: 200, nestStatus: 200 });
+      { body: { ids: [unmigrated[base].id] } }));
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ⚠ BAJARUVCHILAR RO'YXATI TO'LIQMI — 501 SHOXI ERISHIB BO'LMAS
+  // BO'LIB QOLGANINI OCHIQ O'LCHAYDI.
+  //
+  // Ro'yxatni HTTP orqali o'qib bo'lmaydi, shuning uchun Express'ning
+  // KANONIK ro'yxati (`expenseApproval.service.js` dagi EXECUTORS)
+  // manba sifatida olinadi va NestJS'da har bir tur uchun
+  // 501 QAYTMASLIGI tekshiriladi.
+  //
+  // NEGA MUHIM: bitta tur ro'yxatdan tushib qolsa NestJS orqali bosilgan
+  // "Tasdiqlash" 501 berardi va bu FAQAT o'sha turdagi so'rovda
+  // ko'rinardi — ya'ni ishlab chiqarishda tasodifan topilardi.
+  // ═══════════════════════════════════════════════════════════════════
+  section('6b) BARCHA TASDIQ TURLARI BAJARUVCHIGA EGA');
+  const KINDS = [
+    ['salary_payment', 'financial', 1000],
+    ['deposit_withdraw', 'financial', 1000],
+    ['salary_terms', 'configuration', null],
+    ['discount_set', 'configuration', null],
+    ['group_fee_set', 'configuration', null],
+    ['staff_hire', 'configuration', null],
+    ['teacher_compensation_set', 'configuration', null],
+    ['membership_backdate', 'financial', 1000],
+    ['expense_create', 'financial', 1000],
+    ['staff_salary_payment', 'financial', 1000],
+  ];
+  for (const [kind, category, amount] of KINDS) {
+    const f = fx[NEST];
+    // eslint-disable-next-line no-await-in-loop
+    const row = await mkApproval(f.a.id, f.asker.id, { kind, category, amount });
+    // eslint-disable-next-line no-await-in-loop
+    const res = await call(NEST, 'POST',
+      `/api/expense-approvals/${row.id}/approve`, { body: {} });
+    if (res.status === 429) {
+      skip(`bajaruvchi: ${kind}`, 'tezlik chegarasi');
+      continue;
+    }
+    if (res.status === 501) {
+      bad(
+        `BAJARUVCHI YO'Q: ${kind}`,
+        `NestJS 501 qaytardi (${res.body?.code}) — bu tur uchun ` +
+          "\"Tasdiqlash\" tugmasi ishlamaydi",
+      );
+    } else {
+      // ⚠ Boshqa HAR QANDAY status (400/404/…) — bajaruvchi CHAQIRILDI
+      // degani. Bo'sh payload'da yiqilishi KUTILGAN va ahamiyatsiz.
+      ok(`bajaruvchi bor: ${kind} — ${res.status} (501 EMAS)`);
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────
   section('7) RUXSAT');
