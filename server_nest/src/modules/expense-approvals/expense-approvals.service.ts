@@ -8,6 +8,7 @@ import {
   resolveCategory,
 } from '../../common/constants/approvals.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { ApprovalExecutorRegistry } from '../../common/approvals/approval-executor.registry.js';
 import { withPopulatedShape } from '../../common/utils/serialize.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { PERMISSIONS } from '../../common/constants/permissions.js';
@@ -127,7 +128,10 @@ export interface ListArgs {
 export class ExpenseApprovalsService {
   private readonly logger = new Logger('ExpenseApprovals');
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    private readonly executors: ApprovalExecutorRegistry,
+  ) {}
 
   // ============================================================
   // 1) LIMIT / TASDIQ TEKSHIRUVI - amal servislaridan chaqiriladi
@@ -745,4 +749,162 @@ export class ExpenseApprovalsService {
    * ═══════════════════════════════════════════════════════════════════
    */
   static readonly NOT_MIGRATED_CODE = 'APPROVAL_EXECUTORS_NOT_MIGRATED';
+
+  /** Ko'chirilgan bajaruvchilar — kontroller va test shundan o'qiydi. */
+  migratedKinds(): string[] {
+    return this.executors.kinds();
+  }
+
+  canExecute(kind: string): boolean {
+    return this.executors.has(kind);
+  }
+
+  /**
+   * TASDIQLAYDI VA DARHOL BAJARADI.
+   *
+   * AYNAN BIR MARTA kafolati UCH qatlamda (Express'dagi bilan bir xil):
+   *  1. Compare-and-set: PENDING → APPROVED (ikki owner bir vaqtda bossa
+   *     faqat bittasi o'tadi).
+   *  2. Qisman unique indeks `expenseApprovalId` — tranzaksiya darajasida.
+   *  3. Bajaruvchi ichida mavjud tranzaksiya qidiriladi: yozuv bor-u
+   *     holat yangilanmagan bo'lsa (jarayon o'rtada o'lgan), qayta
+   *     to'lamasdan holat tuzatiladi.
+   *
+   * ═══════════════════════════════════════════════════════════════════
+   * ⚠⚠ ATAYLAB QILINGAN YAGONA TARTIB FARQI — VA U XAVFSIZLIK UCHUN.
+   *
+   * Express AVVAL holatni PENDING → APPROVED ga o'tkazadi, KEYIN
+   * bajaruvchini qidiradi; topilmasa so'rovni FAILED qiladi.
+   *
+   * Express'da bu shox AMALDA ERISHIB BO'LMAYDI: u yerda 10 turning
+   * 10 tasida ham bajaruvchi bor, `!executor` faqat buzuq ma'lumot
+   * uchun. NestJS'da esa bajaruvchilar BOSQICHMA-BOSQICH ko'chmoqda,
+   * ya'ni "bajaruvchi yo'q" — MUNTAZAM holat.
+   *
+   * Express tartibini ko'r-ko'rona takrorlash NestJS orqali bosilgan
+   * "Tasdiqlash" tugmasi so'rovni FAILED holatiga o'tkazib BUZIB
+   * qo'yishini anglatardi — owner uni qo'lda tuzatishi kerak bo'lardi,
+   * va Express'da o'sha so'rovni tasdiqlashning iloji QOLMASDI.
+   *
+   * Shuning uchun mavjudlik HOLAT O'ZGARISHIDAN OLDIN tekshiriladi:
+   * ko'chirilmagan tur 501 oladi va so'rov PENDING bo'lib QOLADI —
+   * Express'da bemalol tasdiqlanadi.
+   *
+   * ⚠ KO'CHIRILGAN turlarda tartib AYNAN Express'dagidek: transition →
+   * bajarish → EXECUTED yoki FAILED.
+   * ═══════════════════════════════════════════════════════════════════
+   */
+  async approve(
+    id: string,
+    { note }: { note?: string } = {},
+    currentUser?: Actor | null,
+    permissions?: string[],
+  ) {
+    const existing = await this.loadApproval(id);
+    this.assertCanDecide(existing as never, permissions);
+
+    // O'ZINI-O'ZI TASDIQLASH TAQIQI: tasdiqning butun ma'nosi shu.
+    if (String((existing as any).requestedById) === String(actorId(currentUser))) {
+      throw new ApiError(403, "O'z so'rovingizni o'zingiz tasdiqlay olmaysiz");
+    }
+
+    // ⚠ HOLAT O'ZGARISHIDAN OLDIN — yuqoridagi izohga qarang.
+    const kind = String((existing as any).kind);
+    if (!this.executors.has(kind)) {
+      throw new ApiError(
+        501,
+        `Bu so'rov turini bajaruvchi modul NestJS'ga hali ko'chirilmagan ` +
+          `(${kind}). So'rov TEGILMADI — Express (5000-port) orqali ` +
+          `tasdiqlanadi.`,
+        {
+          code: ExpenseApprovalsService.NOT_MIGRATED_CODE,
+          details: { kind, migrated: this.executors.kinds() },
+        },
+      );
+    }
+
+    // 1-qatlam: atomik holat o'zgarishi.
+    const approval: any = await this.transition(id, {
+      from: APPROVAL_STATUSES.PENDING,
+      data: {
+        status: APPROVAL_STATUSES.APPROVED,
+        decidedById: actorId(currentUser),
+        decidedAt: new Date(),
+        decisionNote: note || '',
+      },
+      conflict: "So'rov allaqachon ko'rib chiqilgan",
+    });
+
+    try {
+      // 2 va 3-qatlam bajaruvchi ICHIDA. Bajaruvchi biznes qoidalarini
+      // QAYTA tekshiradi (balans kamaygan, guruh arxivlangan bo'lishi
+      // mumkin — so'rov yaratilgandan keyin dunyo o'zgargan).
+      const result: any = await this.executors.get(kind)!(approval);
+
+      await this.prisma.approval.update({
+        where: { id: approval.id },
+        data: {
+          status: APPROVAL_STATUSES.EXECUTED,
+          executedAt: new Date(),
+          // ⚠ Bajaruvchilar Prisma yozuvini qaytaradi (`id`), lekin
+          // ba'zilari `withLegacyId` bilan o'ralgan (`_id`) — ikkalasi
+          // ham qabul qilinadi.
+          resultTransactionId: result?.id || result?._id || null,
+          failureReason: '',
+        } as any,
+      });
+      return this.prisma.approval.findUnique({ where: { id: approval.id } });
+    } catch (err: any) {
+      // Re-validatsiya yiqildi yoki texnik xato — holat FAILED, owner ko'radi.
+      const reason = err?.message || "Noma'lum xato";
+      await this.markFailed(approval.id, reason);
+      this.logger.warn(
+        `Tasdiqlangan so'rovni bajarib bo'lmadi (id=${approval.id}, ` +
+          `kind=${kind}): ${reason}`,
+      );
+      throw new ApiError(
+        err?.statusCode || 400,
+        `Tasdiqlandi, lekin bajarib bo'lmadi: ${reason}`,
+      );
+    }
+  }
+
+  /**
+   * OMMAVIY QAROR.
+   *
+   * ⚠ KETMA-KET, ATAYLAB PARALLEL EMAS: bajaruvchilar bir xil resursga
+   * tegishi mumkin (bitta o'quvchining depoziti, bitta o'qituvchining
+   * maosh qoldig'i). Parallel ishga tushirilsa ikki to'lov bir balansni
+   * bir vaqtda o'qib, ikkalasi ham "yetarli" deb qaror qilardi.
+   *
+   * HAR BIR ID ALOHIDA tekshiriladi va alohida yiqiladi: frontend'dagi
+   * checkbox holatiga ISHONILMAYDI — huquq va o'zini-o'zi tasdiqlash
+   * taqiqi `approve`/`reject` ichida QAYTA tekshiriladi.
+   */
+  async bulkDecide(
+    ids: string[],
+    { action, note }: { action?: string; note?: string } = {},
+    currentUser?: Actor | null,
+    permissions?: string[],
+  ) {
+    const succeeded: string[] = [];
+    const failed: { id: string; reason: string }[] = [];
+
+    for (const id of ids) {
+      try {
+        if (action === 'reject') {
+          // eslint-disable-next-line no-await-in-loop
+          await this.reject(id, { note }, currentUser, permissions);
+        } else {
+          // eslint-disable-next-line no-await-in-loop
+          await this.approve(id, { note }, currentUser, permissions);
+        }
+        succeeded.push(String(id));
+      } catch (err: any) {
+        failed.push({ id: String(id), reason: err?.message || "Noma'lum xato" });
+      }
+    }
+
+    return { succeeded, failed, total: ids.length };
+  }
 }

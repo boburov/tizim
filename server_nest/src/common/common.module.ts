@@ -4,8 +4,10 @@ import { BranchAccessService } from './rbac/branch-access.service.js';
 import { CredentialScopeService } from './rbac/credential-scope.js';
 import { RolesHelperService } from './rbac/roles.helper.js';
 import { StudentCompletionService } from './helpers/student-completion.service.js';
+import { ApprovalExecutorRegistry } from './approvals/approval-executor.registry.js';
 import { MembershipService } from './helpers/membership.service.js';
 import { CorrelationCacheService } from './helpers/correlation-cache.service.js';
+import { LessonCancellationService } from './helpers/lesson-cancellation.service.js';
 import { UserRelationsService } from './helpers/user-relations.service.js';
 import { PermissionsGuard } from './guards/permissions.guard.js';
 import { AllPermissionsGuard } from './guards/all-permissions.guard.js';
@@ -46,8 +48,10 @@ import { AuthMiddleware } from '../middleware/auth.middleware.js';
     CredentialScopeService,
     RolesHelperService,
     StudentCompletionService,
+    ApprovalExecutorRegistry,
     MembershipService,
     CorrelationCacheService,
+    LessonCancellationService,
     UserRelationsService,
     PermissionsGuard,
     AllPermissionsGuard,
@@ -63,8 +67,10 @@ import { AuthMiddleware } from '../middleware/auth.middleware.js';
     CredentialScopeService,
     RolesHelperService,
     StudentCompletionService,
+    ApprovalExecutorRegistry,
     MembershipService,
     CorrelationCacheService,
+    LessonCancellationService,
     UserRelationsService,
     PermissionsGuard,
     AllPermissionsGuard,

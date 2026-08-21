@@ -12,6 +12,7 @@ import { ExpenseApprovalsService } from './expense-approvals.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Permissions, Validated } from '../../common/decorators/index.js';
 import { PERMISSIONS } from '../../common/constants/permissions.js';
+import { APPROVAL_CATEGORIES } from '../../common/constants/approvals.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import {
@@ -135,28 +136,44 @@ export class ExpenseApprovalsController {
   @Post(':id/approve')
   @HttpCode(200)
   @Permissions(PERMISSIONS.FINANCE_APPROVE, PERMISSIONS.APPROVALS_DECIDE_CONFIG)
-  approve(
-    @Param('id') _id: string,
-    @Validated(decisionSchema) _v: DecisionRequest,
-  ): never {
-    throw new NotImplementedException({
-      success: false,
-      message:
-        "Tasdiqlashni bajaruvchi modullar hali ko'chirilmagan (maosh, depozit, guruh, chegirma, chiqim, payroll)",
-      code: ExpenseApprovalsService.NOT_MIGRATED_CODE,
-    });
+  async approve(
+    @Validated(decisionSchema) v: DecisionRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data: any = await this.approvals.approve(
+      v.params.id,
+      { note: v.body?.note },
+      req.user,
+      req.permissions,
+    );
+    // ⚠ XABAR KATEGORIYAGA QARAB — Express bilan AYNAN bir xil.
+    // Konfiguratsiya so'rovida pul harakati YO'Q ("o'zgarish qo'llandi"),
+    // moliyaviy so'rovda esa BOR ("to'lov amalga oshirildi").
+    const message =
+      data?.category === APPROVAL_CATEGORIES.CONFIGURATION
+        ? "Tasdiqlandi va o'zgarish qo'llandi"
+        : "Tasdiqlandi va to'lov amalga oshirildi";
+    return { success: true, data, message };
   }
 
   @Post('bulk-approve')
   @HttpCode(200)
   @Permissions(PERMISSIONS.FINANCE_APPROVE, PERMISSIONS.APPROVALS_DECIDE_CONFIG)
-  bulkApprove(@Validated(bulkSchema) _v: BulkRequest): never {
-    throw new NotImplementedException({
-      success: false,
-      message:
-        "Tasdiqlashni bajaruvchi modullar hali ko'chirilmagan (maosh, depozit, guruh, chegirma, chiqim, payroll)",
-      code: ExpenseApprovalsService.NOT_MIGRATED_CODE,
-    });
+  async bulkApprove(
+    @Validated(bulkSchema) v: BulkRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const result = await this.approvals.bulkDecide(
+      v.body.ids,
+      { action: 'approve', note: v.body?.note },
+      req.user,
+      req.permissions,
+    );
+    // 207 EMAS, 200: qisman muvaffaqiyat bu yerda NORMAL holat, xato emas.
+    const message = result.failed.length
+      ? `${result.succeeded.length} ta bajarildi, ${result.failed.length} ta o'tmadi`
+      : `${result.succeeded.length} ta so'rov bajarildi`;
+    return { success: true, data: result, message };
   }
 
   /**

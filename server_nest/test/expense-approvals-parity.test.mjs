@@ -23,7 +23,7 @@
  *
  * ── ATAYLAB KUTILGAN FARQ ──
  *
- * `POST /:id/approve` va `POST /bulk-approve` NestJS'da 501
+ * `POST /:id/approve` KO'CHIRILMAGAN turlarda NestJS'da 501
  * (`APPROVAL_EXECUTORS_NOT_MIGRATED`): bajaruvchilar o'n modulda va
  * ular hali ko'chirilmagan. Farq `expectDivergence` bilan KUZATILADI —
  * bajaruvchilar ko'chgan kuni test YIQILADI va e'tibor tortadi.
@@ -49,6 +49,22 @@ import {
 const prisma = new PrismaClient();
 const TAG = `EA-${Date.now().toString(36)}`;
 const { R, ok, bad, skip, section, finish } = createReporter('expense-approvals');
+
+
+/**
+ * ⚠ SHU YURISHGA XOS MIJOZ MANZILI.
+ *
+ * Bu to'plam ~150 so'rov yuboradi va `generalLimiter` (IP bo'yicha
+ * 200/daq) haqiqiy IP'ni parallel to'plamlar bilan BAHAM ko'radi —
+ * ketma-ket ikki yurishda ikkinchisi 429 olib, HECH NARSA
+ * O'LCHANMAYDI (test o'zi ham shunday deb yozadi).
+ *
+ * Ikkala stek ham `trust proxy: 1` bilan ishlaydi, ya'ni chegara shu
+ * manzil bo'yicha sanaladi. CHEGARA ZAIFLASHMAYDI — to'plam faqat
+ * boshqa mashinadan kelayotgandek ko'rinadi. Chegaraning O'ZI
+ * `test/rate-limit-parity.test.mjs` da alohida o'lchanadi.
+ */
+const RUN_IP = `198.51.100.${(Number(process.hrtime.bigint() % 250n) + 2)}`;
 
 const made = { branches: [], users: [], approvals: [] };
 
@@ -214,7 +230,10 @@ const run = async () => {
     request(base, method, path, {
       token: as ? tok[base][as] : ownerToken,
       body,
-      headers: branchId ? { 'x-branch-id': branchId } : {},
+      headers: {
+        'x-forwarded-for': RUN_IP,
+        ...(branchId ? { 'x-branch-id': branchId } : {}),
+      },
     });
 
   const subs = (base) => {
@@ -636,18 +655,77 @@ const run = async () => {
     const f = fx[base];
     approvable[base] = await mkApproval(f.a.id, f.asker.id, { amount: 444_000 });
   }
-  await expectDivergence('POST /:id/approve', (base) =>
-    call(base, 'POST', `/api/expense-approvals/${approvable[base].id}/approve`,
-      { body: {} }),
-    // Express: bajaruvchi bor, lekin `expense_create` payload'i bo'sh —
-    // bajarish yiqiladi va 400 qaytadi (so'rov `failed` bo'lib qoladi).
-    // NestJS: bajaruvchilar umuman ko'chirilmagan — 501.
-    { expressStatus: 400, nestStatus: 501, nestCode: 'APPROVAL_EXECUTORS_NOT_MIGRATED' });
+  /**
+   * ⚠ FARQ TORAYDI — VA BU KUTILGAN EDI.
+   *
+   * Ilgari NestJS'da BIRORTA bajaruvchi yo'q edi va `approve` har doim
+   * 501 qaytarardi. Endi TO'RTTASI ko'chirilgan:
+   *   `expense_create`, `deposit_withdraw`, `salary_payment`,
+   *   `teacher_compensation_set`.
+   *
+   * Shuning uchun `expense_create` (fikstura turi) endi ATAYLAB FARQ
+   * emas, HAQIQIY PARITET: ikkala stek ham bajarishga urinadi va bo'sh
+   * payload'da bir xil yiqiladi.
+   */
+  await mirror('POST /:id/approve (`expense_create` — endi IKKALASIDA ham bajariladi)',
+    (base) => call(base, 'POST',
+      `/api/expense-approvals/${approvable[base].id}/approve`, { body: {} }));
 
-  await expectDivergence('POST /bulk-approve', (base) =>
-    call(base, 'POST', '/api/expense-approvals/bulk-approve',
-      { body: { ids: [approvable[base].id] } }),
-    { expressStatus: 200, nestStatus: 501, nestCode: 'APPROVAL_EXECUTORS_NOT_MIGRATED' });
+  // Bajarish yiqilgach so'rov IKKALA stekda ham `failed` bo'lishi SHART.
+  for (const base of [EXPRESS, NEST]) {
+    const label = base === EXPRESS ? 'express' : 'nest';
+    const row = await prisma.approval.findUnique({
+      where: { id: approvable[base].id } });
+    eq(`bajarish yiqilgach holat "failed" (${label})`, row.status, 'failed');
+  }
+
+  /**
+   * ⚠ KO'CHIRILMAGAN TUR — HAMON ATAYLAB FARQ.
+   *
+   * `group_fee_set` bajaruvchisi `finance/groupFee` da va u hali
+   * ko'chirilmagan. Express uni bajaradi (payload bo'sh → 400),
+   * NestJS esa 501 qaytaradi.
+   *
+   * ⚠⚠ ENG MUHIM QISMI — SO'ROV HOLATI. NestJS mavjudlikni HOLAT
+   * O'ZGARISHIDAN OLDIN tekshiradi, ya'ni so'rov `pending` bo'lib
+   * QOLADI va Express orqali bemalol tasdiqlanadi. Express tartibini
+   * ko'r-ko'rona takrorlaganda u `failed` bo'lib BUZILARDI.
+   */
+  const unmigrated = {};
+  for (const base of [EXPRESS, NEST]) {
+    const f = fx[base];
+    unmigrated[base] = await mkApproval(f.a.id, f.asker.id, {
+      kind: 'group_fee_set', category: 'configuration', amount: null,
+    });
+  }
+  await expectDivergence("POST /:id/approve (`group_fee_set` — ko'chirilmagan)",
+    (base) => call(base, 'POST',
+      `/api/expense-approvals/${unmigrated[base].id}/approve`, { body: {} }),
+    // ⚠ EXPRESS 404 — 400 EMAS. Bo'sh payload'da `groupFee` bajaruvchisi
+    // "Guruh topilmadi" (404) beradi, `approve` esa `err.statusCode` ni
+    // QAYTA UZATADI (`err?.statusCode || 400`). Ya'ni status BAJARUVCHI
+    // xatosidan keladi, tasdiqlash oqimidan emas — bu O'LCHANDI, taxmin
+    // qilinmadi.
+    { expressStatus: 404, nestStatus: 501, nestCode: 'APPROVAL_EXECUTORS_NOT_MIGRATED' });
+
+  {
+    const eRow = await prisma.approval.findUnique({
+      where: { id: unmigrated[EXPRESS].id } });
+    const nRow = await prisma.approval.findUnique({
+      where: { id: unmigrated[NEST].id } });
+    eq("express: bajarish yiqildi → 'failed'", eRow.status, 'failed');
+    // ⚠ AYNAN SHU XOSSA HIMOYA QILINADI: NestJS so'rovni TEGMAY qoldiradi.
+    eq("nest: so'rov TEGILMADI → 'pending' (Express'da tasdiqlanadi)",
+      nRow.status, 'pending');
+  }
+
+  await expectDivergence("POST /bulk-approve (ko'chirilmagan tur)",
+    (base) => call(base, 'POST', '/api/expense-approvals/bulk-approve',
+      { body: { ids: [unmigrated[base].id] } }),
+    // ⚠ `bulk` HAR BIR ID ni ALOHIDA yiqitadi va 200 qaytaradi (qisman
+    // muvaffaqiyat NORMAL holat) — ikkala stekda ham 200, farq
+    // `failed[].reason` da. Shuning uchun status bo'yicha farq YO'Q.
+    { expressStatus: 200, nestStatus: 200 });
 
   // ─────────────────────────────────────────────────────────────────
   section('7) RUXSAT');
