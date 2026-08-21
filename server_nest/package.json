@@ -30,6 +30,7 @@
     "test:fintx-parity": "node test/financial-transaction-parity.test.mjs",
     "test:finance-ops-parity": "node test/finance-ops-parity.test.mjs",
     "test:expenses-parity": "node test/expenses-parity.test.mjs",
+    "test:attendance-exemptions-parity": "node test/attendance-exemptions-parity.test.mjs",
     "test:rooms-parity": "node test/rooms-parity.test.mjs",
     "test:courses-parity": "node test/courses-parity.test.mjs",
     "test:edu-helpers": "node test/education-helpers-parity.test.mjs",

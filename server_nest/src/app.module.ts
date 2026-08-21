@@ -24,6 +24,7 @@ import { LeadOptionsModule } from './modules/lead-options/lead-options.module.js
 import { FeedbackTypesModule } from './modules/feedback-types/feedback-types.module.js';
 import { ArchiveReasonsModule } from './modules/archive-reasons/archive-reasons.module.js';
 import { AttendanceSettingsModule } from './modules/attendance-settings/attendance-settings.module.js';
+import { AttendanceExemptionsModule } from './modules/attendance-exemptions/attendance-exemptions.module.js';
 import { FeedbackModule } from './modules/feedback/feedback.module.js';
 import { HolidaysModule } from './modules/holidays/holidays.module.js';
 import { SearchModule } from './modules/search/search.module.js';
@@ -113,6 +114,8 @@ import { ExpensesModule } from './modules/expenses/expenses.module.js';
     FeedbackTypesModule,
     ArchiveReasonsModule,
     AttendanceSettingsModule,
+    // Davomatdan ozod davrlari (4/4).
+    AttendanceExemptionsModule,
     // Fikr-mulohaza (aloqa) — bildirishnomalarga tayanadi.
     FeedbackModule,
     // Bayramlar — PUL YO'LIDA (davomat/to'lov/maosh shunga tayanadi).
