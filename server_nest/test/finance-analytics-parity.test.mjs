@@ -18,10 +18,15 @@
  *      SHART. Yozuv sonlari boshda va oxirida solishtiriladi.
  *
  * ── ⚠ ATAYLAB O'LCHANMAYDIGAN YAGONA HOLAT ──
- * `/intelligence/alerts/:alertId?explain=true` — Express LLM ga boradi
- * (`ai` moduli), NestJS esa deterministik matn qaytaradi, chunki `ai`
- * KO'CHIRILMAGAN (B29). Bu holat SKIP EMAS: quyida OCHIQ tekshiriladi
- * va "bloklangan" deb belgilanadi.
+ * `/intelligence/alerts/:alertId?explain=true` — bu MUHITDA
+ * `GEMINI_API_KEY` bo'sh, ya'ni IKKALA stek ham LLM ga bormaydi va
+ * `deterministic` qaytaradi. "Mos keldi" natijasi AI YO'LI ISHLADI
+ * degani EMAS, shuning uchun u SKIP emas, "BLOKLANGAN" deb belgilanadi.
+ *
+ * ⚠ AI ko'prigining O'ZI (B29) alohida o'lchanadi:
+ * `test/ai-explain-wiring.probe.mjs` — u soxta kalit bilan ikkala
+ * stekni LLM shoxiga kirishga majburlaydi va `AiUsageLog` yozuvi
+ * paydo bo'lishini tekshiradi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import assert from 'node:assert/strict';
@@ -422,9 +427,13 @@ const main = async () => {
         if (eSrc === 'deterministic') {
           ok(`explain=true — ikkalasi ham "deterministic" (mos)`);
           blocked("explain=true AI tarmog'i",
-            "Express ham LLM ga yetib bormadi (`source: deterministic`), ya'ni AI YO'LI "
-            + "BU YURISHDA O'LCHANMADI. NestJS'da `ai` moduli ulanmagan (B29) — "
-            + "u ko'chirilgach bu holat QAYTA o'lchanishi SHART.");
+            "IKKALA stek ham LLM ga yetib bormadi (`source: deterministic`) — "
+            + "bu muhitda `GEMINI_API_KEY` BO'SH, ya'ni "
+            + "`isNarrationConfigured()` ikkalasida ham `false`. Bu KOD "
+            + "nuqsoni EMAS, MUHIT cheklovi. B29 (ko'prik ulanganmi) "
+            + "ALOHIDA o'lchanadi: `test/ai-explain-wiring.probe.mjs` "
+            + "soxta kalit bilan ikkala stekni ham LLM shoxiga "
+            + "kirishga majburlaydi va `AiUsageLog` yozuvini tekshiradi.");
         } else {
           ok(`explain=true — ikkalasi ham "${eSrc}" (kesh yo'li)`);
         }

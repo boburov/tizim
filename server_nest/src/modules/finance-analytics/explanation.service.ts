@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { GeminiService } from '../ai/gemini.service.js';
+import { AiBudgetService } from '../ai/ai-budget.service.js';
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -24,30 +26,24 @@ import { PrismaService } from '../../prisma/prisma.service.js';
  * ekrandagi son o'zgarmaydi.
  *
  * ══════════════════════════════════════════════════════════════════════
- * ⚠⚠ KO'CHIRISHDA BLOKLANGAN QISM: `ai` MODULI (B29) ⚠⚠
+ * ⚠ AI QATLAMI ULANGAN (B29 YOPILDI)
  *
- * Express'dagi 2-bosqich `modules/ai/services/gemini.service.js`
- * (`generateFinanceExplanation`, `isNarrationConfigured`) va
- * `aiBudget.service.js` (`openBudget`) ga tayanadi. Bu modul NestJS'ga
- * HALI KO'CHIRILMAGAN va u MENING KO'LAMIMDA EMAS.
+ * Ilgari `narrationPort` `null` edi, chunki `ai` moduli NestJS'ga
+ * ko'chirilmagan edi: `?explain=true` va kesh bo'sh bo'lgan holatda
+ * NestJS `deterministic`, Express esa `ai` qaytarardi.
  *
- * ── NEGA MANTIQ NUSXA KO'CHIRILMADI ──
- * `gemini.service.js` faqat "so'rov yuborish" emas: unda timeout,
- * abort, token hisobi, `AiUsage` yozuvi va kesh barmoq izi bor.
- * Ularni bu yerda qayta yozish IKKINCHI AI qatlami bo'lardi va
- * oylik limit ikki joyda alohida sanalardi — ya'ni limit ishlamay
- * qolardi.
+ * Endi port `AiModule` ning AYNI nusxalariga ulangan
+ * (`GeminiService` + `AiBudgetService`).
  *
- * ── HOZIR NIMA BO'LADI ──
- * `narrationPort` ULANMAGAN (`null`), shuning uchun:
- *   • KESHDAGI izoh Express bilan AYNAN bir xil qaytadi (`ai_cached`)
- *   • kesh bo'sh bo'lsa DETERMINISTIK matn qaytadi
+ * ── ⚠ NEGA MANTIQ NUSXA KO'CHIRILMADI ──
+ * `gemini.service` faqat "so'rov yuborish" emas: unda timeout, abort,
+ * token hisobi, `AiUsage` yozuvi va kesh barmoq izi bor. Ularni bu
+ * yerda qayta yozish IKKINCHI AI qatlami bo'lardi va oylik limit ikki
+ * joyda alohida sanalardi — ya'ni limit ISHLAMAY QOLARDI.
  *
- * Ya'ni `?explain=true` va kesh bo'sh bo'lgan holatda NestJS Express'dan
- * FARQ QILADI (`source: "deterministic"` va `"ai"`). Bu holat paritet
- * testida O'TKAZIB YUBORILMAYDI — u OCHIQ belgilangan va hisobotda
- * "bloklangan" deb sanaladi. `ai` moduli ko'chirilgach, bu yerga
- * faqat `narrationPort` ulanadi — qolgan mantiq tayyor.
+ * ── ⚠ LLM RAQAM O'ZGARTIRA OLMAYDI ──
+ * Javob faqat MATN sifatida saqlanadi; barcha raqamlar signalning
+ * o'zida (`evidence[]`) qoladi.
  * ══════════════════════════════════════════════════════════════════════
  */
 
@@ -119,12 +115,36 @@ export class ExplanationService {
   private readonly logger = new Logger('FinanceExplanation');
 
   /**
-   * ⚠ HOZIRCHA `null` — yuqoridagi B29 izohiga qarang. Bu maydon
-   * `ai` moduli ko'chirilgandan keyin to'ldiriladi.
+   * AI QATLAMIGA KO'PRIK.
+   *
+   * ⚠ `AiModule` EKSPORT QILGAN AYNI NUSXALAR ishlatiladi — ikkinchi
+   * nusxa oylik AI limitini ikki joyda alohida sanardi.
    */
-  private readonly narrationPort: FinanceNarrationPort | null = null;
+  private readonly narrationPort: FinanceNarrationPort;
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    private readonly gemini: GeminiService,
+    private readonly budget: AiBudgetService,
+  ) {
+    this.narrationPort = {
+      isConfigured: () => this.gemini.isNarrationConfigured(),
+      canSpend: async () => {
+        // ⚠ `openBudget()` xato bersa LLM BLOKLANMAYDI — Express'da
+        // ham aynan shunday (`catch` ichida davom etadi).
+        const b = await this.budget.openBudget();
+        return !b || b.canSpend();
+      },
+      spend: (n: number) => {
+        // ⚠ Sarf `gemini.service` ichida ALLAQACHON yoziladi
+        // (`recordUsage`). Bu yerda ikkinchi marta sanash oylik
+        // hisobni IKKI BAROBAR ko'rsatardi.
+        void n;
+      },
+      generate: (signal: Record<string, unknown>) =>
+        this.gemini.generateFinanceExplanation(signal),
+    };
+  }
 
   /** Signal uchun izoh. */
   async explainSignal(
@@ -155,7 +175,7 @@ export class ExplanationService {
       /* kesh o'qilmasa — davom etamiz */
     }
 
-    if (!this.narrationPort || !this.narrationPort.isConfigured()) return base;
+    if (!this.narrationPort.isConfigured()) return base;
 
     // AI BYUDJETI (oylik chaqiruv limiti).
     //

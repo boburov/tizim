@@ -79,6 +79,7 @@
     "test:imports-parity": "node --env-file=../server/.env test/imports-parity.test.mjs",
     "test:ai-parity": "node --env-file=../server/.env test/ai-parity.test.mjs",
     "test:journal-storno": "node --env-file=../server/.env test/journal-storno.test.mjs",
+    "probe:ai-explain": "node --env-file=../server/.env test/ai-explain-wiring.probe.mjs",
     "test:route-matrix": "node --env-file=../server/.env test/route-matrix.mjs"
   },
   "prisma": {

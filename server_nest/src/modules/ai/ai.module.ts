@@ -85,7 +85,19 @@ import { BriefingService } from './briefing.service.js';
     BriefingService,
   ],
   // Tungi joblar (kesishuvdan keyin) shu servislarga murojaat qiladi.
-  exports: [RecomputeService, ReportService, AiLifecycleService, NarrationQueueService],
+  //
+  // ⚠ `GeminiService` + `AiBudgetService` — `finance-analytics` ning
+  // izoh qatlami (`FinanceNarrationPort`, B29) uchun. Ular AYNAN shu
+  // nusxada bo'lishi SHART: ikkinchi nusxa oylik AI limitini ikki
+  // joyda alohida sanardi, ya'ni limit ishlamay qolardi.
+  exports: [
+    RecomputeService,
+    ReportService,
+    AiLifecycleService,
+    NarrationQueueService,
+    GeminiService,
+    AiBudgetService,
+  ],
 })
 export class AiModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

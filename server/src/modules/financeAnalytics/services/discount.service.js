@@ -102,18 +102,37 @@ const groupedBy = async (col, range, branchId, filters, nameKind) => {
   }));
 };
 
-/** CHEGIRMA TURI bo'yicha — `Discount.kind` (Faza 5 da qo'shilgan). */
+/**
+ * CHEGIRMA TURI bo'yicha — `Discount.kind`.
+ *
+ * ── ⚠ B26 TUZATILDI: FILIAL KO'LAMI ──
+ * Ilgari bu yerda `const bc = branchClause(...) === Prisma.empty
+ * ? Prisma.empty : Prisma.empty;` turardi — ternarning IKKALA TARMOG'I
+ * ham bo'sh, ya'ni ko'lam natijasi TASHLAB YUBORILARDI. Ustun nomi ham
+ * xato edi (`d."studentId"` filial ustuni EMAS).
+ *
+ * Natija: aniq `?branchId=` berilmasa bu kesim BUTUN TASHKILOT
+ * chegirmalarini qaytarardi — fayldagi boshqa hamma kesim
+ * (`byBranch`/`byCourse`/`byGroup`) esa ko'lamni to'g'ri qo'llardi.
+ *
+ * ── NEGA `EXISTS`, TO'G'RIDAN FILTR EMAS ──
+ * `Discount` da `branchId` YO'Q: u guruhga tegishli, guruh esa
+ * filialga. Bitta `EXISTS` ikkala holatni ham qamraydi — aniq filial
+ * ham, ALS ko'lami ham (`branchClause` ikkalasini ham qaytaradi).
+ */
 const byKind = async (range, branchId) => {
-  const bc = branchClause('d."studentId"', null) === Prisma.empty ? Prisma.empty : Prisma.empty;
+  const bc = branchClause('g2."branchId"', branchId);
+  const scope = bc === Prisma.empty
+    ? Prisma.empty
+    : Prisma.sql`AND EXISTS (
+        SELECT 1 FROM groups g2 WHERE g2.id = d."groupId" ${bc})`;
   const rows = await prisma.$queryRaw`
     SELECT d.kind::text AS "kind", d.type::text AS "type",
            COUNT(*) AS "count",
            COUNT(DISTINCT d."studentId") AS "students"
     FROM discounts d
     WHERE d."isDeleted" = false AND d."isActive" = true
-      ${branchId ? Prisma.sql`AND EXISTS (
-        SELECT 1 FROM groups g2 WHERE g2.id = d."groupId" AND g2."branchId" = ${String(branchId)})` : Prisma.empty}
-      ${bc}
+      ${scope}
     GROUP BY d.kind, d.type
     ORDER BY "count" DESC
   `;

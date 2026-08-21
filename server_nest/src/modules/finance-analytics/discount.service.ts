@@ -135,46 +135,38 @@ export class DiscountService {
   /**
    * CHEGIRMA TURI bo'yicha — `Discount.kind` (Faza 5 da qo'shilgan).
    *
-   * ⚠⚠ MA'LUM KAMCHILIK — BU KESIMDA FILIAL KO'LAMI YO'Q (B26) ⚠⚠
+   * ── ⚠ B26 TUZATILDI: FILIAL KO'LAMI ──
+   * Ilgari bu yerda `const bc = branchClause(...) === Prisma.empty
+   * ? Prisma.empty : Prisma.empty;` turardi — ternarning IKKALA
+   * TARMOG'I ham bo'sh, ya'ni ko'lam natijasi TASHLAB YUBORILARDI.
+   * Ustun nomi ham xato edi (`d."studentId"` filial ustuni EMAS).
    *
-   * Express'da shu joyda quyidagi qator turadi:
+   * Natija: aniq `?branchId=` berilmasa bu kesim BUTUN TASHKILOT
+   * chegirmalarini qaytarardi — fayldagi boshqa hamma kesim
+   * (`byBranch`/`byCourse`/`byGroup`) esa ko'lamni to'g'ri qo'llardi.
    *
-   *   const bc = branchClause('d."studentId"', null) === Prisma.empty
-   *     ? Prisma.empty : Prisma.empty;
+   * ── NEGA `EXISTS`, TO'G'RIDAN FILTR EMAS ──
+   * `Discount` da `branchId` YO'Q: u guruhga tegishli, guruh esa
+   * filialga. Bitta `EXISTS` ikkala holatni ham qamraydi — aniq filial
+   * ham, ALS ko'lami ham (`branchClause` ikkalasini ham qaytaradi).
    *
-   * Ternarning IKKALA TARMOG'I ham `Prisma.empty` — ya'ni `bc` HAR DOIM
-   * bo'sh va `branchClause` chaqiruvi natijasi TASHLAB YUBORILADI.
-   * Ustun nomi ham xato (`d."studentId"` filial ustuni emas). Natijada
-   * ANIQ `?branchId=` berilmasa, bu kesim BUTUN TASHKILOTNING chegirma
-   * turlari bo'yicha sonini qaytaradi.
-   *
-   * Sizib chiqadigan narsa — faqat AGREGAT sonlar (kind, type, count,
-   * students): ism ham, summa ham yo'q. Shuning uchun ta'sir past,
-   * lekin fayldagi boshqa hamma kesim (`byBranch`/`byCourse`/`byGroup`)
-   * ko'lamni TO'G'RI qo'llaydi — ya'ni bu chetda qolgan joy.
-   *
-   * ⚠ BU YERDA TUZATILMADI — sabab: ko'chirish xatti-harakatni
-   * O'ZGARTIRMASLIGI kerak. Ko'lam qo'shilsa NestJS Express'dan kamroq
-   * qator qaytarardi va paritet ATAYLAB buzilardi. `MIGRATION-
-   * CHECKLIST.md` (B26) da qayd etilgan; test buni "ko'lam ishlayapti"
-   * deb EMAS, "MA'LUM SIZISH" deb qulflaydi.
+   * ⚠ IKKALA STEKDA BIR VAQTDA tuzatildi — aks holda paritet buzilib,
+   * tuzatish "ko'chirish regressiyasi" bo'lib ko'rinardi.
    */
   private async byKind(_range: Range, branchId: string | null) {
-    const bc =
-      branchClause('d."studentId"', null) === Prisma.empty ? Prisma.empty : Prisma.empty;
+    const bc = branchClause('g2."branchId"', branchId);
+    const scope =
+      bc === Prisma.empty
+        ? Prisma.empty
+        : Prisma.sql`AND EXISTS (
+            SELECT 1 FROM groups g2 WHERE g2.id = d."groupId" ${bc})`;
     const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
       SELECT d.kind::text AS "kind", d.type::text AS "type",
              COUNT(*) AS "count",
              COUNT(DISTINCT d."studentId") AS "students"
       FROM discounts d
       WHERE d."isDeleted" = false AND d."isActive" = true
-        ${
-          branchId
-            ? Prisma.sql`AND EXISTS (
-          SELECT 1 FROM groups g2 WHERE g2.id = d."groupId" AND g2."branchId" = ${String(branchId)})`
-            : Prisma.empty
-        }
-        ${bc}
+        ${scope}
       GROUP BY d.kind, d.type
       ORDER BY "count" DESC
     `;

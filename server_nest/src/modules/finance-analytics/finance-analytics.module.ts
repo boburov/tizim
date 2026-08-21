@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { FinanceAnalyticsController } from './finance-analytics.controller.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
 import { BranchAnalyticsModule } from '../branch-analytics/branch-analytics.module.js';
+import { AiModule } from '../ai/ai.module.js';
 
 import { NameResolverService } from './name-resolver.service.js';
 import { SummaryService } from './summary.service.js';
@@ -31,7 +32,9 @@ import { ExplanationService } from './explanation.service.js';
  * (`common/als/branch-context.ts`) ham MAVJUDLARIDAN olinadi.
  */
 @Module({
-  imports: [BranchAnalyticsModule],
+  // ⚠ `AiModule` — `ExplanationService` ning LLM ko'prigi uchun (B29).
+  // Halqa YO'Q: `AiModule` `finance-analytics` ga tayanmaydi.
+  imports: [BranchAnalyticsModule, AiModule],
   controllers: [FinanceAnalyticsController],
   providers: [
     NameResolverService,
