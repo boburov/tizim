@@ -54,6 +54,7 @@ import { LedgerModule } from './modules/ledger/ledger.module.js';
 import { LessonCancellationsModule } from './modules/lesson-cancellations/lesson-cancellations.module.js';
 import { StudentFreezeModule } from './modules/student-freeze/student-freeze.module.js';
 import { ExportsModule } from './modules/exports/exports.module.js';
+import { ImportsModule } from './modules/imports/imports.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -198,6 +199,9 @@ import { ExportsModule } from './modules/exports/exports.module.js';
     StudentFreezeModule,
     // Excel eksport (2/2) — ruxsat HAR BIR dataset'ning O'ZIDA.
     ExportsModule,
+    // Excel import (11/11) — ruxsat YOZISH huquqiga bog'langan
+    // (eksportdan eng muhim farqi).
+    ImportsModule,
   ],
 })
 export class AppModule {}

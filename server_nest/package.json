@@ -76,6 +76,7 @@
     "test:wave-d-parity": "node --env-file=../server/.env test/wave-d-parity.test.mjs",
     "test:branch-analytics-parity": "node --env-file=../server/.env test/branch-analytics-parity.test.mjs",
     "test:exports-parity": "node --env-file=../server/.env test/exports-parity.test.mjs",
+    "test:imports-parity": "node --env-file=../server/.env test/imports-parity.test.mjs",
     "test:route-matrix": "node --env-file=../server/.env test/route-matrix.mjs"
   },
   "prisma": {
@@ -87,9 +88,11 @@
     "@nestjs/core": "^10.4.4",
     "@nestjs/platform-express": "^10.4.4",
     "@prisma/client": "^6.19.3",
+    "bullmq": "^6.2.0",
     "cookie-parser": "^1.4.7",
     "exceljs": "^4.4.0",
     "express-rate-limit": "^7.5.1",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "node-telegram-bot-api": "^0.67.0",
     "pg-boss": "^12.27.0",

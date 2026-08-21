@@ -32,6 +32,10 @@ export const NEST = process.env.NEST_URL || 'http://127.0.0.1:5001';
 const VOLATILE = new Set([
   'createdAt', 'updatedAt', 'deletedAt', 'archivedAt', 'stack',
   'accessToken', 'refreshToken', 'latencyMs', 'iat', 'exp',
+  // ⚠ `durationMs` — O'LCHOV, biznes qiymati EMAS. Import/eksport
+  // javoblarida u har chaqiruvda millisekundlarga farq qiladi va uni
+  // solishtirish HAR DOIM qizil berardi.
+  'durationMs',
 ]);
 
 export const request = async (base, method, path, { token, body, headers: extra } = {}) => {
