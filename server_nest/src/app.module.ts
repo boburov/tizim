@@ -31,6 +31,7 @@ import { ActivityHistoryModule } from './modules/activity-history/activity-histo
 import { LeadsModule } from './modules/leads/leads.module.js';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
 import { BranchAnalyticsModule } from './modules/branch-analytics/branch-analytics.module.js';
+import { BranchAnalyticsModule } from './modules/branch-analytics/branch-analytics.module.js';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
 import { GroupsModule } from './modules/groups/groups.module.js';
@@ -137,6 +138,8 @@ import { LedgerModule } from './modules/ledger/ledger.module.js';
     LeadsModule,
     // Rahbariyat paneli (6/6) — faqat o'qish.
     AdminDashboardModule,
+    // Filial tahlili — FAQAT xona bandligi (`/rooms`).
+    BranchAnalyticsModule,
     // Filial tahlili — FAQAT xona bandligi (`/rooms`).
     BranchAnalyticsModule,
     // Faoliyat loglari — faqat o'qish (yozuvni Express `auditLog` yaratadi).

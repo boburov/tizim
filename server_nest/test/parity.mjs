@@ -254,6 +254,8 @@ const CASES = [
     path: '/api/admin-dashboard/retention', auth: true },
   { name: 'admin-dashboard/churned-students', method: 'GET',
     path: '/api/admin-dashboard/churned-students', auth: true },
+  { name: 'branch-analytics/rooms', method: 'GET',
+    path: '/api/branch-analytics/rooms', auth: true },
   // ── Faza 2.3: auth moduli ──
   { name: 'auth/me', method: 'GET', path: '/api/auth/me', auth: true },
   { name: 'auth/me (401)', method: 'GET', path: '/api/auth/me' },

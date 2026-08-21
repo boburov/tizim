@@ -33,6 +33,7 @@
     "test:expenses-parity": "node test/expenses-parity.test.mjs",
     "test:attendance-exemptions-parity": "node test/attendance-exemptions-parity.test.mjs",
     "test:teacher-attendance-parity": "node test/teacher-attendance-parity.test.mjs",
+    "test:grades-parity": "node test/grades-parity.test.mjs",
     "test:rooms-parity": "node test/rooms-parity.test.mjs",
     "test:courses-parity": "node test/courses-parity.test.mjs",
     "test:edu-helpers": "node test/education-helpers-parity.test.mjs",

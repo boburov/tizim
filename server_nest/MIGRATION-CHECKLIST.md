@@ -184,7 +184,7 @@ keraksiz deb e'lon qilinishi kerak. Ikkalasi ham MAHSULOT QARORI.
 |---|---|---|---|
 | adminDashboard | `/api/admin-dashboard` | 6 | ✅ 6/6 |
 | financeAnalytics | `/api/finance-analytics` | 30 | ⬜ |
-| branchAnalytics | `/api/branch-analytics` | 11 | ⬜ |
+| branchAnalytics | `/api/branch-analytics` | 11 | 🟡 1/11 (`/rooms` — xona bandligi) |
 | ai | `/api/ai` | 15 | ⬜ |
 | exports | `/api/exports` | 2 | ⬜ |
 
