@@ -262,7 +262,7 @@ const main = async () => {
     note("bu ikkisi `GroupsService.addStudent` ko'chgach ochiladi — mantiq nusxalanmadi");
 
     // ═══════════════════════════════════════════════════════════════
-    //  A2. ⚠ EXPRESS'DAGI O'LIK KOD — AYNAN TAKRORLANGAN (B13)
+    //  A2. ⚠ EXPRESS'DAGI O'LIK KOD — AYNAN TAKRORLANGAN (B23)
     //
     // `leadRouting.create` da shunday yozilgan:
     //     const sourceKey = isFallback ? null : ...;
@@ -280,12 +280,12 @@ const main = async () => {
     // ⚠ Bu tekshiruv zaxira qoida YARATILISHIDAN OLDIN turadi: keyin
     // qo'yilsa noyoblik cheklovi (409) o'lik kodni YASHIRIB qo'yardi.
     // ═══════════════════════════════════════════════════════════════
-    head("Express o'lik kodi: zaxira + manba (B13)");
+    head("Express o'lik kodi: zaxira + manba (B23)");
 
     {
       const rulesNow = await prisma.leadRoutingRule.count();
       if (rulesNow !== 0) {
-        skip('B13 o\'lik kod', `bazada ${rulesNow} ta qoida bor — TAXMIN QILINMADI`);
+        skip('B23 o\'lik kod', `bazada ${rulesNow} ta qoida bor — TAXMIN QILINMADI`);
       } else {
         const madeHere = [];
         const e = await req(EXPRESS, 'POST', '/api/leads/routing', {
@@ -312,8 +312,8 @@ const main = async () => {
           assert.equal(n.body.data.sourceKey, null, "nest: sourceKey null EMAS");
           assert.equal(e.body.data.isFallback, true);
           assert.equal(n.body.data.isFallback, true);
-          ok('B13: `sourceKey` JIMGINA e\'tiborsiz qoldirildi, zaxira YARATILDI (ikkala stekda 201)');
-        } catch (err) { bad('B13 o\'lik kod pariteti', err.message); }
+          ok('B23: `sourceKey` JIMGINA e\'tiborsiz qoldirildi, zaxira YARATILDI (ikkala stekda 201)');
+        } catch (err) { bad('B23 o\'lik kod pariteti', err.message); }
 
         // Tozalash: keyingi bo'lim toza holatdan boshlashi kerak.
         await prisma.leadRoutingRule.deleteMany({ where: { note: { startsWith: PREFIX } } });

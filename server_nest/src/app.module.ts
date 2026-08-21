@@ -30,6 +30,7 @@ import { SearchModule } from './modules/search/search.module.js';
 import { ActivityHistoryModule } from './modules/activity-history/activity-history.module.js';
 import { LeadsModule } from './modules/leads/leads.module.js';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
+import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
 import { GroupsModule } from './modules/groups/groups.module.js';
@@ -132,6 +133,8 @@ import { OpeningBalanceModule } from './modules/opening-balance/opening-balance.
     ActivityHistoryModule,
     // Lidlar (14/16) — `convert*` `groups.addStudent` ga tayanadi.
     LeadsModule,
+    // Rahbariyat paneli (6/6) — faqat o'qish.
+    AdminDashboardModule,
     // Rahbariyat paneli (6/6) — faqat o'qish.
     AdminDashboardModule,
     // Faoliyat loglari — faqat o'qish (yozuvni Express `auditLog` yaratadi).
