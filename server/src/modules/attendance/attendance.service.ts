@@ -530,19 +530,26 @@ export class AttendanceService {
      * ketardi — hech kim so'ramagan, KO'RINADIGAN o'zgarish.
      * Bu "jimgina xatti-harakat o'zgarishi" ta'rifiga aynan tushadi.
      *
-     * ⚠ TUZATISH ALOHIDA QAROR. Yoqish uchun shu blokni olib tashlash
-     * KIFOYA — qolgan kod tayyor va to'g'ri. Lekin avval Express ham
-     * tuzatilishi va ikkala stek BIR VAQTDA yoqilishi kerak.
+     * ── ✅ B16 YOQILDI (2026-08-22, EGA QARORI) ──
      *
-     * `test/attendance-parity.test.mjs` bu holatni QULFLAB turadi:
-     * `bulkRecord` dan keyin `notifications` jadvalida YANGI qator
-     * paydo bo'lmasligini ikkala stekda ham tekshiradi.
-     * Hujjat: `MIGRATION-CHECKLIST.md`, "KO'CHIRISHDA TOPILGAN
-     * XATTI-HARAKATLAR" jadvali.
+     * Erta qaytish (`EXPRESS_NOTIFICATION_IS_DEAD`) OLIB TASHLANDI.
+     * Sabab: Express endi O'LIK, ya'ni "ikkala stek bir vaqtda
+     * yoqilsin" sharti o'z-o'zidan bajarildi — yoqiladigan ikkinchi
+     * stek yo'q. Ogohlantirishni yuborish endi FAQAT shu kodga
+     * bog'liq va u to'g'ri yozilgan.
+     *
+     * ⚠ BU KO'RINADIGAN O'ZGARISH. `consecutiveAbsencesAlert = 3`
+     * (o'lchandi), ya'ni o'quvchi ketma-ket 3 marta kelmasa
+     * egalarga HAQIQIY xabar ketadi. Bu ega tomonidan ATAYLAB
+     * so'ralgan.
+     *
+     * ⚠ `test/attendance-parity.test.mjs` (tarixiy, endi
+     * yurgizilmaydi — ikkinchi stek yo'q) TESKARI holatni qulflagan
+     * edi: "`bulkRecord` dan keyin `notifications` O'SMASIN". O'sha
+     * tekshiruv endi NOTO'G'RI. Uning o'rniga
+     * `test/consecutive-absence-alert.test.mjs` YANGI invariantni
+     * qulflaydi: ostona kesilganda xabar YARATILISHI SHART.
      */
-    const EXPRESS_NOTIFICATION_IS_DEAD = true;
-    if (EXPRESS_NOTIFICATION_IS_DEAD) return;
-
     const settings = await this.settings.get();
     const threshold = (settings as any).consecutiveAbsencesAlert || 0;
     if (threshold < 1) return;
@@ -1118,8 +1125,25 @@ export class AttendanceService {
         OR: [{ leftAt: null }, { leftAt: { gte: from } }],
         isDeleted: false,
       },
+      /**
+       * ⚠ B17 — `joinedAt` / `leftAt` QO'SHILDI (2026-08-22).
+       *
+       * Ilgari ular SO'RALMASDI, lekin quyida `computeClassDays` ga
+       * UZATILARDI — ya'ni har doim `undefined` bo'lib borardi va
+       * natijada HAR BIR o'quvchi BUTUN oraliq davomida a'zo bo'lgan
+       * deb hisoblanardi.
+       *
+       * O'LCHANDI (2026-08-01 … 08-22 oynasi): 1274 a'zolikdan 184
+       * tasi (14.4%) oyna O'RTASIDA qo'shilgan yoki chiqqan; 28028
+       * kundan 1633 tasi (5.8%) ortiqcha sanalgan.
+       *
+       * OQIBATI FOIZDA: `groupRate = present / totalClasses`, ya'ni
+       * shishirilgan maxraj davomat foizini PASAYTIRARDI — raqamlar
+       * haqiqatdan YOMONROQ ko'rinardi.
+       */
       select: {
-        groupId: true, studentId: true, student: { select: STUDENT_SELECT },
+        groupId: true, studentId: true, joinedAt: true, leftAt: true,
+        student: { select: STUDENT_SELECT },
       },
     });
 
@@ -1244,36 +1268,29 @@ export class AttendanceService {
       for (const m of members) {
         const sid = String(m.student!.id);
         /**
-         * ⚠⚠ `joinedAt` / `leftAt` ATAYLAB `undefined` ⚠⚠
+         * ⚠ B17 TUZATILDI (2026-08-22) — `joinedAt`/`leftAt` ENDI
+         * HAQIQIY QIYMAT.
          *
-         * Express `groupMemberships` ni `select: { groupId, studentId,
-         * student }` bilan oladi — `joinedAt`/`leftAt` SO'RALMAGAN.
-         * Keyin shu yerda `m.joinedAt` / `m.leftAt` o'qiladi va
-         * ikkalasi ham `undefined` bo'lib chiqadi.
-         *
-         * `computeClassDays` da natija:
+         * Ilgari ular yuqoridagi `select` da SO'RALMAGANI uchun har
+         * doim `undefined` edi va `computeClassDays` da shunday
+         * tugardi:
          *   `effFrom = m.joinedAt > from ? … : from` → `undefined > from`
          *             HAR DOIM `false` → `effFrom = from`
          *   `leftBound = m.leftAt ? … : null`        → `null` → `effTo = to`
+         * Ya'ni har bir o'quvchi BUTUN oraliq davomida a'zo bo'lgan
+         * deb hisoblanardi.
          *
-         * Ya'ni `groupBreakdown` HAR BIR o'quvchini BUTUN oraliq
-         * davomida a'zo bo'lgan deb hisoblaydi — oraliq o'rtasida
-         * qo'shilgan yoki chiqqan o'quvchining dars kunlari
-         * SHISHIRILADI.
+         * ⚠ `as never` OLIB TASHLANDI — aynan u TypeScript'ning
+         * ogohlantirishini bostirib turgan edi. Endi tur tekshiruvi
+         * bu nuqsonning QAYTA kirib kelishiga yo'l qo'ymaydi.
          *
-         * Bu HAQIQIY XATO (`getGroupSummary` AYNI ma'lumot uchun
-         * boshqa son beradi), lekin `dashboard` javobining bir qismi —
-         * ya'ni klient shartnomasi. Tuzatish ALOHIDA qaror:
-         * `select` ga ikki maydon qo'shilsa raqamlar O'ZGARADI.
-         *
-         * TypeScript buni ushlab qoldi; `as never` bilan Express
-         * xatti-harakati AYNAN takrorlanadi.
-         * Hujjat: `MIGRATION-CHECKLIST.md` (B-jadval).
+         * Endi `getGroupSummary` bilan AYNI ma'lumot uchun AYNI son
+         * chiqadi (ilgari ikkalasi boshqa-boshqa javob berardi).
          */
         const { total, cells } = computeClassDays({
           memberships: [{
-            joinedAt: (m as any).joinedAt as never,
-            leftAt: (m as any).leftAt as never,
+            joinedAt: m.joinedAt,
+            leftAt: m.leftAt,
             group: g as never,
           }] as never,
           exemptions: (exemptionsByStudent.get(sid) || []) as never,

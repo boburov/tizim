@@ -934,8 +934,24 @@ export class NotificationsService {
         where,
         _count: { _all: true },
         _sum: { recipientsCount: true, deliveredViaBot: true, readCount: true },
-        orderBy: { _count: { _all: 'desc' } },
-      } as never),
+        /**
+         * ⚠ B4 — BU MARSHRUT HAR DOIM 500 BERARDI (2026-08-22 da tuzatildi).
+         *
+         * Ilgari `orderBy: { _count: { _all: 'desc' } }` edi. Prisma
+         * `_all` ni SELECT tomonida (`_count: { _all: true }`) qabul
+         * qiladi, lekin `orderBy` ichida QABUL QILMAYDI — u yerda ANIQ
+         * maydon kerak. Natija: `PrismaClientValidationError`,
+         * "Unknown argument `_all`", ya'ni 500.
+         *
+         * `id` bo'yicha saralash `_all` bilan AYNAN bir xil natija
+         * beradi: `id` — birlamchi kalit, hech qachon `null` emas,
+         * ya'ni `count(id) === count(*)`.
+         *
+         * ⚠ `as never` OLIB TASHLANDI — aynan u TypeScript'ni
+         * jimlatib, nuqsonni kompilyatsiyada yashirgan edi.
+         */
+        orderBy: { _count: { id: 'desc' } },
+      }),
       this.prisma.notification.aggregate({
         where,
         _sum: { recipientsCount: true, deliveredViaBot: true, readCount: true },

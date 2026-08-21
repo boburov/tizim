@@ -58,7 +58,22 @@ export class NotificationTemplatesService {
     const [items, total] = await Promise.all([
       this.prisma.notificationTemplate.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        /**
+         * ⚠ B9 — IKKILAMCHI SARALASH KALITI (2026-08-22 da qo'shildi).
+         *
+         * Ilgari faqat `createdAt: 'desc'` edi. Seed BIR VAQTNING O'ZIDA
+         * 6 ta shablon yaratadi va ularning `createdAt` i bir xil
+         * millisekundgacha tushishi mumkin — bunda PostgreSQL tartibni
+         * KAFOLATLAMAYDI.
+         *
+         * Bu SAHIFALASHDA ko'rinadigan nuqsonga aylanardi: `skip/take`
+         * bilan bitta shablon IKKI sahifada chiqishi yoki UMUMAN
+         * tushib qolishi mumkin edi.
+         *
+         * `id` — birlamchi kalit, ya'ni tartib endi TO'LIQ aniqlangan.
+         * AYNI naqsh moliya ro'yxatida B39 da tuzatilgan edi.
+         */
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),

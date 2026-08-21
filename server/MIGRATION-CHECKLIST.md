@@ -110,39 +110,56 @@ Ustunlar: **E** = Express marshrut soni, **P** = faza.
 | 2.5a | users (mustaqil marshrutlar) | `/api/users` | 10/14 | ✅ |
 | 2.5b | users (arxivlash/tiklash/hard delete) | `/api/users` | 3/14 | ✅ |
 | 2.5c | users (`POST /staff`) | `/api/users` | 1/14 | ✅ **14/14** |
-| 2.6 | botAuth | `/api/bot-auth` | 2 | 🛑 **BLOKLANGAN** — Express'da ishlamaydi |
+| 2.6 | botAuth | `/api/bot-auth` | 2 | ✅ **HAL QILINDI** (2026-08-22) — quyiga qarang |
 | 2.7 | activityLogs + auditLog middleware | `/api/activity-logs` | 3 | ⬜ |
 
-#### 🛑 2.6 `botAuth` — KO'CHIRIB BO'LMAYDI (Express manbasi buzuq)
+#### ✅ 2.6 `botAuth` — HAL QILINDI (2026-08-22)
 
-`modules/botAuth/services/botAuth.service.js` MONGOOSE davridan qolgan
-maydon nomlarini ishlatadi; ular Prisma sxemasida YO'Q:
+⚠ **BU BAND ILGARI "🛑 KO'CHIRIB BO'LMAYDI" DEB TURGAN EDI VA U ESKIRGAN.**
 
-| Kod | Sxemadagi haqiqat |
+Express manbasi Mongoose davridan qolgan maydon nomlarini ishlatardi
+(`user.password` → `passwordHash`, `where:{login}` → `username`,
+`include:{role,branches}` → `role` skalyar / `branchAssignments` yo'q) va
+ikkala marshrut ham 500 `PrismaClientValidationError` berardi. Qoida
+"Express — etalon" bo'lgani uchun ko'chirish to'silgan edi: saqlanadigan
+xulq-atvor yo'q edi.
+
+**HOZIRGI HOLAT (o'lchandi):** `src/modules/bot-auth/bot-auth.service.ts`
+nuqsonni emas, **MAQSADNI** ko'chirgan va ishlaydigan `modules/auth` login
+oqimiga tayanadi. Ikkala marshrut ham **200** qaytaradi va `accessToken`
+haqiqiy JWT (`payload.sub` — haqiqiy foydalanuvchi id'si).
+
+**⚠ ESKI ZOND "KO'CHIRILMAGANLIK" NI INVARIANT QILIB YOZGAN EDI** —
+§6 dagi AYNI naqsh, endi **oltinchi** marta. `bot-auth-blocker.probe.mjs`
+"2/2 marshrut 500 berishi SHART" ni kutardi va holat o'zgargach o'zi
+"XULOSA: holat o'zgargan" deb yozib turardi, lekin uni hech kim
+yurgizmayotgan edi.
+
+Zond **o'chirildi**, o'rniga `test/bot-auth.test.mjs` (9 ✅) — tekshiruv
+yumshatilmadi, **yo'nalishi teskarisiga burildi**:
+
+| ilgari | endi |
 |---|---|
-| `user.password` | `passwordHash` |
-| `where: { login }` | `username` |
-| `include: { role: true }` | `role` — SKALYAR (String), relation emas |
-| `include: { branches: true }` | bunday relation yo'q (`branchAssignments`) |
+| "ko'chirilmagan, 500 berishi SHART" | "ko'chirilgan, ISHLASHI SHART" |
 
-Handler `{ accessToken, refreshToken, user, roleMeta }` ni kutadi, servis
-esa `{ user, tokens }` qaytaradi — `accessToken` HAR DOIM `undefined`.
+Yangi test asl nuqsonni ATAYLAB qulflaydi: "200 qaytdi" YETARLI EMAS —
+token dekodlanadi va `payload.sub` haqiqiy foydalanuvchi ekani
+tekshiriladi (asl nuqsonda handler `{accessToken}` ni kutardi, servis esa
+`{user, tokens}` qaytarardi, ya'ni token HAR DOIM `undefined` edi).
+Manfiy nazorat ham bor: buzuq HMAC 401 bermasa, qolgan hamma tekshiruv
+ma'nosiz.
 
-O'LCHANDI (taxmin emas): HAQIQIY bot tokeni bilan HMAC to'sig'idan
-o'tilgach IKKALA marshrut ham **500 `PrismaClientValidationError`**
-beradi. Takrorlash:
+**⚠ ESKI ZOND BAZADA QOLDIQ QOLDIRARDI.** U `login` ni haqiqiy
+chaqirardi, ya'ni soxta Telegram id'ni (999000111) **OWNER hisobiga
+BOG'LAB** ketardi (`bot_users` qatori + refresh token). Buni
+`fixture-residue` ham TUTMAGAN: zond `qa_probe` nomini ishlatgan, reyestr
+prefikslari esa `__parity_ / parity- / qa_lc_ / __probe_`. Qoldiq
+to'g'ridan-to'g'ri SQL bilan tozalandi (o'lchandi: 1 → 0).
 
-```
-node --env-file=../server/.env test/bot-auth-blocker.probe.mjs
-```
-
-⚠ NEGA BU ILGARI KO'RINMAGAN: haqiqiy `initData` bo'lmasa har qanday
-so'rov 401 da to'xtaydi va Prisma yo'liga umuman yetib bormaydi.
-
-NEGA TO'SIQ: ko'chirish qoidasi "Express — etalon". Bu yerda etalon 500
-qaytaradi, ya'ni SAQLANADIGAN XULQ-ATVOR YO'Q. Avval Express'dagi
-`botAuth` tuzatilishi (= yangi xulq-atvor loyihalash) yoki modul
-keraksiz deb e'lon qilinishi kerak. Ikkalasi ham MAHSULOT QARORI.
+Yangi test nomi ATAYLAB `__probe_botauth` — qoldiq qolsa
+`fixture-residue` uni endi **KO'RADI**. Tozalash Prisma orqali
+bajariladi (sinaladigan API orqali EMAS) va alohida tekshiruv bilan
+O'LCHANADI.
 
 ### FAZA 3 — TASHKILIY TUZILMA
 | Modul | Manzil | E | Holat |
@@ -431,18 +448,89 @@ ko'rinardi.
 ⚠ Retention/churn raqamlarining kichrayishi **NUQSON EMAS** — ilgari
 ko'rsatilgan raqam boshqa filiallarning ma'lumotini ham o'z ichiga olardi.
 
-### 6.2 ATAYLAB O'ZGARTIRILMAGAN (ega qarori kerak)
+### 6.2 ✅ EGA QARORLARI — HAMMASI YOPILDI (2026-08-22)
 
-| # | Nima | Nega tegilmadi |
-|---|---|---|
-| B22 | `TeacherSalary` da `isDeleted` yo'q | Nuqson emas: hosila jadval o'chirilmaydi, qayta hisoblanadi. Kodda unga `isDeleted` filtri qo'llash urinishi 0 marta. |
-| B4 | `GET /notifications/stats` HAR DOIM 500 | Tuzatish javob shaklini 500 → 200 ga o'zgartiradi — ko'chirish ishi emas, mahsulot qarori. Ikkala stekda BIR XIL; test 500 ni qulflaydi. |
-| B9 | `notification-templates` saralashda ikkilamchi kalit yo'q | B39 da AYNI naqsh moliya ro'yxatida tuzatildi (u yerda paritet testi buni TUTDI). Bu yerda tartib o'zgarishi klient ro'yxatini siljitadi — alohida qaror. |
-| B13 | arxivlangan guruh `GET /groups/:id/history` → 400 | `GET /groups/:id` AYNI guruh uchun 200 beradi — aniq ziddiyat, lekin tuzatish javob kodini o'zgartiradi. |
-| B16 | Express `consecutiveAbsences()` HAR CHAQIRUVDA yiqiladi (Mongo qoldig'i) | NestJS'da TO'G'RI yozilgan, lekin ogohlantirish `EXPRESS_NOTIFICATION_IS_DEAD` bayrog'i bilan ATAYLAB o'chirilgan — aks holda kesishuv davrida egalarga kutilmagan xabarlar oqimi ketardi. **Yoqish alohida qaror: Express ham tuzatilib, ikkalasi BIR VAQTDA yoqilishi kerak.** |
-| B17 | `getDashboardStats().groupBreakdown` dars kunlarini SHISHIRADI | `select` ga `joinedAt`/`leftAt` qo'shilsa dashboard raqamlari O'ZGARADI. |
-| B21 (eski) | — | ✅ **HAL QILINDI** (yuqoridagi jadvalga qarang). ⚠ **QOLGAN ISH:** ilgari bekor qilingan yozuvlar uchun jurnal backfill'i — u tarixiy hisobotlarni qayta hisoblaydi, ya'ni ONGLI qaror. |
-| B30 | `intelligence` marshrutlari 12 servisni parallel chaqiradi | KOD nuqsoni EMAS (o'lchandi). **Cutover'da `connection_limit` sozlanishi kerak** — bu joylashtirish qarori. |
+Ega oltala bandga **HA** dedi. Qaror qabul qilishdan OLDIN har biri
+o'lchandi — abstrakt savol aniq raqamga aylantirildi.
+
+| # | Nima | Qaror | Natija |
+|---|---|---|---|
+| B4 | `GET /notifications/stats` HAR DOIM 500 | ✅ tuzatildi | `orderBy: { _count: { _all } }` → `{ _count: { id } }`. Prisma `_all` ni SELECT'da qabul qiladi, `orderBy` da YO'Q. `id` — birlamchi kalit, ya'ni `count(id) === count(*)`. **500 → 200** |
+| B13 | arxivlangan guruh `history` → 400 | ✅ tuzatildi | `history()` YOZUV qo'riqchisidan (`ensureGroup`) o'tardi. Yangi `readGroup()` qo'shildi. **400 → 200** |
+| B17 | dashboard dars kunlarini SHISHIRADI | ✅ tuzatildi | `select` ga `joinedAt`/`leftAt` qo'shildi. **Σ totalClasses 4095 → 3889 (−206, −5.0%)**, 20 guruhdan 17 tasi o'zgardi |
+| B9 | shablon saralashda ikkilamchi kalit yo'q | ✅ tuzatildi | `orderBy: [{ createdAt }, { id }]` |
+| B16 | "ketma-ket kelmagan o'quvchi" xabari O'CHIQ | ✅ YOQILDI | `EXPRESS_NOTIFICATION_IS_DEAD` bloki olib tashlandi |
+| B21 | jurnal backfill'i | ✅ yozildi | `src/seeds/journal-backfill.seed.ts` |
+| B22 | `TeacherSalary` da `isDeleted` yo'q | — | Nuqson emas: hosila jadval o'chirilmaydi, qayta hisoblanadi |
+| B30 | `intelligence` 12 servisni parallel chaqiradi | — | Kod nuqsoni emas; `connection_limit=30` `.env` da sozlangan |
+
+#### ⚠ B13 — TUZATISHDAGI TUZOQ (deyarli xavfsizlik nuqsoni)
+
+`ensureGroup()` ning IKKITA vazifasi bor edi: **filial ko'lami** VA
+"guruh aktivmi". `history()` dan uni shunchaki olib tashlash
+**FILIALLARARO SIZISH** ochardi — A filial direktori B filial
+guruhining a'zolik tarixini, ya'ni o'quvchilar ro'yxatini o'qiy olardi.
+
+Shuning uchun `readGroup()` `branchFilter()` ni SAQLAYDI va faqat
+"aktivmi" shartini tushiradi.
+
+⚠ Testning BIRINCHI versiyasi bu yerda YOLG'ON QIZIL bergan edi: u
+owner tokeni bilan "begona filial → 404" ni kutgan, holbuki **owner
+BARCHA filialni ko'radi**. O'lchab tasdiqlandi — ESKI kod ham AYNI
+holatda 200 qaytaradi, ya'ni regressiya YO'Q edi, test KODNI
+JAZOLAYOTGAN edi. Tekshiruv to'g'ri invariantga almashtirildi:
+**`history` ning ko'lami `getById` nikidan FARQ QILMASLIGI shart.**
+
+#### ⚠ B17 — MENING BASHORATIM NOTO'G'RI CHIQDI
+
+Qaror so'ralayotganda "tuzatilsa davomat FOIZI ko'tariladi" deb
+aytilgan edi. **O'lchov buni RAD ETDI:** foiz 20 guruhdan HECH
+BIRIDA o'zgarmadi (o'rtacha 91.29% → 91.29%). Sabab: olib tashlangan
+kunlar `unmarked` edi va `computeRate` ularni maxrajga qo'shmaydi.
+
+Ya'ni B17 e'lon qilinganidan **XAVFSIZROQ**: faqat "dars kunlari"
+soni to'g'rilanadi, foizlar joyida qoladi.
+
+Eng kuchli dalil — ZIDDIYAT yopilgani: `dashboard.groupBreakdown[].totalClasses`
+va `groups/:id/summary` dagi `aggregate.totalClasses` AYNI guruh uchun
+**ESKI kodda 20 dan 17 tasida MOS KELMASDI, YANGI kodda 0 tasida**.
+
+#### ⚠ B16 — KO'RINADIGAN O'ZGARISH
+
+`consecutiveAbsencesAlert = 3` (o'lchandi), ya'ni ostona sozlangan va
+xabar HAQIQATAN ketadi. Kod o'zgarishi darhol yubormaydi — u KEYINGI
+davomat belgilanganda ishga tushadi.
+
+⚠ `test/attendance-parity.test.mjs` (tarixiy, endi yurgizilmaydi)
+TESKARI holatni qulflagan edi: "`bulkRecord` dan keyin `notifications`
+O'SMASIN". Bu §6 dagi AYNI naqsh — endi **ettinchi** marta. Test
+yumshatilmadi, o'rniga `test/consecutive-absence-alert.test.mjs`
+YANGI invariantni yozdi.
+
+#### B21 — O'LCHANGAN NATIJA: BACKFILL QILADIGAN ISH YO'Q
+
+`src/seeds/journal-backfill.seed.ts` yozildi va HAQIQIY yurgizildi:
+
+```
+JAMI: yozildi=0, o'tkazildi=42, yiqildi=0
+Tekshiruv: jurnal muvozanatda ✓
+OLDIN:  entries=48 lines=102 debit=80800000.00 credit=80800000.00
+KEYIN:  entries=48 lines=102 debit=80800000.00 credit=80800000.00
+```
+
+42 ta yozuvning HAMMASI `postingKey` unique indeksi tufayli dublikat
+deb rad etildi — ya'ni **jurnalda bo'shliq YO'Q** va skript ishlab
+chiqarish uchun tayyor turadi. Idempotentlik skript mantiqiga emas,
+INDEKSGA tayanadi.
+
+⚠ Bu YAGONA seed bo'lib, u Nest DI konteynerini ochadi (unga
+`FinancialTransactionService` va `JournalService` kerak). Shuning
+uchun u `NEST_WORKERS_ENABLED` / `TELEGRAM_BOT_ENABLED` /
+`NEST_BOT_POLLING` / `NEST_IMPORT_WORKER` ni MAJBURAN o'chiradi va
+`AppModule` ni DINAMIK import qiladi — aks holda
+`createApplicationContext` `onApplicationBootstrap` ni chaqirib, 25
+ta cron'ni IKKINCHI marta ro'yxatga olardi va ikkinchi Telegram
+polling'ini ochishga urinardi.
 
 ### 6.3 QO'SHILGAN QO'RIQCHILAR
 

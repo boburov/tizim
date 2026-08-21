@@ -20135,3 +20135,365 @@ My injection failed the FK — so step 3 proved nothing. The join table has fix
 <sub>session `7a8eb188` · branch `main` · 111 ta qadam</sub>
 
 ---
+
+## 2026-08-22 02:55 — Baseline — I measured it first, and it held route-matrix 399/399 (+1 i
+
+**So'rov**
+
+> Baseline — I measured it first, and it held
+> route-matrix 399/399 (+1 intentional), smoke 18/18, jobs-infra 101/101, module-registration 60/60 modules + 52/52 controllers, db-invariants 23/23. The handoff numbers were accurate.
+>
+> The seed gap was real, and worse than described
+> The migration ran by route and by module. src/seeds/ is neither, so it was never seen. Two constants went missing for the same reason — nothing at runtime imports them, only seeds do:
+>
+> PERMISSION_LABELS (87 labels) — the permission matrix UI reads labels from the database (roles.service.ts → Permission.label). No seed ⇒ empty matrix ⇒ owner can grant nothing.
+> permissionScope.js → permission-scope.ts — the owner-only/branch-local split. This is a security boundary: director = all 87 minus 16 owner-only = 71.
+> Migrated (5): permissions, owner, communication-defaults, expense-categories, migrate-director-full-access. One command: npm run seed:bootstrap.
+>
+> TypeScript caught three latent bugs the JS originals carried: kind, category, and audience are Prisma enums, not strings — wrong values previously failed only at runtime, in Postgres.
+>
+> Evidence, not assertion
+> Parity tests are dead (no second stack), so I measured d
+> …
+
+**Buyruqlar (21)**
+
+```sh
+git log --oneline -5 | cat; echo "=== git holati ==="; git status --short | head -5; echo "(bo'sh = toza)"; echo "=== seed'lar Nest'da bormi ==="; ls server/src…
+git status --short | wc -l | tr -d ' '; echo "ta o'zgarish"; git status --short; echo; echo "=== TOZALASH DA'VOLARI ==="; ls server_legacy/.env 2>/dev/null && e…
+cd server && node --env-file=.env -e " import('@prisma/client').then(async ({PrismaClient})=>{const p=new PrismaClient(); const dbs=await p.\$queryRawUnsafe(\"S…
+node --env-file=.env -e " import('@prisma/client').then(async ({PrismaClient})=>{const p=new PrismaClient(); console.log('ruxsat:', await p.permission.count());…
+cd /Users/shukrullo/Desktop/lc-total/server && node --env-file=.env -e " import('@prisma/client').then(async ({PrismaClient})=>{const p=new PrismaClient(); cons…
+npx tsc -p tsconfig.json --noEmit 2>&1 | grep -c "error TS" | tr -d ' '; echo "ta tip xatosi"; rm -rf dist tsconfig.build.tsbuildinfo && npm run build 2>&1 | ta…
+kill $(lsof -ti:5000) 2>/dev/null; sleep 3; (node --env-file=.env dist/main.js > /tmp/nest-final.log 2>&1 &); sleep 14; node -e "fetch('http://localhost:5000/ap…
+grep -iE "\bERROR\b" /tmp/nest-final.log | head -2 | cut -c1-160
+for t in smoke db-invariants jobs-infra module-registration fixture-residue schedule-jobs notification-jobs prisma-smoke constants-parity; do f="test/$t.test.mj…
+for t in branch-intent salary-rate resource-scope seed-bootstrap; do out=$(node --env-file=.env test/$t.test.mjs 2>&1 | grep -E "Jami|Natija|✅.*ta|❌" | tail -1)…
+for t in branch-intent resource-scope; do echo "── $t"; node --env-file=.env test/$t.test.mjs 2>&1 | tail -4; done
+node --env-file=.env -e " import('@prisma/client').then(async ({PrismaClient})=>{const p=new PrismaClient(); const snap=async()=>({perm:await p.permission.count…
+grep -n "set:\|connect:\|disconnect" src/seeds/permissions.seed.ts | head -8; echo "=== director ruxsatlari qanday belgilanadi ==="; grep -n "director" -A 6 src…
+grep -n "director" -B 2 -A 8 test/seed-bootstrap.test.mjs | head -30
+grep -n "CREATE DATABASE\|DROP DATABASE\|PROBE_DB\|dbName" test/seed-bootstrap.test.mjs | head -6
+python3 - <<'PYEOF' p='dist/seeds/permissions.seed.js' s=open(p,encoding='utf-8').read() import re m = re.search(r'permissions:\s*\{\s*connect:\s*directorPermId…
+npm run build >/dev/null 2>&1 && grep -n "directorPermIds" dist/seeds/permissions.seed.js | head -3
+python3 - <<'PYEOF' p='dist/seeds/permissions.seed.js' s=open(p,encoding='utf-8').read() old = " const directorPermIds = BRANCH_LOCAL_PERMISSIONS.map((k) => per…
+rm -rf dist tsconfig.build.tsbuildinfo && npm run build >/dev/null 2>&1 && node --env-file=.env test/seed-bootstrap.test.mjs 2>&1 | tail -2; echo "=== proba baz…
+kill $(lsof -ti:5000) 2>/dev/null; sleep 3; (node --env-file=.env dist/main.js > /tmp/nest-final.log 2>&1 &); sleep 14; node --env-file=.env test/smoke.mjs 2>&1…
+cd /Users/shukrullo/Desktop/lc-total && rm -f NEXT-AGENT-PROMPT.md && git add -A && git commit -q -m "$(cat <<'EOF' feat(seed): bootstrap seed'lari NestJS'ga ko…
+```
+
+**Natija**
+
+Hisobotni tekshirmasdan qabul qilmayman. Avval o'zim o'lchayman, keyin ochiq qolgan yagona bandni yopaman.
+
+Ish bor, lekin **commit qilinmagan**. To'liq o'zgarishlarni va tozalash da'volarini tekshiraman.
+
+Proba bazalari tozalangan, 87 ruxsat bor. Yorliqlarni to'g'ri so'rov bilan tekshiraman.
+
+Hisobotdagi asosiy raqamlar tasdiqlandi: **87 ruxsat, yorliqlar to'liq, director 71** va owner-only kalitlar unda **yo'q**. Endi ochiq qolgan bandni yopaman — toza qurilma va qayta ishga tushirish.
+
+Xato emas — marshrut nomi. Endi **yangi qurilmaga qarshi** to'liq tekshiruv.
+
+Hammasi yashil. Endi men **o'zim tekshirmagan** bitta da'voni sinab ko'raman — seed'ning idempotentligi.
+
+Idempotentlik mustaqil tasdiqlandi. Endi eng muhim savol: **bu test biror narsani o'lchaydimi?** Avval seed'ning qayta tiklay olishini tekshiraman.
+
+Muhim nuqta: director ruxsatlari `connect` bilan beriladi — ya'ni seed **qo'sha oladi, lekin olib tashlay olmaydi**. Sabotajni shuni hisobga olib qilaman.
+
+Test **o'zining vaqtinchalik bazasini** yaratarkan — ya'ni sabotaj tirik bazaga tegmaydi. Buni tasdiqlab, sabotajni bajaraman.
+
+Sabotaj qizil berdi, lekin **noto'g'ri sababdan** — seed umuman yiqildi. Bu chegara tekshiruvini isbotlamaydi. Aniqroq sabotaj qilaman.
+
+Bu haqiqiy isbot: seed **ishlashda davom etdi**, faqat direktor imtiyozi oshdi — va test aynan shuni tutdi. Tiklab, tozaligini tasdiqlayman.
+
+Hammasi yashil. Commit qilaman.
+
+<sub>session `c0c7f284` · branch `main` · 21 ta qadam</sub>
+
+---
+
+## 2026-08-22 03:02 — nima qilay menga serevevrni muammosni yakunlab bo'ldi qilishim kerak 3
+
+**So'rov**
+
+> nima qilay menga serevevrni muammosni yakunlab bo'ldi qilishim kerak 3kun ishladim zaybal bo'ldim bitta promt bilan hamma muammoni yop
+
+**Buyruqlar (20)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n '/### 6.2/,/### 6.3/p' MIGRATION-CHECKLIST.md
+cd /Users/shukrullo/Desktop/lc-total/server && sed -n '/#### 🛑 2.6/,/^### FAZA 3/p' MIGRATION-CHECKLIST.md | head -35
+echo "=== Nest bot-auth holati ===" && ls src/modules/bot-auth/ && echo && grep -rn "passwordHash\|username\|branchAssignments" src/modules/bot-auth/*.ts | head…
+echo "=== ishlab turgan server qachon boshlangan ===" && ps -o lstart=,etime= -p 58957 2>/dev/null; echo "=== dist qachon qurilgan ===" && ls -la dist/main.js |…
+curl -s -o /dev/null -w "5000: %{http_code}\n" --max-time 3 http://localhost:5000/api/health || echo "5000: O'CHIQ"; lsof -nP -iTCP:5000 -sTCP:LISTEN 2>/dev/nul…
+sed -n '20,40p' src/modules/bot-auth/bot-auth.service.ts
+npm run --silent probe:bot-auth 2>&1 | tail -20
+cat test/bot-auth-blocker.probe.mjs
+export PGPASSWORD=$(grep '^DATABASE_URL' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#') echo "=== bot_users (zond tg id 999000111) ===" psql -h 127.0.0.1 -U postg…
+export PGPASSWORD=$(grep '^DATABASE_URL' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#') psql -h 127.0.0.1 -U postgres -d bayyina -c "\d bot_users" 2>&1 | head -20…
+node --env-file=.env test/fixture-residue.test.mjs 2>&1 | tail -8; echo "════ qamrovi ════"; grep -n "botUser\|bot_users\|refreshToken\|refresh_tokens" test/fix…
+grep -n "PATTERN\|pattern\|FIELDS\|fields\|qa_\|startsWith\|contains" test/fixture-residue.test.mjs | head -20
+export PGPASSWORD=$(grep '^DATABASE_URL' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#') echo "── OLDIN" psql -h 127.0.0.1 -U postgres -d bayyina -tAc "SELECT 'bot…
+cat > test/bot-auth.test.mjs <<'JSEOF' /** * ═══════════════════════════════════════════════════════════════════════════ * BOT-AUTH — ISHLAYDI (invariant). * * …
+git rm -q test/bot-auth-blocker.probe.mjs && python3 - <<'PYEOF' import json, collections p='package.json' d=json.load(open(p), object_pairs_hook=collections.Or…
+python3 - <<'PYEOF' import re p='MIGRATION-CHECKLIST.md' s=open(p).read() start = s.index("#### 🛑 2.6 `botAuth` — KO'CHIRIB BO'LMAYDI") end = s.index("### FAZA …
+python3 - <<'PYEOF' p='MIGRATION-CHECKLIST.md' s=open(p).read() s=s.replace("| 2.6 | botAuth | `/api/bot-auth` | 2 | 🛑 **BLOKLANGAN** — Express'da ishlamaydi |"…
+python3 - <<'PYEOF' p='test/README.md' s=open(p).read() old="| `npm run test:resource-scope` | har bir model filial ko'lami bo'yicha reyestrdan o'tganmi (84/84,…
+echo "════ MAVJUD TEKSHIRUVLAR ════" printf " %-22s " "smoke"; npm run --silent smoke 2>&1 | grep -c "✅" | tr '\n' '/'; echo "18" printf " %-22s " "db-invariant…
+cat > /Users/shukrullo/Desktop/lc-total/QAROR-VARAQASI.md <<'MDEOF' # QAROR VARAQASI — oxirgi 6 band Har biriga **HA** yoki **YO'Q** yozing. Boshqa hech narsa k…
+```
+
+**Natija**
+
+Tushundim. Avval **haqiqatan nima ochiq qolganini** o'lchayin — taxmin bilan emas. Keyin sizga bitta prompt yozib beraman.
+
+Server restarted on the new build (PID 73012), and `bot-auth` was actually **fixed** in NestJS — the §2.6 "blocked" heading is stale. Let me confirm:
+
+Yaxshi xabar bor: **muhandislik ishi deyarli tugagan.** Oxirgi ochiq element — bu aynan sizni ogohlantirgan tuzoq. Uni hozir yopaman.
+
+This probe encoded "not migrated" as the expected state — the exact trap. But first: I just ran it, and `login` succeeded. Let me check what it left behind.
+
+Confirmed residue — and it's security-relevant: fake Telegram id **999000111 is now linked to the owner account**. Let me check whether the existing residue guard catches it:
+
+The guard says "no residue" while `qa_probe` sits in `bot_users`. Let me see how it detects:
+
+The detector looks for prefixes `__parity_`, `parity-`, `qa_lc_`, `__probe_` — but the probe named its user `qa_probe`, which matches none. Let me clean up, then fix the root cause:
+
+Cleaned and verified. Now replacing the stale blocker probe with a real invariant test that cleans up after itself:
+
+9/9 with a negative control and asserted cleanup. Now retiring the obsolete probe and updating the docs:
+
+Server yopildi. Hammasi yashil:
+
+| Tekshiruv | Natija |
+|---|---|
+| route-matrix | 399/399 (0 yetishmayapti) |
+| smoke | 18/18 |
+| jobs-infra | 101/101 |
+| module-registration | 60/60 modul, 52/52 kontroller |
+| db-invariants | 23/23 |
+| fixture-residue | qoldiq yo'q |
+| yangi 6 to'plam | 129/129 |
+
+**Bugun yana bitta narsa topildi va yopildi.** `botAuth` "🛑 KO'CHIRIB BO'LMAYDI" deb turgan edi — bu **eskirgan** ekan. NestJS'da u allaqachon to'g'ri yozilgan va ishlayapti. Eski zond esa "500 berishi SHART" ni invariant qilib yozgan edi — bu naqsh loyih
+
+…(qisqartirildi)
+
+<sub>session `7a8eb188` · branch `main` · 20 ta qadam</sub>
+
+---
+
+## 2026-08-22 03:12 — MENING QARORLARIM: B4 (notifications/stats 500): <HA/YO'Q> B13 (arxivl
+
+**So'rov**
+
+> MENING QARORLARIM:
+>   B4  (notifications/stats 500):      <HA/YO'Q>
+>   B13 (arxivlangan guruh history):    <HA/YO'Q>
+>   B17 (dashboard dars kunlari):       <HA/YO'Q>
+>   B9  (shablon saralash tartibi):     <HA/YO'Q>
+>   B16 (ketma-ket yo'qlik xabari):     <HA/YO'Q>
+>   B21 (jurnal backfill):              <HA/YO'Q>
+>
+> QOIDALAR — bu loyihada QIMMATGA TUSHGAN:
+>
+> 1. HOLATNI SOXTALASHTIRMANG. "Tuzatdim" deyishdan oldin ishga
+>    tushiring va natijani ko'rsating.
+>
+> 2. HAR BIR TUZATISH UCHUN TEST. Testni ATAYLAB BUZIB tekshiring:
+>    tuzatish olib tashlanganda test QIZIL bo'lishi O'LCHANSIN.
+>    Sabotaj TOZA `dist` dan qurilsin — `nest build` ni qayta
+>    yurgizing, aks holda eski emit YOLG'ON natija beradi.
+>
+> 3. ⚠ TEST QIZIL BO'LSA AVVAL SAVOL BERING: test kodni
+>    JAZOLAYAPTIMI yoki HAQIQIY regressiyani ko'rsatyaptimi?
+>    Bu loyihada testlar "ko'chirilmaganlik"ni invariant qilib
+>    yozgan holat OLTI marta uchradi. Yumshatmang — yo'nalishini
+>    teskarisiga buring va NEGA o'zgartirganingizni izohda yozing.
+>
+> 4. B17 va B21 RAQAMLARNI O'ZGARTIRADI. O'zgarishdan OLDIN va
+>    KEYIN raqamlarni yozib qo'ying va farqni ko'rsating.
+>
+> 5. TOZALASH O'LCHANSIN. Test bazada qator qoldirsa, uni
+>    to'g'ridan-to'g'ri Prisma
+> …
+
+**O'zgargan fayllar (4)**
+
+- `server/src/modules/notifications/notifications.service.ts` — tahrirlandi
+- `server/src/modules/notification-templates/notification-templates.service.ts` — tahrirlandi
+- `server/src/modules/groups/groups.service.ts` — tahrirlandi
+- `server/src/modules/attendance/attendance.service.ts` — tahrirlandi
+
+**Buyruqlar (64)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && npm run --silent mint-token 2>&1 | tail -5
+cd /Users/shukrullo/Desktop/lc-total/server T=$(npm run --silent mint-token 2>&1 | tail -1) echo "$T" > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-tota…
+cd /Users/shukrullo/Desktop/lc-total/server python3 -c " import json;d=json.load(open('/tmp/b4.json'));print(d['stack'][:1200])"
+cd /Users/shukrullo/Desktop/lc-total/server echo "── B16: bayroq holati ──"; grep -rn "EXPRESS_NOTIFICATION_IS_DEAD" src/ .env 2>/dev/null | head -5 echo "── B9…
+cd /Users/shukrullo/Desktop/lc-total/server export PGPASSWORD=$(grep '^DATABASE_URL' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#') T=$(cat /private/tmp/claude-50…
+cd /Users/shukrullo/Desktop/lc-total/server export PGPASSWORD=$(grep '^DATABASE_URL' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#') psql -h 127.0.0.1 -U postgres …
+grep -rn "history" src/modules/groups/groups.controller.ts | head -5; echo "── 400 shartini topamiz ──"; grep -rn "history" src/modules/groups/*.ts | grep -i "s…
+sed -n '138,165p' src/modules/groups/groups.service.ts; echo "════ history() ════"; sed -n '335,375p' src/modules/groups/groups.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server export PGPASSWORD=$(grep '^DATABASE_URL' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#') echo "── bekor qilish tushunch…
+cd /Users/shukrullo/Desktop/lc-total/server export PGPASSWORD=$(grep '^DATABASE_URL' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#') echo "── payment_transactions:…
+cd /Users/shukrullo/Desktop/lc-total/server export PGPASSWORD=$(grep '^DATABASE_URL' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#') echo "── jurnalsiz to'lov tran…
+grep -rn "groupBreakdown" src/ | head -5
+sed -n '1245,1300p' src/modules/attendance/attendance.service.ts
+grep -rn "_all" src/modules/notifications/*.ts | head
+sed -n '905,960p' src/modules/notifications/notifications.service.ts
+npx tsc --noEmit -p tsconfig.json 2>&1 | head -10 && echo TSC-DONE
+sed -n '50,72p' src/modules/notification-templates/notification-templates.service.ts
+sed -n '100,175p' src/modules/groups/groups.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server T=$(cat /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/7a8eb188-a30e-4531-9414-485b356cc28e/scratchpad/to…
+grep -n "groupMemberships\|select:" src/modules/attendance/attendance.service.ts | sed -n '1,40p' | grep -n -A2 -B2 "12[0-9][0-9]" ; sed -n '1215,1248p' src/mod…
+sed -n '1138,1160p' src/modules/attendance/attendance.service.ts
+grep -n "groupMemberships" src/modules/attendance/attendance.service.ts | head; echo "── ta'rifi ──"; sed -n '1168,1200p' src/modules/attendance/attendance.serv…
+sed -n '1108,1128p' src/modules/attendance/attendance.service.ts
+sed -n '515,570p' src/modules/attendance/attendance.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server export PGPASSWORD=$(grep '^DATABASE_URL' .env | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#') echo "── consecutiveAbsencesAl…
+# … yana 39 ta
+```
+
+**Natija**
+
+Javoblar to'ldirilmagan — oltalasi ham hamon `<HA/YO'Q>` bo'lib turibdi.
+
+Bularni o'zim hal qila olmayman: uchtasi **ko'rinadigan raqamlarni va foydalanuvchilarga ketadigan xabarlarni** o'zgartiradi. Lekin sizni kutib bo'sh o'tirmayman — javobga bog'liq bo'lmagan ishni hozir qilaman: **har bir bandni o'lchab, savolni aniq raqamga aylantiraman.** Shunda qaror qilish 30 soniyalik ish bo'ladi.
+
+B4 root cause is precise: `orderBy: { _count: { _all: 'desc' } }` — Prisma rejects `_all` there. One-line fix. Now the rest:
+
+B13 confirmed — and there's a trap in it. Let me verify live:
+
+`GID` is a reserved variable in zsh. Renaming:
+
+B21 measured: **0 cancelled transactions** in this DB. Let me check the general journal gap, then measure B17 — the one that actually changes numbers you look at:
+
+B21: **0 gaps** — every transaction already has its journal entry. Now B17, the one that changes numbers you actually look at:
+
+The bug is precisely documented. Let me measure **how much** the numbers would actually move:
+
+14.4% of memberships are affected. Let me quantify the over-count and get the live number:
+
+O'lchandi. Endi savollar aniq raqamga aylandi:
+
+| Band | O'lchov | Ma'nosi |
+|---|---|---|
+| **B4** | HTTP 500 tasdiqlandi | `orderBy: { _count: { _all } }` — Prisma qabul qilmaydi. **Bir qatorlik** tuzatish |
+| **B13** | kodda tasdiqlandi (bazada tugagan guruh yo'q) | `history()` **yozuv** qo'riqchisidan o'tadi |
+| **B9** | `orderBy: { createdAt: 'desc' }` | ikkilamchi kalit yo'q |
+| **B16** | `const EXPRESS_NOTIFICATION_IS_DEAD = true` | kodda qattiq yozilgan, env bayroq emas |
+| **B17** | **1274 a'zolikdan 184 tasi (14.4%)** oyna o'rtasida qo'shilgan/chiqqan; **28028 kundan 1633 tasi (5.8%) ortiqcha sanalgan** | davomat foizi hozir **past** ko'rinadi — tuzatilsa **ko'tariladi**
+
+…(qisqartirildi)
+
+<sub>session `7a8eb188` · branch `main` · 90 ta qadam</sub>
+
+---
+
+## 2026-08-22 03:44 — shukrullo@Mac server % npm run test:owner-decisions npm error Missing 
+
+**So'rov**
+
+> shukrullo@Mac server % npm run test:owner-decisions
+> npm error Missing script: "test:owner-decisions"
+> npm error
+> npm error To see a list of scripts, run:
+> npm error   npm run
+> npm error A complete log of this run can be found in: /Users/shukrullo/.npm/_logs/2026-08-21T22_42_58_213Z-debug-0.log
+> shukrullo@Mac server % clear 
+> shukrullo@Mac server % npm run test:owner-decisions 
+> npm error Missing script: "test:owner-decisions"
+> npm error
+> npm error To see a list of scripts, run:
+> npm error   npm run
+> npm error A complete log of this run can be found in: /Users/shukrullo/.npm/_logs/2026-08-21T22_43_45_096Z-debug-0.log
+> shukrullo@Mac server % npm run test:owner-alerts    
+> npm error Missing script: "test:owner-alerts"
+> npm error
+> npm error To see a list of scripts, run:
+> npm error   npm run
+> npm error A complete log of this run can be found in: /Users/shukrullo/.npm/_logs/2026-08-21T22_43_58_845Z-debug-0.log
+> shukrullo@Mac server %
+
+**Buyruqlar (7)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && echo "── hozirgi seed/test skriptlari ──" && grep -nE "\"(seed:|migrate:|test:owner|test:absence|test:bot-auth|te…
+cd /Users/shukrullo/Desktop/lc-total && git status --short && echo "── package.json oxirgi o'zgarish ──" && git log --oneline -2 -- server/package.json && echo …
+cd /Users/shukrullo/Desktop/lc-total/server && python3 -c "import json;d=json.load(open('package.json'));print('JSON yaroqli, skript soni:',len(d['scripts']));p…
+cd /Users/shukrullo/Desktop/lc-total && echo "── 'server' nomli papkalar ──" && find . -maxdepth 2 -type d -name "*server*" -not -path "*/node_modules/*" && ech…
+cd /Users/shukrullo/Desktop/lc-total/server && echo "── package.json oxirgi tahrir vaqti ──" && ls -la --time-style=full-iso package.json 2>/dev/null || stat -f…
+npm run --silent test:owner-decisions 2>&1 | grep -E "❌" | sed 's/ — .*//' | sed 's/^/ /'
+ps -o pid=,command= -p $(lsof -nP -iTCP:5000 -sTCP:LISTEN -t 2>/dev/null) 2>/dev/null | head -3; echo "── dist qachon qurilgan ──"; stat -f "%Sm" -t "%H:%M:%S" …
+```
+
+**Natija**
+
+Skript **bor** — `package.json:21`. Muammo boshqa joyda. Tekshiraman:
+
+Skript joyida va **hozir ishlayapti**. `package.json` 03:37:07 da yozilgan, sizning urinishingiz 03:42:58 da — ya'ni fayl allaqachon tayyor edi. Ehtimol boshqa terminal oynasi yoki boshqa papkada bo'lgansiz.
+
+Muhimi boshqa narsa: test **qizil**, va sabab aniq:
+
+<sub>session `7a8eb188` · branch `main` · 7 ta qadam</sub>
+
+---
+
+## 2026-08-22 03:48 — shukrullo@shukrullos-MacBook-Air server % npm run test:owner-decisions
+
+**So'rov**
+
+> shukrullo@shukrullos-MacBook-Air server % npm run test:owner-decisions    # 18/18
+> npm run test:absence-alert      # 6/6
+>
+>
+> > bayyina-nest@0.1.0 test:owner-decisions
+> > node --env-file=.env test/owner-decisions.test.mjs # 18/18
+>
+>
+> EGA QARORLARI — B4/B9/B13/B17  http://127.0.0.1:5000
+>
+> B4 — notifications/stats
+>   ✅ 200 qaytadi (ilgari 500 edi) — 200
+>   ✅ javob shakli to'g'ri (total + byCategory)
+>   ✅ byCategory KAMAYISH tartibida (orderBy ishlayapti)
+>
+> B9 — shablon saralash tartibi
+>   ✅ ikkala sahifa ham 200 (200/200)
+>   ✅ sahifalashda 3 ta shablon ham chiqdi (3)
+>   ✅ DUBLIKAT yo'q — bitta shablon ikki sahifada chiqmadi
+>   ✅ tartib BARQAROR — qayta chaqiruvda ayni ketma-ketlik
+>   ✅ AYNI createdAt da tartib `id desc` bo'yicha aniqlangan
+>
+> B13 — tugagan kurs tarixi
+>   ✅ GET /groups/:id → 200 (ilgari ham shunday edi) — 200
+>   ✅ GET /groups/:id/history → 200 (ILGARI 400 EDI) — 200
+>   ✅ ziddiyat yopildi: ikkala marshrut ham AYNI kodni qaytaradi
+>   ✅ XAVFSIZLIK: history ko'lami getById bilan AYNAN bir xil
+>   ✅ MUSBAT NAZORAT: ko'lam bir nechta filialda o'lchandi (2)
+>
+> B17 — dashboard = summary
+>   ✅ dashboard 200 — 200
+>   ✅ MUSBAT NAZORAT: solishtirish BAJARILDI (20 guruh)
+>   ✅ dashboard va summary AYNI sonni ber
+> …
+
+**Buyruqlar (3)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server echo "── :5000 da kim turibdi ──" ps -o pid=,command= -p $(lsof -nP -iTCP:5000 -sTCP:LISTEN -t 2>/dev/null) 2>/dev/n…
+cd /Users/shukrullo/Desktop/lc-total/server printf " %-24s " "route-matrix"; node --env-file=.env test/route-matrix.mjs 2>&1 | grep -oE "NEST'DA YO'Q \([0-9]+\)…
+cd /Users/shukrullo/Desktop/lc-total/server for t in test:seed-bootstrap test:bot-auth test:constants test:resource-scope test:branch-intent test:salary-rate; d…
+```
+
+**Natija**
+
+Tabriklayman — 18/18 va 6/6. Savolingizga aniq javob berish uchun o'lchayin, taxmin qilmayman:
+
+Express jarayoni **umuman yo'q**, :5000 da yagona NestJS jarayoni. `/api/health/db` javob beryapti — u **faqat NestJS'da bor**. Endi to'liq tekshiruv:
+
+<sub>session `7a8eb188` · branch `main` · 3 ta qadam</sub>
+
+---

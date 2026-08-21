@@ -140,15 +140,43 @@ export class GroupsService {
   }
 
   /**
+   * O'QISH amallari uchun: guruh mavjud + FILIAL KO'LAMIDA bo'lishi
+   * shart. Kurs tugagan/arxivlangan bo'lishi MUHIM EMAS.
+   *
+   * ⚠⚠ NEGA BU ALOHIDA FUNKSIYA — B13 (2026-08-22) ⚠⚠
+   *
+   * Ilgari `history()` `ensureGroup()` dan o'tardi, ya'ni YOZUV
+   * qo'riqchisidan. Natijada tugagan kursning TARIXI 400 berardi,
+   * `GET /groups/:id` esa AYNI guruh uchun 200 — ochiq ziddiyat.
+   * Tarix o'qish amali; tugagan kursning tarixi AYNIQSA kerak.
+   *
+   * ⚠ TUZOQ: `ensureGroup` ning ikkita VAZIFASI bor edi — filial
+   * ko'lami VA "aktivmi" tekshiruvi. Ularni ajratmasdan `history()`
+   * dan `ensureGroup` ni olib tashlash FILIALLARARO SIZISH ochardi:
+   * A filial direktori B filial guruhining a'zolik tarixini —
+   * ya'ni o'quvchilar ro'yxatini — o'qiy olardi.
+   *
+   * Shuning uchun bu yerda `branchFilter()` SAQLANADI va faqat
+   * "aktivmi" sharti tushiriladi. `test/groups-history-scope.test.mjs`
+   * ikkalasini ham qulflaydi.
+   */
+  private async readGroup(groupId: string) {
+    const group = await this.prisma.group.findFirst({
+      where: { id: String(groupId), ...branchFilter() },
+      include: GROUP_INCLUDE,
+    });
+    if (!group || group.isDeleted) throw new ApiError(404, 'Guruh topilmadi');
+    return group;
+  }
+
+  /**
    * YOZUV amallari uchun: guruh mavjud + AKTIV bo'lishi shart.
    *
-   * ⚠ O'QISH yo'llari (`getById`, `list`) guruhni TO'G'RIDAN-TO'G'RI
-   * o'qiydi — arxivlangan guruhni KO'RISH mumkin. `history` esa
-   * Express'da AYNAN shu funksiyadan o'tadi, ya'ni tugagan kurs
-   * tarixi 400 beradi. Bu G'ALATI, lekin KLIENT SHARTNOMASI —
-   * o'zgartirilmadi (`MIGRATION-CHECKLIST.md`, B4).
+   * ⚠ O'QISH yo'llari (`getById`, `list`, `history`) guruhni
+   * TO'G'RIDAN-TO'G'RI o'qiydi (`readGroup`) — arxivlangan guruhni
+   * KO'RISH mumkin.
    *
-   * FILIAL KO'LAMI shu YAGONA nuqtada.
+   * FILIAL KO'LAMI shu YAGONA nuqtada (va `readGroup` da).
    */
   private async ensureGroup(groupId: string) {
     const group = await this.prisma.group.findFirst({
@@ -333,7 +361,9 @@ export class GroupsService {
 
   /** A'zolik TARIXI (chiqib ketganlar ham). */
   async history(groupId: string, { page = 1, limit = 20 } = {}) {
-    const group = await this.ensureGroup(groupId);
+    // ⚠ B13: `ensureGroup` EMAS — `readGroup`. Tarix o'qish amali,
+    // tugagan kursniki AYNIQSA kerak. Filial ko'lami saqlanadi.
+    const group = await this.readGroup(groupId);
     const where = { groupId: group.id };
     const skip = (page - 1) * limit;
 
