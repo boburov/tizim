@@ -1,5 +1,24 @@
 # Backend - Bayyina (server/)
 
+> ## ⚠️ BU STEK ENDI ISHLAMAYDI (2026-08-22)
+>
+> **Asosiy server — `server_nest/` (NestJS).** Express 5000-portni
+> BO'SHATDI, NestJS o'sha portni egalladi (klient manzili o'zgarmadi).
+> Fon ishlari (25/25), Telegram bot pollingi va import navbati ham
+> NestJS'da.
+>
+> **Bu papka TARIXIY MANBA sifatida qoladi** — ko'chirishda u
+> ETALON bo'lgan va paritet testlari unga qarshi o'lchangan. Uni
+> o'chirish alohida qaror.
+>
+> ⚠ **EXPRESS'NI QAYTA ISHGA TUSHIRMANG:** uning `PORT` i ham 5000 va
+> ikkalasi bir portni band qila olmaydi. Bundan tashqari ikkala stek
+> bir vaqtda ishlasa cronlar IKKI MARTA yurardi (pul yozuvlari
+> ikkilanardi) va import navbati ikki marta iste'mol qilinardi.
+>
+> Ko'chirish hisoboti, topilgan xatolar va ochiq qolgan qarorlar:
+> [`server_nest/MIGRATION-CHECKLIST.md`](../server_nest/MIGRATION-CHECKLIST.md).
+
 Node.js + Express + **PostgreSQL (Prisma)** + pg-boss + JWT (access + refresh).
 
 > **MongoDB → PostgreSQL migratsiyasi TUGADI.**
