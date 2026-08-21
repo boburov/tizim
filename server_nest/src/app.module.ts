@@ -39,6 +39,7 @@ import { TeacherSalaryModule } from './modules/teacher-salary/teacher-salary.mod
 import { AttendanceExemptionsModule } from './modules/attendance-exemptions/attendance-exemptions.module.js';
 import { TeacherAttendanceModule } from './modules/teacher-attendance/teacher-attendance.module.js';
 import { GradesModule } from './modules/grades/grades.module.js';
+import { AssignmentsModule } from './modules/assignments/assignments.module.js';
 import { JournalModule } from './modules/journal/journal.module.js';
 import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
 import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-approvals.module.js';
@@ -155,6 +156,7 @@ import { LedgerModule } from './modules/ledger/ledger.module.js';
     // O'qituvchi davomati (2/2) — maoshga ta'sir qiladi, faqat manage.
     TeacherAttendanceModule,
     GradesModule,
+    AssignmentsModule,
     // ── FAZA 7: MOLIYA ──
     // Jurnal BIRINCHI ko'chiriladi: qolgan hamma moliya moduli
     // (to'lov, depozit, chiqim, maosh, qaytarim) unga yozadi.

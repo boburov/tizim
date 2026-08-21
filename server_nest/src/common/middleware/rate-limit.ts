@@ -47,3 +47,21 @@ export const botVerifyLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: "Juda ko'p urinish, biroz kuting" },
 });
+
+/**
+ * Fayl yuklash: 10 urinish / 1 daqiqa.
+ *
+ * ⚠ TEKSHIRUVLARDAN KEYIN, LEKIN TANANI O'QISHDAN OLDIN ulanadi
+ * (`assignments.module.ts`). Chegaraga yetgan so'rov 5 MB ni xotiraga
+ * yutmasdan to'xtaydi — VPS uchun aynan shu muhim.
+ */
+export const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Fayl yuklash urinishlari juda ko'p, biroz kuting",
+  },
+});
