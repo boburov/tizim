@@ -1,4 +1,5 @@
 import prisma from "../../../config/prisma.js";
+import { branchGroupFilter } from "../../../helpers/branchContext.helper.js";
 
 // O'quvchilarning guruhlarni tark etishi (churn) tahlili.
 //
@@ -29,10 +30,41 @@ const buildLeftRange = (fromDate, toDate) => {
   return { leftReason: "removed", leftAt, isDeleted: false };
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// XAVFSIZLIK TUZATISHI (B24) — FILIAL KO'LAMI SHU FAYLDA BUTUNLAY YO'Q EDI.
+//
+// `branchFilter` / `branchGroupFilter` / `userBranchCondition` bu faylda
+// 0 marta ishlatilardi, qo'shni `adminDashboard.service.js` da esa 18
+// marta. Natijada FILIAL DIREKTORI butun tashkilotning chiqib ketgan
+// o'quvchilarini — ism, familiya, LOGIN, guruh va o'qituvchisi bilan —
+// ko'rardi.
+//
+// O'LCHANDI (taxmin emas): filialga biriktirilgan direktor uchun
+// `GET /admin-dashboard/churned-students` → 46 ta qator; owner uchun ham
+// AYNAN 46 ta. Ya'ni ko'lam umuman qo'llanmasdi. Ikkala stekda ham.
+//
+// ⚠ NAQSH QO'SHNI SERVISDAN OLINDI: `adminDashboard.service.js` AYNI
+// `groupMembership` uchun `await branchGroupFilter("groupId")` ishlatadi
+// (`flowScope`). Ko'lam qoidasi ikki joyda ikki xil bo'lib qolmasligi
+// uchun shu yerda ham AYNI chaqiruv qaytarilmoqda.
+//
+// ⚠ BU KLIENT RAQAMLARINI O'ZGARTIRADI: filial direktori endi FAQAT
+// o'z filialining churn'ini ko'radi (retention foizi va chiqib ketganlar
+// ro'yxati kichrayadi). Bu ATAYLAB qilingan xatti-harakat o'zgarishi.
+//
+// ⚠ Kontekstsiz chaqiruvda (job/seed) `branchGroupFilter` `{}` qaytaradi.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** `buildLeftRange` + FILIAL KO'LAMI. Kalitlar to'qnashmaydi. */
+const scopedLeftRange = async (fromDate, toDate) => ({
+  ...(await branchGroupFilter("groupId")),
+  ...buildLeftRange(fromDate, toDate),
+});
+
 // Tark etgan membershiplarni group(+teachers) va student bilan yuklaymiz.
 const loadChurnedMemberships = async (fromDate, toDate) => {
   const rows = await prisma.groupMembership.findMany({
-    where: buildLeftRange(fromDate, toDate),
+    where: await scopedLeftRange(fromDate, toDate),
     select: {
       id: true,
       joinedAt: true,
@@ -53,7 +85,7 @@ const loadChurnedMemberships = async (fromDate, toDate) => {
 // Har bir membership = bitta qator: o'quvchi, guruh, muddat, sabab, chiqqan sana.
 export const getChurnedStudents = async ({ fromDate, toDate } = {}) => {
   const rows = await prisma.groupMembership.findMany({
-    where: buildLeftRange(fromDate, toDate),
+    where: await scopedLeftRange(fromDate, toDate),
     select: {
       id: true,
       joinedAt: true,

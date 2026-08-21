@@ -9,7 +9,7 @@ import {
   norm,
   readMap,
 } from "../scoring/common.scoring.js";
-import { DEFAULT_THRESHOLDS } from "../../../models/aiConfig.model.js";
+import { DEFAULT_THRESHOLDS } from "../../../constants/aiDefaults.js";
 import { narrate } from "./narration.service.js";
 import {
   buildInsight,
@@ -88,7 +88,7 @@ const detectAttendanceDrop = ({ course, sig, thresholds }) => {
 
   return {
     kind: "course_attendance_drop",
-    subjectId: course._id,
+    subjectId: course.id ?? course._id,
     subjectLabel: course.title,
     title: `${course.title} kursida davomat ${Math.round(attendance.drop * 100)}% pasaydi`,
     severity: severityFor(score, thresholds),
@@ -199,7 +199,7 @@ const detectDemand = ({ course, sig, demand, medianGroupSize, thresholds }) => {
 
   return {
     kind: "course_demand",
-    subjectId: course._id,
+    subjectId: course.id ?? course._id,
     subjectLabel: course.title,
     title: `${course.title} — ${demand.open} lid kutmoqda, guruhlar to'lgan`,
     severity: severityFor(score, thresholds) === "high" ? "medium" : "low",
@@ -325,7 +325,7 @@ const detectMarketing = ({ course, sig, demand, medianGroupSize, thresholds }) =
 
   return {
     kind: "course_marketing",
-    subjectId: course._id,
+    subjectId: course.id ?? course._id,
     subjectLabel: course.title,
     title: `${course.title} yaxshi ishlaydi, lekin bo'sh joy bor — marketing imkoniyati`,
     severity: "low",
@@ -410,7 +410,7 @@ export const recomputeCourseInsights = async (
   // Yo'nalish → kurs bog'lanishi orqali talab ma'lumotini kursga ulaymiz.
   const demandByCourse = new Map();
   for (const d of demandRows) {
-    if (d.course) demandByCourse.set(String(d.course._id), d);
+    if (d.course) demandByCourse.set(String(d.course.id ?? d.course._id), d);
   }
 
   const stillOpen = {
@@ -425,7 +425,7 @@ export const recomputeCourseInsights = async (
     if (!course) continue;
     stats.scanned += 1;
 
-    const demand = demandByCourse.get(String(course._id)) || null;
+    const demand = demandByCourse.get(String(course.id ?? course._id)) || null;
     const ctx = { course, sig, demand, medianGroupSize, thresholds };
 
     const candidates = [

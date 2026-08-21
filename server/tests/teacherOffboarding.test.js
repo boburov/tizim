@@ -22,11 +22,22 @@
  *   npm run test:offboarding
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
 const BASE_DB = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina";
 // Ishchi bazani ifloslantirmaslik uchun nomga qo'shimcha qo'shamiz.
-const DB = BASE_DB.replace(/(\/[^/?]+)(\?|$)/, "$1_offboarding_test$2");
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi + `dropDatabase()` o'rniga prefiksli fixture va
+ * kafolatli tozalash (`tests/helpers/prismaFixtures.js`). Xavfsizlik va
+ * biznes DA'VOLARI o'zgarmadi — faqat ma'lumotga murojaat qatlami.
+ *
+ * Bog'lanish maydonlari qayta nomlandi: `teacher` → `teacherId`,
+ * `group` → `groupId`, `student` → `studentId` va h.k.
+ */
+const fx = createFixtures();
 
 const R = { pass: 0, fail: 0, notes: [] };
 const ok = (n, extra = "") => {
@@ -53,81 +64,74 @@ const expectThrow = async (fn) => {
 };
 
 const run = async () => {
-  await mongoose.connect(DB);
-  await mongoose.connection.dropDatabase(); // har yurishda toza boshlanadi
-
-  const User = (await import("../src/models/user.model.js")).default;
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
-  const TeacherSalary = (await import("../src/models/teacherSalary.model.js")).default;
-  const SalaryTransaction = (await import("../src/models/salaryTransaction.model.js"))
-    .default;
-  const TeacherGroupPeriod = (
-    await import("../src/models/teacherGroupPeriod.model.js")
-  ).default;
-  const Attendance = (await import("../src/models/attendance.model.js")).default;
-
   const usersService = await import("../src/modules/users/services/users.service.js");
   const adjustmentService = await import(
     "../src/modules/teacherSalary/services/salaryAdjustment.service.js"
   );
 
-  const branch = await Branch.create({ name: "Asosiy", isMain: true, isActive: true });
-  const owner = await User.create({
+  const branch = await fx.branch("Asosiy-offb", { isActive: true });
+  const owner = await fx.user("owner_offb", {
     firstName: "Ega",
     lastName: "Egayev",
-    username: "owner_offb",
     passwordHash: "x",
     role: "owner",
-    homeBranchId: branch._id,
+    homeBranchId: branch.id,
   });
 
   let seq = 0;
   const mkTeacher = async (first) =>
-    User.create({
+    fx.user(`t_offb_${(seq += 1)}`, {
       firstName: first,
       lastName: "Testov",
-      username: `t_offb_${(seq += 1)}`,
       passwordHash: "x",
       role: "teacher",
-      homeBranchId: branch._id,
+      homeBranchId: branch.id,
     });
 
-  const mkSalary = (teacher, over = {}) =>
-    TeacherSalary.create({
-      branchId: branch._id,
-      teacher: teacher._id,
-      kind: "base",
-      year: 2026,
-      month: 1,
-      expectedAmount: 0,
-      paidAmount: 0,
-      ...over,
+  const mkSalary = async (teacher, over = {}) => {
+    const row = await prisma.teacherSalary.create({
+      data: {
+        branchId: branch.id,
+        teacherId: teacher.id,
+        kind: "base",
+        year: 2026,
+        month: 1,
+        expectedAmount: 0,
+        paidAmount: 0,
+        ...over,
+      },
     });
+    return fx.track("teacherSalary", row.id), row;
+  };
 
   // ─────────────────────────────────────────────────────────────────
   console.log("\n\x1b[1m1) BO'SH qatorlar o'chirishni to'smaydi\x1b[0m");
 
   // Cron 12 oy davomida yaratgan bo'sh qatorlar + hech narsa bermagan davr.
   const clean = await mkTeacher("Bosh");
-  const cronGroup = new mongoose.Types.ObjectId(); // "group" qatori guruhsiz bo'lmaydi
+  // "group" turidagi maosh qatori guruhsiz bo'lmaydi — HAQIQIY guruh
+  // kerak: `teacher_salaries_groupId_fkey` mavjud bo'lmagan ID ni rad etadi.
+  const cronGroup = await fx.group("CRON-GURUH", branch.id);
   for (let m = 1; m <= 12; m += 1) {
     await mkSalary(
       clean,
-      m % 2 ? { month: m, kind: "base" } : { month: m, kind: "group", group: cronGroup },
+      m % 2 ? { month: m, kind: "base" } : { month: m, kind: "group", groupId: cronGroup.id },
     );
   }
   // Ochilgan kuniyoq yopilgan davr - bir kun ham dars bo'lmagan.
   const sameDay = new Date("2026-03-05T00:00:00.000Z");
-  await TeacherGroupPeriod.create({
-    teacher: clean._id,
-    group: new mongoose.Types.ObjectId(),
-    startDate: sameDay,
-    endDate: sameDay,
+  const zeroPeriod = await prisma.teacherGroupPeriod.create({
+    data: {
+      teacherId: clean.id,
+      groupId: cronGroup.id,
+      startDate: sameDay,
+      endDate: sameDay,
+    },
   });
+  fx.track("teacherGroupPeriod", zeroPeriod.id);
 
   const cleanErr = await expectThrow(() =>
-    usersService.permanentRemove(clean._id, owner, { confirmName: "Bosh Testov" }),
+    usersService.permanentRemove(clean.id, owner, { confirmName: "Bosh Testov" }),
   );
   check(
     "12 ta bo'sh qator + nol uzunlikdagi davr — o'chdi",
@@ -136,7 +140,7 @@ const run = async () => {
   );
   check(
     "o'chirilgach foydalanuvchi bazada yo'q",
-    (await User.countDocuments({ _id: clean._id })) === 0,
+    (await prisma.user.count({ where: { id: clean.id } })) === 0,
   );
 
   // ─────────────────────────────────────────────────────────────────
@@ -147,7 +151,7 @@ const run = async () => {
     await mkSalary(owed, { month: m, expectedAmount: 2_935_483 });
   }
   const owedErr = await expectThrow(() =>
-    usersService.permanentRemove(owed._id, owner, { confirmName: "Qarzdor Testov" }),
+    usersService.permanentRemove(owed.id, owner, { confirmName: "Qarzdor Testov" }),
   );
   check("to'lanmagan maoshi bor o'qituvchi — to'sildi", owedErr !== null);
   check(
@@ -166,18 +170,21 @@ const run = async () => {
     expectedAmount: 1_000_000,
     paidAmount: 1_000_000,
   });
-  await SalaryTransaction.create({
-    branchId: branch._id,
-    teacher: paid._id,
-    salary: paidRow._id,
-    year: 2026,
-    month: 1,
-    amount: 1_000_000,
-    method: "cash",
-    paidAt: new Date(),
+  const paidTx = await prisma.salaryTransaction.create({
+    data: {
+      branchId: branch.id,
+      teacherId: paid.id,
+      salaryId: paidRow.id,
+      year: 2026,
+      month: 1,
+      amount: 1_000_000,
+      method: "cash",
+      paidAt: new Date(),
+    },
   });
+  fx.track("salaryTransaction", paidTx.id);
   const paidErr = await expectThrow(() =>
-    usersService.permanentRemove(paid._id, owner, { confirmName: "Tolangan Testov" }),
+    usersService.permanentRemove(paid.id, owner, { confirmName: "Tolangan Testov" }),
   );
   check("to'lovi bo'lgan o'qituvchi — to'sildi", paidErr !== null, "o'chib ketdi!");
 
@@ -185,32 +192,33 @@ const run = async () => {
   console.log("\n\x1b[1m3) Davomat o'chirishni to'smaydi, lekin YO'QOLMAYDI ham\x1b[0m");
 
   const marker = await mkTeacher("Belgilagan");
-  const grp = await Group.create({
-    branchId: branch._id,
-    name: "Test guruh",
-    course: new mongoose.Types.ObjectId(),
+  const grp = await fx.group("Test-guruh", branch.id, {
+    // `course` ATAYLAB berilmaydi: u ixtiyoriy FK va soxta ID
+    // `groups_courseId_fkey` ni buzardi.
     startDate: new Date("2026-01-05T00:00:00.000Z"),
-    schedule: [{ day: "mon", startTime: "10:00", endTime: "12:00" }],
+    schedule: { create: [{ day: "mon", startTime: "10:00", endTime: "12:00" }] },
   });
-  const student = await User.create({
+  const student = await fx.user("s_offb_1", {
     firstName: "Oquvchi",
     lastName: "Testov",
-    username: "s_offb_1",
     passwordHash: "x",
     role: "student",
-    homeBranchId: branch._id,
+    homeBranchId: branch.id,
   });
-  const att = await Attendance.create({
-    group: grp._id,
-    student: student._id,
-    date: new Date("2026-01-05T00:00:00.000Z"),
-    dateKey: "2026-01-05",
-    status: "present",
-    recordedBy: marker._id,
+  const att = await prisma.attendance.create({
+    data: {
+      groupId: grp.id,
+      studentId: student.id,
+      date: new Date("2026-01-05T00:00:00.000Z"),
+      dateKey: "2026-01-05",
+      status: "present",
+      recordedById: marker.id,
+    },
   });
+  fx.track("attendance", att.id);
 
   const markerErr = await expectThrow(() =>
-    usersService.permanentRemove(marker._id, owner, {
+    usersService.permanentRemove(marker.id, owner, {
       confirmName: "Belgilagan Testov",
     }),
   );
@@ -219,96 +227,108 @@ const run = async () => {
     markerErr === null,
     `to'sib qoldi: ${markerErr}`,
   );
-  const attAfter = await Attendance.findById(att._id).lean();
+  const attAfter = await prisma.attendance.findUnique({ where: { id: att.id } });
   check("davomat yozuvi JOYIDA qoldi", !!attAfter, "davomat o'chib ketdi!");
   check(
     "davomatning 'kim belgiladi' havolasi uzildi (null)",
-    !!attAfter && attAfter.recordedBy === null,
-    `recordedBy: ${attAfter?.recordedBy}`,
+    !!attAfter && attAfter.recordedById === null,
+    `recordedById: ${attAfter?.recordedById}`,
   );
 
   // ─────────────────────────────────────────────────────────────────
   console.log("\n\x1b[1m4) Hisobni yopish qoldiqni aniq nolga tushiradi\x1b[0m");
 
   const balanceOf = async (teacherId) => {
-    const rows = await TeacherSalary.find(
-      { teacher: teacherId, isDeleted: { $ne: true } },
-      { expectedAmount: 1, paidAmount: 1 },
-    ).lean();
+    const rows = await prisma.teacherSalary.findMany({
+      // ⚠ `isDeleted` YO'Q: `TeacherSalary` da soft-delete ustuni umuman
+      // yo'q (Mongo sxemasidan qolgan taxmin edi). Ishlab chiqarish kodi
+      // ham uni ishlatmaydi — tekshirildi.
+      where: { teacherId },
+      select: { expectedAmount: true, paidAmount: true },
+    });
     return rows.reduce(
-      (s, r) => s + (r.expectedAmount || 0) - (r.paidAmount || 0),
+      (acc, r) => acc + Number(r.expectedAmount || 0) - Number(r.paidAmount || 0),
       0,
     );
   };
 
-  const before = await balanceOf(owed._id);
+  const before = await balanceOf(owed.id);
   check("yopishdan oldin qoldiq bor", before === 6 * 2_935_483, `${money(before)}`);
 
   const res = await adjustmentService.settleBalance(
-    owed._id,
+    owed.id,
     { reason: "Ishdan bo'shatildi, hisob-kitob yopildi" },
     owner,
   );
   check("yopilgan summa qoldiqqa teng", res.settled === before, `${money(res.settled)}`);
 
-  const after = await balanceOf(owed._id);
+  const after = await balanceOf(owed.id);
   check("yopilgandan keyin qoldiq = 0", after === 0, `${money(after)}`);
 
-  const dedRow = await TeacherSalary.findById(res.adjustment._id).lean();
-  check("jarima qatori manfiy summa bilan yozilgan", dedRow?.expectedAmount === -before);
+  // Servis yaratgan jarima qatorini reyestrga olamiz (tozalash uchun).
+  const adjId = res.adjustment.id || res.adjustment._id;
+  fx.track("teacherSalary", adjId);
+  const dedRow = await prisma.teacherSalary.findUnique({ where: { id: String(adjId) } });
+  check("jarima qatori manfiy summa bilan yozilgan", Number(dedRow?.expectedAmount) === -before);
   check("jarima turi deduction", dedRow?.kind === "deduction");
 
   // ─────────────────────────────────────────────────────────────────
   console.log("\n\x1b[1m5) Ikki marta yopilmaydi / mavjud jarima ikki marta sanalmaydi\x1b[0m");
 
   const twice = await expectThrow(() =>
-    adjustmentService.settleBalance(owed._id, { reason: "yana" }, owner),
+    adjustmentService.settleBalance(owed.id, { reason: "yana" }, owner),
   );
   check("qoldiq 0 bo'lgach ikkinchi yopish rad etildi", twice !== null);
 
   // Qisman jarima allaqachon yozilgan holat: NET balans yopilishi kerak.
   const partial = await mkTeacher("Qisman");
   await mkSalary(partial, { expectedAmount: 5_000_000 });
-  await adjustmentService.create(
+  const partialAdj = await adjustmentService.create(
     {
-      teacher: partial._id,
+      teacher: partial.id,
       kind: "deduction",
       amount: 2_000_000,
       year: 2026,
       month: 1,
       reason: "kechikish",
-      branchId: branch._id,
+      branchId: branch.id,
     },
     owner,
   );
+  fx.track("teacherSalary", partialAdj.id || partialAdj._id);
   const partialRes = await adjustmentService.settleBalance(
-    partial._id,
+    partial.id,
     { reason: "bo'shatildi" },
     owner,
   );
+  fx.track("teacherSalary", partialRes.adjustment.id || partialRes.adjustment._id);
   check(
     "mavjud jarima hisobga olindi (5 mln - 2 mln = 3 mln)",
     partialRes.settled === 3_000_000,
     `yopildi: ${money(partialRes.settled)}`,
   );
-  check("NET balans nolga tushdi", (await balanceOf(partial._id)) === 0);
+  check("NET balans nolga tushdi", (await balanceOf(partial.id)) === 0);
 
   // ─────────────────────────────────────────────────────────────────
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-
-  console.log(
-    `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
-      `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
-  );
-  if (R.notes.length) {
-    console.log("\nYiqilganlar:");
-    R.notes.forEach((n) => console.log(`  - ${n}`));
-  }
-  process.exit(R.fail ? 1 : 0);
 };
 
-run().catch((err) => {
-  console.error("Test ishga tushmadi:", err);
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    bad("TEST YIQILDI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
+  })
+  .finally(async () => {
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
+    console.log(
+      `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
+        `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
+    );
+    if (R.fail) R.notes?.forEach?.((n) => console.log(`  • ${n}`));
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
+  });

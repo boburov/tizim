@@ -691,7 +691,8 @@ export const buildBriefing = async ({ now = new Date(), actionLimit = 6 } = {}) 
   const branch = branchId
     ? await prisma.branch.findUnique({
         where: { id: String(branchId) },
-        select: { name: true },
+        // ⚠ `id` ATAYLAB: javobdagi `branch._id` shu yerdan keladi.
+        select: { id: true, name: true },
       })
     : null;
 
@@ -701,7 +702,7 @@ export const buildBriefing = async ({ now = new Date(), actionLimit = 6 } = {}) 
 
   return {
     generatedAt: now,
-    branch: branch ? { _id: branch._id, name: branch.name } : null,
+    branch: branch ? { _id: branch.id, name: branch.name } : null,
     // "AI oxirgi marta qachon o'yladi" - bu qator bo'lmasa sahifa
     // statik dashboard bo'lib qoladi.
     lastRun: lastRun

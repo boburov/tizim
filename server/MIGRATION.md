@@ -11,7 +11,7 @@ jadval yangilanadi.
 | | Ilgari | Endi |
 |---|---|---|
 | Baza | MongoDB | PostgreSQL 16 |
-| ORM | Mongoose (74 model) | Prisma (78 model) |
+| ORM | Mongoose (74 model) | Prisma (84 model) |
 | Joblar | Agenda (Mongo'ga bog'liq) | pg-boss (Postgres) |
 | Kalit | `ObjectId` | 24-hex satr (`gen_object_id()`) |
 | TTL | `expireAfterSeconds` indeksi | `jobs/ttlCleanup.job.js` |
@@ -19,232 +19,196 @@ jadval yangilanadi.
 
 ---
 
-## 2. Holat
+## 2. Holat — ✅ TUGADI (2026-08-20)
 
-### ✅ Tayyor va tekshirilgan (poydevor)
+`src/` da birorta Mongoose chaqiruvi QOLMADI. Tekshirish:
 
-| Narsa | Holat |
-|---|---|
-| `prisma/schema.prisma` — 74 model + 4 yordamchi jadval | ✅ `prisma validate` o'tdi |
-| 3 ta migratsiya (funksiya → jadvallar → qisman indekslar) | ✅ bazaga qo'llandi |
-| 84 jadval, 77 enum, 35 qisman unique indeks | ✅ bazada tasdiqlandi |
-| Pul xavfsizligi invariantlari (10 ta stsenariy) | ✅ hammasi kutilgandek |
-| `config/prisma.js` — klient + `passwordHash` yopilgan | ✅ |
-| `config/scheduler.js` — pg-boss, Agenda API'si saqlangan | ✅ |
-| `jobs/ttlCleanup.job.js` | ✅ ro'yxatdan o'tgan |
-| Provisioning (admin_server + shell skriptlar) | ✅ Postgres'ga o'tdi |
-
-### ✅ Ko'chirilgan (server ko'tariladi, login ishlaydi)
-
-| Fayl / modul | Nima uchun kerak edi |
-|---|---|
-| `modules/auth` | login / refresh / logout / parol / profil — **16/16 test** |
-| `helpers/permission.helper.js` | rol va ruxsatlarni o'qish |
-| `helpers/branchAccess.helper.js` | `ensureMainBranch()` — **boot'ni yiqitayotgan edi** |
-| `helpers/branchContext.helper.js` | filial ko'lami filtrlari (butun tizim shunga tayanadi) |
-| `helpers/userProfile.helper.js` | `/auth/me` javobi |
-| `middleware/auth.js` | `requireAuth` — har bir himoyalangan so'rov |
-| `index.js` | boot tekshiruvi |
-| `seeds/permissions.seed.js`, `seeds/owner.seed.js` | bo'sh bazani ko'tarish |
-| `modules/systemNotifications` | to'liq |
-| `modules/storage` | kvota + fayl yozish (atomik `reserve`) |
-| `modules/expenseApprovals` | **o'qish yo'li** (list / stats / getById / pendingCount) |
-| `modules/notifications` | **inbox bo'lagi** (unread-count / markRead / markAllRead) |
-| `modules/adminDashboard` | overview / cashflow / student-flow (6 aggregate) |
-| `modules/roles` + `helpers/roles.helper.js` | matritsa, muzlatish, ko'chirish |
-| `modules/branches` | list / stats / compare / softRemove |
-| `modules/courses` (+ coursePrice) | narx merosi zanjiri |
-| `modules/rooms` | to'liq |
-| `modules/archiveReasons`, `feedbackTypes`, `leadOptions`, `notificationTemplates`, `attendanceSettings` | to'liq |
-| **`modules/users`** | list / stats / CRUD / parol / arxiv / rol / filial / hard-delete — **49/49 test** (`npm run test:users-prisma`) |
-| `modules/studentFreeze` | muzlatish/chiqarish + ro'yxat filtri (users.list shunga tayanadi) |
-| `modules/staffPayroll/payrollAudit` | HR sanasi auditi (`users.update` chaqiradi) |
-| `helpers/userRelations.helper.js` | hard-delete bloklovchilari + cascade |
-| `helpers/membership.helper.js`, `studentCompletion.helper.js` | a'zolik va yakunlash sanasi |
-| `helpers/correlationCache.js`, `botStatus.helper.js`, `cascadeDelete.helper.js` | kesh, Telegram holati, soft-delete cascade |
-| `finance/financeTxn.helper.js` | `runFinanceTxn` → `prisma.$transaction` |
-| `groups/teacherGroupPeriod.service.js` | **o'qish/rezolver yo'llari** — **20/20 test** (`npm run test:group-periods`) |
-| **`modules/teacherSalary`** (butun modul) | rateResolver, variableBase, teacherCompensation, teacherSalary, salaryTransaction, salaryAdjustment — **31/31 test** (`npm run test:salary-chain`) |
-| **`modules/groups`** (butun modul) | groups.service (1673 → 1779), teacherGroupPeriod **yozish yo'llari ham** — **32/32 test** (`npm run test:groups-chain`) |
-| **`modules/finance`** | groupFee, studentPayment, discount, transaction, financeTxn |
-| **`modules/deposits`**, **`modules/openingBalance`** | to'liq |
-| `modules/journal/journal.service.js` | qo'sh yozuv (post/reverse/balances/reconcile) |
-| **`modules/staffPayroll`** (butun modul) | kpiTriggers, kpiRule, kpiEngine, staffPayroll, staffCompensation, staffAdjustment, staffSalaryTransaction, payrollHistory — **47/47 test** (`npm run test:staff-payroll`) |
-| `modules/holidays`, `modules/lessonCancellations` | pul yo'lidagi tranzitiv blokerlar |
-| `helpers/studentFreeze.helper.js`, `journalPosting.helper.js` | muzlatish oynalari, jurnal postlash |
-
-**Hozir ishlaydi — 22 endpoint (200):**
-`/auth/*`, `/branches` (+compare, stats), `/roles` (+matrix), `/courses`,
-`/rooms`, `/archive-reasons`, `/feedback-types`, `/lead-options`,
-`/notification-templates`, `/attendance-settings`, `/storage/usage`,
-`/system-notifications`, `/notifications/inbox/unread-count`,
-`/expense-approvals` (+pending-count, stats),
-`/admin-dashboard/*` (overview, cashflow, student-flow).
-
-Boot'da **0 ta ERROR**, rejalashtiruvchi 26 job bilan ko'tariladi.
-
-**Hozir ishlamaydi:** `/leads`, `/expenses`, `/feedback`, `/activity-logs`,
-`/attendance`, `/grades`, `/assignments`, `/imports`,
-`/exports`, `/ai`, `/branch-analytics`, `/finance-report`, `/ledger`,
-xazina (`shift`, `cashTransfer`, `journalVerify`) va bot.
-
-**Fon xizmatlari** (hammasi `.catch()` bilan o'ralgan — serverni yiqitmaydi):
-`botlocks`, `groups.find` (autoEndGroups), `studentpayments`
-(catchUpMonthly + dailyAccrual).
-
-### ⚠️ ESDA TUTING: `branchContext` shakli o'zgardi
-
-`branchFilter()` / `branchMatchStage()` endi **Prisma shaklini** qaytaradi
-(`in` — `$in` emas; `branchMatchStage()` esa `$match` o'ramisiz `where`
-bo'lagini beradi).
-
-Ularni **57 fayl** ishlatadi. Ko'chirilmagan modul ularni Mongoose'ga
-uzatsa **aniq xato** beradi (masalan *"Arguments must be aggregate
-pipeline operators"*) — bu yaxshi, chunki jimgina noto'g'ri natija
-qaytarmaydi. Modulni ko'chirayotganda `...branchMatchStage()` ni
-`AND: [...]` ichiga qo'ying.
-
-### ⏳ Qolgan (110 fayl)
-
-Quyidagilar **hali Mongoose'da** va shuning uchun **hozircha ishlamaydi**
-(Mongo ulanishi olib tashlangan). Ko'chirish tartibi — bog'liqlik bo'yicha:
-
-**1-to'lqin — poydevor helperlar** ✅ **bajarildi**
-`membership`, `studentCompletion`, `userRelations`, `roles`, `cascadeDelete`,
-`botStatus`, `correlationCache`, `selfSalary.guard` — hammasi Prisma'da.
-Qolgani: `studentFreeze.helper.js` va `lessonCancellation.helper.js` —
-ular davomat/to'lov to'lqiniga tegishli (chaqiruvchilari hali Mongoose'da).
-
-**2-to'lqin — asosiy ma'lumot** — `branches`, `roles`, `courses`, `rooms` ✅
-
-**`users`** ✅ **bajarildi** (1385 qator, 17 eksport, 49 ta test).
-
-**`groups`** ✅ **bajarildi** (1779 qator, 26 eksport, 31 ta test).
-
-**Moliya/maosh zanjiri (2-to'lqin)** ✅ **bajarildi**
-
-| Modul | Holat |
-|---|---|
-| `teacherSalary/rateResolver.helper.js` | ✅ |
-| `teacherSalary/variableBase.helper.js` | ✅ |
-| `teacherSalary/teacherCompensation.service.js` | ✅ |
-| `teacherSalary/teacherSalary.service.js` | ✅ |
-| `teacherSalary/salaryTransaction.service.js` | ✅ |
-| `teacherSalary/salaryAdjustment.service.js` | ✅ |
-| `finance/groupFee.service.js` | ✅ |
-| `finance/studentPayment.service.js` | ✅ |
-| `finance/discount.service.js` | ✅ |
-| `finance/services/transaction.service.js` | ✅ |
-| `deposits/deposit.service.js` | ✅ |
-| `openingBalance/openingBalance.service.js` | ✅ |
-| `groups/groups.service.js` | ✅ |
-| `journal/journal.service.js` | ✅ |
-
-**Moliyaviy zanjir (4-to'lqin)** ✅ **bajarildi**
-
-| Modul | Holat |
-|---|---|
-| `expenseApprovals` (qaror yo'llari) | ✅ — **butun zanjirning to'sig'i edi** |
-| `expenses/expense.service.js` | ✅ |
-| `expenses/expenseCategory.service.js` | ✅ |
-| `journal/cashTransfer.service.js` | ✅ |
-| `journal/shift.service.js` | ✅ |
-| `journal/journalVerify.service.js` | ✅ |
-| `financeReport/financeReport.service.js` | ✅ |
-| `branchAnalytics/branchPnl.service.js` | ✅ |
-
-**TARTIB O'ZGARDI VA NEGA.** Reja "chiqimlardan boshlash" edi, lekin
-chiqimlar tasdiqlarga bog'liq, tasdiqlarning YOZISH yo'llari esa hali
-Mongoose'da edi. `expenseApproval.service.js` ni **29 fayl** ishlatadi —
-jumladan allaqachon ko'chirilgan `users`, `groups`, `teacherSalary`,
-`deposits`, `finance`, `staffPayroll`. Ya'ni ular ham yashirin Mongoose
-bog'liqligiga ega edi: tasdiq talab qiladigan har qanday yo'l 501
-qaytarardi. Shuning uchun tasdiqlar birinchi ko'chirildi.
-
-**Xodim oyligi (3-to'lqin)** ✅ **bajarildi**
-
-| Modul | Holat |
-|---|---|
-| `staffPayroll/kpiTriggers.js` | ✅ |
-| `staffPayroll/kpiRule.service.js` | ✅ |
-| `staffPayroll/kpiEngine.service.js` | ✅ |
-| `staffPayroll/staffPayroll.service.js` | ✅ |
-| `staffPayroll/staffCompensation.service.js` | ✅ |
-| `staffPayroll/staffAdjustment.service.js` | ✅ |
-| `staffPayroll/staffSalaryTransaction.service.js` | ✅ |
-| `staffPayroll/payrollHistory.service.js` | ✅ |
-| `staffPayroll/payrollAudit.service.js` | ✅ |
-
-**Keyingi to'lqin uchun bog'liqlik tartibi** (qolgan 110 fayl):
-
-| Guruh | Fayl | Nega shu tartibda |
-|---|---|---|
-| 1 | `expenses` (3) + `expenseApprovals` yozish yo'li | `journal.post()` allaqachon Prisma'da; chiqim unga yozadi |
-| 2 | `journal/cashTransfer`, `journalVerify` (3) | Xazina; `accounts` cheklovlari tayyor |
-| 3 | `attendance` (2) + `grades` (2) + `attendanceExemptions` (1) + `teacherAttendance` (1) | Davomat KPI triggerlarini oziqlantiradi |
-| 4 | `assignments`, `feedback`, `activityHistory`, `activityLogs`, `search`, `notifications` (2) | Bir-biriga bog'liq emas, parallel |
-| 5 | `ledger` (1), `financeReport` (1), `branchAnalytics` (4) | Faqat O'QIYDI — yuqoridagilar tugagach |
-| 6 | `imports` (11) | Barcha servislarga yozadi, shuning uchun oxirida |
-| 7 | `ai` (27), `bot` (3), `exports`, `storage` | Mustaqil; `ai` eng katta, lekin pul yo'lida emas |
-| — | `seeds` (25), `jobs` (6), `middleware` (3), `queues` (1) | Chaqiruvchilari bilan birga |
-
-### ⚠️ ATOMIK YOZISH: Mongo update-pipeline'ining o'rni
-
-Mongo `paidAmount`/`status`/`overpaidAmount` ni **aggregation update
-pipeline** bilan yozardi — status BAZADAGI joriy `paidAmount` dan bitta
-atomik amalda keltirib chiqarilardi. Prisma'da bunday quvur **yo'q**.
-Ikki vosita bilan almashtirildi:
-
-1. **`applyPaidDelta`** (teacherSalary + studentPayment + depozit balansi)
-   → **bitta xom `UPDATE`**. Faqat shu yerda "shartli-atomik" o'zgartirish
-   kerak (`capToRemaining`: yangi summa qoldiqdan oshsa qator umuman
-   yangilanmasin). SQL'da o'ng tomondagi ustun ESKI qiymatni beradi —
-   Mongo'dagi `"$paidAmount"` bilan aynan bir xil.
-2. **`recalc` / `recalcStatus`** → `$transaction` + `SELECT … FOR UPDATE`.
-   Qator qulflanadi, `paidAmount` o'qiladi, status JS'da hisoblanadi.
-
-> **HECH QACHON** "o'qi → hisobla → saqla" naqshiga tushirmang: u yo'qolgan
-> to'lov (lost update) demakdir.
->
-> **`updatedAt`**: Prisma'ning `@updatedAt` KLIENT tomonida ishlaydi.
-> Xom SQL uni chetlab o'tadi — `"updatedAt" = NOW()` ochiq yoziladi.
-
-### ⚠️ O'CHIRISH TARTIBI ENDI MAJBURIY
-
-Mongo'da FK yo'q edi — qatorlarni istalgan tartibda o'chirish mumkin edi.
-PostgreSQL'da `RESTRICT` bor, ya'ni **bola ota'sidan oldin** ketishi shart:
-
-```text
-payment_transactions.paymentId → student_payments   (RESTRICT)
-salary_transactions.salaryId   → teacher_salaries   (RESTRICT)
-deposit_transactions.depositId → student_deposits   (RESTRICT)
+```bash
+grep -rn 'from "mongoose"' src/     # 0 natija
+grep -rn 'models/' src/             # 0 natija
 ```
 
-`helpers/userRelations.helper.js` shu tartibda qayta yozildi va Mongo
-umuman tegmagan jadvallar qo'shildi (depozit, muzlatish, boshlang'ich
-qoldiq, yomon qarz, maosh stavkasi, audit jurnali) — ularsiz o'chirish
-FK xatosi bilan yiqilardi.
+### Yakuniy tozalash (Stage A)
 
-**3-to'lqin — o'quv jarayoni**
-`attendance`, `grades`, `assignments`, `holidays`, `lessonCancellations`,
-`attendanceExemptions`, `attendanceSettings`, `studentFreeze`, `teacherAttendance`
+| Nima | Holat |
+|---|---|
+| `src/models/` (74 model + 2 plagin) | 🗑 o'chirildi |
+| `config/legacyMongoose.js` | 🗑 o'chirildi |
+| `errorHandler` dagi Mongoose shoxlari (`ValidationError`, `CastError`, `11000`) | 🗑 o'chirildi |
+| `501 MODULE_NOT_MIGRATED` shartnomasi | 🗑 o'chirildi — endi hech qachon ishlamaydi |
+| `mongoose` bog'lamasi (`package.json`) | 🗑 o'chirildi |
+| `app.js` dagi `configureLegacyMongoose()` chaqiruvi | 🗑 o'chirildi |
 
-**4-to'lqin — moliya** (eng ehtiyot bo'lish kerak bo'lgan qism)
-`finance`, `deposits`, `expenses`, `expenseApprovals`, `journal`, `ledger`,
-`openingBalance`, `teacherSalary`, `staffPayroll`, `financeReport`
+### Model konstantalari — yangi manzillar
 
-**5-to'lqin — qolganlari**
-`leads`, `leadOptions`, `notifications`, `notificationTemplates`, `feedback`,
-`feedbackTypes`, `systemNotifications`, `storage`, `imports`, `exports`,
-`search`, `activityLogs`, `activityHistory`, `adminDashboard`,
-`branchAnalytics`, `archiveReasons`, `botAuth`, `ai`
+Modellar faqat QIYMAT eksport qilgani uchun hali import qilinardi. Ular
+allaqachon mavjud konstanta fayllariga ko'chirildi (qiymatlar AYNAN bir xil):
 
-Shuningdek: **23 ta job**, **bot handlerlari**, **seedlar**, **33 ta eski test**.
+| Konstanta | Eski joy | Yangi joy |
+|---|---|---|
+| `DEFAULT_THRESHOLDS`, `DEFAULT_CHURN_WEIGHTS`, `DEFAULT_PAYMENT_WEIGHTS` | `models/aiConfig.model.js` | `constants/aiDefaults.js` |
+| `GROUP_DAYS` | `models/group.model.js` | `constants/calendar.js` |
+| `AI_REPORT_PERIODS` | `models/aiReport.model.js` | `constants/ai.js` *(yangi qo'shildi)* |
+| `STAFF_SALARY_TYPES` | `models/staffCompensation.model.js` | `constants/staffPayroll.js` |
+| `CLEANUP_FREQUENCIES` | `models/storageSettings.model.js` | `constants/storage.js` |
+| `COMP_BASE_TYPES`, `COMP_VARIABLE_TYPES`, `COMP_PERCENT_BASES` | `models/teacherCompensation.model.js` | `constants/compensation.js` |
+| `INSIGHT_SUBJECT_TYPES`, `INSIGHT_SEVERITIES`, `INSIGHT_STATUSES` | `models/insight.model.js` | `modules/ai/insightKinds.js` *(yangi qo'shildi)* |
 
-> **MUHIM:** modul ko'chirilmagunicha server TO'LIQ ishga tushmaydi —
-> `config/db.js` (mongoose.connect) olib tashlangan, ya'ni har qanday
-> Mongoose chaqiruvi ulanishsiz osiladi. Migratsiya tugagach
-> `src/models/` papkasi va `mongoose` bog'lamasi o'chiriladi.
+### Seedlar
+
+**Ko'chirildi (8):** `communicationDefaults`, `fakeData`, `fakeExtras`,
+`fakeExtras2`, `aiDemoFinance`, `multiBranchDemo`, `aiChurnBacktest`,
+`demoGroup` (avval `package.json` da yo'q edi — `seed:demo-group` qo'shildi).
+
+**O'CHIRILDI (14)** — Mongo davridagi BIR MARTALIK migratsiyalar:
+`migrateAttendanceSlot`, `migrateBotUserIndex`, `migrateBranches`,
+`migrateCourses`, `migrateDirectorGrades`, `migrateGroupEndDate`,
+`migrateMembershipIndex`, `migrateTeacherCompensation`,
+`migrateTeacherGroupPeriods`, `migrateUserPhoneIndex`, `backfillUserRole`,
+`backfillStudentCompletedAt`, `removePlainPasswords`, `cleanDatabase`.
+
+**NEGA KO'CHIRILMADI, O'CHIRILDI:**
+
+1. PostgreSQL bazasi HAR DOIM noldan quriladi (`createdb` + `prisma migrate
+   deploy`) — Mongo'dan ma'lumot ko'chirish skripti kodbazada UMUMAN yo'q.
+   Ya'ni bu backfill'lar hech qachon ishlatilmaydigan bazani tuzatardi.
+2. `schema.prisma` ularning YAKUNIY HOLATINI allaqachon o'z ichiga oladi
+   (`User.role @default("student")`, `phone` unique EMAS, qisman unique
+   indekslar migratsiyasi va h.k.).
+3. Bir nechtasi Mongo INDEKSLARI bilan ishlaydi (`syncIndexes`, `dropIndex`,
+   `sparse` → `partial`) — PostgreSQL'da ekvivalenti yo'q.
+4. `migrateDirectorGrades` ni `migrateDirectorFullAccess.seed.js` (Prisma)
+   TO'LIQ o'rnini bosadi — u `constants/permissionScope.js` dagi barcha
+   filial-ichi ruxsatlarini beradi, `grades.record` ham shular ichida.
+5. `cleanDatabase.seed.js` allaqachon ISHLAMAS holatda edi: u `env.MONGO_URL`
+   ni o'qirdi, u esa `config/env.js` dan olib tashlangan — ya'ni har
+   chaqiruvda 2-xavfsizlik to'sig'ida to'xtardi. `db-reset.sh` ham undan
+   voz kechib `prisma migrate reset` ga o'tgan.
+
+### ⚠ SEEDLARDA XULQ-ATVOR O'ZGARDI: o'chirish tartibi va qamrovi
+
+Mongo'da FK yo'q edi — foydalanuvchini istalgan paytda o'chirsa bo'lardi va
+unga ishora qiluvchi yozuvlar YETIM qolardi. PostgreSQL'da FK'lar `RESTRICT`.
+
+Shuning uchun `fakeData` va `multiBranchDemo` dagi tozalash:
+- **tartiblangan** (`Promise.all` EMAS): bola → ota;
+- **kengroq**: `fakeData` endi `grades`, `student_payments`,
+  `payment_transactions`, `group_fees` ni ham tozalaydi. Mongo'da ular yetim
+  qolardi, bu yerda esa o'chirishni TO'SADI. Bu tanlov emas — baza talabi.
+
+### ⚠ `createMany` yozilgan qatorlarni QAYTARMAYDI
+
+Mongo `insertMany` yaratilgan hujjatlarni `_id` bilan qaytarardi. Prisma
+`createMany` faqat SONINI beradi. Kalit kerak bo'lgan joyda ikki yechim:
+- `fakeData` — `username` bo'yicha qayta o'qish (`attachIds()`), TARTIB
+  saqlanadi (guruhga o'qituvchi indeks bo'yicha biriktiriladi);
+- `multiBranchDemo` — kalit OLDINDAN yaratiladi (`oid()`, `gen_object_id()`
+  ning JS ekvivalenti), shunda bog'lanishlar yozishdan oldin quriladi.
+
+Ichma-ich yozish kerak bo'lgan joyda (`Group.schedule` + `teachers`,
+`Notification.audience*`) `createMany` UMUMAN ishlamaydi — u nested write'ni
+qo'llab-quvvatlamaydi, shuning uchun qator alohida `create()` bilan yoziladi.
+
+### ✅ SEEDLARNI ISHLATIB TOPILGAN IKKI SXEMA MUAMMOSI — TUZATILDI
+
+Ikkalasi ham `ON DELETE SET NULL` ning invariant bilan to'qnashuvi. Ikkalasi
+ham **mavjud xatti-harakat** edi (bu tozalash keltirib chiqargani EMAS).
+
+> **HOLAT: TUZATILDI** — migratsiya
+> `20260820120000_restrict_journal_and_salary_ownership_fks`.
+> Beshta egalik kaliti `RESTRICT` ga o'tkazildi:
+> `journal_entries.{studentId, teacherId, staffId, groupId}` va
+> `teacher_salaries.groupId`. Ma'lumot o'zgarmadi (digest bir xil),
+> regressiya testi: `npm run test:fk-restrict` (10 ta tekshiruv).
+
+**1. `teacher_salaries.groupId` — guruhni o'chirib bo'lmaydi.**
+
+`groupId` ixtiyoriy FK, ya'ni Prisma unga standart `SET NULL` qo'yadi.
+Guruh o'chganda maosh qatorining `groupId` si NULL ga tushadi, lekin
+`teacher_salaries_kind_group_check` `kind='group'` qatoridan `groupId`
+NOT NULL bo'lishini TALAB QILADI:
+
+```
+ERROR 23514: new row for relation "teacher_salaries"
+violates check constraint "teacher_salaries_kind_group_check"
+```
+
+Ya'ni **maosh qatori bor guruhni o'chirish MUMKIN EMAS** — na seed'dan,
+na paneldan, na `groups.remove()` orqali. Xato esa `group.deleteMany()`
+da chiqadi va sababi ko'rinmaydi (guruhga to'g'ridan-to'g'ri hech narsa
+tayanmaydi). To'g'ri yechim — FK ni `RESTRICT` qilish (xato o'z joyida
+va ma'noli bo'ladi) yoki `kind` ni ham birga yangilash. **Qaror egasiniki.**
+
+**2. `journal_entries.*Id` — o'zgarmas jurnal JIMGINA o'zgaradi.**
+
+`journal_entries` ning `studentId` / `teacherId` / `groupId` / `courseId` /
+`roomId` / `membershipId` ustunlari ham `SET NULL`. Ya'ni foydalanuvchi yoki
+guruh o'chirilganda **jurnal yozuvining sub'ekti yo'qoladi**. O'lchangan:
+
+| Ustun | Oldin NULL | Keyin NULL |
+|---|---|---|
+| `studentId` | 25 / 48 | 48 / 48 |
+| `teacherId` | 23 / 48 | 48 / 48 |
+| `groupId` | 17 / 48 | 48 / 48 |
+
+Bu `config/prisma.js` dagi **jurnal o'zgarmasligi kengaytmasini CHETLAB
+O'TADI**: kengaytma `update`/`upsert` ni to'sadi, FK esa qatorni BAZA
+ICHIDA o'zgartiradi — ilova qatlami buni umuman ko'rmaydi. Ya'ni
+"yozuvni faqat storno bilan tuzatish mumkin" kafolati o'chirish yo'lida
+amal qilmaydi. Summalar (`journal_lines`) tegilmaydi, lekin
+"bu pul KIMGA tegishli edi" degan ma'lumot qaytarib bo'lmaydigan
+tarzda yo'qoladi.
+
+---
+
+### 🔒 GURUHNI O'CHIRISH: MOLIYAVIY TARIX TO'SADI
+
+`journal_entries.groupId` `RESTRICT` bo'lgach, jurnalda izi bor guruhni
+o'chirish FK xatosi bilan yiqila boshladi — va xato tranzaksiyaning
+O'RTASIDA, depozitlar allaqachon qaytarilgandan keyin chiqardi.
+
+`groups.permanentRemove()` endi buni OLDINDAN tekshiradi:
+
+```
+DELETE guruh
+   ↓
+moliyaviy tarix (journal_entries.groupId) bormi?
+   ↓  ha
+409 GROUP_HAS_FINANCIAL_HISTORY   →  arxivlang (kursni yakunlang)
+```
+
+Javob: `{ success:false, code:"GROUP_HAS_FINANCIAL_HISTORY",
+details:{ journalEntries:<son> } }`.
+
+Qo'riqchi TASDIQ NOMIDAN OLDIN turadi — ataylab: umuman mumkin bo'lmagan
+amalni tasdiqlatishning ma'nosi yo'q.
+
+Tarixi YO'Q guruh avvalgidek butunlay o'chadi (depozit qaytarish +
+atomik o'chirish yo'li saqlangan). Ikkala holat ham
+`npm run test:groups-chain` da qadalgan.
+
+---
+
+### ⏳ QOLGAN ISH: 27 ta eski test
+
+`tests/` da 27 fayl hali `mongoose` va `src/models/` ga tayanadi. Ular
+ALLAQACHON ishlamas edi (`mongoose.connect(MONGO_URL)` — bunday baza yo'q),
+`src/models/` o'chirilgach esa import darajasida yiqiladi.
+
+Ularning `package.json` dagi skriptlari ham o'lik. Ro'yxat:
+`aiAdvisor`, `approvalModel`, `assignmentStorage`, `attendanceScope`,
+`branchAnalytics`, `branchDelegation`, `branchLeak`, `configApprovals`,
+`coursesRoomsPricing`, `directorRole`, `exportScope`, `importDraftGroup`,
+`importEngine`, `leadCreatedKpi`, `leadRouting`, `ledger`, `lessonReminders`,
+`moneyIsolation`, `openedRoutesScope`, `openingBalance`, `paymentRace`,
+`privEscalation`, `resourceScope`, `teacherHandover`, `teacherOffboarding`,
+`teacherSalaryBalance` + `helpers/branchGuard.js`.
+
+Ularni o'chirish yoki Prisma'ga ko'chirish — ALOHIDA qaror (qamrov
+masalasi), shuning uchun bu tozalashga QO'SHILMADI. Ishlaydigan 27 ta
+Prisma testi ularga BOG'LIQ EMAS (`branchGuard.js` ni faqat `branchLeak`
+ishlatadi), ya'ni `mongoose` ni olib tashlash ishlaydigan hech narsani
+buzmaydi.
 
 ---
 
@@ -575,7 +539,18 @@ filialni ko'radi". Ularsiz "hammasini rad et" ham testdan o'tib ketardi.
 
 ---
 
-## 8. Ko'chirilmagan modul — HTTP kontrakti (501)
+## 8. Ko'chirilmagan modul — HTTP kontrakti (501) — 🗄 TARIXIY
+
+> **Bu bo'lim endi AMAL QILMAYDI.** `config/legacyMongoose.js` va
+> `errorHandler` dagi 501 shoxi o'chirildi (§2), ya'ni `501
+> MODULE_NOT_MIGRATED` hech qachon qaytmaydi. Bo'lim migratsiya
+> davridagi qarorlarni yozib qo'yish uchun saqlanadi.
+>
+> **Klient tomonda qoldi:** `client/src/app/query-client.js`,
+> `shared/components/dashboard/dataStatus.js`,
+> `owner/features/systemAnalysis/*`, `owner/features/ai/pages/
+> OperationsCenterPage.jsx` hali 501 ni maxsus ishlaydi. Bu zararsiz
+> (shox hech qachon ishlamaydi), lekin o'lik kod — alohida tozalanadi.
 
 Mongo ulanishi olib tashlangan, `src/models/*` esa hali joyida. Ko'chirilmagan
 modulga so'rov kelganda Mongoose standart holatda **10 soniya buferda kutardi**,
@@ -774,7 +749,7 @@ npm run test:auth-prisma      #  16  login / refresh / parol
 npm run test:users-prisma     #  49  CRUD / arxiv / hard-delete
 npm run test:group-periods    #  20  dars davrlari, stavka rezolveri
 npm run test:salary-chain     #  31  o'qituvchi maoshi + jurnal
-npm run test:groups-chain     #  32  guruh, jadval versiyalash
+npm run test:groups-chain     #  33  guruh, jadval versiyalash, moliyaviy tarix qo'riqchisi
 npm run test:staff-payroll    #  47  xodim oyligi + filial qo'riqchisi
 npm run test:invariants       #  44  validatsiya invariantlari (servis + CHECK)
 npm run test:expenses-chain      # 35  chiqim + tasdiq zanjiri

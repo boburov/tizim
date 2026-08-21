@@ -22,10 +22,21 @@
  *   npm run test:courses
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
-const BASE = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina";
-const DB = BASE.replace(/\/([^/?]+)(\?|$)/, "/bayyina_courses_test$2");
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi + `dropDatabase()` o'rniga prefiksli fixture va
+ * kafolatli tozalash (`tests/helpers/prismaFixtures.js`). Xavfsizlik va
+ * biznes DA'VOLARI o'zgarmadi — faqat ma'lumotga murojaat qatlami.
+ *
+ * Bog'lanish maydonlari qayta nomlandi: `teacher` → `teacherId`,
+ * `group` → `groupId`, `student` → `studentId` va h.k.
+ */
+const fx = createFixtures();
+let fxCourseId = null;
 
 const R = { pass: 0, fail: 0, notes: [] };
 const ok = (n, extra = "") => {
@@ -47,24 +58,6 @@ const grab = async (fn) => {
 };
 
 const run = async () => {
-  if (DB === BASE) throw new Error("Test bazasi nomi ajratilmadi - to'xtatildi");
-  mongoose.set("autoIndex", false);
-  await mongoose.connect(DB);
-  if (!mongoose.connection.name.includes("courses_test")) {
-    throw new Error(`Kutilmagan baza: ${mongoose.connection.name}`);
-  }
-  await mongoose.connection.dropDatabase();
-
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
-  const GroupFee = (await import("../src/models/groupFee.model.js")).default;
-  const Course = (await import("../src/models/course.model.js")).default;
-  const Room = (await import("../src/models/room.model.js")).default;
-  const CoursePrice = (await import("../src/models/coursePrice.model.js")).default;
-
-  // Unique indekslarni QO'LDA quramiz (autoIndex o'chirilgan).
-  await Promise.all([Room.syncIndexes(), CoursePrice.syncIndexes()]);
-
   const roomsService = await import("../src/modules/rooms/services/rooms.service.js");
   const priceService = await import(
     "../src/modules/courses/services/coursePrice.service.js"
@@ -74,8 +67,8 @@ const run = async () => {
     "../src/helpers/branchContext.helper.js"
   );
 
-  const A = await Branch.create({ name: "A filial", isMain: true });
-  const B = await Branch.create({ name: "B filial" });
+  const A = await fx.branch("A-filial");
+  const B = await fx.branch("B-filial");
 
   const asBranch = (branchId, fn) =>
     runWithBranchContext(
@@ -93,30 +86,31 @@ const run = async () => {
       fn,
     );
 
-  const ielts = await Course.create({ title: "IELTS", code: "ielts" });
+  const ielts = await fx.course("IELTS");
+  fxCourseId = ielts.id;
 
   // ─────────────────────────────────────────────────────────
   console.log("\n\x1b[1m1) XONA - filial resursi\x1b[0m");
   // ─────────────────────────────────────────────────────────
 
-  const roomA = await asBranch(A._id, () =>
+  const roomA = await asBranch(A.id, () =>
     roomsService.create({ name: "3-xona", capacity: 12, areaM2: 24 }, null),
   );
-  check("A filialda xona yaratildi", String(roomA.branchId) === String(A._id));
+  check("A filialda xona yaratildi", String(roomA.branchId) === String(A.id));
 
   // Bir xil nom BOSHQA filialda - RUXSAT ETILADI.
-  const roomB = await asBranch(B._id, () =>
+  const roomB = await asBranch(B.id, () =>
     roomsService.create({ name: "3-xona", capacity: 20 }, null),
   );
   check(
     "«3-xona» B filialda ham yaratiladi (nom filial ichida unikal)",
-    String(roomB.branchId) === String(B._id),
+    String(roomB.branchId) === String(B.id),
     "global unique indeks ikkinchi filialni to'sib qo'ygan bo'lardi",
   );
 
   // Bir xil nom AYNI filialda - RAD ETILADI.
   const dup = await grab(() =>
-    asBranch(A._id, () => roomsService.create({ name: "3-xona" }, null)),
+    asBranch(A.id, () => roomsService.create({ name: "3-xona" }, null)),
   );
   check(
     "Ayni filialda takror nom rad etiladi",
@@ -125,19 +119,29 @@ const run = async () => {
   );
 
   // Ro'yxat FILTRLANADI.
-  const listA = await asBranch(A._id, () => roomsService.list({}));
+  const listA = await asBranch(A.id, () => roomsService.list({}));
   check(
     "A direktori faqat A xonalarini ko'radi",
-    listA.items.length === 1 && String(listA.items[0]._id) === String(roomA._id),
+    listA.items.length === 1 && String(listA.items[0]._id) === String(roomA.id),
     `${listA.items.length} ta xona qaytdi`,
   );
 
-  const listAll = await asOwner(() => roomsService.list({}));
-  check("Owner ikkala filial xonasini ko'radi", listAll.items.length === 2);
+  const listAll = await asOwner(() => roomsService.list({ limit: 500 }));
+  // ⚠ FIXTURE XONALARI bo'yicha: baza bo'sh emas, `items.length === 2`
+  // bazadagi boshqa xonalar tufayli hech qachon to'g'ri kelmasdi.
+  const fixtureRoomIds = [String(roomA.id), String(roomB.id)];
+  const seen = listAll.items
+    .map((r) => String(r.id || r._id))
+    .filter((id) => fixtureRoomIds.includes(id));
+  check(
+    "Owner ikkala filial xonasini ko'radi",
+    seen.length === 2,
+    `${seen.length}/2 fixture xonasi ko'rindi (jami ${listAll.items.length})`,
+  );
 
   // Boshqa filial xonasini ID bilan OCHIB bo'lmaydi.
   const foreign = await grab(() =>
-    asBranch(A._id, () => roomsService.getById(String(roomB._id))),
+    asBranch(A.id, () => roomsService.getById(String(roomB.id))),
   );
   check(
     "A direktori B xonasini ID bilan ocha olmaydi",
@@ -147,8 +151,8 @@ const run = async () => {
 
   // Xona filialini ALMASHTIRIB bo'lmaydi.
   const moved = await grab(() =>
-    asBranch(A._id, () =>
-      roomsService.update(String(roomA._id), { branchId: String(B._id) }),
+    asBranch(A.id, () =>
+      roomsService.update(String(roomA.id), { branchId: String(B.id) }),
     ),
   );
   check(
@@ -161,22 +165,24 @@ const run = async () => {
   console.log("\n\x1b[1m2) GURUH - xona filialga mos kelishi shart\x1b[0m");
   // ─────────────────────────────────────────────────────────
 
-  const mkGroup = (branchId, extra = {}) =>
-    Group.create({
-      branchId,
-      name: `Guruh-${String(branchId).slice(-4)}-${Math.round(extra.n || 1)}`,
-      schedule: [{ day: "mon", startTime: "10:00", endTime: "11:00" }],
+  // ⚠ `n` FAQAT NOM UCHUN — u Prisma'ga UZATILMASLIGI kerak.
+  // Mongoose noma'lum maydonni jimgina tashlardi; Prisma esa
+  // "Unknown argument `n`" bilan RAD ETADI.
+  const mkGroup = (branchId, { n, ...extra } = {}) =>
+    fx.group(`Guruh-${String(branchId).slice(-4)}-${Math.round(n || 1)}`, branchId, {
+      // `schedule` endi alohida jadval (Mongo'da embedded massiv edi).
+      schedule: { create: [{ day: "mon", startTime: "10:00", endTime: "11:00" }] },
       startDate: new Date("2026-01-01"),
       ...extra,
     });
 
-  const groupA = await mkGroup(A._id, { courseId: ielts._id, roomId: roomA._id });
-  check("A guruhga A xonasi biriktirildi", String(groupA.roomId) === String(roomA._id));
+  const groupA = await mkGroup(A.id, { courseId: ielts.id, roomId: roomA.id });
+  check("A guruhga A xonasi biriktirildi", String(groupA.roomId) === String(roomA.id));
 
   const groupsService = await import("../src/modules/groups/services/groups.service.js");
   const crossRoom = await grab(() =>
-    asBranch(A._id, () =>
-      groupsService.update(String(groupA._id), { roomId: String(roomB._id) }),
+    asBranch(A.id, () =>
+      groupsService.update(String(groupA.id), { roomId: String(roomB.id) }),
     ),
   );
   check(
@@ -187,7 +193,7 @@ const run = async () => {
 
   // Xonada faol guruh bo'lsa - o'chirib bo'lmaydi.
   const busyDelete = await grab(() =>
-    asBranch(A._id, () => roomsService.softRemove(String(roomA._id), null)),
+    asBranch(A.id, () => roomsService.softRemove(String(roomA.id), null)),
   );
   check(
     "Faol guruhi bor xonani o'chirib bo'lmaydi",
@@ -200,7 +206,7 @@ const run = async () => {
   // ─────────────────────────────────────────────────────────
 
   // Narx umuman yo'q.
-  let price = await priceService.resolveGroupPrice(String(groupA._id));
+  let price = await priceService.resolveGroupPrice(String(groupA.id));
   check(
     "Narx yo'q -> source=none",
     price.source === PRICE_SOURCES.NONE && price.amount === null,
@@ -210,11 +216,11 @@ const run = async () => {
   // Bazaviy narx.
   await asOwner(() =>
     priceService.setPrice(
-      { courseId: String(ielts._id), branchId: null, amount: 500000 },
+      { courseId: String(ielts.id), branchId: null, amount: 500000 },
       null,
     ),
   );
-  price = await priceService.resolveGroupPrice(String(groupA._id));
+  price = await priceService.resolveGroupPrice(String(groupA.id));
   check(
     "Bazaviy narx qo'llanadi",
     price.source === PRICE_SOURCES.BASE_PRICE && price.amount === 500000,
@@ -222,13 +228,13 @@ const run = async () => {
   );
 
   // Filial istisnosi bazaviydan USTUN.
-  await asBranch(A._id, () =>
+  await asBranch(A.id, () =>
     priceService.setPrice(
-      { courseId: String(ielts._id), branchId: String(A._id), amount: 700000 },
+      { courseId: String(ielts.id), branchId: String(A.id), amount: 700000 },
       null,
     ),
   );
-  price = await priceService.resolveGroupPrice(String(groupA._id));
+  price = await priceService.resolveGroupPrice(String(groupA.id));
   check(
     "Filial istisnosi bazaviydan USTUN",
     price.source === PRICE_SOURCES.BRANCH_PRICE && price.amount === 700000,
@@ -236,8 +242,8 @@ const run = async () => {
   );
 
   // B filialning guruhi baribir BAZAVIY narxda.
-  const groupB = await mkGroup(B._id, { courseId: ielts._id, n: 2 });
-  const priceB = await priceService.resolveGroupPrice(String(groupB._id));
+  const groupB = await mkGroup(B.id, { courseId: ielts.id, n: 2 });
+  const priceB = await priceService.resolveGroupPrice(String(groupB.id));
   check(
     "Boshqa filial bazaviy narxda qoladi",
     priceB.source === PRICE_SOURCES.BASE_PRICE && priceB.amount === 500000,
@@ -245,14 +251,8 @@ const run = async () => {
   );
 
   // GroupFee HAMMASIDAN USTUN.
-  await GroupFee.create({
-    group: groupA._id,
-    year: 2026,
-    month: 8,
-    amount: 400000,
-    source: "manual",
-  });
-  price = await priceService.resolveGroupPrice(String(groupA._id), {
+  await fx.groupFee(groupA.id, 2026, 8, 400000);
+  price = await priceService.resolveGroupPrice(String(groupA.id), {
     year: 2026,
     month: 8,
   });
@@ -263,8 +263,8 @@ const run = async () => {
   );
 
   // Kursi yo'q guruh - meros yo'q.
-  const noCourse = await mkGroup(A._id, { n: 3 });
-  const noPrice = await priceService.resolveGroupPrice(String(noCourse._id));
+  const noCourse = await mkGroup(A.id, { n: 3 });
+  const noPrice = await priceService.resolveGroupPrice(String(noCourse.id));
   check(
     "Kursi biriktirilmagan guruhda meros yo'q",
     noPrice.source === PRICE_SOURCES.NONE,
@@ -275,17 +275,17 @@ const run = async () => {
   console.log("\n\x1b[1m4) NARX TARIXI\x1b[0m");
   // ─────────────────────────────────────────────────────────
 
-  const before = await CoursePrice.countDocuments({ courseId: ielts._id });
+  const before = await prisma.coursePrice.count({ where: { courseId: ielts.id } });
 
   // Narxni ko'taramiz - kelasi oydan.
   const future = new Date(Date.UTC(2026, 10, 1)); // 2026-11-01
   await asOwner(() =>
     priceService.setPrice(
-      { courseId: String(ielts._id), branchId: null, amount: 600000, validFrom: future },
+      { courseId: String(ielts.id), branchId: null, amount: 600000, validFrom: future },
       null,
     ),
   );
-  const after = await CoursePrice.countDocuments({ courseId: ielts._id });
+  const after = await prisma.coursePrice.count({ where: { courseId: ielts.id } });
 
   check(
     "Yangi narx QATOR qo'shadi (eskisi o'chirilmaydi)",
@@ -293,11 +293,9 @@ const run = async () => {
     `${before} -> ${after}`,
   );
 
-  const closed = await CoursePrice.findOne({
-    courseId: ielts._id,
-    branchId: null,
-    amount: 500000,
-  }).lean();
+  const closed = await prisma.coursePrice.findFirst({
+    where: { courseId: ielts.id, branchId: null, amount: 500000 },
+  });
   check(
     "Eski narxning davri YOPILDI",
     closed?.validTo !== null,
@@ -305,7 +303,7 @@ const run = async () => {
   );
 
   // O'TGAN oyni hisoblaganda ESKI narx.
-  const past = await priceService.resolveGroupPrice(String(groupB._id), {
+  const past = await priceService.resolveGroupPrice(String(groupB.id), {
     year: 2026,
     month: 9,
   });
@@ -316,7 +314,7 @@ const run = async () => {
   );
 
   // KELAJAK oyni hisoblaganda YANGI narx.
-  const later = await priceService.resolveGroupPrice(String(groupB._id), {
+  const later = await priceService.resolveGroupPrice(String(groupB.id), {
     year: 2026,
     month: 12,
   });
@@ -327,14 +325,14 @@ const run = async () => {
   );
 
   // Bir xil summa qayta yuborilsa - yangi qator OCHILMAYDI.
-  const countBefore = await CoursePrice.countDocuments({ courseId: ielts._id });
+  const countBefore = await prisma.coursePrice.count({ where: { courseId: ielts.id } });
   await asOwner(() =>
     priceService.setPrice(
-      { courseId: String(ielts._id), branchId: null, amount: 600000 },
+      { courseId: String(ielts.id), branchId: null, amount: 600000 },
       null,
     ),
   );
-  const countAfter = await CoursePrice.countDocuments({ courseId: ielts._id });
+  const countAfter = await prisma.coursePrice.count({ where: { courseId: ielts.id } });
   check(
     "Bir xil summa qayta yuborilsa yangi qator ochilmaydi",
     countBefore === countAfter,
@@ -346,9 +344,9 @@ const run = async () => {
   // ─────────────────────────────────────────────────────────
 
   const foreignPrice = await grab(() =>
-    asBranch(A._id, () =>
+    asBranch(A.id, () =>
       priceService.setPrice(
-        { courseId: String(ielts._id), branchId: String(B._id), amount: 1 },
+        { courseId: String(ielts.id), branchId: String(B.id), amount: 1 },
         null,
       ),
     ),
@@ -359,13 +357,13 @@ const run = async () => {
     `kutilgan 403, kelgani ${foreignPrice.err?.statusCode}`,
   );
 
-  const matrixA = await asBranch(A._id, () =>
-    priceService.listForCourse(String(ielts._id)),
+  const matrixA = await asBranch(A.id, () =>
+    priceService.listForCourse(String(ielts.id)),
   );
   check(
     "A direktori matritsada faqat O'Z istisnosini ko'radi",
     matrixA.branches.length === 1 &&
-      String(matrixA.branches[0].branchId._id) === String(A._id),
+      String(matrixA.branches[0].branchId.id) === String(A.id),
     `${matrixA.branches.length} ta filial qatori`,
   );
   check("Bazaviy narx hammaga ko'rinadi", matrixA.base?.amount === 600000);
@@ -376,13 +374,13 @@ const run = async () => {
   );
 
   const cleared = await grab(() =>
-    asBranch(A._id, () =>
-      priceService.clearBranchPrice(String(ielts._id), String(A._id), null),
+    asBranch(A.id, () =>
+      priceService.clearBranchPrice(String(ielts.id), String(A.id), null),
     ),
   );
   check("Filial istisnosi olib tashlanadi", cleared.err === null);
 
-  price = await priceService.resolveGroupPrice(String(groupA._id));
+  price = await priceService.resolveGroupPrice(String(groupA.id));
   check(
     "Istisno olingach BAZAVIY narxga qaytadi",
     price.source === PRICE_SOURCES.BASE_PRICE,
@@ -401,7 +399,7 @@ const run = async () => {
   );
 
   const clearBase = await grab(() =>
-    asOwner(() => priceService.clearBranchPrice(String(ielts._id), null, null)),
+    asOwner(() => priceService.clearBranchPrice(String(ielts.id), null, null)),
   );
   check(
     "Bazaviy narxni o'chirib bo'lmaydi",
@@ -423,8 +421,8 @@ const run = async () => {
 
   // Bazaviy narx hozir 600 000 (yuqorida qo'yilgan, 2026-11 dan).
   // Kelajak oy uchun GroupFee yaratsak - u kurs narxini MEROS olishi kerak.
-  const freshGroup = await mkGroup(B._id, { courseId: ielts._id, n: 9 });
-  const fee = await feeService.ensureGroupFee(freshGroup._id, 2026, 12);
+  const freshGroup = await mkGroup(B.id, { courseId: ielts.id, n: 9 });
+  const fee = await feeService.ensureGroupFee(freshGroup.id, 2026, 12);
 
   check(
     "Yangi guruh tarifi KURS narxidan meros oldi",
@@ -433,8 +431,8 @@ const run = async () => {
   );
 
   // Kursi YO'Q guruhda meros ham yo'q - avvalgidek 0.
-  const noCourseGroup = await mkGroup(B._id, { n: 10 });
-  const fee0 = await feeService.ensureGroupFee(noCourseGroup._id, 2026, 12);
+  const noCourseGroup = await mkGroup(B.id, { n: 10 });
+  const fee0 = await feeService.ensureGroupFee(noCourseGroup.id, 2026, 12);
   check(
     "Kursi yo'q guruhda tarif 0 (avvalgidek)",
     fee0.amount === 0,
@@ -442,15 +440,8 @@ const run = async () => {
   );
 
   // O'TGAN OY tarifi KURS narxidan USTUN.
-  const GroupFeeModel = (await import("../src/models/groupFee.model.js")).default;
-  await GroupFeeModel.create({
-    group: freshGroup._id,
-    year: 2027,
-    month: 1,
-    amount: 111111,
-    source: "manual",
-  });
-  const feeNext = await feeService.ensureGroupFee(freshGroup._id, 2027, 2);
+  await fx.groupFee(freshGroup.id, 2027, 1, 111111);
+  const feeNext = await feeService.ensureGroupFee(freshGroup.id, 2027, 2);
   check(
     "O'tgan oy tarifi kurs narxidan USTUN",
     feeNext.amount === 111111,
@@ -458,26 +449,44 @@ const run = async () => {
   );
 
   // ── Yakun ──
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-
-  console.log(
-    `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
-      `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
-  );
-  if (R.fail) {
-    console.log("\nYiqilganlar:");
-    R.notes.forEach((n) => console.log(`  • ${n}`));
-    process.exit(1);
-  }
 };
 
-run().catch(async (err) => {
-  console.error("\x1b[31mTEST YIQILDI:\x1b[0m", err);
-  try {
-    await mongoose.disconnect();
-  } catch {
-    /* ulanmagan bo'lsa e'tiborsiz */
-  }
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    bad("TEST YIQILDI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
+  })
+  .finally(async () => {
+    // Servis yaratgan narx va tarif qatorlarini ham tozalaymiz.
+    // Servis yaratgan xonalarni ham reyestrga olamiz — aks holda
+    // `rooms_branchId_fkey` filialni o'chirishga yo'l bermaydi.
+    const bids = [...(fx.registry.get("branch") || [])];
+    const rooms = await prisma.room
+      .findMany({ where: { branchId: { in: bids } }, select: { id: true } })
+      .catch(() => []);
+    for (const r of rooms) fx.track("room", r.id);
+
+    const prices = await prisma.coursePrice
+      .findMany({ where: { courseId: fxCourseId || "" }, select: { id: true } })
+      .catch(() => []);
+    for (const r of prices) fx.track("coursePrice", r.id);
+    const gids = [...(fx.registry.get("group") || [])];
+    const fees = await prisma.groupFee
+      .findMany({ where: { groupId: { in: gids } }, select: { id: true } })
+      .catch(() => []);
+    for (const r of fees) fx.track("groupFee", r.id);
+
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
+    console.log(
+      `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
+        `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
+    );
+    if (R.fail) R.notes.forEach((n) => console.log(`  • ${n}`));
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
+  });

@@ -14,7 +14,8 @@
  * ISHLATISH:  npm run test:ai
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
 import {
   INSIGHT_KIND_META,
@@ -28,7 +29,9 @@ import {
   kindsForTier,
   isOpportunity,
 } from "../src/modules/ai/insightKinds.js";
-import { INSIGHT_SUBJECT_TYPES } from "../src/models/insight.model.js";
+// ⚠ `INSIGHT_SUBJECT_TYPES` model faylidan `insightKinds.js` ga ko'chgan
+// (model qatlami yo'q). Taksonomiya o'zgarmadi.
+import { INSIGHT_SUBJECT_TYPES } from "../src/modules/ai/insightKinds.js";
 import {
   byDomainSchema,
   listReportsSchema,
@@ -45,12 +48,28 @@ import {
   openBudget,
   recordUsage,
 } from "../src/modules/ai/services/aiBudget.service.js";
-import AiUsageLog, {
-  estimateCostUsd,
-  usageMonthKey,
-} from "../src/models/aiUsageLog.model.js";
+// ⚠ `estimateCostUsd` va `usageMonthKey` model faylidan
+// `constants/aiUsage.js` ga ko'chgan — model o'chirilgach konstantalar
+// qolishi kerak edi (o'sha fayldagi izohga qarang).
+import { estimateCostUsd, usageMonthKey } from "../src/constants/aiUsage.js";
 
-const TEST_DB = "mongodb://127.0.0.1:27017/lc_ai_test";
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi + `dropDatabase()` o'rniga prefiksli fixture va
+ * kafolatli tozalash. `Insight.syncIndexes()` KERAK EMAS: partial-unique
+ * indeks migratsiyadan keladi — uning bazada BORLIGI tekshiriladi, aks
+ * holda dedup testi indekssiz ishlab yolg'on "o'tdi" berardi.
+ */
+const fx = createFixtures();
+/**
+ * ⚠ `AiUsageLog` da FILIAL USTUNI YO'Q — u markazga umumiy sarf jurnali.
+ * Shuning uchun test yaratgan qatorlar BAZAVIY SURAT bo'yicha aniqlanadi:
+ * boshlanishdan oldin mavjud bo'lmagan har bir qator — shu testniki.
+ * (`recordUsage` ni byudjet servisi chaqiradi, ya'ni ularni qo'lda
+ * reyestrga olib bo'lmaydi.)
+ */
+const usageBaseline = new Set();
 
 // ─── Natija yig'ish ───
 const R = { pass: 0, fail: 0, failures: [] };
@@ -373,7 +392,7 @@ const testAiBudgetResolution = () => {
 const testAiBudgetUsage = async () => {
   head("17. AI BYUDJETI (sanash)");
 
-  await AiUsageLog.deleteMany({});
+  await prisma.aiUsageLog.deleteMany({ where: { id: { in: [...(fx.registry.get("aiUsageLog") || [])] } } });
   const month = usageMonthKey();
 
   // 3 ta muvaffaqiyatli
@@ -433,7 +452,7 @@ const testAiBudgetUsage = async () => {
   eq("qolgan 0 (manfiy emas)", tight.remaining, 0);
 
   // ── Boshqa oy aralashmaydi ──
-  await AiUsageLog.create({
+  const usageRow = await prisma.aiUsageLog.create({ data: {
     monthKey: "2000-01",
     provider: "gemini",
     model: "gemini-2.5-flash",
@@ -442,11 +461,13 @@ const testAiBudgetUsage = async () => {
     outputTokens: 150,
     costUsd: 1,
     ok: true,
+    },
   });
+  fx.track("aiUsageLog", usageRow.id);
   const afterOld = await openBudget();
   eq("eski oy joriy byudjetga qo'shilmaydi", afterOld.usedAtStart, 3);
 
-  await AiUsageLog.deleteMany({});
+  await prisma.aiUsageLog.deleteMany({ where: { id: { in: [...(fx.registry.get("aiUsageLog") || [])] } } });
   setEntitlements({ limits: {} });
 };
 
@@ -523,11 +544,26 @@ const testPeriodMeta = async () => {
 // ════════════════════════════════════════════════════════════════
 // DB QISMI
 // ════════════════════════════════════════════════════════════════
-const seedInsight = async (Insight, buildInsight, over = {}) => {
+/**
+ * ⚠ HAR CHAQIRUVDA YANGI `subjectId`.
+ *
+ * Mongo'da `new mongoose.Types.ObjectId()` har safar noyob qiymat
+ * berardi. Qattiq satr qo'yilsa dedup indeksi
+ * (`subjectType, subjectId, kind`) IKKINCHI chaqiruvni rad etadi —
+ * ya'ni fixture o'zini o'zi bloklab qo'yardi.
+ */
+let subjectSeq = 0;
+const nextSubjectId = () =>
+  (Date.now().toString(16) + (subjectSeq += 1).toString(16).padStart(8, "0"))
+    .padStart(24, "0")
+    .slice(-24);
+
+const seedInsight = async (buildInsight, over = {}) => {
   const doc = buildInsight({
     branchId: over.branchId,
     kind: over.kind,
-    subjectId: over.subjectId || new mongoose.Types.ObjectId(),
+    // Prisma kalitlari — 24 belgili hex SATR.
+    subjectId: over.subjectId || nextSubjectId(),
     subjectLabel: over.subjectLabel || "Sinov subyekti",
     title: over.title || "Sinov",
     severity: over.severity || "medium",
@@ -537,13 +573,11 @@ const seedInsight = async (Insight, buildInsight, over = {}) => {
     now: over.now || new Date(),
   });
   Object.assign(doc, over.raw || {});
-  return Insight.create(doc);
+  const row = await prisma.insight.create({ data: doc });
+  return fx.track("insight", row.id), row;
 };
 
 const runDbTests = async () => {
-  const Insight = (await import("../src/models/insight.model.js")).default;
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const AiReport = (await import("../src/models/aiReport.model.js")).default;
   const { buildInsight } = await import("../src/modules/ai/services/insightWriter.service.js");
   const insightService = await import("../src/modules/ai/services/insight.service.js");
   const { openCounts } = await import("../src/modules/ai/services/recompute.service.js");
@@ -568,8 +602,8 @@ const runDbTests = async () => {
     );
 
   // ── Ikkita filial: A (sinov ostida) va B (begona) ──
-  const A = await Branch.create({ name: "Filial A", isActive: true });
-  const B = await Branch.create({ name: "Filial B", isActive: true });
+  const A = await fx.branch("Filial-A-ai", { isActive: true });
+  const B = await fx.branch("Filial-B-ai", { isActive: true });
 
   // ════════════════════════════════════════════════════════════
   // 5. IMKONIYAT/XAVF AJRATILISHI  ← ASOSIY REGRESSIYA TESTI
@@ -581,40 +615,40 @@ const runDbTests = async () => {
   // ════════════════════════════════════════════════════════════
   head("5. IMKONIYAT / XAVF AJRATILISHI (regressiya)");
 
-  await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "student_churn_risk",
     severity: "high",
     expectedImpact: { amount: 500000, currency: "UZS", label: "500 ming" },
   });
-  await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "overdue_payments",
     severity: "medium",
     expectedImpact: { amount: 200000, currency: "UZS", label: "200 ming" },
   });
   // Uchta HAR XIL imkoniyat turi - "bitta tur qattiq yozilgan" xatosi
   // qaytsa, uchalasi ham tushib qoladi.
-  await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "course_demand",
     severity: "low",
     expectedImpact: { amount: 300000, currency: "UZS", label: "300 ming" },
   });
-  await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "teacher_top_performer",
     severity: "low",
     expectedImpact: { amount: 0, currency: "UZS", label: "" },
   });
-  await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "slot_opportunity",
     severity: "low",
     expectedImpact: { amount: 150000, currency: "UZS", label: "150 ming" },
   });
 
-  const ac = await inBranch(A._id, () => insightService.actionCenter({ limit: 20 }));
+  const ac = await inBranch(A.id, () => insightService.actionCenter({ limit: 20 }));
 
   eq("Imkoniyatlar alohida ro'yxatga tushdi", ac.opportunities.length, 3);
   eq("Yuqori ustuvorlik ro'yxati", ac.high.length, 1);
@@ -635,7 +669,7 @@ const runDbTests = async () => {
 
   // openCounts() ham AYNAN shunday ajratishi kerak - u boshqa
   // funksiya, lekin bir xil qoidaga bo'ysunadi.
-  const counts = await inBranch(A._id, () => openCounts());
+  const counts = await inBranch(A.id, () => openCounts());
   eq("openCounts.opportunities mos", counts.opportunities, ac.summary.opportunities);
   eq("openCounts.impactAtRisk mos", counts.impactAtRisk, ac.summary.impactAtRisk);
   eq("openCounts.upside mos", counts.upside, ac.summary.upside);
@@ -645,24 +679,24 @@ const runDbTests = async () => {
   // ════════════════════════════════════════════════════════════
   head("6. MODUL PANELI (byDomain)");
 
-  const fin = await inBranch(A._id, () => insightService.byDomain("finance", {}));
+  const fin = await inBranch(A.id, () => insightService.byDomain("finance", {}));
   eq("moliya: xavflar", fin.risks.length, 1);
   eq("moliya: imkoniyatlar", fin.opportunities.length, 0);
   eq("moliya: domen qaytdi", fin.domain, "finance");
 
-  const courses = await inBranch(A._id, () => insightService.byDomain("courses", {}));
+  const courses = await inBranch(A.id, () => insightService.byDomain("courses", {}));
   eq("kurslar: imkoniyat topildi", courses.opportunities.length, 1);
   eq("kurslar: xavf yo'q", courses.risks.length, 0);
 
-  const students = await inBranch(A._id, () => insightService.byDomain("students", {}));
+  const students = await inBranch(A.id, () => insightService.byDomain("students", {}));
   eq("o'quvchilar: xavf topildi", students.risks.length, 1);
 
   // Bo'sh domen xato bermasligi kerak - panel shunchaki chizilmaydi.
-  const leads = await inBranch(A._id, () => insightService.byDomain("leads", {}));
+  const leads = await inBranch(A.id, () => insightService.byDomain("leads", {}));
   eq("bo'sh domen xato bermaydi", leads.risks.length + leads.opportunities.length, 0);
 
   // limit hurmat qilinadi.
-  const limited = await inBranch(A._id, () =>
+  const limited = await inBranch(A.id, () =>
     insightService.byDomain("groups", { limit: 1 }),
   );
   limited.opportunities.length <= 1
@@ -677,20 +711,20 @@ const runDbTests = async () => {
   // B filialiga ataylab KO'P ma'lumot qo'yamiz.
   const bIds = [];
   for (const kind of ["student_churn_risk", "overdue_payments", "course_demand"]) {
-    const doc = await seedInsight(Insight, buildInsight, {
-      branchId: B._id,
+    const doc = await seedInsight(buildInsight, {
+      branchId: B.id,
       kind,
       severity: "high",
       subjectLabel: "BEGONA-FILIAL-B",
       expectedImpact: { amount: 9_000_000, currency: "UZS", label: "begona" },
     });
-    bIds.push(String(doc._id));
+    bIds.push(String(doc.id));
   }
 
   const hasForeign = (payload) => {
     const json = JSON.stringify(payload);
     if (json.includes("BEGONA-FILIAL-B")) return "subjectLabel";
-    if (json.includes(String(B._id))) return "branchId";
+    if (json.includes(String(B.id))) return "branchId";
     for (const id of bIds) if (json.includes(id)) return "insight _id";
     return null;
   };
@@ -708,7 +742,7 @@ const runDbTests = async () => {
 
   for (const [name, fn] of checks) {
     try {
-      const res = await inBranch(A._id, fn);
+      const res = await inBranch(A.id, fn);
       const leak = hasForeign(res);
       leak ? bad(`${name} sizmaydi`, `B filiali izi: ${leak}`) : ok(`${name} sizmaydi`);
     } catch (err) {
@@ -718,14 +752,14 @@ const runDbTests = async () => {
 
   // SON SIZISHI: A da 700k xavf bor, B da 27M. Agar filtr ishlamasa,
   // summa keskin oshadi.
-  const aCounts = await inBranch(A._id, () => openCounts());
+  const aCounts = await inBranch(A.id, () => openCounts());
   aCounts.impactAtRisk === 700000
     ? ok("son sizishi yo'q", "impactAtRisk = 700 000")
     : bad("son sizishi", `impactAtRisk = ${aCounts.impactAtRisk}, kutilgan 700000`);
 
   // Teskari yo'nalish: B kontekstida A ko'rinmasin.
-  const bView = await inBranch(B._id, () => insightService.actionCenter({ limit: 50 }));
-  const aLeak = JSON.stringify(bView).includes(String(A._id));
+  const bView = await inBranch(B.id, () => insightService.actionCenter({ limit: 50 }));
+  const aLeak = JSON.stringify(bView).includes(String(A.id));
   aLeak ? bad("teskari sizish yo'q", "A filiali B da ko'rindi") : ok("teskari sizish yo'q");
 
   // ════════════════════════════════════════════════════════════
@@ -736,33 +770,34 @@ const runDbTests = async () => {
   // ════════════════════════════════════════════════════════════
   head("8. DEDUP INDEKSI");
 
-  const subj = new mongoose.Types.ObjectId();
-  await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  const subj = nextSubjectId();
+  await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "attendance_anomaly",
     subjectId: subj,
   });
   try {
-    await seedInsight(Insight, buildInsight, {
-      branchId: A._id,
+    await seedInsight(buildInsight, {
+      branchId: A.id,
       kind: "attendance_anomaly",
       subjectId: subj,
     });
     bad("takroriy ochiq insight bloklanadi", "ikkinchisi yaratildi");
   } catch (err) {
-    err.code === 11000
+    // ⚠ Mongo `E11000` → Postgres/Prisma `P2002` (unique cheklov).
+    err.code === "P2002"
       ? ok("takroriy ochiq insight bloklanadi", "unique indeks ishladi")
-      : bad("takroriy ochiq insight bloklanadi", `boshqa xato: ${err.message}`);
+      : bad("takroriy ochiq insight bloklanadi", `boshqa xato: ${err.code} ${err.message}`);
   }
 
   // Yopilgandan keyin YANGISI ochilishi KERAK (partial indeks).
-  await Insight.updateOne(
-    { subjectId: subj, kind: "attendance_anomaly" },
-    { $set: { status: "done", resolvedAt: new Date() } },
-  );
+  await prisma.insight.updateMany({
+    where: { subjectId: subj, kind: "attendance_anomaly" },
+    data: { status: "done", resolvedAt: new Date() },
+  });
   try {
-    await seedInsight(Insight, buildInsight, {
-      branchId: A._id,
+    await seedInsight(buildInsight, {
+      branchId: A.id,
       kind: "attendance_anomaly",
       subjectId: subj,
     });
@@ -777,23 +812,23 @@ const runDbTests = async () => {
   head("9. HAYOT SIKLI");
 
   const now = new Date();
-  await Insight.deleteMany({ branchId: A._id });
+  await prisma.insight.deleteMany({ where: { branchId: A.id } });
 
   // (a) muddati o'tgan ochiq
-  const expiredOne = await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  const expiredOne = await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "lead_hot",
     raw: { expiresAt: new Date(now.getTime() - DAY) },
   });
   // (b) muddati kelmagan ochiq
-  const freshOne = await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  const freshOne = await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "lead_stale",
     raw: { expiresAt: new Date(now.getTime() + 10 * DAY) },
   });
   // (c) muddatsiz ochiq
-  const noExpiry = await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  const noExpiry = await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "cashflow_warning",
     raw: { expiresAt: null },
   });
@@ -801,7 +836,7 @@ const runDbTests = async () => {
   const expiredCount = await lifecycle.expireStale(now);
   eq("faqat muddati o'tgani yopildi", expiredCount, 1);
 
-  const afterExpire = await Insight.findById(expiredOne._id).lean();
+  const afterExpire = await prisma.insight.findUnique({ where: { id: expiredOne.id } });
   eq("yopilgan status", afterExpire.status, "expired");
   // "prevented" EMAS: e'tibor berilmagan insight uchun "xavf oldi
   // olindi" deyish yopiq halqa statistikasini yolg'on qilardi.
@@ -809,31 +844,31 @@ const runDbTests = async () => {
 
   eq(
     "muddati kelmagani tegilmadi",
-    (await Insight.findById(freshOne._id).lean()).status,
+    (await prisma.insight.findUnique({ where: { id: freshOne.id } })).status,
     "open",
   );
   eq(
     "muddatsizi tegilmadi",
-    (await Insight.findById(noExpiry._id).lean()).status,
+    (await prisma.insight.findUnique({ where: { id: noExpiry.id } })).status,
     "open",
   );
 
   // ── PRUNE: eski yopiqlar o'chadi, "dismissed" SAQLANADI ──
-  await Insight.deleteMany({ branchId: A._id });
+  await prisma.insight.deleteMany({ where: { branchId: A.id } });
   const old = new Date(now.getTime() - 400 * DAY);
 
-  const doneOld = await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  const doneOld = await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "lead_hot",
     raw: { status: "done", resolvedAt: old, outcome: "prevented" },
   });
-  const dismissedOld = await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  const dismissedOld = await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "lead_stale",
     raw: { status: "dismissed", resolvedAt: old, outcome: "prevented", dismissReason: "x" },
   });
-  const pendingOld = await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  const pendingOld = await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "cashflow_warning",
     raw: { status: "expired", resolvedAt: old, outcome: "pending" },
   });
@@ -842,19 +877,19 @@ const runDbTests = async () => {
   eq("faqat bitta eski yozuv o'chdi", pruned, 1);
   eq(
     "tugatilgan eski yozuv o'chdi",
-    await Insight.countDocuments({ _id: doneOld._id }),
+    await prisma.insight.count({ where: { id: doneOld.id } }),
     0,
   );
   // Bu QASDDAN: "bu noto'g'ri" degan har bir holat modelni kalibrlash
   // uchun eng qimmatli signal. Uni o'chirish - o'rganishni yo'qotish.
   eq(
     "'dismissed' SAQLANADI",
-    await Insight.countDocuments({ _id: dismissedOld._id }),
+    await prisma.insight.count({ where: { id: dismissedOld.id } }),
     1,
   );
   eq(
     "natijasi aniqlanmagani saqlanadi",
-    await Insight.countDocuments({ _id: pendingOld._id }),
+    await prisma.insight.count({ where: { id: pendingOld.id } }),
     1,
   );
 
@@ -863,9 +898,9 @@ const runDbTests = async () => {
   // ════════════════════════════════════════════════════════════
   head("10. BRIFING (to'rtta savol)");
 
-  await Insight.deleteMany({ branchId: A._id });
+  await prisma.insight.deleteMany({ where: { branchId: A.id } });
 
-  const briefing = await inBranch(A._id, () => buildBriefing({ now }));
+  const briefing = await inBranch(A.id, () => buildBriefing({ now }));
 
   for (const key of ["yesterday", "today", "next", "now"]) {
     briefing[key] !== undefined
@@ -1040,13 +1075,13 @@ const runDbTests = async () => {
   // ════════════════════════════════════════════════════════════
   head("11. HISOBOT IDEMPOTENTLIGI");
 
-  const r1 = await inBranch(A._id, () => buildReport(A._id, "daily", now));
-  const r2 = await inBranch(A._id, () => buildReport(A._id, "daily", now));
+  const r1 = await inBranch(A.id, () => buildReport(A.id, "daily", now));
+  const r2 = await inBranch(A.id, () => buildReport(A.id, "daily", now));
 
-  eq("ikki marta chaqirilganda bitta hujjat", String(r1._id), String(r2._id));
+  eq("ikki marta chaqirilganda bitta hujjat", String(r1.id), String(r2.id));
   eq(
     "bazada bitta kunlik hisobot",
-    await AiReport.countDocuments({ branchId: A._id, period: "daily" }),
+    await prisma.aiReport.count({ where: { branchId: A.id, period: "daily" } }),
     1,
   );
   eq("davr kaliti bir xil", r1.periodKey, r2.periodKey);
@@ -1062,8 +1097,8 @@ const runDbTests = async () => {
   r1.summary ? ok("xulosa yozilgan") : bad("xulosa yozilgan", "bo'sh");
 
   // Haftalik va oylik ham buziladimi?
-  const w1 = await inBranch(A._id, () => buildReport(A._id, "weekly", now));
-  const m1 = await inBranch(A._id, () => buildReport(A._id, "monthly", now));
+  const w1 = await inBranch(A.id, () => buildReport(A.id, "weekly", now));
+  const m1 = await inBranch(A.id, () => buildReport(A.id, "monthly", now));
   w1?.periodKey ? ok("haftalik hisobot tuzildi", w1.periodKey) : bad("haftalik", "yo'q");
   m1?.periodKey ? ok("oylik hisobot tuzildi", m1.periodKey) : bad("oylik", "yo'q");
 
@@ -1088,13 +1123,13 @@ const runDbTests = async () => {
     : bad("kunlikda bashorat yo'q", "bor ekan");
 
   // Hisobot ham filialga bog'langanmi?
-  const bReport = await inBranch(B._id, () => buildReport(B._id, "daily", now));
-  String(bReport.branchId) === String(B._id)
+  const bReport = await inBranch(B.id, () => buildReport(B.id, "daily", now));
+  String(bReport.branchId) === String(B.id)
     ? ok("hisobot to'g'ri filialga yozildi")
     : bad("hisobot filiali", String(bReport.branchId));
 
-  const aReports = await inBranch(A._id, () => listReports({}));
-  const foreignReport = aReports.items.some((r) => String(r.branchId) !== String(A._id));
+  const aReports = await inBranch(A.id, () => listReports({}));
+  const foreignReport = aReports.items.some((r) => String(r.branchId) !== String(A.id));
   foreignReport
     ? bad("hisobot ro'yxati sizmaydi", "begona filial hisoboti ko'rindi")
     : ok("hisobot ro'yxati sizmaydi");
@@ -1109,16 +1144,15 @@ const runDbTests = async () => {
   // ════════════════════════════════════════════════════════════
   head("12. RECOMPUTE QUVURI");
 
-  const AiRun = (await import("../src/models/aiRun.model.js")).default;
   const { recomputeBranch, FULL_PIPELINE, FAST_PIPELINE } = await import(
     "../src/modules/ai/services/recompute.service.js"
   );
 
   try {
-    const full = await recomputeBranch(A._id, { scope: "full", trigger: "manual", now });
+    const full = await recomputeBranch(A.id, { scope: "full", trigger: "manual", now });
     ok("to'liq quvur bo'sh filialda yiqilmadi");
 
-    const run = await AiRun.findById(full.runId).lean();
+    const run = await prisma.aiRun.findUnique({ where: { id: full.runId } });
     eq("AiRun yozuvi 'ok'", run.status, "ok");
     eq("AiRun scope", run.scope, "full");
     run.durationMs != null
@@ -1141,7 +1175,7 @@ const runDbTests = async () => {
   }
 
   try {
-    const fast = await recomputeBranch(A._id, {
+    const fast = await recomputeBranch(A.id, {
       scope: "fast",
       trigger: "intraday",
       now,
@@ -1168,21 +1202,21 @@ const runDbTests = async () => {
   head("13. IZOH MATNI SIFATI");
 
   // "Hozir" izohi ishga tushishi uchun xavf ostidagi pul kerak.
-  await seedInsight(Insight, buildInsight, {
-    branchId: A._id,
+  await seedInsight(buildInsight, {
+    branchId: A.id,
     kind: "revenue_forecast_drop",
     severity: "high",
     expectedImpact: { amount: 1_250_000, currency: "UZS", label: "1.25 mln" },
   });
 
-  const b2 = await inBranch(A._id, () => buildBriefing({ now }));
+  const b2 = await inBranch(A.id, () => buildBriefing({ now }));
 
   b2.now?.narration
     ? ok("xavf bo'lganda 'hozir' izohi yozildi")
     : bad("xavf bo'lganda 'hozir' izohi", "null qoldi");
 
   // Barcha izohlarni bitta qopga yig'ib, buzuq belgilarni qidiramiz.
-  const r3 = await inBranch(A._id, () => buildReport(A._id, "monthly", now));
+  const r3 = await inBranch(A.id, () => buildReport(A.id, "monthly", now));
   const texts = [
     b2.yesterday?.narration,
     b2.today?.narration,
@@ -1225,36 +1259,26 @@ const runDbTests = async () => {
   // ════════════════════════════════════════════════════════════
   head("16. REYTINGLAR (hech to'lamaganlar tuzog'i)");
 
-  const User = (await import("../src/models/user.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
-  const GroupMembership = (await import("../src/models/groupMembership.model.js")).default;
-  const StudentPayment = (await import("../src/models/studentPayment.model.js")).default;
-  const PaymentTransaction = (await import("../src/models/paymentTransaction.model.js")).default;
   const { recomputeRankings, readAllRankings } = await import(
     "../src/modules/ai/services/ranking.service.js"
   );
 
   const rankNow = new Date();
-  const rankGroup = await Group.create({
-    name: "Reyting guruhi",
-    branchId: A._id,
-    isActive: true,
-  });
+  const rankGroup = await fx.group("Reyting-guruhi", A.id, { isActive: true });
 
   /** Test o'quvchisi + a'zoligi. */
   const mkStudent = async (firstName) => {
-    const u = await User.create({
+    const u = await fx.user(`rank_${firstName.toLowerCase()}`, {
       firstName,
       lastName: "Testov",
-      username: `rank_${firstName.toLowerCase()}_${Date.now()}`,
       phone: `9989${Math.floor(Math.random() * 100000000)}`,
       passwordHash: "x",
       role: "student",
-      homeBranchId: A._id,
+      homeBranchId: A.id,
       enrolledAt: new Date(rankNow.getTime() - 400 * DAY),
       isActive: true,
     });
-    await GroupMembership.create({ student: u._id, group: rankGroup._id, leftAt: null });
+    await fx.membership(rankGroup.id, u.id, { leftAt: null });
     return u;
   };
 
@@ -1266,32 +1290,38 @@ const runDbTests = async () => {
     const year = d.getUTCFullYear();
     const month = d.getUTCMonth() + 1;
     const expected = 500000;
-    const p = await StudentPayment.create({
-      branchId: A._id,
-      student: student._id,
-      group: rankGroup._id,
-      year,
-      month,
-      baseFee: expected,
-      expectedAmount: expected,
-      paidAmount: paid ? expected : 0,
-      status: paid ? "paid" : "unpaid",
-      writtenOff: false,
-    });
-    if (paid) {
-      const periodEnd = new Date(Date.UTC(year, month, 0));
-      await PaymentTransaction.create({
-        branchId: A._id,
-        payment: p._id,
-        student: student._id,
-        group: rankGroup._id,
+    const p = await prisma.studentPayment.create({
+      data: {
+        branchId: A.id,
+        studentId: student.id,
+        groupId: rankGroup.id,
         year,
         month,
-        amount: expected,
-        source: "direct",
-        method: "cash",
-        paidAt: new Date(periodEnd.getTime() + paidLateDays * DAY),
+        baseFee: expected,
+        expectedAmount: expected,
+        paidAmount: paid ? expected : 0,
+        status: paid ? "paid" : "unpaid",
+        writtenOff: false,
+      },
+    });
+    fx.track("studentPayment", p.id);
+    if (paid) {
+      const periodEnd = new Date(Date.UTC(year, month, 0));
+      const tx = await prisma.paymentTransaction.create({
+        data: {
+          branchId: A.id,
+          paymentId: p.id,
+          studentId: student.id,
+          groupId: rankGroup.id,
+          year,
+          month,
+          amount: expected,
+          source: "direct",
+          method: "cash",
+          paidAt: new Date(periodEnd.getTime() + paidLateDays * DAY),
+        },
       });
+      fx.track("paymentTransaction", tx.id);
     }
   };
 
@@ -1312,11 +1342,11 @@ const runDbTests = async () => {
     await mkPayment(alwaysOnTime, m, { paid: true, paidLateDays: 1 });
   }
 
-  await inBranch(A._id, () => recomputeRankings(A._id));
-  const ranks = await readAllRankings(A._id);
+  await inBranch(A.id, () => recomputeRankings(A.id));
+  const ranks = await readAllRankings(A.id);
   const payRows = ranks.payment_delay?.rows || [];
 
-  const posOf = (u) => payRows.findIndex((r) => String(r.subjectId) === String(u._id));
+  const posOf = (u) => payRows.findIndex((r) => String(r.subjectId) === String(u.id));
   const iNever = posOf(neverPays);
   const iSometimes = posOf(sometimesLate);
   const iAlways = posOf(alwaysOnTime);
@@ -1355,8 +1385,8 @@ const runDbTests = async () => {
     : bad("har bir reyting qatorida profil havolasi bor", "havolasiz qator bor");
 
   // Filial izolyatsiyasi: B filialida reyting bo'sh bo'lishi kerak.
-  await inBranch(B._id, () => recomputeRankings(B._id));
-  const bRanks = await readAllRankings(B._id);
+  await inBranch(B.id, () => recomputeRankings(B.id));
+  const bRanks = await readAllRankings(B.id);
   (bRanks.payment_delay?.rows || []).length === 0
     ? ok("reyting begona filialga sizmaydi")
     : bad("reyting begona filialga sizmaydi", `${bRanks.payment_delay.rows.length} qator`);
@@ -1739,13 +1769,22 @@ const main = async () => {
   await testSubjectLinks();
   await testHrefsResolve();
 
-  // DB testlari
-  await mongoose.connect(TEST_DB);
-  await mongoose.connection.dropDatabase();
-  // Partial-unique indeks avtomatik qurilishini kutamiz - aks holda
+  for (const u of await prisma.aiUsageLog.findMany({ select: { id: true } }).catch(() => [])) {
+    usageBaseline.add(u.id);
+  }
+
+  // ⚠ Partial-unique indeks BAZADA borligini tekshiramiz — aks holda
   // dedup testi indekssiz ishlab, yolg'on "o'tdi" berardi.
-  const Insight = (await import("../src/models/insight.model.js")).default;
-  await Insight.syncIndexes();
+  try {
+    const idx = await prisma.$queryRaw`
+      SELECT indexname FROM pg_indexes
+      WHERE tablename = 'insights' AND indexdef ILIKE '%UNIQUE%'
+    `;
+    if (idx.length) ok("insight dedup indeksi bazada mavjud", idx[0].indexname);
+    else bad("insight dedup indeksi YO'Q", "dedup testi yolg'on yashil berardi");
+  } catch (e) {
+    bad("indeks tekshiruvi", e.message);
+  }
 
   try {
     await runDbTests();
@@ -1754,8 +1793,24 @@ const main = async () => {
     bad("DB testlari", `kutilmagan xato: ${err.message}`);
     console.error(err);
   } finally {
-    await mongoose.connection.dropDatabase();
-    await mongoose.disconnect();
+    // Servis yaratgan AI qatorlarini ham reyestrga olamiz.
+    const bids = [...(fx.registry.get("branch") || [])];
+    for (const model of ["insight", "aiReport", "aiRanking", "aiRun"]) {
+      const rows = await prisma[model]
+        .findMany({ where: { branchId: { in: bids } }, select: { id: true } })
+        .catch(() => []);
+      for (const r of rows) fx.track(model, r.id);
+    }
+    for (const u of await prisma.aiUsageLog.findMany({ select: { id: true } }).catch(() => [])) {
+      if (!usageBaseline.has(u.id)) fx.track("aiUsageLog", u.id);
+    }
+
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+    await prisma.$disconnect().catch(() => {});
   }
 
   const total = R.pass + R.fail;

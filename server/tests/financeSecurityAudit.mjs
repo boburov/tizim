@@ -16,6 +16,53 @@ const bad = (n, e = "") => { R.fail += 1; R.failures.push(`${n} — ${e}`); cons
 const warn = (n, e = "") => { R.warn += 1; console.log(`  ⚠️  ${n}${e ? ` — ${e}` : ""}`); };
 const head = (t) => console.log(`\n\x1b[1m${t}\x1b[0m`);
 
+/**
+ * ⚠ AUDIT MOLIYAVIY QOLDIQ QOLDIRARDI.
+ *
+ * 6-bo'lim (idempotentlik) DEMO filialida HAQIQIY ichki o'tkazma
+ * yozadi — 1 000 so'm, `cash → bank`. Bu ATAYLAB shunday: idempotentlik
+ * faqat haqiqiy yozuv ustida isbotlanadi, "muvaffaqiyatli HTTP javob"
+ * bilan emas.
+ *
+ * Lekin audit hech narsani TOZALAMASDI. Har ishga tushirish DEMO
+ * filialining jurnaliga bitta yozuv qo'shardi va u abadiy qolardi:
+ * tekshirilgan bazada 3 ta shunday yozuv topildi
+ * (`account_transfer:audit-idem-…`). Audit — chiqarishdan oldingi
+ * OXIRGI darvoza, ya'ni u eng ko'p ishga tushiriladigan skript.
+ *
+ * Yozuv o'zgarmas, LEKIN o'chirilishi mumkin (`config/prisma.js` dagi
+ * izohga qarang: to'siq TAHRIRGA qo'yilgan, o'chirish esa KO'RINADI).
+ * Shuning uchun audit o'zi yozgan yozuvni o'zi olib tashlaydi.
+ */
+const MADE = { postingKeys: [], references: [] };
+
+const cleanup = async () => {
+  if (!MADE.postingKeys.length) return;
+  const { default: prisma } = await import("../src/config/prisma.js");
+  try {
+    const entries = await prisma.journalEntry.findMany({
+      where: { postingKey: { in: MADE.postingKeys } },
+      select: { id: true },
+    });
+    const ids = entries.map((e) => e.id);
+    if (ids.length) {
+      await prisma.journalLine.deleteMany({ where: { entryId: { in: ids } } });
+      await prisma.journalEntry.deleteMany({ where: { id: { in: ids } } });
+    }
+    // Audit izida `postingKey` YO'Q — u hujjat bilan bog'lanadi
+    // (`entityType` + `entityId`). O'tkazma uchun `entityId` —
+    // idempotentlik kalitining O'ZI (qarang: `postTransfer`).
+    await prisma.financialAuditLog.deleteMany({
+      where: { entityType: "AccountTransfer", entityId: { in: MADE.references } },
+    }).catch(() => {});
+    console.log(`\n  🧹 tozalandi: ${ids.length} jurnal yozuvi`);
+  } catch (e) {
+    console.error("  ⚠ tozalash xatosi:", e.message);
+  } finally {
+    await prisma.$disconnect().catch(() => {});
+  }
+};
+
 const login = async (l, p) => {
   const r = await fetch(`${API}/auth/login`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -131,6 +178,11 @@ const run = async () => {
   head("6) Takroriy yuborish");
   if (BID) {
     const key = `audit-idem-${Date.now()}`;
+    // Yozuv YARATILISHIDAN OLDIN ro'yxatga olinadi — so'rov yarim
+    // yo'lda uzilsa ham (javob kelmasa-yu yozuv yozilgan bo'lsa)
+    // tozalash uni topadi.
+    MADE.postingKeys.push(`account_transfer:${key}`);
+    MADE.references.push(key);
     const body = { fromMethod: "cash", toMethod: "bank", amount: 1000, idempotencyKey: key };
     const a = await (await post("/finance-ops/transfers", owner, body, { "x-branch-id": BID })).json();
     const b = await (await post("/finance-ops/transfers", owner, body, { "x-branch-id": BID })).json();
@@ -217,7 +269,14 @@ const run = async () => {
 
   console.log(`\n=== AUDIT: ${R.pass} o'tdi, ${R.fail} yiqildi, ${R.warn} ogohlantirish ===\n`);
   if (R.failures.length) { console.log("Muammolar:"); for (const f of R.failures) console.log("  • " + f); }
-  process.exit(R.fail ? 1 : 0);
 };
 
-run().catch((e) => { console.error("AUDIT YIQILDI:", e); process.exit(1); });
+// ⚠ `process.exit()` `run()` ICHIDA EMAS. U yerda turganda tozalash
+// UMUMAN ishlamasdi — Node darhol to'xtaydi. Aynan shu naqsh
+// `journalTreasury.test.js` da ham qoldiq to'plab kelayotgan edi.
+run()
+  .catch((e) => { console.error("AUDIT YIQILDI:", e); R.fail += 1; })
+  .finally(async () => {
+    await cleanup();
+    process.exit(R.fail ? 1 : 0);
+  });

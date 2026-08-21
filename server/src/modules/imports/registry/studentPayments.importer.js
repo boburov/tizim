@@ -172,7 +172,12 @@ const studentPaymentsImporter = {
             ...branchFilter(),
             studentId: { in: studentIds },
             groupId: { in: groupIds },
-            isDeleted: false,
+            // ⚠ `isDeleted` OLIB TASHLANDI — `StudentPayment` da bunday
+            // USTUN YO'Q (qarang `schema.prisma`; `financeReport.service.js`
+            // da ham shu izoh bor). Prisma uni "Unknown argument" bilan
+            // RAD ETADI, ya'ni o'quvchi to'lovlarini import qilishning
+            // ko'rib chiqish (preview) va yozish (commit) yo'llari HAR
+            // chaqiruvda yiqilardi.
           },
           select: { id: true, studentId: true, groupId: true, year: true, month: true, expectedAmount: true, paidAmount: true, writtenOff: true },
         })

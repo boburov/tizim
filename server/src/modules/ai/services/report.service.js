@@ -550,6 +550,15 @@ export const buildReport = async (branchId, period, now = new Date()) => {
       : "Yuqori ustuvorlikli ochiq vazifa yo'q.",
   ].join(" ");
 
+  // ⚠ SNAPSHOT'LAR YASSI USTUNLARGA YOZILADI.
+  //
+  // Mongo'da `insightSnapshot` va `outcomeSnapshot` EMBEDDED obyekt edi.
+  // `schema.prisma` da ular alohida ustunlarga yoyilgan
+  // (`insightHigh`, `insightMedium`, ... `outcomeResolvedByOwner`).
+  //
+  // Obyekt shaklida yuborilsa Prisma "Unknown argument `insightSnapshot`"
+  // bilan RAD ETADI — ya'ni AI hisobotini yaratish HAR chaqiruvda
+  // yiqilardi (kunlik/haftalik/oylik joblar ham).
   const doc = {
     branchId,
     period,
@@ -559,8 +568,13 @@ export const buildReport = async (branchId, period, now = new Date()) => {
     title: meta.title,
     summary,
     sections,
-    insightSnapshot: snapshot,
-    outcomeSnapshot,
+    insightHigh: snapshot.high ?? 0,
+    insightMedium: snapshot.medium ?? 0,
+    insightOpportunities: snapshot.opportunities ?? 0,
+    insightImpactAtRisk: snapshot.impactAtRisk ?? 0,
+    outcomePrevented: outcomeSnapshot.prevented ?? 0,
+    outcomeOccurred: outcomeSnapshot.occurred ?? 0,
+    outcomeResolvedByOwner: outcomeSnapshot.resolvedByOwner ?? 0,
     engineVersion: AI_ENGINE_VERSION,
     generatedAt: now,
   };

@@ -1,5 +1,30 @@
 import prisma from "../../../config/prisma.js";
 import { ROLES } from "../../../constants/roles.js";
+import { userBranchCondition } from "../../../helpers/branchContext.helper.js";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠ FILIAL KO'LAMI — SHU FAYLDA BUTUNLAY YO'Q EDI.
+//
+// `tests/branchLeak.test.js` Prisma'ga ko'chirilgach darhol ushladi:
+// BO'M-BO'SH filial kontekstida `ongoing.cohorts[*].count` 64 / 49 / 127
+// qaytardi — ya'ni BUTUN MARKAZning o'quvchilari sanalardi. `activeCount`,
+// `finished`, `enrollmentTrend` va `recentEnrollments` ham xuddi shunday.
+//
+// SABAB: filtrlar MODUL DARAJASIDAGI KONSTANTA edi. Konstanta import
+// paytida BIR MARTA hisoblanadi, filial ko'lami esa HAR SO'ROVDA
+// (AsyncLocalStorage) boshqacha bo'ladi — ya'ni uni konstantaga
+// qo'yib bo'lmaydi. Shuning uchun ular FUNKSIYAGA aylantirildi.
+//
+// Naqsh qo'shni `adminDashboard.service.js` dan olindi: `userBranchCondition()`
+// `OR` qaytaradi, shuning uchun u `AND` ichiga solinadi — aks holda
+// boshqa `OR` bilan to'qnashib, filtrni jimgina yo'q qilardi.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Filial ko'lamini `AND` ichiga qo'shadi (kontekst yo'q bo'lsa — tegmaydi). */
+const userScoped = (base) => {
+  const cond = userBranchCondition();
+  return cond ? { ...base, AND: [cond] } : base;
+};
 
 // === Sana yordamchilari (UTC) ===
 // O'tgan `count` oyni [{year, month}] ko'rinishida (eng eskisidan boshlab).
@@ -28,24 +53,21 @@ const BASE_STUDENT_FILTER = {
   enrolledAt: { not: null },
 };
 
+// ⚠ QUYIDAGILAR FUNKSIYA — KONSTANTA EMAS (yuqoridagi izohga qarang).
+// Filial ko'lami har so'rovda ALS'dan o'qiladi, ya'ni u import paytida
+// ma'lum emas.
+
 // Hozir o'qiyotganlar: faol + hali yakunlamagan (muddat enrolledAt → bugun).
-const ONGOING_FILTER = {
-  ...BASE_STUDENT_FILTER,
-  isActive: true,
-  completedAt: null,
-};
+const ongoingFilter = () =>
+  userScoped({ ...BASE_STUDENT_FILTER, isActive: true, completedAt: null });
 
 // Yakunlaganlar: yakunlash sanasi belgilangan (muddat enrolledAt → completedAt).
-const FINISHED_FILTER = {
-  ...BASE_STUDENT_FILTER,
-  completedAt: { not: null },
-};
+const finishedFilter = () =>
+  userScoped({ ...BASE_STUDENT_FILTER, completedAt: { not: null } });
 
 // Faol o'quvchilar (trend/so'nggi ro'yxat/jami soni uchun) - eski semantika.
-const ACTIVE_STUDENT_FILTER = {
-  ...BASE_STUDENT_FILTER,
-  isActive: true,
-};
+const activeStudentFilter = () =>
+  userScoped({ ...BASE_STUDENT_FILTER, isActive: true });
 
 // Ro'yxatga olinish davomiyligiga ko'ra guruhlash chegaralari (oyda).
 // [min, max) - max=null cheksiz. Tartib UI'da shu tartibda chiqadi.
@@ -91,26 +113,30 @@ const computeEnrollmentTrend = async (months) => {
   const periods = previousMonths(months);
   const rangeStart = monthStart(periods[0].year, periods[0].month);
 
-  // Ustun nomlari qo'shtirnoqda: Postgres identifikatorlari registrga
-  // sezgir va `enrolledAt` camelCase.
-  const rows = await prisma.$queryRaw`
-    SELECT
-      EXTRACT(YEAR  FROM "enrolledAt")::int  AS year,
-      EXTRACT(MONTH FROM "enrolledAt")::int  AS month,
-      COUNT(*)::int                          AS count
-    FROM "users"
-    WHERE "role" = ${ROLES.STUDENT}
-      AND "isDeleted" = false
-      AND "isActive"  = true
-      AND "enrolledAt" IS NOT NULL
-      AND "enrolledAt" >= ${rangeStart}
-    GROUP BY 1, 2
-  `;
+  // ⚠ XOM SQL DAN VOZ KECHILDI — FILIAL KO'LAMI SABABLI.
+  //
+  // Ilgari bu `$queryRaw` edi (Prisma `groupBy` sana QISMLARI bo'yicha
+  // guruhlay olmaydi). Lekin `userBranchCondition()` Prisma shartini
+  // qaytaradi va uni SQL matniga qo'lda tarjima qilish kerak bo'lardi —
+  // ya'ni ko'lam qoidasi IKKI JOYDA ikki tilda yozilardi va ular
+  // muqarrar ravishda bir-biridan uzoqlashardi.
+  //
+  // Shuning uchun qatorlar KO'LAM BILAN o'qiladi va oy bo'yicha JS'da
+  // guruhlanadi — bu faylda `computeDurationStats` allaqachon shunday
+  // qiladi. Hajm chegaralangan: faqat `rangeStart` dan keyingi FAOL
+  // o'quvchilar.
+  const rows = await prisma.user.findMany({
+    where: { ...activeStudentFilter(), enrolledAt: { gte: rangeStart } },
+    select: { enrolledAt: true },
+  });
 
   // Bo'sh oylarni 0 bilan to'ldiramiz (grafikda uzilish bo'lmasligi uchun).
   const map = new Map();
   for (const r of rows) {
-    map.set(`${Number(r.year)}-${Number(r.month)}`, Number(r.count));
+    if (!r.enrolledAt) continue;
+    const d = new Date(r.enrolledAt);
+    const key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
+    map.set(key, (map.get(key) || 0) + 1);
   }
   return periods.map((p) => ({
     year: p.year,
@@ -160,7 +186,7 @@ const computeDurationStats = async (where, useNow) => {
 // Eng so'nggi ro'yxatga olingan o'quvchilar.
 const computeRecentEnrollments = async (limit) =>
   prisma.user.findMany({
-    where: ACTIVE_STUDENT_FILTER,
+    where: activeStudentFilter(),
     // `id` ATAYLAB: Prisma `select` bilan uni avtomatik qaytarmaydi,
     // klient esa qatorni `_id` bo'yicha ochadi.
     select: {
@@ -178,9 +204,9 @@ const computeRecentEnrollments = async (limit) =>
 export const getStudentStats = async ({ months = 12, recentLimit = 8 } = {}) => {
   const [activeCount, ongoing, finished, enrollmentTrend, recentRows] =
     await Promise.all([
-      prisma.user.count({ where: ACTIVE_STUDENT_FILTER }),
-      computeDurationStats(ONGOING_FILTER, true),
-      computeDurationStats(FINISHED_FILTER, false),
+      prisma.user.count({ where: activeStudentFilter() }),
+      computeDurationStats(ongoingFilter(), true),
+      computeDurationStats(finishedFilter(), false),
       computeEnrollmentTrend(months),
       computeRecentEnrollments(recentLimit),
     ]);

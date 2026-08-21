@@ -1,5 +1,5 @@
 import prisma from "../../../config/prisma.js";
-import { GROUP_DAYS } from "../../../models/group.model.js";
+import { GROUP_DAYS } from "../../../constants/calendar.js";
 import { buildWindows } from "./student.signal.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

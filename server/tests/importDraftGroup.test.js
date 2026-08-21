@@ -16,13 +16,24 @@
  *
  * O'Z BAZASIDA ishlaydi (lc_draft_group_test) va oxirida o'chiradi.
  *
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi + `dropDatabase()` o'rniga prefiksli fixture va
+ * kafolatli tozalash (`tests/helpers/prismaFixtures.js`). Sinalayotgan
+ * mantiq (`draftFromFile` guruh nomini qanday hal qilishi) o'zgarmadi.
+ *
+ * ⚠ GURUH NOMI ENDI SUFFIKS BILAN yaratiladi, shuning uchun xlsx ga ham
+ * AYNAN o'sha nom yoziladi — aks holda "mavjud guruh" holati tasodifan
+ * "mavjud emas" bo'lib qolardi va test o'z-o'zini aldardi.
+ *
  * ISHLATISH:  npm run test:draft-group
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
 import ExcelJS from "exceljs";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
-const TEST_DB = "mongodb://127.0.0.1:27017/lc_draft_group_test";
+const fx = createFixtures();
 
 const R = { pass: 0, fail: 0, failures: [] };
 const ok = (n, extra = "") => {
@@ -47,11 +58,6 @@ const buildSheet = async (importer, rows) => {
 };
 
 const run = async () => {
-  await mongoose.connect(TEST_DB);
-  await mongoose.connection.dropDatabase();
-
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
   const { getImporter } = await import("../src/modules/imports/registry/index.js");
   const { draftFromFile } = await import(
     "../src/modules/imports/services/importEngine.service.js"
@@ -60,10 +66,8 @@ const run = async () => {
     "../src/helpers/branchContext.helper.js"
   );
 
-  const branch = await Branch.create({ name: "Asosiy filial", isMain: true });
-  await Group.create({
-    branchId: branch._id,
-    name: "HAQIQIY-GURUH",
+  const branch = await fx.branch("DG-filial");
+  const realGroup = await fx.group("HAQIQIY-GURUH", branch.id, {
     isActive: true,
     startDate: new Date("2026-01-05"),
   });
@@ -73,13 +77,13 @@ const run = async () => {
     // 1) Shablonning namuna qatoridagi kabi - bunday guruh YO'Q.
     { firstName: "Ali", lastName: "Valiyev", groupName: "IELTS-A1" },
     // 2) Haqiqatan mavjud guruh.
-    { firstName: "Vali", lastName: "Aliyev", groupName: "HAQIQIY-GURUH" },
+    { firstName: "Vali", lastName: "Aliyev", groupName: realGroup.name },
   ]);
 
   const result = await runWithBranchContext(
     {
-      branchId: String(branch._id),
-      allowedBranchIds: [String(branch._id)],
+      branchId: String(branch.id),
+      allowedBranchIds: [String(branch.id)],
       canSeeAllBranches: false,
       userId: null,
     },
@@ -107,25 +111,27 @@ const run = async () => {
   console.log("\n\x1b[1m2) Tizimda BOR guruh\x1b[0m");
   check(
     "guruh nomi saqlandi",
-    r2.raw.groupName === "HAQIQIY-GURUH",
+    r2.raw.groupName === realGroup.name,
     `olindi: "${r2.raw.groupName}"`,
   );
   check("guruh xatosi YO'Q", !groupErr(r2), `xato: "${groupErr(r2)}"`);
 
-  console.log(`\n\x1b[1mNATIJA\x1b[0m  ${R.pass} o'tdi, ${R.fail} yiqildi`);
-  for (const f of R.failures) console.log(`  \x1b[31m•\x1b[0m ${f}`);
-
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-  process.exit(R.fail ? 1 : 0);
 };
 
-run().catch(async (err) => {
-  console.error(err);
-  try {
-    await mongoose.disconnect();
-  } catch {
-    /* ulanish yo'q */
-  }
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    bad("TEST YIQILDI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
+  })
+  .finally(async () => {
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
+    console.log(`\n\x1b[1mNATIJA\x1b[0m  ${R.pass} o'tdi, ${R.fail} yiqildi`);
+    for (const f of R.failures) console.log(`  \x1b[31m•\x1b[0m ${f}`);
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
+  });

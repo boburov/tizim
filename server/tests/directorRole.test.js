@@ -24,11 +24,33 @@
  * o'qimaydi (ilgari shunday edi va formatlash o'zgarganda buzilardi) -
  * to'g'ridan-to'g'ri hisoblangan ro'yxatni tekshiradi.
  *
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * `mongoose.connect(...)` + `Role.findOne().populate("permissions")`
+ * o'rniga `prisma.role.findUnique({ include: { permissions: true } })`.
+ *
+ * ⚠⚠ VA BITTA JIDDIY XATO TUZATILDI ⚠⚠
+ *
+ * Eski versiyada 2-bo'lim (JORIY BAZA) `.catch()` ichida edi va xato
+ * shunchaki BOSILARDI:
+ *
+ *     .catch((e) => console.log("~ bazaga ulanib bo'lmadi - faqat shablon"))
+ *
+ * Natijada Mongoose olib tashlangach test HAR SAFAR "33 to'g'ri / 0 xato"
+ * deb YASHIL chiqardi, holbuki bazadagi direktor rolini UMUMAN
+ * tekshirmasdi. Ya'ni jonli bazada `system.admin_access` qo'lda berib
+ * yuborilgan bo'lsa ham test buni ko'rmasdi — bu aynan testning ASOSIY
+ * maqsadi edi.
+ *
+ * Endi bazaga ulanib bo'lmasa yoki rol topilmasa — bu YIQILISH.
+ *
+ * BAZAGA YOZMAYDI: faqat o'qiydi, shuning uchun tozalash kerak emas.
+ *
  * ISHLATISH:
  *   npm run test:director
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
 import { PERMISSIONS } from "../src/constants/permissions.js";
 import {
   BRANCH_LOCAL_PERMISSIONS,
@@ -107,18 +129,38 @@ for (const [key, why] of REQUIRED) {
 
 // ── 2. JORIY BAZA ─────────────────────────────────────────────
 const run = async () => {
-  await mongoose.connect(process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina");
-  console.log(`\n\x1b[1m2) Joriy baza (${mongoose.connection.name})\x1b[0m`);
+  const dbName = String(process.env.DATABASE_URL || "").split("/").pop()?.split("?")[0];
+  console.log(`\n\x1b[1m2) Joriy baza (${dbName || "?"})\x1b[0m`);
 
-  const Role = (await import("../src/models/role.model.js")).default;
-  const role = await Role.findOne({ value: "director" }).populate("permissions").lean();
+  const role = await prisma.role.findUnique({
+    where: { value: "director" },
+    include: { permissions: { select: { key: true } } },
+  });
 
+  // ⚠ ROL YO'Q = YIQILISH, "o'tkazib yuborish" EMAS.
+  //
+  // Ilgari bu shox jimgina `return` qilardi. Direktor roli bu tizimning
+  // asosiy filial rolisi — u yo'q bo'lsa yo seed yurgazilmagan, yo rol
+  // o'chirib yuborilgan. Ikkalasi ham e'tibor talab qiladi.
   if (!role) {
-    console.log("  \x1b[2m~ direktor roli bazada yo'q - o'tkazib yuborildi\x1b[0m");
+    bad(
+      "direktor roli bazada topildi",
+      "rol YO'Q — `npm run seed:permissions` yurgazilmaganmi?",
+    );
     return;
   }
 
   const keys = (role.permissions || []).map((p) => p.key);
+
+  // MUSBAT NAZORAT: rolda ruxsat HAQIQATAN bormi.
+  //
+  // Busiz bo'sh ro'yxat pastdagi HAMMA "YO'Q" tekshiruvini o'tkazib
+  // yuborardi — ya'ni ruxsatsiz rol "mukammal xavfsiz" bo'lib ko'rinardi.
+  check(
+    "rolda ruxsatlar yuklandi (musbat nazorat)",
+    keys.length > 0,
+    "ruxsatlar bo'sh — pastdagi «YO'Q» tekshiruvlari ma'nosiz bo'lardi",
+  );
   check("rol muzlatilmagan (aks holda kira olmaydi)", role.isFrozen === false);
 
   for (const key of FORBIDDEN) {
@@ -139,12 +181,11 @@ const run = async () => {
 
 run()
   .catch((e) => {
-    console.log(
-      `\n  \x1b[2m~ bazaga ulanib bo'lmadi (${e?.message}) - faqat shablon tekshirildi\x1b[0m`,
-    );
+    // ⚠ JIMGINA O'TKAZIB YUBORISH YO'Q — qarang fayl boshidagi izoh.
+    bad("bazaga ulanish", e?.message || String(e));
   })
   .finally(async () => {
-    if (mongoose.connection.readyState === 1) await mongoose.disconnect();
+    await prisma.$disconnect().catch(() => {});
     console.log(
       `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} to'g'ri\x1b[0m / \x1b[31m${R.fail} xato\x1b[0m`,
     );

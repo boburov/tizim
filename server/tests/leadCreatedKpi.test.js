@@ -9,13 +9,26 @@
  * belgilashi yoki to'lov kiritishi kerak edi; bu yerda yo'q. Shuning uchun
  * ikki darvoza (minStatus, dedupeDays) MANTIG'I aynan shu testda qulflanadi.
  *
- * BAZA KERAK EMAS: `Lead.find` vaqtincha almashtiriladi va trigger sof
- * funksiya sifatida tekshiriladi.
+ * BAZA KERAK EMAS: ma'lumot qatlami vaqtincha almashtiriladi va trigger
+ * sof funksiya sifatida tekshiriladi.
+ *
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Trigger endi `Lead.find(...).lean()` emas, `prisma.lead.findMany({ where })`
+ * chaqiradi. Shuning uchun STUB ham o'sha delegatga qo'yiladi.
+ *
+ * ⚠ TESTNING ASOSIY G'OYASI SAQLANDI — u BAZAGA ULANMAYDI. Prisma
+ * delegat metodlari `writable: true`, ya'ni ularni vaqtincha almashtirib,
+ * `finally` da TIKLASH mumkin. Bu triggerni sof funksiya sifatida
+ * sinashning yagona yo'li: aks holda har bir ssenariy uchun bazaga o'nlab
+ * lid yozib, keyin o'chirish kerak bo'lardi va test sekin hamda
+ * "hozirgi sana" ga bog'liq bo'lib qolardi.
+ *
+ * Maydon nomlari ham o'zgardi: `_id` → `id`, `createdBy` → `createdById`.
  *
  * ISHLATISH:  npm run test:lead-kpi
  */
-import mongoose from "mongoose";
-import Lead from "../src/models/lead.model.js";
+import prisma from "../src/config/prisma.js";
 import { getTrigger } from "../src/modules/staffPayroll/services/kpiTriggers.js";
 
 const R = { pass: 0, fail: 0, failures: [] };
@@ -34,7 +47,8 @@ const eq = (name, actual, expected) =>
     ? ok(name, `= ${actual}`)
     : bad(name, `kutilgan ${expected}, olindi ${actual}`);
 
-const oid = (hex) => new mongoose.Types.ObjectId(hex.padStart(24, "0"));
+// Prisma kalitlari — 24 belgili hex SATR (`gen_object_id()`), ObjectId emas.
+const oid = (hex) => String(hex).padStart(24, "0");
 const D = (s) => new Date(`${s}T00:00:00.000Z`);
 
 const SELLER = oid("a1");
@@ -53,39 +67,39 @@ const lead = ({
 }) => {
   seq += 1;
   return {
-    _id: id ? oid(id) : oid(`f${seq}`),
+    id: id ? oid(id) : oid(`f${seq}`),
     firstName: `Lid${seq}`,
     lastName: "",
     phone,
     status,
     statusHistory: (history || [status]).map((s) => ({ status: s })),
     createdAt,
-    createdBy,
+    createdById: createdBy,
   };
 };
 
-// ─── Lead.find STUB'i ────────────────────────────────────────────────────
-// Trigger ikki xil so'rov yuboradi: (1) shu xodimning oy ichidagi lidlari,
-// (2) takroriy raqamlarni topish uchun telefon bo'yicha. Stub ikkalasini
-// filtr shakliga qarab ajratadi.
-const realFind = Lead.find.bind(Lead);
+// ─── `prisma.lead.findMany` STUB'i ───────────────────────────────────────
+// Trigger IKKI xil so'rov yuboradi:
+//   (1) shu xodimning oy ichidagi lidlari  → `where.createdById` bor;
+//   (2) takroriy raqamlarni topish uchun telefon bo'yicha (BARCHA
+//       yaratuvchilar bo'ylab) → `where.createdById` YO'Q.
+// Stub ikkalasini AYNAN shu belgi bo'yicha ajratadi.
+const realFindMany = prisma.lead.findMany.bind(prisma.lead);
 const useDataset = (rows) => {
-  Lead.find = (filter = {}) => ({
-    lean: async () => {
-      if (filter.createdBy) {
-        return rows.filter(
-          (r) =>
-            String(r.createdBy) === String(filter.createdBy) &&
-            r.createdAt >= filter.createdAt.$gte &&
-            r.createdAt < filter.createdAt.$lt,
-        );
-      }
-      const phones = filter.phone?.$in || [];
+  prisma.lead.findMany = async ({ where = {} } = {}) => {
+    if (where.createdById) {
       return rows.filter(
-        (r) => phones.includes(r.phone) && r.createdAt < filter.createdAt.$lt,
+        (r) =>
+          String(r.createdById) === String(where.createdById) &&
+          r.createdAt >= where.createdAt.gte &&
+          r.createdAt < where.createdAt.lt,
       );
-    },
-  });
+    }
+    const phones = where.phone?.in || [];
+    return rows.filter(
+      (r) => phones.includes(r.phone) && r.createdAt < where.createdAt.lt,
+    );
+  };
 };
 
 const trigger = getTrigger("lead_created");
@@ -233,13 +247,15 @@ const main = async () => {
 
 main()
   .catch((err) => bad("test yiqildi", err?.message || String(err)))
-  .finally(() => {
-    Lead.find = realFind;
+  .finally(async () => {
+    // ⚠ STUB TIKLANADI: bu jarayonda boshqa test ham yurishi mumkin.
+    prisma.lead.findMany = realFindMany;
     console.log(
       `\n${R.fail ? "\x1b[31m" : "\x1b[32m"}${R.pass} o'tdi, ${R.fail} yiqildi\x1b[0m`,
     );
-    if (R.fail) {
-      R.failures.forEach((f) => console.log(`  - ${f}`));
-      process.exit(1);
-    }
+    if (R.fail) R.failures.forEach((f) => console.log(`  - ${f}`));
+    // Baza ishlatilmasa ham klient import paytida hovuz ochadi —
+    // yopmasak jarayon tugamay osilib turardi.
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
   });

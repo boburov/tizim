@@ -55,6 +55,41 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// IKKINCHI KLIENT — `server_nest/` (NestJS poydevori) uchun.
+//
+// NEGA KERAK: NestJS ilovasi AYNAN SHU sxemadan foydalanadi (sxema — yagona
+// haqiqat manbai, nusxa YO'Q). Lekin `prisma generate` standart holda
+// klientni SXEMA JOYLASHGAN joyga nisbatan yozadi — ya'ni `server_nest` dan
+// chaqirilganda ham u `server/node_modules/@prisma/client` ga tushardi va
+// NestJS tomonda generatsiya qilinmagan bo'sh klient qolardi.
+//
+// Shuning uchun NestJS klientining manzili OCHIQ ko'rsatiladi. Bu blok
+// FAQAT build sozlamasi: birorta model, bog'lanish, enum yoki indeks
+// o'zgarmaydi va migratsiya HOSIL QILMAYDI (generatorlar migratsiyaga
+// kirmaydi).
+//
+// NATIJA: bitta sxema → ikkita klient, ular DOIM bir xil tuzilmani biladi.
+// Ko'chirish davrida ikkala ilova ham bir vaqtda ishlagani uchun bu muhim:
+// sxema o'zgarsa ikkalasi ham birdan yangilanadi.
+//
+// MANZIL `node_modules/.prisma/client` — ATAYLAB (va Prisma'ning O'ZI shuni
+// talab qiladi: `@prisma/client` ga yozish taqiqlangan, chunki u paketning
+// o'zi). `@prisma/client` dan import qilinganda Prisma so'rovni shu yerga
+// AVTOMATIK yo'naltiradi, ya'ni kodda hech narsa o'zgarmaydi.
+//
+// `src/` ichiga chiqarilmadi: u holda TypeScript `rootDir`/emit yo'llari
+// bilan to'qnashardi va klient `dist/` ga nusxalanmay qolardi.
+//
+// DIQQAT: `server/` da `prisma generate` chaqirilganda bu klient ham
+// qayta yaratiladi (bir necha soniya va ~20 MB disk). Kerak bo'lmasa
+// faqat birinchisini yaratish mumkin: `prisma generate --generator client`.
+// ═══════════════════════════════════════════════════════════════════════════
+generator nestClient {
+  provider = "prisma-client-js"
+  output   = "../../server_nest/node_modules/.prisma/client"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -1942,8 +1977,23 @@ model TeacherSalary {
   teacherId String  @db.VarChar(24)
   teacher   User    @relation("TeacherSalaryTeacher", fields: [teacherId], references: [id])
   // NULL = markaz qatori (base/bonus/deduction/opening).
+  // `onDelete: Restrict` — STANDART `SetNull` EMAS.
+  //
+  // `SetNull` bu yerda BAZANI O'ZINI ZIDDIYATGA solardi: guruh o'chganda
+  // `groupId` null bo'ladi, `teacher_salaries_kind_group_check` esa
+  // `kind='group'` qatoridan `groupId` NOT NULL bo'lishini talab qiladi.
+  // Natijada guruhni o'chirish 23514 (CHECK violation) bilan yiqilardi —
+  // xato esa `groups` ni o'chirish paytida, umuman boshqa jadval nomi
+  // bilan chiqardi va sababi ko'rinmasdi.
+  //
+  // ENDI: maosh tarixi bor guruhni o'chirish 23503 (FK violation) beradi —
+  // ya'ni xato AYNAN to'sayotgan jadvalni ko'rsatadi. Maosh tarixi
+  // hech qachon o'chirilmaydi va o'zgartirilmaydi.
+  //
+  // `teacherId` allaqachon `RESTRICT` edi — bu uni guruh tomoni bilan
+  // MOSLAYDI (ilgari bir tomoni himoyalangan, ikkinchisi yo'q edi).
   groupId   String? @db.VarChar(24)
-  group     Group?  @relation("TeacherSalaryGroup", fields: [groupId], references: [id])
+  group     Group?  @relation("TeacherSalaryGroup", fields: [groupId], references: [id], onDelete: Restrict)
   kind      SalaryKind @default(group)
   year      Int
   month     Int
@@ -2418,16 +2468,43 @@ model JournalEntry {
   // Kimga tegishli (uchtasi ham User, lekin ROLI boshqa — shuning uchun
   // alohida ustun: `teacherId IS NOT NULL` shartida indeks ishlaydi va
   // "o'qituvchi maoshi" bilan "o'quvchi to'lovi" chalkashmaydi).
+  // ═══════════════════════════════════════════════════════════════════
+  // EGALIK USTUNLARI — `onDelete: Restrict` (STANDART `SetNull` EMAS)
+  //
+  // Prisma ixtiyoriy (`?`) bog'lanishga STANDART holda `ON DELETE SET NULL`
+  // qo'yadi. Jurnal uchun bu JIMGINA MA'LUMOT YO'QOTISH edi: o'quvchi,
+  // o'qituvchi yoki guruh o'chirilganda yozuvning EGASI null bo'lib
+  // qolardi. Summalar (`journal_lines`) joyida turardi, ya'ni
+  // `reconcile()` ham, muvozanat tekshiruvi ham buni TOPMASDI — faqat
+  // "bu pul KIMGA tegishli edi" degan javob yo'qolardi. Qaytarib
+  // bo'lmaydigan tarzda.
+  //
+  // O'LCHANGAN (seed tekshiruvida): demo o'quvchi/o'qituvchi/guruhlarni
+  // o'chirish 48 yozuvning HAMMASIDA `studentId`/`teacherId`/`groupId` ni
+  // null qilib yubordi (oldin mos ravishda 25/23/17 tasi null edi).
+  //
+  // BU `config/prisma.js` DAGI O'ZGARMASLIK KENGAYTMASINI CHETLAB
+  // O'TARDI: kengaytma `update`/`upsert` ni to'sadi, FK esa qatorni
+  // BAZA ICHIDA o'zgartiradi — ilova qatlami buni umuman ko'rmaydi.
+  //
+  // ENDI: tarixi bor odamni/guruhni o'chirish XATO BERADI (23503).
+  // Jurnal yozuvi hech qachon kaskadli o'chmaydi va o'zgartirilmaydi —
+  // yagona to'g'ri yo'l avvalgidek storno (`journal.reverse()`).
+  //
+  // `staffId` ham shu uchlikning bir qismi (yuqoridagi izohga qarang:
+  // "uchtasi ham User, lekin ROLI boshqa") — u ham xuddi shunday
+  // egalikni bildiradi, shuning uchun bir xil qoida qo'llanadi.
+  // ═══════════════════════════════════════════════════════════════════
   studentId String? @db.VarChar(24)
-  student   User?   @relation("JournalStudent", fields: [studentId], references: [id])
+  student   User?   @relation("JournalStudent", fields: [studentId], references: [id], onDelete: Restrict)
   teacherId String? @db.VarChar(24)
-  teacher   User?   @relation("JournalTeacher", fields: [teacherId], references: [id])
+  teacher   User?   @relation("JournalTeacher", fields: [teacherId], references: [id], onDelete: Restrict)
   // O'qituvchi BO'LMAGAN xodim (admin, kassir, farrosh) — Faza 7.
   staffId   String? @db.VarChar(24)
-  staff     User?   @relation("JournalStaff", fields: [staffId], references: [id])
+  staff     User?   @relation("JournalStaff", fields: [staffId], references: [id], onDelete: Restrict)
 
   groupId   String? @db.VarChar(24)
-  group     Group?  @relation("JournalGroup", fields: [groupId], references: [id])
+  group     Group?  @relation("JournalGroup", fields: [groupId], references: [id], onDelete: Restrict)
   // YO'NALISH (Faza 17). Guruhdan nusxalanadi.
   courseId  String? @db.VarChar(24)
   course    Course? @relation("JournalCourse", fields: [courseId], references: [id])

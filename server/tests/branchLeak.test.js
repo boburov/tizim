@@ -10,16 +10,39 @@
  * esa unutishga ochiq. Bu test unutilgan joyni CODE REVIEW emas, ISHGA
  * TUSHIRISH paytida tutadi.
  *
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * IZOLYATSIYA. Ilgari alohida Mongo bazasi (`lc_leak_test`) ochilib,
+ * oxirida `dropDatabase()` qilinardi. PostgreSQL'da bu naqsh ishlamaydi,
+ * shuning uchun izolyatsiya PREFIKSLI FIXTURE + kafolatli tozalash bilan
+ * (`tests/helpers/prismaFixtures.js`).
+ *
+ * ⚠ BUNING MUHIM OQIBATI BOR: endi test HAQIQIY dev bazasida ishlaydi,
+ * ya'ni unda BOSHQA (begona) ma'lumot ham bor. Shuning uchun:
+ *
+ *   • "sizish" tekshiruvi AVVALGIDEK ishlaydi — u B filialining ANIQ
+ *     ID'larini qidiradi, umumiy son emas;
+ *   • "SON SIZISHI" bo'limi esa BO'M-BO'SH filial (C) yaratadi va
+ *     uning kontekstida har qanday musbat son sizish hisoblanadi —
+ *     bu ham bazadagi begona ma'lumotdan mustaqil.
+ *
+ * RUXSAT/ROL: ilgari test o'z `Permission` qatorlarini yaratardi
+ * (bo'sh bazada boshqa yo'l yo'q edi). Endi ular SEED bilan boshqariladi
+ * va test faqat MAVJUD ruxsatlarga `connect` qiladi — katalogga doimiy
+ * test qatori qo'shilmasligi uchun.
+ *
  * ISHLATISH:  npm run test:leak
  *
  * Yangi ro'yxat funksiyasi qo'shsangiz - shu yerga bitta qator qo'shing.
  * Sinovdan o'tmagan funksiya = potentsial sizish.
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
 import { enableBranchGuard, getViolations } from "./helpers/branchGuard.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
-const TEST_DB = "mongodb://127.0.0.1:27017/lc_leak_test";
+const fx = createFixtures();
+let restoreGuard = () => {};
 
 // ─── Natijalarni yig'ish ───
 const results = { pass: 0, fail: 0, skip: 0, failures: [] };
@@ -108,26 +131,8 @@ const check = async (name, fn, foreignIds, runWith) => {
 };
 
 const run = async () => {
-  await mongoose.connect(TEST_DB);
-  await mongoose.connection.dropDatabase();
-
   // SO'ROV QO'RIQCHISI: filtrsiz so'rovlarni yozib boradi.
-  enableBranchGuard();
-
-  // ─── Modellar ───
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const User = (await import("../src/models/user.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
-  const GroupMembership = (await import("../src/models/groupMembership.model.js")).default;
-  const GroupFee = (await import("../src/models/groupFee.model.js")).default;
-  const StudentPayment = (await import("../src/models/studentPayment.model.js")).default;
-  const PaymentTransaction = (await import("../src/models/paymentTransaction.model.js")).default;
-  const TeacherSalary = (await import("../src/models/teacherSalary.model.js")).default;
-  const SalaryTransaction = (await import("../src/models/salaryTransaction.model.js")).default;
-  const Attendance = (await import("../src/models/attendance.model.js")).default;
-  const Lead = (await import("../src/models/lead.model.js")).default;
-  const Role = (await import("../src/models/role.model.js")).default;
-  const Permission = (await import("../src/models/permission.model.js")).default;
+  restoreGuard = enableBranchGuard();
 
   const { runWithBranchContext } = await import(
     "../src/helpers/branchContext.helper.js"
@@ -136,61 +141,101 @@ const run = async () => {
     "../src/helpers/permission.helper.js"
   );
 
-  // ─── Ruxsat/rollar ───
-  const permKeys = [
+  // ─── Rol ───
+  //
+  // ⚠ `Permission` QATORLARI YARATILMAYDI — ular seed bilan boshqariladi
+  // va katalogga test qatori qo'shilsa u DOIMIY qolib ketardi. Fixture
+  // yordamchisi mavjud kalitlarga `connect` qiladi va kalit topilmasa
+  // ANIQ xato beradi (jimgina ruxsatsiz rol yaratmaydi).
+  await fx.role("leak-director", [
     "users.read", "finance.read", "finance.pay", "salary.read", "salary.pay",
     "groups.read", "attendance.read", "leads.read", "grades.read",
     "notifications.read", "notifications.send", "feedback.read",
     "activity_logs.read", "admin_dashboard.read", "branches.read", "rating.read",
-  ];
-  const permIds = [];
-  for (const key of permKeys) {
-    const [module, action] = key.split(".");
-    const p = await Permission.create({ key, label: key, group: module, module, action });
-    permIds.push(p._id);
-  }
-  await Role.create({ value: "director", label: "Direktor", roleType: "staff", permissions: permIds });
+  ]);
   invalidateRoleCache();
 
   // ─── Ikki filial, har birida to'liq ma'lumot ───
-  const A = await Branch.create({ name: "A-FILIAL", isMain: true });
-  const B = await Branch.create({ name: "B-FILIAL" });
+  const A = await fx.branch("A-FILIAL");
+  const B = await fx.branch("B-FILIAL");
 
   const mkUser = (n, role, branch) =>
-    User.create({
-      firstName: n, lastName: "X", username: n.toLowerCase(),
-      passwordHash: "p", role, homeBranchId: branch._id,
-    });
+    fx.user(n, { firstName: n, lastName: "X", passwordHash: "p", role, homeBranchId: branch.id });
 
   const teachA = await mkUser("TeachA", "teacher", A);
   const teachB = await mkUser("TeachB", "teacher", B);
   const studA = await mkUser("StudA", "student", A);
   const studB = await mkUser("StudB", "student", B);
 
-  const gA = await Group.create({ branchId: A._id, name: "GROUP-A", isActive: true, teachers: [teachA._id] });
-  const gB = await Group.create({ branchId: B._id, name: "GROUP-B", isActive: true, teachers: [teachB._id] });
+  // `Group.teachers` — ko'p-ko'pga bog'lanish (Mongo'da massiv edi).
+  const gA = await fx.group("GROUP-A", A.id, { isActive: true, teachers: { connect: [{ id: teachA.id }] } });
+  const gB = await fx.group("GROUP-B", B.id, { isActive: true, teachers: { connect: [{ id: teachB.id }] } });
 
-  await GroupMembership.create({ group: gA._id, student: studA._id, joinedAt: new Date("2026-01-01") });
-  await GroupMembership.create({ group: gB._id, student: studB._id, joinedAt: new Date("2026-01-01") });
+  await fx.membership(gA.id, studA.id, { joinedAt: new Date("2026-01-01") });
+  await fx.membership(gB.id, studB.id, { joinedAt: new Date("2026-01-01") });
 
-  await GroupFee.create({ group: gA._id, year: 2026, month: 7, amount: 500000, source: "manual" });
-  await GroupFee.create({ group: gB._id, year: 2026, month: 7, amount: 900000, source: "manual" });
+  await fx.groupFee(gA.id, 2026, 7, 500000);
+  await fx.groupFee(gB.id, 2026, 7, 900000);
 
-  const spA = await StudentPayment.create({ branchId: A._id, student: studA._id, group: gA._id, year: 2026, month: 7, baseFee: 500000, expectedAmount: 500000, paidAmount: 500000 });
-  const spB = await StudentPayment.create({ branchId: B._id, student: studB._id, group: gB._id, year: 2026, month: 7, baseFee: 900000, expectedAmount: 900000, paidAmount: 900000 });
+  const mkPayment = async (branch, stud, g, amount) => {
+    const r = await prisma.studentPayment.create({
+      data: {
+        branchId: branch.id, studentId: stud.id, groupId: g.id, year: 2026, month: 7,
+        baseFee: amount, expectedAmount: amount, paidAmount: amount,
+      },
+    });
+    return fx.track("studentPayment", r.id), r;
+  };
+  const spA = await mkPayment(A, studA, gA, 500000);
+  const spB = await mkPayment(B, studB, gB, 900000);
 
-  await PaymentTransaction.create({ branchId: A._id, payment: spA._id, student: studA._id, group: gA._id, year: 2026, month: 7, amount: 500000, source: "direct", method: "cash", paidAt: new Date() });
-  await PaymentTransaction.create({ branchId: B._id, payment: spB._id, student: studB._id, group: gB._id, year: 2026, month: 7, amount: 900000, source: "direct", method: "cash", paidAt: new Date() });
+  const mkPayTx = async (branch, sp, stud, g, amount) => {
+    const r = await prisma.paymentTransaction.create({
+      data: {
+        branchId: branch.id, paymentId: sp.id, studentId: stud.id, groupId: g.id,
+        year: 2026, month: 7, amount, source: "direct", method: "cash", paidAt: new Date(),
+      },
+    });
+    return fx.track("paymentTransaction", r.id), r;
+  };
+  await mkPayTx(A, spA, studA, gA, 500000);
+  await mkPayTx(B, spB, studB, gB, 900000);
 
-  const tsA = await TeacherSalary.create({ branchId: A._id, teacher: teachA._id, group: gA._id, year: 2026, month: 7, expectedAmount: 2000000, paidAmount: 1000000 });
-  const tsB = await TeacherSalary.create({ branchId: B._id, teacher: teachB._id, group: gB._id, year: 2026, month: 7, expectedAmount: 3000000, paidAmount: 1500000 });
+  const mkSalary = async (branch, teach, g, expected, paid) => {
+    const r = await prisma.teacherSalary.create({
+      data: {
+        branchId: branch.id, teacherId: teach.id, groupId: g.id,
+        year: 2026, month: 7, expectedAmount: expected, paidAmount: paid,
+      },
+    });
+    return fx.track("teacherSalary", r.id), r;
+  };
+  const tsA = await mkSalary(A, teachA, gA, 2000000, 1000000);
+  const tsB = await mkSalary(B, teachB, gB, 3000000, 1500000);
 
-  await SalaryTransaction.create({ branchId: A._id, salary: tsA._id, teacher: teachA._id, group: gA._id, year: 2026, month: 7, amount: 1000000, method: "cash", paidAt: new Date() });
-  await SalaryTransaction.create({ branchId: B._id, salary: tsB._id, teacher: teachB._id, group: gB._id, year: 2026, month: 7, amount: 1500000, method: "cash", paidAt: new Date() });
+  const mkSalaryTx = async (branch, ts, teach, g, amount) => {
+    const r = await prisma.salaryTransaction.create({
+      data: {
+        branchId: branch.id, salaryId: ts.id, teacherId: teach.id, groupId: g.id,
+        year: 2026, month: 7, amount, method: "cash", paidAt: new Date(),
+      },
+    });
+    return fx.track("salaryTransaction", r.id), r;
+  };
+  await mkSalaryTx(A, tsA, teachA, gA, 1000000);
+  await mkSalaryTx(B, tsB, teachB, gB, 1500000);
 
-  const rec = new mongoose.Types.ObjectId();
-  await Attendance.create({ group: gA._id, student: studA._id, date: new Date(), dateKey: "2026-07-20", status: "present", recordedBy: rec });
-  await Attendance.create({ group: gB._id, student: studB._id, date: new Date(), dateKey: "2026-07-20", status: "absent", recordedBy: rec });
+  const mkAttendance = async (g, stud, status) => {
+    const r = await prisma.attendance.create({
+      data: {
+        groupId: g.id, studentId: stud.id, date: new Date("2026-07-20"),
+        dateKey: "2026-07-20", status, recordedById: teachA.id,
+      },
+    });
+    return fx.track("attendance", r.id), r;
+  };
+  await mkAttendance(gA, studA, "present");
+  await mkAttendance(gB, studB, "absent");
 
   // FEEDBACK va ACTIVITY LOG - bu modellarda `branchId` YO'Q.
   //
@@ -198,42 +243,51 @@ const run = async () => {
   // servislar bo'sh ro'yxat qaytarardi va test ularni "toza" deb
   // belgilardi. Bu SOXTA O'TISH edi: filtr umuman yo'qligini bo'sh
   // natija yashirib turardi.
-  const FeedbackType = (await import("../src/models/feedbackType.model.js")).default;
-  const Feedback = (await import("../src/models/feedback.model.js")).default;
-  const ActivityLog = (await import("../src/models/activityLog.model.js")).default;
+  const fbType = await prisma.feedbackType.create({
+    data: { name: `Shikoyat-${fx.suffix}`, isActive: true },
+  });
+  fx.track("feedbackType", fbType.id);
 
-  const fbType = await FeedbackType.create({ name: "Shikoyat", isActive: true });
-  await Feedback.create({
-    author: studA._id, type: fbType._id, group: gA._id,
-    message: "A filial fikri", status: "new",
-  });
-  await Feedback.create({
-    author: studB._id, type: fbType._id, group: gB._id,
-    message: "StudB maxfiy shikoyati", status: "new",
-  });
+  const mkFeedback = async (author, g, message) => {
+    const r = await prisma.feedback.create({
+      data: { authorId: author.id, typeId: fbType.id, groupId: g.id, message, status: "new" },
+    });
+    return fx.track("feedback", r.id), r;
+  };
+  await mkFeedback(studA, gA, `A filial fikri ${fx.suffix}`);
+  await mkFeedback(studB, gB, `StudB maxfiy shikoyati ${fx.suffix}`);
 
-  await ActivityLog.create({
-    user: teachA._id, actorLabel: "TeachA", actorRole: "teacher",
-    method: "POST", path: "/api/groups", status: 201,
-  });
-  await ActivityLog.create({
-    user: teachB._id, actorLabel: "TeachB", actorRole: "teacher",
-    method: "POST", path: "/api/groups/B-MAXFIY", status: 201,
-  });
+  const mkActivityLog = async (u, path) => {
+    const r = await prisma.activityLog.create({
+      data: {
+        userId: u.id, actorLabel: u.firstName, userRole: u.role,
+        method: "POST", path, status: 201,
+      },
+    });
+    return fx.track("activityLog", r.id), r;
+  };
+  await mkActivityLog(teachA, "/api/groups");
+  await mkActivityLog(teachB, `/api/groups/B-MAXFIY-${fx.suffix}`);
 
-  await Lead.create({ branchId: A._id, firstName: "LeadA", phone: "998901111111", status: "new" });
-  await Lead.create({ branchId: B._id, firstName: "LeadB", phone: "998902222222", status: "new" });
+  const mkLead = async (branch, name, phone) => {
+    const r = await prisma.lead.create({
+      data: { branchId: branch.id, firstName: `${name}-${fx.suffix}`, phone, status: "new" },
+    });
+    return fx.track("lead", r.id), r;
+  };
+  await mkLead(A, "LeadA", "998901111111");
+  await mkLead(B, "LeadB", "998902222222");
 
   // B filialiga tegishli - javobda BULARDAN birortasi chiqmasligi kerak
   const foreign = {
-    "B-filial": B._id, "GROUP-B": gB._id, "StudB": studB._id,
-    "TeachB": teachB._id, "B-to'lov": spB._id, "B-maosh": tsB._id,
+    "B-filial": B.id, "GROUP-B": gB.id, "StudB": studB.id,
+    "TeachB": teachB.id, "B-to'lov": spB.id, "B-maosh": tsB.id,
   };
 
   // A direktori konteksti
   const asA = (fn) =>
     runWithBranchContext(
-      { branchId: String(A._id), allowedBranchIds: [String(A._id)], canSeeAllBranches: false },
+      { branchId: String(A.id), allowedBranchIds: [String(A.id)], canSeeAllBranches: false },
       fn,
     );
 
@@ -261,6 +315,7 @@ const run = async () => {
   const notifications = await import("../src/modules/notifications/services/notifications.service.js");
 
   const P = { year: 2026, month: 7 };
+  const RANGE = { fromDate: "2026-07-01", toDate: "2026-07-31" };
 
   const CASES = [
     ["users.list", () => users.list({ status: "active", limit: 100 })],
@@ -269,13 +324,13 @@ const run = async () => {
     ["users.list(staff)", () => users.list({ staff: true, status: "active", limit: 100 })],
     ["users.staffStats", () => users.staffStats()],
     ["groups.list", () => groups.list({ limit: 100 })],
-    ["groups.getById(B)", () => groups.getById(gB._id)],
-    ["groups.history(B)", () => groups.history(gB._id, {})],
-    ["groups.listMemberships(B)", () => groups.listMemberships(gB._id, studB._id)],
+    ["groups.getById(B)", () => groups.getById(gB.id)],
+    ["groups.history(B)", () => groups.history(gB.id, {})],
+    ["groups.listMemberships(B)", () => groups.listMemberships(gB.id, studB.id)],
     ["attendance.getDashboardStats", () => attendance.getDashboardStats({ fromDate: "2026-07-01", toDate: "2026-07-31" })],
-    ["attendance.getGroupSummary(B)", () => attendance.getGroupSummary(gB._id, { fromDate: "2026-07-01", toDate: "2026-07-31" })],
-    ["attendance.getGroupMonthly(B)", () => attendance.getGroupMonthly(gB._id, P)],
-    ["attendance.getStudentSummary(B)", () => attendance.getStudentSummary(studB._id, { fromDate: "2026-07-01", toDate: "2026-07-31" })],
+    ["attendance.getGroupSummary(B)", () => attendance.getGroupSummary(gB.id, { fromDate: "2026-07-01", toDate: "2026-07-31" })],
+    ["attendance.getGroupMonthly(B)", () => attendance.getGroupMonthly(gB.id, P)],
+    ["attendance.getStudentSummary(B)", () => attendance.getStudentSummary(studB.id, { fromDate: "2026-07-01", toDate: "2026-07-31" })],
     ["leads.list", () => leads.list({ limit: 100 })],
     ["leads.stats", () => leads.stats({})],
     ["financeReport.getSummary", () => finReport.getSummary(P)],
@@ -284,14 +339,14 @@ const run = async () => {
     ["financeReport.getGroupBreakdown", () => finReport.getGroupBreakdown(P)],
     ["studentPayment.list", () => studentPayment.list({ ...P, limit: 100 })],
     ["studentPayment.obligations", () => studentPayment.obligations(P)],
-    ["studentPayment.historyByStudent(B)", () => studentPayment.historyByStudent(studB._id)],
+    ["studentPayment.historyByStudent(B)", () => studentPayment.historyByStudent(studB.id)],
     ["groupFee.list", () => groupFee.list({ ...P, limit: 100 })],
     ["discount.list", () => discount.list({ limit: 100 })],
     ["deposits.list", () => deposits.list({ limit: 100 })],
     ["deposits.report", () => deposits.report({})],
     ["salary.list", () => salary.list({ ...P, limit: 100 })],
     ["salary.obligations", () => salary.obligations(P)],
-    ["salary.historyByTeacher(B)", () => salary.historyByTeacher(teachB._id)],
+    ["salary.historyByTeacher(B)", () => salary.historyByTeacher(teachB.id)],
     ["dashboard.getOverview", () => dashboard.getOverview({})],
     ["dashboard.getStudentFlow", () => dashboard.getStudentFlow({})],
     ["dashboard.getCashflow", () => dashboard.getCashflow({})],
@@ -299,8 +354,12 @@ const run = async () => {
     ["search.globalSearch", () => search.globalSearch("B")],
     ["activityLogs.list", () => activityLogs.list({ limit: 100 })],
     ["activityLogs.getStats", () => activityLogs.getStats({})],
-    ["grades.getGroupSummary(B)", () => grades.getGroupSummary(gB._id, P)],
-    ["grades.getStudentSummary(B)", () => grades.getStudentSummary(studB._id, P)],
+    // ⚠ `getGroupSummary` sana DIAPAZONI oladi ({fromDate,toDate}), oy
+    // raqamini EMAS. Ilgari unga `P` ({year,month}) uzatilardi va chaqiruv
+    // "Sana noto'g'ri" bilan yiqilib, holat O'TKAZIB YUBORILARDI — ya'ni bu
+    // yo'l umuman O'LCHANMASDI.
+    ["grades.getGroupSummary(B)", () => grades.getGroupSummary(gB.id, RANGE)],
+    ["grades.getStudentSummary(B)", () => grades.getStudentSummary(studB.id, P)],
     ["rating.getLeaderboard", () => rating.getLeaderboard({ limit: 100 })],
     ["feedback.list", () => feedback.list({ limit: 100 })],
     ["feedback.getStats", () => feedback.getStats({})],
@@ -335,33 +394,35 @@ const run = async () => {
   const financeTxn = await import("../src/modules/finance/services/transaction.service.js");
   const salaryTxn = await import("../src/modules/teacherSalary/services/salaryTransaction.service.js");
 
-  await mustThrow("groups.update(B)", () => groups.update(gB._id, { name: "BUZILDI" }));
+  await mustThrow("groups.update(B)", () => groups.update(gB.id, { name: "BUZILDI" }));
   await mustThrow("groups.permanentRemove(B)", () =>
-    groups.permanentRemove(gB._id, { _id: teachA._id }, { confirmName: "GROUP-B" }),
+    groups.permanentRemove(gB.id, { _id: teachA.id }, { confirmName: "GROUP-B" }),
   );
   await mustThrow("groupFee.upsert(B)", () =>
-    groupFee.upsert({ groupId: gB._id, year: 2026, month: 7, amount: 1 }, { _id: teachA._id }),
+    groupFee.upsert({ groupId: gB.id, year: 2026, month: 7, amount: 1 }, { _id: teachA.id }),
   );
   await mustThrow("finance.transaction.create(B-plan)", () =>
-    financeTxn.create({ paymentId: spB._id, amount: 1000, method: "cash" }, { _id: teachA._id }),
+    financeTxn.create({ paymentId: spB.id, amount: 1000, method: "cash" }, { _id: teachA.id }),
   );
   await mustThrow("salary.transaction.create(B-maosh)", () =>
     salaryTxn.create(
-      { salaryId: tsB._id, amount: 1000, method: "cash" },
-      { _id: teachA._id, permissions: ["salary.pay"] },
+      { salaryId: tsB.id, amount: 1000, method: "cash" },
+      { _id: teachA.id, permissions: ["salary.pay"] },
     ),
   );
   await mustThrow("attendance.bulkRecord(B-guruh)", () =>
     attendance.bulkRecord(
-      gB._id,
-      { dateKey: "2026-07-25", records: [{ student: studB._id, status: "present" }] },
-      { _id: teachA._id },
+      gB.id,
+      { dateKey: "2026-07-25", records: [{ student: studB.id, status: "present" }] },
+      { _id: teachA.id },
     ),
   );
 
   // B filialining ma'lumoti HALI HAM joyidami (yozuv amallari o'tib ketmadimi)
-  const gBAfter = await Group.findById(gB._id).lean();
-  if (gBAfter && gBAfter.name === "GROUP-B") ok("B-guruh o'zgarmagan (yakuniy tekshiruv)");
+  const gBAfter = await prisma.group.findUnique({ where: { id: gB.id } });
+  // ⚠ Nom fixture SUFFIKSI bilan yaratiladi (`GROUP-B-<suffix>`), shuning
+  // uchun qattiq satr emas, YARATILGAN qiymat bilan solishtiriladi.
+  if (gBAfter && gBAfter.name === gB.name) ok("B-guruh o'zgarmagan (yakuniy tekshiruv)");
   else bad("B-guruh o'zgarmagan (yakuniy tekshiruv)", "guruh o'zgardi yoki o'chdi!");
 
   // ══════════════════════════════════════════════════════════════
@@ -374,10 +435,10 @@ const run = async () => {
   // boshqa filialdan sizgan bo'ladi.
   console.log("\n\x1b[1mSON SIZISHI\x1b[0m (bo'm-bo'sh filial 0 ko'rsatishi kerak)\n");
 
-  const C = await Branch.create({ name: "C-BO'SH-FILIAL" });
+  const C = await fx.branch("C-BOSH-FILIAL");
   const asC = (fn) =>
     runWithBranchContext(
-      { branchId: String(C._id), allowedBranchIds: [String(C._id)], canSeeAllBranches: false },
+      { branchId: String(C.id), allowedBranchIds: [String(C.id)], canSeeAllBranches: false },
       fn,
     );
 
@@ -433,22 +494,31 @@ const run = async () => {
     );
   }
 
-  // ─── Xulosa ───
-  console.log(
-    `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${results.pass} toza\x1b[0m / ` +
-      `\x1b[31m${results.fail} sizish\x1b[0m / \x1b[33m${results.skip} o'tkazib yuborildi\x1b[0m`,
-  );
-  if (results.failures.length) {
-    console.log("\n\x1b[31mSIZAYOTGAN funksiyalar:\x1b[0m");
-    for (const f of results.failures) console.log(`  • ${f.name} — ${f.detail}`);
-  }
-
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-  process.exit(results.fail > 0 ? 1 : 0);
 };
 
-run().catch((err) => {
-  console.error("Test ishga tushmadi:", err);
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    bad("TEST ISHGA TUSHMADI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
+  })
+  .finally(async () => {
+    // ⚠ QO'RIQCHI AVVAL TIKLANADI: tozalash so'rovlari uning ro'yxatiga
+    // tushmasligi kerak (ular ataylab filtrsiz — ID bo'yicha o'chirish).
+    restoreGuard();
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
+    console.log(
+      `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${results.pass} toza\x1b[0m / ` +
+        `\x1b[31m${results.fail} sizish\x1b[0m / \x1b[33m${results.skip} o'tkazib yuborildi\x1b[0m`,
+    );
+    if (results.failures.length) {
+      console.log("\n\x1b[31mSIZAYOTGAN funksiyalar:\x1b[0m");
+      for (const f of results.failures) console.log(`  • ${f.name} — ${f.detail}`);
+    }
+    await prisma.$disconnect().catch(() => {});
+    process.exit(results.fail > 0 ? 1 : 0);
+  });

@@ -1,11 +1,6 @@
 import "dotenv/config";
-import mongoose from "mongoose";
-import { connectDB, disconnectDB } from "../config/db.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
-import Branch from "../models/branch.model.js";
-import Group from "../models/group.model.js";
-import GroupMembership from "../models/groupMembership.model.js";
-import User from "../models/user.model.js";
 import { ROLES } from "../constants/roles.js";
 import { runWithBranchContext } from "../helpers/branchContext.helper.js";
 import { collectStudentSignals } from "../modules/ai/signals/student.signal.js";
@@ -74,38 +69,40 @@ const mean = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length 
 const backtestBranch = async (branch, cutoff, now) =>
   runWithBranchContext(
     {
-      branchId: String(branch._id),
-      allowedBranchIds: [String(branch._id)],
+      branchId: String(branch.id),
+      allowedBranchIds: [String(branch.id)],
       canSeeAllBranches: false,
       userId: null,
     },
     async () => {
-      const groups = await Group.find({ branchId: branch._id, isDeleted: false })
-        .select("_id")
-        .lean();
+      const groups = await prisma.group.findMany({
+        where: { branchId: branch.id, isDeleted: false },
+        select: { id: true },
+      });
       if (!groups.length) return [];
-      const groupIds = groups.map((g) => g._id);
+      const groupIds = groups.map((g) => g.id);
 
       // cutoff sanasida FAOL bo'lgan a'zoliklar:
       //   joinedAt <= cutoff  VA  (leftAt yo'q YOKI leftAt > cutoff)
-      const memberships = await GroupMembership.find({
-        group: { $in: groupIds },
-        isDeleted: false,
-        joinedAt: { $lte: cutoff },
-        $or: [{ leftAt: null }, { leftAt: { $gt: cutoff } }],
-      })
-        .select("student group leftAt leftReason")
-        .lean();
+      const memberships = await prisma.groupMembership.findMany({
+        where: {
+          groupId: { in: groupIds },
+          isDeleted: false,
+          joinedAt: { lte: cutoff },
+          OR: [{ leftAt: null }, { leftAt: { gt: cutoff } }],
+        },
+        select: { studentId: true, groupId: true, leftAt: true, leftReason: true },
+      });
       if (!memberships.length) return [];
 
       const byStudent = new Map();
       for (const m of memberships) {
-        const sid = String(m.student);
+        const sid = String(m.studentId);
         if (!byStudent.has(sid)) {
           byStudent.set(sid, { groupIds: [], left: false });
         }
         const entry = byStudent.get(sid);
-        entry.groupIds.push(m.group);
+        entry.groupIds.push(m.groupId);
         // LABEL: cutoff dan keyin, ufq ichida "removed" bilan ketgan.
         // "transferred" va "graduated" MUSBAT EMAS - bular churn emas
         // (ko'chirish va bitirish). Ularni churn deb belgilash modelni
@@ -120,26 +117,25 @@ const backtestBranch = async (branch, cutoff, now) =>
         }
       }
 
-      const users = await User.find({
-        _id: {
-          $in: [...byStudent.keys()].map((id) => new mongoose.Types.ObjectId(id)),
+      const users = await prisma.user.findMany({
+        where: {
+          id: { in: [...byStudent.keys()] },
+          role: ROLES.STUDENT,
+          isDeleted: false,
         },
-        role: ROLES.STUDENT,
-        isDeleted: false,
-      })
-        .select("_id firstName lastName enrolledAt")
-        .lean();
+        select: { id: true, firstName: true, lastName: true, enrolledAt: true },
+      });
 
       const students = users.map((u) => ({
         ...u,
-        groupIds: byStudent.get(String(u._id))?.groupIds || [],
+        groupIds: byStudent.get(String(u.id))?.groupIds || [],
       }));
       if (!students.length) return [];
 
       // MUHIM: signallar CUTOFF holatiga ko'ra hisoblanadi - oynalar
       // shu sanada tugaydi, shuning uchun keyingi davomat/baho ko'rinmaydi.
       const signalsMap = await collectStudentSignals(students, cutoff);
-      const config = await resolveConfig(branch._id);
+      const config = await resolveConfig(branch.id);
 
       // Qarzsiz variant: debt signalini neytrallashtiramiz (leakage'siz baho).
       const configNoDebt = {
@@ -149,7 +145,7 @@ const backtestBranch = async (branch, cutoff, now) =>
 
       const rows = [];
       for (const s of students) {
-        const sid = String(s._id);
+        const sid = String(s.id);
         const signals = signalsMap.get(sid);
         if (!signals) continue;
 
@@ -192,10 +188,11 @@ const run = async () => {
   const cutoff = new Date(now.getTime() - HORIZON_DAYS * DAY_MS);
 
   // Tarixiy ma'lumot yetarlimi - eng eski "removed" a'zolikni tekshiramiz.
-  const oldest = await GroupMembership.findOne({ leftReason: "removed", leftAt: { $ne: null } })
-    .sort({ leftAt: 1 })
-    .select("leftAt")
-    .lean();
+  const oldest = await prisma.groupMembership.findFirst({
+    where: { leftReason: "removed", leftAt: { not: null } },
+    orderBy: { leftAt: "asc" },
+    select: { leftAt: true },
+  });
 
   if (!oldest) {
     logger.warn(
@@ -218,9 +215,10 @@ const run = async () => {
     );
   }
 
-  const branches = await Branch.find({ isDeleted: { $ne: true } })
-    .select("_id name")
-    .lean();
+  const branches = await prisma.branch.findMany({
+    where: { isDeleted: false },
+    select: { id: true, name: true },
+  });
 
   let rows = [];
   for (const b of branches) {

@@ -3,6 +3,7 @@ import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
 import * as financialTx from "../modules/finance/services/financialTransaction.service.js";
 import * as budgetSvc from "../modules/financeOps/services/budget.service.js";
+import * as depositSvc from "../modules/deposits/services/deposit.service.js";
 import { runWithBranchContext } from "../helpers/branchContext.helper.js";
 
 /**
@@ -72,7 +73,42 @@ const clean = async () => {
   await prisma.user.deleteMany({ where: { id: { in: uids } } });
   await prisma.expenseCategory.deleteMany({ where: { code: { startsWith: "demo_" } } });
   await prisma.course.deleteMany({ where: { code: { startsWith: "demo_" } } });
+
+  // ── AI QATLAMI — FILIALDAN OLDIN ──
+  //
+  // Bu blok YETISHMAYOTGAN edi va tozalash aynan shu yerda to'xtardi:
+  //
+  //   prisma.branch.deleteMany() → Foreign key constraint violated on
+  //   the constraint: `insights_branchId_fkey`
+  //
+  // Oqibati jimgina emas, ammo NOTO'G'RI o'qilardi: `--clean` yarim
+  // bajarilib, guruh va to'lovlar o'chib, filial esa foydalanuvchi,
+  // chiqim, jurnal va hisoblari bilan QOLIB ketardi. Keyingi seed
+  // "Demo ma'lumot allaqachon bor" deb rad etardi, ya'ni demo bazani
+  // qayta qurishning ILOJI YO'Q edi — `audit:workspace` dagi yetti
+  // tekshiruv esa aynan shu ma'lumot yo'qligi uchun o'lchanmasdi.
+  //
+  // AI jadvallari `Insight`/`AiRanking`/... filialga TASHQI KALIT
+  // bilan bog'langan va ular tungi joblar tomonidan yaratiladi, ya'ni
+  // demo filial bir kecha tursa — o'chirilmay qoladi.
+  await prisma.insight.deleteMany({ where: { branchId: { in: ids } } });
+  await prisma.aiRanking.deleteMany({ where: { branchId: { in: ids } } });
+  await prisma.aiRun.deleteMany({ where: { branchId: { in: ids } } });
+  await prisma.aiUsageLog.deleteMany({ where: { branchId: { in: ids } } });
+  await prisma.aiReport.deleteMany({ where: { branchId: { in: ids } } });
+  await prisma.aiConfig.deleteMany({ where: { branchId: { in: ids } } });
+
   await prisma.branch.deleteMany({ where: { id: { in: ids } } });
+
+  // ⚠ TOZALASH "TUGADIM" DEGANIGA ISHONMAYMIZ — O'LCHAYMIZ.
+  // Yarim tozalash keyingi seed'ni butunlay to'sib qo'yadi, shuning
+  // uchun qoldiq bo'lsa SABABI BILAN ko'rinishi shart.
+  const left = await prisma.branch.count({ where: { id: { in: ids } } });
+  if (left) {
+    logger.error({ left }, "TOZALASH TUGALLANMADI — filial o'chmadi");
+    process.exitCode = 1;
+    return;
+  }
   logger.info({ branches: ids.length }, "Demo ma'lumot o'chirildi");
 };
 
@@ -223,6 +259,29 @@ const seed = async () => {
     }
   }
 
+  // ── DEPOZIT (oldindan to'lov) ──
+  //
+  // NEGA SEED'GA QO'SHILDI: `audit:workspace` dagi "depozit hisoboti
+  // ko'lami" tekshiruvi uchta raqamni solishtiradi (tashkilot / A
+  // filial / B filial) va uchalasi nol bo'lsa O'ZINI O'CHIRADI —
+  // "o'lchanmadi" deb. Ya'ni depozitdagi filial chegarasi bazada
+  // depozit bo'lmagani uchun HECH QACHON tekshirilmagan edi.
+  //
+  // Summalar `deposit.topup()` orqali o'tadi, ya'ni jurnal yozuvi ham,
+  // audit izi ham ishlab chiqarish yo'lidagidek hosil bo'ladi (bu
+  // fayldagi qolgan hamma narsa kabi). `--clean` ularni o'chiradi:
+  // `depositTransaction`/`studentDeposit` demo o'quvchilar bo'yicha
+  // tozalanadi.
+  let deposits = 0;
+  for (const st of students.slice(0, 3)) {
+    await inBr(() => depositSvc.topup(
+      st.id,
+      { amount: 500000, method: "cash", paidAt: day(3, 1), note: "DEMO oldindan to'lov" },
+      owner,
+    ));
+    deposits += 1;
+  }
+
   // ── CHIQIMLAR ──
   // ── KATEGORIYALAR: MAVJUDLARI QAYTA ISHLATILADI ──
   //
@@ -340,7 +399,7 @@ const seed = async () => {
     ],
   }, owner));
 
-  logger.info({ branch: branch.name, payments, groups: 4, students: 12 }, "Moliya demo ma'lumoti tayyor");
+  logger.info({ branch: branch.name, payments, deposits, groups: 4, students: 12 }, "Moliya demo ma'lumoti tayyor");
   await disconnectDB();
 };
 

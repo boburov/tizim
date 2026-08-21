@@ -2,7 +2,7 @@ import { PERMISSIONS } from "../../../constants/permissions.js";
 import { ROLES } from "../../../constants/roles.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
-import { STAFF_SALARY_TYPES } from "../../../models/staffCompensation.model.js";
+import { STAFF_SALARY_TYPES } from "../../../constants/staffPayroll.js";
 import * as usersService from "../../users/services/users.service.js";
 import * as staffCompensationService from "../../staffPayroll/services/staffCompensation.service.js";
 import { ROW_STATUS } from "../services/importEngine.service.js";

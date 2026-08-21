@@ -29,10 +29,20 @@
  *   npm run test:delegation
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 
-const BASE = process.env.MONGO_URL || "mongodb://127.0.0.1:27017/bayyina";
-const DB = BASE.replace(/\/([^/?]+)(\?|$)/, "/bayyina_delegation_test$2");
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi + `dropDatabase()` o'rniga prefiksli fixture va
+ * kafolatli tozalash (`tests/helpers/prismaFixtures.js`). Xavfsizlik va
+ * biznes DA'VOLARI o'zgarmadi — faqat ma'lumotga murojaat qatlami.
+ *
+ * Bog'lanish maydonlari qayta nomlandi: `teacher` → `teacherId`,
+ * `group` → `groupId`, `student` → `studentId` va h.k.
+ */
+const fx = createFixtures();
 
 const R = { pass: 0, fail: 0, notes: [] };
 const ok = (n, extra = "") => {
@@ -55,14 +65,6 @@ const grab = async (fn) => {
 };
 
 const run = async () => {
-  if (DB === BASE) throw new Error("Test bazasi nomi ajratilmadi - to'xtatildi");
-  mongoose.set("autoIndex", false);
-  await mongoose.connect(DB);
-  if (!mongoose.connection.name.includes("delegation_test")) {
-    throw new Error(`Kutilmagan baza: ${mongoose.connection.name}`);
-  }
-
-  const Branch = (await import("../src/models/branch.model.js")).default;
   const { PERMISSIONS } = await import("../src/constants/permissions.js");
   const {
     OWNER_ONLY_PERMISSIONS,
@@ -77,7 +79,7 @@ const run = async () => {
     validateDelegation,
     resolveRule,
   } = await import("../src/constants/delegation.js");
-  const { APPROVAL_KINDS } = await import("../src/models/approval.model.js");
+  const { APPROVAL_KINDS } = await import("../src/constants/approvals.js");
   const { checkConfigApproval } = await import(
     "../src/modules/expenseApprovals/services/expenseApproval.service.js"
   );
@@ -96,7 +98,7 @@ const run = async () => {
   // Owner-ga tenglashtirilgan: matritsadan tashqarida.
   const APPROVER = [PERMISSIONS.APPROVALS_DECIDE_CONFIG];
 
-  const mkBranch = async (name, delegation) => Branch.create({ name, delegation });
+  const mkBranch = async (name, delegation) => fx.branch(name, { delegation });
 
   // ─────────────────────────────────────────────────────────
   console.log("\n\x1b[1m1) RUXSAT KO'LAMI: direktor nimani oladi\x1b[0m");
@@ -186,7 +188,7 @@ const run = async () => {
     const res = await checkConfigApproval({
       permissions: DIRECTOR,
       kind,
-      branchId: plain._id,
+      branchId: plain.id,
       // auto rejimida o'lchov kerak emas.
     });
     check(
@@ -199,7 +201,7 @@ const run = async () => {
   const approverRes = await checkConfigApproval({
     permissions: APPROVER,
     kind: K.STAFF_HIRE,
-    branchId: plain._id,
+    branchId: plain.id,
   });
   check(
     "approvals.decide_config bor: matritsadan tashqarida",
@@ -220,14 +222,14 @@ const run = async () => {
   const hire = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.STAFF_HIRE,
-    branchId: restricted._id,
+    branchId: restricted.id,
   });
   check("approval: ishga olish tasdiqqa qaytdi", hire.needsApproval === true);
 
   const within = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.DISCOUNT_SET,
-    branchId: restricted._id,
+    branchId: restricted.id,
     metrics: { percent: 20 },
   });
   check("threshold: 20% o'tadi (chegaraning o'zi ruxsat)", within.needsApproval === false);
@@ -235,7 +237,7 @@ const run = async () => {
   const over = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.DISCOUNT_SET,
-    branchId: restricted._id,
+    branchId: restricted.id,
     metrics: { percent: 21 },
   });
   check("threshold: 21% tasdiqqa", over.needsApproval === true);
@@ -243,7 +245,7 @@ const run = async () => {
   const noMetric = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.DISCOUNT_SET,
-    branchId: restricted._id,
+    branchId: restricted.id,
     metrics: {},
   });
   check(
@@ -254,7 +256,7 @@ const run = async () => {
   const priceOk = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.GROUP_FEE_SET,
-    branchId: restricted._id,
+    branchId: restricted.id,
     metrics: { amount: 900000 },
   });
   check("Narx poldan yuqori (900k ≥ 800k): o'tadi", priceOk.needsApproval === false);
@@ -262,7 +264,7 @@ const run = async () => {
   const priceLow = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.GROUP_FEE_SET,
-    branchId: restricted._id,
+    branchId: restricted.id,
     metrics: { amount: 400000 },
   });
   check(
@@ -275,7 +277,7 @@ const run = async () => {
     checkConfigApproval({
       permissions: DIRECTOR,
       kind: K.SALARY_TERMS,
-      branchId: restricted._id,
+      branchId: restricted.id,
       metrics: { amount: 1000 },
     }),
   );
@@ -293,12 +295,31 @@ const run = async () => {
     [K.SALARY_TERMS]: { mode: APPROVAL },
   });
   // Validatsiyani BUTUNLAY chetlab o'tib noto'g'ri rejim yozamiz.
-  await Branch.collection.updateOne(
-    { _id: sneaky._id },
-    { $set: { "delegation.salary_terms": { mode: "hammasi_mumkin" } } },
-  );
+  //
+  // ⚠ XOM SQL ATAYLAB — VA BU AYNAN MONGO VERSIYASINING EKVIVALENTI.
+  //
+  // Mongo'da bu `Branch.collection.updateOne` edi: Mongoose sxemasidan
+  // PASTDAGI xom kolleksiya, ya'ni `pre("validate")` hook'i ishlamasdi.
+  //
+  // Prisma'da `prisma.branch.update(...)` ENDI ISHLAMAYDI — chunki
+  // `config/prisma.js` dagi `delegation-validation` kengaytmasi buzuq
+  // matritsani rad etadi (o'sha yo'qotilgan hook shunday tiklandi).
+  // Shuning uchun bu yerda `$executeRaw` kerak: u ilova qatlamini
+  // BUTUNLAY chetlab o'tadi — xuddi `mongosh`, Prisma Studio yoki eski
+  // migratsiya skripti kabi.
+  //
+  // TEKSHIRUV MAQSADI O'ZGARMADI: bazada ALLAQACHON turgan buzuq qiymat
+  // O'QISHDA `auto` ga aylanmasligi (fail-closed) isbotlanadi.
+  await prisma.$executeRaw`
+    UPDATE "branches"
+    SET "delegation" = '{"salary_terms":{"mode":"hammasi_mumkin"}}'::jsonb
+    WHERE "id" = ${sneaky.id}
+  `;
 
-  const raw = await Branch.findById(sneaky._id).select("delegation").lean();
+  const raw = await prisma.branch.findUnique({
+    where: { id: sneaky.id },
+    select: { delegation: true },
+  });
   check(
     "Bazada buzuq qiymat turibdi (test to'g'ri qurilgan)",
     raw?.delegation?.salary_terms?.mode === "hammasi_mumkin",
@@ -312,7 +333,7 @@ const run = async () => {
   const sneakyRes = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.SALARY_TERMS,
-    branchId: sneaky._id,
+    branchId: sneaky.id,
     metrics: { amount: 999999999 },
   });
   check(
@@ -323,7 +344,7 @@ const run = async () => {
   const unknownKind = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: "nonexistent_kind",
-    branchId: plain._id,
+    branchId: plain.id,
   });
   check(
     "Noma'lum tur: tasdiqqa (fail-closed)",
@@ -333,7 +354,7 @@ const run = async () => {
   const financialKind = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.SALARY_PAYMENT,
-    branchId: plain._id,
+    branchId: plain.id,
   });
   check(
     "Moliyaviy tur matritsaga tushmaydi: tasdiqqa",
@@ -352,8 +373,8 @@ const run = async () => {
 
   const fromCtx = await runWithBranchContext(
     {
-      branchId: String(plain._id),
-      allowedBranchIds: [String(plain._id)],
+      branchId: String(plain.id),
+      allowedBranchIds: [String(plain.id)],
       canSeeAllBranches: false,
       userId: null,
     },
@@ -368,8 +389,10 @@ const run = async () => {
   console.log("\n\x1b[1m5) O'ZIGA O'ZI MAOSH TAQIQI\x1b[0m");
   // ─────────────────────────────────────────────────────────
 
-  const uid = new mongoose.Types.ObjectId();
-  const other = new mongoose.Types.ObjectId();
+  // Prisma kalitlari — 24 belgili hex SATR (baza yozuvi kerak emas:
+  // `assertNotSelfSalary` sof solishtiruv qiladi).
+  const uid = "a".repeat(24);
+  const other = "b".repeat(24);
 
   const selfErr = await grab(async () => assertNotSelfSalary({ _id: uid }, uid));
   check(
@@ -452,11 +475,21 @@ const run = async () => {
     }) === null,
   );
 
+  // ⚠ ILGARI BU MONGOOSE `pre("validate")` HOOK'I EDI.
+  //
+  // Prisma'da model qatlami yo'q, shuning uchun himoya `config/prisma.js`
+  // dagi `delegation-validation` KENGAYTMASIGA ko'chirildi — u ham
+  // SERVISDAN CHETLAB O'TUVCHI yo'llarni (seed, import, migratsiya)
+  // qoplaydi, xuddi eski hook kabi.
+  //
+  // Ko'chirishdan keyin bu tekshiruv YIQILGAN edi: himoya faqat
+  // `branches.service.update` da qolgan, ya'ni to'g'ridan-to'g'ri
+  // yozuvlar buzuq matritsani saqlab qo'ya olardi.
   const modelErr = await grab(() =>
     mkBranch("Buzuq matritsa", { [K.DISCOUNT_SET]: { mode: THRESHOLD } }),
   );
   check(
-    "Model pre(validate) buzuq matritsani saqlamaydi",
+    "Prisma kengaytmasi buzuq matritsani saqlamaydi",
     modelErr !== null,
   );
 
@@ -519,7 +552,7 @@ const run = async () => {
   const mixedBad = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.SALARY_TERMS,
-    branchId: mixedBranch._id,
+    branchId: mixedBranch.id,
     metrics: { amount: 500000, percent: 25 },
   });
   check(
@@ -529,32 +562,36 @@ const run = async () => {
   const mixedOk = await checkConfigApproval({
     permissions: DIRECTOR,
     kind: K.SALARY_TERMS,
-    branchId: mixedBranch._id,
+    branchId: mixedBranch.id,
     metrics: { amount: 500000, percent: 8 },
   });
   check("Aralash: ikkalasi chegarada -> o'tadi", mixedOk.needsApproval === false);
 
   // ── Yakun ──
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-
-  console.log(
-    `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
-      `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
-  );
-  if (R.fail) {
-    console.log("\nYiqilganlar:");
-    R.notes.forEach((n) => console.log(`  • ${n}`));
-    process.exit(1);
-  }
+  //
+  // ⚠ BU YERDA `process.exit` YO'Q. Ilgari yiqilish holatida u shu
+  // joyda chaqirilardi va `.finally()` dagi TOZALASH umuman ishga
+  // tushmasdi — ya'ni test yiqilgan har safar bazada fixture qolib
+  // ketardi. Xulosa va chiqish kodi endi FAQAT `.finally()` da.
 };
 
-run().catch(async (err) => {
-  console.error("\x1b[31mTEST YIQILDI:\x1b[0m", err);
-  try {
-    await mongoose.disconnect();
-  } catch {
-    /* ulanmagan bo'lsa e'tiborsiz */
-  }
-  process.exit(1);
-});
+run()
+  .catch((err) => {
+    bad("TEST YIQILDI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
+  })
+  .finally(async () => {
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+
+    console.log(
+      `\n\x1b[1mNATIJA:\x1b[0m \x1b[32m${R.pass} o'tdi\x1b[0m, ` +
+        `${R.fail ? `\x1b[31m${R.fail} yiqildi\x1b[0m` : "0 yiqildi"}`,
+    );
+    if (R.fail) R.notes?.forEach?.((n) => console.log(`  • ${n}`));
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
+  });

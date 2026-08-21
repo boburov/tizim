@@ -18,12 +18,23 @@
  * ISHLATISH:  npm run test:import
  */
 import "dotenv/config";
-import mongoose from "mongoose";
+import prisma from "../src/config/prisma.js";
+import { createFixtures } from "./helpers/prismaFixtures.js";
 import ExcelJS from "exceljs";
 
 import { runWithBranchContext } from "../src/helpers/branchContext.helper.js";
 
-const TEST_DB = "mongodb://127.0.0.1:27017/lc_import_test";
+/**
+ * ── PRISMA'GA KO'CHIRISHDA NIMA O'ZGARDI ──
+ *
+ * Alohida Mongo bazasi + `dropDatabase()` o'rniga prefiksli fixture va
+ * kafolatli tozalash (`tests/helpers/prismaFixtures.js`). Xavfsizlik va
+ * biznes DA'VOLARI o'zgarmadi — faqat ma'lumotga murojaat qatlami.
+ *
+ * Bog'lanish maydonlari qayta nomlandi: `teacher` → `teacherId`,
+ * `group` → `groupId`, `student` → `studentId` va h.k.
+ */
+const fx = createFixtures();
 
 const R = { pass: 0, fail: 0, failures: [] };
 const ok = (n, extra = "") => {
@@ -64,17 +75,6 @@ const makeXlsx = async (columns, rows) => {
 };
 
 const run = async () => {
-  await mongoose.connect(TEST_DB);
-  await mongoose.connection.dropDatabase();
-
-  const Branch = (await import("../src/models/branch.model.js")).default;
-  const User = (await import("../src/models/user.model.js")).default;
-  const Group = (await import("../src/models/group.model.js")).default;
-  const StudentPayment = (await import("../src/models/studentPayment.model.js")).default;
-  const PaymentTransaction = (await import("../src/models/paymentTransaction.model.js"))
-    .default;
-  const StudentDeposit = (await import("../src/models/studentDeposit.model.js")).default;
-
   const { getImporter } = await import("../src/modules/imports/registry/index.js");
   const { preview, commit } = await import(
     "../src/modules/imports/services/importEngine.service.js"
@@ -83,50 +83,57 @@ const run = async () => {
     "../src/modules/imports/services/template.service.js"
   );
 
+  // ⚠ FIXTURE NOMLARI SUFFIKSLI. Excel qatorlariga qattiq satr
+  // ("studenta", "GROUP-A") yozilsa importer ularni TOPA OLMAYDI va
+  // hamma qator "error" bo'lardi — test o'z fixture'i tufayli yiqilardi,
+  // importer esa to'g'ri ishlayotgan bo'lardi.
   const importer = getImporter("student-payments");
   const cols = importer.columns;
 
   // ─── Fixture ───
-  const A = await Branch.create({ name: "A-FILIAL", isMain: true });
-  const B = await Branch.create({ name: "B-FILIAL" });
+  const A = await fx.branch("A-FILIAL");
+  const B = await fx.branch("B-FILIAL");
 
   const mkStudent = (name, branchId) =>
-    User.create({
+    fx.user(name.toLowerCase(), {
       firstName: name,
       lastName: "Test",
-      username: name.toLowerCase(),
       passwordHash: "x",
       role: "student",
       homeBranchId: branchId,
       isActive: true,
     });
 
-  const studA = await mkStudent("StudentA", A._id);
-  const studA2 = await mkStudent("StudentA2", A._id);
-  const studB = await mkStudent("StudentB", B._id);
+  const studA = await mkStudent("StudentA", A.id);
+  const studA2 = await mkStudent("StudentA2", A.id);
+  const studB = await mkStudent("StudentB", B.id);
 
-  const gA = await Group.create({ branchId: A._id, name: "GROUP-A", isActive: true });
-  const gB = await Group.create({ branchId: B._id, name: "GROUP-B", isActive: true });
+  const gA = await fx.group("GROUP-A", A.id, { isActive: true });
+  const gB = await fx.group("GROUP-B", B.id, { isActive: true });
 
   const EXPECTED = 1_000_000;
-  const mkObligation = (student, group, branchId) =>
-    StudentPayment.create({
-      branchId,
-      student: student._id,
-      group: group._id,
-      year: YEAR,
-      month: MONTH,
-      baseFee: EXPECTED,
-      expectedAmount: EXPECTED,
-      paidAmount: 0,
-      status: "unpaid",
+  const mkObligation = async (student, group, branchId) => {
+    const row = await prisma.studentPayment.create({
+      data: {
+        branchId,
+        studentId: student.id,
+        groupId: group.id,
+        year: YEAR,
+        month: MONTH,
+        baseFee: EXPECTED,
+        expectedAmount: EXPECTED,
+        paidAmount: 0,
+        status: "unpaid",
+      },
     });
+    return fx.track("studentPayment", row.id), row;
+  };
 
-  await mkObligation(studA, gA, A._id);
-  await mkObligation(studA2, gA, A._id);
-  await mkObligation(studB, gB, B._id);
+  await mkObligation(studA, gA, A.id);
+  await mkObligation(studA2, gA, A.id);
+  await mkObligation(studB, gB, B.id);
 
-  const currentUser = { _id: studA._id, permissions: ["*"] };
+  const currentUser = { _id: studA.id, permissions: ["*"] };
 
   // ─── 1. Shablon ───
   head("1) Shablon generatsiyasi");
@@ -149,11 +156,11 @@ const run = async () => {
 
   // ─── 2. FILIAL KO'LAMI ───
   head("2) Filial ko'lami - boshqa filial o'quvchisi");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     const buffer = await makeXlsx(cols, [
       {
-        studentRef: "studenta",
-        groupName: "GROUP-A",
+        studentRef: studA.username,
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: 200000,
@@ -162,8 +169,8 @@ const run = async () => {
       },
       {
         // B filial o'quvchisi - A direktori uchun "topilmadi" bo'lishi shart.
-        studentRef: "studentb",
-        groupName: "GROUP-B",
+        studentRef: studB.username,
+        groupName: gB.name,
         year: YEAR,
         month: MONTH,
         amount: 500000,
@@ -173,8 +180,8 @@ const run = async () => {
     ]);
 
     const res = await preview({ importer, buffer, fileName: "t.xlsx" });
-    const rowB = res.rows.find((r) => r.raw.studentRef === "studentb");
-    const rowA = res.rows.find((r) => r.raw.studentRef === "studenta");
+    const rowB = res.rows.find((r) => r.raw.studentRef === studB.username);
+    const rowA = res.rows.find((r) => r.raw.studentRef === studA.username);
 
     if (rowB?.status === "error") {
       ok("boshqa filial o'quvchisi rad etildi", rowB.errors[0]?.message?.slice(0, 60));
@@ -188,11 +195,11 @@ const run = async () => {
 
   // ─── 3. QISMAN MUVAFFAQIYAT ───
   head("3) Bitta xato qator qolganlarini to'xtatmaydi");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     const buffer = await makeXlsx(cols, [
       {
-        studentRef: "studenta",
-        groupName: "GROUP-A",
+        studentRef: studA.username,
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: 300000,
@@ -201,7 +208,7 @@ const run = async () => {
       },
       {
         studentRef: "yoq-bunday-odam",
-        groupName: "GROUP-A",
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: 100000,
@@ -209,8 +216,8 @@ const run = async () => {
         paidAt: PAID_AT,
       },
       {
-        studentRef: "studenta2",
-        groupName: "GROUP-A",
+        studentRef: studA2.username,
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: 400000,
@@ -232,9 +239,11 @@ const run = async () => {
     }
 
     // Pul haqiqatan yozilganmi va qoldiq to'g'rimi.
-    const p = await StudentPayment.findOne({ student: studA._id, group: gA._id });
-    p?.paidAmount === 300000
-      ? ok("qoldiq to'g'ri hisoblandi", `to'langan ${money(p.paidAmount)}`)
+    const p = await prisma.studentPayment.findFirst({
+      where: { studentId: studA.id, groupId: gA.id },
+    });
+    Number(p?.paidAmount) === 300000
+      ? ok("qoldiq to'g'ri hisoblandi", `to'langan ${money(Number(p.paidAmount))}`)
       : bad("qoldiq to'g'ri hisoblandi", `paidAmount=${p?.paidAmount}`);
 
     p?.status === "partial"
@@ -248,11 +257,11 @@ const run = async () => {
 
   // ─── 4. IDEMPOTENTLIK ───
   head("4) Bir xil faylni ikki marta yuklash");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     const buffer = await makeXlsx(cols, [
       {
-        studentRef: "studenta",
-        groupName: "GROUP-A",
+        studentRef: studA.username,
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: 100000,
@@ -262,11 +271,11 @@ const run = async () => {
     ]);
 
     const first = await commit({ importer, buffer, fileName: "t.xlsx", currentUser });
-    const afterFirst = await StudentPayment.findOne({ student: studA._id, group: gA._id });
+    const afterFirst = await prisma.studentPayment.findFirst({ where: { studentId: studA.id, groupId: gA.id } });
 
     // Ikkinchi marta - AYNAN o'sha fayl.
     const second = await commit({ importer, buffer, fileName: "t.xlsx", currentUser });
-    const afterSecond = await StudentPayment.findOne({ student: studA._id, group: gA._id });
+    const afterSecond = await prisma.studentPayment.findFirst({ where: { studentId: studA.id, groupId: gA.id } });
 
     first.summary.imported === 1
       ? ok("birinchi yuklash yozdi")
@@ -291,10 +300,10 @@ const run = async () => {
 
   // ─── 5. FAYL ICHIDAGI TAKROR ───
   head("5) Fayl ichida bir xil qator ikki marta");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     const row = {
-      studentRef: "studenta2",
-      groupName: "GROUP-A",
+      studentRef: studA2.username,
+      groupName: gA.name,
       year: YEAR,
       month: MONTH,
       amount: 55000,
@@ -313,15 +322,15 @@ const run = async () => {
 
   // ─── 6. ORTIQCHA TO'LOV DEPOZITGA ───
   head("6) Qarzdan ortgan pul depozitga tushadi");
-  await asBranch(A._id, async () => {
-    const before = await StudentPayment.findOne({ student: studA2._id, group: gA._id });
+  await asBranch(A.id, async () => {
+    const before = await prisma.studentPayment.findFirst({ where: { studentId: studA2.id, groupId: gA.id } });
     const remaining = before.expectedAmount - before.paidAmount;
     const overpay = remaining + 250_000;
 
     const buffer = await makeXlsx(cols, [
       {
-        studentRef: "studenta2",
-        groupName: "GROUP-A",
+        studentRef: studA2.username,
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: overpay,
@@ -331,8 +340,8 @@ const run = async () => {
     ]);
 
     const res = await commit({ importer, buffer, fileName: "t.xlsx", currentUser });
-    const after = await StudentPayment.findOne({ student: studA2._id, group: gA._id });
-    const dep = await StudentDeposit.findOne({ student: studA2._id });
+    const after = await prisma.studentPayment.findFirst({ where: { studentId: studA2.id, groupId: gA.id } });
+    const dep = await prisma.studentDeposit.findFirst({ where: { studentId: studA2.id } });
 
     res.summary.imported === 1
       ? ok("ortiqcha to'lov qabul qilindi", `${money(overpay)}`)
@@ -349,11 +358,11 @@ const run = async () => {
 
   // ─── 7. NOTO'G'RI MA'LUMOT ───
   head("7) Noto'g'ri qiymatlar aniqlanadi");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     const buffer = await makeXlsx(cols, [
       {
-        studentRef: "studenta",
-        groupName: "GROUP-A",
+        studentRef: studA.username,
+        groupName: gA.name,
         year: YEAR,
         month: 13, // noto'g'ri oy
         amount: 100000,
@@ -361,8 +370,8 @@ const run = async () => {
         paidAt: PAID_AT,
       },
       {
-        studentRef: "studenta",
-        groupName: "GROUP-A",
+        studentRef: studA.username,
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: -5000, // manfiy summa
@@ -370,8 +379,8 @@ const run = async () => {
         paidAt: PAID_AT,
       },
       {
-        studentRef: "studenta",
-        groupName: "GROUP-A",
+        studentRef: studA.username,
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: 10000,
@@ -379,8 +388,8 @@ const run = async () => {
         paidAt: PAID_AT,
       },
       {
-        studentRef: "studenta",
-        groupName: "GROUP-A",
+        studentRef: studA.username,
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: 10000,
@@ -406,12 +415,12 @@ const run = async () => {
 
   // ─── 8. F.I.O NOMUVOFIQLIGI ───
   head("8) F.I.O login bilan mos kelmasa");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     const buffer = await makeXlsx(cols, [
       {
-        studentRef: "studenta",
+        studentRef: studA.username,
         studentName: "Boshqa Odam",
-        groupName: "GROUP-A",
+        groupName: gA.name,
         year: YEAR,
         month: MONTH,
         amount: 10000,
@@ -427,10 +436,10 @@ const run = async () => {
 
   // ─── 9. SARLAVHA YO'Q ───
   head("9) Majburiy ustun yo'q fayl");
-  await asBranch(A._id, async () => {
+  await asBranch(A.id, async () => {
     const partial = cols.filter((c) => c.key !== "amount");
     const buffer = await makeXlsx(partial, [
-      { studentRef: "studenta", groupName: "GROUP-A", year: YEAR, month: MONTH, paidAt: PAID_AT },
+      { studentRef: studA.username, groupName: gA.name, year: YEAR, month: MONTH, paidAt: PAID_AT },
     ]);
     try {
       await preview({ importer, buffer, fileName: "t.xlsx" });
@@ -445,26 +454,28 @@ const run = async () => {
   // ─── 10. Yozuvlar filialga to'g'ri bog'landimi ───
   head("10) Yozilgan tranzaksiyalar filiali");
   {
-    const txs = await PaymentTransaction.find({}).lean();
-    const wrong = txs.filter((t) => String(t.branchId) !== String(A._id));
+    // ⚠ FIXTURE o'quvchilari bo'yicha: baza bo'sh emas, filtrsiz
+    // `find({})` bazadagi barcha tranzaksiyani olardi.
+    const txs = await prisma.paymentTransaction.findMany({
+      where: { studentId: { in: [studA.id, studA2.id, studB.id] } },
+    });
+    const wrong = txs.filter((t) => String(t.branchId) !== String(A.id));
     wrong.length === 0
       ? ok("barcha tranzaksiya A filialga yozildi", `${txs.length} ta`)
       : bad("barcha tranzaksiya A filialga yozildi", `${wrong.length} tasi boshqa filialda`);
 
-    const bTx = txs.filter((t) => String(t.student) === String(studB._id));
+    const bTx = txs.filter((t) => String(t.student) === String(studB.id));
     bTx.length === 0
       ? ok("B filial o'quvchisiga hech narsa yozilmadi")
       : bad("B filial o'quvchisiga hech narsa yozilmadi", `${bTx.length} ta yozuv`);
   }
 
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
 };
 
 run()
   .catch((err) => {
-    console.error("\n\x1b[31mTEST YIQILDI:\x1b[0m", err);
-    process.exitCode = 1;
+    bad("TEST YIQILDI", err?.message || String(err));
+    if (process.env.DEBUG) console.error(err);
   })
   .finally(async () => {
     console.log(
@@ -475,5 +486,36 @@ run()
       R.failures.forEach((f) => console.log(`  • ${f}`));
       process.exitCode = 1;
     }
-    if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+    // Import servisi yaratgan tranzaksiya/depozit/jurnal qatorlari.
+    const uids = [...(fx.registry.get("user") || [])];
+    const bids = [...(fx.registry.get("branch") || [])];
+    for (const [model, where] of [
+      ["paymentTransaction", { studentId: { in: uids } }],
+      ["depositTransaction", { studentId: { in: uids } }],
+      ["studentDeposit", { studentId: { in: uids } }],
+      ["importJob", { branchId: { in: bids } }],
+      ["journalEntry", { branchId: { in: bids } }],
+    ]) {
+      const rows = await prisma[model].findMany({ where, select: { id: true } }).catch(() => []);
+      for (const r of rows) fx.track(model, r.id);
+    }
+    const entryIds = [...(fx.registry.get("journalEntry") || [])];
+    if (entryIds.length) {
+      const lines = await prisma.journalLine
+        .findMany({ where: { entryId: { in: entryIds } }, select: { id: true } })
+        .catch(() => []);
+      for (const l of lines) fx.track("journalLine", l.id);
+    }
+    const accounts = await prisma.account
+      .findMany({ where: { branchId: { in: bids } }, select: { id: true } })
+      .catch(() => []);
+    for (const a of accounts) fx.track("account", a.id);
+
+    const problems = await fx.cleanup();
+    const leftovers = await fx.assertClean();
+    if (problems.length) bad("fixture tozalash", problems.join(" · "));
+    else if (leftovers.length) bad("fixture tozalash to'liq emas", leftovers.join(" · "));
+    else ok(`fixture tozalandi (${fx.suffix})`);
+    await prisma.$disconnect().catch(() => {});
+    process.exit(R.fail ? 1 : 0);
   });

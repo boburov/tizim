@@ -1,7 +1,7 @@
 import {
   DEFAULT_PAYMENT_WEIGHTS,
   DEFAULT_THRESHOLDS,
-} from "../../../models/aiConfig.model.js";
+} from "../../../constants/aiDefaults.js";
 import { computeConfidence } from "./churn.scoring.js";
 import { softNorm } from "./common.scoring.js";
 

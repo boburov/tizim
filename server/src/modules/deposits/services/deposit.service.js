@@ -590,20 +590,39 @@ export const removeDepositTxn = async (id, currentUser) => {
     throw new ApiError(400, "Qaytarim tranzaksiyasini o'chirib bo'lmaydi");
   }
 
+  // ── ⚠ ATOMAR + JURNAL STORNOSI (B21 bilan o'zgardi) ──
+  // Balans o'zgarishi, soft-delete va JURNAL STORNOSI BITTA
+  // tranzaksiyada. Ilgari jurnal TEGILMAY qolardi — bekor qilingan
+  // to'ldirish kassa qoldig'ida ABADIY qolardi.
+  //
+  // ⚠ `refund` turi BEKOR QILINMAYDI (yuqorida 400): qaytarim — "pul
+  // HAQIQATAN qaytdi", storno esa "operatsiya BO'LMAGAN".
   const deposit = await getOrCreate(txn.studentId);
-  if (txn.type === "topup") {
-    // Pul kelmagan deb hisoblaymiz - balansdan ayiramiz (agar qoplanmagan bo'lsa).
-    const balUpd = await applyBalanceDelta(deposit.id, -txn.amount);
-    if (!balUpd) {
-      throw new ApiError(400, "Bu pul allaqachon qoplangan - tranzaksiyani o'chirib bo'lmaydi");
+  await runFinanceTxn(async (tx) => {
+    // ⚠ SHARTLI-ATOMIK (B38): `findFirst` va yozuv ORASIDAGI poygada
+    // balans BIR NECHA MARTA o'zgarardi. Bekor qilishni EN BOSHIDA
+    // "band qilamiz"; yutmagan so'rov 404 oladi va balansga TEGMAYDI.
+    const claimed = await tx.depositTransaction.updateMany({
+      where: { id: txn.id, isDeleted: false },
+      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+    });
+    if (claimed.count === 0) throw new ApiError(404, "Tranzaksiya topilmadi");
+
+    if (txn.type === "topup") {
+      // Pul kelmagan deb hisoblaymiz - balansdan ayiramiz (agar qoplanmagan bo'lsa).
+      const balUpd = await applyBalanceDelta(deposit.id, -txn.amount, { tx });
+      if (!balUpd) {
+        throw new ApiError(400, "Bu pul allaqachon qoplangan - tranzaksiyani o'chirib bo'lmaydi");
+      }
+    } else {
+      // withdraw bekor - pul qaytib keldi.
+      await applyBalanceDelta(deposit.id, txn.amount, { tx });
     }
-  } else {
-    // withdraw bekor - pul qaytib keldi.
-    await applyBalanceDelta(deposit.id, txn.amount);
-  }
-  await prisma.depositTransaction.update({
-    where: { id: txn.id },
-    data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+    await financialTx.reverseByRef(
+      { refModel: "DepositTransaction", refId: txn.id },
+      currentUser,
+      { tx, memo: "Storno: depozit amali bekor qilindi" },
+    );
   });
   return { id: txn.id, _id: txn.id };
 };

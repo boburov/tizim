@@ -1,20 +1,8 @@
 import "dotenv/config";
-import mongoose from "mongoose";
+import { randomBytes } from "node:crypto";
 import { faker } from "@faker-js/faker";
-import { connectDB, disconnectDB } from "../config/db.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
-
-import Branch from "../models/branch.model.js";
-import User from "../models/user.model.js";
-import Role from "../models/role.model.js";
-import Group from "../models/group.model.js";
-import GroupMembership from "../models/groupMembership.model.js";
-import GroupFee from "../models/groupFee.model.js";
-import StudentPayment from "../models/studentPayment.model.js";
-import PaymentTransaction from "../models/paymentTransaction.model.js";
-import TeacherSalary from "../models/teacherSalary.model.js";
-import SalaryTransaction from "../models/salaryTransaction.model.js";
-import TeacherGroupPeriod from "../models/teacherGroupPeriod.model.js";
 
 /**
  * KO'P FILIALLI DEMO MA'LUMOT.
@@ -65,7 +53,17 @@ const monthList = () => {
   return out;
 };
 
-const oid = () => new mongoose.Types.ObjectId();
+// `gen_object_id()` (prisma/migrations/..._object_id_function) NING JS
+// EKVIVALENTI: 8 hex — unix sekund, 16 hex — tasodifiy. Jami 24 belgi,
+// ya'ni `varchar(24)` ustuniga va `/^[0-9a-fA-F]{24}$/` validatoriga mos.
+//
+// NEGA KALIT OLDINDAN YARATILADI: bu seed bog'lanishlarni yozishdan
+// OLDIN quradi (to'lov → tranzaksiya, maosh → maosh to'lovi), shuning
+// uchun `createMany` bilan ommaviy yozish mumkin bo'ladi. Bazadan
+// qaytgan kalitni kutish har bir yozuvni alohida qilishga majburlardi.
+const oid = () =>
+  Math.floor(Date.now() / 1000).toString(16).padStart(8, "0") +
+  randomBytes(8).toString("hex");
 const pick = (arr) => arr[faker.number.int({ min: 0, max: arr.length - 1 })];
 
 const seed = async () => {
@@ -74,20 +72,26 @@ const seed = async () => {
 
   // ─── Tozalash (owner, rollar, ruxsatlar SAQLANADI) ───
   logger.info("Eski demo ma'lumot tozalanmoqda...");
-  await Promise.all([
-    Group.deleteMany({}),
-    GroupMembership.deleteMany({}),
-    GroupFee.deleteMany({}),
-    StudentPayment.deleteMany({}),
-    PaymentTransaction.deleteMany({}),
-    TeacherSalary.deleteMany({}),
-    SalaryTransaction.deleteMany({}),
-    TeacherGroupPeriod.deleteMany({}),
-    User.deleteMany({ role: { $in: ["student", "teacher", "director"] } }),
-    Branch.deleteMany({ isMain: { $ne: true } }),
-  ]);
+  // ⚠ TARTIB MAJBURIY (PostgreSQL FK'lari RESTRICT): bola ota'sidan OLDIN.
+  //   payment_transactions → student_payments
+  //   salary_transactions  → teacher_salaries
+  // Mongo'da FK yo'q edi va bu `Promise.all` bilan parallel ketardi.
+  const CLEANUP_ORDER = [
+    "paymentTransaction",
+    "studentPayment",
+    "salaryTransaction",
+    "teacherSalary",
+    "groupFee",
+    "groupMembership",
+    "teacherGroupPeriod",
+    "group",
+  ];
+  for (const model of CLEANUP_ORDER) await prisma[model].deleteMany({});
+  // Foydalanuvchi va filial ENG OXIRIDA - yuqoridagilar ularga ishora qiladi.
+  await prisma.user.deleteMany({ where: { role: { in: ["student", "teacher", "director"] } } });
+  await prisma.branch.deleteMany({ where: { isMain: false } });
 
-  const directorRole = await Role.findOne({ value: "director" });
+  const directorRole = await prisma.role.findFirst({ where: { value: "director" } });
   if (!directorRole) {
     throw new Error("'director' roli topilmadi - avval: npm run seed:permissions");
   }
@@ -96,18 +100,21 @@ const seed = async () => {
 
   // ─── 1) FILIALLAR ───
   // Asosiy filial bo'lsa - birinchisi sifatida ishlatamiz (o'chirib bo'lmaydi).
-  const mainBranch = await Branch.findOne({ isMain: true });
+  const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
   const branchDocs = [];
   for (const [i, b] of BRANCHES.entries()) {
     if (i === 0 && mainBranch) {
-      mainBranch.name = b.name;
-      mainBranch.code = b.code;
-      mainBranch.phone = b.phone;
-      await mainBranch.save();
-      branchDocs.push(mainBranch);
+      branchDocs.push(
+        await prisma.branch.update({
+          where: { id: mainBranch.id },
+          data: { name: b.name, code: b.code, phone: b.phone },
+        }),
+      );
     } else {
       branchDocs.push(
-        await Branch.create({ name: b.name, code: b.code, phone: b.phone, isActive: true }),
+        await prisma.branch.create({
+          data: { name: b.name, code: b.code, phone: b.phone, isActive: true },
+        }),
       );
     }
   }
@@ -115,18 +122,17 @@ const seed = async () => {
 
   // ─── 2) DIREKTORLAR (har filialga bittadan) ───
   const directors = branchDocs.map((br, i) => ({
-    _id: oid(),
+    id: oid(),
     firstName: faker.person.firstName(),
     lastName: faker.person.lastName(),
     username: `dir_${BRANCHES[i].code.toLowerCase()}`,
     passwordHash: "parol123",
     role: "director",
-    homeBranchId: br._id,
-    branchAssignments: [],
+    homeBranchId: br.id,
     isActive: true,
     hiredAt: new Date(),
   }));
-  await User.insertMany(directors);
+  await prisma.user.createMany({ data: directors });
 
   // ─── 3) O'QITUVCHILAR ───
   // Har filialga 20 ta + IKKI FILIALDA ishlaydigan 3 ta (sinov uchun muhim).
@@ -136,29 +142,34 @@ const seed = async () => {
     const list = [];
     for (let i = 0; i < 20; i += 1) {
       const t = {
-        _id: oid(),
+        id: oid(),
         firstName: faker.person.firstName(),
         lastName: faker.person.lastName(),
         username: `teach_${BRANCHES[bi].code.toLowerCase()}_${i}`,
         passwordHash: "parol123",
         role: "teacher",
-        homeBranchId: br._id,
-        branchAssignments: [],
+        homeBranchId: br.id,
         isActive: true,
         hiredAt: months[0].start,
       };
       teachers.push(t);
       list.push(t);
     }
-    teachersByBranch.set(String(br._id), list);
+    teachersByBranch.set(String(br.id), list);
   }
   // IKKI FILIALLI o'qituvchilar: 0-filialning ilk 3 tasi 1-filialda ham ishlaydi.
-  const crossTeachers = teachersByBranch.get(String(branchDocs[0]._id)).slice(0, 3);
+  //
+  // `branchAssignments` ENDI ICHKI MASSIV EMAS - u alohida jadval
+  // (`user_branch_assignments`). Shuning uchun u foydalanuvchi bilan
+  // BIRGA emas, undan KEYIN yoziladi (FK: avval `users` qatori bo'lishi shart).
+  const teacherAssignments = [];
+  const crossTeachers = teachersByBranch.get(String(branchDocs[0].id)).slice(0, 3);
   for (const t of crossTeachers) {
-    t.branchAssignments = [{ branchId: branchDocs[1]._id, role: "teacher" }];
-    teachersByBranch.get(String(branchDocs[1]._id)).push(t);
+    teacherAssignments.push({ userId: t.id, branchId: branchDocs[1].id, role: "teacher" });
+    teachersByBranch.get(String(branchDocs[1].id)).push(t);
   }
-  await User.insertMany(teachers);
+  await prisma.user.createMany({ data: teachers });
+  await prisma.userBranchAssignment.createMany({ data: teacherAssignments });
   logger.info(`O'qituvchilar: ${teachers.length} (${crossTeachers.length} tasi 2 filialda)`);
 
   // ─── 4) GURUHLAR ───
@@ -166,37 +177,50 @@ const seed = async () => {
   const groupsByBranch = new Map();
   for (const [bi, br] of branchDocs.entries()) {
     const list = [];
-    const brTeachers = teachersByBranch.get(String(br._id));
+    const brTeachers = teachersByBranch.get(String(br.id));
     for (let i = 0; i < GROUPS_PER_BRANCH; i += 1) {
       const teacher = brTeachers[i % brTeachers.length];
       const g = {
-        _id: oid(),
-        branchId: br._id,
+        id: oid(),
+        branchId: br.id,
         name: `${BRANCHES[bi].code}-${pick(SUBJECTS)}-${i + 1}`,
         schedule: [
           { day: DAYS[i % 6], startTime: "09:00", endTime: "10:30", effectiveFrom: null },
           { day: DAYS[(i + 2) % 6], startTime: "09:00", endTime: "10:30", effectiveFrom: null },
         ],
-        teachers: [teacher._id],
+        teacherId: teacher.id,
         startDate: months[0].start,
         isActive: true,
       };
       groups.push(g);
-      list.push({ ...g, teacherId: teacher._id });
+      list.push(g);
     }
-    groupsByBranch.set(String(br._id), list);
+    groupsByBranch.set(String(br.id), list);
   }
-  await Group.insertMany(groups);
+  // Guruh `createMany` bilan yozilmaydi: `schedule` alohida jadval,
+  // `teachers` esa ko'p-ko'pga bog'lanish - ikkalasi ham ichma-ich
+  // yozishni talab qiladi.
+  for (const g of groups) {
+    const { schedule, teacherId, ...rest } = g;
+    await prisma.group.create({
+      data: {
+        ...rest,
+        schedule: { create: schedule },
+        teachers: { connect: [{ id: teacherId }] },
+      },
+      select: { id: true },
+    });
+  }
   logger.info(`Guruhlar: ${groups.length}`);
 
   // ─── 5) GURUH NARXLARI (har guruh × har oy) ───
   const fees = [];
   for (const g of groups) {
     for (const m of months) {
-      fees.push({ group: g._id, year: m.year, month: m.month, amount: FEE, source: "manual" });
+      fees.push({ groupId: g.id, year: m.year, month: m.month, amount: FEE, source: "manual" });
     }
   }
-  await GroupFee.insertMany(fees);
+  await prisma.groupFee.createMany({ data: fees });
   logger.info(`Guruh narxlari: ${fees.length}`);
 
   // ─── 6) O'QUVCHILAR + A'ZOLIK ───
@@ -205,18 +229,17 @@ const seed = async () => {
   const studentsByBranch = new Map();
 
   for (const [bi, br] of branchDocs.entries()) {
-    const brGroups = groupsByBranch.get(String(br._id));
+    const brGroups = groupsByBranch.get(String(br.id));
     const list = [];
     for (let i = 0; i < STUDENTS_PER_BRANCH; i += 1) {
       const s = {
-        _id: oid(),
+        id: oid(),
         firstName: faker.person.firstName(),
         lastName: faker.person.lastName(),
         username: `stud_${BRANCHES[bi].code.toLowerCase()}_${i}`,
         passwordHash: "parol123",
         role: "student",
-        homeBranchId: br._id,
-        branchAssignments: [],
+        homeBranchId: br.id,
         isActive: true,
         enrolledAt: months[0].start,
         gender: pick(["male", "female"]),
@@ -226,13 +249,13 @@ const seed = async () => {
 
       const g = brGroups[i % brGroups.length];
       memberships.push({
-        group: g._id,
-        student: s._id,
+        groupId: g.id,
+        studentId: s.id,
         joinedAt: months[0].start,
         leftAt: null,
       });
     }
-    studentsByBranch.set(String(br._id), list);
+    studentsByBranch.set(String(br.id), list);
   }
 
   // ─── KO'CHGAN O'QUVCHILAR (eng muhim sinov holati) ───
@@ -240,11 +263,12 @@ const seed = async () => {
   // Ular IKKI filialda ham to'lov tarixiga ega bo'ladi - aynan shu
   // holat "aralashib ketmaydimi" degan savolga javob beradi.
   const transferMonth = months[3];
-  const movers = studentsByBranch.get(String(branchDocs[0]._id)).slice(-5);
-  const targetGroups = groupsByBranch.get(String(branchDocs[1]._id));
+  const moverAssignments = [];
+  const movers = studentsByBranch.get(String(branchDocs[0].id)).slice(-5);
+  const targetGroups = groupsByBranch.get(String(branchDocs[1].id));
   for (const [i, s] of movers.entries()) {
     // Eski a'zolikni yopamiz
-    const old = memberships.find((m) => String(m.student) === String(s._id));
+    const old = memberships.find((m) => String(m.studentId) === String(s.id));
     if (old) {
       old.leftAt = transferMonth.start;
       old.leftReason = "transferred";
@@ -252,19 +276,21 @@ const seed = async () => {
     // Yangi filialda yangi a'zolik
     const ng = targetGroups[i % targetGroups.length];
     memberships.push({
-      group: ng._id,
-      student: s._id,
+      groupId: ng.id,
+      studentId: s.id,
       joinedAt: transferMonth.start,
       leftAt: null,
     });
     // homeBranchId yangi filialga o'tadi, lekin ESKI filial ham qoladi
     // (u yerda to'lov tarixi bor).
-    s.homeBranchId = branchDocs[1]._id;
-    s.branchAssignments = [{ branchId: branchDocs[0]._id, role: "student" }];
+    s.homeBranchId = branchDocs[1].id;
+    // Eski filial biriktirmasi - alohida jadvalga, foydalanuvchidan KEYIN.
+    moverAssignments.push({ userId: s.id, branchId: branchDocs[0].id, role: "student" });
   }
 
-  await User.insertMany(students);
-  await GroupMembership.insertMany(memberships);
+  await prisma.user.createMany({ data: students });
+  await prisma.userBranchAssignment.createMany({ data: moverAssignments });
+  await prisma.groupMembership.createMany({ data: memberships });
   logger.info(`O'quvchilar: ${students.length} (${movers.length} tasi ko'chgan)`);
 
   // ─── 7) OYLIK TO'LOVLAR + TRANZAKSIYALAR ───
@@ -272,7 +298,7 @@ const seed = async () => {
   //   60% to'liq to'lagan, 20% qisman, 15% qarzdor, 5% ortiqcha
   const payments = [];
   const transactions = [];
-  const groupById = new Map(groups.map((g) => [String(g._id), g]));
+  const groupById = new Map(groups.map((g) => [String(g.id), g]));
 
   for (const m of months) {
     for (const mem of memberships) {
@@ -281,7 +307,7 @@ const seed = async () => {
       const left = mem.leftAt && mem.leftAt.getTime() <= m.start.getTime();
       if (!joined || left) continue;
 
-      const g = groupById.get(String(mem.group));
+      const g = groupById.get(String(mem.groupId));
       if (!g) continue;
 
       const paymentId = oid();
@@ -293,10 +319,10 @@ const seed = async () => {
       else paid = FEE; // ortiqchani pastda alohida qo'shamiz
 
       payments.push({
-        _id: paymentId,
+        id: paymentId,
         branchId: g.branchId, // GURUHDAN meros - filial haqiqati shu
-        student: mem.student,
-        group: g._id,
+        studentId: mem.studentId,
+        groupId: g.id,
         year: m.year,
         month: m.month,
         baseFee: FEE,
@@ -311,9 +337,9 @@ const seed = async () => {
       if (paid > 0) {
         transactions.push({
           branchId: g.branchId, // plandan meros
-          payment: paymentId,
-          student: mem.student,
-          group: g._id,
+          paymentId,
+          studentId: mem.studentId,
+          groupId: g.id,
           year: m.year,
           month: m.month,
           amount: paid,
@@ -325,8 +351,8 @@ const seed = async () => {
       }
     }
   }
-  await StudentPayment.insertMany(payments);
-  await PaymentTransaction.insertMany(transactions);
+  await prisma.studentPayment.createMany({ data: payments });
+  await prisma.paymentTransaction.createMany({ data: transactions });
   logger.info(`O'quvchi to'lovlari: ${payments.length}, tranzaksiyalar: ${transactions.length}`);
 
   // ─── 8) O'QITUVCHI MAOSHLARI ───
@@ -338,14 +364,14 @@ const seed = async () => {
   for (const m of months) {
     for (const g of groups) {
       const salaryId = oid();
-      const teacherId = g.teachers[0];
+      const teacherId = g.teacherId;
       const paid = faker.number.int({ min: 1, max: 100 }) <= 70 ? FIXED_SALARY : 0;
 
       salaries.push({
-        _id: salaryId,
+        id: salaryId,
         branchId: g.branchId,
-        teacher: teacherId,
-        group: g._id,
+        teacherId,
+        groupId: g.id,
         year: m.year,
         month: m.month,
         salaryType: "fixed",
@@ -365,9 +391,9 @@ const seed = async () => {
       if (paid > 0) {
         salaryTxns.push({
           branchId: g.branchId,
-          salary: salaryId,
-          teacher: teacherId,
-          group: g._id,
+          salaryId,
+          teacherId,
+          groupId: g.id,
           year: m.year,
           month: m.month,
           amount: paid,
@@ -377,8 +403,8 @@ const seed = async () => {
       }
     }
   }
-  await TeacherSalary.insertMany(salaries);
-  await SalaryTransaction.insertMany(salaryTxns);
+  await prisma.teacherSalary.createMany({ data: salaries });
+  await prisma.salaryTransaction.createMany({ data: salaryTxns });
   logger.info(`Maoshlar: ${salaries.length}, maosh to'lovlari: ${salaryTxns.length}`);
 
   // ─── XULOSA ───

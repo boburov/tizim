@@ -2,10 +2,14 @@
 
 Node.js + Express + **PostgreSQL (Prisma)** + pg-boss + JWT (access + refresh).
 
-> **Migratsiya davom etmoqda: MongoDB → PostgreSQL.**
-> Poydevor (schema, migratsiyalar, klient, rejalashtiruvchi) tayyor va
-> tekshirilgan; modullar ketma-ket ko'chirilmoqda. Joriy holat, qolgan
-> ish ro'yxati va ko'chirish qoidalari: [`MIGRATION.md`](./MIGRATION.md).
+> **MongoDB → PostgreSQL migratsiyasi TUGADI.**
+> `src/` da birorta Mongoose chaqiruvi qolmadi: `src/models/`,
+> `config/legacyMongoose.js` va `mongoose` bog'lamasi o'chirildi,
+> `501 MODULE_NOT_MIGRATED` shartnomasi ham yo'q. Tarix, qabul qilingan
+> qarorlar va ko'chirishda topilgan xatolar: [`MIGRATION.md`](./MIGRATION.md).
+>
+> **Keyingi bosqich: NestJS.** Audit va reja:
+> [`NESTJS-MIGRATION-AUDIT.md`](./NESTJS-MIGRATION-AUDIT.md).
 
 ## Folder structure
 
@@ -36,9 +40,6 @@ server/src/
 │  ├─ cookie.helper.js
 │  ├─ password.helper.js
 │  └─ permission.helper.js
-├─ models/                        # ESKIRGAN - Mongoose modellari.
-│  └─ ...                         # Modul ko'chirilgach fayli o'chiriladi.
-│                                 # Yagona haqiqat manbai: prisma/schema.prisma
 ├─ modules/                       # feature-based segmentation
 │  └─ <name>/
 │     ├─ handlers/                # one file per endpoint
@@ -57,7 +58,7 @@ server/src/
 └─ routes/index.js                # mounts all modules under /api
 
 prisma/
-├─ schema.prisma                  # 78 model - BAZANING YAGONA MANBAI
+├─ schema.prisma                  # 84 model - BAZANING YAGONA MANBAI
 └─ migrations/
    ├─ ..._object_id_function/     # gen_object_id() - 24-hex kalitlar
    ├─ ..._init/                   # jadvallar, FK, enumlar
@@ -212,6 +213,7 @@ npm run prisma:migrate   # yangi migratsiya (development)
 npm run prisma:deploy    # tayyor migratsiyalarni qo'llash (production)
 npm run prisma:studio    # bazani brauzerda ko'rish
 npm run db:reset         # schema'ni qayta qurish + owner seed
+                         # (prisma migrate reset - eski `db:clean` o'chirildi)
 
 # ── Testlar ──
 npm run test:auth-prisma  # ko'chirilgan auth oqimi (haqiqiy Postgres ustida)

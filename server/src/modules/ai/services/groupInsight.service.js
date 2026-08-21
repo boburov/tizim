@@ -8,7 +8,7 @@ import {
   norm,
   readMap,
 } from "../scoring/common.scoring.js";
-import { DEFAULT_THRESHOLDS } from "../../../models/aiConfig.model.js";
+import { DEFAULT_THRESHOLDS } from "../../../constants/aiDefaults.js";
 import { narrate } from "./narration.service.js";
 import {
   buildInsight,
@@ -65,7 +65,7 @@ const detectUnderfilled = ({ group, size, median, sampleSize, thresholds }) => {
 
   return {
     kind: "group_underfilled",
-    subjectId: group._id,
+    subjectId: group.id ?? group._id,
     subjectLabel: group.name,
     title: `${group.name} — ${size.active} o'quvchi (median ${median})`,
     severity: severityFor(score, thresholds) === "high" ? "medium" : "low",
@@ -82,7 +82,7 @@ const detectUnderfilled = ({ group, size, median, sampleSize, thresholds }) => {
         model: "GroupMembership",
         ids: [],
         total: size.active,
-        href: `/owner/groups/${group._id}/o-quvchilar`,
+        href: `/owner/groups/${group.id ?? group._id}/o-quvchilar`,
       },
     ],
     recommendedActions: [
@@ -153,7 +153,7 @@ const detectComplaints = ({ group, complaints, thresholds }) => {
 
   return {
     kind: "group_complaints",
-    subjectId: group._id,
+    subjectId: group.id ?? group._id,
     subjectLabel: group.name,
     title: `${group.name} — shikoyatlar ${complaints.prior} dan ${complaints.recent} ga oshdi`,
     severity: severityFor(score, thresholds),
@@ -326,7 +326,7 @@ export const recomputeGroupInsights = async (branchId, now = new Date()) => {
   const stillOpen = { group_underfilled: new Set(), group_complaints: new Set() };
 
   for (const group of signals.groups) {
-    const gid = String(group._id);
+    const gid = String(group.id ?? group._id);
     const size = signals.size.byGroup.get(gid) || {
       active: 0,
       joinedRecently: 0,

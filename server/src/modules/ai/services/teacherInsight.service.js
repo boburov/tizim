@@ -8,7 +8,7 @@ import {
   norm,
   readMap,
 } from "../scoring/common.scoring.js";
-import { DEFAULT_THRESHOLDS } from "../../../models/aiConfig.model.js";
+import { DEFAULT_THRESHOLDS } from "../../../constants/aiDefaults.js";
 import { narrate } from "./narration.service.js";
 import {
   buildInsight,
@@ -116,7 +116,7 @@ const detectAttendanceIssue = ({ teacher, signals, monthlyValue, thresholds }) =
 
   return {
     kind: "teacher_attendance_issue",
-    subjectId: teacher._id,
+    subjectId: teacher.id ?? teacher._id,
     subjectLabel: name,
     title: `${name} — oxirgi 4 haftada ${totalMissed} marta kelmagan`,
     severity,
@@ -124,7 +124,7 @@ const detectAttendanceIssue = ({ teacher, signals, monthlyValue, thresholds }) =
     confidence,
     factors,
     expectedImpact,
-    sourceRefs: buildAbsenceRefs(teacher._id, absence),
+    sourceRefs: buildAbsenceRefs(teacher.id ?? teacher._id, absence),
     recommendedActions: [
       {
         key: "talk_to_teacher",
@@ -208,7 +208,7 @@ const detectLowLoad = ({ teacher, signals, thresholds }) => {
   const name = `${teacher.firstName} ${teacher.lastName || ""}`.trim();
   return {
     kind: "teacher_low_load",
-    subjectId: teacher._id,
+    subjectId: teacher.id ?? teacher._id,
     subjectLabel: name,
     title: `${name} — yuklamasi filial o'rtachasidan ${Math.round(gap * 100)}% past`,
     severity: severityFor(score, thresholds) === "high" ? "medium" : "low",
@@ -225,7 +225,7 @@ const detectLowLoad = ({ teacher, signals, thresholds }) => {
         model: "Group",
         ids: load.perGroup.map((p) => p.groupId).slice(0, 20),
         total: load.groups,
-        href: `/owner/users/${teacher._id}`,
+        href: `/owner/users/${teacher.id ?? teacher._id}`,
       },
     ],
     recommendedActions: [
@@ -309,7 +309,7 @@ const detectTopPerformer = ({ teacher, signals, thresholds }) => {
   const name = `${teacher.firstName} ${teacher.lastName || ""}`.trim();
   return {
     kind: "teacher_top_performer",
-    subjectId: teacher._id,
+    subjectId: teacher.id ?? teacher._id,
     subjectLabel: name,
     title: `${name} — o'quvchilari eng tez o'sayotgan o'qituvchi`,
     severity: score >= thresholds.highSeverityScore ? "medium" : "low",
@@ -326,7 +326,7 @@ const detectTopPerformer = ({ teacher, signals, thresholds }) => {
         model: "Group",
         ids: load.perGroup.map((p) => p.groupId).slice(0, 20),
         total: load.groups,
-        href: `/owner/users/${teacher._id}`,
+        href: `/owner/users/${teacher.id ?? teacher._id}`,
       },
     ],
     recommendedActions: [
@@ -374,7 +374,7 @@ const loadMonthlyByTeacher = async (teachers, now) => {
   for (const t of teachers) {
     let total = 0;
     for (const gid of t.groupIds) total += byGroup.get(String(gid)) || 0;
-    out.set(String(t._id), total);
+    out.set(String(t.id ?? t._id), total);
   }
   return out;
 };
@@ -407,7 +407,7 @@ export const recomputeTeacherInsights = async (branchId, now = new Date()) => {
   ];
 
   for (const teacher of teachers) {
-    const tid = String(teacher._id);
+    const tid = String(teacher.id ?? teacher._id);
     const sig = signals.get(tid);
     if (!sig) continue;
     const monthlyValue = monthlyByTeacher.get(tid) || 0;

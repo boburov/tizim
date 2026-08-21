@@ -92,6 +92,13 @@ const writeSalaryTransaction = async ({
   // qaytarishning o'zi yiqilsa maosh "to'langan" bo'lib qolardi.
   // Endi tranzaksiya buni kafolatlaydi.
   //
+  // ⚠ B20: bu da'vo UZOQ VAQT NOTO'G'RI EDI. `applyPaidDelta` `tx` ni
+  // QABUL QILARDI, lekin uni TASHLAB YUBORARDI va xom `UPDATE` global
+  // klientda, tranzaksiyadan TASHQARIDA bajarilardi. O'LCHANDI:
+  // tranzaksiya bekor qilinganda `paidAmount` 0 → 50000 bo'lib QOLDI.
+  // ENDI `tx` hurmat qilinadi va atomiklik HAQIQATAN bajariladi
+  // (`server_nest/test/teacher-salary-atomicity.test.mjs` o'lchaydi).
+  //
   // Jurnal yozuvi ENDI "Maosh" kategoriyasiga va o'qituvchiga
   // bog'lanadi (Faza 7) — ilgari u nomsiz `expense` edi va chiqim
   // kategoriyalari hisobotida markazning eng katta xarajati
@@ -238,6 +245,31 @@ export const executeApproved = async (approval) => {
 };
 
 // To'lovni bekor qiladi (soft-delete), balansni atomik kamaytiradi.
+/**
+ * TO'LOVNI BEKOR QILADI.
+ *
+ * ── ⚠ ATOMAR (B21 bilan o'zgardi) ──
+ * Soft-delete, `paidAmount` kamayishi va JURNAL STORNOSI BITTA
+ * tranzaksiyada. Oradagi uzilish "pul qaytdi, lekin jurnal eski"
+ * holatini qoldirardi.
+ *
+ * ── ⚠ JURNAL STORNO QILINADI ──
+ * Ilgari jurnal TEGILMAY qolardi va bekor qilingan to'lov P&L da
+ * ABADIY chiqim bo'lib turardi (kassa qoldig'i esa o'sha summa qadar
+ * kam ko'rsatardi). Endi `reverseByRef` teskari yozuv qo'shadi — asl
+ * yozuv O'ZGARMAS qoladi (`JOURNAL_IMMUTABLE`), audit izi to'liq. *
+ * ── ⚠ IKKI MARTA BEKOR QILISH POYGASI (B38) ──
+ * Yuqoridagi `findFirst` va quyidagi yozuv ORASIDA boshqa so'rov ham
+ * o'sha qatorni "bekor qilinmagan" deb o'qishi mumkin. O'LCHANGAN:
+ * bitta to'lovga 10 ta parallel `DELETE` yuborilganda `paidAmount`
+ * −27 000 000 ga tushdi — ya'ni `applyPaidDelta` O'N MARTA ishladi.
+ *
+ * Himoya — SHARTLI-ATOMIK `updateMany` (`isDeleted: false` shartini
+ * YOZUV bilan bir amalda tekshiradi). Faqat SHU shart bajarilgan
+ * so'rov davom etadi; qolganlari 404 oladi. Jurnal stornosi
+ * `postingKey` bilan allaqachon idempotent edi — buzilgan joyi
+ * BALANS edi.
+ */
 export const remove = async (id, currentUser) => {
   // FILIAL: boshqa filial to'lovini bekor qilib bo'lmaydi (SalaryTransaction'da
   // branchId bor, shuning uchun to'g'ridan-to'g'ri filtr).
@@ -245,10 +277,22 @@ export const remove = async (id, currentUser) => {
     where: { id: String(id), ...branchFilter(), isDeleted: false },
   });
   if (!trx) throw new ApiError(404, "Tranzaksiya topilmadi");
-  await prisma.salaryTransaction.update({
-    where: { id: trx.id },
-    data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+
+  await runFinanceTxn(async (tx) => {
+    const claimed = await tx.salaryTransaction.updateMany({
+      where: { id: trx.id, isDeleted: false },
+      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+    });
+    // Boshqa so'rov allaqachon bekor qilgan — BALANSGA TEGMAYMIZ.
+    if (claimed.count === 0) throw new ApiError(404, "Tranzaksiya topilmadi");
+
+    await teacherSalaryService.applyPaidDelta(trx.salaryId, -trx.amount, { tx });
+    await financialTx.reverseByRef(
+      { refModel: "SalaryTransaction", refId: trx.id },
+      currentUser,
+      { tx, memo: "Storno: o'qituvchi maoshi bekor qilindi" },
+    );
   });
-  await teacherSalaryService.applyPaidDelta(trx.salaryId, -trx.amount);
+
   return { id: trx.id, _id: trx.id };
 };

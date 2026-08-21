@@ -1,18 +1,8 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
 import { hashPassword } from "../helpers/password.helper.js";
 import { ROLES } from "../constants/roles.js";
-import User from "../models/user.model.js";
-import Branch from "../models/branch.model.js";
-import Group from "../models/group.model.js";
-import GroupMembership from "../models/groupMembership.model.js";
-import TeacherGroupPeriod from "../models/teacherGroupPeriod.model.js";
-import Attendance from "../models/attendance.model.js";
-import AttendanceSettings from "../models/attendanceSettings.model.js";
-import AttendanceExemption from "../models/attendanceExemption.model.js";
-import Feedback from "../models/feedback.model.js";
-import FeedbackType from "../models/feedbackType.model.js";
 
 // Sonlarni env orqali kichraytirsa bo'ladi (demo uchun): SEED_TEACHERS=5 ...
 const TEACHER_COUNT = Number(process.env.SEED_TEACHERS) || 40;
@@ -110,20 +100,38 @@ const genSchedule = () => {
   }));
 };
 
-const bulkInsert = async (Model, docs, chunkSize = 1000) => {
-  const inserted = [];
+// `insertMany` ning o'rni. Mongo'dan asosiy FARQ: `createMany` yozilgan
+// QATORLARNI qaytarmaydi, faqat sonini. `id` kerak bo'lgan joyda
+// (foydalanuvchi) qatorlar keyin alohida o'qiladi - `attachIds()`.
+const bulkCreate = async (model, docs, chunkSize = 1000) => {
+  let count = 0;
   for (let i = 0; i < docs.length; i += chunkSize) {
-    const chunk = await Model.insertMany(docs.slice(i, i + chunkSize));
-    inserted.push(...chunk);
+    const res = await prisma[model].createMany({ data: docs.slice(i, i + chunkSize) });
+    count += res.count;
   }
-  return inserted;
+  return count;
+};
+
+// Yozilgan foydalanuvchilarga `id` ni QAYTA BIRIKTIRADI.
+//
+// TARTIB SAQLANADI: guruhga o'qituvchi indeks bo'yicha biriktiriladi
+// (`teachers[i]`), shuning uchun natija bazadan kelgan tartibda emas,
+// KIRISH massivi tartibida qurilishi shart. `username` unique, ya'ni
+// xaritalash bir qiymatli.
+const attachIds = async (docs) => {
+  const rows = await prisma.user.findMany({
+    where: { username: { in: docs.map((d) => d.username) } },
+    select: { id: true, username: true },
+  });
+  const idByUsername = new Map(rows.map((r) => [r.username, r.id]));
+  return docs.map((d) => ({ ...d, id: idByUsername.get(d.username) }));
 };
 
 const seed = async () => {
   await connectDB();
   const startedAt = Date.now();
 
-  const owner = await User.findOne({ role: ROLES.OWNER });
+  const owner = await prisma.user.findFirst({ where: { role: ROLES.OWNER } });
   if (!owner) {
     throw new Error("Owner yo'q. Avval `npm run seed:owner` ishga tushiring.");
   }
@@ -133,19 +141,19 @@ const seed = async () => {
   // Filial endi majburiy: bitta "Asosiy filial" ta'minlanadi va barcha
   // foydalanuvchi/guruh shunga biriktiriladi. Idempotent - qayta ishga
   // tushirilsa mavjudini oladi.
-  let branch = await Branch.findOne({ isMain: true, isDeleted: false });
+  let branch = await prisma.branch.findFirst({ where: { isMain: true, isDeleted: false } });
   if (!branch) {
-    branch = await Branch.create({
+    branch = await prisma.branch.create({ data: {
       name: "Asosiy filial",
       code: "MAIN",
       isMain: true,
       isActive: true,
-    });
+    } });
   }
   // Owner ham filialga bog'lanadi - aks holda u kirganda "filial tanlang"
   // holatida qolib ketadi va AI bashorati (filialga bog'liq) ishlamaydi.
   if (!owner.homeBranchId) {
-    await User.updateOne({ _id: owner._id }, { $set: { homeBranchId: branch._id } });
+    await prisma.user.update({ where: { id: owner.id }, data: { homeBranchId: branch.id } });
   }
 
   // --- ESKI DEMO MA'LUMOTNI TOZALASH (idempotent qayta ishga tushirish) ---
@@ -157,19 +165,139 @@ const seed = async () => {
   //
   // SAQLANADI: owner, rollar, ruxsatlar, bildirishnoma shablonlari.
   // O'CHIRILADI: faqat demo o'quvchi/o'qituvchi va ularga bog'liq yozuvlar.
-  const removedUsers = await User.deleteMany({
-    role: { $in: [ROLES.STUDENT, ROLES.TEACHER] },
+  // ═══════════════════════════════════════════════════════════════════════
+  // ⚠ TOZALASH: FK TARTIBI MAJBURIY, QAMROVI ESA CHEKLANGAN.
+  //
+  // Mongo'da tashqi kalit yo'q edi: `User.deleteMany({role: student|teacher})`
+  // darhol ishlardi va unga ishora qiluvchi to'lov/maosh yozuvlari YETIM
+  // qolardi. PostgreSQL bunga yo'l qo'ymaydi - 34 ta jadval `RESTRICT` bilan
+  // o'chirishni to'sadi.
+  //
+  // IKKI XIL TO'SIQ BOR:
+  //
+  //   1) RESTRICT — bola bo'lsa ota o'chmaydi (aniq xato).
+  //   2) SET NULL + CHECK — JIMROQ va shu sababli xavfliroq. Masalan
+  //      `teacher_salaries.groupId` guruh o'chganda NULL ga tushadi, lekin
+  //      `teacher_salaries_kind_group_check` `kind='group'` qatoridan
+  //      groupId NOT NULL bo'lishini talab qiladi. Natijada `group.deleteMany()`
+  //      23514 bilan yiqiladi - garchi guruhga TO'G'RIDAN-TO'G'RI hech narsa
+  //      tayanmasa ham.
+  //
+  // NEGA HAMMASINI TOZALAMAYMIZ: to'siqlar yopilishi 34 jadvalni qamraydi
+  // (`shifts`, `staff_payrolls`, `refunds`, `expense_approvals`...). Ularni
+  // ko'r-ko'rona bo'shatish bu seed'ning ishi EMAS - u faqat o'quv demo
+  // ma'lumotini qayta quradi. Shuning uchun har bir o'chirish AYNAN
+  // o'chirilayotgan foydalanuvchi/guruhga BOG'LANGAN qatorlar bilan
+  // cheklanadi. Boshqa seed (financeDemo) va QA fixture ma'lumoti tegilmaydi.
+  //
+  // Ya'ni qamrov Mongo davridagidek: o'sha o'quvchi/o'qituvchi va guruhlar,
+  // ustiga esa Mongo YETIM qoldirgan qatorlar (endi ular ham ketishi SHART).
+  //
+  // TARTIB `information_schema` dagi haqiqiy FK grafidan topologik
+  // hisoblangan (bola → ota).
+  // ═══════════════════════════════════════════════════════════════════════
+  const doomedUsers = await prisma.user.findMany({
+    where: { role: { in: [ROLES.STUDENT, ROLES.TEACHER] } },
+    select: { id: true },
   });
-  await Promise.all([
-    Group.deleteMany({}),
-    GroupMembership.deleteMany({}),
-    TeacherGroupPeriod.deleteMany({}),
-    Attendance.deleteMany({}),
-    AttendanceExemption.deleteMany({}),
-    Feedback.deleteMany({}),
-  ]);
-  if (removedUsers.deletedCount) {
-    logger.info(`Eski demo ma'lumot tozalandi: ${removedUsers.deletedCount} foydalanuvchi`);
+  const uid = doomedUsers.map((u) => u.id);
+  const gid = (await prisma.group.findMany({ select: { id: true } })).map((g) => g.id);
+
+  // ─────────────────────────────────────────────────────────────────────
+  // OLDINDAN TEKSHIRUV: moliyaviy jurnal tozalashni to'sadimi?
+  //
+  // `20260820120000_restrict_journal_and_salary_ownership_fks` dan keyin
+  // `journal_entries` ning egalik ustunlari `RESTRICT`. Ya'ni jurnalda
+  // izi qolgan o'quvchi/o'qituvchi/guruhni o'chirib BO'LMAYDI — va bu
+  // TO'G'RI: moliyaviy tarixni jimgina yo'q qilgandan ko'ra seed
+  // to'xtagani yaxshi.
+  //
+  // Lekin xom FK xatosi tushunarsiz ("Foreign key constraint violated ...
+  // journal_entries_studentId_fkey" — `group.deleteMany()` paytida).
+  // Shuning uchun sabab OLDINDAN, o'qiladigan tilda aytiladi.
+  //
+  // Bunga tushib qolish yo'li: `seed:finance-demo` yoki haqiqiy to'lov
+  // oqimi demo odam/guruhga jurnal yozuvi yozgan bo'lsa.
+  // ─────────────────────────────────────────────────────────────────────
+  const blockingEntries = await prisma.journalEntry.count({
+    where: {
+      OR: [
+        { studentId: { in: uid } },
+        { teacherId: { in: uid } },
+        { staffId: { in: uid } },
+        { groupId: { in: gid } },
+      ],
+    },
+  });
+  if (blockingEntries > 0) {
+    throw new Error(
+      `Tozalash to'xtatildi: ${blockingEntries} ta moliyaviy jurnal yozuvi ` +
+        `o'chirilishi kerak bo'lgan demo o'quvchi/o'qituvchi/guruhga bog'langan. ` +
+        `Jurnal O'ZGARMAS — u o'chirilmaydi va tahrirlanmaydi. ` +
+        `Toza demo ma'lumot kerak bo'lsa: npm run db:reset`,
+    );
+  }
+
+  if (uid.length || gid.length) {
+    const byUser = (col) => ({ [col]: { in: uid } });
+    const byGroup = (col) => ({ [col]: { in: gid } });
+    // [model, where] — ketma-ket bajariladi, tartib O'ZGARTIRILMASIN.
+    const CLEANUP = [
+      ["groupMembership",        { OR: [byGroup("groupId"), byUser("studentId")] }],
+      ["attendance",             { OR: [byGroup("groupId"), byUser("studentId")] }],
+      // `grades.recordedById` ham RESTRICT - o'qituvchi qo'ygan baho uni bloklaydi.
+      ["grade",                  { OR: [byGroup("groupId"), byUser("studentId"), byUser("recordedById")] }],
+      ["lessonCancellation",     byGroup("groupId")],
+      // `teacher_absences.recordedById` RESTRICT (teacherId esa SET NULL).
+      ["teacherAbsence",         { OR: [byGroup("groupId"), byUser("recordedById")] }],
+      ["paymentTransaction",     { OR: [byGroup("groupId"), byUser("studentId")] }],
+      ["debtWriteOff",           { OR: [byGroup("groupId"), byUser("studentId")] }],
+      ["studentPayment",         { OR: [byGroup("groupId"), byUser("studentId")] }],
+      ["discount",               { OR: [byGroup("groupId"), byUser("studentId")] }],
+      ["groupFee",               byGroup("groupId")],
+      ["teacherGroupPeriod",     { OR: [byGroup("groupId"), byUser("teacherId")] }],
+      // Maosh zanjiri: tranzaksiya → maosh. `teacher_salaries.groupId` SET NULL
+      // + CHECK bo'lgani uchun GURUH bo'yicha ham o'chiriladi (yuqoridagi 2-holat).
+      ["salaryTransaction",      { OR: [byUser("teacherId"), byGroup("groupId")] }],
+      ["teacherSalary",          { OR: [byUser("teacherId"), byGroup("groupId")] }],
+      ["attendanceExemption",    byUser("studentId")],
+      ["teacherAttendance",      byUser("teacherId")],
+      ["depositTransaction",     byUser("studentId")],
+      ["studentDeposit",         byUser("studentId")],
+      ["studentFreeze",          byUser("studentId")],
+      ["teacherCompensation",    byUser("teacherId")],
+      ["staffKpiAssignment",     byUser("employeeId")],
+      ["staffPayrollItem",       byUser("employeeId")],
+      ["staffSalaryTransaction", byUser("employeeId")],
+      ["staffPayrollAdjustment", byUser("employeeId")],
+      ["staffPayroll",           byUser("employeeId")],
+      ["staffCompensation",      byUser("employeeId")],
+      ["payrollAuditLog",        byUser("employeeId")],
+      ["shift",                  byUser("cashierId")],
+      ["openingBalance",         { OR: [byUser("userId"), byGroup("groupId")] }],
+      ["notificationRecipient",  byUser("userId")],
+      ["assignmentRecipient",    { OR: [byUser("studentId"), byGroup("groupId")] }],
+      ["assignment",             byUser("senderId")],
+      ["archiveLog",             { OR: [byUser("userId"), byUser("performedById")] }],
+      ["refund",                 { OR: [byUser("studentId"), byUser("requestedById")] }],
+      // Prisma modeli `Approval` (jadval: `expense_approvals`).
+      ["approval",               byUser("requestedById")],
+      // Fikr-mulohaza: FK to'smaydi (authorId SET NULL), lekin demo
+      // ma'lumoti sifatida Mongo davrida ham to'liq tozalanardi.
+      ["feedback",               {}],
+      ["group",                  {}],
+    ];
+    for (const [model, where] of CLEANUP) {
+      await prisma[model].deleteMany({ where });
+    }
+  }
+
+  // Foydalanuvchi ENG OXIRIDA: yuqoridagilarning hammasi unga ishora qiladi.
+  const removedUsers = await prisma.user.deleteMany({
+    where: { role: { in: [ROLES.STUDENT, ROLES.TEACHER] } },
+  });
+  if (removedUsers.count) {
+    logger.info(`Eski demo ma'lumot tozalandi: ${removedUsers.count} foydalanuvchi`);
   }
 
   const passwordHash = await hashPassword(COMMON_PASSWORD);
@@ -196,11 +324,12 @@ const seed = async () => {
       gender,
       birthDate: randDate(new Date(1975, 0, 1), new Date(1995, 11, 31)),
       hiredAt: randDate(new Date(2022, 0, 1), new Date(2024, 11, 31)),
-      homeBranchId: branch._id,
+      homeBranchId: branch.id,
       isActive: true,
     });
   }
-  const teachers = await bulkInsert(User, teacherDocs);
+  await bulkCreate("user", teacherDocs);
+  const teachers = await attachIds(teacherDocs);
   logger.info(`${teachers.length} ta o'qituvchi yaratildi`);
 
   const studentDocs = [];
@@ -221,15 +350,21 @@ const seed = async () => {
       role: ROLES.STUDENT,
       gender,
       birthDate: randDate(new Date(2005, 0, 1), new Date(2015, 11, 31)),
-      address: `${pick(CITIES)} sh., ${pick(STREETS)} ko'chasi, ${randInt(1, 200)}-uy`,
-      parentName: `${pick(LAST_NAMES)} ${pick(MALE_FIRST)}`,
-      parentPhone: genPhone(i + 5000),
+      // `address` / `parentName` / `parentPhone` ATAYLAB YO'Q.
+      //
+      // Ular `User` da HECH QACHON bo'lmagan - eski Mongoose modelida ham
+      // yo'q edi (ular `Lead` maydonlari). Mongoose sxemada e'lon
+      // qilinmagan maydonni JIMGINA tashlab yuborardi, shuning uchun bu
+      // qatorlar bazaga hech narsa yozmasdi va buni hech kim sezmasdi.
+      // Postgres esa noma'lum ustunni rad etadi va xatoni ochib berdi.
+      // Xulq-atvor O'ZGARMADI - ular ilgari ham saqlanmagan.
       enrolledAt,
-      homeBranchId: branch._id,
+      homeBranchId: branch.id,
       isActive: true,
     });
   }
-  const students = await bulkInsert(User, studentDocs);
+  await bulkCreate("user", studentDocs);
+  const students = await attachIds(studentDocs);
   logger.info(`${students.length} ta o'quvchi yaratildi`);
 
   const groupDocs = [];
@@ -241,12 +376,32 @@ const seed = async () => {
     groupDocs.push({
       name: `${dirName} ${letter}-${num}`,
       schedule: genSchedule(),
-      teachers: [teacher._id],
-      branchId: branch._id,
+      teacherId: teacher.id,
+      branchId: branch.id,
       isActive: true,
     });
   }
-  const groups = await Group.insertMany(groupDocs);
+  // GURUH `createMany` BILAN YOZILMAYDI.
+  //
+  // Ikki sabab: `schedule` endi ALOHIDA jadval (`group_schedule_items`) va
+  // `teachers` ko'p-ko'pga bog'lanish. `createMany` ichma-ich yozishni
+  // (nested write) qo'llab-quvvatlamaydi, shuning uchun har bir guruh
+  // alohida yoziladi - guruhlar soni o'nlab, ya'ni bu sezilarli emas.
+  const groups = [];
+  for (const doc of groupDocs) {
+    const { schedule, teacherId, ...rest } = doc;
+    const row = await prisma.group.create({
+      data: {
+        ...rest,
+        schedule: { create: schedule },
+        teachers: { connect: [{ id: teacherId }] },
+      },
+      select: { id: true, name: true },
+    });
+    // Keyingi bosqichlar `group.schedule` va `group.teachers[0]` ni
+    // o'qiydi - ularni bazadan qayta so'ramasdan lokal saqlaymiz.
+    groups.push({ ...row, schedule, teacherId });
+  }
   logger.info(`${groups.length} ta guruh yaratildi`);
 
   // O'QITUVCHI–GURUH DAVRLARI.
@@ -257,15 +412,15 @@ const seed = async () => {
   // Seed bu yozuvlarni yaratmasa, AI filialda BITTA ham o'qituvchi
   // ko'rmaydi va o'qituvchi analitikasi butunlay bo'sh qoladi.
   const periodDocs = groups.map((g, i) => ({
-    teacher: g.teachers[0],
-    group: g._id,
+    teacherId: g.teacherId,
+    groupId: g.id,
     startDate: randDate(yearAgo, new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)),
     endDate: null, // hozir dars beradi
     salaryType: "percent",
     percentRate: 40 + (i % 3) * 5,
-    createdBy: owner._id,
+    createdById: owner.id,
   }));
-  await TeacherGroupPeriod.insertMany(periodDocs);
+  await bulkCreate("teacherGroupPeriod", periodDocs);
   logger.info(`${periodDocs.length} ta o'qituvchi-guruh davri yaratildi`);
 
   const membershipDocs = [];
@@ -286,20 +441,23 @@ const seed = async () => {
         ? pick(["graduated", "removed", "transferred"])
         : null;
       membershipDocs.push({
-        group: group._id,
-        student: student._id,
+        groupId: group.id,
+        studentId: student.id,
         joinedAt,
         leftAt,
         leftReason,
       });
     }
   }
-  const memberships = await bulkInsert(GroupMembership, membershipDocs);
+  await bulkCreate("groupMembership", membershipDocs);
+  // Keyingi bosqich faqat (groupId, studentId, joinedAt, leftAt) ni o'qiydi -
+  // `id` kerak emas, shuning uchun qayta o'qish ham shart emas.
+  const memberships = membershipDocs;
   logger.info(`${memberships.length} ta group membership yaratildi`);
 
 
   // --- Reference data for ancillary collections ---
-  const feedbackTypes = await FeedbackType.find({ isActive: true });
+  const feedbackTypes = await prisma.feedbackType.findMany({ where: { isActive: true } });
   if (feedbackTypes.length === 0) {
     throw new Error(
       "Reference data yo'q. Avval `npm run seed:communication` ishga tushiring.",
@@ -307,11 +465,13 @@ const seed = async () => {
   }
 
   // AttendanceSettings (singleton)
-  await AttendanceSettings.findOneAndUpdate(
-    { _id: "default" },
-    { $setOnInsert: { _id: "default" } },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+  // Singleton: `AttendanceSettings.id` sxemada `@default("default")`.
+  // `update: {}` - mavjud sozlama TEGILMAYDI (eski `$setOnInsert` kabi).
+  await prisma.attendanceSettings.upsert({
+    where: { id: "default" },
+    create: { id: "default" },
+    update: {},
+  });
   logger.info("AttendanceSettings tayyor");
 
   // AttendanceExemption: 5% studentlarda
@@ -319,7 +479,7 @@ const seed = async () => {
   for (const student of students) {
     if (Math.random() < 0.05) {
       exemptionDocs.push({
-        student: student._id,
+        studentId: student.id,
         startDate: randDate(yearAgo, now),
         endDate: null,
         daysOfWeek: pick([[], ["fri"], ["sat"], ["fri", "sat"]]),
@@ -330,21 +490,20 @@ const seed = async () => {
           "Oilaviy sharoit",
         ]),
         isActive: true,
-        createdBy: owner._id,
+        createdById: owner.id,
       });
     }
   }
-  if (exemptionDocs.length > 0)
-    await AttendanceExemption.insertMany(exemptionDocs);
+  if (exemptionDocs.length > 0) await bulkCreate("attendanceExemption", exemptionDocs);
   logger.info(`${exemptionDocs.length} ta attendance exemption yaratildi`);
 
   // Attendance: har bir guruh uchun jadval kunlarida
   const DAY_NUM_TO_KEY = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const teacherByGroup = new Map();
-  for (const g of groups) teacherByGroup.set(String(g._id), g.teachers[0]);
+  for (const g of groups) teacherByGroup.set(String(g.id), g.teacherId);
   const membershipsByGroupId = new Map();
   for (const m of memberships) {
-    const k = String(m.group);
+    const k = String(m.groupId);
     if (!membershipsByGroupId.has(k)) membershipsByGroupId.set(k, []);
     membershipsByGroupId.get(k).push(m);
   }
@@ -352,9 +511,9 @@ const seed = async () => {
   let totalAttendance = 0;
   for (const group of groups) {
     const scheduleDays = new Set(group.schedule.map((s) => s.day));
-    const groupMembers = membershipsByGroupId.get(String(group._id)) || [];
+    const groupMembers = membershipsByGroupId.get(String(group.id)) || [];
     if (groupMembers.length === 0) continue;
-    const teacherId = teacherByGroup.get(String(group._id));
+    const teacherId = teacherByGroup.get(String(group.id));
 
     const docs = [];
     const cursor = new Date(yearAgo);
@@ -372,8 +531,8 @@ const seed = async () => {
             { value: "exempt", weight: 1 },
           ]);
           const doc = {
-            group: group._id,
-            student: m.student,
+            groupId: group.id,
+            studentId: m.studentId,
             date: new Date(
               cursor.getFullYear(),
               cursor.getMonth(),
@@ -382,7 +541,7 @@ const seed = async () => {
             ),
             dateKey,
             status,
-            recordedBy: teacherId,
+            recordedById: teacherId,
             source: "teacher",
             recordedAt: new Date(
               cursor.getFullYear(),
@@ -404,7 +563,7 @@ const seed = async () => {
       cursor.setDate(cursor.getDate() + 1);
     }
     if (docs.length > 0) {
-      await bulkInsert(Attendance, docs, 5000);
+      await bulkCreate("attendance", docs, 5000);
       totalAttendance += docs.length;
     }
   }
@@ -433,23 +592,23 @@ const seed = async () => {
       { value: "rejected", weight: 10 },
     ]);
     const fb = {
-      author: isAnon ? null : author._id,
+      authorId: isAnon ? null : author.id,
       authorRoleSnapshot: isAnon ? "" : "student",
       isAnonymous: isAnon,
-      type: pick(feedbackTypes)._id,
-      group: Math.random() < 0.5 ? pick(groups)._id : null,
+      typeId: pick(feedbackTypes).id,
+      groupId: Math.random() < 0.5 ? pick(groups).id : null,
       message: pick(FB_MESSAGES),
       status,
     };
     if (status === "in_review" || status === "resolved" || status === "rejected") {
-      fb.reviewedBy = owner._id;
+      fb.reviewedById = owner.id;
       fb.reviewedAt = randDate(yearAgo, now);
     }
     if (status === "resolved") {
-      fb.resolvedBy = owner._id;
+      fb.resolvedById = owner.id;
       fb.resolvedAt = randDate(yearAgo, now);
       fb.adminReply = "Murojaatingiz uchun rahmat, ko'rib chiqildi.";
-      fb.repliedBy = owner._id;
+      fb.repliedById = owner.id;
       fb.repliedAt = fb.resolvedAt;
     }
     if (status === "rejected") {
@@ -457,7 +616,7 @@ const seed = async () => {
     }
     feedbackDocs.push(fb);
   }
-  await Feedback.insertMany(feedbackDocs);
+  await bulkCreate("feedback", feedbackDocs);
   logger.info(`${feedbackDocs.length} ta fikr-mulohaza yaratildi`);
 
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);

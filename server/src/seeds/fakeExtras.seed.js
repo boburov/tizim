@@ -1,20 +1,11 @@
 import "dotenv/config";
-import { connectDB, disconnectDB } from "../config/db.js";
+import prisma, { connectDB, disconnectDB } from "../config/prisma.js";
 import logger from "../config/logger.js";
 import { ROLES } from "../constants/roles.js";
 import {
   dateKeyOf,
   getClassDaysInRange,
 } from "../helpers/attendance.helper.js";
-import User from "../models/user.model.js";
-import Group from "../models/group.model.js";
-import GroupMembership from "../models/groupMembership.model.js";
-import Feedback from "../models/feedback.model.js";
-import NotificationTemplate from "../models/notificationTemplate.model.js";
-import Notification from "../models/notification.model.js";
-import NotificationRecipient from "../models/notificationRecipient.model.js";
-import TeacherAbsence from "../models/teacherAbsence.model.js";
-import BotUser from "../models/botUser.model.js";
 
 // Mavjud fake datani (fakeData.seed) to'ldiruvchi: bo'sh qolgan kolleksiyalar uchun
 // realistik data - notifications, notificationrecipients, teacherabsences, botusers.
@@ -48,15 +39,18 @@ const sample = (arr, n) => {
 const clampDate = (d) => (d.getTime() > NOW.getTime() ? new Date(NOW) : d);
 const addMinutes = (d, m) => new Date(d.getTime() + m * 60000);
 
-const bulkInsert = async (Model, docs, chunkSize = 1000) => {
-  const inserted = [];
+// `insertMany(..., { ordered: false })` ning o'rni: `skipDuplicates`
+// Postgres'da `ON CONFLICT DO NOTHING` ga aylanadi.
+const bulkCreate = async (model, docs, chunkSize = 1000) => {
+  let count = 0;
   for (let i = 0; i < docs.length; i += chunkSize) {
-    const chunk = await Model.insertMany(docs.slice(i, i + chunkSize), {
-      ordered: false,
+    const res = await prisma[model].createMany({
+      data: docs.slice(i, i + chunkSize),
+      skipDuplicates: true,
     });
-    inserted.push(...chunk);
+    count += res.count;
   }
-  return inserted;
+  return count;
 };
 
 const FIRST_NAMES = [
@@ -128,22 +122,28 @@ const seed = async () => {
   const startedAt = Date.now();
 
   // Idempotent: faqat shu 4 ta (fake) kolleksiya tozalanadi
-  await Promise.all([
-    BotUser.deleteMany({}),
-    Notification.deleteMany({}),
-    NotificationRecipient.deleteMany({}),
-    TeacherAbsence.deleteMany({}),
-  ]);
+  // FK TARTIBI: `notification_recipients.notificationId` → `notifications`.
+  // (Bog'lanish `onDelete: Cascade`, lekin tartibni ochiq yozamiz - u
+  // niyatni ko'rsatadi va sxema o'zgarsa ham to'g'ri qoladi.)
+  await prisma.notificationRecipient.deleteMany({});
+  await prisma.notification.deleteMany({});
+  await prisma.botUser.deleteMany({});
+  await prisma.teacherAbsence.deleteMany({});
 
-  const owner = await User.findOne({ role: ROLES.OWNER }).lean();
-  const teachers = await User.find({ role: ROLES.TEACHER }).lean();
-  const students = await User.find({ role: ROLES.STUDENT }).lean();
-  const groups = await Group.find({}).lean();
-  const templates = await NotificationTemplate.find({ isActive: true }).lean();
+  const owner = await prisma.user.findFirst({ where: { role: ROLES.OWNER } });
+  const teachers = await prisma.user.findMany({ where: { role: ROLES.TEACHER } });
+  const students = await prisma.user.findMany({ where: { role: ROLES.STUDENT } });
+  // `schedule` va `teachers` ATAYLAB include qilinadi: birinchisini
+  // `getClassDaysInRange()`, ikkinchisini o'qituvchi tanlash o'qiydi.
+  // Mongo'da ikkalasi ham hujjat ICHIDA edi, Prisma'da alohida jadval.
+  const groups = await prisma.group.findMany({
+    include: { schedule: true, teachers: { select: { id: true } } },
+  });
+  const templates = await prisma.notificationTemplate.findMany({ where: { isActive: true } });
 
   const activeStudents = students.filter((s) => s.isActive !== false);
-  const teacherIds = teachers.map((t) => t._id);
-  const activeStudentIds = activeStudents.map((s) => s._id);
+  const teacherIds = teachers.map((t) => t.id);
+  const activeStudentIds = activeStudents.map((s) => s.id);
 
   // ---------- BOT USERS ----------
   // telegramId - qat'iy o'suvchi (unique kafolati), 100M..2.1B oralig'ida
@@ -178,30 +178,37 @@ const seed = async () => {
     };
   };
 
-  // user maydoni unique+sparse: bog'lanmaganlar uchun maydon UMUMAN tushiriladi
-  // (null bersak sparse ishlamaydi). Shuning uchun native driver bilan kiritamiz -
-  // Mongoose default:null ni qo'shmasligi va createdAt ni orqaga sanash uchun.
+  // `userId` NULL bo'lishi ENDI muammo emas.
+  //
+  // Mongo'da indeks `sparse` edi va `null` ni ODDIY qiymat deb sanardi -
+  // shuning uchun ikkinchi bog'lanmagan bot yozuvi E11000 berardi va
+  // maydonni UMUMAN tushirish uchun native driver ishlatilardi.
+  // PostgreSQL'da esa `NULL != NULL`, ya'ni qisman unique indeks
+  // istalgancha bog'lanmagan qatorga ruxsat beradi va hiyla kerak emas.
+  //
+  // `telegramId`/`chatId` — `BigInt` ustunlar, shuning uchun ochiq
+  // `BigInt(...)` ga o'giriladi (Number bersak Prisma rad etadi).
   const linkedUserIdSet = new Set();
   const botDocs = [];
   const makeLinkedBot = (u) => {
     const id = nextTg();
     const lastSeen = lastSeenOf();
     botDocs.push({
-      telegramId: id,
-      chatId: id,
+      telegramId: BigInt(id),
+      chatId: BigInt(id),
       username: chance(0.6) ? String(u.username).toLowerCase() : null,
       firstName: u.firstName || "",
       lastName: u.lastName || "",
       languageCode: langOf(),
       isBot: false,
       isBlocked: chance(0.04),
-      user: u._id,
+      userId: u.id,
       flowState: flowStateOf(),
       lastSeenAt: lastSeen,
       createdAt: randDate(YEAR_AGO, lastSeen),
       updatedAt: lastSeen,
     });
-    linkedUserIdSet.add(String(u._id));
+    linkedUserIdSet.add(String(u.id));
   };
 
   for (const s of sample(students, Math.round(students.length * 0.7))) makeLinkedBot(s);
@@ -212,8 +219,8 @@ const seed = async () => {
     const id = nextTg();
     const lastSeen = randDate(YEAR_AGO, addMinutes(NOW, -14 * 24 * 60));
     botDocs.push({
-      telegramId: id,
-      chatId: id,
+      telegramId: BigInt(id),
+      chatId: BigInt(id),
       username: chance(0.4) ? `tg_user_${id}` : null,
       firstName: pick(FIRST_NAMES),
       lastName: pick(LAST_NAMES),
@@ -226,23 +233,24 @@ const seed = async () => {
       updatedAt: lastSeen,
     });
   }
-  await BotUser.collection.insertMany(botDocs, { ordered: false });
+  await bulkCreate("botUser", botDocs);
   logger.info(`${botDocs.length} ta bot user yaratildi (${linkedUserIdSet.size} bog'langan)`);
 
   // ---------- NOTIFICATIONS ----------
   // Faol guruh a'zolari (leftAt=null) - guruh -> studentId[]
-  const activeMemberships = await GroupMembership.find({ leftAt: null })
-    .select("group student")
-    .lean();
+  const activeMemberships = await prisma.groupMembership.findMany({
+    where: { leftAt: null },
+    select: { groupId: true, studentId: true },
+  });
   const groupMembers = new Map();
   for (const m of activeMemberships) {
-    const g = String(m.group);
+    const g = String(m.groupId);
     if (!groupMembers.has(g)) groupMembers.set(g, []);
-    groupMembers.get(g).push(m.student);
+    groupMembers.get(g).push(m.studentId);
   }
   const teacherToGroups = new Map();
   for (const g of groups) {
-    for (const t of g.teachers || []) {
+    for (const t of (g.teachers || []).map((x) => x.id)) {
       const k = String(t);
       if (!teacherToGroups.has(k)) teacherToGroups.set(k, []);
       teacherToGroups.get(k).push(g);
@@ -267,7 +275,7 @@ const seed = async () => {
   // announcement -> barcha o'quvchilar
   for (let i = 0; i < 8; i++)
     pushNotif({
-      sender: chance(0.5) ? owner._id : null,
+      sender: chance(0.5) ? owner.id : null,
       senderRole: chance(0.5) ? "owner" : "system",
       body: pick(ANNOUNCE_BODIES),
       category: "announcement",
@@ -277,7 +285,7 @@ const seed = async () => {
   // announcement -> barcha o'qituvchilar
   for (let i = 0; i < 5; i++)
     pushNotif({
-      sender: owner._id,
+      sender: owner.id,
       senderRole: "owner",
       body: pick(ANNOUNCE_TEACHER_BODIES),
       category: "announcement",
@@ -320,14 +328,14 @@ const seed = async () => {
   // class_cancel -> bitta guruh
   for (let i = 0; i < 20; i++) {
     const g = pick(groups);
-    const teacher = g.teachers?.[0] || null;
+    const teacher = g.teachers?.[0]?.id ?? null;
     const fromTeacher = teacher && chance(0.7);
     pushNotif({
-      sender: fromTeacher ? teacher : owner._id,
+      sender: fromTeacher ? teacher : owner.id,
       senderRole: fromTeacher ? "teacher" : "owner",
       body: pick(CLASSCANCEL_BODIES),
       category: "class_cancel",
-      audience: { type: "groups", groupIds: [g._id] },
+      audience: { type: "groups", groupIds: [g.id] },
       sentAt: randDate(YEAR_AGO, NOW),
     });
   }
@@ -337,18 +345,18 @@ const seed = async () => {
     const tid = pick(teachersWithGroups);
     const g = pick(teacherToGroups.get(tid));
     pushNotif({
-      sender: g.teachers[0],
+      sender: g.teachers[0]?.id ?? null,
       senderRole: "teacher",
       body: pick(TEACHERMSG_BODIES),
       category: "teacher_message",
-      audience: { type: "groups", groupIds: [g._id] },
+      audience: { type: "groups", groupIds: [g.id] },
       sentAt: randDate(YEAR_AGO, NOW),
     });
   }
   // admin_personal -> bitta o'quvchi
   for (let i = 0; i < 15; i++)
     pushNotif({
-      sender: owner._id,
+      sender: owner.id,
       senderRole: "owner",
       body: pick(ADMINPERSONAL_BODIES),
       category: "admin_personal",
@@ -359,32 +367,30 @@ const seed = async () => {
   for (let i = 0; i < 40 && templates.length; i++) {
     const tpl = pick(templates);
     pushNotif({
-      sender: owner._id,
+      sender: owner.id,
       senderRole: "owner",
       body: tpl.body,
       category: "template_based",
-      template: tpl._id,
+      template: tpl.id,
       audience: { type: "users", userIds: sample(activeStudentIds, randInt(10, 30)) },
       sentAt: randDate(YEAR_AGO, NOW),
     });
   }
   // feedback_status -> feedback muallifiga (auto)
-  const feedbacks = await Feedback.find({
-    author: { $ne: null },
-    isAnonymous: false,
-  })
-    .select("author")
-    .limit(10)
-    .lean();
+  const feedbacks = await prisma.feedback.findMany({
+    where: { authorId: { not: null }, isAnonymous: false },
+    select: { id: true, authorId: true },
+    take: 10,
+  });
   for (const fb of feedbacks)
     pushNotif({
-      sender: owner._id,
+      sender: owner.id,
       senderRole: "owner",
       body: pick(FEEDBACK_BODIES),
       category: "feedback_status",
       isAuto: true,
-      relatedFeedback: fb._id,
-      audience: { type: "feedback_author", userIds: [fb.author] },
+      relatedFeedback: fb.id,
+      audience: { type: "feedback_author", userIds: [fb.authorId] },
       sentAt: randDate(YEAR_AGO, NOW),
     });
   // other
@@ -428,42 +434,64 @@ const seed = async () => {
     }
     decisionsPerNotif.push(decisions);
     notifDocs.push({
-      sender: p.sender ?? null,
+      senderId: p.sender ?? null,
       senderRole: p.senderRole || "system",
       title: p.title || "",
       body: p.body,
       category: p.category,
-      template: p.template ?? null,
-      audience: {
-        type: p.audience.type,
-        groupIds: p.audience.groupIds || [],
-        userIds: p.audience.userIds || [],
-      },
+      templateId: p.template ?? null,
+      // MONGO'DAGI ICHKI `audience` OBYEKTI YASSILANDI.
+      //
+      // Ilgari bu bitta hujjat ichidagi `{ type, groupIds, userIds }` edi.
+      // Prisma'da `audienceType` — ustun, `audienceGroups`/`audienceUsers`
+      // esa KO'P-KO'PGA bog'lanish (alohida join jadval). Shuning uchun
+      // ular `connect` bilan yoziladi va yozuv `createMany` ga sig'maydi.
+      audienceType: p.audience.type,
+      audienceGroupIds: p.audience.groupIds || [],
+      audienceUserIds: p.audience.userIds || [],
       recipientsCount: recipientIds.length,
       deliveredViaBot,
       readCount,
       isAuto: !!p.isAuto,
-      relatedFeedback: p.relatedFeedback ?? null,
+      relatedFeedbackId: p.relatedFeedback ?? null,
       sentAt: p.sentAt,
     });
   }
 
-  const insertedNotifs = await bulkInsert(Notification, notifDocs);
+  // Ichma-ich yozish (`connect`) tufayli har bir bildirishnoma ALOHIDA
+  // yoziladi - `createMany` nested write'ni qo'llab-quvvatlamaydi. Ayni
+  // paytda bu qaytgan `id` ni ham beradi, ya'ni qabul qiluvchilarni
+  // bog'lash uchun qo'shimcha o'qish kerak emas.
   const recipientDocs = [];
-  insertedNotifs.forEach((n, idx) => {
+  let notifCount = 0;
+  for (const [idx, doc] of notifDocs.entries()) {
+    const { audienceGroupIds, audienceUserIds, ...rest } = doc;
+    const n = await prisma.notification.create({
+      data: {
+        ...rest,
+        ...(audienceGroupIds.length && {
+          audienceGroups: { connect: audienceGroupIds.map((id) => ({ id })) },
+        }),
+        ...(audienceUserIds.length && {
+          audienceUsers: { connect: audienceUserIds.map((id) => ({ id })) },
+        }),
+      },
+      select: { id: true },
+    });
+    notifCount += 1;
     for (const d of decisionsPerNotif[idx]) {
       recipientDocs.push({
-        notification: n._id,
-        user: d.user,
+        notificationId: n.id,
+        userId: d.user,
         readAt: d.readAt,
         botDeliveredAt: d.botDeliveredAt,
         botFailedReason: d.botFailedReason,
       });
     }
-  });
-  await bulkInsert(NotificationRecipient, recipientDocs);
+  }
+  await bulkCreate("notificationRecipient", recipientDocs);
   logger.info(
-    `${insertedNotifs.length} ta notification, ${recipientDocs.length} ta recipient yaratildi`,
+    `${notifCount} ta notification, ${recipientDocs.length} ta recipient yaratildi`,
   );
 
   // ---------- TEACHER ABSENCES ----------
@@ -480,23 +508,23 @@ const seed = async () => {
     ]);
     const count = Math.min(randInt(bucket[0], bucket[1]), classDays.length);
     if (count === 0) continue;
-    const teacher = g.teachers?.[0] || null;
+    const teacher = g.teachers?.[0]?.id ?? null;
     for (const cd of sample(classDays, count)) {
       absenceDocs.push({
-        group: g._id,
-        teacher,
+        groupId: g.id,
+        teacherId: teacher,
         date: cd.date,
         dateKey: cd.dateKey || dateKeyOf(cd.date),
-        recordedBy: owner._id,
+        recordedById: owner.id,
       });
     }
   }
-  await bulkInsert(TeacherAbsence, absenceDocs);
+  await bulkCreate("teacherAbsence", absenceDocs);
   logger.info(`${absenceDocs.length} ta teacher absence yaratildi`);
 
   const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
   logger.info(
-    `Fake extras tayyor (${secs}s): ${botDocs.length} bot user, ${insertedNotifs.length} notification, ${recipientDocs.length} recipient, ${absenceDocs.length} teacher absence`,
+    `Fake extras tayyor (${secs}s): ${botDocs.length} bot user, ${notifCount} notification, ${recipientDocs.length} recipient, ${absenceDocs.length} teacher absence`,
   );
 
   await disconnectDB();

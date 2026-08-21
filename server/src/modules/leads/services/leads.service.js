@@ -602,7 +602,30 @@ export const convert = async (id, body, currentUser) => {
     currentUser,
     body.groupId,
   );
-  return { lead: await getById(lead._id), student, groupError };
+  // ═══════════════════════════════════════════════════════════════════════
+  // ⚠ B33 — BU MARSHRUT HAR SAFAR 500 QAYTARARDI (ikkala stekda emas,
+  // FAQAT Express'da — NestJS ko'chirmasi to'g'ri yozilgan edi).
+  //
+  // `lead` — PRISMA qatori; unda `_id` YO'Q (faqat `id`). `getById(undefined)`
+  // esa `prisma.lead.findUnique({ where: { id: undefined } })` ga aylanib,
+  // `PrismaClientValidationError` bilan yiqilardi.
+  //
+  // O'LCHANDI (tuzatishdan OLDIN): `POST /leads/:id/convert` →
+  //   express: 500 "Serverda xatolik yuz berdi"
+  //   nest   : 201 + to'liq javob
+  //
+  // ⚠ ENG YOMONI: XATO ISHDAN KEYIN chiqardi. O'quvchi ALLAQACHON
+  // yaratilgan, lid `enrolled` bo'lgan, guruhga qabul qilingan — lekin
+  // operator "xatolik" ko'rib qayta urinardi va ikkinchi urinish 409
+  // olardi ("allaqachon aylantirilgan"). Ya'ni muvaffaqiyatli amal
+  // muvaffaqiyatsiz bo'lib ko'rinardi.
+  //
+  // Bu B4 (`notifications/stats`) dan FARQ QILADI: u sof O'QISH va
+  // 500 uning YAGONA xatti-harakati. Bu yerda esa yozuv MUVAFFAQIYATLI
+  // bajariladi va faqat javob yiqiladi — ya'ni "saqlanadigan
+  // xatti-harakat" yo'q.
+  // ═══════════════════════════════════════════════════════════════════════
+  return { lead: await getById(lead.id), student, groupError };
 };
 
 // KO'P LIDNI BIR MARTADA aylantirish (yangi sotuvlar oqimi).

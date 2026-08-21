@@ -31,14 +31,40 @@ import { getRoomUtilization } from "../src/modules/branchAnalytics/services/room
 import { getRoomRevenue } from "../src/modules/financeAnalytics/services/profitability.service.js";
 
 const TAG = "ZZTEST";
-const made = { rooms: [], groups: [] };
+const made = { rooms: [], groups: [], branch: null };
 let failures = 0;
 const check = (name, cond, extra = "") => {
   if (cond) console.log(`  ok  ${name}`);
   else { failures++; console.log(`  XATO ${name} ${extra}`); }
 };
 
-const branch = await prisma.branch.findFirst({ where: { isDeleted: false }, select: { id: true } });
+// ══════════════════════════════════════════════════════════════════════
+// ⚠ O'Z FILIALI — ULASHILGAN FILIALGA YOZIB BO'LMAYDI.
+//
+// Ilgari bu yer `branch.findFirst()` edi, ya'ni test o'z xonalarini
+// MAVJUD filialga qo'yardi. `activeDaysOf()` esa filialdagi HAMMA
+// guruhdan faol kunlarni yig'adi — faqat testning o'zinikidan emas.
+// Natijada seed ma'lumotidagi bitta shanba darsi yetardi:
+//
+//     faol kunlar   mon,tue,wed,thu,fri  →  ...,sat   (6 kun)
+//     sig'im        60 soat              →  72 soat
+//     101 bandligi  100%                 →  83.3%
+//
+// Ya'ni test SERVIS xatosini emas, BAZADAGI BEGONA MA'LUMOTNI
+// o'lchardi va ishlab chiqarish kodi to'g'ri bo'lsa ham yiqilardi.
+//
+// Endi test o'z filialini yaratadi va uni oxirida o'chiradi: maxraj
+// FAQAT shu testning jadvalidan kelib chiqadi.
+const branch = await prisma.branch.create({
+  data: { name: `${TAG} Bandlik ${Date.now().toString(36)}` },
+  select: { id: true },
+});
+made.branch = branch.id;
+
+// MUSBAT NAZORAT: izolyatsiya HAQIQATAN bo'sh joydan boshlanganini
+// o'lchaymiz. Bu qator bo'lmasa, kelajakda kimdir bu filialga fon
+// ma'lumot qo'shsa test yana jimgina noto'g'ri narsani o'lchardi.
+const preGroups = await prisma.group.count({ where: { branchId: branch.id } });
 
 const mkRoom = async (name, capacity) => {
   const r = await prisma.room.create({ data: { branchId: branch.id, name: `${TAG} ${name}`, capacity } });
@@ -58,7 +84,16 @@ const mkGroup = async (name, roomId, slots) => {
 
 try {
   const a = await mkRoom("101", 12);   // to'lib ketadigan xona
-  const b = await mkRoom("204", 10);   // bo'sh xona
+  const b = await mkRoom("204", 10);   // kam band xona
+  // ⚠ UCHINCHI XONA ATAYLAB BO'SH QOLADI.
+  //
+  // Ikkita tekshiruv — "cho'qqida uchinchisi bo'sh" va
+  // `free_slot_at_peak` tavsiyasi — markazda cho'qqi payti BO'SH xona
+  // borligini talab qiladi. Ilgari test faqat ikkita xona yaratardi va
+  // uchinchisini ULASHILGAN filialdan qarz olardi; o'z filialiga
+  // o'tgach bu jimgina yo'qoldi. Fikstura endi o'z izohiga mos:
+  // uch xonali markaz.
+  await mkRoom("305", 8);              // hech qachon band bo'lmaydi
 
   // 101: dushanba–juma 09:00–21:00 to'liq (12 soat × 5 kun = 60 soat)
   await mkGroup("Toliq", a.id, ["mon","tue","wed","thu","fri"].map((d) => ({ d, f: "09:00", t: "21:00" })));
@@ -68,6 +103,8 @@ try {
   await mkGroup("Kam", b.id, [{ d: "mon", f: "18:00", t: "20:00" }]);
   // Xonasiz guruh
   await mkGroup("Xonasiz", null, [{ d: "wed", f: "15:00", t: "17:00" }]);
+
+  check("MUSBAT NAZORAT: test filiali bo'sh boshlandi", preGroups === 0, `(${preGroups} begona guruh)`);
 
   const d = await getRoomUtilization({ branchId: branch.id });
   const r101 = d.rooms.find((r) => r.name.endsWith("101"));
@@ -132,7 +169,10 @@ try {
   // Ular BOSHQA-BOSHQA hisoblasa, foydalanuvchi bir xil xona uchun ikki
   // xil foiz ko'radi va qaysi biri to'g'ri ekanini ayta olmaydi. Shu
   // tekshiruv ular ajralib ketishiga yo'l qo'ymaydi.
-  const fin = await getRoomRevenue({});
+  // ⚠ `branchId` SHART: filialsiz chaqiruv BARCHA filiallarni qamrab
+  // oladi va maxraj (faol kunlar) begona jadvaldan kelardi — ikki
+  // endpoint bir xilligini tekshirish ma'nosini yo'qotardi.
+  const fin = await getRoomRevenue({ branchId: branch.id });
   const finById = new Map(fin.items.map((i) => [String(i.roomId), i]));
 
   check(
@@ -157,8 +197,12 @@ try {
   await prisma.groupScheduleItem.deleteMany({ where: { groupId: { in: made.groups } } });
   await prisma.group.deleteMany({ where: { id: { in: made.groups } } });
   await prisma.room.deleteMany({ where: { id: { in: made.rooms } } });
+  // Filial ENG OXIRIDA: xona/guruh undan oldin o'chmasa Postgres
+  // `RESTRICT` bilan rad etadi va filial abadiy qolib ketardi.
+  if (made.branch) await prisma.branch.deleteMany({ where: { id: made.branch } });
   const left = await prisma.room.count({ where: { name: { startsWith: TAG } } })
-    + await prisma.group.count({ where: { name: { startsWith: TAG } } });
+    + await prisma.group.count({ where: { name: { startsWith: TAG } } })
+    + await prisma.branch.count({ where: { name: { startsWith: TAG } } });
   console.log(`  qolgan test yozuvlari: ${left}`);
   console.log(failures === 0 ? "\nNATIJA: hammasi o'tdi" : `\nNATIJA: ${failures} ta xato`);
   process.exit(failures === 0 ? 0 : 1);

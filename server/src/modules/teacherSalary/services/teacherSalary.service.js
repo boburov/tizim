@@ -338,7 +338,51 @@ const updateWithDerivedStatus = async (salaryId, expected, data) =>
 // BITTA SQL amali: SQL'da o'ng tomondagi `"paidAmount"` ESKI qiymatni
 // beradi, ya'ni Mongo'dagi `{ $add: ["$paidAmount", delta] }` bilan aynan
 // bir xil. Ikki bosqichga bo'lish (o'qi → yoz) poygani qaytarib kelardi.
-export const applyPaidDelta = async (salaryId, delta, { capToRemaining = false } = {}) => {
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * B20 TUZATILDI — `tx` ENDI HURMAT QILINADI.
+ *
+ * ── QANDAY EDI ──
+ *
+ * Imzo faqat `capToRemaining` ni olardi. `salaryTransaction.service.js`
+ * uni `runFinanceTxn` ICHIDA `{ capToRemaining: true, tx }` bilan
+ * chaqiradi — ya'ni `tx` UZATILARDI, lekin JIMGINA TASHLAB YUBORILARDI
+ * va xom `UPDATE` GLOBAL klientda, tranzaksiyadan TASHQARIDA bajarilardi.
+ *
+ * O'LCHANDI (taxmin emas): tranzaksiya ataylab bekor qilinganda
+ *   tranzaksiya ICHIDA  → paidAmount = 50000
+ *   ROLLBACK'DAN KEYIN  → paidAmount = 50000   ← OMON QOLDI
+ *
+ * ── NEGA BU PUL XAVFSIZLIGI XATOSI ──
+ *
+ * `salaryTransaction.create` yoki `postTeacherPayroll` yiqilsa to'lov
+ * qatori va jurnal yozuvi ROLLBACK bo'lardi, `paidAmount` esa
+ * O'SGANICHA qolardi: maosh "to'langan" ko'rinib, unga mos PUL YOZUVI
+ * BO'LMASDI. Ya'ni "atomik: balans + tranzaksiya + jurnal BITTA amalda"
+ * degan da'vo AMALDA NOTO'G'RI edi.
+ *
+ * ── TUZATISH ──
+ *
+ * `tx` qabul qilinadi va berilgan bo'lsa AYNAN O'SHA klient ishlatiladi.
+ * Berilmasa xatti-harakat AVVALGIDEK (global klient) — ya'ni
+ * tranzaksiyasiz chaqiruvchilar (`remove()`) ta'sirlanmaydi.
+ *
+ * ⚠ IKKALA STEKDA BIR VAQTDA (`server_nest/.../teacher-salary.service.ts`).
+ *
+ * ⚠ AYNI NUQSON `staffPayroll` VA `studentPayment` DA HAM BOR — ular bu
+ * ishning doirasidan TASHQARIDA va ATAYLAB TEGILMADI. Hisobotda qayd
+ * etilgan.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const applyPaidDelta = async (
+  salaryId,
+  delta,
+  { capToRemaining = false, tx = null } = {},
+) => {
+  // `tx` berilgan bo'lsa XOM SQL HAM, keyingi o'qish HAM o'sha
+  // tranzaksiyada bajarilishi shart — aks holda rollback ularni
+  // qaytara olmaydi.
+  const db = tx || prisma;
   const id = String(salaryId);
   const d = Number(delta) || 0;
 
@@ -361,18 +405,18 @@ export const applyPaidDelta = async (salaryId, delta, { capToRemaining = false }
   `;
 
   const affected = capToRemaining
-    ? await prisma.$executeRaw`
+    ? await db.$executeRaw`
         UPDATE "teacher_salaries" ${setClause}
         WHERE "id" = ${id}
           AND COALESCE("paidAmount", 0) + ${d}::numeric <= "expectedAmount"
       `
-    : await prisma.$executeRaw`
+    : await db.$executeRaw`
         UPDATE "teacher_salaries" ${setClause}
         WHERE "id" = ${id}
       `;
 
   if (affected === 0) return null;
-  return prisma.teacherSalary.findUnique({ where: { id } });
+  return db.teacherSalary.findUnique({ where: { id } });
 };
 
 // Faol tranzaksiyalar yig'indisidan paidAmount/status ni tiklaydi (repair yo'li).

@@ -5,6 +5,8 @@ import {
   SQL_EXPENSE, SQL_FEES, SQL_PAYROLL, SQL_EXPENSE_NON_PAYROLL, SQL_REVENUE_NET,
 } from "./analyticsFilter.js";
 import { compare, ratioPercent, n } from "./metrics.js";
+import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import { NON_OPERATING_ENTRY_KINDS } from "../../../constants/ledger.js";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -77,7 +79,13 @@ export const getExpenseBreakdown = async (filters = {}) => {
     FROM journal_lines l
     JOIN journal_entries e ON e.id = l."entryId"
     WHERE e.date >= ${prev.from} AND e.date <= ${range.to}
-      AND e.kind::text NOT IN ('owner_investment','owner_withdrawal','account_transfer','transfer_send','transfer_receive','inter_branch')
+      -- ⚠ B28 TUZATILDI: ro'yxat QO'LDA takrorlanmaydi.
+      -- Ilgari bu qatorda oltita tur QO'LDA sanab o'tilgan edi.
+      -- constants/ledger ga yangi non-operating turi qo'shilsa, u
+      -- BARCHA hisobotdan chiqarilardi-yu, AYNAN SHU kesimga kirib
+      -- qolardi — "chiqimlar" jamisi boshqa ekrandan farq qila
+      -- boshlardi va buni HECH NARSA tutmasdi.
+      AND e.kind::text NOT IN (${Prisma.join(NON_OPERATING_ENTRY_KINDS)})
       ${bc}
     GROUP BY e."expenseCategoryId"
     HAVING COALESCE(SUM(CASE WHEN l."accountKind" IN ('expense','payment_fee') THEN l.debit - l.credit ELSE 0 END), 0) <> 0
@@ -361,6 +369,48 @@ export const getRecurringSplit = async (filters = {}) => {
  *   kind     — kategoriya turi (payroll/operating/tax/capital)
  * Ularni qo'shib yuborish bir xil pulni ikki-uch marta sanardi.
  */
+/**
+ * BYUDJET TANLASHNING FILIAL KO'LAMI (B27).
+ *
+ * Aniq `branchId` berilsa — o'sha filial (ko'lam ichida ekani
+ * `branchClause` da allaqachon tekshiriladi). Berilmasa — ALS
+ * ko'lamidagi filiallar VA markaziy (`branchId: null`) byudjet.
+ */
+const budgetBranchScope = (branchId) => {
+  if (branchId) return { branchId: String(branchId) };
+  const bf = branchFilter();
+  const v = bf.branchId;
+  if (typeof v === "string") return { OR: [{ branchId: v }, { branchId: null }] };
+  if (v?.in) {
+    // Bo'sh ro'yxat — hech qaysi filialga biriktirilmagan xodim
+    // (fail-closed): faqat markaziy byudjet ko'rinadi.
+    return { OR: [{ branchId: { in: v.in } }, { branchId: null }] };
+  }
+  // Ko'lam cheklanmagan (owner "barcha filiallar") — filtr qo'yilmaydi.
+  return {};
+};
+
+/**
+ * BYUDJET BAJARILISHI — plan vs fakt.
+ *
+ * ── ⚠ B27 TUZATILDI: BYUDJET TANLASHDA FILIAL KO'LAMI ──
+ * Ilgari `?branchId=` berilmasa byudjet tanlashda filial filtri UMUMAN
+ * yo'q edi: faktik summa `journalWhere` orqali ko'lamda qolardi,
+ * byudjet esa `findFirst` bilan BUTUN TASHKILOTDAN olinardi. Ya'ni
+ * filial direktori BOSHQA filialning byudjet raqamlarini o'z fakti
+ * bilan yonma-yon ko'rishi mumkin edi — plan va fakt turli filialga
+ * tegishli bo'lardi.
+ *
+ * ── NEGA `branchId: null` HAM QABUL QILINADI ──
+ * `Budget.branchId` NULLABLE va NULL "butun markaz bo'yicha byudjet"
+ * degani (schema izohida ochiq yozilgan). Uni chiqarib tashlash
+ * markaziy byudjetni har bir filial ekranidan yo'qotardi.
+ *
+ * ── ⚠ SARALASH ──
+ * `branchId: "asc"` — Postgres'da ASC uchun NULL'lar OXIRIDA, ya'ni
+ * FILIALGA XOS byudjet markaziysidan USTUN turadi. Usiz ikkovi ham
+ * mos kelganda qaysi biri tanlanishi ANIQ EMAS edi.
+ */
 export const getBudgetPerformance = async (filters = {}) => {
   const range = parseRange(filters);
   const branchId = filters.branchId || null;
@@ -372,10 +422,10 @@ export const getBudgetPerformance = async (filters = {}) => {
       isDeleted: false,
       year,
       OR: [{ periodType: "month", month }, { periodType: "year", month: 0 }],
-      ...(branchId ? { branchId } : {}),
+      ...budgetBranchScope(branchId),
     },
     include: { lines: { include: { category: { select: { id: true, name: true, kind: true } } } } },
-    orderBy: { periodType: "asc" },
+    orderBy: [{ periodType: "asc" }, { branchId: "asc" }],
   });
 
   if (!budget) {

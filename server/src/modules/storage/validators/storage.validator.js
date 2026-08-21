@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CLEANUP_FREQUENCIES } from "../../../models/storageSettings.model.js";
+import { CLEANUP_FREQUENCIES } from "../../../constants/storage.js";
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, "Noto'g'ri ID");
 

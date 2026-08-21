@@ -2,6 +2,7 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import env from "./env.js";
 import logger from "./logger.js";
 import ApiError from "../utils/ApiError.js";
+import { validateDelegation } from "../constants/delegation.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Prisma klienti — eski `config/db.js` (mongoose.connect) o'rniga.
@@ -152,6 +153,30 @@ const withDecimalNormalization = (client) =>
 const IMMUTABLE_MODELS = new Set(["JournalEntry", "JournalLine"]);
 const MUTATING_OPS = new Set(["update", "updateMany", "upsert"]);
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BOSHLANG'ICH QOLDIQ SUMMASI — O'ZGARMAS.
+//
+// Mongo davrida `openingBalance.model.js` da maydon `immutable: true` edi
+// va Mongoose uni JIMGINA e'tiborsiz qoldirardi. Ko'chishda model qatlami
+// yo'qolgach himoya ham yo'qoldi — `tests/openingBalance.test.js` ning
+// oxirgi tekshiruvi ("Summa immutable - o'zgarmadi") aynan shuni sinaydi.
+//
+// NEGA MUHIM: boshlang'ich qoldiq — o'quvchi/xodim bilan hisob-kitobning
+// BOSHLANG'ICH NUQTASI. U keyinchalik o'zgartirilsa, undan keyin
+// yaratilgan hamma qator (to'lov rejasi, taqsimot, ko'chirilgan qarz)
+// boshqa asosga tayanib qoladi va balans JIMGINA noto'g'ri bo'ladi.
+//
+// ⚠ JIMGINA E'TIBORSIZ QOLDIRISH O'RNIGA XATO TASHLANADI — jurnal
+// qo'riqchisi bilan bir xil uslub. Sabab o'sha izohda: xavfli holat
+// jimgina tahrir, chunki uni hech kim sezmaydi. Ishlab chiqarish kodida
+// `amount` ni yangilaydigan yo'l YO'Q (tekshirildi), ya'ni bu hech
+// qanday mavjud oqimni buzmaydi.
+// ═══════════════════════════════════════════════════════════════════════════
+const openingAmountTouched = (args) => {
+  const has = (d) => d && typeof d === "object" && d.amount !== undefined;
+  return has(args?.data) || has(args?.update) || (Array.isArray(args?.data) && args.data.some(has));
+};
+
 const withJournalImmutability = (client) =>
   client.$extends({
     name: "journal-immutability",
@@ -164,6 +189,81 @@ const withJournalImmutability = (client) =>
               "Jurnal yozuvi o'zgarmas. Tuzatish uchun storno (reverse) ishlating",
               { code: "JOURNAL_IMMUTABLE" },
             );
+          }
+          if (
+            model === "OpeningBalance" &&
+            MUTATING_OPS.has(operation) &&
+            openingAmountTouched(args)
+          ) {
+            throw new ApiError(
+              409,
+              "Boshlang'ich qoldiq summasi o'zgarmas. Tuzatish uchun yangi yozuv kiriting",
+              { code: "OPENING_BALANCE_IMMUTABLE" },
+            );
+          }
+          return query(args);
+        },
+      },
+    },
+  });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DELEGATSIYA MATRITSASI VALIDATSIYASI — YO'QOTILGAN HOOK'NI TIKLASH.
+//
+// Mongo davrida `branch.model.js` da `pre("validate")` hook'i bor edi va u
+// `validateDelegation()` ni chaqirardi. Uning MAQSADI servis qatlamini
+// DUBLIKAT qilish emas edi — u SERVISDAN CHETLAB O'TUVCHI yo'llarni
+// qoplardi: seed, migratsiya, import, qo'lda yozish.
+//
+// Prisma'da model qatlami yo'q, ya'ni hook ham yo'qoldi va himoya FAQAT
+// `branches.service.update` da qoldi. `tests/branchDelegation.test.js`
+// buni aynan shu sababdan tekshiradi ("Model pre(validate) buzuq
+// matritsani saqlamaydi") va ko'chirishdan keyin o'sha tekshiruv yiqildi.
+//
+// NEGA BU MUHIM: buzuq matritsa `resolveRule()` da `approval` ga tushadi
+// (fail-closed), ya'ni darhol xavf tug'dirmaydi — LEKIN u owner
+// ko'rsatgan qoidani JIMGINA boshqa qoidaga aylantiradi. Owner "20%
+// gacha o'zi bersin" deb yozgan bo'lsa-yu qiymat buzuq saqlangan bo'lsa,
+// amalda HAR BIR chegirma tasdiqqa tushadi va sabab hech qayerda
+// ko'rinmaydi.
+//
+// Naqsh `withJournalImmutability` bilan bir xil va o'sha izohda ochiq
+// aytilgan: kengaytma yo'qotilgan Mongoose hook'ini AYNAN tiklaydi.
+// ═══════════════════════════════════════════════════════════════════════════
+const DELEGATION_WRITE_OPS = new Set([
+  "create",
+  "update",
+  "upsert",
+  "updateMany",
+  "createMany",
+]);
+
+/** Yozuv argumentlaridan `delegation` bo'lgan har bir tanani yig'adi. */
+const delegationPayloads = (args) => {
+  const out = [];
+  const push = (d) => {
+    if (d && typeof d === "object" && d.delegation !== undefined && d.delegation !== null) {
+      out.push(d.delegation);
+    }
+  };
+  push(args?.data);
+  push(args?.create);
+  push(args?.update);
+  if (Array.isArray(args?.data)) args.data.forEach(push);
+  return out;
+};
+
+const withDelegationValidation = (client) =>
+  client.$extends({
+    name: "delegation-validation",
+    query: {
+      branch: {
+        async $allOperations({ operation, args, query }) {
+          if (DELEGATION_WRITE_OPS.has(operation)) {
+            for (const delegation of delegationPayloads(args)) {
+              const error = validateDelegation(delegation);
+              if (error) throw new ApiError(400, error);
+            }
           }
           return query(args);
         },
@@ -185,7 +285,8 @@ if (!globalForPrisma.__prismaBase) {
 // proxy yaratadi va uni modul darajasida qayta yaratish nodemon
 // qayta yuklashlarida proxy zanjirini o'stirib borardi.
 const prisma =
-  globalForPrisma.__prisma ?? withJournalImmutability(withDecimalNormalization(base));
+  globalForPrisma.__prisma ??
+  withDelegationValidation(withJournalImmutability(withDecimalNormalization(base)));
 if (!globalForPrisma.__prisma) globalForPrisma.__prisma = prisma;
 
 // ─────────────────────────────────────────────────────────────────────────

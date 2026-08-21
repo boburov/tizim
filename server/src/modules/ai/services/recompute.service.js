@@ -241,7 +241,7 @@ export const recomputeAll = async ({
       // Bitta filial xatosi qolganini to'xtatmaydi - aks holda bitta
       // filialdagi buzuq ma'lumot butun markazni AI'siz qoldirardi.
       logger.error({ err, branch: b.name }, "AI qayta hisoblash xato");
-      results.push({ branchId: String(b._id), name: b.name, error: err.message });
+      results.push({ branchId: String(b.id), name: b.name, error: err.message });
     }
   }
   return results;
