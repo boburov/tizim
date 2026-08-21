@@ -11,6 +11,10 @@ import path from 'node:path';
  * o'qib, sababi topilmaydigan farqlar bergan bo'lardi.
  *
  * YAGONA YANGI O'ZGARUVCHI — `NEST_PORT`.
+ *
+ * ⚠ CUTOVER'DAN KEYIN (2026-08-22) u `PORT` bilan BIR XIL (5000):
+ * Express to'xtatildi va NestJS o'sha portni egalladi, ya'ni klient
+ * manzili o'zgarmadi. Pastdagi izohlar kesishuv davriga tegishli edi.
  * Sabab: Express `PORT` (5000) da turibdi va u O'CHIRILMAYDI (Faza 1
  * qo'shimcha, almashtiruvchi emas). Ikkalasi bitta portni egallay olmaydi,
  * shuning uchun NestJS alohida portda ko'tariladi. `PORT` TEGILMAYDI.
@@ -120,6 +124,23 @@ export const envSchema = z.object({
    * (Express bilan BIR XIL) ikkinchi pollerni to'sadi.
    */
   NEST_BOT_POLLING: boolish(false),
+
+  /**
+   * OMMAVIY IMPORT NAVBATINI KIM ISTE'MOL QILADI.
+   *
+   * ⚠ KESISHUV DAVRIDA `false`: navbatni EXPRESS worker'i oladi
+   * (`startImportWorker`). Ikkala stek bir navbatni iste'mol qilsa
+   * BITTA import IKKI MARTA bajarilardi — ya'ni PUL yozuvlari
+   * ikkilanardi.
+   *
+   * ⚠ EXPRESS O'CHIRILGANDA `true` QILINISHI SHART. Aks holda NestJS
+   * ishni navbatga QO'YADI, lekin HECH KIM olmaydi va import
+   * "queued" holatida ABADIY qotib qoladi — xato ham chiqmaydi.
+   *
+   * ⚠ `REDIS_URL` bo'sh bo'lsa bu bayroqning ahamiyati yo'q: navbat
+   * umuman ishlamaydi va import SINXRON bajariladi.
+   */
+  NEST_IMPORT_WORKER: boolish(false),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;

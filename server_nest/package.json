@@ -83,6 +83,7 @@
     "test:file-security": "node --env-file=../server/.env test/file-security.test.mjs",
     "test:money-concurrency": "node --env-file=../server/.env test/money-concurrency.test.mjs",
     "test:db-invariants": "node --env-file=../server/.env test/db-invariants.test.mjs",
+    "smoke": "node --env-file=../server/.env test/smoke.mjs",
     "test:route-matrix": "node --env-file=../server/.env test/route-matrix.mjs"
   },
   "prisma": {

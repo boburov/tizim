@@ -156,9 +156,18 @@ async function bootstrap(): Promise<void> {
 
   const port = get('NEST_PORT');
   await app.listen(port);
+
+  // ⚠ XABAR HOLATNI ROSTGO'YLIK BILAN AYTADI. Ilgari u shartsiz
+  // "Express tegilmagan holda ishlayapti" derdi — cutover'dan keyin bu
+  // YOLG'ON bo'lib qoldi. Yolg'on jurnal xabari eng yomon turdagi
+  // hujjat: uni o'qigan odam noto'g'ri xulosa chiqaradi.
+  const expressPort = get('PORT');
   logger.log(
-    `NestJS poydevori ${port}-portda ishga tushdi ` +
-      `(Express ${get('PORT')}-portda tegilmagan holda ishlayapti)`,
+    port === expressPort
+      ? `NestJS ${port}-portda ASOSIY server sifatida ishga tushdi ` +
+          '(Express bu portni BO\'SHATGAN bo\'lishi SHART)'
+      : `NestJS ${port}-portda ishga tushdi ` +
+          `(Express ${expressPort}-portda alohida ishlayapti)`,
   );
 }
 
