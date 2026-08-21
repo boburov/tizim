@@ -15,10 +15,11 @@
  *   3. XONASIZ GURUH → `unassignedGroups` da AYTILADI (bandlik
  *      raqamining ostida yashirilmaydi).
  *
- * ── ⚠ BOSHQA `branch-analytics` MARSHRUTLARI KO'CHIRILMAGAN ──
- * `/pnl`, `/utilization`, `/churn`, `/sales`… — ular moliya tahlili
- * ko'lamiga kiradi. Test ularning NestJS'da 404 ekanini tasdiqlaydi
- * (scaffold emas, umuman yo'q).
+ * ── ⚠ QO'SHNI `branch-analytics` MARSHRUTLARI ──
+ * `/pnl`, `/utilization`, `/churn`, `/sales`… ko'chirilgan va TO'LIQ
+ * pariteti `branch-analytics-parity` to'plamida o'lchanadi. Bu yerda
+ * faqat ular RO'YXATDAN O'TGANI qulflanadi: qo'shni modul jimgina
+ * tushib qolsa, xona bandligi hisobotlari ham buzilardi.
  *
  * ── BAZA GIGIYENASI ──
  * Fixture xona/guruh/jadval QATTIQ o'chiriladi; modul faqat o'qiydi.
@@ -284,16 +285,28 @@ const main = async () => {
   };
 
   try {
-    // ═══════════════ KO'CHIRILMAGAN MARSHRUTLAR ═══════════════
-    head("ko'chirilmagan `branch-analytics` marshrutlari (404)");
+    // ═══════════════ QO'SHNI MARSHRUTLAR RO'YXATDAN O'TGAN ═══════════
+    //
+    // ⚠ BU BO'LIM TESKARISIGA O'ZGARDI. Ilgari u bu oltita
+    // `branch-analytics` marshruti NestJS'da E'LON QILINMAGANINI (404)
+    // TALAB qilardi. Ular ko'chirilgach test YOLG'ON QIZIL bera
+    // boshladi — ya'ni ko'chirishning TUGAGANINI jazolardi.
+    //
+    // ⚠ TO'LIQ PARITET BU YERDA TAKRORLANMAYDI — u
+    // `branch-analytics-parity` to'plamida (26 o'lchov). Bu yerda
+    // faqat RO'YXATDAN O'TGANI qulflanadi: qo'shni modul jimgina
+    // tushib qolsa, xona bandligi hisobotlari ham buzilardi.
+    head("qo'shni `branch-analytics` marshrutlari RO'YXATDAN O'TGAN");
 
     for (const p of ['pnl', 'utilization', 'churn', 'normalized', 'teachers', 'sales']) {
       const e = await req(EXPRESS, 'GET', `/api/branch-analytics/${p}`, { token: ownerToken });
       const n = await req(NEST, 'GET', `/api/branch-analytics/${p}`, { token: ownerToken });
       try {
-        assert.equal(n.status, 404, `NestJS ${n.status} berdi (404 kutilgan)`);
-        assert.notEqual(e.status, 404, 'Express ham 404 — marshrut yo\'qmi?');
-        ok(`/${p} — NestJS'da E'LON QILINMAGAN (404), Express ${e.status}`);
+        assert.notEqual(e.status, 404, 'Express 404 — marshrut yo\'qmi?');
+        assert.notEqual(n.status, 404, 'NestJS 404 — marshrut ro\'yxatdan o\'tmaganmi?');
+        assert.equal(n.status, e.status,
+          `status farq qildi: express=${e.status}, nest=${n.status}`);
+        ok(`/${p} — ikkala stek ham ${e.status}`);
       } catch (err) { bad(`/${p}`, err.message); }
     }
 
