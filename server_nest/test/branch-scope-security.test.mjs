@@ -12,6 +12,7 @@
  * │ /activity-logs/:id         │ begona log 200   →  404                 │
  * │ /grades/rating/students/:id│ begona o'quvchi  →  403                 │
  * │ /groups/:id/teacher-periods│ begona guruh 200 →  404                 │
+ * │ /lesson-cancellations (B32)│ butun tashkilot  →  faqat o'z filiali   │
  * └────────────────────────────┴────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════
@@ -111,6 +112,8 @@ const run = async () => {
   // ── ko'lamlangan, LEKIN RUXSATLI aktyor ──
   const wanted = [
     'activity_logs.read', 'rating.read', 'groups.read', 'grades.read',
+    // B32 uchun SHART — `GET /lesson-cancellations` shu ruxsat ostida.
+    'attendance.read',
     // ⚠ B24 uchun SHART: usiz `/retention` 403 qaytaradi va bu
     // "ko'lam ishlayapti" bilan ADASHTIRILARDI — 403 ruxsat rad
     // etilishi, KO'LAM qo'llanishi EMAS.
@@ -241,6 +244,67 @@ const run = async () => {
         `${path} — IKKALA stekda ham direktor AYNAN o'z filialining ` +
           `${expectScoped} tasini oldi (owner ${all}; ilgari direktor ham ${all} ta ko'rardi)`,
       );
+    }
+  }
+
+  // ═════════════════ 5) B32 lesson-cancellations ═════════════════
+  //
+  // ⚠ NEGA O'Z FIKSTURASI: bazada bekor qilingan dars umuman bo'lmasligi
+  // mumkin va o'shanda "0 qator" natijasi ko'lam ishlaganini EMAS,
+  // ma'lumot yo'qligini bildirardi. Ikkala tomonga BITTADAN yozuv
+  // qo'yiladi va AYNIQSA "begona 0, o'ziniki 1" talab qilinadi.
+  section("B32 — /lesson-cancellations filial ko'lami");
+  if (!mineGrp || !otherGrp) {
+    skip('B32', "ko'lam ichida yoki tashqarisida guruh yo'q");
+  } else {
+    const KEY_MINE = '2099-01-05';
+    const KEY_OTHER = '2099-01-06';
+    const mk = (groupId, dateKey) => prisma.lessonCancellation.create({
+      data: {
+        groupId, date: new Date(`${dateKey}T00:00:00.000Z`), dateKey,
+        slot: '', reason: 'other', note: `${VAL} zond`, billable: false,
+      },
+      select: { id: true },
+    });
+    let cMine = null;
+    let cOther = null;
+    try {
+      cMine = await mk(mineGrp.id, KEY_MINE);
+      cOther = await mk(otherGrp.id, KEY_OTHER);
+
+      const r = await expectBoth(
+        "/lesson-cancellations — ikkalasi 200", '/api/lesson-cancellations', token, 200,
+      );
+      if (r && r.e.status === 200 && r.n.status === 200) {
+        for (const [stack, res] of [['express', r.e], ['nest', r.n]]) {
+          const rows = Array.isArray(res.body?.data) ? res.body.data : [];
+          const mine = rows.filter((x) => String(x.groupId) === String(mineGrp.id)).length;
+          const foreign = rows.filter((x) => String(x.groupId) === String(otherGrp.id)).length;
+          if (foreign > 0) {
+            bad(
+              `B32 SIZISH (${stack})`,
+              `begona filial guruhining ${foreign} ta bekor qilingan darsi ko'rindi ` +
+                '(guruh nomi, sana, sabab, IZOH va kim yozgani bilan)',
+            );
+          } else if (mine === 0) {
+            // ⚠ MUSBAT NAZORAT: "0 begona" o'z-o'zidan hech nimani
+            // isbotlamaydi — marshrut umuman bo'sh qaytargan bo'lishi
+            // ham mumkin.
+            skip(`B32 (${stack})`, "o'z filiali yozuvi ham ko'rinmadi — o'lchov ishonchsiz");
+          } else {
+            ok(`B32 (${stack}) — o'z filialidan ${mine} ta, begona filialdan 0 ta`);
+          }
+        }
+      }
+    } finally {
+      const ids = [cMine?.id, cOther?.id].filter(Boolean);
+      if (ids.length) {
+        await prisma.lessonCancellation.deleteMany({ where: { id: { in: ids } } });
+      }
+      const left = await prisma.lessonCancellation.count({
+        where: { note: { contains: VAL } } });
+      if (left === 0) ok('B32 fixture tozalandi (bazadan tasdiqlandi)');
+      else bad('B32 FIXTURE QOLDI', `${left} ta yozuv`);
     }
   }
 };

@@ -8,16 +8,22 @@ import { BranchAccessService } from '../../common/rbac/branch-access.service.js'
 import { RolesHelperService, staffRoleFilter } from '../../common/rbac/roles.helper.js';
 import { LEAD_PIPELINE } from '../../common/constants/lead-status.js';
 import { LeadRoutingService } from './lead-routing.service.js';
+import {
+  getAllowedBranchIds,
+  canSeeAllBranches,
+} from '../../common/als/branch-context.js';
+import { AuthService } from '../auth/auth.service.js';
+import { GroupsService } from '../groups/groups.service.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  * LIDLAR — `services/leads.service.js` EKVIVALENTI.
  *
- * ⚠ KO'CHIRILMAGAN QISM: `convert` va `convertBulk` (lidni o'quvchiga
- * aylantirish). Ular `GroupsService.addStudent` ga tayanadi va u HALI
- * KO'CHIRILMAGAN (`groups` moduli NestJS'da FAQAT O'QISH). Biznes
- * mantiq NUSXALANMADI — marshrutlar ochiq ravishda BLOKLANGAN deb
- * belgilangan (MIGRATION-CHECKLIST.md).
+ * ── ✅ `convert` / `convertBulk` ENDI SHU YERDA ──
+ * Ular `AuthService.registerUser` (o'quvchi yaratish) va
+ * `GroupsService.addStudent` (ixtiyoriy guruhga qabul) ga tayanadi.
+ * Ikkalasi ham ko'chirilgach marshrutlar ochildi; biznes mantiq
+ * NUSXALANMADI.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
@@ -53,6 +59,8 @@ export class LeadsService {
     @Inject(BranchAccessService) private readonly branchAccess: BranchAccessService,
     @Inject(RolesHelperService) private readonly rolesHelper: RolesHelperService,
     @Inject(LeadRoutingService) private readonly routing: LeadRoutingService,
+    @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(GroupsService) private readonly groups: GroupsService,
   ) {}
 
   /**
@@ -704,5 +712,205 @@ export class LeadsService {
         ),
       },
     };
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // LIDNI O'QUVCHIGA AYLANTIRISH
+  // ══════════════════════════════════════════════════════════════════
+
+  /**
+   * `registerUser` ga uzatiladigan ko'lam.
+   *
+   * ⚠ `assertCanAssignBranch` shunga qaraydi: usiz bir filial direktori
+   * boshqasiga odam qo'shib, keyin uning parolini o'qib olardi.
+   */
+  private registerScope(currentUser: any) {
+    return {
+      allowedBranchIds: getAllowedBranchIds(),
+      canSeeAllBranches: canSeeAllBranches(),
+      userId: currentUser?.id || currentUser?._id || null,
+    };
+  }
+
+  /**
+   * Guruh mavjudmi va so'rov KO'LAMIDAMI.
+   *
+   * ⚠ AYLANTIRISHDAN OLDIN tekshiriladi: o'quvchi yaratilib bo'lgach
+   * xato chiqsa uni orqaga qaytarib bo'lmaydi.
+   */
+  private async ensureGroupInScope(
+    groupId: string | null | undefined, leadBranchId: string | null,
+  ) {
+    if (!groupId) return null;
+    const group = await this.prisma.group.findFirst({
+      where: { id: String(groupId), isDeleted: false, ...branchFilter() },
+    });
+    if (!group) throw new ApiError(404, 'Guruh topilmadi');
+    if (leadBranchId && String(group.branchId) !== String(leadBranchId)) {
+      throw new ApiError(400, "Guruh lid filialiga tegishli emas");
+    }
+    return group;
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════
+   * BITTA lidni o'quvchiga aylantirish + (ixtiyoriy) guruhga qo'shish.
+   *
+   * ⚠ GURUHGA QO'SHISH XATOSI AYLANTIRISHNI BEKOR QILMAYDI: o'quvchi
+   * allaqachon yaratilgan va tranzaksiya yo'q. Xato `groupError` bo'lib
+   * qaytariladi — klient ogohlantirish ko'rsatadi, operator guruhga
+   * qo'lda qo'shadi.
+   *
+   * ⚠ FILIAL: yaratilayotgan o'quvchi LID FILIALIGA biriktiriladi. Aks
+   * holda u filialsiz qolardi va `userBranchCondition()` bo'yicha FAQAT
+   * `view_all` egalariga ko'rinardi — ya'ni lidni aylantirgan direktor
+   * o'zi yaratgan o'quvchini ro'yxatda KO'RMAY qolardi.
+   * ═══════════════════════════════════════════════════════════════════
+   */
+  private async convertOne(
+    lead: any, body: any, currentUser: any, groupId?: string | null,
+  ) {
+    const student: any = await this.auth.registerUser(
+      { ...body, role: 'student', homeBranchId: lead.branchId },
+      this.registerScope(currentUser),
+    );
+
+    const actorId = currentUser?.id || currentUser?._id || null;
+    const studentId = student.id || student._id;
+    const patch: any = { studentId };
+
+    // ⚠ ATRIBUTSIYA — KPI mukofoti KIMGA tegishli.
+    //
+    // Tartib: mas'ul xodim → lidni yaratgan → aylantirgan odam. BIR
+    // MARTA yoziladi va keyin O'ZGARMAYDI: mas'ulni ertaga almashtirish
+    // o'tgan oyning maoshini qayta yozib yuborishi mumkin emas.
+    patch.creditedToId =
+      lead.creditedToId || lead.assignedToId || lead.createdById || actorId || null;
+    patch.convertedById = lead.convertedById || actorId || null;
+    patch.convertedAt = lead.convertedAt || new Date();
+
+    if (lead.status !== 'enrolled') {
+      patch.status = 'enrolled';
+      patch.statusHistory = [
+        ...(Array.isArray(lead.statusHistory) ? lead.statusHistory : []),
+        { status: 'enrolled', at: new Date().toISOString(), by: actorId },
+      ];
+    }
+
+    // ⚠ O'QUVCHI → LID havolasi ALOHIDA yoziladi: `registerUser` hujjatni
+    // QAT'IY oq ro'yxat bo'yicha quradi, ya'ni `leadId` ni body orqali
+    // uzatib bo'lmaydi — u JIMGINA tushib qolardi.
+    //
+    // ⚠ IKKALASI BITTA TRANZAKSIYADA: Mongo'da bu ikki alohida yozuv edi
+    // va oradagi xato "lid aylantirilgan, lekin o'quvchida leadId yo'q"
+    // holatini qoldirardi — konversiya atributsiyasi (KPI mukofoti)
+    // jimgina yo'qolardi.
+    await this.prisma.$transaction([
+      this.prisma.lead.update({ where: { id: lead.id }, data: patch }),
+      this.prisma.user.update({ where: { id: studentId }, data: { leadId: lead.id } }),
+    ]);
+
+    let groupError: string | null = null;
+    if (groupId) {
+      try {
+        // ⚠ `joinedAt` BERILMAYDI: `addStudent` guruh boshlangan sana
+        // bilan o'quvchi ro'yxatga olingan sanadan KECHROG'INI oladi —
+        // yangi o'quvchida bu har doim to'g'ri va tekshiruvlardan o'tadi.
+        await this.groups.addStudent(groupId, String(studentId));
+      } catch (err) {
+        groupError = (err as Error)?.message || "Guruhga qo'shib bo'lmadi";
+      }
+    }
+
+    return { student, groupError };
+  }
+
+  /** Lidni o'quvchiga aylantirish: o'quvchi yaratiladi + lid bog'lanadi. */
+  async convert(id: string, body: any, currentUser: any) {
+    // FILIAL: boshqa filial lidini aylantirib bo'lmaydi.
+    const lead = await this.prisma.lead.findFirst({
+      where: { id, ...branchFilter() },
+    });
+    if (!lead) throw new ApiError(404, 'Lid topilmadi');
+    if (lead.studentId) {
+      throw new ApiError(409, "Bu lid allaqachon o'quvchiga aylantirilgan");
+    }
+
+    await this.ensureGroupInScope(body.groupId, lead.branchId);
+
+    const { student, groupError } = await this.convertOne(
+      lead, body, currentUser, body.groupId,
+    );
+    return { lead: await this.getById(lead.id), student, groupError };
+  }
+
+  /**
+   * KO'P LIDNI BIR MARTADA aylantirish (yangi sotuvlar oqimi).
+   *
+   * ⚠ Har lid ALOHIDA ishlanadi: bittasi yiqilsa (login band, telefon
+   * takrorlangan…) qolganlari BARIBIR o'tadi. Natijada har lid uchun
+   * javob qaytadi — operator kimga login berilganini ko'radi.
+   */
+  async convertBulk(
+    { leads = [], groupId }: { leads?: any[]; groupId?: string | null },
+    currentUser: any,
+  ) {
+    if (!leads.length) throw new ApiError(400, 'Lid tanlanmagan');
+
+    const ids = leads.map((l) => l.id);
+    if (new Set(ids.map(String)).size !== ids.length) {
+      throw new ApiError(400, "Ro'yxatda takrorlangan lid bor");
+    }
+    const usernames = leads.map((l) => String(l.username).toLowerCase().trim());
+    if (new Set(usernames).size !== usernames.length) {
+      throw new ApiError(400, "Ro'yxatda bir xil login ikki marta ishlatilgan");
+    }
+
+    const converted: any[] = [];
+    const failed: any[] = [];
+
+    for (const item of leads) {
+      const { id, ...body } = item;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const lead = await this.prisma.lead.findFirst({
+          where: { id, ...branchFilter() },
+        });
+        if (!lead) throw new ApiError(404, 'Lid topilmadi');
+        if (lead.studentId) {
+          throw new ApiError(409, "Bu lid allaqachon o'quvchiga aylantirilgan");
+        }
+
+        // ⚠ Guruh HAR LID uchun tekshiriladi: tanlovga TURLI filial
+        // lidlari tushishi mumkin, va boshqa filial o'quvchisini bu
+        // guruhga qo'shib bo'lmaydi.
+        // eslint-disable-next-line no-await-in-loop
+        if (groupId) await this.ensureGroupInScope(groupId, lead.branchId);
+
+        // eslint-disable-next-line no-await-in-loop
+        const { student, groupError } = await this.convertOne(
+          lead, body, currentUser, groupId,
+        );
+        converted.push({
+          leadId: String(lead.id),
+          studentId: String(student.id || student._id),
+          firstName: student.firstName,
+          lastName: student.lastName,
+          username: student.username,
+          // Parol OPERATORGA qaytariladi — u o'quvchiga aytishi kerak.
+          password: body.password,
+          addedToGroup: Boolean(groupId) && !groupError,
+          groupError,
+        });
+      } catch (err) {
+        failed.push({
+          leadId: String(id),
+          name: `${item.firstName || ''} ${item.lastName || ''}`.trim(),
+          message: (err as Error)?.message || "Aylantirib bo'lmadi",
+        });
+      }
+    }
+
+    return { converted, failed, groupId: groupId || null };
   }
 }

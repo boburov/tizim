@@ -51,6 +51,8 @@ import { ExpensesModule } from './modules/expenses/expenses.module.js';
 import { DepositsModule } from './modules/deposits/deposits.module.js';
 import { OpeningBalanceModule } from './modules/opening-balance/opening-balance.module.js';
 import { LedgerModule } from './modules/ledger/ledger.module.js';
+import { LessonCancellationsModule } from './modules/lesson-cancellations/lesson-cancellations.module.js';
+import { StudentFreezeModule } from './modules/student-freeze/student-freeze.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -185,6 +187,14 @@ import { LedgerModule } from './modules/ledger/ledger.module.js';
     OpeningBalanceModule,
     // Shaxsiy moliyaviy tarix — SOF O'QISH modeli (2/2).
     LedgerModule,
+    // Bekor qilingan darslar (3/3) — o'quvchi to'lamaydi, o'qituvchiga
+    // soat sanalmaydi. Yozuv PUL YO'LIDA.
+    LessonCancellationsModule,
+    // ⚠ O'quvchi muzlatishi (3/3) — ILGARI FAQAT `FinanceModule` orqali
+    // BILVOSITA erishilardi (kontrollersiz edi). Endi kontrolleri bor,
+    // shuning uchun ildizga OCHIQ qo'shildi: bilvosita bog'liqlik
+    // yo'qolsa marshrutlar jimgina 404 bo'lib qolardi.
+    StudentFreezeModule,
   ],
 })
 export class AppModule {}

@@ -73,6 +73,7 @@
     "test:finance-analytics-parity": "node test/finance-analytics-parity.test.mjs",
     "test:finance-core-parity": "node --env-file=../server/.env test/finance-core-parity.test.mjs",
     "test:groups-write-parity": "node --env-file=../server/.env test/groups-write-parity.test.mjs",
+    "test:wave-d-parity": "node --env-file=../server/.env test/wave-d-parity.test.mjs",
     "test:route-matrix": "node --env-file=../server/.env test/route-matrix.mjs"
   },
   "prisma": {

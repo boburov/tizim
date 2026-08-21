@@ -2,7 +2,10 @@ import prisma from "../../../config/prisma.js";
 import ApiError from "../../../utils/ApiError.js";
 import logger from "../../../config/logger.js";
 import { parseLocalDay, dateKeyOf } from "../../../helpers/attendance.helper.js";
-import { branchFilter } from "../../../helpers/branchContext.helper.js";
+import {
+  branchFilter,
+  branchGroupFilter,
+} from "../../../helpers/branchContext.helper.js";
 import { withLegacyId, withLegacyIds } from "../../../utils/serialize.js";
 import * as financePaymentService from "../../finance/services/studentPayment.service.js";
 import * as teacherSalaryService from "../../teacherSalary/services/teacherSalary.service.js";
@@ -80,9 +83,42 @@ export const create = async (body, currentUser) => {
   }
 };
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * ⚠ B32 — FILIAL KO'LAMI ILGARI UMUMAN YO'Q EDI.
+ *
+ * `where` faqat `{ isDeleted: false }` edi va `groupId` berilmasa BUTUN
+ * TASHKILOTNING bekor qilingan darslari qaytardi: guruh nomi, sana,
+ * sabab, IZOH va kim yozgani. Filial direktori boshqa filiallarning ish
+ * tafsilotlarini ko'rardi.
+ *
+ * O'LCHANGAN (taxmin emas, tuzatishdan OLDIN): A filial direktori
+ * `GET /lesson-cancellations` da 2 qator oldi — biri O'Z filialidan,
+ * biri BEGONA filialdan.
+ *
+ * `LessonCancellation` da `branchId` YO'Q — u GURUHGA tegishli, guruh
+ * esa filialga. Shuning uchun qo'shni modullardagi AYNI helper
+ * ishlatiladi: `branchGroupFilter("groupId")`.
+ *
+ * ⚠ ANIQ `groupId` berilgan bo'lsa ham KO'LAM TEKSHIRILADI: aks holda
+ * guruh ID'sini qo'lda berish orqali filtr butunlay chetlab o'tilardi
+ * (`discount.service.list` dagi bilan bir xil naqsh).
+ *
+ * ⚠ IKKALA STEKDA BIR VAQTDA tuzatildi
+ * (`server_nest/src/modules/lesson-cancellations/...`) — aks holda
+ * paritet ataylab buzilib, tuzatish "ko'chirish regressiyasi" bo'lib
+ * ko'rinardi.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
 export const list = async ({ groupId, year, month }) => {
-  const where = { isDeleted: false };
-  if (groupId) where.groupId = String(groupId);
+  const scope = await branchGroupFilter("groupId");
+  const where = { ...scope, isDeleted: false };
+  if (groupId) {
+    const gid = String(groupId);
+    const allowed = scope.groupId?.in;
+    if (allowed && !allowed.some((id) => String(id) === gid)) return [];
+    where.groupId = gid;
+  }
   if (year && month) {
     where.date = {
       gte: new Date(Date.UTC(Number(year), Number(month) - 1, 1)),

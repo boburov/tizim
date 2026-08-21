@@ -10,10 +10,12 @@ import type { AuthenticatedRequest } from '../../common/types/authenticated-requ
 import {
   idSchema, listSchema, statsSchema, createSchema, updateSchema,
   reminderSchema, reminderBulkSchema,
+  convertSchema, convertBulkSchema,
   routingCreateSchema, routingUpdateSchema, routingIdSchema,
   type IdRequest, type ListRequest, type StatsRequest,
   type CreateRequest, type UpdateRequest,
   type ReminderRequest, type ReminderBulkRequest,
+  type ConvertRequest, type ConvertBulkRequest,
   type RoutingCreateRequest, type RoutingUpdateRequest, type RoutingIdRequest,
 } from './leads.validators.js';
 
@@ -32,16 +34,11 @@ import {
  * `/convert-bulk` va `/reminder-bulk` ham mos `/:id/...` yo'llaridan
  * OLDIN turadi — yo'llar farq qilsa ham, tartib NIYATNI ochiq ko'rsatadi.
  *
- * ── ⚠ KO'CHIRILMAGAN 2 MARSHRUT (BLOKLANGAN, SCAFFOLD EMAS) ──
- *
- *   POST /leads/convert-bulk
- *   POST /leads/:id/convert
- *
- * Ular `GroupsService.addStudent` ga tayanadi va `groups` moduli
- * NestJS'da HOZIRCHA FAQAT O'QISH (yozish metodlari yo'q). Biznes
- * mantiq NUSXALANMADI — bu yerda ular UMUMAN E'LON QILINMAGAN, ya'ni
- * NestJS 404 qaytaradi va paritet testi ularni Express'ga qarshi
- * SOLISHTIRMAYDI. Bog'liqlik `MIGRATION-CHECKLIST.md` da qayd etilgan.
+ * ── ✅ 16/16 — `convert` va `convert-bulk` ham ochiq ──
+ * Ular `AuthService.registerUser` va `GroupsService.addStudent` ga
+ * tayanadi; ikkalasi ham ko'chirilgach bu marshrutlar ochildi.
+ * `POST /leads/convert-bulk` `POST /leads/:id/convert` DAN OLDIN
+ * e'lon qilinadi — Express routes faylidagi tartibning aynan o'zi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 @Controller('leads')
@@ -154,6 +151,41 @@ export class LeadsController {
   async create(@Validated(createSchema) v: CreateRequest, @Req() req: AuthenticatedRequest) {
     const data = await this.leads.create(v.body, req.user);
     return { success: true, data, message: "Lid qo'shildi" };
+  }
+
+  /**
+   * KO'P LIDNI BIR MARTADA AYLANTIRISH.
+   *
+   * ⚠ `/:id/convert` DAN OLDIN — yo'llar farq qilsa ham, tartib
+   * NIYATNI ochiq ko'rsatadi (Express routes faylidagi izohning o'zi).
+   *
+   * ⚠ 201 — Express `res.status(201)` yozadi.
+   */
+  @Post('convert-bulk')
+  @HttpCode(201)
+  @Permissions(PERMISSIONS.LEADS_MANAGE)
+  async convertBulk(
+    @Validated(convertBulkSchema) v: ConvertBulkRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = await this.leads.convertBulk(v.body as never, req.user);
+    const ok = data.converted.length;
+    const bad = data.failed.length;
+    const message = bad
+      ? `${ok} ta lid o'quvchiga aylantirildi, ${bad} tasi aylantirilmadi`
+      : `${ok} ta lid o'quvchiga aylantirildi`;
+    return { success: true, data, message };
+  }
+
+  @Post(':id/convert')
+  @HttpCode(201)
+  @Permissions(PERMISSIONS.LEADS_MANAGE)
+  async convert(
+    @Validated(convertSchema) v: ConvertRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = await this.leads.convert(v.params.id, v.body, req.user);
+    return { success: true, data, message: "Lid o'quvchiga aylantirildi" };
   }
 
   /** ⚠ `/:id/reminder` DAN OLDIN. */
