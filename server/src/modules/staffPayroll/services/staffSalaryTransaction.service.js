@@ -217,11 +217,25 @@ export const remove = async (id, currentUser) => {
     throw new ApiError(403, "Bu filial bo'yicha amal bajarib bo'lmaydi");
   }
 
-  await prisma.staffSalaryTransaction.update({
-    where: { id: doc.id },
-    data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+  // ── ⚠ ATOMAR (B21 bilan o'zgardi) ──
+  // Soft-delete, `paidAmount` kamayishi va JURNAL STORNOSI BITTA
+  // tranzaksiyada.
+  //
+  // ⚠ AUDIT YOZUVI TRANZAKSIYADAN TASHQARIDA qoldi — u kuzatuv izi,
+  // pul harakati emas. Uni ichkariga kiritish audit yozuvidagi xatoni
+  // PUL amalini bekor qiladigan darajaga ko'tarardi.
+  await runFinanceTxn(async (tx) => {
+    await tx.staffSalaryTransaction.update({
+      where: { id: doc.id },
+      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+    });
+    await payrollService.applyPaidDelta(doc.payrollId, -doc.amount, { tx });
+    await financialTx.reverseByRef(
+      { refModel: "StaffSalaryTransaction", refId: doc.id },
+      currentUser,
+      { tx, memo: "Storno: xodim maoshi bekor qilindi" },
+    );
   });
-  await payrollService.applyPaidDelta(doc.payrollId, -doc.amount);
 
   await auditService.record({
     employee: doc.employeeId,

@@ -485,6 +485,73 @@ export const postStaffPayroll = async ({ staffSalaryTransactionId }, actor, { tx
 // 5. QAYTARIM (Faza 6)
 // ══════════════════════════════════════════════════════════════════════
 
+
+// ══════════════════════════════════════════════════════════════════════
+// STORNO — BEKOR QILINGAN OPERATSIYANING JURNAL AKSI (B21)
+// ══════════════════════════════════════════════════════════════════════
+//
+// ── MUAMMO (O'LCHANGAN) ──
+// To'lov/chiqim BEKOR QILINGANDA manba yozuv soft-delete bo'lardi va
+// `paidAmount` kamayardi, JURNAL esa TEGILMAY qolardi. Jurnal esa
+// P&L va kassa qoldig'ining MANBAI — ya'ni bekor qilingan har bir
+// to'lov hisobotda ABADIY chiqim bo'lib qolardi va kassa qoldig'i
+// o'sha summa qadar KAM ko'rsatardi.
+//
+// ── NEGA STORNO, QAYTARIM (`postRefund`) EMAS ──
+// Qaytarim — "to'lov BO'LGAN, keyin pul qaytarildi": ikkala harakat ham
+// tarixda ko'rinishi kerak. Bekor qilish esa "bu operatsiya UMUMAN
+// BO'LMAGAN" (xato kiritilgan). Aynan shu holat uchun storno bor.
+//
+// ── NEGA YOZUVNI O'CHIRMAYMIZ ──
+// `JOURNAL_IMMUTABLE`: jurnal yozuvi o'zgarmas. To'g'ri yechim —
+// TESKARI yozuv qo'shish. Audit izi to'liq qoladi: xato ham,
+// tuzatish ham ko'rinadi.
+//
+// ── IDEMPOTENTLIK ──
+// `postingKey = "storno:<asl kalit>"`. Ikki marta bekor qilish
+// (double-click, retry) IKKINCHI storno YARATMAYDI — aks holda balans
+// o'sha summa qadar YOLG'ON o'sardi.
+//
+// ── ⚠ ESKI MA'LUMOT ──
+// Bu ilgari bekor qilingan (jurnali teskari aylantirilmagan) yozuvlarni
+// O'ZI TUZATMAYDI. Ular uchun alohida backfill kerak — u ONGLI qaror
+// bo'lishi va tarixiy hisobotlarni qayta hisoblashi shart.
+
+/**
+ * Manba hujjat bo'yicha jurnal yozuvini TESKARI aylantiradi.
+ *
+ * @returns storno yozuvi, yoki `null` — asl yozuv topilmasa.
+ *
+ * ⚠ `null` XATO EMAS: jurnal qatlami keyinroq qo'shilgan, ya'ni eski
+ * to'lovlarning jurnal yozuvi umuman yo'q. Bunday holatda bekor qilish
+ * ISHLASHDA DAVOM ETISHI kerak — aks holda eski yozuvni o'chirib
+ * bo'lmay qolardi.
+ */
+export const reverseByRef = async ({ refModel, refId }, actor, { tx = null, memo } = {}) =>
+  withTxn(tx, async (t) => {
+    // ⚠ `findMany`, `findFirst` EMAS: bitta hujjatga bir nechta yozuv
+    // tegishli bo'lishi MUMKIN (masalan to'lov + komissiya). Faqat
+    // birinchisini teskari aylantirish qolganini jurnalda QOLDIRARDI.
+    const originals = await t.journalEntry.findMany({
+      where: { refModel: String(refModel), refId: String(refId) },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, postingKey: true, memo: true },
+    });
+    if (!originals.length) return null;
+
+    const out = [];
+    for (const original of originals) {
+      // eslint-disable-next-line no-await-in-loop
+      out.push(await journal.reverse(original.id, {
+        memo: memo || `Storno: ${original.memo || refModel}`,
+        createdBy: actor?.id || actor?._id || null,
+        postingKey: `storno:${original.postingKey || original.id}`,
+        tx: t,
+      }));
+    }
+    return out;
+  });
+
 /**
  * QAYTARIMNI BAJARADI VA JURNALGA YOZADI.
  *
@@ -838,6 +905,7 @@ export const safely = async (label, fn) => {
 };
 
 export default {
+  reverseByRef,
   postStudentPayment,
   postDepositTopup,
   postDepositWithdraw,

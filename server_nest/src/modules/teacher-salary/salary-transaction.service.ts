@@ -287,23 +287,40 @@ export class SalaryTransactionService {
    * ⚠ FILIAL: boshqa filial to'lovini bekor qilib bo'lmaydi
    * (`SalaryTransaction` da `branchId` bor → to'g'ridan-to'g'ri filtr).
    *
-   * ⚠ EXPRESS XATTI-HARAKATI: bekor qilishda JURNAL YOZUVI
-   * STORNO QILINMAYDI (`postTeacherPayroll` ning teskarisi
-   * chaqirilmaydi) — faqat `SalaryTransaction` soft-delete bo'ladi va
-   * `paidAmount` kamayadi. Hujjatlangan, o'zgartirilmagan.
+   * ── ⚠ ATOMAR (B21 bilan o'zgardi) ──
+   * Soft-delete, `paidAmount` kamayishi va JURNAL STORNOSI BITTA
+   * tranzaksiyada. Oradagi uzilish "pul qaytdi, lekin jurnal eski"
+   * holatini qoldirardi.
+   *
+   * ── ⚠ JURNAL STORNO QILINADI ──
+   * Ilgari jurnal TEGILMAY qolardi va bekor qilingan to'lov P&L da
+   * ABADIY chiqim bo'lib turardi (kassa qoldig'i esa o'sha summa
+   * qadar kam ko'rsatardi). Endi `reverseByRef` teskari yozuv
+   * qo'shadi — asl yozuv O'ZGARMAS qoladi (`JOURNAL_IMMUTABLE`).
    */
   async remove(id: string, currentUser: any) {
     const trx = await this.prisma.salaryTransaction.findFirst({
       where: { id: String(id), ...branchFilter(), isDeleted: false },
     });
     if (!trx) throw new ApiError(404, 'Tranzaksiya topilmadi');
-    await this.prisma.salaryTransaction.update({
-      where: { id: trx.id },
-      data: {
-        isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser),
-      },
-    });
-    await this.salaries.applyPaidDelta(trx.salaryId, -Number(trx.amount));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.salaryTransaction.update({
+        where: { id: trx.id },
+        data: {
+          isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser),
+        },
+      });
+      await this.salaries.applyPaidDelta(trx.salaryId, -Number(trx.amount), {
+        tx: tx as never,
+      });
+      await this.financialTx.reverseByRef(
+        { refModel: 'SalaryTransaction', refId: trx.id },
+        currentUser,
+        { tx: tx as never, memo: "Storno: o'qituvchi maoshi bekor qilindi" },
+      );
+    }, FINANCE_TXN_OPTIONS);
+
     return { id: trx.id, _id: trx.id };
   }
 }

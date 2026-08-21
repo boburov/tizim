@@ -292,6 +292,21 @@ export const remove = async (id, currentUser) => {
         // eslint-disable-next-line no-await-in-loop
         await depositService.refundToDeposit(t.studentId, t.amount, { tx });
       }
+
+      // ── ⚠ JURNAL STORNOSI (B21 bilan qo'shildi) ──
+      // Ilgari jurnal TEGILMAY qolardi: bekor qilingan to'lov P&L da
+      // ABADIY DAROMAD bo'lib turardi va kassa qoldig'i o'sha summa
+      // qadar KO'P ko'rsatardi. Endi teskari yozuv qo'shiladi — asl
+      // yozuv O'ZGARMAS (`JOURNAL_IMMUTABLE`).
+      //
+      // ⚠ AYNI TRANZAKSIYADA: void yarim bajarilib qolsa jurnal ham,
+      // `paidAmount` ham qaytariladi.
+      // eslint-disable-next-line no-await-in-loop
+      await financialTx.reverseByRef(
+        { refModel: "PaymentTransaction", refId: t.id },
+        currentUser,
+        { tx, memo: "Storno: to'lov bekor qilindi" },
+      );
       removed.push(t.id);
     }
     return { id: trx.id, _id: trx.id, removed };

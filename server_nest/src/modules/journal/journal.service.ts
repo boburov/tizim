@@ -326,16 +326,46 @@ export class JournalService {
    *
    * Yozuv o'zgarmas, shuning uchun tuzatishning yagona to'g'ri yo'li shu.
    * Audit izi to'liq saqlanadi: xato ham, uni tuzatish ham ko'rinadi.
+   *
+   * ── ⚠ `postingKey` — IDEMPOTENTLIK (B21 bilan qo'shildi) ──
+   * Berilsa, takroriy chaqiruv YANGI storno YARATMAYDI: mavjudi
+   * qaytariladi. Usiz ikki marta bekor qilish (double-click, retry)
+   * jurnalni IKKI MARTA teskari aylantirardi va balans o'sha summa
+   * qadar YOLG'ON o'sardi.
+   *
+   * ── ⚠ `tx` — ATOMARLIK ──
+   * Chaqiruvchining tranzaksiyasida bajariladi: soft-delete,
+   * `paidAmount` kamayishi va storno BIR amalda bo'lishi shart.
    */
   async reverse(
     entryId: string,
-    { memo, createdBy }: { memo?: string; createdBy?: string | null } = {},
+    {
+      memo,
+      createdBy,
+      postingKey = null,
+      tx = null,
+    }: {
+      memo?: string;
+      createdBy?: string | null;
+      postingKey?: string | null;
+      tx?: TxClient | null;
+    } = {},
   ) {
-    const original = await this.prisma.journalEntry.findUnique({
+    const client = (tx || this.prisma) as never as typeof this.prisma;
+
+    const original = await client.journalEntry.findUnique({
       where: { id: String(entryId) },
       include: { lines: true },
     });
     if (!original) throw new ApiError(404, "Jurnal yozuvi topilmadi");
+
+    if (postingKey) {
+      const existing = await client.journalEntry.findUnique({
+        where: { postingKey },
+        include: { lines: true },
+      });
+      if (existing) return withLegacyId(existing);
+    }
 
     // Debet va kredit ALMASHTIRILADI - yig'indilar teng bo'lgani uchun
     // teskari yozuv ham avtomatik muvozanatda bo'ladi.
@@ -346,24 +376,41 @@ export class JournalService {
       credit: l.debit,
     }));
 
-    const entry = await this.prisma.journalEntry.create({
-      data: {
-        branchId: original.branchId,
-        date: new Date(),
-        kind: ENTRY_KINDS.ADJUSTMENT as never,
-        memo: memo || `Storno: ${original.memo || original.kind}`,
-        refModel: 'JournalEntry',
-        refId: original.id,
-        isInternal: original.isInternal,
-        counterpartyBranchId: original.counterpartyBranchId,
-        totalDebit: original.totalCredit,
-        totalCredit: original.totalDebit,
-        createdById: createdBy ? String(createdBy) : null,
-        lines: { create: lines as never },
-      },
-      include: { lines: true },
-    });
-    return withLegacyId(entry);
+    const data = {
+      branchId: original.branchId,
+      date: new Date(),
+      kind: ENTRY_KINDS.ADJUSTMENT as never,
+      memo: memo || `Storno: ${original.memo || original.kind}`,
+      refModel: 'JournalEntry',
+      refId: original.id,
+      isInternal: original.isInternal,
+      counterpartyBranchId: original.counterpartyBranchId,
+      totalDebit: original.totalCredit,
+      totalCredit: original.totalDebit,
+      createdById: createdBy ? String(createdBy) : null,
+      lines: { create: lines as never },
+      ...(postingKey ? { postingKey } : {}),
+    };
+
+    try {
+      const entry = await client.journalEntry.create({
+        data: data as never,
+        include: { lines: true },
+      });
+      return withLegacyId(entry);
+    } catch (err: unknown) {
+      // POYGA: ikki so'rov bir vaqtda kelsa unique indeks ikkinchisini
+      // rad etadi — o'shanda mavjudini o'qiymiz (`postIdempotent` bilan
+      // AYNI naqsh).
+      if (postingKey && (err as { code?: string })?.code === 'P2002') {
+        const raced = await client.journalEntry.findUnique({
+          where: { postingKey },
+          include: { lines: true },
+        });
+        if (raced) return withLegacyId(raced);
+      }
+      throw err;
+    }
   }
 
   // ============================================================

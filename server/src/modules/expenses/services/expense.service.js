@@ -371,11 +371,28 @@ export const update = async (id, body, currentUser) => {
   return withLegacyId(saved);
 };
 
+/**
+ * CHIQIMNI BEKOR QILADI.
+ *
+ * ── ⚠ JURNAL STORNO QILINADI (B21 bilan qo'shildi) ──
+ * Ilgari faqat soft-delete bo'lardi va jurnal TEGILMAY qolardi — bekor
+ * qilingan chiqim P&L da ABADIY chiqim bo'lib turardi, kassa qoldig'i
+ * esa o'sha summa qadar kam ko'rsatardi.
+ *
+ * Ikkalasi BITTA tranzaksiyada.
+ */
 export const remove = async (id, currentUser) => {
   const doc = await loadForWrite(id);
-  await prisma.expense.update({
-    where: { id: doc.id },
-    data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+  await runFinanceTxn(async (tx) => {
+    await tx.expense.update({
+      where: { id: doc.id },
+      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+    });
+    await financialTx.reverseByRef(
+      { refModel: "Expense", refId: doc.id },
+      currentUser,
+      { tx, memo: "Storno: chiqim bekor qilindi" },
+    );
   });
   return { ok: true };
 };

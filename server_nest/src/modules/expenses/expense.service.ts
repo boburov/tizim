@@ -396,12 +396,30 @@ export class ExpenseService {
     return withLegacyId(saved);
   }
 
+  /**
+   * CHIQIMNI BEKOR QILADI.
+   *
+   * ── ⚠ JURNAL STORNO QILINADI (B21 bilan qo'shildi) ──
+   * Ilgari faqat soft-delete bo'lardi va jurnal TEGILMAY qolardi —
+   * bekor qilingan chiqim P&L da ABADIY chiqim bo'lib turardi, kassa
+   * qoldig'i esa o'sha summa qadar kam ko'rsatardi.
+   *
+   * Ikkalasi BITTA tranzaksiyada: oradagi uzilish "chiqim o'chdi,
+   * jurnal eski" holatini qoldirardi.
+   */
   async remove(id: string, currentUser?: Actor | null) {
     const doc = await this.loadForWrite(id);
-    await this.prisma.expense.update({
-      where: { id: doc.id },
-      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
-    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.expense.update({
+        where: { id: doc.id },
+        data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+      });
+      await this.financialTx.reverseByRef(
+        { refModel: 'Expense', refId: doc.id },
+        currentUser,
+        { tx: tx as never, memo: 'Storno: chiqim bekor qilindi' },
+      );
+    }, FINANCE_TXN_OPTIONS);
     return { ok: true };
   }
 

@@ -805,6 +805,15 @@ const main = async () => {
       });
       const eids = entries.map((e) => e.id);
       if (eids.length) {
+        // ⚠ STORNO YOZUVLARI (B21) — ular `refModel: "JournalEntry"` va
+        // ASL yozuvga ishora qiladi, ya'ni yuqoridagi `SalaryTransaction`
+        // bo'yicha qidiruv ularni TOPMAYDI. Ularsiz tozalash baza
+        // driftini qoldirardi.
+        const stornos = await prisma.journalEntry.findMany({
+          where: { refModel: 'JournalEntry', refId: { in: eids } },
+          select: { id: true },
+        });
+        eids.push(...stornos.map((e) => e.id));
         await prisma.journalLine.deleteMany({ where: { entryId: { in: eids } } });
         await prisma.journalEntry.deleteMany({ where: { id: { in: eids } } });
       }

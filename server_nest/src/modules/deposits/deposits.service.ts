@@ -707,6 +707,17 @@ export class DepositsService {
   // DEPOZIT TRANZAKSIYASINI BEKOR QILISH
   // ══════════════════════════════════════════════════════════════════
 
+  /**
+   * DEPOZIT TRANZAKSIYASINI BEKOR QILADI (topup/withdraw).
+   *
+   * ── ⚠ ATOMAR + JURNAL STORNOSI (B21 bilan o'zgardi) ──
+   * Balans o'zgarishi, soft-delete va JURNAL STORNOSI BITTA
+   * tranzaksiyada. Ilgari jurnal TEGILMAY qolardi — bekor qilingan
+   * to'ldirish kassa qoldig'ida ABADIY qolardi.
+   *
+   * ⚠ `refund` turi BEKOR QILINMAYDI (yuqorida 400): qaytarim —
+   * "pul HAQIQATAN qaytdi", storno esa "operatsiya BO'LMAGAN".
+   */
   async removeDepositTxn(id: string, currentUser: any) {
     const txn = await this.prisma.depositTransaction.findFirst({
       where: { id: String(id), isDeleted: false },
@@ -717,29 +728,38 @@ export class DepositsService {
     }
 
     const deposit = await this.getOrCreate(txn.studentId);
-    if (txn.type === 'topup') {
-      // Pul kelmagan deb hisoblaymiz — balansdan ayiramiz (agar
-      // qoplanmagan bo'lsa). Qoplangan bo'lsa balans yetmaydi va yozuv
-      // o'zgarmaydi — bu ATAYLAB: qoplangan pulni "yo'q" qilib bo'lmaydi.
-      const balUpd = await this.applyBalanceDelta(deposit.id, -(txn.amount as any));
-      if (!balUpd) {
-        throw new ApiError(
-          400,
-          "Bu pul allaqachon qoplangan - tranzaksiyani o'chirib bo'lmaydi",
-        );
+    await this.prisma.$transaction(async (tx) => {
+      if (txn.type === 'topup') {
+        // Pul kelmagan deb hisoblaymiz — balansdan ayiramiz (agar
+        // qoplanmagan bo'lsa). Qoplangan bo'lsa balans yetmaydi va yozuv
+        // o'zgarmaydi — bu ATAYLAB: qoplangan pulni "yo'q" qilib bo'lmaydi.
+        const balUpd = await this.applyBalanceDelta(
+          deposit.id, -(txn.amount as any), { tx: tx as never });
+        if (!balUpd) {
+          throw new ApiError(
+            400,
+            "Bu pul allaqachon qoplangan - tranzaksiyani o'chirib bo'lmaydi",
+          );
+        }
+      } else {
+        // withdraw bekor — pul qaytib keldi.
+        await this.applyBalanceDelta(
+          deposit.id, txn.amount as any, { tx: tx as never });
       }
-    } else {
-      // withdraw bekor — pul qaytib keldi.
-      await this.applyBalanceDelta(deposit.id, txn.amount as any);
-    }
-    await this.prisma.depositTransaction.update({
-      where: { id: txn.id },
-      data: {
-        isDeleted: true,
-        deletedAt: new Date(),
-        deletedBy: this.actorId(currentUser),
-      },
-    });
+      await tx.depositTransaction.update({
+        where: { id: txn.id },
+        data: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: this.actorId(currentUser),
+        },
+      });
+      await this.financialTx.reverseByRef(
+        { refModel: 'DepositTransaction', refId: txn.id },
+        currentUser,
+        { tx: tx as never, memo: 'Storno: depozit amali bekor qilindi' },
+      );
+    }, FINANCE_TXN_OPTIONS);
     return { id: txn.id, _id: txn.id };
   }
 

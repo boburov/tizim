@@ -402,11 +402,11 @@ export class TeacherSalaryService {
    * o'sganicha qolardi — maosh "to'langan" ko'rinib, PUL YOZUVI
    * bo'lmasdi.
    *
-   * ⚠ `tx` berilmasa xatti-harakat AVVALGIDEK (global klient), ya'ni
-   * tranzaksiyasiz chaqiruvchilar (`remove()`) ta'sirlanmaydi.
+   * ⚠ `tx` berilmasa xatti-harakat AVVALGIDEK (global klient).
    *
-   * ⚠ AYNI NUQSON `staff-payroll` va `student-payment` da HAM bor —
-   * ular bu ishning doirasidan tashqarida va ATAYLAB TEGILMADI.
+   * ⚠ AYNI NUQSON `staff-payroll` da HAM bor edi — u B20 bilan
+   * TUZATILDI (ikkala stekda). `student-payment` allaqachon to'g'ri
+   * edi (o'lchandi).
    * ═══════════════════════════════════════════════════════════════════
    */
   async applyPaidDelta(

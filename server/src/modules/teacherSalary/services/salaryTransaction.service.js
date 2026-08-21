@@ -245,6 +245,20 @@ export const executeApproved = async (approval) => {
 };
 
 // To'lovni bekor qiladi (soft-delete), balansni atomik kamaytiradi.
+/**
+ * TO'LOVNI BEKOR QILADI.
+ *
+ * ── ⚠ ATOMAR (B21 bilan o'zgardi) ──
+ * Soft-delete, `paidAmount` kamayishi va JURNAL STORNOSI BITTA
+ * tranzaksiyada. Oradagi uzilish "pul qaytdi, lekin jurnal eski"
+ * holatini qoldirardi.
+ *
+ * ── ⚠ JURNAL STORNO QILINADI ──
+ * Ilgari jurnal TEGILMAY qolardi va bekor qilingan to'lov P&L da
+ * ABADIY chiqim bo'lib turardi (kassa qoldig'i esa o'sha summa qadar
+ * kam ko'rsatardi). Endi `reverseByRef` teskari yozuv qo'shadi — asl
+ * yozuv O'ZGARMAS qoladi (`JOURNAL_IMMUTABLE`), audit izi to'liq.
+ */
 export const remove = async (id, currentUser) => {
   // FILIAL: boshqa filial to'lovini bekor qilib bo'lmaydi (SalaryTransaction'da
   // branchId bor, shuning uchun to'g'ridan-to'g'ri filtr).
@@ -252,10 +266,19 @@ export const remove = async (id, currentUser) => {
     where: { id: String(id), ...branchFilter(), isDeleted: false },
   });
   if (!trx) throw new ApiError(404, "Tranzaksiya topilmadi");
-  await prisma.salaryTransaction.update({
-    where: { id: trx.id },
-    data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+
+  await runFinanceTxn(async (tx) => {
+    await tx.salaryTransaction.update({
+      where: { id: trx.id },
+      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+    });
+    await teacherSalaryService.applyPaidDelta(trx.salaryId, -trx.amount, { tx });
+    await financialTx.reverseByRef(
+      { refModel: "SalaryTransaction", refId: trx.id },
+      currentUser,
+      { tx, memo: "Storno: o'qituvchi maoshi bekor qilindi" },
+    );
   });
-  await teacherSalaryService.applyPaidDelta(trx.salaryId, -trx.amount);
+
   return { id: trx.id, _id: trx.id };
 };

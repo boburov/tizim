@@ -252,6 +252,17 @@ export class StaffSalaryTransactionService {
     });
   }
 
+  /**
+   * TO'LOVNI BEKOR QILADI.
+   *
+   * ── ⚠ ATOMAR (B21 bilan o'zgardi) ──
+   * Soft-delete, `paidAmount` kamayishi va JURNAL STORNOSI BITTA
+   * tranzaksiyada.
+   *
+   * ⚠ AUDIT YOZUVI TRANZAKSIYADAN TASHQARIDA qoldi — u kuzatuv izi,
+   * pul harakati emas. Uni ichkariga kiritish audit yozuvidagi xatoni
+   * PUL amalini bekor qiladigan darajaga ko'tarardi.
+   */
   async remove(id: string, currentUser: Actor | null) {
     const doc = await this.prisma.staffSalaryTransaction.findFirst({
       where: { id: String(id), isDeleted: false },
@@ -261,12 +272,19 @@ export class StaffSalaryTransactionService {
       throw new ApiError(403, "Bu filial bo'yicha amal bajarib bo'lmaydi");
     }
 
-    await this.prisma.staffSalaryTransaction.update({
-      where: { id: doc.id },
-      data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
-    });
-    await this.payroll.applyPaidDelta(
-      doc.payrollId, -(doc.amount as unknown as number));
+    await this.prisma.$transaction(async (tx) => {
+      await tx.staffSalaryTransaction.update({
+        where: { id: doc.id },
+        data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },
+      });
+      await this.payroll.applyPaidDelta(
+        doc.payrollId, -(doc.amount as unknown as number), { tx: tx as never });
+      await this.financialTx.reverseByRef(
+        { refModel: 'StaffSalaryTransaction', refId: doc.id },
+        currentUser,
+        { tx: tx as never, memo: 'Storno: xodim maoshi bekor qilindi' },
+      );
+    }, FINANCE_TXN_OPTIONS);
 
     await this.audit.record({
       employee: doc.employeeId,

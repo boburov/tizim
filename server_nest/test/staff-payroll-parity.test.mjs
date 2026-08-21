@@ -38,7 +38,9 @@ import {
   EXPRESS, NEST, request, normalize, nowStamps, mintToken,
   waitForStacks, createReporter,
 } from './_harness.mjs';
+import { runIp } from './_mirror.mjs';
 
+const RUN_IP = runIp();
 const prisma = new PrismaClient();
 const TAG = `SP-${Date.now().toString(36)}`;
 const { R, ok, bad, skip, section, finish } = createReporter('staff-payroll');
@@ -309,10 +311,17 @@ const run = async () => {
     };
   }
 
+  // ⚠ SHU YURISHGA XOS MIJOZ MANZILI: bu to'plam 200 dan ortiq so'rov
+  // yuboradi va `generalLimiter` (200/daq) 127.0.0.1 byudjetini yeb
+  // qo'yardi — o'shanda IKKALA stek ham 429 qaytaradi va tekshiruvlar
+  // "o'lchanmadi" bo'lib qoladi (o'lchangan: 28 ta).
+  //
+  // ⚠ CHEGARANI KO'TARISH MUMKIN EMAS — u ishlab chiqarish himoyasi.
   const call = (base, method, path, { body, as, noAuth } = {}) =>
     request(base, method, path, {
       token: noAuth ? undefined : as ? tok[base][as] : ownerToken,
       body,
+      headers: { 'x-forwarded-for': RUN_IP },
     });
 
   /** Fikstura ichida yaratilgan ID'lar (stekka xos). */
