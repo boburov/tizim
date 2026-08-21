@@ -211,10 +211,15 @@ const run = async () => {
       mk({ NEST_WORKER_JOBS: '  ,  , ' }).selected().length === 0,
     );
     // Noma'lum nom → o'sha nom TASHLANADI (lekin baland ovozda loglanadi).
+    //
+    // ⚠ NOM ATAYLAB MAVJUD EMAS: ilgari bu yerda `daily.ai-recompute`
+    // turardi (AI joblari hali ko'chirilmagan edi). Ular ko'chirilgach
+    // tekshiruv "noma'lum nom" ni emas, MAVJUD jobni sinay boshlagan
+    // va yolg'on qizil bergan edi. Endi hech qachon mavjud
+    // bo'lmaydigan nom ishlatiladi.
     check(
       "noma'lum nom ro'yxatga olinmaydi",
-      mk({ NEST_WORKER_JOBS: 'daily.ai-recompute' }).selected().length === 0,
-      "AI joblari hali ko'chirilmagan",
+      mk({ NEST_WORKER_JOBS: 'never.exists-sentinel' }).selected().length === 0,
     );
     // Aniq nom → faqat o'sha.
     const one = mk({ NEST_WORKER_JOBS: 'daily.ttl-cleanup' }).selected();
@@ -223,7 +228,9 @@ const run = async () => {
       one.length === 1 && one[0].name === 'daily.ttl-cleanup',
     );
     // Aralash: bittasi ma'lum, bittasi emas.
-    const mixed = mk({ NEST_WORKER_JOBS: 'daily.ttl-cleanup,monthly.ai-report' }).selected();
+    const mixed = mk({
+      NEST_WORKER_JOBS: 'daily.ttl-cleanup,never.exists-sentinel',
+    }).selected();
     check(
       "aralash ro'yxat → faqat ma'lumlari",
       mixed.length === 1 && mixed[0].name === 'daily.ttl-cleanup',
@@ -234,13 +241,24 @@ const run = async () => {
       mk({ NEST_WORKER_JOBS: '*' }).selected().length === all.length,
       `${all.length} ta`,
     );
-    // Ko'chirilmagan job ro'yxatda BO'LMASLIGI shart.
+    // ── KO'CHIRISH TO'LIQLIGI ──
+    //
+    // ⚠ SHART TESKARISIGA O'ZGARDI. Ilgari bu yerda "ko'chirilmagan
+    // joblar Nest ro'yxatida YO'Q" tekshirilardi va u `notMigrated.length
+    // > 0` ni TALAB qilardi — ya'ni ko'chirish TUGAGANDA test QIZIL
+    // bo'lardi. Endi barcha Express joblari ko'chirilgan, shuning uchun
+    // tekshiruv "BIRORTASI QOLMADI" ga aylandi.
+    //
+    // ⚠ BU "ISHGA TUSHDI" DEGANI EMAS: ro'yxat faqat kodi tayyorligini
+    // bildiradi. Kesishuv davrida joblarni EXPRESS yuritadi
+    // (`NEST_WORKERS_ENABLED=false`) va yuqoridagi "cron soati O'CHIQ"
+    // tekshiruvi buni qulflaydi.
     const migrated = new Set(all.map((j) => j.name));
     const notMigrated = [...express.keys()].filter((n) => !migrated.has(n));
     check(
-      "ko'chirilmagan joblar Nest ro'yxatida YO'Q",
-      notMigrated.length > 0 && notMigrated.every((n) => !migrated.has(n)),
-      `${notMigrated.length} ta job hamon Express'da`,
+      "Express joblarining HAMMASI Nest ro'yxatida bor",
+      notMigrated.length === 0,
+      notMigrated.length ? `qolgan: ${notMigrated.join(', ')}` : `${migrated.size} ta job`,
     );
 
     // ── BOOT CATCH-UP: faqat ISHCHI rejimida va faqat ochiq ro'yxatda ──

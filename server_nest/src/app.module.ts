@@ -12,6 +12,10 @@ import { JobsModule } from './jobs/jobs.module.js';
 import { BotModule } from './bot/bot.module.js';
 import { NotificationJobsModule } from './jobs/notifications/notification-jobs.module.js';
 import { StorageJobsModule } from './jobs/storage/storage-jobs.module.js';
+import { AiJobsModule } from './jobs/ai/ai-jobs.module.js';
+import { FinanceJobsModule } from './jobs/finance/finance-jobs.module.js';
+import { EducationJobsModule } from './jobs/education/education-jobs.module.js';
+import { LeadJobsModule } from './jobs/leads/lead-jobs.module.js';
 import { HolidayJobsModule } from './jobs/holidays/holiday-jobs.module.js';
 import { AttendanceJobsModule } from './jobs/attendance/attendance-jobs.module.js';
 import { BotAuthModule } from './modules/bot-auth/bot-auth.module.js';
@@ -108,6 +112,14 @@ import { AiModule } from './modules/ai/ai.module.js';
     StorageJobsModule,
     HolidayJobsModule,
     AttendanceJobsModule,
+    // AI job oilasi (7/7) — `AiModule` ko'chirilgach OCHILDI.
+    AiJobsModule,
+    // Moliya (4), ta'lim (3) va lid (2) job oilalari — bog'liq
+    // servislari ko'chirilgach ochildi. ⚠ Ro'yxatda turishi ISHGA
+    // TUSHISHI degani EMAS: kesishuv davrida ularni Express yuritadi.
+    FinanceJobsModule,
+    EducationJobsModule,
+    LeadJobsModule,
     // ── FAZA 10: Telegram bot ──
     // ⚠ Polling standart holda O'CHIQ (`NEST_BOT_POLLING=false`) — bot
     // nusxasi faqat YUBORISH uchun ko'tariladi. Buyruqlarni Express

@@ -2,6 +2,8 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { LeadsController } from './leads.controller.js';
 import { LeadsService } from './leads.service.js';
 import { LeadRoutingService } from './lead-routing.service.js';
+import { LeadNotifyService } from './lead-notify.service.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 import { LeadConversionService } from './lead-conversion.service.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
 import { AuthModule } from '../auth/auth.module.js';
@@ -19,10 +21,14 @@ import { GroupsModule } from '../groups/groups.module.js';
  * ga tayanadi, bot esa `LeadRoutingService.route` ga.
  */
 @Module({
-  imports: [AuthModule, GroupsModule],
+  // ⚠ `NotificationsModule` — `LeadNotifyService` eslatmalarni AYNI
+  // `notifications.send` orqali yuboradi (platforma + Telegram bitta
+  // amalda). Ikkinchi yuborish yo'li yaratilsa dedupe kaliti bo'linib
+  // ketardi va odam IKKI xabar olardi.
+  imports: [AuthModule, GroupsModule, NotificationsModule],
   controllers: [LeadsController],
-  providers: [LeadsService, LeadRoutingService, LeadConversionService],
-  exports: [LeadsService, LeadRoutingService, LeadConversionService],
+  providers: [LeadsService, LeadRoutingService, LeadConversionService, LeadNotifyService],
+  exports: [LeadsService, LeadRoutingService, LeadConversionService, LeadNotifyService],
 })
 export class LeadsModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
