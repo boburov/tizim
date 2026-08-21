@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule, OnModuleInit } from '@nestjs/common';
 import { DepositsController } from './deposits.controller.js';
 import { DepositsService } from './deposits.service.js';
+import { StudentPaymentService } from '../finance/student-payment.service.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
 import { ApprovalExecutorRegistry } from '../../common/approvals/approval-executor.registry.js';
 import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
@@ -31,6 +32,7 @@ export class DepositsModule implements NestModule, OnModuleInit {
   constructor(
     private readonly executors: ApprovalExecutorRegistry,
     private readonly svc: DepositsService,
+    private readonly payments: StudentPaymentService,
   ) {}
 
 /**
@@ -45,6 +47,21 @@ export class DepositsModule implements NestModule, OnModuleInit {
     this.executors.register(APPROVAL_KINDS.DEPOSIT_WITHDRAW, (a) =>
       this.svc.executeApprovedWithdraw(a),
     );
+
+    /**
+     * ⚠ ORTIQCHA TO'LOVNI DEPOZITGA QAYTARISH — KECH BOG'LASH.
+     *
+     * `StudentPaymentService.recalc` plan kamayganda ortiqcha to'lovni
+     * depozitga qaytarishi kerak, lekin `finance` `deposits` ni import
+     * QILA OLMAYDI: `deposits` allaqachon `finance` ga tayanadi
+     * (`applyPaidDelta`) va teskari yo'nalish modul AYLANASI bo'lardi.
+     *
+     * Express aynan shu joyda dinamik `import()` ishlatadi ("deposit
+     * .service → studentPayment.service siklini oldini oladi"). NestJS'da
+     * ekvivalenti — ishga tushishda qayta ishlovchini o'rnatish.
+     */
+    this.payments.onOverpay = (paymentId, capAmount) =>
+      this.svc.reconcileDepositOverpay(paymentId, { capAmount });
   }
 
   configure(consumer: MiddlewareConsumer): void {

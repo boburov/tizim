@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import type { FreezeWindow } from '../../common/utils/proration.js';
 import { toUtcMidnight } from '../../common/utils/date.js';
 
 /**
@@ -129,4 +130,69 @@ export class StudentFreezeService {
     ] as Record<string, any>[];
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // TO'LOV PRORATSIYASI — `helpers/studentFreeze.helper.js` dan.
+  //
+  // ⚠ MUZLATILGAN KUN UCHUN O'QUVCHI TO'LAMAYDI. Oyna chegarasi
+  // `[start, end)` — chiqish kuni ARTIQ muzlatilmagan. Bu semantika
+  // `freezeToExemption` dagidan FARQ QILADI (u davomat uchun bir kun
+  // ayiradi) va ikkalasi ATAYLAB alohida.
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * BITTA o'quvchining muzlatish oynalari — to'lov hisobi uchun.
+   *
+   * ⚠ Oynalar BITTA ro'yxatga qo'shiladi, ya'ni bu funksiya faqat BIR
+   * o'quvchi uchun. Ko'p o'quvchida `loadFreezeWindowsByStudent`
+   * ishlatiladi — aks holda bir o'quvchining muzlatishi boshqasiga ham
+   * qo'llanardi.
+   */
+  async loadFreezeWindows(studentId: string): Promise<FreezeWindow[]> {
+    const rows = await this.prisma.studentFreeze.findMany({
+      where: { studentId: String(studentId), isDeleted: false },
+      select: { startDate: true, endDate: true },
+    });
+    return rows.map((r) => ({
+      start: toUtcMidnight(r.startDate).getTime(),
+      end: r.endDate ? toUtcMidnight(r.endDate).getTime() : Infinity,
+    }));
+  }
+
+  /**
+   * Muzlatish oynalari O'QUVCHI BO'YICHA: `Map<studentId, windows[]>`.
+   *
+   * ⚠ BITTADA BITTA SO'ROV: har o'quvchi uchun alohida chaqirilsa 500
+   * o'quvchida 500 ta so'rov ketardi (kunlik joblar).
+   */
+  async loadFreezeWindowsByStudent(
+    studentIds: string | string[],
+  ): Promise<Map<string, FreezeWindow[]>> {
+    const ids = (Array.isArray(studentIds) ? studentIds : [studentIds]).map(String);
+    const map = new Map<string, FreezeWindow[]>();
+    if (!ids.length) return map;
+
+    const rows = await this.prisma.studentFreeze.findMany({
+      where: { studentId: { in: ids }, isDeleted: false },
+      select: { studentId: true, startDate: true, endDate: true },
+    });
+
+    for (const r of rows) {
+      const key = String(r.studentId);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push({
+        start: toUtcMidnight(r.startDate).getTime(),
+        end: r.endDate ? toUtcMidnight(r.endDate).getTime() : Infinity,
+      });
+    }
+    return map;
+  }
 }
+
+/**
+ * Berilgan sana biror muzlatish oynasiga tushadimi (`start <= d < end`).
+ *
+ * ⚠ SOF FUNKSIYA — servisdan TASHQARIDA: u bazaga tegmaydi va issiq
+ * sikllarda (har bir dars sanasi uchun) chaqiriladi.
+ */
+export const isFrozenOn = (windows: FreezeWindow[], dateMs: number): boolean =>
+  windows.some((w) => dateMs >= w.start && dateMs < w.end);
