@@ -183,6 +183,23 @@ const run = async () => {
 
   const eq = (n, a, b) => (a === b ? ok(`${n} — ${a}`) : bad(n, `kutilgan ${b}, keldi ${a}`));
 
+  /**
+   * BAZA TEKSHIRUVI — FAQAT so'rov HAQIQATAN bajarilgan bo'lsa.
+   *
+   * ⚠ `mirror()` 429 (tezlik chegarasi) da bo'sh obyekt qaytaradi va
+   * so'rov UMUMAN yuborilmagan bo'ladi. Undan keyingi baza tekshiruvi
+   * esa shartsiz ishlab, "qator yo'q" deb QIZIL berardi — holbuki
+   * implementatsiya to'g'ri, shunchaki hech narsa o'lchanmagan.
+   *
+   * Aynan shu 4 ta yolg'on qizil berdi (`NaN`, `undefined`, `false`),
+   * shuning uchun baza tekshiruvlari ham o'sha shartga bog'landi.
+   */
+  const ranOk = (m) => Boolean(m && m.e && m.n);
+  const eqIf = (m, n, fn) => {
+    if (!ranOk(m)) { skip(n, "oldingi so'rov o'lchanmadi (429)"); return null; }
+    return fn();
+  };
+
   // ─────────────────────────────────────────────────────────────────
   section('1) KATEGORIYALAR');
   // ─────────────────────────────────────────────────────────────────
@@ -308,7 +325,7 @@ const run = async () => {
     }));
 
   // MUSBAT: valyuta kursi bilan — summa MUZLATILADI.
-  await mirror('POST /expenses (USD + kurs → 201)', (base, f) =>
+  const usd = await mirror('POST /expenses (USD + kurs → 201)', (base, f) =>
     call(base, 'POST', '/api/expenses', {
       branchId: f.branch.id,
       body: {
@@ -319,11 +336,13 @@ const run = async () => {
     }));
   for (const base of [EXPRESS, NEST]) {
     const f = fx[base]; const label = base === EXPRESS ? 'express' : 'nest';
-    const row = await prisma.expense.findFirst({
-      where: { branchId: f.branch.id, title: `${TAG} usd-ok` } });
-    // 100 × 12 500 = 1 250 000 — kurs YOZUVDA muzlatiladi.
-    eq(`valyuta summasi muzlatildi (${label})`, Number(row?.amount), 1_250_000);
-    eq(`kurs saqlandi (${label})`, Number(row?.exchangeRate), 12_500);
+    await eqIf(usd, `valyuta yozuvi (${label})`, async () => {
+      const row = await prisma.expense.findFirst({
+        where: { branchId: f.branch.id, title: `${TAG} usd-ok` } });
+      // 100 × 12 500 = 1 250 000 — kurs YOZUVDA muzlatiladi.
+      eq(`valyuta summasi muzlatildi (${label})`, Number(row?.amount), 1_250_000);
+      eq(`kurs saqlandi (${label})`, Number(row?.exchangeRate), 12_500);
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -346,8 +365,9 @@ const run = async () => {
 
   const listed = await mirror('GET /expenses', (base, f) =>
     call(base, 'GET', '/api/expenses?year=2034&month=5', { branchId: f.branch.id }));
-  eq('ro\'yxatda jami summa bor',
-    typeof listed.e?.body?.meta?.totalAmount, 'number');
+  eqIf(listed, "ro'yxatda jami summa bor", () =>
+    eq("ro'yxatda jami summa bor",
+      typeof listed.e?.body?.meta?.totalAmount, 'number'));
 
   await mirror('GET /expenses?branchScope=branch-only', (base, f) =>
     call(base, 'GET', '/api/expenses?year=2034&month=5&branchScope=branch-only',
@@ -430,14 +450,16 @@ const run = async () => {
       body: { description: 'izoh' },
     }));
 
-  await mirror('DELETE /expenses/:id', (base) =>
+  const deleted = await mirror('DELETE /expenses/:id', (base) =>
     call(base, 'DELETE', `/api/expenses/${first[base]}`, {}));
   for (const base of [EXPRESS, NEST]) {
     const label = base === EXPRESS ? 'express' : 'nest';
-    const row = await prisma.expense.findUnique({ where: { id: first[base] } });
-    // O'chirish YUMSHOQ — hujjat qoladi (jurnal yozuvi ham).
-    eq(`hujjat saqlanib qoldi (${label})`, Boolean(row), true);
-    eq(`isDeleted bayrog'i (${label})`, row?.isDeleted, true);
+    await eqIf(deleted, `yumshoq o'chirish (${label})`, async () => {
+      const row = await prisma.expense.findUnique({ where: { id: first[base] } });
+      // O'chirish YUMSHOQ — hujjat qoladi (jurnal yozuvi ham).
+      eq(`hujjat saqlanib qoldi (${label})`, Boolean(row), true);
+      eq(`isDeleted bayrog'i (${label})`, row?.isDeleted, true);
+    });
   }
   await mirror('DELETE /expenses/:id (qayta → 404)', (base) =>
     call(base, 'DELETE', `/api/expenses/${first[base]}`, {}));
