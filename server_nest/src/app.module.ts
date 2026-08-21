@@ -30,7 +30,7 @@ import { SearchModule } from './modules/search/search.module.js';
 import { ActivityHistoryModule } from './modules/activity-history/activity-history.module.js';
 import { LeadsModule } from './modules/leads/leads.module.js';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
-import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
+import { BranchAnalyticsModule } from './modules/branch-analytics/branch-analytics.module.js';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
 import { GroupsModule } from './modules/groups/groups.module.js';
@@ -38,6 +38,7 @@ import { AttendanceModule } from './modules/attendance/attendance.module.js';
 import { TeacherSalaryModule } from './modules/teacher-salary/teacher-salary.module.js';
 import { AttendanceExemptionsModule } from './modules/attendance-exemptions/attendance-exemptions.module.js';
 import { TeacherAttendanceModule } from './modules/teacher-attendance/teacher-attendance.module.js';
+import { GradesModule } from './modules/grades/grades.module.js';
 import { JournalModule } from './modules/journal/journal.module.js';
 import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
 import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-approvals.module.js';
@@ -46,6 +47,7 @@ import { FinanceOpsModule } from './modules/finance-ops/finance-ops.module.js';
 import { ExpensesModule } from './modules/expenses/expenses.module.js';
 import { DepositsModule } from './modules/deposits/deposits.module.js';
 import { OpeningBalanceModule } from './modules/opening-balance/opening-balance.module.js';
+import { LedgerModule } from './modules/ledger/ledger.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -135,8 +137,8 @@ import { OpeningBalanceModule } from './modules/opening-balance/opening-balance.
     LeadsModule,
     // Rahbariyat paneli (6/6) — faqat o'qish.
     AdminDashboardModule,
-    // Rahbariyat paneli (6/6) — faqat o'qish.
-    AdminDashboardModule,
+    // Filial tahlili — FAQAT xona bandligi (`/rooms`).
+    BranchAnalyticsModule,
     // Faoliyat loglari — faqat o'qish (yozuvni Express `auditLog` yaratadi).
     ActivityLogsModule,
     // Kurs katalogi + narx matritsasi (global katalog, owner yozadi).
@@ -152,6 +154,7 @@ import { OpeningBalanceModule } from './modules/opening-balance/opening-balance.
     AttendanceExemptionsModule,
     // O'qituvchi davomati (2/2) — maoshga ta'sir qiladi, faqat manage.
     TeacherAttendanceModule,
+    GradesModule,
     // ── FAZA 7: MOLIYA ──
     // Jurnal BIRINCHI ko'chiriladi: qolgan hamma moliya moduli
     // (to'lov, depozit, chiqim, maosh, qaytarim) unga yozadi.
@@ -172,6 +175,8 @@ import { OpeningBalanceModule } from './modules/opening-balance/opening-balance.
     DepositsModule,
     // Boshlang'ich qoldiq (tizimga o'tishda kiritilgan qarz/avans) — 3/3.
     OpeningBalanceModule,
+    // Shaxsiy moliyaviy tarix — SOF O'QISH modeli (2/2).
+    LedgerModule,
   ],
 })
 export class AppModule {}

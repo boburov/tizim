@@ -57,7 +57,9 @@
     "test:schedule-jobs": "node test/schedule-jobs.test.mjs",
     "test:deposits-parity": "node test/deposits-parity.test.mjs",
     "test:admin-dashboard-parity": "node test/admin-dashboard-parity.test.mjs",
-    "test:opening-balance-parity": "node test/opening-balance-parity.test.mjs"
+    "test:opening-balance-parity": "node test/opening-balance-parity.test.mjs",
+    "test:ledger-parity": "node test/ledger-parity.test.mjs",
+    "test:room-utilization-parity": "node test/room-utilization-parity.test.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"
