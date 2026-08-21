@@ -436,4 +436,26 @@ export class BranchAccessService {
     return String(group.branchId);
   }
 
+  /**
+   * `branchContext.helper::resolveBranchFromUser` NING KO'CHIRMASI.
+   *
+   * Foydalanuvchining ASOSIY filiali. `resolveBranchFromGroup` dan
+   * FARQLI o'laroq bu YO'QLIKKA CHIDAYDI (`null` qaytaradi, xato
+   * TASHLAMAYDI) — Express'da ham shunday.
+   *
+   * ⚠ FARQ ATAYLAB: guruhsiz to'lov yozib bo'lmaydi (pul qayerga
+   * tegishli ekani noma'lum bo'lardi), lekin filialga biriktirilmagan
+   * o'quvchining depozitiga pul qaytarish TO'SILMASLIGI kerak — aks
+   * holda uning puli hisobda qamalib qolardi. Bunday yozuv
+   * `branchId: null` bilan qoladi va aniq filial tanlanganda
+   * ko'rinmaydi (fail-closed), owner esa "barcha filiallar" ko'rinishida
+   * ko'radi.
+   */
+  async resolveBranchFromUser(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: String(userId) },
+      select: { homeBranchId: true },
+    });
+    return user?.homeBranchId || null;
+  }
 }

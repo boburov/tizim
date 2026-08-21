@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DimensionResolverService } from './dimension-resolver.service.js';
 import { FinancialTransactionService } from './financial-transaction.service.js';
+import { StudentPaymentService } from './student-payment.service.js';
 import { JournalModule } from '../journal/journal.module.js';
 
 /**
@@ -22,7 +23,15 @@ import { JournalModule } from '../journal/journal.module.js';
  */
 @Module({
   imports: [JournalModule],
-  providers: [DimensionResolverService, FinancialTransactionService],
-  exports: [DimensionResolverService, FinancialTransactionService],
+  providers: [
+    DimensionResolverService,
+    FinancialTransactionService,
+    StudentPaymentService,
+  ],
+  exports: [
+    DimensionResolverService,
+    FinancialTransactionService,
+    StudentPaymentService,
+  ],
 })
 export class FinanceModule {}
