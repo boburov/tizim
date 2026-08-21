@@ -36,6 +36,23 @@ tekshiruvini seed holatiga bog'lagan) — batafsil `MIGRATION-CHECKLIST.md`.
 | `node --env-file=.env test/schedule-jobs.test.mjs` | rejalashtiruvchi shartnomasi |
 | `node --env-file=.env test/notification-jobs.test.mjs` | bildirishnoma joblari |
 | `node --env-file=.env test/prisma-smoke.test.mjs` | Prisma kengaytmalari (Decimal, `passwordHash` yashirish, jurnal o'zgarmasligi) |
+| `npm run test:seed-bootstrap` | **TOZA bazani bootstrap qilish** — alohida baza yaratadi, migratsiya yotqizadi, seed yurgizadi, natijani kod konstantalari bilan solishtiradi va idempotentlikni o'lchaydi (20 tekshiruv) |
+| `npm run test:constants` | konstantalar pariteti — endi `PERMISSION_LABELS` va ruxsat KO'LAMI (owner-only / filial-ichi) ham (21 tekshiruv) |
+| `npm run test:branch-intent` | yozuv noto'g'ri filialga tushmasligi — `x-branch-context` 409 to'sig'i (14, bazasiz) |
+| `npm run test:salary-rate` | oy o'rtasida stavka o'zgarganda pul bo'linishi + legacy yozuvlar o'zgarmasligi (57, bazasiz) |
+| `npm run test:resource-scope` | har bir model filial ko'lami bo'yicha reyestrdan o'tganmi (84/84, bazasiz) |
+
+## SEED — TOZA O'RNATMA
+
+Cutover'da `src/seeds/` ko'chirilmay qolgan edi (u na marshrut, na modul —
+ko'chirish uni ko'rmagan). Endi u NestJS tomonida:
+
+```
+npm run seed:bootstrap      # build + ruxsatlar + owner + ma'lumotnomalar
+```
+
+Batafsil (nimasi ko'chirildi, nimasi yo'q va NEGA, qanday o'lchangan):
+`MIGRATION-CHECKLIST.md` §7.
 
 ## ⚠ `jobs-infra` DAGI QOIDA TESKARISIGA AYLANDI
 

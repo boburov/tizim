@@ -10,6 +10,7 @@
 import assert from 'node:assert/strict';
 import {
   PERMISSIONS as EXPRESS_PERMISSIONS,
+  PERMISSION_LABELS as EXPRESS_PERMISSION_LABELS,
   ACTION_ORDER as EXPRESS_ACTION_ORDER,
   ACTION_LABELS as EXPRESS_ACTION_LABELS,
   MODULE_META as EXPRESS_MODULE_META,
@@ -32,10 +33,21 @@ import {
   PAYROLL_AUDIT_ACTIONS,
   PAYROLL_AUDIT_ACTION_LABELS,
 } from '../dist/common/constants/payroll-audit.js';
+import {
+  OWNER_ONLY_PERMISSIONS as EXPRESS_OWNER_ONLY_PERMISSIONS,
+  BRANCH_LOCAL_PERMISSIONS as EXPRESS_BRANCH_LOCAL_PERMISSIONS,
+  isOwnerOnlyPermission as expressIsOwnerOnlyPermission,
+} from '../../server_legacy/src/constants/permissionScope.js';
+import {
+  OWNER_ONLY_PERMISSIONS,
+  BRANCH_LOCAL_PERMISSIONS,
+  isOwnerOnlyPermission,
+} from '../dist/common/constants/permission-scope.js';
 import * as EXPRESS_DELEGATION from '../../server_legacy/src/constants/delegation.js';
 import * as DELEGATION from '../dist/common/constants/delegation.js';
 import {
   PERMISSIONS,
+  PERMISSION_LABELS,
   ROLES,
   ROLE_TYPES,
   SYSTEM_ROLE_META,
@@ -157,6 +169,62 @@ check('validateDelegation / resolveRule bir xil javob beradi', () => {
     );
   }
   assert.ok(cases >= 200, `juda kam holat sinaldi: ${cases}`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEED KONSTANTALARI.
+//
+// ⚠ BULARNI ISH VAQTIDA HECH KIM IMPORT QILMAYDI — yagona iste'molchi
+// `src/seeds/`. Aynan shu sabab ular birinchi ko'chirishda TUSHIB QOLGAN
+// edi (marshrut/modul bo'yicha yurgan ko'chirish ularni ko'rmagan).
+//
+// Ular ajralib ketsa xato JIMGINA bo'ladi: seed yurib ketaveradi, faqat
+// bazaga BOSHQA yorliq yoki BOSHQA ruxsat to'plami tushadi. Direktor
+// ro'yxati bo'lsa — bu to'g'ridan-to'g'ri xavfsizlik chegarasi.
+// ═══════════════════════════════════════════════════════════════════════════
+
+check(`PERMISSION_LABELS aynan bir xil (${Object.keys(EXPRESS_PERMISSION_LABELS).length} yorliq)`, () => {
+  assert.deepEqual({ ...PERMISSION_LABELS }, { ...EXPRESS_PERMISSION_LABELS });
+});
+
+check('har bir ruxsatning yorlig\'i bor (yorliqsiz kalit qolmadi)', () => {
+  const missing = Object.values(PERMISSIONS).filter((k) => !PERMISSION_LABELS[k]);
+  assert.deepEqual(missing, [], `yorliqsiz: ${missing.join(', ')}`);
+  const orphan = Object.keys(PERMISSION_LABELS).filter(
+    (k) => !Object.values(PERMISSIONS).includes(k),
+  );
+  assert.deepEqual(orphan, [], `ruxsatsiz yorliq: ${orphan.join(', ')}`);
+});
+
+check(`OWNER_ONLY_PERMISSIONS aynan bir xil (${EXPRESS_OWNER_ONLY_PERMISSIONS.length} kalit)`, () => {
+  assert.deepEqual([...OWNER_ONLY_PERMISSIONS], [...EXPRESS_OWNER_ONLY_PERMISSIONS]);
+});
+
+check(`BRANCH_LOCAL_PERMISSIONS aynan bir xil (${EXPRESS_BRANCH_LOCAL_PERMISSIONS.length} kalit)`, () => {
+  assert.deepEqual([...BRANCH_LOCAL_PERMISSIONS], [...EXPRESS_BRANCH_LOCAL_PERMISSIONS]);
+});
+
+check('ko\'lam bo\'linishi TO\'LIQ: owner_only + branch_local = hammasi', () => {
+  // Hisoblangan ro'yxat, qo'lda yozilmagan — shuning uchun bu invariant
+  // yangi ruxsat qo'shilganda ham buzilmasligi SHART.
+  const all = Object.values(PERMISSIONS);
+  assert.equal(
+    OWNER_ONLY_PERMISSIONS.length + BRANCH_LOCAL_PERMISSIONS.length,
+    all.length,
+    'bo\'linish to\'liq emas',
+  );
+  const overlap = BRANCH_LOCAL_PERMISSIONS.filter((k) => OWNER_ONLY_PERMISSIONS.includes(k));
+  assert.deepEqual(overlap, [], `ikkala ro'yxatda ham bor: ${overlap.join(', ')}`);
+});
+
+check('isOwnerOnlyPermission har bir kalitda bir xil javob beradi', () => {
+  for (const key of [...Object.values(PERMISSIONS), 'yoq.kalit', '']) {
+    assert.equal(
+      isOwnerOnlyPermission(key),
+      expressIsOwnerOnlyPermission(key),
+      `isOwnerOnlyPermission(${key})`,
+    );
+  }
 });
 
 console.log(`\n  Natija: ${R.pass} o'tdi, ${R.fail} yiqildi\n`);

@@ -15,7 +15,7 @@ tasvirlaydi va o'sha paytdagi o'lchovlarga havola qiladi.
 
 ## 0. HAJM — YAKUNIY HOLAT (2026-08-22)
 
-| O'lchov | Express (`server/src`) | NestJS (`server_nest/src`) |
+| O'lchov | Express (`server_legacy/src`) | NestJS (`server/src`) |
 |---|---|---|
 | Ro'yxatdan o'tgan marshrut | **399** | **399** (+1 ataylab: `GET /api/health/db`) |
 | Biznes moduli | 47 | 47 (60 ta modul `AppModule` dan erishiladi) |
@@ -468,3 +468,187 @@ Har bir qo'riqchi **ATAYLAB BUZIB** tekshirildi: qo'riqchi olib
 tashlanganda test QIZIL bo'lishi o'lchandi. Sabotaj har safar TOZA
 `dist` dan qurildi — eski emit "bypass isbotlandi" degan YOLG'ON
 natija berardi.
+
+---
+
+## 7. SEED'LAR VA QOLGAN TESTLAR (2026-08-22)
+
+Cutover'dan keyin `server_legacy/` da ikki narsa qolgan edi: `src/seeds/`
+(14 skript) va `tests/` (54 fayl). Bu bo'lim shularning taqdirini yozadi.
+
+### 7.1 ⚠ TOPILGAN NUQSON: NestJS'da SEED UMUMAN YO'Q EDI
+
+Ko'chirish **marshrut va modul bo'yicha** yurgan. `src/seeds/` na marshrut,
+na modul — shuning uchun u butunlay e'tibordan chetda qolgan. Yon ta'siri
+ikki qavatli edi:
+
+1. `server_legacy/` da `.env` yo'q (u `server/` ga ko'chirilgan), ya'ni eski
+   seed'lar ham **ishga tushmasdi**;
+2. NestJS tomonida esa ular umuman yo'q edi.
+
+Natijada **toza bazani bootstrap qilib bo'lmasdi**: ruxsat katalogi ham,
+owner hisobi ham yaratilmasdi. Ishlab turgan o'rnatmaga ta'siri yo'q (baza
+allaqachon to'ldirilgan) — buzilgani **yangi o'rnatma va falokatdan
+tiklash** edi.
+
+**NEGA UNI HECH BIR TEST USHLAMADI:** barcha 66 to'plam ALLAQACHON
+TO'LDIRILGAN bazaga so'rov yuboradi. Hech biri "bo'sh bazadan boshlansa
+nima bo'ladi" degan savolni bermaydi. Endi beradi — `test/seed-bootstrap.test.mjs`.
+
+### 7.2 KO'CHIRILGAN SEED'LAR
+
+| Seed | NestJS | Buyruq |
+|---|---|---|
+| `permissions.seed.js` | `src/seeds/permissions.seed.ts` | `npm run seed:permissions` |
+| `owner.seed.js` | `src/seeds/owner.seed.ts` | `npm run seed:owner` |
+| `communicationDefaults.seed.js` | `src/seeds/communication-defaults.seed.ts` | `npm run seed:communication` |
+| `expenseCategories.seed.js` | `src/seeds/expense-categories.seed.ts` | `npm run seed:expense-categories` |
+| `migrateDirectorFullAccess.seed.js` | `src/seeds/migrate-director-full-access.seed.ts` | `npm run migrate:director-full` |
+
+Hammasi bitta buyruq bilan: **`npm run seed:bootstrap`** (build + 4 ta seed).
+
+⚠ `seed:bootstrap` Express'dagi `seed:all` DAN FARQ QILADI: `seed:all`
+demo seed'larini ham chaqirardi (`fake-data` 800+ o'quvchi yaratadi).
+Bootstrap ro'yxatiga demo **ATAYLAB kiritilmadi** — toza o'rnatma buyrug'i
+soxta ma'lumot yaratmasligi kerak.
+
+#### Ko'chirish uchun QAYTA TIKLANGAN konstantalar
+
+Seed'lar ikki konstantaga tayanadi va ikkalasi ham ko'chirishda tushib
+qolgan edi — sababi bir xil: **ularni ish vaqtida hech kim import
+qilmaydi**, yagona iste'molchi seed.
+
+| Konstanta | NestJS |
+|---|---|
+| `PERMISSION_LABELS` (87 yorliq) | `src/common/constants/permissions.ts` ga qo'shildi |
+| `permissionScope.js` (owner-only / filial-ichi) | `src/common/constants/permission-scope.ts` |
+
+Yorliqlar **ish vaqtida bazadan** o'qiladi (`roles.service.ts` ruxsat
+matritsasini `Permission.label` / `Permission.moduleLabel` ustunlaridan
+quradi) — ya'ni ular bazaga FAQAT seed orqali tushadi. Seed yurmasa
+matritsa bo'sh qoladi va owner hech kimga hech narsa bera olmaydi.
+
+`test/constants-parity.test.mjs` endi ikkalasini ham Express manbasi bilan
+solishtiradi (21 tekshiruv), shu jumladan **ko'lam bo'linishi to'liqligini**:
+`owner_only + branch_local = hammasi`, kesishmasdan.
+
+#### O'LCHANGAN DALIL
+
+Paritet testlari endi ishlamaydi (Express o'chirilgan), shuning uchun dalil
+**baza holatidan** olindi:
+
+1. **Ikki toza baza** yaratildi, ikkalasiga ham migratsiyalar yotqizildi.
+   Biriga EXPRESS seed'lari, ikkinchisiga NESTJS seed'lari yurgizildi.
+   Kanonik surat (87 ruxsat qatori to'liq maydonlari bilan, 172 rol↔ruxsat
+   bog'lanishi, rollar, owner, 6 shablon, 8 fikr turi, 6 bayram, 11 chiqim
+   kategoriyasi) — **315 qator, bayt-ma-bayt AYNAN teng**.
+2. **Idempotentlik**: NestJS seed'lari ikkinchi marta yurgizildi — surat
+   o'zgarmadi, dublikat qator paydo bo'lmadi.
+3. **To'ldirilgan bazada xavfsizligi**: jonli dev bazasida yurgizildi —
+   1219 qatorli surat o'zgarmadi (to'liq no-op). `deleteMany` tarmog'i
+   uchun shart oldindan o'lchandi: bazadagi 87 kalit kod bilan aynan teng,
+   ya'ni u hech narsa o'chirmaydi.
+4. **`migrate:director-full` ikkala yo'nalishda**: direktorga
+   `branches.view_all` va `system.admin_access` QO'LDA qo'shildi (shart
+   o'lchandi — qo'shishdan oldin ular yo'qligi tasdiqlandi), skript
+   ikkalasini ham olib tashladi va holat toza seed holatiga qaytdi.
+
+⚠ Birinchi urinishda in'yeksiya FK cheklovi tufayli **muvaffaqiyatsiz**
+bo'lgan edi va "0 qoldi" degan natija hech narsani isbotlamasdi. Shart
+o'lchanmaganda buzg'unchi test YOLG'ON yashil beradi.
+
+### 7.3 KO'CHIRILMAGAN SEED'LAR — VA SABABI
+
+| Seed | Qator | Sabab |
+|---|---|---|
+| `fakeData` / `fakeExtras` / `fakeExtras2` | ~1428 | **Demo.** Faqat dev uchun. `fakeData` 800+ o'quvchi yaratadi. |
+| `demoGroup` / `financeDemo` / `aiDemoFinance` / `multiBranchDemo` | ~1333 | **Demo.** Bundan tashqari `demoGroup` va `financeDemo` Express SERVIS qatlamini chaqiradi (`groups.service`, `studentPayment.service`, `budget.service`) — NestJS'da ular DI konteyneridan olinishi kerak, ya'ni bu ko'chirish emas, QAYTA YOZISH. `multiBranchDemo` yana `@faker-js/faker` ga tayanadi (NestJS bog'liqliklarida yo'q). |
+| `journalBackfill` | 171 | **Bir martalik migratsiya**, allaqachon qo'llangan. `journal.service` + `financialTransaction.service` ni chaqiradi — DI konteyneri kerak. |
+| `aiChurnBacktest` | 279 | **Tahlil vositasi**, o'rnatma uchun kerak emas. To'rtta AI servisiga tayanadi. |
+
+Bu qaror **ochiq**: demo ma'lumot yaratish NestJS tomonida hozircha
+**yo'q**. Kerak bo'lsa ular alohida ish sifatida ko'chirilishi kerak.
+
+⚠ **AGAR DEMO SEED'LARI KEYINCHALIK KO'CHIRILSA**, ularga ishlab
+chiqarish himoyasi QO'SHILISHI SHART (`NODE_ENV !== 'production'` yoki
+ochiq bayroq). **Express tomonida bunday himoya YO'Q EDI** — `fakeData`
+ishlab chiqarish bazasida bir marta yurgizilsa natijani qaytarib
+bo'lmaydi, chunki soxta yozuvlar haqiqiy moliyaviy hisobotlarga (jurnal,
+balans, maosh) aralashib ketadi. Hozir bunday helper ATAYLAB YOZILMADI:
+iste'molchisi yo'q qo'riqchi — ishlamaydigan scaffold.
+
+⚠ **DI KONTEYNERIGA TAYANADIGAN SEED KERAK BO'LSA:** `NestFactory.createApplicationContext`
+`onApplicationBootstrap` ni CHAQIRADI, ya'ni `JobsModule` 25 ta cron'ni
+IKKINCHI marta ro'yxatga oladi va `BotModule` ikkinchi Telegram polling'ini
+ochishga urinadi (`.env` da hozir `NEST_WORKERS_ENABLED=true`,
+`TELEGRAM_BOT_ENABLED=true`). O'sha bayroqlarni MAJBURAN o'chirish shart.
+Ko'chirilgan seed'larning hech biriga servis kerak emas — shuning uchun
+`seed-runner.ts` DI konteynerini umuman ochmaydi, faqat
+`createExtendedPrismaClient()` dan foydalanadi (xom `new PrismaClient()`
+kengaytmalarni — `passwordHash` niqobi, Decimal→son, jurnal
+o'zgarmasligi — YO'QOTARDI).
+
+### 7.4 `server_legacy/tests/` — NIMA KO'CHIRILDI, NIMA TAKRORLANGAN
+
+**O'LCHOV, taxmin emas** (54 test fayli):
+
+| | Soni |
+|---|---|
+| Express SERVISINI jarayon ichida import qiladi (`modules/*/services/*`) | **43** |
+| `../src/` ga umuman tegmaydi | **2** (`migrationProbe.mjs`, `workspaceSecurityAudit.mjs`) |
+| HTTP orqali ishlaydi (`localhost:5000` / `BASE_URL`) | **7** |
+
+Ya'ni aksariyati Express biznes mantiqini **jarayon ichida** sinaydi va
+NestJS'ga "ko'chirib" bo'lmaydi — ekvivalenti Nest servislarini DI
+konteyneridan olib chaqirish bo'lardi, bu esa har bir fayl uchun
+KO'CHIRISH emas, QAYTA YOZISH.
+
+Ularning qamrovi NestJS tomonida **66 ta paritet to'plami** bilan
+qoplangan — o'sha to'plamlar ikkala stek tirik bo'lgan paytda HTTP
+darajasida 3585+ tekshiruv bilan yashil bo'lgan (§6). Shuning uchun ular
+**TAKRORLANGAN** deb belgilanadi.
+
+Qamrovsiz qolgan uchtasi topildi va KO'CHIRILDI. Ular **sof funksiya**
+testlari (baza ham, HTTP ham kerak emas), ya'ni ko'chirish mexanik:
+
+| Ko'chirildi | Nishon | Dalil |
+|---|---|---|
+| `branchIntent.test.js` → `test/branch-intent.test.mjs` (14 ✅) | `src/common/rbac/branch-intent.ts` | `grep -rl "branch-intent" test/` **BO'SH** edi — modul `auth.middleware.ts:113` da har so'rovda ishlaydi, lekin sinalmagan |
+| `salaryRate.test.js` → `test/salary-rate.test.mjs` (57 ✅) | `src/modules/teacher-salary/rate-resolver.ts` | `grep -rl "rate-resolver" test/` **BO'SH** edi. `teacher-salary-parity` HTTP darajasida ishlaydi va oy o'rtasida stavka o'zgarishi kabi chekka holatlarga yetmaydi |
+| `resourceScope.test.js` → `test/resource-scope.test.mjs` (8 ✅) | `prisma/schema.prisma` + reyestr | NestJS'da ekvivalenti yo'q: `branch-scope-security` TANLANGAN endpointlarni, bu esa REYESTR TO'LIQLIGINI o'lchaydi |
+
+`salary-rate` **testi o'zgarmagan holda** NestJS ko'chirmasiga qarshi
+57/57 yashil bo'ldi — bu `rate-resolver.ts` ning xatti-harakati Express
+bilan aynan bir xilligining mustaqil dalili.
+
+`resource-scope` bilan birga `resourceScope.js` reyestri
+`test/resource-scope.registry.mjs` ga ko'chirildi — `src/` ga EMAS,
+ATAYLAB: uni ish vaqtida hech kim import qilmaydi (Express tomonida ham
+shunday edi). Natija: **84 model, reyestrda 84 yozuv, nomuvofiqlik yo'q.**
+
+⚠ Ko'chirilgan payt u **BUZUQ** edi: `prisma/` `server/` ga ko'chirilgani
+uchun test qidirgan `server_legacy/prisma/schema.prisma` endi mavjud emas.
+Musbat nazorat (`models.size < 50`) tufayli u jimgina o'tib ketmasdi —
+lekin uni hech kim yurgizmayotgan edi.
+
+`migrationProbe.mjs` ko'chirilmadi: uning vazifasi ko'chirish jarayonini
+kuzatish edi, `route-matrix.mjs` uni to'liq almashtiradi.
+
+### 7.5 QO'SHILGAN QO'RIQCHILAR
+
+| Test | Nimani qulflaydi |
+|---|---|
+| `test/seed-bootstrap.test.mjs` | **TOZA bazani bootstrap qilish**: alohida baza yaratadi, migratsiya yotqizadi, seed yurgizadi, katalog/rol/owner ni kod konstantalari bilan solishtiradi va IDEMPOTENTLIKNI o'lchaydi (20 tekshiruv) |
+| `test/branch-intent.test.mjs` | yozuv NOTO'G'RI FILIALGA tushmasligi (409 tasdiq to'sig'i) |
+| `test/salary-rate.test.mjs` | oy o'rtasida stavka o'zgarganda pul to'g'ri bo'linishi + LEGACY yozuvlar puli o'zgarmasligi |
+| `test/resource-scope.test.mjs` | yangi model qo'shilganda uning filial ko'lami HAL QILINGANI (84/84) |
+
+`seed-bootstrap` **ATAYLAB BUZIB** tekshirildi: `dist` da direktor
+ro'yxati `BRANCH_LOCAL_PERMISSIONS` o'rniga `Object.values(PERMISSIONS)`
+ga almashtirildi (ya'ni direktor owner'ga tenglashtirildi) — test
+**2 tekshiruvda QIZIL** bo'ldi, jumladan "direktorda imtiyoz oshirish
+kalitlari YO'Q". Keyin toza `dist` qayta qurilib yashilligi tiklandi.
+
+Tozalash **O'LCHANADI**: sinov bazasi `DROP DATABASE` bilan o'chiriladi
+(sinaladigan narsaga TAYANMAYDI) va `pg_database` da qoldiq yo'qligi
+alohida tekshiriladi.
