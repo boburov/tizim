@@ -32,6 +32,7 @@ import { FinanceReportModule } from './modules/finance-report/finance-report.mod
 import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-approvals.module.js';
 import { FinanceModule } from './modules/finance/finance.module.js';
 import { FinanceOpsModule } from './modules/finance-ops/finance-ops.module.js';
+import { ExpensesModule } from './modules/expenses/expenses.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -131,6 +132,8 @@ import { FinanceOpsModule } from './modules/finance-ops/finance-ops.module.js';
     FinanceModule,
     // Moliyaviy amallar — qaytarim / o'tkazma / egasi puli / byudjet.
     FinanceOpsModule,
+    // Umumiy chiqimlar + kategoriyalar (tasdiq oqimi bilan).
+    ExpensesModule,
   ],
 })
 export class AppModule {}

@@ -165,7 +165,7 @@ keraksiz deb e'lon qilinishi kerak. Ikkalasi ham MAHSULOT QARORI.
 |---|---|---|---|
 | finance | `/api/finance` | 13 | 🟡 yadro ko'chdi (`financialTransaction`, `dimensionResolver`, `money`) — marshrutlar `studentPayment`/`discount`/`groupFee` ni kutmoqda |
 | deposits | `/api/deposits` | 8 | ⬜ |
-| expenses | `/api/expenses` | 10 | ⬜ |
+| expenses | `/api/expenses` | 10 | ✅ 10/10 |
 | expenseApprovals | `/api/expense-approvals`, `/api/approvals` | 10 | 🟡 8/10 (`approve`, `bulk-approve` — bajaruvchilar kutilmoqda) |
 | journal | `/api/journal` | 9 | ✅ 9/9 |
 | ledger | `/api/ledger` | 2 | ⬜ |
