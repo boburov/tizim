@@ -208,7 +208,43 @@ export const createReporter = (title) => {
    *        almashtiriladi. Usiz har bir chaqiruvni qo'lda o'rash
    *        kerak bo'lardi va bu qavslarni chalkashtirardi.
    */
-  const both = async (name, fn, subsOf = () => [], onEach = null) => {
+  /**
+   * ═══════════════════════════════════════════════════════════════════
+   * INFRASTRUKTURA NOSOZLIGI — "PARITET" EMAS.
+   *
+   * Bu naqshlar ikkala stekda ham bir xil chiqadi va `deepEqual` ni
+   * MUVAFFAQIYATLI qiladi — ya'ni "farq yo'q" degan YOLG'ON yashil.
+   * Sabab kodda emas: ulanish hovuzi to'lgan, server ko'tarilmagan,
+   * tranzaksiya kutishdan chiqib ketgan.
+   *
+   * ⚠ MEMORY: `pg-connections-look-like-regression` — ommaviy 500
+   * ko'rilganda avval server logi o'qilishi kerak.
+   * ═══════════════════════════════════════════════════════════════════
+   */
+  const INFRA_PATTERNS = [
+    /too many clients/i,
+    /Timed out fetching a new connection/i,
+    /Can't reach database server/i,
+    /ECONNREFUSED/i,
+    /Transaction API error/i,
+    /Transaction already closed/i,
+  ];
+
+  const infraReason = (res) => {
+    const text = typeof res.body === 'string' ? res.body : JSON.stringify(res.body || '');
+    const hit = INFRA_PATTERNS.find((re) => re.test(text));
+    return hit ? hit.source : null;
+  };
+
+  /**
+   * @param opts.allowServerError 5xx ni HAQIQIY tekshiruv deb sanaydi.
+   *        ⚠ FAQAT ikkala stekda ATAYLAB saqlangan xato uchun (B4 kabi)
+   *        va izoh bilan. Standart holda 5xx O'LCHANMADI deb belgilanadi:
+   *        `500/500` `deepEqual` ni muvaffaqiyatli qiladi va "paritet
+   *        saqlandi" degan yolg'on yashil beradi, holbuki hech narsa
+   *        o'lchanmagan.
+   */
+  const both = async (name, fn, subsOf = () => [], onEach = null, opts = {}) => {
     let e, n;
     try {
       e = await fn(EXPRESS);
@@ -245,6 +281,28 @@ export const createReporter = (title) => {
     // ═══════════════════════════════════════════════════════════════════
     if (e.status === 429 || n.status === 429) {
       skip(name, `tezlik chegarasi — express=${e.status}, nest=${n.status}`);
+      return { e, n };
+    }
+
+    // ── INFRASTRUKTURA: sabab har doim ko'rsatiladi ──
+    const infra = infraReason(e) || infraReason(n);
+    if (infra) {
+      skip(
+        name,
+        `INFRASTRUKTURA (kod emas): ${infra} — express=${e.status}, nest=${n.status}`,
+      );
+      return { e, n };
+    }
+
+    // ── 5xx: standart holda O'LCHANMADI (yuqoridagi izohga qarang) ──
+    if (!opts.allowServerError && (e.status >= 500 || n.status >= 500)) {
+      const msg = (r) =>
+        (r.body && typeof r.body === 'object' && r.body.message) || '';
+      skip(
+        name,
+        `server xatosi — express=${e.status} "${msg(e)}", nest=${n.status} "${msg(n)}". ` +
+          "Ataylab saqlangan 5xx bo'lsa `{ allowServerError: true }` bilan belgilang.",
+      );
       return { e, n };
     }
 

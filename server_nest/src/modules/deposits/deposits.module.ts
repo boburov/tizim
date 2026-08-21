@@ -1,4 +1,6 @@
-import { MiddlewareConsumer, Module, NestModule, OnModuleInit } from '@nestjs/common';
+import {
+  MiddlewareConsumer, Module, NestModule, OnModuleInit, forwardRef,
+} from '@nestjs/common';
 import { DepositsController } from './deposits.controller.js';
 import { DepositsService } from './deposits.service.js';
 import { StudentPaymentService } from '../finance/student-payment.service.js';
@@ -23,7 +25,13 @@ import { ExpenseApprovalsModule } from '../expense-approvals/expense-approvals.m
  * qaytarish) va `expense-approvals` bajaruvchisi unga tayanadi.
  */
 @Module({
-  imports: [FinanceModule, ExpenseApprovalsModule],
+  imports: [
+    // ⚠ `forwardRef` — HAQIQIY AYLANA: `FinanceModule` ning
+    // `TransactionService` i barcha qarz yopilgach ORTGAN pulni shu
+    // servis orqali depozitga o'tkazadi. Batafsil: `finance.module.ts`.
+    forwardRef(() => FinanceModule),
+    ExpenseApprovalsModule,
+  ],
   controllers: [DepositsController],
   providers: [DepositsService],
   exports: [DepositsService],

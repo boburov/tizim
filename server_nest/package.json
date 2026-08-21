@@ -70,7 +70,9 @@
     "test:ledger-parity": "node test/ledger-parity.test.mjs",
     "test:room-utilization-parity": "node test/room-utilization-parity.test.mjs",
     "test:student-payment-parity": "node test/student-payment-parity.test.mjs",
-    "test:finance-analytics-parity": "node test/finance-analytics-parity.test.mjs"
+    "test:finance-analytics-parity": "node test/finance-analytics-parity.test.mjs",
+    "test:finance-core-parity": "node --env-file=../server/.env test/finance-core-parity.test.mjs",
+    "test:route-matrix": "node --env-file=../server/.env test/route-matrix.mjs"
   },
   "prisma": {
     "schema": "../server/prisma/schema.prisma"

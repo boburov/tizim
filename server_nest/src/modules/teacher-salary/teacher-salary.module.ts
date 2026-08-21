@@ -1,6 +1,7 @@
 import {
   MiddlewareConsumer,
   Module,
+  forwardRef,
   NestModule,
   OnModuleInit,
 } from '@nestjs/common';
@@ -34,7 +35,11 @@ import { GroupsModule } from '../groups/groups.module.js';
  */
 @Module({
   imports: [
-    FinanceModule,
+    // ⚠ `forwardRef` — HAQIQIY AYLANA: `FinanceModule` ning
+    // `GroupFeeService`/`DiscountService` i tarif yoki chegirma
+    // o'zgarganda o'qituvchining FOIZ maoshini qayta hisoblaydi, ya'ni
+    // teskari yo'nalish ham kerak. Batafsil: `finance.module.ts`.
+    forwardRef(() => FinanceModule),
     ExpenseApprovalsModule,
     HolidaysModule,
     GroupsModule,
