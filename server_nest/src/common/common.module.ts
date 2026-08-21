@@ -19,6 +19,7 @@ import {
 } from './guards/attendance-scope.guard.js';
 import { AuthMiddleware } from '../middleware/auth.middleware.js';
 import { EntitlementsService } from './entitlements/entitlements.service.js';
+import { PlanLimitsService } from './entitlements/plan-limits.service.js';
 
 /**
  * Umumiy infratuzilma — RBAC servislari, qo'riqchilar va auth middleware.
@@ -61,6 +62,10 @@ import { EntitlementsService } from './entitlements/entitlements.service.js';
     GroupAccessGuard,
     StudentAccessGuard,
     AuthMiddleware,
+    // Tarif CHEGARASI (`enforceLimit` ko'chirmasi) — u ham global,
+    // chunki yangi yozuv yaratadigan har bir modulga kerak bo'lishi
+    // mumkin.
+    PlanLimitsService,
     // ⚠ TARIF KESHI SHU YERDA — GLOBAL, YAGONA NUSXA.
     //
     // Ilgari u `JobsModule` da edi. AI moduli ham unga tayangach IKKINCHI
@@ -89,6 +94,7 @@ import { EntitlementsService } from './entitlements/entitlements.service.js';
     StudentAccessGuard,
     AuthMiddleware,
     EntitlementsService,
+    PlanLimitsService,
   ],
 })
 export class CommonModule {}

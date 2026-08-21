@@ -120,6 +120,36 @@ const both = async (req) => {
   return { e, n, problems };
 };
 
+/**
+ * `register-user` probasi yaratgan nomlar — yakunda O'CHIRILADI.
+ *
+ * ⚠ API ORQALI EMAS, BAZADAN: bu test aynan auth yo'llarini sinaydi
+ * va ular buzilsa API orqali tozalash ham yiqilardi.
+ */
+const probeUsernames = [];
+const cleanupProbes = async () => {
+  if (!probeUsernames.length) return;
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient();
+  try {
+    const users = await prisma.user.findMany({
+      where: { username: { in: probeUsernames } }, select: { id: true } });
+    const ids = users.map((u) => u.id);
+    if (ids.length) {
+      await prisma.studentDeposit.deleteMany({ where: { studentId: { in: ids } } })
+        .catch(() => null);
+      await prisma.userBranchAssignment.deleteMany({ where: { userId: { in: ids } } })
+        .catch(() => null);
+      await prisma.user.deleteMany({ where: { id: { in: ids } } });
+    }
+    const left = await prisma.user.count({ where: { username: { in: probeUsernames } } });
+    if (left === 0) ok('proba foydalanuvchilari tozalandi', `${ids.length} ta`);
+    else bad('proba foydalanuvchilari QOLDI', `${left} ta`);
+  } finally {
+    await prisma.$disconnect();
+  }
+};
+
 const parity = async (name, req, extra) => {
   const { e, n, problems } = await both(req);
   const more = extra ? extra(e, n) : null;
@@ -322,8 +352,15 @@ const run = async () => {
     body: { firstName: 'X', lastName: 'Y', username: 'zzz', password: 'pw1234', role: 'student' },
   });
 
-  // ─── 8. KO'CHIRILMAGAN YO'LLAR OCHIQ RAD ETILADI (jimgina EMAS) ──
-  console.log('\n\x1b[1m  Ko\'chirilmagan yo\'llar: 501, jimgina degradatsiya EMAS\x1b[0m');
+  // ─── 8. ILGARI 501 BO'LGAN YO'LLAR — ENDI PARITETDA ────────────────
+  //
+  // ⚠ BU BO'LIM TESKARISIGA O'ZGARDI. Ilgari u NestJS'ning OCHIQ 501
+  // qaytarishini talab qilardi ("jimgina degradatsiya EMAS"). O'sha
+  // shoxlar ko'chirilgach 501 YO'QOLDI va test YOLG'ON QIZIL bera
+  // boshladi — ya'ni u endi ko'chirishning TUGAGANINI jazolardi.
+  //
+  // Endi u AYNI ikki yo'lni PARITET sifatida o'lchaydi.
+  console.log('\n\x1b[1m  Ilgari 501 bo\'lgan yo\'llar — endi PARITETDA\x1b[0m');
   {
     const ownerTok2 = sessTok;
 
@@ -351,35 +388,56 @@ const run = async () => {
       : { status: 0 };
     if (stud.status === 200) {
       const t = stud.body.data.accessToken;
+      // ⚠ MUSBAT NAZORAT: 200 bo'lishi SHART — aks holda quyidagi
+      // "ikkalasi bir xil" natijasi ikkala tomonning BIR XIL XATOSI
+      // ustida qurilgan bo'lardi.
+      await parity("o'quvchi /me — profil paritetda", { path: '/api/auth/me', token: t });
       const e = await call(EXPRESS, { path: '/api/auth/me', token: t });
-      const n = await call(NEST, { path: '/api/auth/me', token: t });
-      check("express: o'quvchi /me → 200", e.status === 200, `${e.status}`);
-      check("nest: o'quvchi /me → 501 (jimgina bo'sh profil EMAS)",
-        n.status === 501 && n.body?.code === 'PROFILE_NOT_MIGRATED', `${n.status} ${n.body?.code}`);
+      check("express: o'quvchi /me → 200 (musbat nazorat)", e.status === 200, `${e.status}`);
     } else {
       warn("o'quvchi /me farqi",
         `o'quvchi sifatida kira olmadi (${studentLogin || 'nom topilmadi'} → ${stud.status}) — O'LCHANMADI`);
     }
 
-    // (b) `register-user` — maosh/boshlang'ich qoldiq ko'chirilmagan.
+    // (b) `register-user` + `openingBalance` — yon ta'sir ko'chirildi.
+    //
+    // ⚠ HAR STEKKA O'Z NOMI: bu MUTATSIYA. Bir xil `username` bilan
+    // ikkinchi chaqiruv 409 olardi va hech narsa o'lchanmasdi.
+    //
+    // ⚠ TOZALASH: yaratilgan foydalanuvchilar yakunda O'CHIRILADI —
+    // aks holda har yurish bazada ikkita yetim yozuv qoldirardi.
     if (ownerTok2) {
-      const withSideEffect = await call(NEST, {
+      const stamp = Date.now();
+      const mk = (base) => call(base, {
         method: 'POST', path: '/api/auth/register-user', token: ownerTok2,
         body: {
-          firstName: 'X', lastName: 'Y', username: `probe_${Date.now()}`,
+          firstName: 'X', lastName: 'Y',
+          username: `probe_${base === EXPRESS ? 'e' : 'n'}_${stamp}`,
           password: 'pw1234', role: 'student', openingBalance: 50000,
         },
       });
-      check('nest: openingBalance bilan register → 501 (pul jimgina yo\'qolmaydi)',
-        withSideEffect.status === 501 &&
-          withSideEffect.body?.code === 'REGISTER_SIDE_EFFECTS_NOT_MIGRATED',
-        `${withSideEffect.status} ${withSideEffect.body?.code}`);
+      const e2 = await mk(EXPRESS);
+      const n2 = await mk(NEST);
+      check('openingBalance bilan register — status paritetda',
+        e2.status === n2.status, `express=${e2.status}, nest=${n2.status}`);
+      check('openingBalance bilan register — xato kodi paritetda',
+        String(e2.body?.code) === String(n2.body?.code),
+        `express=${e2.body?.code}, nest=${n2.body?.code}`);
+      probeUsernames.push(`probe_e_${stamp}`, `probe_n_${stamp}`);
     }
   }
+
+  await cleanupProbes();
 
   guardRateLimit();
   console.log(`\n  Natija: ${R.pass} o'tdi, ${R.fail} yiqildi, ${R.skip} o'lchanmadi\n`);
   process.exit(R.fail ? 1 : 0);
 };
 
-run().catch((e) => { console.error('Test xatosi:', e); process.exit(1); });
+run().catch(async (e) => {
+  // ⚠ XATO YO'LIDA HAM TOZALANADI: yiqilgan test bazada yetim
+  // foydalanuvchi qoldirardi.
+  await cleanupProbes().catch(() => null);
+  console.error('Test xatosi:', e);
+  process.exit(1);
+});

@@ -1,5 +1,4 @@
 import {
-  Body,
   Controller,
   Get,
   HttpCode,
@@ -30,7 +29,10 @@ import {
   type LoginRequest,
   type UpdateProfileRequest,
   type ChangePasswordRequest,
+  registerUserSchema,
+  type RegisterUserRequest,
 } from './auth.validators.js';
+import { PlanLimitsService } from '../../common/entitlements/plan-limits.service.js';
 
 /**
  * `modules/auth/auth.routes.js` ning ko'chirmasi.
@@ -47,6 +49,7 @@ export class AuthController {
 
   constructor(
     private readonly auth: AuthService,
+    private readonly limits: PlanLimitsService,
     config: ConfigService<AppConfig, true>,
   ) {
     this.cookie = {
@@ -139,14 +142,27 @@ export class AuthController {
    * direktori o'z filialiga odam qo'sha olishi kerak. Xavfsiz, chunki
    * servis qatlamida `assertCanAssignBranch` bor.
    *
-   * ⚠ `enforceLimit` (tarif chegarasi) HALI ULANMAGAN — u admin panel
-   * heartbeat'i to'ldiradigan keshga tayanadi (Faza J).
+   * ── ⚠ ZANJIR TARTIBI EXPRESS BILAN AYNAN BIR XIL ──
+   *   requirePermission → validate(registerUserSchema) → enforceUserLimit
+   *
+   * ⚠ `@Validated` KEYIN QO'SHILDI: ilgari `@Body()` XOM holda servisga
+   * uzatilardi va ikki stek BOSHQA joyda rad etardi (Express zod bilan
+   * `VALIDATION_ERROR` + maydon yo'li, NestJS esa servis xabari bilan).
+   * Klient xato maydonni KO'RSATA olmasdi.
+   *
+   * ⚠ TARIF CHEGARASI (`enforceUserLimit`) ham shu yerda: usiz NestJS
+   * orqali tarifdagi limitdan ORTIQ foydalanuvchi yaratish mumkin edi.
    */
   @Post('register-user')
   @UseGuards(PermissionsGuard)
   @Permissions(PERMISSIONS.USERS_CREATE)
   @HttpCode(201)
-  async registerUser(@Body() body: Record<string, unknown>, @Req() req: AuthenticatedRequest) {
+  async registerUser(
+    @Validated(registerUserSchema) v: RegisterUserRequest,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const body = v.body as unknown as Record<string, unknown>;
+    await this.limits.assertUserLimit(String(body.role));
     const data = await this.auth.registerUser(body, {
       allowedBranchIds: req.allowedBranchIds,
       canSeeAllBranches: req.canSeeAllBranches,
