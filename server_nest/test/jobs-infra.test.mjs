@@ -243,6 +243,52 @@ const run = async () => {
       `${notMigrated.length} ta job hamon Express'da`,
     );
 
+    // ── BOOT CATCH-UP: faqat ISHCHI rejimida va faqat ochiq ro'yxatda ──
+    //
+    // ⚠ `runOnBoot` ikkilanish himoyasini CHETLAB O'TA OLADIGAN yagona
+    // yo'l: u cron kutmasdan, ishga tushish paytida DARHOL bajariladi.
+    // Shuning uchun u ham `NEST_WORKERS_ENABLED` + `NEST_WORKER_JOBS`
+    // ostida bo'lishi SHART.
+    {
+      let bootCalls = 0;
+      const bootJob = {
+        name: 'test.boot-probe', cron: null,
+        async run() {}, async runOnBoot() { bootCalls += 1; },
+      };
+      const fakeScheduler = { async start() {}, isStarted: () => false };
+
+      const enabled = new JobsRegistry(fakeScheduler, fakeConfig({
+        NEST_WORKERS_ENABLED: true, NEST_WORKER_JOBS: 'test.boot-probe',
+      }));
+      enabled.register(bootJob);
+      await enabled.onApplicationBootstrap();
+      // `runOnBoot` `await` qilinmaydi (startup bloklanmasin) — bir tik kutamiz.
+      await new Promise((r) => setImmediate(r));
+      check('ishchi rejimida boot catch-up CHAQIRILDI', bootCalls === 1, `${bootCalls} marta`);
+
+      bootCalls = 0;
+      const disabled = new JobsRegistry(fakeScheduler, fakeConfig({
+        NEST_WORKERS_ENABLED: false, NEST_WORKER_JOBS: 'test.boot-probe',
+      }));
+      disabled.register(bootJob);
+      await disabled.onApplicationBootstrap();
+      await new Promise((r) => setImmediate(r));
+      check(
+        "⚠ ishchi O'CHIQ bo'lsa boot catch-up CHAQIRILMAYDI",
+        bootCalls === 0,
+        'aks holda u himoyani chetlab o\'tardi',
+      );
+
+      bootCalls = 0;
+      const notListed = new JobsRegistry(fakeScheduler, fakeConfig({
+        NEST_WORKERS_ENABLED: true, NEST_WORKER_JOBS: '',
+      }));
+      notListed.register(bootJob);
+      await notListed.onApplicationBootstrap();
+      await new Promise((r) => setImmediate(r));
+      check("ro'yxatda bo'lmagan job boot catch-up qilmaydi", bootCalls === 0);
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     console.log('\n\x1b[1m3. daily.ttl-cleanup — baza ta\'siri\x1b[0m');
 

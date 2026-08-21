@@ -12,6 +12,7 @@ import { JobsModule } from './jobs/jobs.module.js';
 import { BotModule } from './bot/bot.module.js';
 import { NotificationJobsModule } from './jobs/notifications/notification-jobs.module.js';
 import { StorageJobsModule } from './jobs/storage/storage-jobs.module.js';
+import { HolidayJobsModule } from './jobs/holidays/holiday-jobs.module.js';
 import { BotAuthModule } from './modules/bot-auth/bot-auth.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
@@ -83,6 +84,7 @@ import { ExpensesModule } from './modules/expenses/expenses.module.js';
     // `NEST_WORKER_JOBS` bo'sh bo'lsa hech biri ishlamaydi.
     NotificationJobsModule,
     StorageJobsModule,
+    HolidayJobsModule,
     // ── FAZA 10: Telegram bot ──
     // ⚠ Polling standart holda O'CHIQ (`NEST_BOT_POLLING=false`) — bot
     // nusxasi faqat YUBORISH uchun ko'tariladi. Buyruqlarni Express
