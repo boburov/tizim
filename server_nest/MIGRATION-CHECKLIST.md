@@ -154,7 +154,7 @@ keraksiz deb e'lon qilinishi kerak. Ikkalasi ham MAHSULOT QARORI.
 | groups (5a — o'qish) | `/api/groups` | 9/24 | ✅ |
 | groups (5b — yozish) | `/api/groups` | 15/24 | ⬜ MOLIYA/MAOSHDAN KEYIN |
 | attendance | `/api/attendance` | 11 | ✅ 11/11 |
-| teacherAttendance | `/api/teacher-attendance` | 2 | ⬜ |
+| teacherAttendance | `/api/teacher-attendance` | 2 | ✅ 2/2 |
 | attendanceExemptions | `/api/attendance-exemptions` | 4 | ✅ 4/4 |
 | lessonCancellations | `/api/lesson-cancellations` | 3 | ⬜ |
 | grades | `/api/grades` | 8 | ⬜ |

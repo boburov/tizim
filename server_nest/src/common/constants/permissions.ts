@@ -327,3 +327,22 @@ export const getActionOrder = (action: string): number => {
   const idx = ACTION_ORDER.indexOf(action);
   return idx === -1 ? ACTION_ORDER.length : idx;
 };
+
+/**
+ * O'QITUVCHI DAVOMATI HOLATLARI.
+ *
+ * ⚠ `server/src/constants/teacherAttendance.js` DAN AYNAN KO'CHIRILGAN.
+ *
+ * "exempt" ATAYLAB YO'Q: o'quvchida "imtiyoz" tushunchasi bor
+ * (`AttendanceExemption`), o'qituvchida esa yo'q — u yo keldi, yo
+ * kelmadi, yo sababli kelmadi. Ro'yxatga "exempt" qo'shilsa maosh
+ * hisobi uni qanday qarashini bilmasdi.
+ *
+ * Qiymatlar Prisma `TeacherAttendanceStatus` enumi bilan AYNAN bir xil
+ * bo'lishi SHART — aks holda yozuv bazada rad etiladi.
+ */
+export const TEACHER_ATTENDANCE_STATUSES: string[] = [
+  'present',
+  'absent',
+  'excused',
+];

@@ -36,6 +36,7 @@ import { AttendanceModule } from './modules/attendance/attendance.module.js';
 import { TeacherSalaryModule } from './modules/teacher-salary/teacher-salary.module.js';
 import { AttendanceExemptionsModule } from './modules/attendance-exemptions/attendance-exemptions.module.js';
 import { TeacherAttendanceModule } from './modules/teacher-attendance/teacher-attendance.module.js';
+import { TeacherAttendanceModule } from './modules/teacher-attendance/teacher-attendance.module.js';
 import { JournalModule } from './modules/journal/journal.module.js';
 import { FinanceReportModule } from './modules/finance-report/finance-report.module.js';
 import { ExpenseApprovalsModule } from './modules/expense-approvals/expense-approvals.module.js';
@@ -143,6 +144,8 @@ import { DepositsModule } from './modules/deposits/deposits.module.js';
     TeacherSalaryModule,
     // Davomatdan ozod davrlari (4/4).
     AttendanceExemptionsModule,
+    // O'qituvchi davomati (2/2) — maoshga ta'sir qiladi, faqat manage.
+    TeacherAttendanceModule,
     // O'qituvchi davomati (2/2) — maoshga ta'sir qiladi, faqat manage.
     TeacherAttendanceModule,
     // ── FAZA 7: MOLIYA ──
