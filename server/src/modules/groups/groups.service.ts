@@ -116,6 +116,11 @@ const findSlotConflicts = (slotsA: any[], slotsB: any[]): any[] => {
   return out;
 };
 
+const DAY_LABEL_UZ: Record<string, string> = {
+  mon: 'Dushanba', tue: 'Seshanba', wed: 'Chorshanba',
+  thu: 'Payshanba', fri: 'Juma', sat: 'Shanba', sun: 'Yakshanba',
+};
+
 @Injectable()
 export class GroupsService {
   private readonly logger = new Logger('GroupsService');
@@ -130,6 +135,38 @@ export class GroupsService {
     private readonly completion: StudentCompletionService,
     private readonly systemNotifications: SystemNotificationsService,
   ) {}
+
+  async assertRoomScheduleFree(
+    roomId: string,
+    incomingSchedule: any[] | null | undefined,
+    excludeGroupId: string | null = null,
+  ): Promise<void> {
+    if (!roomId) return;
+    const slots = scheduleActiveOn(incomingSchedule || [] as never);
+    if (!slots.length) return;
+
+    const groups = await this.prisma.group.findMany({
+      where: {
+        roomId: String(roomId),
+        isActive: true,
+        isDeleted: false,
+        ...(excludeGroupId ? { id: { not: String(excludeGroupId) } } : {}),
+      },
+      select: { name: true, schedule: SCHEDULE_SELECT },
+    });
+
+    for (const g of groups) {
+      const conflicts = findSlotConflicts(slots, scheduleActiveOn(g.schedule || [] as never));
+      if (conflicts.length > 0) {
+        const conflict = conflicts[0];
+        const dayLabel = DAY_LABEL_UZ[conflict.day] || conflict.day;
+        throw new ApiError(
+          400,
+          `Xona band: "${g.name}" guruhi bu xonada ${dayLabel} ${conflict.startTime}-${conflict.endTime} da dars o'tadi. Bitta xonaga bir vaqtda ikkita guruh qo'yib bo'lmaydi.`,
+        );
+      }
+    }
+  }
 
   /** Guruh javobini eski (Mongoose) shakliga keltiradi. */
   private shapeGroup<T>(group: T): T {
@@ -785,6 +822,9 @@ export class GroupsService {
 
     await this.assertCourseExists(body.courseId);
     await this.assertRoomInBranch(body.roomId, branchId);
+    if (body.roomId) {
+      await this.assertRoomScheduleFree(body.roomId, body.schedule, null);
+    }
 
     const group = await this.prisma.group.create({
       data: {
@@ -931,6 +971,14 @@ export class GroupsService {
         await this.periods.assertTeacherScheduleFree(
           teacherId, scheduleForCheck, group.id,
         );
+      }
+    }
+
+    if (body.roomId !== undefined || body.schedule !== undefined) {
+      const roomIdForCheck = body.roomId !== undefined ? body.roomId : group.roomId;
+      const scheduleForCheck = body.schedule !== undefined ? body.schedule : group.schedule;
+      if (roomIdForCheck) {
+        await this.assertRoomScheduleFree(roomIdForCheck, scheduleForCheck, group.id);
       }
     }
 

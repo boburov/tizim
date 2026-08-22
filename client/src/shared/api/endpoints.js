@@ -54,6 +54,10 @@ export const ENDPOINTS = Object.freeze({
     // XONA BANDLIGI — xona va soat darajasida (`/utilization` esa
     // filial darajasida; ikkalasi boshqa savolga javob beradi).
     rooms: "/branch-analytics/rooms",
+    roomDashboard: "/branch-analytics/rooms/dashboard",
+    roomFinder: "/branch-analytics/rooms/finder",
+    roomSchedule: "/branch-analytics/rooms/schedule",
+    roomDetails: (id) => `/branch-analytics/rooms/${id}`,
     churn: "/branch-analytics/churn",
     normalized: "/branch-analytics/normalized",
     alerts: "/branch-analytics/alerts",

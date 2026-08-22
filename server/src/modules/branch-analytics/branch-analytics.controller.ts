@@ -14,8 +14,10 @@ import type { AuthenticatedRequest } from '../../common/types/authenticated-requ
 import {
   roomUtilizationSchema, pnlSchema, rangeSchema,
   transferPreviewSchema, transferSchema,
+  roomDashboardSchema, roomFinderSchema, roomScheduleSchema, roomDetailsSchema,
   type RoomUtilizationRequest, type PnlRequest, type RangeRequest,
   type TransferPreviewRequest, type TransferRequest,
+  type RoomDashboardRequest, type RoomFinderRequest, type RoomScheduleRequest, type RoomDetailsRequest,
 } from './branch-analytics.validators.js';
 
 /**
@@ -204,6 +206,54 @@ export class BranchAnalyticsRoomsController {
       branchId: v.query.branchId,
       dayStart: q.dayStart === undefined ? undefined : Number(q.dayStart),
       dayEnd: q.dayEnd === undefined ? undefined : Number(q.dayEnd),
+    });
+    return { success: true, data };
+  }
+
+  @Get('rooms/dashboard')
+  @Permissions(PERMISSIONS.CLASSES_READ)
+  async roomDashboard(@Validated(roomDashboardSchema) v: RoomDashboardRequest) {
+    const data = await this.roomUtilization.getDashboard({
+      branchId: v.query.branchId,
+      from: v.query.from,
+      to: v.query.to,
+    });
+    return { success: true, data };
+  }
+
+  @Get('rooms/finder')
+  @Permissions(PERMISSIONS.CLASSES_READ)
+  async roomFinder(@Validated(roomFinderSchema) v: RoomFinderRequest) {
+    const data = await this.roomUtilization.findEmptyRooms({
+      branchId: v.query.branchId,
+      days: v.query.days,
+      startTime: v.query.startTime,
+      endTime: v.query.endTime,
+      capacity: v.query.capacity,
+    });
+    return { success: true, data };
+  }
+
+  @Get('rooms/schedule')
+  @Permissions(PERMISSIONS.CLASSES_READ)
+  async roomSchedule(@Validated(roomScheduleSchema) v: RoomScheduleRequest) {
+    const data = await this.roomUtilization.getSchedule({
+      branchId: v.query.branchId,
+      from: v.query.from,
+      to: v.query.to,
+      roomId: v.query.roomId,
+    });
+    return { success: true, data };
+  }
+
+  @Get('rooms/:roomId')
+  @Permissions(PERMISSIONS.CLASSES_READ)
+  async roomDetails(@Validated(roomDetailsSchema) v: RoomDetailsRequest) {
+    const data = await this.roomUtilization.getRoomDetails({
+      branchId: v.query.branchId,
+      roomId: v.params.roomId,
+      from: v.query.from,
+      to: v.query.to,
     });
     return { success: true, data };
   }

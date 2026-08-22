@@ -10,3 +10,4 @@ export { default as SchedulePage } from "./pages/SchedulePage";
 export { default as RoomsGrid } from "./components/RoomsGrid";
 export { default as RoomUtilizationSection } from "./components/RoomUtilizationSection";
 export { default as useRoomUtilizationQuery } from "./hooks/useRoomUtilizationQuery";
+export { default as RoomAnalyticsPage } from "./pages/RoomAnalyticsPage";

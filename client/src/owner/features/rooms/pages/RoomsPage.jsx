@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, BarChart3 } from "lucide-react";
 
 import PageShell from "@/shared/components/page/PageShell";
 import useActiveBranch from "@/shared/hooks/useActiveBranch";
@@ -55,13 +55,22 @@ const RoomsPage = () => {
       title="Xonalar"
       subtitle={`${scopeNote} · guruh jadvali shu xonalarga bog'lanadi`}
       actions={
-        <Link
-          to="/owner/jadval"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted"
-        >
-          <CalendarDays className="size-4" />
-          Haftalik jadval
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/owner/rooms/analytics"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground transition shadow-sm hover:bg-muted"
+          >
+            <BarChart3 className="size-4" />
+            Tahlil
+          </Link>
+          <Link
+            to="/owner/jadval"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground transition shadow-sm hover:bg-muted"
+          >
+            <CalendarDays className="size-4" />
+            Haftalik jadval
+          </Link>
+        </div>
       }
     >
       <RoomsGrid />

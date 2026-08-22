@@ -12,4 +12,12 @@ export const roomAnalyticsAPI = {
    */
   utilization: (params = {}) =>
     http.get(ENDPOINTS.branchAnalytics.rooms, { params }),
+  dashboard: (params = {}) =>
+    http.get(ENDPOINTS.branchAnalytics.roomDashboard, { params }),
+  finder: (params = {}) =>
+    http.get(ENDPOINTS.branchAnalytics.roomFinder, { params }),
+  schedule: (params = {}) =>
+    http.get(ENDPOINTS.branchAnalytics.roomSchedule, { params }),
+  details: (roomId, params = {}) =>
+    http.get(ENDPOINTS.branchAnalytics.roomDetails(roomId), { params }),
 };

@@ -10,6 +10,7 @@ import FiliallarPage from "../pages/FiliallarPage";
 import BranchDetailPage from "../pages/BranchDetailPage";
 import TizimTahliliPage from "../pages/TizimTahliliPage";
 import VakolatlarPage from "../pages/VakolatlarPage";
+import RoomAnalyticsPage from "../pages/RoomAnalyticsPage";
 import { MyInboxPage } from "@/owner/features/notifications";
 
 /**
@@ -89,6 +90,11 @@ const SuperAdminRoutes = () => (
     <Route
       path="vakolatlar"
       element={<G required={PERMISSIONS.ROLES_READ}><VakolatlarPage /></G>}
+    />
+
+    <Route
+      path="rooms/analytics"
+      element={<G required={PERMISSIONS.CLASSES_READ}><RoomAnalyticsPage /></G>}
     />
 
     {/* XABARLAR — sarlavhadagi qo'ng'iroq shu yerga olib keladi.

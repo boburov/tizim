@@ -135,34 +135,26 @@ export class FinancialIntelligenceService {
       month: undefined,
     };
 
-    const [
-      summary,
-      expenses,
-      discounts,
-      refunds,
-      receivables,
-      directions,
-      directionsPrev,
-      rooms,
-      groups,
-      budget,
-      teachers,
-      teachersPrev,
-    ] = await Promise.all([
+    // ⚠ B30 TUZATILDI: DB ulanishlarni band qilib qo'ymaslik uchun 12 ta so'rov 3 bosqichga (chunks) bo'lindi.
+    const [summary, expenses, discounts, refunds] = await Promise.all([
       this.summarySvc.getSummary(filters),
       this.expenseSvc.getExpenseBreakdown(filters),
       this.discountSvc.getDiscountAnalytics(filters),
       this.revenueSvc.getRefundAnalytics(filters),
+    ]);
+
+    const [receivables, directions, directionsPrev, rooms] = await Promise.all([
       this.receivablesSvc.getReceivables(filters),
       this.profitSvc.getDirectionProfitability(filters),
       this.profitSvc.getDirectionProfitability(prevFilters),
       this.profitSvc.getRoomRevenue(filters),
+    ]);
+
+    const [groups, budget, teachers, teachersPrev] = await Promise.all([
       this.profitSvc.getGroupProfitability(filters),
       this.expenseSvc.getBudgetPerformance(filters),
       canPayroll ? this.profitSvc.getTeacherProfitability(filters) : Promise.resolve(null),
-      canPayroll
-        ? this.profitSvc.getTeacherProfitability(prevFilters)
-        : Promise.resolve(null),
+      canPayroll ? this.profitSvc.getTeacherProfitability(prevFilters) : Promise.resolve(null),
     ]);
 
     return {

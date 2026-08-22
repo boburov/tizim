@@ -79,7 +79,7 @@ import {
 } from "@/owner/features/branches";
 import { CashDeskPage } from "@/owner/features/journal";
 import { CatalogPage } from "@/owner/features/catalog";
-import { RoomsPage, SchedulePage } from "@/owner/features/rooms";
+import { RoomsPage, SchedulePage, RoomAnalyticsPage } from "@/owner/features/rooms";
 import { SystemAnalysisPage } from "@/owner/features/systemAnalysis";
 import { BranchPnlPage } from "@/owner/features/branchAnalytics";
 import { ExpenseApprovalsPage } from "@/owner/features/expenseApprovals";
@@ -482,14 +482,24 @@ const OwnerRoutes = () => (
         o'zi administratorning filialiga bog'laydi. Boshqa filialga
         xona qo'shish yo'li YO'Q va bu serverda ta'minlangan
         (`rooms.service.js`), bu yerda emas. */}
-    <Route
-      path="rooms"
-      element={
-        <PermissionGuard required="classes.read" fallback="/owner">
-          <RoomsPage />
-        </PermissionGuard>
-      }
-    />
+    <Route path="rooms">
+      <Route
+        index
+        element={
+          <PermissionGuard required="classes.read" fallback="/owner">
+            <RoomsPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="analytics"
+        element={
+          <PermissionGuard required="classes.read" fallback="/owner/rooms">
+            <RoomAnalyticsPage />
+          </PermissionGuard>
+        }
+      />
+    </Route>
 
     {/* HAFTALIK JADVAL — "seshanba 14:00 da 201-xona bo'shmi?".
         Xonalar sahifasidan havola qilinadi; menyuda alohida yozuv

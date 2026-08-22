@@ -449,4 +449,424 @@ export class RoomUtilizationService {
 
     return out;
   }
+
+  private getDayKey(date: Date): string {
+    const map = [6, 0, 1, 2, 3, 4, 5];
+    return DAYS[map[date.getDay()]];
+  }
+
+  private formatDateKey(date: Date): string {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  async getDashboard({
+    branchId,
+    from,
+    to,
+  }: {
+    branchId?: string;
+    from?: Date;
+    to?: Date;
+  } = {}) {
+    const scope: Record<string, any> = branchFilter();
+    if (branchId) {
+      if (!isBranchAllowed(branchId)) {
+        throw new ApiError(403, "Bu filial ma'lumotini ko'rish huquqingiz yo'q");
+      }
+      scope.branchId = String(branchId);
+    }
+
+    const today = new Date();
+    const targetFrom = from || new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const targetTo = to || today;
+    
+    const baseUtilization = await this.getRoomUtilization({ branchId });
+    
+    const [cancellations, groups] = await Promise.all([
+      this.prisma.lessonCancellation.findMany({
+        where: {
+          group: { ...scope, isActive: true, isDeleted: false },
+          isDeleted: false,
+          dateKey: {
+            gte: this.formatDateKey(targetFrom),
+            lte: this.formatDateKey(targetTo),
+          }
+        },
+        select: { groupId: true, dateKey: true }
+      }),
+      this.prisma.group.findMany({
+        where: { ...scope, isActive: true, isDeleted: false },
+        select: { id: true, roomId: true, schedule: { select: { day: true, startTime: true, endTime: true } } }
+      })
+    ]);
+
+    const cancelSet = new Set(cancellations.map(c => `${c.groupId}_${c.dateKey}`));
+
+    let curr = new Date(targetFrom);
+    curr.setHours(0,0,0,0);
+    const end = new Date(targetTo);
+    end.setHours(0,0,0,0);
+    
+    let occupiedToday = 0;
+    let emptyToday = 0;
+    let todayLessons = 0;
+    const todayKey = this.formatDateKey(today);
+
+    const trend = [];
+
+    while (curr <= end) {
+      const dKey = this.formatDateKey(curr);
+      const dayStr = this.getDayKey(curr);
+      let dayLessons = 0;
+      let dayOccupiedRooms = new Set();
+      
+      for (const g of groups) {
+        if (!g.schedule) continue;
+        const slotsForDay = (g.schedule as any[]).filter(s => s.day === dayStr);
+        if (slotsForDay.length > 0 && !cancelSet.has(`${g.id}_${dKey}`)) {
+          dayLessons += slotsForDay.length;
+          if (g.roomId) dayOccupiedRooms.add(g.roomId);
+        }
+      }
+
+      const isToday = dKey === todayKey;
+      if (isToday) {
+        todayLessons = dayLessons;
+        occupiedToday = dayOccupiedRooms.size;
+        emptyToday = baseUtilization.totals.roomCount - occupiedToday;
+      }
+      
+      const occupancyRate = percent(dayOccupiedRooms.size, baseUtilization.totals.roomCount) || 0;
+      
+      trend.push({
+        date: dKey,
+        day: dayStr,
+        occupancyRate,
+        occupiedRooms: dayOccupiedRooms.size,
+        lessons: dayLessons
+      });
+      
+      curr.setDate(curr.getDate() + 1);
+    }
+    
+    const sortedRooms = [...baseUtilization.rooms].sort((a,b) => (b.utilizationPercent || 0) - (a.utilizationPercent || 0));
+    
+    return {
+      kpi: {
+        totalRooms: baseUtilization.totals.roomCount,
+        occupiedToday,
+        emptyToday,
+        todayLessons,
+        averageOccupancy: baseUtilization.totals.utilizationPercent,
+        busiestRoom: sortedRooms.length > 0 ? { name: sortedRooms[0].name, occupancy: sortedRooms[0].utilizationPercent } : null,
+        leastOccupiedRoom: sortedRooms.length > 0 ? { name: sortedRooms[sortedRooms.length - 1].name, occupancy: sortedRooms[sortedRooms.length - 1].utilizationPercent } : null,
+      },
+      statusDistribution: [
+        { status: 'Band', count: occupiedToday, color: 'bg-primary' },
+        { status: "Bo'sh", count: emptyToday, color: 'bg-warning' },
+        { status: 'Ta\'mirda', count: 0, color: 'bg-destructive' },
+        { status: 'Nofaol', count: 0, color: 'bg-muted-foreground' },
+      ],
+      trend,
+      ranking: sortedRooms.map(r => ({
+        roomId: r.roomId,
+        name: r.name,
+        branchName: r.branchName,
+        utilizationPercent: r.utilizationPercent,
+        freeHours: r.capacityHours - r.busyHours,
+        busyHours: r.busyHours,
+        groupCount: r.groupCount
+      })),
+      baseUtilization
+    };
+  }
+
+  async findEmptyRooms({
+    branchId,
+    days,
+    startTime,
+    endTime,
+    capacity,
+  }: {
+    branchId?: string;
+    days: string[];
+    startTime?: string;
+    endTime?: string;
+    capacity?: number;
+  }) {
+    const scope: Record<string, any> = branchFilter();
+    if (branchId) {
+      if (!isBranchAllowed(branchId)) {
+        throw new ApiError(403, "Bu filial ma'lumotini ko'rish huquqingiz yo'q");
+      }
+      scope.branchId = String(branchId);
+    }
+    
+    // fetch rooms first so we can filter by capacity
+    const roomsWhere: Record<string, any> = { ...scope, isActive: true, isDeleted: false };
+    if (capacity) {
+      roomsWhere.capacity = { gte: capacity };
+    }
+    const matchingRooms = await this.prisma.room.findMany({
+      where: roomsWhere,
+      select: { id: true, name: true, capacity: true, branch: { select: { name: true } } }
+    });
+    
+    const matchingRoomIds = new Set(matchingRooms.map(r => String(r.id)));
+
+    const baseUtilization = await this.getRoomUtilization({ branchId });
+    const filteredBaseRooms = baseUtilization.rooms.filter(r => matchingRoomIds.has(String(r.roomId)));
+
+    const startMin = startTime ? toMinutes(startTime) : null;
+    const endMin = endTime ? toMinutes(endTime) : null;
+    
+    const results = [];
+    
+    for (const room of filteredBaseRooms) {
+      // Bir nechta kun tanlangan bo'lsa, ularning barchasidagi band vaqtlarni birlashtiramiz.
+      // Shunda faqat barcha kunlarda HAM bo'sh bo'lgan vaqtlargina "freeWindows" ga kiradi.
+      let allSlots: any[] = [];
+      let totalDaySlotsLength = 0;
+      for (const day of days) {
+        const slots = room.byDay[day] || [];
+        totalDaySlotsLength += slots.length;
+        allSlots = allSlots.concat(slots);
+      }
+      
+      const merged = mergeIntervals(allSlots.map((s: any) => ({ start: toMinutes(s.from)!, end: toMinutes(s.to)! })));
+      const newFree = freeWindows(merged, DEFAULT_DAY_START * 60, DEFAULT_DAY_END * 60, 0);
+      
+      let isFree = false;
+      let status = "Bo'sh";
+      
+      if (startMin !== null && endMin !== null) {
+        const requested = { start: startMin, end: endMin };
+        const hasOverlap = merged.some(s => overlaps(s, requested));
+        isFree = !hasOverlap;
+        status = hasOverlap ? (merged.length > 1 ? "Qisman bo'sh" : "Band") : "Bo'sh";
+      } else {
+        isFree = newFree.length > 0;
+        status = totalDaySlotsLength > 0 ? (newFree.length > 0 ? "Qisman bo'sh" : "Band") : "Bo'sh";
+      }
+      
+      results.push({
+        roomId: room.roomId,
+        name: room.name,
+        capacity: room.capacity,
+        branchName: room.branchName,
+        status,
+        isFree,
+        freeWindows: newFree,
+      });
+    }
+    
+    return results.sort((a,b) => (a.isFree === b.isFree ? a.name.localeCompare(b.name) : (a.isFree ? -1 : 1)));
+  }
+
+  async getSchedule({
+    branchId,
+    from,
+    to,
+    roomId,
+  }: {
+    branchId?: string;
+    from?: Date;
+    to?: Date;
+    roomId?: string;
+  }) {
+    const scope: Record<string, any> = branchFilter();
+    if (branchId) {
+      if (!isBranchAllowed(branchId)) {
+        throw new ApiError(403, "Bu filial ma'lumotini ko'rish huquqingiz yo'q");
+      }
+      scope.branchId = String(branchId);
+    }
+    
+    const today = new Date();
+    const targetFrom = from || today;
+    const targetTo = to || new Date(today.getTime() + 6 * 24 * 60 * 60 * 1000);
+
+    const [rooms, groups, cancellations] = await Promise.all([
+      this.prisma.room.findMany({
+        where: { ...scope, isActive: true, isDeleted: false, ...(roomId ? { id: String(roomId) } : {}) },
+        select: { id: true, name: true, branch: { select: { name: true } } },
+        orderBy: { name: 'asc' }
+      }),
+      this.prisma.group.findMany({
+        where: { ...scope, isActive: true, isDeleted: false },
+        select: { 
+          id: true, 
+          name: true, 
+          roomId: true, 
+          schedule: { select: { day: true, startTime: true, endTime: true } },
+          course: { select: { title: true } },
+          teachers: { select: { firstName: true, lastName: true } }
+        }
+      }),
+      this.prisma.lessonCancellation.findMany({
+        where: {
+          group: { ...scope, isActive: true, isDeleted: false },
+          isDeleted: false,
+          dateKey: {
+            gte: this.formatDateKey(targetFrom),
+            lte: this.formatDateKey(targetTo),
+          }
+        },
+        select: { groupId: true, dateKey: true }
+      }),
+    ]);
+
+    const cancelSet = new Set(cancellations.map(c => `${c.groupId}_${c.dateKey}`));
+
+    const dates = [];
+    let curr = new Date(targetFrom);
+    curr.setHours(0,0,0,0);
+    const end = new Date(targetTo);
+    end.setHours(0,0,0,0);
+
+    while (curr <= end) {
+      const dKey = this.formatDateKey(curr);
+      const dayStr = this.getDayKey(curr);
+      dates.push({ date: dKey, day: dayStr });
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    const schedule = [];
+    for (const d of dates) {
+      const daySchedule = { date: d.date, day: d.day, rooms: [] };
+      for (const room of rooms) {
+        const roomLessons = [];
+        for (const g of groups) {
+          if (g.roomId !== room.id) continue;
+          if (!g.schedule) continue;
+          const slots = (g.schedule as any[]).filter(s => s.day === d.day);
+          for (const slot of slots) {
+            const isCanceled = cancelSet.has(`${g.id}_${d.date}`);
+            roomLessons.push({
+              groupId: g.id,
+              groupName: g.name,
+              subjectName: (g as any).course?.title || '',
+              teacherName: (g as any).teachers?.[0] ? `${(g as any).teachers[0].firstName} ${(g as any).teachers[0].lastName}` : '',
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              isCanceled
+            });
+          }
+        }
+        roomLessons.sort((a,b) => (toMinutes(a.startTime) || 0) - (toMinutes(b.startTime) || 0));
+        (daySchedule.rooms as any[]).push({
+          roomId: room.id,
+          roomName: room.name,
+          branchName: room.branch?.name || '',
+          lessons: roomLessons
+        });
+      }
+      schedule.push(daySchedule);
+    }
+
+    return schedule;
+  }
+
+  async getRoomDetails({
+    branchId,
+    roomId,
+    from,
+    to,
+  }: {
+    branchId?: string;
+    roomId: string;
+    from?: Date;
+    to?: Date;
+  }) {
+    const scope: Record<string, any> = branchFilter();
+    if (branchId) {
+      if (!isBranchAllowed(branchId)) {
+        throw new ApiError(403, "Bu filial ma'lumotini ko'rish huquqingiz yo'q");
+      }
+      scope.branchId = String(branchId);
+    }
+
+    const room = await this.prisma.room.findFirst({
+      where: { ...scope, id: roomId, isDeleted: false },
+    });
+    if (!room) {
+      throw new ApiError(404, "Xona topilmadi");
+    }
+
+    const baseUtilization = await this.getRoomUtilization({ branchId });
+    const roomStats = baseUtilization.rooms.find(r => String(r.roomId) === roomId);
+
+    const today = new Date();
+    const targetFrom = from || new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const targetTo = to || today;
+
+    const groups = await this.prisma.group.findMany({
+      where: { ...scope, roomId, isActive: true, isDeleted: false },
+      select: { 
+        id: true, 
+        name: true,
+        memberships: { select: { studentId: true } },
+        teachers: { select: { id: true } }
+      }
+    });
+
+    const studentIds = new Set();
+    const teacherIds = new Set();
+    
+    for (const g of groups) {
+      for (const m of g.memberships) studentIds.add(m.studentId);
+      for (const t of g.teachers) teacherIds.add(t.id);
+    }
+
+    const fullSchedule = await this.getSchedule({ branchId, from: targetFrom, to: targetTo, roomId });
+    const lessons = [];
+    for (const day of fullSchedule) {
+      const roomDay = (day.rooms as any[]).find(r => r.roomId === roomId);
+      if (roomDay && roomDay.lessons) {
+         for (const l of roomDay.lessons) {
+           lessons.push({ ...l, date: day.date, day: day.day });
+         }
+      }
+    }
+    
+    const dayStr = this.getDayKey(today);
+    const dKey = this.formatDateKey(today);
+    const cancellations = await this.prisma.lessonCancellation.findMany({
+      where: {
+        group: { roomId },
+        isDeleted: false,
+        dateKey: dKey
+      },
+      select: { groupId: true }
+    });
+    const cancelSet = new Set(cancellations.map(c => String(c.groupId)));
+    
+    const daySlots = (roomStats?.byDay[dayStr] || []).filter((s: any) => !cancelSet.has(s.groupId));
+    const merged = mergeIntervals(daySlots.map((s: any) => ({ start: toMinutes(s.from)!, end: toMinutes(s.to)! })));
+    const free = freeWindows(merged, DEFAULT_DAY_START * 60, DEFAULT_DAY_END * 60, 0);
+
+    return {
+      roomId: room.id,
+      name: room.name,
+      capacity: room.capacity,
+      areaM2: room.areaM2,
+      equipment: room.equipment,
+      note: room.note,
+      stats: roomStats ? {
+        utilizationPercent: roomStats.utilizationPercent,
+        groupCount: roomStats.groupCount,
+        lessonsPerWeek: roomStats.lessonsPerWeek,
+        busyHours: roomStats.busyHours,
+        freeHours: roomStats.capacityHours - roomStats.busyHours,
+        capacityHours: roomStats.capacityHours,
+      } : null,
+      studentsCount: studentIds.size,
+      teachersCount: teacherIds.size,
+      freeToday: free,
+      lessons: lessons.sort((a,b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime))
+    };
+  }
 }
