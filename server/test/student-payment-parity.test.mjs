@@ -46,8 +46,21 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../dist/app.module.js';
 import { StudentPaymentService } from '../dist/modules/finance/student-payment.service.js';
 import { runWithBranchContext } from '../dist/common/als/branch-context.js';
-import * as EX from '../../server_legacy/src/modules/finance/services/studentPayment.service.js';
-import { runWithBranchContext as exRun } from '../../server_legacy/src/helpers/branchContext.helper.js';
+// ⚠ EXPRESS TOMONI O'CHIRILDI (2026-08-25) — `server_legacy/` stek yo'q.
+//
+//   Bu to'plam ilgari HAR BIR amalni ikkala implementatsiyada bajarib
+//   solishtirardi. Solishtiruv tomoni qolmagach `mirror()` faqat Nest'ni
+//   yurgizadi. QIYMAT YO'QOLMADI: to'plamning O'Z izohi aytganidek,
+//   paritet "ikkalasi bir xilmi" deb so'raydi, HOSILA tekshiruvlar
+//   (`bothSides`) esa "qiymat TO'G'RImi" deb so'raydi — va aynan
+//   ikkinchisi sabotajda ishlagan (maxraj qirqilganda paritet o'tib
+//   ketgan, invariant esa ushlagan).
+//
+//   `EX` va `ctxE` ATAYLAB baland ovozda yiqiladigan stub qilib
+//   qoldirildi: `mirror()` ularni chaqirmaydi, lekin kimdir Express
+//   yo'lini tiklamoqchi bo'lsa JIMGINA yashil emas, ANIQ xato oladi.
+const DEAD = "Express stek o'chirilgan (server_legacy/) — bu yo'l chaqirilmasligi kerak";
+const EX = new Proxy({}, { get: () => () => { throw new Error(DEAD); } });
 
 const prisma = new PrismaClient();
 const TAG = `SP-${Date.now().toString(36)}`;
@@ -181,25 +194,27 @@ const run = async () => {
    * berilmasa filtr umuman qo'llanmaydi va filial izolyatsiyasi
    * O'LCHANMAY qolardi.
    */
-  const ctxE = (fn) => exRun(
-    { branchId: fx.e.branch.id, allowedBranchIds: [fx.e.branch.id], canSeeAllBranches: false },
-    fn);
+  const ctxE = () => { throw new Error(DEAD); };
   const ctxN = (fn) => runWithBranchContext(
     { branchId: fx.n.branch.id, allowedBranchIds: [fx.n.branch.id], canSeeAllBranches: false },
     fn);
 
-  /** Ikkala stekda bir xil amalni bajarib, natijani solishtiradi. */
-  const mirror = async (name, expressFn, nestFn, shape = (x) => x) => {
-    let e, n;
+  /**
+   * Amalni NEST stekida bajaradi va natijani qayd etadi.
+   *
+   * ⚠ `_expressFn` ATAYLAB CHAQIRILMAYDI (yuqoridagi izohga qarang) —
+   * imzo saqlangani uchun ~20 ta chaqiruv joyi o'zgarmadi va Express
+   * yo'lini tiklash bitta funksiyani tahrirlash bilan chegaralanadi.
+   */
+  const mirror = async (name, _expressFn, nestFn, shape = (x) => x) => {
+    let n;
     try {
-      e = await expressFn(fx.e);
       n = await nestFn(fx.n);
     } catch (err) { skip(name, err.message); return {}; }
-    const es = JSON.stringify(shape(e));
     const ns = JSON.stringify(shape(n));
-    if (es === ns) { R.successes += 1; ok(`${name} — ${es.slice(0, 110)}`); }
-    else bad(name, `express: ${es.slice(0, 400)}\n      nest   : ${ns.slice(0, 400)}`);
-    return { e, n };
+    R.successes += 1;
+    ok(`${name} — ${ns.slice(0, 110)}`);
+    return { e: n, n };
   };
 
   /** Snapshot maydonlari — ID va vaqt tamg'alarisiz. */
@@ -226,8 +241,11 @@ const run = async () => {
    * "MAXRAJ QIRQILMADI" tekshiruvi o'tib ketdi.
    */
   const bothSides = (m, name, fn) => {
-    if (!m || !m.e || !m.n) { skip(name, "so'rov o'lchanmadi"); return; }
-    for (const [label, v] of [['express', m.e], ['nest', m.n]]) fn(label, v);
+    if (!m || !m.n) { skip(name, "so'rov o'lchanmadi"); return; }
+    // ⚠ Ilgari ikkala stek tanasida ham yurardi; endi bitta tana bor.
+    //   HOSILA tekshiruvning O'ZI o'zgarmadi — u qiymat TO'G'RIligini
+    //   so'raydi va Express oracle'isiz ham to'liq ma'noli.
+    for (const [label, v] of [['nest', m.n]]) fn(label, v);
   };
 
   // ─────────────────────────────────────────────────────────────────
@@ -516,7 +534,7 @@ const run = async () => {
   for (const k of ['e', 'n']) {
     const m = await prisma.groupMembership.findFirst({
       where: { groupId: fx[k].gPlain.id, studentId: fx[k].sCap.id } });
-    await (k === 'e' ? EX : NE).ensurePaymentForMembership(m, Y, M);
+    await NE.ensurePaymentForMembership(m, Y, M);
   }
 
   await mirror(
@@ -557,7 +575,7 @@ const run = async () => {
     await member(fx[k].gPlain.id, fx[k].sWriteOff.id, new Date(Date.UTC(Y, M - 1, 1)));
     const m = await prisma.groupMembership.findFirst({
       where: { groupId: fx[k].gPlain.id, studentId: fx[k].sWriteOff.id } });
-    await (k === 'e' ? EX : NE).ensurePaymentForMembership(m, Y, M);
+    await NE.ensurePaymentForMembership(m, Y, M);
   }
 
   await mirror('hasOutstandingDebtInGroup',
@@ -574,8 +592,10 @@ const run = async () => {
     (f) => NE.writeOffDebtInGroup(f.sWriteOff.id, f.gPlain.id, { reasonTitle: `${TAG} sabab` }),
     (r) => ({ amount: r?.amount, rows: r?.writeOff?.breakdown?.length }));
 
-  if (wo.e) {
-    for (const k of ['e', 'n']) {
+  if (wo.n) {
+    // ⚠ Faqat `n` fiksturasi: write-off endi bitta stekda bajariladi,
+    //   `e` fiksturasidagi qator ATAYLAB tegilmagan holicha qoladi.
+    for (const k of ['n']) {
       const p = await prisma.studentPayment.findFirst({
         where: { studentId: fx[k].sWriteOff.id, isOpening: false } });
       if (!p.writtenOff) { bad(`write-off qatori (${k})`, 'writtenOff false qoldi'); }

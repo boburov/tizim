@@ -33,8 +33,19 @@
  * ISHLATISH:  npm run test:money-parity
  * ═══════════════════════════════════════════════════════════════════════════
  */
-const E = await import('../../server_legacy/src/utils/money.js');
+import path from 'node:path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 const N = await import('../dist/common/utils/money.js');
+
+// ⚠ ILGARI `server_legacy/src/utils/money.js` JONLI import qilinardi.
+// Express stek o'chirilgach, uning 5756 ta javobi TARTIB BILAN
+// `test/fixtures/express-money.json` ga muzlatildi. Kirishlar ro'yxati
+// (VALUES/ALLOC) o'zgarmasligi SHART — tartib oracle kalitidir.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const EX = JSON.parse(readFileSync(path.join(HERE, 'fixtures/express-money.json'), 'utf8'));
+let cursor = 0;
 
 let checked = 0, diff = 0;
 const cmp = (label, a, b) => {
@@ -53,11 +64,19 @@ const cmp = (label, a, b) => {
  * ko'chirishda ATAYLAB o'zgartirilmadi — bu yerda maqsad
  * "yaxshilash" emas, AYNAN bir xillik.
  */
-const both = (label, fe, fn) => {
-  let ea, na;
-  try { ea = { ok: fe() }; } catch (e) { ea = { err: e.message }; }
+const both = (label, _unusedExpress, fn) => {
+  const expected = EX.seq[cursor];
+  cursor += 1;
+  if (expected === undefined) {
+    diff += 1;
+    console.log(`  ✗ ${label}: oracle TUGADI (kirishlar ro'yxati o'zgarganmi?)`);
+    return;
+  }
+  let na;
   try { na = { ok: fn() }; } catch (e) { na = { err: e.message }; }
-  cmp(label, ea, na);
+  checked += 1;
+  const sb = JSON.stringify(na);
+  if (expected !== sb) { diff += 1; console.log(`  ✗ ${label}: express=${expected} nest=${sb}`); }
 };
 
 // Turli xil kirishlar — chegara holatlari bilan birga.
@@ -91,15 +110,17 @@ const ALLOC = [
   [1, [1, 1, 1]], [0, [1, 2]], [999_999, [5, 3, 2]], [100, []],
   [1_000_000, [0, 0]], [12_345_678, [7, 11, 13, 17]], [5, [1, 1, 1, 1, 1, 1]],
 ];
-for (const [t, w] of ALLOC) {
-  let ea, na;
-  try { ea = E.allocate(t, w); } catch (e) { ea = `ERR:${e.message}`; }
+for (let i = 0; i < ALLOC.length; i += 1) {
+  const [t, w] = ALLOC[i];
+  const o = EX.alloc[i];
+  let na;
   try { na = N.allocate(t, w); } catch (e) { na = `ERR:${e.message}`; }
+  const ea = o.result;
   if (typeof ea === 'string') { cmp(`allocate(${t},[${w}])`, ea, na); continue; }
   cmp(`allocate(${t},[${w}])`, ea, na);
   // INVARIANT: ulushlar yig'indisi ASL SUMMAGA teng (vazn bo'lsa).
   const s = ea.reduce((x, y) => x + y, 0);
-  const expect = w.some((x) => x > 0) ? E.soum(t) : 0;
+  const expect = w.some((x) => x > 0) ? o.soum : 0;
   if (s !== expect) { diff += 1; console.log(`  ✗ allocate yig'indisi: ${s} ≠ ${expect}`); }
   checked += 1;
 }

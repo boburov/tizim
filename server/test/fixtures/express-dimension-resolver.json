@@ -1,0 +1,38 @@
+{
+  "_comment": "MUZLATILGAN ORACLE — server_legacy/.../dimensionResolver.js `assertApplicable` 2026-08-25 da olingan.",
+  "cases": {
+    "account_transfer + studentId": {
+      "err": "\"account_transfer\" yozuvi uchun mos kelmaydigan o'lchov: studentId"
+    },
+    "deposit_in + groupId": {
+      "err": "\"deposit_in\" yozuvi uchun mos kelmaydigan o'lchov: groupId"
+    },
+    "deposit_in + teacherId": {
+      "err": "\"deposit_in\" yozuvi uchun mos kelmaydigan o'lchov: teacherId"
+    },
+    "owner_investment + studentId": {
+      "err": "\"owner_investment\" yozuvi uchun mos kelmaydigan o'lchov: studentId"
+    },
+    "transfer_send + staffId": {
+      "err": "\"transfer_send\" yozuvi uchun mos kelmaydigan o'lchov: staffId"
+    },
+    "__nope__": {
+      "err": "Noma'lum jurnal yozuvi turi: __nope__"
+    },
+    "payment + studentId (musbat)": {
+      "ok": {
+        "studentId": "aaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "deposit_in + paymentMethod (musbat)": {
+      "ok": {
+        "paymentMethod": "cash"
+      }
+    },
+    "expense + costType (musbat)": {
+      "ok": {
+        "costType": "fixed"
+      }
+    }
+  }
+}

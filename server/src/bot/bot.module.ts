@@ -43,6 +43,7 @@ import type { AppConfig } from '../config/env.validation.js';
 export class BotLifecycle implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger('Bot');
   private polling = false;
+  private handlers: { dispose: () => void } | null = null;
 
   constructor(
     private readonly bots: TelegramBotService,
@@ -69,9 +70,13 @@ export class BotLifecycle implements OnApplicationBootstrap, OnApplicationShutdo
     // shunchaki hech qachon chaqirilmaydi. Shartli ro'yxatga olish
     // "polling yoqildi, lekin buyruqlar javob bermaydi" holatini
     // yaratish xavfini tug'dirardi.
-    registerHandlers(bot, {
+    this.handlers = registerHandlers(bot, {
       appName: this.bots.appName(),
       webAppUrl: this.bots.webAppUrl(),
+      // ⚠ 401 da polling TO'XTATILADI: token yaroqsiz bo'lsa har 300 ms
+      // da bir marta rad etilgan so'rov ketardi va qulf boshqa (balki
+      // to'g'ri sozlangan) nusxaga ham berilmasdi.
+      onFatal: (reason) => void this.stopPolling(reason),
     });
 
     if (!this.config.get('NEST_BOT_POLLING', { infer: true })) {
@@ -108,6 +113,22 @@ export class BotLifecycle implements OnApplicationBootstrap, OnApplicationShutdo
   }
 
   /**
+   * Polling'ni to'xtatadi va qulfni bo'shatadi — jarayonni O'LDIRMAY.
+   *
+   * ⚠ Nusxa TIRIK QOLADI: xabar YUBORISH token bilan ishlaydi va
+   * `getUpdates` rad etilgani yetkazishga ta'sir qilmaydi (`deliverToChat`
+   * nusxasiz `bot-not-running` qaytarardi).
+   */
+  private async stopPolling(reason: string): Promise<void> {
+    if (!this.polling) return;
+    this.polling = false;
+    const bot = this.bots.get();
+    await bot?.stopPolling({ cancel: true }).catch(() => null);
+    await this.lock.release().catch(() => null);
+    this.logger.warn(`Polling toʻxtatildi (faqat yuborish rejimi): ${reason}`);
+  }
+
+  /**
    * ⚠ QULF BOT'DAN OLDIN BO'SHATILADI. Teskari tartibda to'xtayotgan
    * jarayon qulfni 90 soniya ushlab turardi va o'rnini bosuvchi nusxa
    * shuncha vaqt buyruqlarga javob bermay turardi.
@@ -120,6 +141,8 @@ export class BotLifecycle implements OnApplicationBootstrap, OnApplicationShutdo
       await bot.stopPolling({ cancel: true }).catch(() => null);
       this.polling = false;
     }
+    this.handlers?.dispose();
+    this.handlers = null;
     this.bots.destroy();
     this.logger.log("Telegram bot to'xtatildi");
   }

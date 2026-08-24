@@ -32,7 +32,8 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import assert from 'node:assert/strict';
-import prisma from '../../server_legacy/src/config/prisma.js';
+import { createExtendedPrismaClient } from '../dist/prisma/prisma.service.js';
+const prisma = createExtendedPrismaClient();
 
 const EXPRESS = process.env.EXPRESS_URL || 'http://127.0.0.1:5000';
 const NEST = process.env.NEST_URL || 'http://127.0.0.1:5001';

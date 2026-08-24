@@ -7,7 +7,10 @@
  *
  * ISHLATISH:  node tests/financeSecurityAudit.mjs
  */
-import "dotenv/config";
+// ⚠ `dotenv` OLIB TASHLANDI (2026-08-25): u Express paketi edi va
+//   `server/` bog'liqliklarida YO'Q. Muhit endi Node'ning o'zidan
+//   keladi — `node --env-file=.env ...` (npm skriptlari shunday
+//   chaqiradi).
 
 const API = process.env.API || "http://localhost:5000/api";
 const R = { pass: 0, fail: 0, warn: 0, failures: [] };
@@ -38,7 +41,9 @@ const MADE = { postingKeys: [], references: [] };
 
 const cleanup = async () => {
   if (!MADE.postingKeys.length) return;
-  const { default: prisma } = await import("../src/config/prisma.js");
+  // ⚠ Express klienti o'rniga NestJS kengaytirilgan klienti (2026-08-25).
+  const { createExtendedPrismaClient } = await import("../dist/prisma/prisma.service.js");
+  const prisma = createExtendedPrismaClient();
   try {
     const entries = await prisma.journalEntry.findMany({
       where: { postingKey: { in: MADE.postingKeys } },

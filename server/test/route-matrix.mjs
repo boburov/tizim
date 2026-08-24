@@ -1,22 +1,33 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * MARSHRUT MATRITSASI — ikkala stekni HAQIQIY ro'yxatdan o'qiydi.
+ * MARSHRUT MATRITSASI — NestJS ro'yxatini MUZLATILGAN Express oracle'i
+ * bilan solishtiradi.
  *
- * Manba fayllardan EMAS: Express `app` ning router steki va NestJS
- * `dist/` dan ko'tarilgan ilovaning Express adapteri o'qiladi. Ya'ni
- * "modul yozilgan, lekin AppModule'ga qo'shilmagan" holat ko'rinadi.
+ * ⚠ ILGARI `server_legacy/src/app.js` JONLI import qilinardi. Express
+ * steki o'chirilgach, uning 399 marshruti `test/fixtures/express-routes.json`
+ * ga MUZLATILDI. Oracle o'zgarmaydi — u ko'chirish tugagan paytdagi
+ * shartnomani qayd etadi, ya'ni "Nest bu marshrutni YO'QOTDI" holati
+ * hamon ko'rinadi.
+ *
+ * Nest tomoni MANBADAN EMAS, `dist/` dan ko'tarilgan ilovaning Express
+ * adapteridan o'qiladi — "modul yozilgan, lekin AppModule'ga qo'shilmagan"
+ * holat SHU SABABLI ko'rinadi.
+ *
+ * ⚠ BU HISOBOT, QO'RIQCHI EMAS: yetishmayotgan marshrut topilsa ham
+ * chiqish kodi 0 bo'ladi (asl xatti-harakat ATAYLAB saqlangan).
  *
  * ISHLATISH:  node --env-file=.env test/route-matrix.mjs [--json]
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const EXPRESS_APP = pathToFileURL(path.join(HERE, '../../server_legacy/src/app.js')).href;
 const NEST_DIST = pathToFileURL(path.join(HERE, '../dist/app.module.js')).href;
+const ORACLE = path.join(HERE, 'fixtures/express-routes.json');
 
-/** Express 4 router stekini rekursiv aylanib chiqadi. */
+/** Express 4 router stekini rekursiv aylanib chiqadi (Nest adapteri ham shu). */
 const expressRoutes = (stack, prefix = '') => {
   const out = [];
   for (const layer of stack) {
@@ -45,9 +56,8 @@ const norm = (r) =>
   r.replace(/:[A-Za-z0-9_]+/g, ':p').replace(/\/$/, '') || '/';
 
 const main = async () => {
-  // ── EXPRESS ──
-  const { default: app } = await import(EXPRESS_APP);
-  const express = [...new Set(expressRoutes(app._router.stack))].sort();
+  // ── EXPRESS (muzlatilgan oracle) ──
+  const express = JSON.parse(readFileSync(ORACLE, 'utf8')).routes;
 
   // ── NEST (dist'dan, HTTP tinglamasdan) ──
   await import('reflect-metadata');
@@ -68,8 +78,8 @@ const main = async () => {
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ express, nest, missing, extra }, null, 2));
   } else {
-    console.log(`EXPRESS: ${express.length}`);
-    console.log(`NEST   : ${nest.length}`);
+    console.log(`EXPRESS (muzlatilgan): ${express.length}`);
+    console.log(`NEST                 : ${nest.length}`);
     console.log(`\n── NEST'DA YO'Q (${missing.length}) ──`);
     for (const r of missing) console.log('  ' + r);
     console.log(`\n── FAQAT NEST'DA (${extra.length}) ──`);

@@ -1,0 +1,3719 @@
+{
+  "_comment": "MUZLATILGAN ORACLE — server_legacy/src/constants/* dan 2026-08-25 da olingan. Express stek o'chirilgan; bu qiymatlar ko'chirish tugagan paytdagi shartnomani qayd etadi.",
+  "_cases": 252,
+  "PERMISSIONS": {
+    "USERS_READ": "users.read",
+    "USERS_CREATE": "users.create",
+    "USERS_UPDATE": "users.update",
+    "USERS_ARCHIVE": "users.archive",
+    "USERS_PASSWORD": "users.password",
+    "ARCHIVE_REASONS_MANAGE": "archive_reasons.manage",
+    "LEADS_READ": "leads.read",
+    "LEADS_CREATE": "leads.create",
+    "LEADS_UPDATE": "leads.update",
+    "LEADS_MANAGE": "leads.manage",
+    "STUDENTS_READ": "students.read",
+    "STUDENTS_CREATE": "students.create",
+    "STUDENTS_UPDATE": "students.update",
+    "STUDENTS_DELETE": "students.delete",
+    "STUDENTS_FREEZE": "students.freeze",
+    "TEACHERS_READ": "teachers.read",
+    "TEACHERS_CREATE": "teachers.create",
+    "TEACHERS_UPDATE": "teachers.update",
+    "TEACHERS_DELETE": "teachers.delete",
+    "CLASSES_READ": "classes.read",
+    "CLASSES_CREATE": "classes.create",
+    "CLASSES_UPDATE": "classes.update",
+    "CLASSES_DELETE": "classes.delete",
+    "GROUPS_READ": "groups.read",
+    "GROUPS_CREATE": "groups.create",
+    "GROUPS_UPDATE": "groups.update",
+    "GROUPS_DELETE": "groups.delete",
+    "GROUPS_MANAGE_STUDENTS": "groups.manage_students",
+    "ATTENDANCE_READ": "attendance.read",
+    "ATTENDANCE_RECORD": "attendance.record",
+    "ATTENDANCE_MANAGE": "attendance.manage",
+    "GRADES_READ": "grades.read",
+    "GRADES_RECORD": "grades.record",
+    "GRADES_MANAGE": "grades.manage",
+    "RATING_READ": "rating.read",
+    "RATING_MANAGE": "rating.manage",
+    "NOTIFICATIONS_READ": "notifications.read",
+    "NOTIFICATIONS_SEND": "notifications.send",
+    "NOTIFICATION_TEMPLATES_MANAGE": "notification_templates.manage",
+    "HOLIDAYS_MANAGE": "holidays.manage",
+    "FEEDBACK_READ": "feedback.read",
+    "FEEDBACK_RESPOND": "feedback.respond",
+    "FEEDBACK_TYPES_MANAGE": "feedback_types.manage",
+    "ASSIGNMENTS_READ": "assignments.read",
+    "ASSIGNMENTS_SEND": "assignments.send",
+    "STORAGE_MANAGE": "storage.manage",
+    "ADMIN_DASHBOARD_READ": "admin_dashboard.read",
+    "ACTIVITY_LOGS_READ": "activity_logs.read",
+    "FINANCE_READ": "finance.read",
+    "FINANCE_PAY": "finance.pay",
+    "FINANCE_MANAGE": "finance.manage",
+    "FINANCE_OPENING_BALANCE": "finance.opening_balance",
+    "SALARY_READ": "salary.read",
+    "SALARY_PAY": "salary.pay",
+    "PAYROLL_READ": "payroll.read",
+    "PAYROLL_MANAGE": "payroll.manage",
+    "PAYROLL_PAY": "payroll.pay",
+    "EXPENSES_READ": "expenses.read",
+    "EXPENSES_CREATE": "expenses.create",
+    "EXPENSES_MANAGE": "expenses.manage",
+    "FINANCE_CREATE_EXPENSE": "finance.create_expense",
+    "FINANCE_MANAGE_EXPENSE": "finance.manage_expense",
+    "FINANCE_MANAGE_ACCOUNTS": "finance.manage_accounts",
+    "FINANCE_MANAGE_REFUNDS": "finance.manage_refunds",
+    "FINANCE_MANAGE_TRANSFERS": "finance.manage_transfers",
+    "FINANCE_VIEW_PROFITABILITY": "finance.view_profitability",
+    "FINANCE_VIEW_CASHFLOW": "finance.view_cashflow",
+    "FINANCE_VIEW_RECEIVABLES": "finance.view_receivables",
+    "FINANCE_MANAGE_OWNER_CAPITAL": "finance.manage_owner_capital",
+    "FINANCE_MANAGE_BUDGETS": "finance.manage_budgets",
+    "FINANCE_APPROVE": "finance.approve",
+    "APPROVALS_DECIDE_CONFIG": "approvals.decide_config",
+    "BRANCHES_READ": "branches.read",
+    "BRANCHES_CREATE": "branches.create",
+    "BRANCHES_UPDATE": "branches.update",
+    "BRANCHES_DELETE": "branches.delete",
+    "BRANCHES_VIEW_ALL": "branches.view_all",
+    "COURSES_READ": "courses.read",
+    "COURSES_MANAGE": "courses.manage",
+    "AI_READ": "ai.read",
+    "AI_ASSISTANT": "ai.assistant",
+    "AI_CONFIG": "ai.config",
+    "SYSTEM_ADMIN_ACCESS": "system.admin_access",
+    "ROLES_READ": "roles.read",
+    "ROLES_CREATE": "roles.create",
+    "ROLES_UPDATE": "roles.update",
+    "ROLES_DELETE": "roles.delete"
+  },
+  "PERMISSION_LABELS": {
+    "users.read": {
+      "label": "Foydalanuvchilarni ko'rish",
+      "group": "users"
+    },
+    "users.create": {
+      "label": "Foydalanuvchi yaratish",
+      "group": "users"
+    },
+    "users.update": {
+      "label": "Foydalanuvchini tahrirlash",
+      "group": "users"
+    },
+    "users.archive": {
+      "label": "Foydalanuvchini arxivlash va tiklash",
+      "group": "users"
+    },
+    "users.password": {
+      "label": "Parolni ko'rish va almashtirish",
+      "group": "users"
+    },
+    "archive_reasons.manage": {
+      "label": "Arxiv sabablarini boshqarish",
+      "group": "users"
+    },
+    "leads.read": {
+      "label": "Lidlarni ko'rish",
+      "group": "leads"
+    },
+    "leads.create": {
+      "label": "Lid qo'shish",
+      "group": "leads"
+    },
+    "leads.update": {
+      "label": "Lidni tahrirlash va status o'zgartirish",
+      "group": "leads"
+    },
+    "leads.manage": {
+      "label": "Lidlarni to'liq boshqarish (aylantirish, o'chirish)",
+      "group": "leads"
+    },
+    "students.read": {
+      "label": "O'quvchilarni ko'rish",
+      "group": "students"
+    },
+    "students.create": {
+      "label": "O'quvchilarni yaratish",
+      "group": "students"
+    },
+    "students.update": {
+      "label": "O'quvchilarni tahrirlash",
+      "group": "students"
+    },
+    "students.delete": {
+      "label": "O'quvchilarni o'chirish",
+      "group": "students"
+    },
+    "students.freeze": {
+      "label": "O'quvchini muzlatish",
+      "group": "students"
+    },
+    "teachers.read": {
+      "label": "O'qituvchilarni ko'rish",
+      "group": "teachers"
+    },
+    "teachers.create": {
+      "label": "O'qituvchilarni yaratish",
+      "group": "teachers"
+    },
+    "teachers.update": {
+      "label": "O'qituvchilarni tahrirlash",
+      "group": "teachers"
+    },
+    "teachers.delete": {
+      "label": "O'qituvchilarni o'chirish",
+      "group": "teachers"
+    },
+    "classes.read": {
+      "label": "Sinflarni ko'rish",
+      "group": "classes"
+    },
+    "classes.create": {
+      "label": "Sinflarni yaratish",
+      "group": "classes"
+    },
+    "classes.update": {
+      "label": "Sinflarni tahrirlash",
+      "group": "classes"
+    },
+    "classes.delete": {
+      "label": "Sinflarni o'chirish",
+      "group": "classes"
+    },
+    "groups.read": {
+      "label": "Guruhlarni ko'rish",
+      "group": "groups"
+    },
+    "groups.create": {
+      "label": "Guruhlarni yaratish",
+      "group": "groups"
+    },
+    "groups.update": {
+      "label": "Guruhlarni tahrirlash",
+      "group": "groups"
+    },
+    "groups.delete": {
+      "label": "Guruhlarni o'chirish",
+      "group": "groups"
+    },
+    "groups.manage_students": {
+      "label": "Guruh o'quvchilarini boshqarish",
+      "group": "groups"
+    },
+    "attendance.read": {
+      "label": "Davomatni ko'rish",
+      "group": "attendance"
+    },
+    "attendance.record": {
+      "label": "Davomatni belgilash",
+      "group": "attendance"
+    },
+    "attendance.manage": {
+      "label": "Davomatni boshqarish",
+      "group": "attendance"
+    },
+    "grades.read": {
+      "label": "Baholarni ko'rish",
+      "group": "grades"
+    },
+    "grades.record": {
+      "label": "Baho qo'yish",
+      "group": "grades"
+    },
+    "grades.manage": {
+      "label": "Baholashni boshqarish",
+      "group": "grades"
+    },
+    "rating.read": {
+      "label": "Reytingni ko'rish",
+      "group": "rating"
+    },
+    "rating.manage": {
+      "label": "Reyting sozlamalarini boshqarish",
+      "group": "rating"
+    },
+    "notifications.read": {
+      "label": "Bildirishnomalarni ko'rish",
+      "group": "notifications"
+    },
+    "notifications.send": {
+      "label": "Bildirishnoma yuborish",
+      "group": "notifications"
+    },
+    "notification_templates.manage": {
+      "label": "Bildirishnoma shablonlarini boshqarish",
+      "group": "notifications"
+    },
+    "holidays.manage": {
+      "label": "Bayramlarni boshqarish",
+      "group": "holidays"
+    },
+    "feedback.read": {
+      "label": "Feedback'larni ko'rish",
+      "group": "feedback"
+    },
+    "feedback.respond": {
+      "label": "Feedback'ga javob berish",
+      "group": "feedback"
+    },
+    "feedback_types.manage": {
+      "label": "Feedback turlarini boshqarish",
+      "group": "feedback"
+    },
+    "assignments.read": {
+      "label": "Vazifalarni ko'rish",
+      "group": "assignments"
+    },
+    "assignments.send": {
+      "label": "Vazifa yuborish",
+      "group": "assignments"
+    },
+    "storage.manage": {
+      "label": "Fayl saqlagichni boshqarish",
+      "group": "storage"
+    },
+    "admin_dashboard.read": {
+      "label": "Boshqaruv panelini ko'rish",
+      "group": "admin"
+    },
+    "activity_logs.read": {
+      "label": "Faoliyat loglarini ko'rish",
+      "group": "audit"
+    },
+    "finance.read": {
+      "label": "Moliyani ko'rish",
+      "group": "finance"
+    },
+    "finance.pay": {
+      "label": "To'lov qabul qilish",
+      "group": "finance"
+    },
+    "finance.manage": {
+      "label": "Moliyani boshqarish",
+      "group": "finance"
+    },
+    "finance.opening_balance": {
+      "label": "Boshlang'ich qoldiq kiritish",
+      "group": "finance"
+    },
+    "salary.read": {
+      "label": "Maoshlarni ko'rish",
+      "group": "finance"
+    },
+    "salary.pay": {
+      "label": "Maosh to'lash",
+      "group": "finance"
+    },
+    "payroll.read": {
+      "label": "Xodimlar maoshini ko'rish",
+      "group": "finance"
+    },
+    "payroll.manage": {
+      "label": "KPI qoidalari va maosh shartnomalari",
+      "group": "finance"
+    },
+    "payroll.pay": {
+      "label": "Xodimga maosh to'lash",
+      "group": "finance"
+    },
+    "expenses.read": {
+      "label": "Chiqimlarni ko'rish",
+      "group": "finance"
+    },
+    "expenses.create": {
+      "label": "Chiqim qo'shish",
+      "group": "finance"
+    },
+    "expenses.manage": {
+      "label": "Chiqim kategoriyalari va o'chirish",
+      "group": "finance"
+    },
+    "finance.approve": {
+      "label": "Chiqimni tasdiqlash",
+      "group": "finance"
+    },
+    "finance.create_expense": {
+      "label": "Chiqim yozish",
+      "group": "finance"
+    },
+    "finance.manage_expense": {
+      "label": "Chiqimni boshqarish (kategoriya, o'chirish)",
+      "group": "finance"
+    },
+    "finance.manage_accounts": {
+      "label": "Moliyaviy hisoblarni boshqarish",
+      "group": "finance"
+    },
+    "finance.manage_refunds": {
+      "label": "Qaytarimlarni boshqarish",
+      "group": "finance"
+    },
+    "finance.manage_transfers": {
+      "label": "O'tkazma va inkassatsiya",
+      "group": "finance"
+    },
+    "finance.view_profitability": {
+      "label": "Foydalilik tahlili (maosh tannarxini ko'rsatadi)",
+      "group": "finance"
+    },
+    "finance.view_cashflow": {
+      "label": "Pul oqimi va kassa qoldiqlari",
+      "group": "finance"
+    },
+    "finance.view_receivables": {
+      "label": "Qarzdorlik va undirish tahlili",
+      "group": "finance"
+    },
+    "finance.manage_budgets": {
+      "label": "Byudjetni boshqarish",
+      "group": "finance"
+    },
+    "finance.manage_owner_capital": {
+      "label": "Egasining puli (kiritish / yechib olish)",
+      "group": "finance"
+    },
+    "approvals.decide_config": {
+      "label": "Sozlama o'zgarishini tasdiqlash",
+      "group": "approvals"
+    },
+    "branches.read": {
+      "label": "Filiallarni ko'rish",
+      "group": "branches"
+    },
+    "branches.create": {
+      "label": "Filial yaratish",
+      "group": "branches"
+    },
+    "branches.update": {
+      "label": "Filialni tahrirlash",
+      "group": "branches"
+    },
+    "branches.delete": {
+      "label": "Filialni o'chirish",
+      "group": "branches"
+    },
+    "branches.view_all": {
+      "label": "Barcha filiallarni ko'rish",
+      "group": "branches"
+    },
+    "courses.read": {
+      "label": "Kurslarni ko'rish",
+      "group": "courses"
+    },
+    "courses.manage": {
+      "label": "Kurslarni boshqarish",
+      "group": "courses"
+    },
+    "ai.read": {
+      "label": "AI tahlilini ko'rish",
+      "group": "ai"
+    },
+    "ai.assistant": {
+      "label": "AI assistentdan foydalanish",
+      "group": "ai"
+    },
+    "ai.config": {
+      "label": "AI sozlamalarini boshqarish",
+      "group": "ai"
+    },
+    "system.admin_access": {
+      "label": "Tizim sozlamalariga kirish",
+      "group": "admin"
+    },
+    "roles.read": {
+      "label": "Rollarni ko'rish",
+      "group": "admin"
+    },
+    "roles.create": {
+      "label": "Rol yaratish",
+      "group": "admin"
+    },
+    "roles.update": {
+      "label": "Rolni tahrirlash",
+      "group": "admin"
+    },
+    "roles.delete": {
+      "label": "Rolni o'chirish",
+      "group": "admin"
+    }
+  },
+  "ACTION_ORDER": [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "manage",
+    "record",
+    "pay",
+    "send",
+    "respond",
+    "manage_students",
+    "view_all",
+    "approve",
+    "decide_config",
+    "assistant",
+    "config",
+    "admin_access"
+  ],
+  "ACTION_LABELS": {
+    "create": "Yaratish",
+    "read": "Ko'rish",
+    "update": "Tahrirlash",
+    "delete": "O'chirish",
+    "manage": "Boshqarish",
+    "record": "Belgilash",
+    "pay": "To'lov",
+    "send": "Yuborish",
+    "respond": "Javob berish",
+    "manage_students": "O'quvchilarni biriktirish",
+    "view_all": "Barchasini ko'rish",
+    "approve": "Tasdiqlash",
+    "decide_config": "Sozlamani tasdiqlash",
+    "assistant": "Assistentdan foydalanish",
+    "config": "Sozlamalarni boshqarish",
+    "admin_access": "To'liq kirish"
+  },
+  "MODULE_META": {
+    "admin_dashboard": {
+      "label": "Boshqaruv paneli",
+      "order": 10
+    },
+    "branches": {
+      "label": "Filiallar",
+      "order": 15
+    },
+    "users": {
+      "label": "Foydalanuvchilar",
+      "order": 20
+    },
+    "roles": {
+      "label": "Rollar va ruxsatlar",
+      "order": 30
+    },
+    "students": {
+      "label": "O'quvchilar",
+      "order": 40
+    },
+    "teachers": {
+      "label": "O'qituvchilar",
+      "order": 50
+    },
+    "groups": {
+      "label": "Guruhlar",
+      "order": 60
+    },
+    "courses": {
+      "label": "Kurslar",
+      "order": 65
+    },
+    "classes": {
+      "label": "Sinflar",
+      "order": 70
+    },
+    "leads": {
+      "label": "Lidlar",
+      "order": 80
+    },
+    "attendance": {
+      "label": "Davomat",
+      "order": 90
+    },
+    "grades": {
+      "label": "Baholash",
+      "order": 100
+    },
+    "rating": {
+      "label": "Reyting",
+      "order": 110
+    },
+    "finance": {
+      "label": "Moliya",
+      "order": 120
+    },
+    "salary": {
+      "label": "Maoshlar",
+      "order": 130
+    },
+    "approvals": {
+      "label": "Tasdiqlar",
+      "order": 135
+    },
+    "assignments": {
+      "label": "Vazifalar",
+      "order": 138
+    },
+    "storage": {
+      "label": "Fayl saqlagich",
+      "order": 139
+    },
+    "notifications": {
+      "label": "Bildirishnomalar",
+      "order": 140
+    },
+    "notification_templates": {
+      "label": "Bildirishnoma shablonlari",
+      "order": 150
+    },
+    "holidays": {
+      "label": "Bayramlar",
+      "order": 160
+    },
+    "feedback": {
+      "label": "Feedback",
+      "order": 170
+    },
+    "feedback_types": {
+      "label": "Feedback turlari",
+      "order": 180
+    },
+    "archive_reasons": {
+      "label": "Arxiv sabablari",
+      "order": 190
+    },
+    "activity_logs": {
+      "label": "Faoliyat loglari",
+      "order": 200
+    },
+    "ai": {
+      "label": "AI maslahatchi",
+      "order": 205
+    },
+    "system": {
+      "label": "Tizim",
+      "order": 210
+    }
+  },
+  "ROLES": {
+    "OWNER": "owner",
+    "TEACHER": "teacher",
+    "STUDENT": "student"
+  },
+  "ROLE_TYPES": {
+    "OWNER": "owner",
+    "STAFF": "staff",
+    "TEACHER": "teacher",
+    "STUDENT": "student"
+  },
+  "SYSTEM_ROLE_META": {
+    "owner": {
+      "roleType": "owner",
+      "defaultPath": "/admin"
+    },
+    "teacher": {
+      "roleType": "teacher",
+      "defaultPath": "/teacher"
+    },
+    "student": {
+      "roleType": "student",
+      "defaultPath": "/student"
+    }
+  },
+  "DEFAULT_ROLE_PATH": "/owner",
+  "PAYROLL_AUDIT_ACTIONS": {
+    "GENERATED": "payroll.generated",
+    "RECALCULATED": "payroll.recalculated",
+    "LOCKED": "payroll.locked",
+    "UNLOCKED": "payroll.unlocked",
+    "PAID": "payroll.paid",
+    "PAYMENT_REVERSED": "payroll.payment_reversed",
+    "BONUS_ADDED": "bonus.added",
+    "BONUS_REMOVED": "bonus.removed",
+    "PENALTY_ADDED": "penalty.added",
+    "PENALTY_REMOVED": "penalty.removed",
+    "SALARY_CHANGED": "salary.changed",
+    "ACTIVATION_CHANGED": "payroll.activation_changed",
+    "EMPLOYMENT_DATE_CHANGED": "hr.employment_date_changed",
+    "IMPORTED": "payroll.imported",
+    "BLOCKED": "payroll.blocked"
+  },
+  "PAYROLL_AUDIT_ACTION_LABELS": {
+    "payroll.generated": "Maosh yaratildi",
+    "payroll.recalculated": "Maosh qayta hisoblandi",
+    "payroll.locked": "Maosh qulflandi",
+    "payroll.unlocked": "Qulf ochildi",
+    "payroll.paid": "Maosh to'landi",
+    "payroll.payment_reversed": "To'lov bekor qilindi",
+    "bonus.added": "Bonus qo'shildi",
+    "bonus.removed": "Bonus o'chirildi",
+    "penalty.added": "Jarima qo'shildi",
+    "penalty.removed": "Jarima o'chirildi",
+    "salary.changed": "Maosh shartnomasi o'zgardi",
+    "payroll.activation_changed": "Maosh boshlanish sanasi o'zgardi",
+    "hr.employment_date_changed": "Ishga olingan sana o'zgardi",
+    "payroll.imported": "Maosh import qilindi",
+    "payroll.blocked": "Amal rad etildi (o'zgarmas davr)"
+  },
+  "OWNER_ONLY_PERMISSIONS": [
+    "system.admin_access",
+    "branches.view_all",
+    "branches.create",
+    "branches.update",
+    "branches.delete",
+    "approvals.decide_config",
+    "finance.approve",
+    "roles.create",
+    "roles.delete",
+    "courses.manage",
+    "archive_reasons.manage",
+    "feedback_types.manage",
+    "notification_templates.manage",
+    "holidays.manage",
+    "storage.manage",
+    "ai.config"
+  ],
+  "BRANCH_LOCAL_PERMISSIONS": [
+    "users.read",
+    "users.create",
+    "users.update",
+    "users.archive",
+    "users.password",
+    "leads.read",
+    "leads.create",
+    "leads.update",
+    "leads.manage",
+    "students.read",
+    "students.create",
+    "students.update",
+    "students.delete",
+    "students.freeze",
+    "teachers.read",
+    "teachers.create",
+    "teachers.update",
+    "teachers.delete",
+    "classes.read",
+    "classes.create",
+    "classes.update",
+    "classes.delete",
+    "groups.read",
+    "groups.create",
+    "groups.update",
+    "groups.delete",
+    "groups.manage_students",
+    "attendance.read",
+    "attendance.record",
+    "attendance.manage",
+    "grades.read",
+    "grades.record",
+    "grades.manage",
+    "rating.read",
+    "rating.manage",
+    "notifications.read",
+    "notifications.send",
+    "feedback.read",
+    "feedback.respond",
+    "assignments.read",
+    "assignments.send",
+    "admin_dashboard.read",
+    "activity_logs.read",
+    "finance.read",
+    "finance.pay",
+    "finance.manage",
+    "finance.opening_balance",
+    "salary.read",
+    "salary.pay",
+    "payroll.read",
+    "payroll.manage",
+    "payroll.pay",
+    "expenses.read",
+    "expenses.create",
+    "expenses.manage",
+    "finance.create_expense",
+    "finance.manage_expense",
+    "finance.manage_accounts",
+    "finance.manage_refunds",
+    "finance.manage_transfers",
+    "finance.view_profitability",
+    "finance.view_cashflow",
+    "finance.view_receivables",
+    "finance.manage_owner_capital",
+    "finance.manage_budgets",
+    "branches.read",
+    "courses.read",
+    "ai.read",
+    "ai.assistant",
+    "roles.read",
+    "roles.update"
+  ],
+  "DELEGATABLE_KINDS": {
+    "staff_hire": {
+      "label": "Ishga olish",
+      "modes": [
+        "auto",
+        "approval",
+        "forbidden"
+      ],
+      "limits": [],
+      "direction": null
+    },
+    "discount_set": {
+      "label": "Chegirma belgilash",
+      "modes": [
+        "auto",
+        "threshold",
+        "approval",
+        "forbidden"
+      ],
+      "limits": [
+        "maxAmount",
+        "maxPercent"
+      ],
+      "direction": "ceiling"
+    },
+    "group_fee_set": {
+      "label": "Guruh oylik narxi",
+      "modes": [
+        "auto",
+        "threshold",
+        "approval",
+        "forbidden"
+      ],
+      "limits": [
+        "minAmount"
+      ],
+      "direction": "floor"
+    },
+    "salary_terms": {
+      "label": "Maosh stavkasi (guruh davri)",
+      "modes": [
+        "auto",
+        "threshold",
+        "approval",
+        "forbidden"
+      ],
+      "limits": [
+        "maxAmount",
+        "maxPercent"
+      ],
+      "direction": "ceiling"
+    },
+    "teacher_compensation_set": {
+      "label": "O'qituvchi standart stavkasi",
+      "modes": [
+        "auto",
+        "threshold",
+        "approval",
+        "forbidden"
+      ],
+      "limits": [
+        "maxAmount",
+        "maxPercent"
+      ],
+      "direction": "ceiling"
+    }
+  },
+  "DELEGATION_MODES": {
+    "AUTO": "auto",
+    "THRESHOLD": "threshold",
+    "APPROVAL": "approval",
+    "FORBIDDEN": "forbidden"
+  },
+  "ALL_DELEGATION_MODES": [
+    "auto",
+    "threshold",
+    "approval",
+    "forbidden"
+  ],
+  "DEFAULT_DELEGATION_MODE": "auto",
+  "FALLBACK_DELEGATION_MODE": "approval",
+  "fn": {
+    "getActionLabel": {
+      "create": "Yaratish",
+      "read": "Ko'rish",
+      "update": "Tahrirlash",
+      "delete": "O'chirish",
+      "manage": "Boshqarish",
+      "record": "Belgilash",
+      "pay": "To'lov",
+      "send": "Yuborish",
+      "respond": "Javob berish",
+      "manage_students": "O'quvchilarni biriktirish",
+      "view_all": "Barchasini ko'rish",
+      "approve": "Tasdiqlash",
+      "decide_config": "Sozlamani tasdiqlash",
+      "assistant": "Assistentdan foydalanish",
+      "config": "Sozlamalarni boshqarish",
+      "admin_access": "To'liq kirish",
+      "nomavjud_action": "nomavjud_action",
+      "": ""
+    },
+    "getActionOrder": {
+      "create": 0,
+      "read": 1,
+      "update": 2,
+      "delete": 3,
+      "manage": 4,
+      "record": 5,
+      "pay": 6,
+      "send": 7,
+      "respond": 8,
+      "manage_students": 9,
+      "view_all": 10,
+      "approve": 11,
+      "decide_config": 12,
+      "assistant": 13,
+      "config": 14,
+      "admin_access": 15,
+      "nomavjud_action": 16,
+      "": 16
+    },
+    "getModuleMeta": {
+      "admin_dashboard": {
+        "label": "Boshqaruv paneli",
+        "order": 10
+      },
+      "branches": {
+        "label": "Filiallar",
+        "order": 15
+      },
+      "users": {
+        "label": "Foydalanuvchilar",
+        "order": 20
+      },
+      "roles": {
+        "label": "Rollar va ruxsatlar",
+        "order": 30
+      },
+      "students": {
+        "label": "O'quvchilar",
+        "order": 40
+      },
+      "teachers": {
+        "label": "O'qituvchilar",
+        "order": 50
+      },
+      "groups": {
+        "label": "Guruhlar",
+        "order": 60
+      },
+      "courses": {
+        "label": "Kurslar",
+        "order": 65
+      },
+      "classes": {
+        "label": "Sinflar",
+        "order": 70
+      },
+      "leads": {
+        "label": "Lidlar",
+        "order": 80
+      },
+      "attendance": {
+        "label": "Davomat",
+        "order": 90
+      },
+      "grades": {
+        "label": "Baholash",
+        "order": 100
+      },
+      "rating": {
+        "label": "Reyting",
+        "order": 110
+      },
+      "finance": {
+        "label": "Moliya",
+        "order": 120
+      },
+      "salary": {
+        "label": "Maoshlar",
+        "order": 130
+      },
+      "approvals": {
+        "label": "Tasdiqlar",
+        "order": 135
+      },
+      "assignments": {
+        "label": "Vazifalar",
+        "order": 138
+      },
+      "storage": {
+        "label": "Fayl saqlagich",
+        "order": 139
+      },
+      "notifications": {
+        "label": "Bildirishnomalar",
+        "order": 140
+      },
+      "notification_templates": {
+        "label": "Bildirishnoma shablonlari",
+        "order": 150
+      },
+      "holidays": {
+        "label": "Bayramlar",
+        "order": 160
+      },
+      "feedback": {
+        "label": "Feedback",
+        "order": 170
+      },
+      "feedback_types": {
+        "label": "Feedback turlari",
+        "order": 180
+      },
+      "archive_reasons": {
+        "label": "Arxiv sabablari",
+        "order": 190
+      },
+      "activity_logs": {
+        "label": "Faoliyat loglari",
+        "order": 200
+      },
+      "ai": {
+        "label": "AI maslahatchi",
+        "order": 205
+      },
+      "system": {
+        "label": "Tizim",
+        "order": 210
+      },
+      "nomavjud_modul": {
+        "label": "nomavjud_modul",
+        "order": 999
+      }
+    },
+    "splitPermissionKey": {
+      "users.read": {
+        "module": "users",
+        "action": "read"
+      },
+      "users.create": {
+        "module": "users",
+        "action": "create"
+      },
+      "users.update": {
+        "module": "users",
+        "action": "update"
+      },
+      "users.archive": {
+        "module": "users",
+        "action": "archive"
+      },
+      "users.password": {
+        "module": "users",
+        "action": "password"
+      },
+      "archive_reasons.manage": {
+        "module": "archive_reasons",
+        "action": "manage"
+      },
+      "leads.read": {
+        "module": "leads",
+        "action": "read"
+      },
+      "leads.create": {
+        "module": "leads",
+        "action": "create"
+      },
+      "leads.update": {
+        "module": "leads",
+        "action": "update"
+      },
+      "leads.manage": {
+        "module": "leads",
+        "action": "manage"
+      },
+      "students.read": {
+        "module": "students",
+        "action": "read"
+      },
+      "students.create": {
+        "module": "students",
+        "action": "create"
+      },
+      "students.update": {
+        "module": "students",
+        "action": "update"
+      },
+      "students.delete": {
+        "module": "students",
+        "action": "delete"
+      },
+      "students.freeze": {
+        "module": "students",
+        "action": "freeze"
+      },
+      "teachers.read": {
+        "module": "teachers",
+        "action": "read"
+      },
+      "teachers.create": {
+        "module": "teachers",
+        "action": "create"
+      },
+      "teachers.update": {
+        "module": "teachers",
+        "action": "update"
+      },
+      "teachers.delete": {
+        "module": "teachers",
+        "action": "delete"
+      },
+      "classes.read": {
+        "module": "classes",
+        "action": "read"
+      },
+      "classes.create": {
+        "module": "classes",
+        "action": "create"
+      },
+      "classes.update": {
+        "module": "classes",
+        "action": "update"
+      },
+      "classes.delete": {
+        "module": "classes",
+        "action": "delete"
+      },
+      "groups.read": {
+        "module": "groups",
+        "action": "read"
+      },
+      "groups.create": {
+        "module": "groups",
+        "action": "create"
+      },
+      "groups.update": {
+        "module": "groups",
+        "action": "update"
+      },
+      "groups.delete": {
+        "module": "groups",
+        "action": "delete"
+      },
+      "groups.manage_students": {
+        "module": "groups",
+        "action": "manage_students"
+      },
+      "attendance.read": {
+        "module": "attendance",
+        "action": "read"
+      },
+      "attendance.record": {
+        "module": "attendance",
+        "action": "record"
+      },
+      "attendance.manage": {
+        "module": "attendance",
+        "action": "manage"
+      },
+      "grades.read": {
+        "module": "grades",
+        "action": "read"
+      },
+      "grades.record": {
+        "module": "grades",
+        "action": "record"
+      },
+      "grades.manage": {
+        "module": "grades",
+        "action": "manage"
+      },
+      "rating.read": {
+        "module": "rating",
+        "action": "read"
+      },
+      "rating.manage": {
+        "module": "rating",
+        "action": "manage"
+      },
+      "notifications.read": {
+        "module": "notifications",
+        "action": "read"
+      },
+      "notifications.send": {
+        "module": "notifications",
+        "action": "send"
+      },
+      "notification_templates.manage": {
+        "module": "notification_templates",
+        "action": "manage"
+      },
+      "holidays.manage": {
+        "module": "holidays",
+        "action": "manage"
+      },
+      "feedback.read": {
+        "module": "feedback",
+        "action": "read"
+      },
+      "feedback.respond": {
+        "module": "feedback",
+        "action": "respond"
+      },
+      "feedback_types.manage": {
+        "module": "feedback_types",
+        "action": "manage"
+      },
+      "assignments.read": {
+        "module": "assignments",
+        "action": "read"
+      },
+      "assignments.send": {
+        "module": "assignments",
+        "action": "send"
+      },
+      "storage.manage": {
+        "module": "storage",
+        "action": "manage"
+      },
+      "admin_dashboard.read": {
+        "module": "admin_dashboard",
+        "action": "read"
+      },
+      "activity_logs.read": {
+        "module": "activity_logs",
+        "action": "read"
+      },
+      "finance.read": {
+        "module": "finance",
+        "action": "read"
+      },
+      "finance.pay": {
+        "module": "finance",
+        "action": "pay"
+      },
+      "finance.manage": {
+        "module": "finance",
+        "action": "manage"
+      },
+      "finance.opening_balance": {
+        "module": "finance",
+        "action": "opening_balance"
+      },
+      "salary.read": {
+        "module": "salary",
+        "action": "read"
+      },
+      "salary.pay": {
+        "module": "salary",
+        "action": "pay"
+      },
+      "payroll.read": {
+        "module": "payroll",
+        "action": "read"
+      },
+      "payroll.manage": {
+        "module": "payroll",
+        "action": "manage"
+      },
+      "payroll.pay": {
+        "module": "payroll",
+        "action": "pay"
+      },
+      "expenses.read": {
+        "module": "expenses",
+        "action": "read"
+      },
+      "expenses.create": {
+        "module": "expenses",
+        "action": "create"
+      },
+      "expenses.manage": {
+        "module": "expenses",
+        "action": "manage"
+      },
+      "finance.create_expense": {
+        "module": "finance",
+        "action": "create_expense"
+      },
+      "finance.manage_expense": {
+        "module": "finance",
+        "action": "manage_expense"
+      },
+      "finance.manage_accounts": {
+        "module": "finance",
+        "action": "manage_accounts"
+      },
+      "finance.manage_refunds": {
+        "module": "finance",
+        "action": "manage_refunds"
+      },
+      "finance.manage_transfers": {
+        "module": "finance",
+        "action": "manage_transfers"
+      },
+      "finance.view_profitability": {
+        "module": "finance",
+        "action": "view_profitability"
+      },
+      "finance.view_cashflow": {
+        "module": "finance",
+        "action": "view_cashflow"
+      },
+      "finance.view_receivables": {
+        "module": "finance",
+        "action": "view_receivables"
+      },
+      "finance.manage_owner_capital": {
+        "module": "finance",
+        "action": "manage_owner_capital"
+      },
+      "finance.manage_budgets": {
+        "module": "finance",
+        "action": "manage_budgets"
+      },
+      "finance.approve": {
+        "module": "finance",
+        "action": "approve"
+      },
+      "approvals.decide_config": {
+        "module": "approvals",
+        "action": "decide_config"
+      },
+      "branches.read": {
+        "module": "branches",
+        "action": "read"
+      },
+      "branches.create": {
+        "module": "branches",
+        "action": "create"
+      },
+      "branches.update": {
+        "module": "branches",
+        "action": "update"
+      },
+      "branches.delete": {
+        "module": "branches",
+        "action": "delete"
+      },
+      "branches.view_all": {
+        "module": "branches",
+        "action": "view_all"
+      },
+      "courses.read": {
+        "module": "courses",
+        "action": "read"
+      },
+      "courses.manage": {
+        "module": "courses",
+        "action": "manage"
+      },
+      "ai.read": {
+        "module": "ai",
+        "action": "read"
+      },
+      "ai.assistant": {
+        "module": "ai",
+        "action": "assistant"
+      },
+      "ai.config": {
+        "module": "ai",
+        "action": "config"
+      },
+      "system.admin_access": {
+        "module": "system",
+        "action": "admin_access"
+      },
+      "roles.read": {
+        "module": "roles",
+        "action": "read"
+      },
+      "roles.create": {
+        "module": "roles",
+        "action": "create"
+      },
+      "roles.update": {
+        "module": "roles",
+        "action": "update"
+      },
+      "roles.delete": {
+        "module": "roles",
+        "action": "delete"
+      },
+      "nuqtasiz": {
+        "module": "nuqtasiz",
+        "action": "read"
+      }
+    },
+    "isOwnerOnlyPermission": {
+      "users.read": false,
+      "users.create": false,
+      "users.update": false,
+      "users.archive": false,
+      "users.password": false,
+      "archive_reasons.manage": true,
+      "leads.read": false,
+      "leads.create": false,
+      "leads.update": false,
+      "leads.manage": false,
+      "students.read": false,
+      "students.create": false,
+      "students.update": false,
+      "students.delete": false,
+      "students.freeze": false,
+      "teachers.read": false,
+      "teachers.create": false,
+      "teachers.update": false,
+      "teachers.delete": false,
+      "classes.read": false,
+      "classes.create": false,
+      "classes.update": false,
+      "classes.delete": false,
+      "groups.read": false,
+      "groups.create": false,
+      "groups.update": false,
+      "groups.delete": false,
+      "groups.manage_students": false,
+      "attendance.read": false,
+      "attendance.record": false,
+      "attendance.manage": false,
+      "grades.read": false,
+      "grades.record": false,
+      "grades.manage": false,
+      "rating.read": false,
+      "rating.manage": false,
+      "notifications.read": false,
+      "notifications.send": false,
+      "notification_templates.manage": true,
+      "holidays.manage": true,
+      "feedback.read": false,
+      "feedback.respond": false,
+      "feedback_types.manage": true,
+      "assignments.read": false,
+      "assignments.send": false,
+      "storage.manage": true,
+      "admin_dashboard.read": false,
+      "activity_logs.read": false,
+      "finance.read": false,
+      "finance.pay": false,
+      "finance.manage": false,
+      "finance.opening_balance": false,
+      "salary.read": false,
+      "salary.pay": false,
+      "payroll.read": false,
+      "payroll.manage": false,
+      "payroll.pay": false,
+      "expenses.read": false,
+      "expenses.create": false,
+      "expenses.manage": false,
+      "finance.create_expense": false,
+      "finance.manage_expense": false,
+      "finance.manage_accounts": false,
+      "finance.manage_refunds": false,
+      "finance.manage_transfers": false,
+      "finance.view_profitability": false,
+      "finance.view_cashflow": false,
+      "finance.view_receivables": false,
+      "finance.manage_owner_capital": false,
+      "finance.manage_budgets": false,
+      "finance.approve": true,
+      "approvals.decide_config": true,
+      "branches.read": false,
+      "branches.create": true,
+      "branches.update": true,
+      "branches.delete": true,
+      "branches.view_all": true,
+      "courses.read": false,
+      "courses.manage": true,
+      "ai.read": false,
+      "ai.assistant": false,
+      "ai.config": true,
+      "system.admin_access": true,
+      "roles.read": false,
+      "roles.create": true,
+      "roles.update": false,
+      "roles.delete": true,
+      "yoq.kalit": false,
+      "": false
+    }
+  },
+  "delegation": {
+    "{\"staff_hire\":{\"mode\":\"auto\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"auto\",\"maxAmount\":100}}": {
+      "validate": "Ishga olish: maxAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"auto\",\"minAmount\":100}}": {
+      "validate": "Ishga olish: minAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"auto\",\"maxPercent\":50}}": {
+      "validate": "Ishga olish: maxPercent bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"auto\",\"maxPercent\":150}}": {
+      "validate": "Ishga olish: maxPercent bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"auto\",\"maxAmount\":-1}}": {
+      "validate": "Ishga olish: maxAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"auto\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Ishga olish: maxAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"threshold\"}}": {
+      "validate": "Ishga olish: \"threshold\" rejimi bu tur uchun ruxsat etilmagan",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"threshold\",\"maxAmount\":100}}": {
+      "validate": "Ishga olish: \"threshold\" rejimi bu tur uchun ruxsat etilmagan",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"threshold\",\"minAmount\":100}}": {
+      "validate": "Ishga olish: \"threshold\" rejimi bu tur uchun ruxsat etilmagan",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"threshold\",\"maxPercent\":50}}": {
+      "validate": "Ishga olish: \"threshold\" rejimi bu tur uchun ruxsat etilmagan",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"threshold\",\"maxPercent\":150}}": {
+      "validate": "Ishga olish: \"threshold\" rejimi bu tur uchun ruxsat etilmagan",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"threshold\",\"maxAmount\":-1}}": {
+      "validate": "Ishga olish: \"threshold\" rejimi bu tur uchun ruxsat etilmagan",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"threshold\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Ishga olish: \"threshold\" rejimi bu tur uchun ruxsat etilmagan",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"approval\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"approval\",\"maxAmount\":100}}": {
+      "validate": "Ishga olish: maxAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"approval\",\"minAmount\":100}}": {
+      "validate": "Ishga olish: minAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"approval\",\"maxPercent\":50}}": {
+      "validate": "Ishga olish: maxPercent bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"approval\",\"maxPercent\":150}}": {
+      "validate": "Ishga olish: maxPercent bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"approval\",\"maxAmount\":-1}}": {
+      "validate": "Ishga olish: maxAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"approval\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Ishga olish: maxAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"forbidden\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"forbidden\",\"maxAmount\":100}}": {
+      "validate": "Ishga olish: maxAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"forbidden\",\"minAmount\":100}}": {
+      "validate": "Ishga olish: minAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"forbidden\",\"maxPercent\":50}}": {
+      "validate": "Ishga olish: maxPercent bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"forbidden\",\"maxPercent\":150}}": {
+      "validate": "Ishga olish: maxPercent bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"forbidden\",\"maxAmount\":-1}}": {
+      "validate": "Ishga olish: maxAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"forbidden\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Ishga olish: maxAmount bu tur uchun qo'llanmaydi (chegara yo'q)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"__bad__\"}}": {
+      "validate": "Ishga olish: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"__bad__\",\"maxAmount\":100}}": {
+      "validate": "Ishga olish: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"__bad__\",\"minAmount\":100}}": {
+      "validate": "Ishga olish: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"__bad__\",\"maxPercent\":50}}": {
+      "validate": "Ishga olish: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"__bad__\",\"maxPercent\":150}}": {
+      "validate": "Ishga olish: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"__bad__\",\"maxAmount\":-1}}": {
+      "validate": "Ishga olish: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"mode\":\"__bad__\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Ishga olish: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{}}": {
+      "validate": "Ishga olish: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"maxAmount\":100}}": {
+      "validate": "Ishga olish: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"minAmount\":100}}": {
+      "validate": "Ishga olish: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"maxPercent\":50}}": {
+      "validate": "Ishga olish: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"maxPercent\":150}}": {
+      "validate": "Ishga olish: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"maxAmount\":-1}}": {
+      "validate": "Ishga olish: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"staff_hire\":{\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Ishga olish: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"auto\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"auto\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"auto\",\"minAmount\":100}}": {
+      "validate": "Chegirma belgilash: minAmount bu tur uchun qo'llanmaydi (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"auto\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"auto\",\"maxPercent\":150}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"auto\",\"maxAmount\":-1}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"auto\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"threshold\"}}": {
+      "validate": "Chegirma belgilash: \"threshold\" rejimi uchun kamida bitta chegara kerak (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"threshold\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"threshold\",\"minAmount\":100}}": {
+      "validate": "Chegirma belgilash: \"threshold\" rejimi uchun kamida bitta chegara kerak (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"threshold\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"threshold\",\"maxPercent\":150}}": {
+      "validate": "Chegirma belgilash: maxPercent 100 dan oshmasligi kerak",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"threshold\",\"maxAmount\":-1}}": {
+      "validate": "Chegirma belgilash: maxAmount musbat son bo'lishi kerak",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"threshold\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"approval\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"approval\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"approval\",\"minAmount\":100}}": {
+      "validate": "Chegirma belgilash: minAmount bu tur uchun qo'llanmaydi (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"approval\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"approval\",\"maxPercent\":150}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"approval\",\"maxAmount\":-1}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"approval\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"forbidden\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"forbidden\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"forbidden\",\"minAmount\":100}}": {
+      "validate": "Chegirma belgilash: minAmount bu tur uchun qo'llanmaydi (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"forbidden\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"forbidden\",\"maxPercent\":150}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"forbidden\",\"maxAmount\":-1}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"forbidden\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"__bad__\"}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"__bad__\",\"maxAmount\":100}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"__bad__\",\"minAmount\":100}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"__bad__\",\"maxPercent\":50}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"__bad__\",\"maxPercent\":150}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"__bad__\",\"maxAmount\":-1}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"mode\":\"__bad__\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"maxAmount\":100}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"minAmount\":100}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"maxPercent\":50}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"maxPercent\":150}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"maxAmount\":-1}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"discount_set\":{\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Chegirma belgilash: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"auto\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"auto\",\"maxAmount\":100}}": {
+      "validate": "Guruh oylik narxi: maxAmount bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"auto\",\"minAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"auto\",\"maxPercent\":50}}": {
+      "validate": "Guruh oylik narxi: maxPercent bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"auto\",\"maxPercent\":150}}": {
+      "validate": "Guruh oylik narxi: maxPercent bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"auto\",\"maxAmount\":-1}}": {
+      "validate": "Guruh oylik narxi: maxAmount bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"auto\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Guruh oylik narxi: maxAmount bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"threshold\"}}": {
+      "validate": "Guruh oylik narxi: \"threshold\" rejimi uchun kamida bitta chegara kerak (minAmount)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"threshold\",\"maxAmount\":100}}": {
+      "validate": "Guruh oylik narxi: \"threshold\" rejimi uchun kamida bitta chegara kerak (minAmount)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"threshold\",\"minAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"threshold\",\"maxPercent\":50}}": {
+      "validate": "Guruh oylik narxi: \"threshold\" rejimi uchun kamida bitta chegara kerak (minAmount)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"threshold\",\"maxPercent\":150}}": {
+      "validate": "Guruh oylik narxi: \"threshold\" rejimi uchun kamida bitta chegara kerak (minAmount)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"threshold\",\"maxAmount\":-1}}": {
+      "validate": "Guruh oylik narxi: \"threshold\" rejimi uchun kamida bitta chegara kerak (minAmount)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"threshold\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Guruh oylik narxi: \"threshold\" rejimi uchun kamida bitta chegara kerak (minAmount)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"approval\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"approval\",\"maxAmount\":100}}": {
+      "validate": "Guruh oylik narxi: maxAmount bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"approval\",\"minAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"approval\",\"maxPercent\":50}}": {
+      "validate": "Guruh oylik narxi: maxPercent bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"approval\",\"maxPercent\":150}}": {
+      "validate": "Guruh oylik narxi: maxPercent bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"approval\",\"maxAmount\":-1}}": {
+      "validate": "Guruh oylik narxi: maxAmount bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"approval\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Guruh oylik narxi: maxAmount bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"forbidden\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"forbidden\",\"maxAmount\":100}}": {
+      "validate": "Guruh oylik narxi: maxAmount bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"forbidden\",\"minAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"forbidden\",\"maxPercent\":50}}": {
+      "validate": "Guruh oylik narxi: maxPercent bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"forbidden\",\"maxPercent\":150}}": {
+      "validate": "Guruh oylik narxi: maxPercent bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"forbidden\",\"maxAmount\":-1}}": {
+      "validate": "Guruh oylik narxi: maxAmount bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"forbidden\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Guruh oylik narxi: maxAmount bu tur uchun qo'llanmaydi (minAmount)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"__bad__\"}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"__bad__\",\"maxAmount\":100}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"__bad__\",\"minAmount\":100}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"__bad__\",\"maxPercent\":50}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"__bad__\",\"maxPercent\":150}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"__bad__\",\"maxAmount\":-1}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"mode\":\"__bad__\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"maxAmount\":100}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"minAmount\":100}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"maxPercent\":50}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"maxPercent\":150}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"maxAmount\":-1}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"group_fee_set\":{\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Guruh oylik narxi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"auto\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"auto\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"auto\",\"minAmount\":100}}": {
+      "validate": "Maosh stavkasi (guruh davri): minAmount bu tur uchun qo'llanmaydi (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"auto\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"auto\",\"maxPercent\":150}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"auto\",\"maxAmount\":-1}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"auto\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"threshold\"}}": {
+      "validate": "Maosh stavkasi (guruh davri): \"threshold\" rejimi uchun kamida bitta chegara kerak (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"threshold\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"threshold\",\"minAmount\":100}}": {
+      "validate": "Maosh stavkasi (guruh davri): \"threshold\" rejimi uchun kamida bitta chegara kerak (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"threshold\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"threshold\",\"maxPercent\":150}}": {
+      "validate": "Maosh stavkasi (guruh davri): maxPercent 100 dan oshmasligi kerak",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"threshold\",\"maxAmount\":-1}}": {
+      "validate": "Maosh stavkasi (guruh davri): maxAmount musbat son bo'lishi kerak",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"threshold\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"approval\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"approval\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"approval\",\"minAmount\":100}}": {
+      "validate": "Maosh stavkasi (guruh davri): minAmount bu tur uchun qo'llanmaydi (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"approval\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"approval\",\"maxPercent\":150}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"approval\",\"maxAmount\":-1}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"approval\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"forbidden\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"forbidden\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"forbidden\",\"minAmount\":100}}": {
+      "validate": "Maosh stavkasi (guruh davri): minAmount bu tur uchun qo'llanmaydi (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"forbidden\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"forbidden\",\"maxPercent\":150}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"forbidden\",\"maxAmount\":-1}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"forbidden\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"__bad__\"}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"__bad__\",\"maxAmount\":100}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"__bad__\",\"minAmount\":100}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"__bad__\",\"maxPercent\":50}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"__bad__\",\"maxPercent\":150}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"__bad__\",\"maxAmount\":-1}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"mode\":\"__bad__\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"maxAmount\":100}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"minAmount\":100}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"maxPercent\":50}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"maxPercent\":150}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"maxAmount\":-1}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"salary_terms\":{\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Maosh stavkasi (guruh davri): noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"auto\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"auto\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"auto\",\"minAmount\":100}}": {
+      "validate": "O'qituvchi standart stavkasi: minAmount bu tur uchun qo'llanmaydi (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"auto\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"auto\",\"maxPercent\":150}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"auto\",\"maxAmount\":-1}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"auto\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"threshold\"}}": {
+      "validate": "O'qituvchi standart stavkasi: \"threshold\" rejimi uchun kamida bitta chegara kerak (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"threshold\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"threshold\",\"minAmount\":100}}": {
+      "validate": "O'qituvchi standart stavkasi: \"threshold\" rejimi uchun kamida bitta chegara kerak (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"threshold\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"threshold\",\"maxPercent\":150}}": {
+      "validate": "O'qituvchi standart stavkasi: maxPercent 100 dan oshmasligi kerak",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"threshold\",\"maxAmount\":-1}}": {
+      "validate": "O'qituvchi standart stavkasi: maxAmount musbat son bo'lishi kerak",
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"threshold\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "threshold",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"approval\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"approval\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"approval\",\"minAmount\":100}}": {
+      "validate": "O'qituvchi standart stavkasi: minAmount bu tur uchun qo'llanmaydi (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"approval\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"approval\",\"maxPercent\":150}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"approval\",\"maxAmount\":-1}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"approval\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"forbidden\"}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"forbidden\",\"maxAmount\":100}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"forbidden\",\"minAmount\":100}}": {
+      "validate": "O'qituvchi standart stavkasi: minAmount bu tur uchun qo'llanmaydi (maxAmount, maxPercent)",
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": 100,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"forbidden\",\"maxPercent\":50}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 50
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"forbidden\",\"maxPercent\":150}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": 150
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"forbidden\",\"maxAmount\":-1}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": -1,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"forbidden\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "forbidden",
+        "maxAmount": 100,
+        "minAmount": null,
+        "maxPercent": 10
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"__bad__\"}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"__bad__\",\"maxAmount\":100}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"__bad__\",\"minAmount\":100}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"__bad__\",\"maxPercent\":50}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"__bad__\",\"maxPercent\":150}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"__bad__\",\"maxAmount\":-1}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"mode\":\"__bad__\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"__bad__\"",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"maxAmount\":100}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"minAmount\":100}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"maxPercent\":50}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"maxPercent\":150}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"maxAmount\":-1}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"teacher_compensation_set\":{\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "O'qituvchi standart stavkasi: noma'lum rejim \"undefined\"",
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"auto\"}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"auto\",\"maxAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"auto\",\"minAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"auto\",\"maxPercent\":50}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"auto\",\"maxPercent\":150}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"auto\",\"maxAmount\":-1}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"auto\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"threshold\"}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"threshold\",\"maxAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"threshold\",\"minAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"threshold\",\"maxPercent\":50}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"threshold\",\"maxPercent\":150}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"threshold\",\"maxAmount\":-1}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"threshold\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"approval\"}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"approval\",\"maxAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"approval\",\"minAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"approval\",\"maxPercent\":50}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"approval\",\"maxPercent\":150}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"approval\",\"maxAmount\":-1}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"approval\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"forbidden\"}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"forbidden\",\"maxAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"forbidden\",\"minAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"forbidden\",\"maxPercent\":50}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"forbidden\",\"maxPercent\":150}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"forbidden\",\"maxAmount\":-1}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"forbidden\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"__bad__\"}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"__bad__\",\"maxAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"__bad__\",\"minAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"__bad__\",\"maxPercent\":50}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"__bad__\",\"maxPercent\":150}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"__bad__\",\"maxAmount\":-1}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"mode\":\"__bad__\",\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"maxAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"minAmount\":100}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"maxPercent\":50}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"maxPercent\":150}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"maxAmount\":-1}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__nope__\":{\"maxAmount\":100,\"maxPercent\":10}}": {
+      "validate": "Delegatsiya qilib bo'lmaydigan tur: __nope__",
+      "resolve": {
+        "mode": "approval",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__empty\":null}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__empty\":{\"__undef\":true}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    },
+    "{\"__empty\":{}}": {
+      "validate": null,
+      "resolve": {
+        "mode": "auto",
+        "maxAmount": null,
+        "minAmount": null,
+        "maxPercent": null
+      }
+    }
+  }
+}

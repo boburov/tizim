@@ -31,7 +31,8 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import assert from 'node:assert/strict';
-import prisma from '../../server_legacy/src/config/prisma.js';
+import { createExtendedPrismaClient } from '../dist/prisma/prisma.service.js';
+const prisma = createExtendedPrismaClient();
 
 const EXPRESS = process.env.EXPRESS_URL || 'http://127.0.0.1:5000';
 const NEST = process.env.NEST_URL || 'http://127.0.0.1:5001';
@@ -401,12 +402,14 @@ const main = async () => {
     // ═══════════════════════════════════════════════════════════════
     head("yo'naltirish pretsedenti (manba → zaxira → asosiy filial)");
 
-    let expressRouting = null;
     let nestRouting = null;
     try {
-      expressRouting = await import(
-        '../../server_legacy/src/modules/leads/services/leadRouting.service.js'
-      );
+      // ⚠ ILGARI EXPRESS SERVISI bilan yonma-yon solishtirilardi
+      //   (`server_legacy/.../leadRouting.service.js`). Stek o'chirilgach
+      //   solishtiruv tomoni qolmadi — LEKIN bu blok qiymatini
+      //   YO'QOTMAYDI: quyidagi tekshiruvlar ANIQ kutilmani
+      //   tasdiqlaydi (`matchedBy === 'main_branch' / 'fallback' /
+      //   'source'`), ya'ni pretsedent tartibi o'z-o'zicha o'lchanadi.
       const { LeadRoutingService } = await import('../dist/modules/leads/lead-routing.service.js');
       const { BranchAccessService } = await import(
         '../dist/common/rbac/branch-access.service.js'
@@ -414,19 +417,9 @@ const main = async () => {
       nestRouting = new LeadRoutingService(prisma, new BranchAccessService(prisma));
 
       const compareRoute = async (label, source) => {
-        const e = await expressRouting.route({ source });
         const n = await nestRouting.route({ source });
-        try {
-          assert.deepEqual(
-            { branchId: n.branchId, assigneeId: n.assigneeId, matchedBy: n.matchedBy },
-            { branchId: e.branchId, assigneeId: e.assigneeId, matchedBy: e.matchedBy },
-          );
-          ok(`${label} → ${e.matchedBy} (ikkala stekda bir xil)`);
-          return e;
-        } catch (err) {
-          bad(label, `express: ${JSON.stringify(e)}\n      nest   : ${JSON.stringify(n)}`);
-          return e;
-        }
+        ok(`${label} → ${n.matchedBy}`);
+        return n;
       };
 
       // ── 3-QADAM: qoida YO'Q → ASOSIY FILIAL ──
@@ -521,12 +514,10 @@ const main = async () => {
         select: { id: true },
       });
       madeRuleIds.push(keyRule.id);
-      const eKey = await expressRouting.resolveSourceKey(opt.id);
       const nKey = await nestRouting.resolveSourceKey(opt.id);
       try {
-        assert.equal(nKey, eKey);
-        assert.equal(eKey, opt.name.trim().toLowerCase());
-        ok(`manba kaliti: LeadOption ID → nom ("${eKey}") — ikkala stekda bir xil`);
+        assert.equal(nKey, opt.name.trim().toLowerCase());
+        ok(`manba kaliti: LeadOption ID → nom ("${nKey}")`);
       } catch (err) { bad('manba kaliti', err.message); }
       await compareRoute('LeadOption ID bilan yo\'naltirish', opt.id);
     } catch (err) {

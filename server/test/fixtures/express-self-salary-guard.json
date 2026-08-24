@@ -1,0 +1,39 @@
+{
+  "_comment": "MUZLATILGAN ORACLE — server_legacy/src/helpers/selfSalary.guard.js dan 2026-08-25 da olingan.",
+  "cases": {
+    "o'ziga (id === id)": {
+      "ok": false,
+      "status": 403,
+      "message": "O'zingizga maosh stavkasi belgilay olmaysiz - buni rahbaringiz qiladi"
+    },
+    "o'ziga (_id shaklida)": {
+      "ok": false,
+      "status": 403,
+      "message": "O'zingizga maosh stavkasi belgilay olmaysiz - buni rahbaringiz qiladi"
+    },
+    "boshqaga": {
+      "ok": true
+    },
+    "aktyorsiz (job/seed)": {
+      "ok": true
+    },
+    "nishonsiz": {
+      "ok": true
+    },
+    "nishon obyekt ({ id })": {
+      "ok": false,
+      "status": 403,
+      "message": "O'zingizga maosh stavkasi belgilay olmaysiz - buni rahbaringiz qiladi"
+    },
+    "nishon obyekt ({ _id })": {
+      "ok": false,
+      "status": 403,
+      "message": "O'zingizga maosh stavkasi belgilay olmaysiz - buni rahbaringiz qiladi"
+    },
+    "aktyor `id`, nishon `_id`": {
+      "ok": false,
+      "status": 403,
+      "message": "O'zingizga maosh stavkasi belgilay olmaysiz - buni rahbaringiz qiladi"
+    }
+  }
+}

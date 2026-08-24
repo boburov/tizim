@@ -18,7 +18,7 @@
  *
  * ISHLATISH:  npm run build && npm run test:jobs
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../dist/app.module.js';
 import { PrismaService } from '../dist/prisma/prisma.service.js';
@@ -34,68 +34,27 @@ const bad = (n, x = '') => { R.fail += 1; console.log(`  ❌ ${n}${x ? ` — ${x
 const check = (n, cond, x = '') => (cond ? ok(n, x) : bad(n, x));
 const skipTest = (n, x = '') => { R.skip += 1; console.log(`  ⏭️  ${n}${x ? ` — ${x}` : ''}`); };
 
-const EXPRESS_JOBS_DIR = new URL('../../server_legacy/src/jobs/', import.meta.url);
+const EXPRESS_JOBS_ORACLE = new URL('fixtures/express-jobs.json', import.meta.url);
 
 /**
- * Express tomonidan HAQIQIY jadvalni o'qiydi.
+ * Express jadvalini MUZLATILGAN oracle'dan o'qiydi.
  *
- * Qo'lda yozilgan kutilma (`expected = "15 3 * * *"`) bu testni
- * ma'nosiz qilardi: Express'da cron o'zgarsa test baribir yashil
- * qolardi. Shuning uchun manba faylning O'ZI parse qilinadi.
+ * ⚠ ILGARI `server_legacy/src/jobs/` manba fayllari HAR SAFAR parse
+ * qilinardi — qo'lda yozilgan kutilma (`expected = "15 3 * * *"`) testni
+ * ma'nosiz qilardi, chunki Express'da cron o'zgarsa test yashil qolardi.
+ * Express stek o'chirilgach o'sha PARSE NATIJASI
+ * `test/fixtures/express-jobs.json` ga qotirildi: 22 cron, 5 lock,
+ * 25 job nomi. Oracle endi o'zgarmaydi — u ko'chirish tugagan paytdagi
+ * jadvalni qayd etadi, ya'ni "Nest bu jobni yo'qotdi yoki cron'ini
+ * o'zgartirdi" holati HAMON ko'rinadi.
  */
 const expressSchedule = () => {
-  const indexSrc = readFileSync(new URL('index.js', EXPRESS_JOBS_DIR), 'utf8');
-
-  // 1) Har bir job faylidagi job-nom konstantalari.
-  //    ⚠ `JOB_NAME` bilan cheklanmaydi: `aiReports.job.js` uchtasini
-  //    (`DAILY_JOB`/`WEEKLY_JOB`/`MONTHLY_JOB`) eksport qiladi va faqat
-  //    `JOB_NAME` ni qidirsak, 3 ta AI hisoboti pariteti JIMGINA
-  //    tekshirilmay qolardi.
-  const constsByFile = new Map();
-  const fileByName = new Map();
-  const srcByFile = new Map();
-  for (const file of readdirSync(EXPRESS_JOBS_DIR)) {
-    if (!file.endsWith('.js') || file === 'index.js') continue;
-    const src = readFileSync(new URL(file, EXPRESS_JOBS_DIR), 'utf8');
-    srcByFile.set(file, src);
-    const pairs = [];
-    for (const m of src.matchAll(/export const (\w+) = "([a-z]+\.[a-z-]+)"/g)) {
-      pairs.push([m[1], m[2]]);
-      fileByName.set(m[2], file);
-    }
-    if (pairs.length) constsByFile.set(file, pairs);
-  }
-
-  // 2) index.js import bloki → `KONSTANTA as ALIAS`
-  const nameByAlias = new Map();
-  for (const [file, pairs] of constsByFile) {
-    const re = new RegExp(
-      `import\\s+\\w+,\\s*\\{([^}]*)\\}\\s*from\\s*"\\./${file.replace('.', '\\.')}"`,
-      's',
-    );
-    const block = indexSrc.match(re);
-    if (!block) continue;
-    for (const [constName, jobName] of pairs) {
-      const alias = block[1].match(new RegExp(`${constName} as (\\w+)`));
-      if (alias) nameByAlias.set(alias[1], jobName);
-    }
-  }
-
-  // 3) `every("<cron>", ALIAS)` → cron
-  const crons = new Map();
-  for (const m of indexSrc.matchAll(/every\("([^"]+)",\s*(\w+)\)/g)) {
-    const jobName = nameByAlias.get(m[2]);
-    if (jobName) crons.set(jobName, m[1]);
-  }
-
-  // 4) `lockLifetime: N * 60 * 1000` → ms
-  const locks = new Map();
-  for (const [name, file] of fileByName) {
-    const m = srcByFile.get(file)?.match(/lockLifetime:\s*(\d+)\s*\*\s*60\s*\*\s*1000/);
-    if (m) locks.set(name, Number(m[1]) * 60 * 1000);
-  }
-
-  return { crons, locks, names: new Set(fileByName.keys()) };
+  const o = JSON.parse(readFileSync(EXPRESS_JOBS_ORACLE, 'utf8'));
+  return {
+    crons: new Map(Object.entries(o.crons)),
+    locks: new Map(Object.entries(o.locks)),
+    names: new Set(o.names),
+  };
 };
 
 /** ConfigService o'rniga — ro'yxat mantig'ini alohida sinash uchun. */

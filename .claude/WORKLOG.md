@@ -20497,3 +20497,278 @@ Express jarayoni **umuman yo'q**, :5000 da yagona NestJS jarayoni. `/api/health/
 <sub>session `7a8eb188` · branch `main` · 3 ta qadam</sub>
 
 ---
+
+## 2026-08-25 01:17 — I have a question: Is the server currently running entirely on NestJS?
+
+**So'rov**
+
+> I have a question: Is the server currently running entirely on NestJS? Why do we still need the server_legacy file? If it's for controlling the Telegram bot, it should have been named bot instead
+
+**Buyruqlar (15)**
+
+```sh
+ls -la && echo "---ROOT PKG---" && cat package.json 2>/dev/null | head -60
+cat QAROR-VARAQASI.md
+echo "=== server ===" && ls server && echo "=== server_legacy ===" && ls server_legacy && echo "=== deploy.sh ===" && cat deploy.sh
+echo "=== legacy src ===" && ls server_legacy/src && echo && echo "=== legacy pkg ===" && cat server_legacy/package.json && echo && echo "=== nest src ===" && l…
+echo "=== nest bot ===" && find server/src/bot -type f | sed 's|^| |' && echo && echo "=== legacy bot ===" && find server_legacy/src/bot -type f | sed 's|^| |'
+cd server && grep -nE "^#|^\*\*|status|Status|HOLAT|holat|foiz|%" MIGRATION-CHECKLIST.md | head -60
+cd server && sed -n '16,40p' MIGRATION-CHECKLIST.md && echo "=== bot mentions ===" && grep -n -i "bot" MIGRATION-CHECKLIST.md | grep -vi "botAuth\|bot-auth\|bot…
+cd server && echo "=== bot.router.ts ===" && cat src/bot/bot.router.ts | head -80 && echo && echo "=== bot.module.ts ===" && cat src/bot/bot.module.ts
+sed -n '16,40p' MIGRATION-CHECKLIST.md && echo "=== bot mentions ===" && grep -n -i "bot" MIGRATION-CHECKLIST.md | grep -vi "botAuth\|bot-auth\|botStatus\|bot-s…
+echo "=== bot.router.ts ===" && cat src/bot/bot.router.ts && echo "=== bot.module.ts ===" && cat src/bot/bot.module.ts
+for f in .env .env.example ../server_legacy/.env ../server_legacy/.env.example; do echo "=== $f ==="; [ -f "$f" ] && grep -E "NEST_|TELEGRAM_|EXPRESS_|PORT" "$f…
+sed -n '420,435p;520,535p;660,700p' MIGRATION-CHECKLIST.md; echo "=== tail ==="; tail -40 MIGRATION-CHECKLIST.md
+echo "=== legacy bot.router.js handlers wired ===" && grep -nE "require|import|onText|bot\.on\(" ../server_legacy/src/bot/bot.router.js | head -40 echo; echo "=…
+echo "test fayllari server_legacy ga tayanadi: $(grep -rl "server_legacy" test/ | wc -l | tr -d ' ') / $(ls test/*.mjs test/*.js 2>/dev/null | wc -l | tr -d ' '…
+ls ../server_legacy/node_modules/.prisma/client/*.js 2>/dev/null | head -3 || echo " .prisma/client YO'Q" echo "--- legacy config/prisma.js ---"; head -20 ../se…
+```
+
+**Natija**
+
+I'll look at the repo structure to answer this.
+
+Deploy script only touches `server/`, `client/`, `admin_server/`, `admin_client/` — `server_legacy` isn't deployed. Let me check what's actually inside it and whether the bot lives there.
+
+Both have a `bot/`. Let me compare them and check the migration checklist status.
+
+<sub>session `da96a129` · branch `main` · 15 ta qadam</sub>
+
+---
+
+## 2026-08-25 01:13 — [Nest] 17648 - 08/25/2026, 1:12:35 AM ERROR [Bot] Telegram polling xat
+
+**So'rov**
+
+> [Nest] 17648  - 08/25/2026, 1:12:35 AM   ERROR [Bot] Telegram polling xatosi
+> [Nest] 17648  - 08/25/2026, 1:12:35 AM   ERROR [Bot] Error: EFATAL: Error: read ECONNRESET this error shows up in backend logs in /server analize and fix it
+
+**Buyruqlar (35)**
+
+```sh
+ls && echo "---" && ls server 2>/dev/null | head -50
+cd /Users/shukrullo/Desktop/lc-total/server && grep -rn "polling" --include=*.ts src | head -40
+grep -rn "polling" src --include="*.ts" | head -40; echo "---"; grep -rn "Telegram polling" src --include="*.ts" | head
+sed -n '1,120p' src/bot/bot.router.ts
+cat src/bot/bot.module.ts; echo "=========="; cat src/bot/telegram-bot.service.ts
+grep -n "node-telegram-bot-api" package.json; echo "---"; cat node_modules/node-telegram-bot-api/package.json | grep '"version"'; echo "--- legacy ---"; grep -r…
+sed -n '1,80p' ../server_legacy/src/bot/bot.router.js; echo "=== polling module ==="; sed -n '1,60p' node_modules/node-telegram-bot-api/src/telegramPolling.js
+sed -n '60,200p' node_modules/node-telegram-bot-api/src/telegramPolling.js
+grep -n "polling" node_modules/node-telegram-bot-api/src/telegram.js | head -40; echo "=== errors ==="; cat node_modules/node-telegram-bot-api/src/errors.js
+ls src/bot src/bot/handlers test 2>/dev/null; echo "=== lock ==="; cat src/bot/bot-poll-lock.service.ts
+cat src/bot/telegram-errors.ts; echo "=== bot-parity test ==="; sed -n '1,60p' test/bot-parity.test.mjs
+grep -rn "isPolling\|BotLifecycle" src test --include="*.ts" --include="*.mjs" | grep -v "bot.module.ts" | head -20
+cat tsconfig.json; echo "=== scripts ==="; sed -n '/"scripts"/,/}/p' package.json
+cat > src/bot/polling-error.ts <<'EOF' import type { Logger } from '@nestjs/common'; /** * ═════════════════════════════════════════════════════════════════════…
+python3 - <<'PY' import re p='src/bot/bot.router.ts' s=open(p).read() s = s.replace( """import { startHandler } from './handlers/start.handler.js'; import { hel…
+python3 - <<'PY' p='src/bot/bot.module.ts' s=open(p).read() old = """ registerHandlers(bot, { appName: this.bots.appName(), webAppUrl: this.bots.webAppUrl(), })…
+npx tsc --noEmit -p tsconfig.json 2>&1 | head -20
+npx eslint src/bot/polling-error.ts src/bot/bot.router.ts src/bot/bot.module.ts 2>&1 | tail -20
+grep -n "^console.log\|^// ─\|=== \|^const section\|SECTION\|^ console.log" test/bot-parity.test.mjs | head -30
+sed -n '76,100p;142,172p' test/bot-parity.test.mjs
+grep -n "3. \|\\\\n\\\\x1b\[1m3" test/bot-parity.test.mjs | head
+sed -n '176,181p' test/bot-parity.test.mjs
+python3 - <<'PY' p='test/bot-parity.test.mjs' s=open(p).read() # 1) import old_imp = """import { isBlockedError, isRateLimited, retryAfterOf, retryWaitMs, reaso…
+npm run build 2>&1 | tail -5
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/9512afa8-6e84-4bd3-80f0-8f6e3c45c9f2/scratchpad/pe.mjs <<'EOF' import { classifyPollingError, po…
+# … yana 10 ta
+```
+
+**Natija**
+
+I'll look at the bot polling setup in the server.
+
+Now I'll write the polling-error classifier and reporter.
+
+Now wire the lifecycle so a fatal `401` actually stops polling and frees the lock:
+
+I'll verify the new test block standalone rather than re-running the full suite (that run boots a second poller — see note below).
+
+<sub>session `9512afa8` · branch `main` · 35 ta qadam</sub>
+
+---
+
+## 2026-08-25 01:20 — tets what do you mean if you mean fake data i dont need them anymore j
+
+**So'rov**
+
+> tets what do you mean if you mean fake data i dont need them anymore just delet ethem
+
+**Buyruqlar (24)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total echo "=== server_legacy/src/seeds/ ==="; ls server_legacy/src/seeds/ echo; echo "=== server/src/seeds/ (NestJS) ==="; ls -R…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== 30 ta parity test fayli ==="; grep -rl "server_legacy" test/ | sort
+cd /Users/shukrullo/Desktop/lc-total/server_legacy/src/seeds for f in fakeData.seed.js fakeExtras.seed.js aiDemoFinance.seed.js financeDemo.seed.js demoGroup.se…
+cd /Users/shukrullo/Desktop/lc-total/server_legacy/src/seeds echo "=== RUN_TAG qayerda saqlanadi ==="; grep -n "RUN_TAG" fakeData.seed.js | head -20 echo; echo …
+cd /Users/shukrullo/Desktop/lc-total/server cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad/coun…
+cd /Users/shukrullo/Desktop/lc-total/server cp /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad/count-f…
+cd /Users/shukrullo/Desktop/lc-total/server grep -E "^DATABASE_URL|^DIRECT" .env | sed -E 's#://[^:]+:[^@]+@#://***:***@#' echo "--- NODE_ENV ---"; grep -E "^NO…
+cd /Users/shukrullo/Desktop/lc-total/server cat > __inv.mjs <<'EOF' // FAQAT O'QISH. import { PrismaClient } from '@prisma/client'; const p = new PrismaClient()…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== server scripts ==="; node -e "const s=require('./package.json').scripts;for(const k in s)if(/seed|reset|db…
+cd /Users/shukrullo/Desktop/lc-total/server SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad URL=$(g…
+cd /Users/shukrullo/Desktop/lc-total/server echo "modellar: $(grep -c '^model ' prisma/schema.prisma)" echo; echo "=== onDelete taqsimoti ===" grep -oE 'onDelet…
+cd /Users/shukrullo/Desktop/lc-total/server cat > __b.mjs <<'EOF' import { PrismaClient } from '@prisma/client'; const p = new PrismaClient(); const br = await …
+cd /Users/shukrullo/Desktop/lc-total/server grep -n '@@map' prisma/schema.prisma | head -5 echo "--- User modeli ---"; awk '/^model User \{/,/^\}/' prisma/schem…
+cd /Users/shukrullo/Desktop/lc-total/server SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad cat > _…
+cd /Users/shukrullo/Desktop/lc-total/server cat > __fk.mjs <<'EOF' import { PrismaClient } from '@prisma/client'; const p = new PrismaClient(); const out = awai…
+cd /Users/shukrullo/Desktop/lc-total/server cat > __wipe.mjs <<'EOF' import { PrismaClient } from '@prisma/client'; const p = new PrismaClient(); const APPLY = …
+cd /Users/shukrullo/Desktop/lc-total FAKE="aiChurnBacktest aiDemoFinance demoGroup fakeData fakeExtras fakeExtras2 financeDemo multiBranchDemo" for s in $FAKE; …
+cd /Users/shukrullo/Desktop/lc-total for s in aiChurnBacktest aiDemoFinance demoGroup fakeData fakeExtras fakeExtras2 financeDemo multiBranchDemo; do hits=$(gre…
+cd /Users/shukrullo/Desktop/lc-total echo "=== server/test/auth-parity.test.mjs ==="; grep -n -B3 -A6 "fakeData" server/test/auth-parity.test.mjs echo; echo "==…
+cd /Users/shukrullo/Desktop/lc-total/server_legacy/src/seeds git rm -q aiChurnBacktest.seed.js aiDemoFinance.seed.js demoGroup.seed.js fakeData.seed.js fakeExtr…
+cd /Users/shukrullo/Desktop/lc-total/server_legacy node -e ' const fs=require("fs"),f="package.json"; const j=JSON.parse(fs.readFileSync(f,"utf8")); const drop=…
+cd /Users/shukrullo/Desktop/lc-total echo "=== o'chirilgan fayllarga qolgan havola (kod/konfig) ===" grep -rn "fakeData.seed\|fakeExtras\|financeDemo.seed\|demo…
+cd /Users/shukrullo/Desktop/lc-total echo "=== bot fayllari oxirgi o'zgargan vaqt (men tegmadim) ===" ls -l --time-style=+%Y-%m-%d\ %H:%M server/src/bot/bot.mod…
+SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad cat > "$SP/purge-fake-data.mjs" <<'EOF' /** * SOXTA…
+```
+
+**Natija**
+
+Two different things got mixed up there — let me separate them, because one of them is not what you think.
+
+The 30 files aren't fake data — those are parity test code. Fake data is a separate thing. Let me check whether fake rows are even identifiable before I say anything about deleting.
+
+Fake users are identifiable (`student_<i>_<tag>` / `teacher_<i>_<tag>`). Let me check read-only whether any actually exist in the DB — that decides whether there's anything to delete at all.
+
+Correction on the premise: I didn't mean fake data. The 30 files are parity **test code** — they load the old Express service in-process and diff its output against NestJS. No fake data in them.
+
+But your question made me check, and here's what I found:
+
+**Fake data seeds exist** — only in [server_legacy/src/seeds/](server_legacy/src/seeds/), 8 of them (`fakeData`, `fakeExtras`, `fakeExtras2`, `aiDemoFinance`, `financeDemo`, `demoGroup`, `multiBranchDemo`, `aiChurnBacktest`). They were deliberately never migrated to NestJS, so the live stack can't generate fake data anymore.
+
+**Your local DB is almost entirely fake data:**
+
+| | count |
+|---|---|
+| `student_<i>_<tag>` (fakeData seed) | 800 |
+| `teacher_<i>_<tag>` (fakeData seed) | 40 |
+| **total users** | **867** |
+| groups | 44 |
+| studentPayments | 1286 |
+| journalEntries | 48 |
+
+840 of 867 users are seed-generated. This is `127.0.0.1:5432/bayyina`, `NODE_ENV=development` — a local dev DB, not production, so no customers are involved.
+
+Two things you should know before I delete anything:
+
+1. **The parity suites run against this data.** The checklist's own measurements are seed-derived — B17's "Σ totalClasses 4095 → 3889 across 20 groups", B24's "46 churned students", B12's room-utilization denominator that counts seed groups. Empty the DB and th
+
+…(qisqartirildi)
+
+<sub>session `da96a129` · branch `main` · 25 ta qadam</sub>
+
+---
+
+## 2026-08-25 01:33 — srver legacy hozirda qanday foidali ish qimoqda bo'lmasam delete qilam
+
+**So'rov**
+
+> srver legacy hozirda qanday foidali ish qimoqda bo'lmasam delete qilamiz
+
+**Buyruqlar (11)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total echo "=== CI workflow ==="; find .github -type f | while read f; do echo "--- $f ---"; cat "$f"; done
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== server/package.json BARCHA test skriptlari ===" node -e 'const s=require("./package.json").scripts;let n=0…
+cd /Users/shukrullo/Desktop/lc-total/server SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad # SIGPI…
+cd /Users/shukrullo/Desktop/lc-total/server SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad head -3…
+cd /Users/shukrullo/Desktop/lc-total/server SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad for t i…
+cd /Users/shukrullo/Desktop/lc-total/server SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad echo "=…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== route-matrix: 451 vs 399 qanday solishtiriladi ===" grep -nE "normal|replace|:p\b|Set|filter|diff|EXPRESS:…
+cd /Users/shukrullo/Desktop/lc-total/server for f in $(grep -rl "server_legacy" test/ | sort); do printf "%-45s " "${f#test/}" refs=$(grep -oE "server_legacy/sr…
+cd /Users/shukrullo/Desktop/lc-total LEG=server_legacy/node_modules/.prisma/client echo "legacy klient generatsiya vaqti: $(stat -f '%Sm' -t '%Y-%m-%d %H:%M' $L…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== oxirgi 6 migratsiya ==="; ls prisma/migrations | tail -6 echo; echo "=== legacy klient (2026-08-20 17:48) …
+cd /Users/shukrullo/Desktop/lc-total/server_legacy echo "=== hujjatlar ==="; for f in *.md; do printf " %-32s %5s qator " "$f" "$(wc -l < "$f" | tr -d ' ')"; he…
+```
+
+**Natija**
+
+Yaxshi savol — buni o'lchash kerak, taxmin qilish emas. Avval `server_legacy` ga tayanadigan narsalar HAQIQATAN ishlayaptimi, shuni tekshiraman.
+
+CI muhim topilma: `.github/workflows/deploy.yml` — **birorta test yurgizmaydi**, faqat SSH orqali deploy. Ya'ni 79 test skripti faqat qo'lda ishlaydi.
+
+Endi asosiy savol: o'sha 30 test HOZIR haqiqatan ishlaydimi? O'lchayman.
+
+`route-matrix` ishlaydi va o'tadi. Yana ikkitasini va 451 vs 399 farqini tekshiraman.
+
+Uchalasi ham yashil: `route-matrix` (0 yo'qolgan marshrut), `constants-parity` 21/21, `bot-parity` 72/72. Demak server_legacy **haqiqatan ishlayapti**. Endi hal qiluvchi savol: o'chirsak, nima yo'qoladi? Har bir testning legacy'dan NIMA olishini tasniflayman.
+
+Aniq tasnif chiqdi. Bitta shubhali narsa bor: 12 ta test legacy'ning **Prisma klientini** import qiladi, lekin `server_legacy/prisma/` o'chirilgan — ya'ni u klient ESKI sxemadan generatsiya qilingan. Buni tekshiraman.
+
+Bitta oxirgi tekshiruv — papkada faqat kod emas, hujjatlar ham bor.
+
+<sub>session `da96a129` · branch `main` · 11 ta qadam</sub>
+
+---
+
+## 2026-08-25 01:38 — alright do it for me move all the fuction server_legacy have to server
+
+**So'rov**
+
+> alright do it for me move all the fuction server_legacy have to server then you can delete
+
+**Buyruqlar (115)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server_legacy echo "=== scripts/ ==="; ls scripts/ 2>/dev/null echo; echo "=== src/ pastki papkalar (fayl soni) ===" for d …
+cd /Users/shukrullo/Desktop/lc-total echo "=== server/scripts/ ==="; ls server/scripts/ 2>/dev/null echo; echo "=== server/ ildizidagi .md ==="; ls server/*.md …
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== legacy prisma ISHLATMAYDIGAN testlar prisma'ni qayerdan oladi ===" grep -rhoE "^import .*[Pp]risma.*from […
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== dist/prisma.service.js ni ishlatadigan 6 test qanday chaqiradi ===" grep -rn -A2 "prisma.service.js" test/…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '60,100p' src/prisma/prisma.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '35,60p' src/prisma/prisma.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== legacy prisma import qatorlari ===" grep -rn "server_legacy/src/config/prisma.js" test/ | sed 's|^test/||'
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== connectDB/disconnectDB legacy'dan import qilinadimi ===" grep -rn "connectDB\|disconnectDB" test/ | head e…
+cd /Users/shukrullo/Desktop/lc-total/server OLD="import prisma from '../../server_legacy/src/config/prisma.js';" NEW="import { createExtendedPrismaClient } from…
+cd /Users/shukrullo/Desktop/lc-total/server SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad for t i…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== 5001 (Express HTTP) ga muhtoj test fayllari ===" grep -rln "5001" test/*.mjs | wc -l | tr -d ' '; echo " f…
+echo "=== 5000 va 5001 da nima tinglayapti ===" for p in 5000 5001; do pid=$(lsof -nP -iTCP:$p -sTCP:LISTEN -t 2>/dev/null | head -1) if [ -n "$pid" ]; then ech…
+cd /Users/shukrullo/Desktop/lc-total/server echo "asl 30 talik — :5001 ga muhtojmi?" for f in admin-dashboard-parity bot-parity branch-intent catalogs-parity co…
+cd /Users/shukrullo/Desktop/lc-total/server SP=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/da96a129-f9f2-4261-878d-2a172b3149aa/scratchpad npm run…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== HOZIR server_legacy ga tayanadigan fayllar ===" for f in $(grep -rl "server_legacy" test/ | sort); do prin…
+cd /Users/shukrullo/Desktop/lc-total/server cat test/route-matrix.mjs
+cd /Users/shukrullo/Desktop/lc-total/server mkdir -p test/fixtures cat > __dump-routes.mjs <<'EOF' import path from 'node:path'; import { fileURLToPath, pathToF…
+cd /Users/shukrullo/Desktop/lc-total/server cat > test/route-matrix.mjs <<'EOF' /** * ══════════════════════════════════════════════════════════════════════════…
+cd /Users/shukrullo/Desktop/lc-total/server cp test/fixtures/express-routes.json /tmp/oracle.bak node -e ' const f="test/fixtures/express-routes.json",fs=requir…
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '1,60p' test/constants-parity.test.mjs
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '60,200p' test/constants-parity.test.mjs
+cd /Users/shukrullo/Desktop/lc-total/server sed -n '200,300p' test/constants-parity.test.mjs; echo "--- jami qator: $(wc -l < test/constants-parity.test.mjs) --…
+cd /Users/shukrullo/Desktop/lc-total/server cat > __dump-consts.mjs <<'EOF' import { writeFileSync } from 'node:fs'; import * as P from '../server_legacy/src/co…
+cd /Users/shukrullo/Desktop/lc-total/server cat > test/constants-parity.test.mjs <<'MJSEOF' /** * KONSTANTALAR PARITETI — NestJS nusxasi MUZLATILGAN Express ora…
+cd /Users/shukrullo/Desktop/lc-total/server cp test/fixtures/express-constants.json /tmp/c.bak node -e ' const f="test/fixtures/express-constants.json",fs=requi…
+# … yana 90 ta
+```
+
+**Natija**
+
+Ha, bajaraman. Avval `server_legacy` da server'da EKVIVALENTI YO'Q narsalarni inventarizatsiya qilaman — hech narsa yo'qolmasligi uchun.
+
+Aniq: `db-reset.sh` ning server'da ekvivalenti yo'q — uni ko'chirish kerak. Seed'lar esa hammasi allaqachon server'da.
+
+Endi Group-A testlari uchun server'ning o'z Prisma klientini qanday olishini ko'ray.
+
+İki naqsh bor. Legacy `config/prisma.js` kengaytmali (Decimal→son, `passwordHash` niqobi) — shuning uchun xom `PrismaClient` mos kelmasligi mumkin. Tekshiraman.
+
+`createExtendedPrismaClient()` — legacy `config/prisma.js` ning aniq ekvivalenti (bir xil `decimal-to-number` + `journal-immutability`). Tasdiqlash uchun tanasini ko'ray.
+
+Tasdiqlandi — `createExtendedPrismaClient()` legacy `config/prisma.js` bilan aynan bir xil (bir xil `omit`, bir xil ikki kengaytma, bir xil tartib). Endi 12 ta Group-A testini yo'naltiraman.
+
+13 ta statik import (journal-parity dagi dinamik — u ataylab ikki klientni solishtiradi, alohida hal qilaman). Avval `connectDB`/`disconnectDB` ishlatilishini tekshiray.
+
+Toza — faqat standart eksport ishlatiladi. 13 ta faylni yo'naltiraman.
+
+13 tasi yo'naltirildi. Darhol tekshiraman — ikkitasini yurgizaman (ketma-ket ko'p yurgizsam 429 chiqadi).
+
+Muhim topilma — bu ikkalasi `127.0.0.1:5001` (Express HTTP) ga ulanmoqchi. Express esa o'lik. Ya'ni **mening o'zgarishim emas, ular allaqachon yiqilardi**. Buni miqdorlashtiraman.
+
+Bu juda muhim: testlarda **`EXPRESS` = :5000, `NEST` = :5001** — ya'ni kesishuv davri xaritasi. Hozir esa Nest 5000 ni egallagan (`NEST_PORT=5000`), 5001 bo'sh. Tekshiraman.
+
+Aniqlandi: **:5000 = NestJS** (`/api/health/db` 200 beradi — u faqat Nest'da bor), **:5001 = bo'sh**. Ya'ni o'sha testlar "Express" deb Nest'ga, "Nest" deb o'lik portga murojaat qiladi.
+
+Dastlabki 30 talikning qanchasi shu s
+
+…(qisqartirildi)
+
+<sub>session `da96a129` · branch `main` · 119 ta qadam</sub>
+
+---

@@ -68,8 +68,34 @@ Himoya yo'qolmadi, faqat yo'nalishi o'zgardi:
 - ilgari — "ikkinchi ega paydo bo'lmasin"
 - endi — "ega BOR va U BITTA" (5001 bo'sh ekani ham o'lchanadi)
 
-## ESKI EXPRESS MANBAI
+## ESKI EXPRESS MANBAI — O'CHIRILDI (2026-08-25)
 
-Ba'zi paritet testlari `../../server_legacy/src/...` dan import qiladi —
-u ko'chirishda ETALON bo'lgan. `server_legacy/` papkasi shu sababdan
-o'chirilmadi.
+`server_legacy/` **o'chirildi**. Ilgari 19 ta test undan import qilardi;
+ularning hammasi ko'chirildi:
+
+| Yondashuv | Testlar | Qayerga |
+|---|---|---|
+| **Muzlatilgan oracle** (sof ma'lumot/funksiya) | `route-matrix`, `constants-parity`, `money-parity`, `jobs-infra`, `education-helpers-parity`, `teacher-salary-parity`, `bot-parity`, `financial-transaction-parity` (o'lchov qo'riqchisi) | `test/fixtures/express-*.json` |
+| **Express tomoni olib tashlandi** (jonli bazaga bog'liq) | `journal-parity`, `journal-storno`, `holidays-parity`, `leads-parity`, `student-payment-parity`, `financial-transaction-parity` (ko'zgu) | Nest tomoni + hosila invariantlar saqlandi |
+| **Prisma klienti yo'naltirildi** | 13 ta test | `dist/prisma/prisma.service.js` |
+
+### Muzlatilgan oracle nima va nega ishonchli
+
+Fikstura — Express o'chirilishidan OLDIN undan olingan javoblar.
+Har biri **sabotaj bilan tekshirilgan**: fiksturaga soxta qiymat
+qo'yilganda test QIZIL bo'lishi o'lchandi, keyin tiklandi.
+
+⚠ Oracle **o'zgarmaydi** — u ko'chirish tugagan paytdagi shartnomani
+qayd etadi. Nest xatti-harakati ATAYLAB o'zgarsa, fiksturani ham
+YANGILASH kerak (va nega o'zgarganini izohda yozish).
+
+### Ko'chirilgan yordamchilar
+
+| Fayl | Nima |
+|---|---|
+| `test/fixtures/qa-users.mjs` | QA foydalanuvchilari (`qa_admin_a` …) — **10+ test shunga tayanadi**, `npm run fixture:qa` |
+| `test/workspace-security-audit.mjs` | Ish makoni chegarasi HTTP auditi, `npm run audit:workspace` |
+| `test/finance-security-audit.mjs` | Moliya xavfsizlik auditi, `npm run audit:finance` |
+| `scripts/db-reset.sh` | Baza tozalash + bootstrap seed, `npm run db:reset` |
+
+Hujjatlar `server/docs/` ga ko'chirildi (`server/docs/README.md` ga qarang).

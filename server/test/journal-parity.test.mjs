@@ -681,12 +681,13 @@ const run = async () => {
   //
   // `JOURNAL_IMMUTABLE` — ILOVA QATLAMIDAGI qo'riqchi (Prisma klient
   // kengaytmasi), bazadagi trigger EMAS. Ya'ni uni tekshirishning
-  // yagona to'g'ri yo'li — HAR STEKNING O'Z KLIENTINI ishlatish:
-  //   • Express  → `server/src/config/prisma.js`
-  //   • NestJS   → `dist/prisma/prisma.service.js`
+  // yagona to'g'ri yo'li — stekning O'Z KLIENTINI ishlatish:
+  //   • NestJS → `dist/prisma/prisma.service.js`
   //
-  // Ikkalasi ham ALOHIDA ulanish ochadi, shuning uchun oxirida
-  // yopiladi.
+  // ⚠ EXPRESS ZONDI OLIB TASHLANDI (2026-08-25): `server_legacy/` stek
+  //   o'chirildi. U ALOHIDA Prisma klienti ochib AYNI invariantni
+  //   tekshirardi; qo'riqchining o'zi Nest klientida qoladi va quyida
+  //   ayni tarzda o'lchanadi. Musbat nazorat ham saqlangan.
   {
     const victim = await prisma.journalEntry.findFirst({
       where: { branchId: fx[EXPRESS].a.id },
@@ -694,8 +695,6 @@ const run = async () => {
     });
 
     const probes = [];
-    const expressPrisma = (await import('../../server_legacy/src/config/prisma.js')).default;
-    probes.push(['express', expressPrisma, null]);
     const { createExtendedPrismaClient } = await import(
       '../dist/prisma/prisma.service.js'
     );

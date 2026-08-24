@@ -54,6 +54,7 @@
  * ISHLATISH:  npm run test:fintx-parity
  * ═══════════════════════════════════════════════════════════════════════════
  */
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '@prisma/client';
 
@@ -100,11 +101,13 @@ const loadNest = async () => {
   return { svc: new FinancialTransactionService(client, journal, dim), client };
 };
 
-const loadExpress = async () => {
-  const svc = await import(
-    '../../server_legacy/src/modules/finance/services/financialTransaction.service.js');
-  return { svc, client: null };
-};
+// ⚠ `loadExpress()` OLIB TASHLANDI (2026-08-25): `server_legacy/` stek
+//   o'chirildi. Ilgari bu to'plam AYNI amalni ikkala implementatsiyada
+//   ALOHIDA fikstura ustida bajarib, bazadagi izlarni solishtirardi
+//   ("ko'zgu fikstura"). Solishtiruv tomoni qolmagach, `mirror()` endi
+//   Nest izining O'ZINI tekshiradi — yozuv YOZILDIMI, debet=kredit
+//   bo'ldimi, audit izi tushdimi. Har-stek INVARIANT sikllari
+//   (idempotentlik, balans, ko'lam) o'zgarishsiz qoladi.
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FIKSTURA
@@ -251,11 +254,10 @@ const balanceOf = async (branchId, kind) => {
 const run = async () => {
   console.log(`\n\x1b[1mMOLIYAVIY TRANZAKSIYA — DIFFERENSIAL PARITET\x1b[0m  (${TAG})`);
 
-  const E = await loadExpress();
   const N = await loadNest();
 
-  const fx = { express: await makeFixture('E'), nest: await makeFixture('N') };
-  const STACKS = [['express', E.svc, fx.express], ['nest', N.svc, fx.nest]];
+  const fx = { nest: await makeFixture('N') };
+  const STACKS = [['nest', N.svc, fx.nest]];
 
   /**
    * Bir xil AMALNI har stekda O'Z fiksturasi ustida bajaradi va
@@ -273,32 +275,38 @@ const run = async () => {
         out[label] = { error: err?.message || String(err) };
       }
     }
-    // Xatolar ham solishtiriladi — xato MATNI shartnomaning bir qismi.
-    if (out.express?.error || out.nest?.error) {
-      out.express?.error === out.nest?.error
-        ? ok(`${name} — ikkalasi ham rad etdi`, String(out.express.error).slice(0, 60))
-        : bad(name, `express: ${out.express?.error}\n      nest   : ${out.nest?.error}`);
+    // Xato MATNI shartnomaning bir qismi — rad etilgani QAYD ETILADI.
+    if (out.nest?.error) {
+      ok(`${name} — rad etildi`, String(out.nest.error).slice(0, 60));
       return out;
     }
-    const de = await entryDigest(out.express.postingKey);
     const dn = await entryDigest(out.nest.postingKey);
-    try {
-      assert.deepEqual(dn, de);
-      de === null
-        ? ok(`${name} — ikkalasi ham yozuv yozmadi (kutilgan)`)
-        : ok(`${name} — yozuv AYNAN bir xil`, `${de.kind} ${de.totalDebit}`);
-    } catch {
-      bad(name, `express: ${JSON.stringify(de)}\n      nest   : ${JSON.stringify(dn)}`);
+    if (dn === null) {
+      ok(`${name} — yozuv yozilmadi`);
+    } else {
+      try {
+        // ⚠ Ilgari bu Express izi bilan solishtirilardi. Endi yozuvning
+        //   O'Z shartnomasi o'lchanadi: TURI bor va DEBET=KREDIT.
+        //   Ikki tomonlama yozuvda bu buzilsa jurnal balansdan chiqadi.
+        assert.ok(dn.kind, "yozuv turi (`kind`) BO'SH");
+        assert.equal(
+          String(dn.totalDebit), String(dn.totalCredit),
+          `debet ${dn.totalDebit} ≠ kredit ${dn.totalCredit}`,
+        );
+        ok(`${name} — yozuv TO'G'RI`, `${dn.kind} ${dn.totalDebit}`);
+      } catch (err) {
+        bad(name, `${err.message} — ${JSON.stringify(dn)}`);
+      }
     }
-    if (out.express.entityType) {
-      const ae = await auditDigest(out.express.entityType, out.express.entityId);
+    if (out.nest.entityType) {
       const an = await auditDigest(out.nest.entityType, out.nest.entityId);
       try {
-        assert.deepEqual(an, ae);
-        ok(`${name} — audit izi bir xil`, `${ae.length} yozuv`);
-      } catch {
-        bad(`${name} — audit izi`,
-          `express: ${JSON.stringify(ae)}\n      nest   : ${JSON.stringify(an)}`);
+        // ⚠ MUSBAT NAZORAT: audit izi BO'SH bo'lmasligi shart, aks holda
+        //   "hech narsa yozilmadi" ham yashil bo'lardi.
+        assert.ok(an.length > 0, "audit izi BO'SH");
+        ok(`${name} — audit izi bor`, `${an.length} yozuv`);
+      } catch (err) {
+        bad(`${name} — audit izi`, `${err.message}: ${JSON.stringify(an)}`);
       }
     }
     return out;
@@ -732,8 +740,13 @@ const run = async () => {
   //
   // Shuning uchun qo'riqchi O'ZI chaqiriladi, cheklangan turlar bilan.
   {
-    const eDim = await import(
-      '../../server_legacy/src/modules/finance/services/dimensionResolver.js');
+    // ⚠ ILGARI EXPRESS `dimensionResolver.js` JONLI import qilinardi.
+    //   Sof funksiya bo'lgani uchun uning 9 holatdagi javobi
+    //   `test/fixtures/express-dimension-resolver.json` ga MUZLATILDI
+    //   (6 tasi RAD ETILGAN) — qo'riqchi hamon AYNI kirish bilan
+    //   o'lchanadi.
+    const DIM_ORACLE = JSON.parse(readFileSync(
+      new URL('fixtures/express-dimension-resolver.json', import.meta.url), 'utf8')).cases;
     const { DimensionResolverService } =
       await import('../dist/modules/finance/dimension-resolver.service.js');
     const nDim = new DimensionResolverService(N.client);
@@ -757,19 +770,21 @@ const run = async () => {
     ];
 
     for (const [name, kind, dims] of CASES) {
-      let ea, na;
-      try { ea = { ok: eDim.assertApplicable(kind, dims) }; }
-      catch (err) { ea = { err: err.message }; }
-      try { na = { ok: nDim.assertApplicable(kind, dims) }; }
-      catch (err) { na = { err: err.message }; }
+      const ea = DIM_ORACLE[name];
+      if (!ea) { bad(`o'lchov qo'riqchisi: ${name}`, "oracle'da yo'q"); continue; }
+      let na;
+      try {
+        const r = nDim.assertApplicable(kind, dims);
+        na = r === undefined ? { undef: true } : { ok: JSON.parse(JSON.stringify(r)) };
+      } catch (err) { na = { err: err.message }; }
       try {
         assert.deepEqual(na, ea);
         ea.err
           ? ok(`o'lchov qo'riqchisi: ${name} — RAD ETILDI`, ea.err.slice(0, 55))
-          : ok(`o'lchov qo'riqchisi: ${name} — O'TDI`, JSON.stringify(ea.ok));
+          : ok(`o'lchov qo'riqchisi: ${name} — O'TDI`, JSON.stringify(ea.ok ?? null));
       } catch {
         bad(`o'lchov qo'riqchisi: ${name}`,
-          `express: ${JSON.stringify(ea)}\n      nest   : ${JSON.stringify(na)}`);
+          `oracle: ${JSON.stringify(ea)}\n      nest  : ${JSON.stringify(na)}`);
       }
     }
   }
@@ -825,12 +840,17 @@ const run = async () => {
         e.lines.filter((l) => Number(l.debit) > 0 && Number(l.credit) > 0)).length, 0);
   }
 
-  // Ikkala stek ham AYNAN bir xil sondagi yozuv yozdi.
-  const cnt = {};
+  // ⚠ ILGARI bu yerda IKKALA STEK yozgan yozuvlar SONI solishtirilardi.
+  //   Express tomoni o'chirilgach solishtiruv ma'nosini yo'qotdi; uning
+  //   o'rniga MUSBAT NAZORAT qoladi: to'plam umuman yozuv YOZGAN
+  //   bo'lishi shart, aks holda yuqoridagi barcha "balans to'g'ri"
+  //   tekshiruvlari BO'SH to'plam ustida yashil bo'lardi.
   for (const [label, , f] of STACKS) {
-    cnt[label] = await prisma.journalEntry.count({ where: { branchId: f.branch.id } });
+    const n = await prisma.journalEntry.count({ where: { branchId: f.branch.id } });
+    n > 0
+      ? ok(`MUSBAT NAZORAT: ${label} yozuv yozdi`, `${n} ta yozuv`)
+      : bad(`MUSBAT NAZORAT: ${label} yozuv yozdi`, "birorta yozuv YO'Q — to'plam bo'sh o'lchadi");
   }
-  eq('ikkala stek bir xil sondagi yozuv yozdi', cnt.nest, cnt.express);
 
   await N.client.$disconnect().catch(() => {});
 };

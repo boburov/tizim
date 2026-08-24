@@ -20,8 +20,18 @@
  *   node tests/fixtures/qaUsers.mjs           # yaratish
  *   node tests/fixtures/qaUsers.mjs --clean   # o'chirish
  */
-import prisma from "../../src/config/prisma.js";
-import { hashPassword } from "../../src/helpers/password.helper.js";
+// ⚠ `server_legacy/tests/fixtures/qaUsers.mjs` DAN KO'CHIRILGAN (2026-08-25).
+//   Express stek o'chirildi; klient va parol yordamchisi NestJS `dist/`
+//   dan olinadi. `createExtendedPrismaClient` ATAYLAB: xom
+//   `new PrismaClient()` `passwordHash` niqobini va Decimal→son
+//   normalizatsiyasini YO'QOTARDI.
+//
+// ⚠ BU FIKSTURA 10+ TESTGA KERAK (`qa_admin_a`, `qa_staff_a`, ...).
+//   Uni o'chirmang — o'sha testlar JIMGINA `skip` ga tushadi.
+import { createExtendedPrismaClient } from "../../dist/prisma/prisma.service.js";
+import { hashPassword } from "../../dist/common/utils/password.js";
+
+const prisma = createExtendedPrismaClient();
 
 const CLEAN = process.argv.includes("--clean");
 

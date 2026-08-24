@@ -97,7 +97,11 @@
     "test:money-concurrency": "node --env-file=.env test/money-concurrency.test.mjs",
     "test:db-invariants": "node --env-file=.env test/db-invariants.test.mjs",
     "smoke": "node --env-file=.env test/smoke.mjs",
-    "test:route-matrix": "node --env-file=.env test/route-matrix.mjs"
+    "test:route-matrix": "node --env-file=.env test/route-matrix.mjs",
+    "db:reset": "bash scripts/db-reset.sh",
+    "fixture:qa": "node --env-file=.env test/fixtures/qa-users.mjs",
+    "audit:workspace": "node --env-file=.env test/workspace-security-audit.mjs",
+    "audit:finance": "node --env-file=.env test/finance-security-audit.mjs"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

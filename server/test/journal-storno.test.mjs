@@ -255,7 +255,14 @@ const run = async () => {
   // shuni TO'G'RIDAN chaqirib o'lchaymiz.
   section("3b) IDEMPOTENTLIK — `reverse()` ikki marta to'g'ridan chaqirildi");
   {
-    const journal = await import('../../server_legacy/src/modules/journal/services/journal.service.js');
+    // ⚠ ILGARI EXPRESS SERVISI chaqirilardi
+    //   (`server_legacy/.../journal.service.js`). Stek o'chirilgach
+    //   AYNI invariant NEST servisida o'lchanadi — himoya baribir
+    //   `postingKey` UNIQUE INDEKSIDA, ya'ni qaysi implementatsiya
+    //   chaqirgani muhim emas: ikkinchi `reverse()` yangi yozuv
+    //   YARATMASLIGI shart.
+    const { JournalService } = await import('../dist/modules/journal/journal.service.js');
+    const journal = new JournalService(prisma);
     const f = fx[EXPRESS];
     const key = `storno:expense:${f.expenseId}`;
     const before = await prisma.journalEntry.count({ where: { branchId: f.branch.id } });

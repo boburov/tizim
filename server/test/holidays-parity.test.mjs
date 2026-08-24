@@ -27,7 +27,8 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 import assert from 'node:assert/strict';
-import prisma from '../../server_legacy/src/config/prisma.js';
+import { createExtendedPrismaClient } from '../dist/prisma/prisma.service.js';
+const prisma = createExtendedPrismaClient();
 
 const EXPRESS = process.env.EXPRESS_URL || 'http://127.0.0.1:5000';
 const NEST = process.env.NEST_URL || 'http://127.0.0.1:5001';
@@ -317,7 +318,17 @@ const main = async () => {
     head("PUL YO'LI: `holidayKeySetForRange` (davomat/to'lov/maosh)");
 
     try {
-      const expressSvc = await import('../../server_legacy/src/modules/holidays/services/holidays.service.js');
+      // ⚠ ILGARI EXPRESS IMPLEMENTATSIYASI bilan solishtirilardi
+      //   (`server_legacy/.../holidays.service.js`). Stek o'chirilgach
+      //   solishtirish uchun ikkinchi tomon QOLMADI va natijani
+      //   fiksturaga muzlatib ham bo'lmaydi — chiqish BAZADAGI bayram
+      //   qatorlariga bog'liq, ya'ni muzlatilgan to'plam bayram
+      //   qo'shilishi bilanoq SOXTA QIZIL berardi.
+      //
+      //   Shuning uchun solishtiruv o'rniga funksiyaning O'Z
+      //   INVARIANTLARI o'lchanadi — ular Express oracle'isiz ham
+      //   MA'NOLI: determinizm, kabisa yili, teskari oraliq, va
+      //   29-fevralning 1-martga ko'chmasligi.
       const { HolidaysService } = await import('../dist/modules/holidays/holidays.service.js');
 
       // ⚠ Faqat `prisma` kerak — qolgan bog'liqliklar bu funksiyada
@@ -337,48 +348,49 @@ const main = async () => {
       let mismatched = 0;
       for (const [from, to] of ranges) {
         for (const aud of audienceSets) {
-          // ⚠ Keshni tozalaymiz — aks holda birinchi chaqiruv natijasi
-          // keyingi auditoriya uchun qayta ishlatilardi.
-          expressSvc.invalidateHolidayCache();
+          // ⚠ DETERMINIZM: kesh tozalangandan keyin AYNI chaqiruv AYNI
+          // natijani berishi shart. Ilgari bu ikki stek orasida
+          // o'lchanardi; endi ayni stekning ikki chaqirig'i orasida.
           nestSvc.invalidateHolidayCache();
-
-          const e = await expressSvc.holidayKeySetForRange(from, to, aud);
-          const n = await nestSvc.holidayKeySetForRange(from, to, aud);
+          const a = await nestSvc.holidayKeySetForRange(from, to, aud);
+          nestSvc.invalidateHolidayCache();
+          const b = await nestSvc.holidayKeySetForRange(from, to, aud);
           compared += 1;
-          const eArr = [...e].sort();
-          const nArr = [...n].sort();
-          if (JSON.stringify(eArr) !== JSON.stringify(nArr)) {
+          const aArr = [...a].sort();
+          const bArr = [...b].sort();
+          if (JSON.stringify(aArr) !== JSON.stringify(bArr)) {
             mismatched += 1;
-            bad(`holidayKeySetForRange ${from}..${to} [${aud}]`,
-              `express: ${JSON.stringify(eArr)}\n      nest   : ${JSON.stringify(nArr)}`);
+            bad(`holidayKeySetForRange ${from}..${to} [${aud}] DETERMINIZM`,
+              `1-chaqiruv: ${JSON.stringify(aArr)}\n      2-chaqiruv: ${JSON.stringify(bArr)}`);
+          }
+          // Teskari oraliq HAR DOIM bo'sh bo'lishi shart.
+          if (from > to && aArr.length) {
+            mismatched += 1;
+            bad(`teskari oraliq ${from}..${to} bo'sh EMAS`, JSON.stringify(aArr));
           }
         }
       }
       if (!mismatched) {
-        ok(`holidayKeySetForRange: ${compared} ta oraliq/auditoriya — natijalar AYNAN bir xil`);
+        ok(`holidayKeySetForRange: ${compared} ta oraliq/auditoriya — determinizm va teskari oraliq TO'G'RI`);
       }
 
-      // ⚠ MUSBAT NAZORAT: solishtiruv BO'SH to'plamlar ustida
-      // bo'lmaganini isbotlaymiz. Aks holda "ikkalasi ham hech narsa
-      // qaytarmadi" YASHIL bo'lib chiqardi.
-      expressSvc.invalidateHolidayCache();
-      const sample = await expressSvc.holidayKeySetForRange('2026-01-01', '2026-12-31', ['all', 'students']);
+      // ⚠ MUSBAT NAZORAT: tekshiruv BO'SH to'plamlar ustida
+      // bo'lmaganini isbotlaymiz. Aks holda "hech narsa qaytmadi"
+      // YASHIL bo'lib chiqardi.
+      nestSvc.invalidateHolidayCache();
+      const sample = await nestSvc.holidayKeySetForRange('2026-01-01', '2026-12-31', ['all', 'students']);
       try {
-        assert.ok(sample.size > 0, "2026 yil uchun birorta bayram kuni topilmadi — solishtiruv BO'SH edi");
-        ok(`MUSBAT NAZORAT: 2026 yilda ${sample.size} ta bayram kuni topildi (bo'sh solishtiruv EMAS)`);
-      } catch (err) { bad('bo\'sh solishtiruv', err.message); }
+        assert.ok(sample.size > 0, "2026 yil uchun birorta bayram kuni topilmadi — tekshiruv BO'SH edi");
+        ok(`MUSBAT NAZORAT: 2026 yilda ${sample.size} ta bayram kuni topildi (bo'sh tekshiruv EMAS)`);
+      } catch (err) { bad("bo'sh tekshiruv", err.message); }
 
       // ⚠ 29-FEVRAL OSHIB KETISH QO'RIQLOVI: kabisa BO'LMAGAN yilda
       // 29-fev bayrami 1-MARTGA ko'chib ketmasligi kerak.
-      expressSvc.invalidateHolidayCache();
       nestSvc.invalidateHolidayCache();
-      const e2025 = await expressSvc.holidayKeySetForRange('2025-02-25', '2025-03-05', ['all', 'students']);
       const n2025 = await nestSvc.holidayKeySetForRange('2025-02-25', '2025-03-05', ['all', 'students']);
       try {
-        assert.equal(e2025.has('2025-03-01'), false, 'express: 29-fev 1-martga ko\'chdi');
-        assert.equal(n2025.has('2025-03-01'), false, 'nest: 29-fev 1-martga ko\'chdi');
-        assert.deepEqual([...n2025].sort(), [...e2025].sort());
-        ok("29-fevral kabisa bo'lmagan yilda 1-martga KO'CHMADI (ikkala stekda)");
+        assert.equal(n2025.has('2025-03-01'), false, "29-fev 1-martga ko'chdi");
+        ok("29-fevral kabisa bo'lmagan yilda 1-martga KO'CHMADI");
       } catch (err) { bad('sana oshib ketish qo\'riqlovi', err.message); }
     } catch (err) {
       skip("PUL YO'LI funksiyasi", err.message);

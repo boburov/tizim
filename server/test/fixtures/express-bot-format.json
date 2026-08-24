@@ -1,0 +1,17 @@
+{
+  "_comment": "MUZLATILGAN ORACLE — server_legacy/src/bot/services/ MANBASIDAN 2026-08-25 da parse qilingan (CATEGORY_EMOJI jadvali + CAPTION_LIMIT).",
+  "categoryEmoji": {
+    "payment_reminder": "💰",
+    "debt_warning": "⚠️",
+    "class_cancel": "❌",
+    "announcement": "📢",
+    "admin_personal": "✉️",
+    "teacher_message": "👨‍🏫",
+    "feedback_status": "📝",
+    "holiday": "🎉",
+    "attendance": "📋",
+    "template_based": "📨",
+    "other": "📨"
+  },
+  "captionLimit": 1024
+}

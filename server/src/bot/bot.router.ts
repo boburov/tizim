@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import type TelegramBot from 'node-telegram-bot-api';
 import { startHandler } from './handlers/start.handler.js';
 import { helpHandler } from './handlers/help.handler.js';
+import { PollingErrorReporter, type PollingErrorLike } from './polling-error.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -45,10 +46,22 @@ const safe =
     }
   };
 
+/**
+ * Handler'larni ulaydi va polling xatolari uchun "gate" qaytaradi.
+ *
+ * `onFatal` — TUZALMAYDIGAN xato (401) topilganda chaqiriladi:
+ * hayot sikli polling'ni to'xtatib, qulfni bo'shatadi.
+ */
 export const registerHandlers = (
   bot: TelegramBot,
-  opts: { appName: string; webAppUrl: string },
-): void => {
+  opts: {
+    appName: string;
+    webAppUrl: string;
+    onFatal?: (reason: string) => void;
+  },
+): { dispose: () => void } => {
+  const pollingErrors = new PollingErrorReporter(logger, opts.onFatal);
+
   bot.onText(/^\/start(?:\s|$)/, safe(bot, (msg) => startHandler(bot, msg, opts)));
   bot.onText(/^\/help(?:\s|$)/, safe(bot, (msg) => helpHandler(bot, msg, opts)));
 
@@ -63,11 +76,20 @@ export const registerHandlers = (
     }
   });
 
-  bot.on('polling_error', (err: Error) => logger.error('Telegram polling xatosi', err));
+  // ⚠ `logger.error(msg, err)` EMAS: `EFATAL: read ECONNRESET` — Telegram
+  // uzun so'rovni yopganda tushadigan oddiy tarmoq uzilishi va kutubxona
+  // undan keyin polling'ni O'ZI davom ettiradi. Uni stack bilan xato
+  // sifatida yozish log'ni to'ldirib, 401/409 kabi HAQIQIY nosozliklarni
+  // ko'rinmas qilardi. Tasnif va bosish — `PollingErrorReporter` da.
+  bot.on('polling_error', (err: Error) => {
+    pollingErrors.handle(err as PollingErrorLike);
+  });
   bot.on('webhook_error', (err: Error) => logger.error('Telegram webhook xatosi', err));
 
   // ⚠ Bloklangan (403) foydalanuvchini belgilash BU YERDA EMAS —
   // yetkazish nuqtasida (`deliverToChat`), chunki faqat o'sha yerda
   // `telegramId` ishonchli ma'lum. Bu generic hodisada u yo'q.
   bot.on('error', (err: Error) => logger.error('Bot umumiy xato', err));
+
+  return { dispose: () => pollingErrors.dispose() };
 };

@@ -6,6 +6,9 @@
  *      begona egani rad etadi (shart OLDINDAN o'lchanadi).
  *   2. XATO TASNIFI — 403 → terminal, 429 → bir marta qayta urinish,
  *      kutish vaqti chegarasi.
+ *   2b. POLLING XATOSI — `EFATAL: read ECONNRESET` o'tkinchi deb tasniflanadi
+ *      va TAKRORLARI BOSILADI; 401 → FATAL (polling to'xtaydi), 409 → ikkinchi
+ *      poller ogohlantirishi.
  *   3. XABAR FORMATI — emoji jadvali va caption chegarasi Express
  *      MANBASIDAN o'qib solishtiriladi (qo'lda ko'chirilgan kutilma emas).
  *   4. `initData` HMAC — musbat, 4-variant bardoshliligi va manfiy
@@ -32,6 +35,9 @@ import { formatAssignmentText } from '../dist/bot/assignment-deliver.service.js'
 import {
   isBlockedError, isRateLimited, retryAfterOf, retryWaitMs, reasonOf,
 } from '../dist/bot/telegram-errors.js';
+import {
+  classifyPollingError, pollingErrorLine, PollingErrorReporter,
+} from '../dist/bot/polling-error.js';
 import { verifyInitData, parseInitDataUserUnsafe } from '../dist/bot/init-data.js';
 import { BotAuthService } from '../dist/modules/bot-auth/bot-auth.service.js';
 import { hashPassword } from '../dist/common/utils/password.js';
@@ -52,7 +58,10 @@ const expectStatus = async (name, status, fn) => {
   }
 };
 
-const EXPRESS_BOT = new URL('../../server_legacy/src/bot/services/', import.meta.url);
+// ⚠ ILGARI EXPRESS BOT SERVISLARINING MANBASI o'qilib, `CATEGORY_EMOJI`
+//   jadvali va `CAPTION_LIMIT` regex bilan ajratib olinardi. Stek
+//   o'chirilgach o'sha PARSE NATIJASI muzlatildi (11 emoji + 1024).
+const BOT_ORACLE = new URL('fixtures/express-bot-format.json', import.meta.url);
 
 /** Telegram `initData` ni HAQIQIY HMAC bilan quradi. */
 const buildInitData = (token, { user, authDate, extra = {}, tamper = false }) => {
@@ -177,14 +186,107 @@ const run = async () => {
     check('userId yo\'q → no-bot-link', noLink.ok === false && noLink.reason === 'no-bot-link');
 
     // ═══════════════════════════════════════════════════════════════════
+    console.log('\n\x1b[1m2b. Polling xato tasnifi va log bosish\x1b[0m');
+
+    // ⚠ AYNAN LOG'DA CHIQQAN XATO SHAKLI: kutubxona `FatalError` asl
+    // syscall xatosini `cause` da saqlaydi, `message` esa kod bilan
+    // prefikslanadi.
+    const econnreset = Object.assign(new Error('EFATAL: Error: read ECONNRESET'), {
+      code: 'EFATAL',
+      cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
+    });
+    const dnsDown = Object.assign(new Error('EFATAL: Error: getaddrinfo EAI_AGAIN api.telegram.org'), {
+      code: 'EFATAL',
+    });
+    const conflict = Object.assign(new Error('ETELEGRAM: 409 Conflict'), {
+      code: 'ETELEGRAM',
+      response: { statusCode: 409, body: { description: 'Conflict: terminated by other getUpdates request' } },
+    });
+    const unauthorized = Object.assign(new Error('ETELEGRAM: 401 Unauthorized'), {
+      code: 'ETELEGRAM',
+      response: { statusCode: 401, body: { description: 'Unauthorized' } },
+    });
+    const tgDown = { response: { statusCode: 502, body: { description: 'Bad Gateway' } } };
+    const weird = Object.assign(new Error('EPARSE: Error parsing response'), { code: 'EPARSE' });
+
+    check('ECONNRESET → o\'tkinchi', classifyPollingError(econnreset) === 'transient');
+    check('EAI_AGAIN → o\'tkinchi (DNS tebranishi bot o\'chirmaydi)', classifyPollingError(dnsDown) === 'transient');
+    check('5xx → o\'tkinchi', classifyPollingError(tgDown) === 'transient');
+    check('409 → conflict (ikkinchi poller)', classifyPollingError(conflict) === 'conflict');
+    check('401 → unauthorized (FATAL)', classifyPollingError(unauthorized) === 'unauthorized');
+    check('notanish xato → unknown', classifyPollingError(weird) === 'unknown');
+    check('bo\'sh xato → unknown', classifyPollingError(undefined) === 'unknown');
+    check('log qatori stack\'siz va bir satr', !pollingErrorLine(econnreset).includes('\n'));
+
+    // Soxta logger + soxta soat: taymerga tayanmaymiz.
+    const mkReporter = (onFatal) => {
+      const lines = { log: [], warn: [], error: [] };
+      let clock = 0;
+      const logger = {
+        log: (m) => lines.log.push(String(m)),
+        warn: (m) => lines.warn.push(String(m)),
+        error: (m) => lines.error.push(String(m)),
+      };
+      const r = new PollingErrorReporter(logger, onFatal, () => clock);
+      return { r, lines, tick: (ms) => { clock += ms; } };
+    };
+
+    {
+      // ⚠ ASOSIY REGRESSIYA: 300 ms'da bir marta kelayotgan bir xil xato
+      // log'ni to'ldirmasligi kerak.
+      const { r, lines, tick } = mkReporter();
+      for (let i = 0; i < 10; i += 1) { r.handle(econnreset); tick(300); }
+      check(
+        'takroriy ECONNRESET → BITTA warn (stack yo\'q)',
+        lines.warn.length === 1 && lines.error.length === 0,
+        `warn=${lines.warn.length} error=${lines.error.length}`,
+      );
+      check('o\'tkinchi xato ERROR sifatida yozilmaydi', lines.error.length === 0);
+
+      // Seriya uzaysa — BIR marta ko'tariladi.
+      for (let i = 0; i < 20; i += 1) { r.handle(econnreset); tick(300); }
+      check(
+        'uzoq seriya → bir marta ERROR ga ko\'tariladi',
+        lines.error.length === 1,
+        `error=${lines.error.length}`,
+      );
+
+      // Boshqa TURDAGI xato seriya ichida yashirinib qolmaydi + tiklanish yoziladi.
+      r.handle(weird);
+      check('yangi xato turi seriya ichida ham ko\'rinadi', lines.error.length === 2);
+      check(
+        'seriya tugaganda "tiklandi" yoziladi',
+        lines.warn.some((l) => l.includes('tiklandi')) || lines.log.some((l) => l.includes('tiklandi')),
+      );
+      r.dispose();
+    }
+
+    {
+      // 409 — ERROR emas, lekin ko'rinadi va daqiqada bir marta.
+      const { r, lines, tick } = mkReporter();
+      r.handle(conflict); tick(1000); r.handle(conflict);
+      check('409 → warn, takrori bosiladi', lines.warn.length === 1 && lines.error.length === 0);
+      tick(60_000);
+      r.handle(conflict);
+      check('409 daqiqadan keyin qayta eslatiladi', lines.warn.length === 2);
+      r.dispose();
+    }
+
+    {
+      // 401 — TUZALMAYDI: bir marta ERROR va polling to'xtatiladi.
+      let fatal = 0;
+      const { r, lines, tick } = mkReporter(() => { fatal += 1; });
+      for (let i = 0; i < 5; i += 1) { r.handle(unauthorized); tick(300); }
+      check('401 → BIR marta ERROR', lines.error.length === 1, `error=${lines.error.length}`);
+      check('401 → onFatal BIR marta (polling to\'xtaydi)', fatal === 1, `fatal=${fatal}`);
+      r.dispose();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     console.log('\n\x1b[1m3. Xabar formati (Express manbasidan solishtiriladi)\x1b[0m');
 
-    const expressNotifySrc = readFileSync(new URL('notificationDeliver.service.js', EXPRESS_BOT), 'utf8');
-    const expressAssignSrc = readFileSync(new URL('assignmentDeliver.service.js', EXPRESS_BOT), 'utf8');
-
-    const emojiBlock = expressNotifySrc.match(/const CATEGORY_EMOJI = \{([\s\S]*?)\};/)[1];
-    const expressEmoji = {};
-    for (const m of emojiBlock.matchAll(/(\w+):\s*"([^"]+)"/g)) expressEmoji[m[1]] = m[2];
+    const oracle = JSON.parse(readFileSync(BOT_ORACLE, 'utf8'));
+    const expressEmoji = oracle.categoryEmoji;
 
     let emojiMismatch = [];
     for (const [key, emoji] of Object.entries(expressEmoji)) {
@@ -209,7 +311,7 @@ const run = async () => {
       formatNotification({ title: '   ', body: 'B', category: 'other' }) === `${expressEmoji.other} B`,
     );
 
-    const expressCaption = Number(expressAssignSrc.match(/const CAPTION_LIMIT = (\d+)/)[1]);
+    const expressCaption = oracle.captionLimit;
     check('CAPTION_LIMIT pariteti', expressCaption === 1024, `Express=${expressCaption}`);
 
     check(

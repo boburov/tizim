@@ -24,6 +24,7 @@
  * SNAPSHOT solishtiruvi (7 jadval).
  * ═══════════════════════════════════════════════════════════════════════════
  */
+import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import {
   EXPRESS, NEST, request, mintToken, waitForStacks, createReporter, nowStamps,
@@ -657,10 +658,15 @@ const main = async () => {
      * u qo'riqchining O'ZINI sinaydi, uning oldidagi qatlamlarni emas.
      */
     try {
-      const [expGuard, nestGuard] = await Promise.all([
-        import('../../server_legacy/src/helpers/selfSalary.guard.js'),
-        import('../dist/common/rbac/self-salary.guard.js'),
-      ]);
+      // ⚠ ILGARI `server_legacy/src/helpers/selfSalary.guard.js` JONLI
+      //   import qilinardi. Express stek o'chirilgach uning 8 holatdagi
+      //   javobi `test/fixtures/express-self-salary-guard.json` ga
+      //   MUZLATILDI (5 tasi TO'SILGAN) — qo'riqchi FUNKSIYA DARAJASIDA
+      //   solishtirilishi o'zgarmadi.
+      const nestGuard = await import('../dist/common/rbac/self-salary.guard.js');
+      const GUARD_ORACLE = JSON.parse(
+        readFileSync(new URL('fixtures/express-self-salary-guard.json', import.meta.url), 'utf8'),
+      ).cases;
 
       const call = (fn, actor, target) => {
         try { fn(actor, target); return { ok: true }; }
@@ -683,7 +689,8 @@ const main = async () => {
       let blocked = 0;
       let allSame = true;
       for (const [name, actorArg, target] of CASES) {
-        const a = call(expGuard.assertNotSelfSalary, actorArg, target);
+        const a = GUARD_ORACLE[name];
+        if (!a) { allSame = false; T.bad(`selfSalary: ${name}`, "oracle'da yo'q"); continue; }
         const bres = call(nestGuard.assertNotSelfSalary, actorArg, target);
         if (JSON.stringify(a) !== JSON.stringify(bres)) {
           allSame = false;

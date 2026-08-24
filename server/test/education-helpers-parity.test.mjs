@@ -25,7 +25,7 @@
  */
 import assert from 'node:assert/strict';
 
-const EXP = '../../server_legacy/src/helpers';
+const EXP = './fixtures/express-education';
 const NEST = '../dist/common';
 
 const [

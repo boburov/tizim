@@ -18,7 +18,10 @@
  *   node tests/workspaceSecurityAudit.mjs
  *   node tests/fixtures/qaUsers.mjs --clean
  */
-import "dotenv/config";
+// ⚠ `dotenv` OLIB TASHLANDI (2026-08-25): u Express paketi edi va
+//   `server/` bog'liqliklarida YO'Q. Muhit endi Node'ning o'zidan
+//   keladi — `node --env-file=.env ...` (npm skriptlari shunday
+//   chaqiradi).
 
 const API = process.env.API || "http://localhost:5000/api";
 const R = { pass: 0, fail: 0, warn: 0, failures: [] };

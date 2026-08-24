@@ -1,0 +1,1560 @@
+{
+  "_comment": "MUZLATILGAN ORACLE — server_legacy/src/helpers/{attendance,period,group}.helper.js chaqiruvlari 2026-08-25 da yozib olingan. Kalit: `modul.funksiya(JSON argumentlar)`.",
+  "consts": {
+    "attendance.TZ_OFFSET_MIN": 300
+  },
+  "calls": {
+    "attendance.dateKeyOf([\"2026-01-01\"])": {
+      "ok": "2026-01-01"
+    },
+    "attendance.parseLocalDay([\"2026-01-01\"])": {
+      "ok": "2026-01-01T00:00:00.000Z"
+    },
+    "attendance.parseLocalDayKey([\"2026-01-01\"])": {
+      "ok": "2026-01-01"
+    },
+    "attendance.dateKeyOf([\"2026-02-28\"])": {
+      "ok": "2026-02-28"
+    },
+    "attendance.parseLocalDay([\"2026-02-28\"])": {
+      "ok": "2026-02-28T00:00:00.000Z"
+    },
+    "attendance.parseLocalDayKey([\"2026-02-28\"])": {
+      "ok": "2026-02-28"
+    },
+    "attendance.dateKeyOf([\"2026-02-29\"])": {
+      "ok": "2026-03-01"
+    },
+    "attendance.parseLocalDay([\"2026-02-29\"])": {
+      "ok": null
+    },
+    "attendance.parseLocalDayKey([\"2026-02-29\"])": {
+      "ok": null
+    },
+    "attendance.dateKeyOf([\"2026-12-31\"])": {
+      "ok": "2026-12-31"
+    },
+    "attendance.parseLocalDay([\"2026-12-31\"])": {
+      "ok": "2026-12-31T00:00:00.000Z"
+    },
+    "attendance.parseLocalDayKey([\"2026-12-31\"])": {
+      "ok": "2026-12-31"
+    },
+    "attendance.dateKeyOf([\"2026-07-15T23:30:00.000Z\"])": {
+      "ok": "2026-07-15"
+    },
+    "attendance.parseLocalDay([\"2026-07-15T23:30:00.000Z\"])": {
+      "ok": "2026-07-16T00:00:00.000Z"
+    },
+    "attendance.parseLocalDayKey([\"2026-07-15T23:30:00.000Z\"])": {
+      "ok": "2026-07-16"
+    },
+    "attendance.dateKeyOf([\"2026-07-15T18:59:59.000Z\"])": {
+      "ok": "2026-07-15"
+    },
+    "attendance.parseLocalDay([\"2026-07-15T18:59:59.000Z\"])": {
+      "ok": "2026-07-15T00:00:00.000Z"
+    },
+    "attendance.parseLocalDayKey([\"2026-07-15T18:59:59.000Z\"])": {
+      "ok": "2026-07-15"
+    },
+    "attendance.dateKeyOf([\"2026-07-15T19:00:00.000Z\"])": {
+      "ok": "2026-07-15"
+    },
+    "attendance.parseLocalDay([\"2026-07-15T19:00:00.000Z\"])": {
+      "ok": "2026-07-16T00:00:00.000Z"
+    },
+    "attendance.parseLocalDayKey([\"2026-07-15T19:00:00.000Z\"])": {
+      "ok": "2026-07-16"
+    },
+    "attendance.dateKeyOf([\"2026-02-31\"])": {
+      "ok": "2026-03-03"
+    },
+    "attendance.parseLocalDay([\"2026-02-31\"])": {
+      "ok": null
+    },
+    "attendance.parseLocalDayKey([\"2026-02-31\"])": {
+      "ok": null
+    },
+    "attendance.dateKeyOf([\"not-a-date\"])": {
+      "ok": null
+    },
+    "attendance.parseLocalDay([\"not-a-date\"])": {
+      "ok": null
+    },
+    "attendance.parseLocalDayKey([\"not-a-date\"])": {
+      "ok": null
+    },
+    "attendance.dateKeyOf([\"2026-07-15T00:00:00.000Z\"])": {
+      "ok": "2026-07-15"
+    },
+    "attendance.parseLocalDay([\"2026-07-15T00:00:00.000Z\"])": {
+      "ok": "2026-07-15T00:00:00.000Z"
+    },
+    "attendance.parseLocalDayKey([\"2026-07-15T00:00:00.000Z\"])": {
+      "ok": "2026-07-15"
+    },
+    "attendance.dayOfWeekOf([\"2026-01-01\"])": {
+      "ok": "thu"
+    },
+    "attendance.toUtcMidnight([\"2026-01-01\"])": {
+      "ok": "2026-01-01T00:00:00.000Z"
+    },
+    "attendance.dayOfWeekOf([\"2026-02-28\"])": {
+      "ok": "sat"
+    },
+    "attendance.toUtcMidnight([\"2026-02-28\"])": {
+      "ok": "2026-02-28T00:00:00.000Z"
+    },
+    "attendance.dayOfWeekOf([\"2026-02-29\"])": {
+      "ok": "sun"
+    },
+    "attendance.toUtcMidnight([\"2026-02-29\"])": {
+      "ok": "2026-03-01T00:00:00.000Z"
+    },
+    "attendance.dayOfWeekOf([\"2026-12-31\"])": {
+      "ok": "thu"
+    },
+    "attendance.toUtcMidnight([\"2026-12-31\"])": {
+      "ok": "2026-12-31T00:00:00.000Z"
+    },
+    "attendance.dayOfWeekOf([\"2026-07-15T23:30:00.000Z\"])": {
+      "ok": "wed"
+    },
+    "attendance.toUtcMidnight([\"2026-07-15T23:30:00.000Z\"])": {
+      "ok": "2026-07-15T00:00:00.000Z"
+    },
+    "attendance.dayOfWeekOf([\"2026-07-15T18:59:59.000Z\"])": {
+      "ok": "wed"
+    },
+    "attendance.toUtcMidnight([\"2026-07-15T18:59:59.000Z\"])": {
+      "ok": "2026-07-15T00:00:00.000Z"
+    },
+    "attendance.dayOfWeekOf([\"2026-07-15T19:00:00.000Z\"])": {
+      "ok": "wed"
+    },
+    "attendance.toUtcMidnight([\"2026-07-15T19:00:00.000Z\"])": {
+      "ok": "2026-07-15T00:00:00.000Z"
+    },
+    "attendance.dayOfWeekOf([\"2026-07-15T00:00:00.000Z\"])": {
+      "ok": "wed"
+    },
+    "attendance.toUtcMidnight([\"2026-07-15T00:00:00.000Z\"])": {
+      "ok": "2026-07-15T00:00:00.000Z"
+    },
+    "attendance.localTodayMidnight([\"2026-07-15T00:30:00.000Z\"])": {
+      "ok": "2026-07-15T00:00:00.000Z"
+    },
+    "attendance.localTodayKey([\"2026-07-15T00:30:00.000Z\"])": {
+      "ok": "2026-07-15"
+    },
+    "attendance.localDayOfWeek([\"2026-07-15T00:30:00.000Z\"])": {
+      "ok": "wed"
+    },
+    "attendance.isFutureLocalDay([\"2026-07-14\",\"2026-07-15T00:30:00.000Z\"])": {
+      "ok": false
+    },
+    "attendance.isFutureLocalDay([\"2026-07-15\",\"2026-07-15T00:30:00.000Z\"])": {
+      "ok": false
+    },
+    "attendance.isFutureLocalDay([\"2026-07-16\",\"2026-07-15T00:30:00.000Z\"])": {
+      "ok": true
+    },
+    "attendance.localTodayMidnight([\"2026-07-15T18:30:00.000Z\"])": {
+      "ok": "2026-07-15T00:00:00.000Z"
+    },
+    "attendance.localTodayKey([\"2026-07-15T18:30:00.000Z\"])": {
+      "ok": "2026-07-15"
+    },
+    "attendance.localDayOfWeek([\"2026-07-15T18:30:00.000Z\"])": {
+      "ok": "wed"
+    },
+    "attendance.isFutureLocalDay([\"2026-07-14\",\"2026-07-15T18:30:00.000Z\"])": {
+      "ok": false
+    },
+    "attendance.isFutureLocalDay([\"2026-07-15\",\"2026-07-15T18:30:00.000Z\"])": {
+      "ok": false
+    },
+    "attendance.isFutureLocalDay([\"2026-07-16\",\"2026-07-15T18:30:00.000Z\"])": {
+      "ok": true
+    },
+    "attendance.localTodayMidnight([\"2026-07-15T19:30:00.000Z\"])": {
+      "ok": "2026-07-16T00:00:00.000Z"
+    },
+    "attendance.localTodayKey([\"2026-07-15T19:30:00.000Z\"])": {
+      "ok": "2026-07-16"
+    },
+    "attendance.localDayOfWeek([\"2026-07-15T19:30:00.000Z\"])": {
+      "ok": "thu"
+    },
+    "attendance.isFutureLocalDay([\"2026-07-14\",\"2026-07-15T19:30:00.000Z\"])": {
+      "ok": false
+    },
+    "attendance.isFutureLocalDay([\"2026-07-15\",\"2026-07-15T19:30:00.000Z\"])": {
+      "ok": false
+    },
+    "attendance.isFutureLocalDay([\"2026-07-16\",\"2026-07-15T19:30:00.000Z\"])": {
+      "ok": false
+    },
+    "attendance.scheduleActiveOn([[],\"2025-12-31\"])": {
+      "ok": []
+    },
+    "attendance.scheduleActiveOn([[],\"2026-01-01\"])": {
+      "ok": []
+    },
+    "attendance.scheduleActiveOn([[],\"2026-06-30\"])": {
+      "ok": []
+    },
+    "attendance.scheduleActiveOn([[],\"2026-07-01\"])": {
+      "ok": []
+    },
+    "attendance.scheduleActiveOn([[],\"2026-07-15\"])": {
+      "ok": []
+    },
+    "attendance.scheduleActiveOn([[],\"2100-01-01\"])": {
+      "ok": []
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"2025-12-31\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"2026-01-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"2026-06-30\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"2026-07-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"2026-07-15\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"2100-01-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2025-12-31\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        },
+        {
+          "day": "wed",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2026-01-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        },
+        {
+          "day": "wed",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2026-06-30\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        },
+        {
+          "day": "wed",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2026-07-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "effectiveFrom": "2026-07-01"
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2026-07-15\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "effectiveFrom": "2026-07-01"
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2100-01-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "effectiveFrom": "2026-07-01"
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2025-12-31\"])": {
+      "ok": []
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2026-01-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": "2026-01-01"
+        },
+        {
+          "day": "wed",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": "2026-01-01"
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2026-06-30\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": "2026-01-01"
+        },
+        {
+          "day": "wed",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": "2026-01-01"
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2026-07-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": "2026-07-01"
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2026-07-15\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": "2026-07-01"
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"2100-01-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": "2026-07-01"
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"tue\",\"startTime\":\"09:00\",\"endTime\":\"11:00\",\"effectiveFrom\":\"2099-01-01\"}],\"2025-12-31\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"tue\",\"startTime\":\"09:00\",\"endTime\":\"11:00\",\"effectiveFrom\":\"2099-01-01\"}],\"2026-01-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"tue\",\"startTime\":\"09:00\",\"endTime\":\"11:00\",\"effectiveFrom\":\"2099-01-01\"}],\"2026-06-30\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"tue\",\"startTime\":\"09:00\",\"endTime\":\"11:00\",\"effectiveFrom\":\"2099-01-01\"}],\"2026-07-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"tue\",\"startTime\":\"09:00\",\"endTime\":\"11:00\",\"effectiveFrom\":\"2099-01-01\"}],\"2026-07-15\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"tue\",\"startTime\":\"09:00\",\"endTime\":\"11:00\",\"effectiveFrom\":\"2099-01-01\"}],\"2100-01-01\"])": {
+      "ok": [
+        {
+          "day": "tue",
+          "startTime": "09:00",
+          "endTime": "11:00",
+          "effectiveFrom": "2099-01-01"
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"2025-12-31\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "effectiveFrom": null
+        },
+        {
+          "day": "mon",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"2026-01-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "effectiveFrom": null
+        },
+        {
+          "day": "mon",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"2026-06-30\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "effectiveFrom": null
+        },
+        {
+          "day": "mon",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"2026-07-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "effectiveFrom": null
+        },
+        {
+          "day": "mon",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"2026-07-15\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "effectiveFrom": null
+        },
+        {
+          "day": "mon",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.scheduleActiveOn([[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"2100-01-01\"])": {
+      "ok": [
+        {
+          "day": "mon",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "effectiveFrom": null
+        },
+        {
+          "day": "mon",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "effectiveFrom": null
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-06-25\",\"2026-07-10\",null])": {
+      "ok": [
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-06-25\",\"2026-07-10\",{}])": {
+      "ok": [
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-01\",\"2026-07-31\",null])": {
+      "ok": [
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-13T00:00:00.000Z",
+          "dateKey": "2026-07-13",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-01\",\"2026-07-31\",{}])": {
+      "ok": [
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-15\",\"2026-07-15\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-15\",\"2026-07-15\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-10\",\"2026-07-01\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-10\",\"2026-07-01\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-06-15\",\"endDate\":null},\"2026-06-25\",\"2026-07-10\",null])": {
+      "ok": [
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-06-15\",\"endDate\":null},\"2026-06-25\",\"2026-07-10\",{}])": {
+      "ok": [
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-06-15\",\"endDate\":null},\"2026-07-01\",\"2026-07-31\",null])": {
+      "ok": [
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-13T00:00:00.000Z",
+          "dateKey": "2026-07-13",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-06-15\",\"endDate\":null},\"2026-07-01\",\"2026-07-31\",{}])": {
+      "ok": [
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "14:00",
+          "endTime": "16:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-06-15\",\"endDate\":null},\"2026-07-15\",\"2026-07-15\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-06-15\",\"endDate\":null},\"2026-07-15\",\"2026-07-15\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-06-15\",\"endDate\":null},\"2026-07-10\",\"2026-07-01\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"16:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-06-15\",\"endDate\":null},\"2026-07-10\",\"2026-07-01\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-01-01\",\"endDate\":null},\"2026-06-25\",\"2026-07-10\",null])": {
+      "ok": [
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-01-01\",\"endDate\":null},\"2026-06-25\",\"2026-07-10\",{}])": {
+      "ok": [
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-01-01\",\"endDate\":null},\"2026-07-01\",\"2026-07-31\",null])": {
+      "ok": [
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-13T00:00:00.000Z",
+          "dateKey": "2026-07-13",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-01-01\",\"endDate\":null},\"2026-07-01\",\"2026-07-31\",{}])": {
+      "ok": [
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-01-01\",\"endDate\":null},\"2026-07-15\",\"2026-07-15\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-01-01\",\"endDate\":null},\"2026-07-15\",\"2026-07-15\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-01-01\",\"endDate\":null},\"2026-07-10\",\"2026-07-01\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"wed\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-01-01\"},{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":\"2026-07-01\"}],\"startDate\":\"2026-01-01\",\"endDate\":null},\"2026-07-10\",\"2026-07-01\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-06-25\",\"2026-07-10\",null])": {
+      "ok": [
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "09:00",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "14:00",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "isFirstSlot": false
+        },
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "09:00",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "14:00",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "isFirstSlot": false
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-06-25\",\"2026-07-10\",{}])": {
+      "ok": [
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "09:00",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-06-29T00:00:00.000Z",
+          "dateKey": "2026-06-29",
+          "dayOfWeek": "mon",
+          "slot": "14:00",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "isFirstSlot": false
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-01\",\"2026-07-31\",null])": {
+      "ok": [
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "09:00",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-06T00:00:00.000Z",
+          "dateKey": "2026-07-06",
+          "dayOfWeek": "mon",
+          "slot": "14:00",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "isFirstSlot": false
+        },
+        {
+          "date": "2026-07-13T00:00:00.000Z",
+          "dateKey": "2026-07-13",
+          "dayOfWeek": "mon",
+          "slot": "09:00",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-13T00:00:00.000Z",
+          "dateKey": "2026-07-13",
+          "dayOfWeek": "mon",
+          "slot": "14:00",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "isFirstSlot": false
+        },
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "09:00",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "14:00",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "isFirstSlot": false
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "09:00",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "14:00",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "isFirstSlot": false
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-01\",\"2026-07-31\",{}])": {
+      "ok": [
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "09:00",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "14:00",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "isFirstSlot": false
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "09:00",
+          "startTime": "09:00",
+          "endTime": "10:30",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "14:00",
+          "startTime": "14:00",
+          "endTime": "15:30",
+          "isFirstSlot": false
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-15\",\"2026-07-15\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-15\",\"2026-07-15\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-10\",\"2026-07-01\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"09:00\",\"endTime\":\"10:30\",\"effectiveFrom\":null},{\"day\":\"mon\",\"startTime\":\"14:00\",\"endTime\":\"15:30\",\"effectiveFrom\":null}],\"startDate\":null,\"endDate\":null},\"2026-07-10\",\"2026-07-01\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":\"2026-07-08\",\"endDate\":null},\"2026-06-25\",\"2026-07-10\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":\"2026-07-08\",\"endDate\":null},\"2026-06-25\",\"2026-07-10\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":\"2026-07-08\",\"endDate\":null},\"2026-07-01\",\"2026-07-31\",null])": {
+      "ok": [
+        {
+          "date": "2026-07-13T00:00:00.000Z",
+          "dateKey": "2026-07-13",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":\"2026-07-08\",\"endDate\":null},\"2026-07-01\",\"2026-07-31\",{}])": {
+      "ok": [
+        {
+          "date": "2026-07-20T00:00:00.000Z",
+          "dateKey": "2026-07-20",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        },
+        {
+          "date": "2026-07-27T00:00:00.000Z",
+          "dateKey": "2026-07-27",
+          "dayOfWeek": "mon",
+          "slot": "",
+          "startTime": "10:00",
+          "endTime": "12:00",
+          "isFirstSlot": true
+        }
+      ]
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":\"2026-07-08\",\"endDate\":null},\"2026-07-15\",\"2026-07-15\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":\"2026-07-08\",\"endDate\":null},\"2026-07-15\",\"2026-07-15\",{}])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":\"2026-07-08\",\"endDate\":null},\"2026-07-10\",\"2026-07-01\",null])": {
+      "ok": []
+    },
+    "attendance.getClassDaysInRange([{\"schedule\":[{\"day\":\"mon\",\"startTime\":\"10:00\",\"endTime\":\"12:00\",\"effectiveFrom\":null}],\"startDate\":\"2026-07-08\",\"endDate\":null},\"2026-07-10\",\"2026-07-01\",{}])": {
+      "ok": []
+    },
+    "attendance.dayOfWeekOf([\"2026-06-30\"])": {
+      "ok": "tue"
+    },
+    "attendance.isExemptOn([[],\"2026-06-30\",\"tue\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[],\"2026-06-30\",\"tue\"])": {
+      "ok": null
+    },
+    "attendance.dayOfWeekOf([\"2026-07-01\"])": {
+      "ok": "wed"
+    },
+    "attendance.isExemptOn([[],\"2026-07-01\",\"wed\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[],\"2026-07-01\",\"wed\"])": {
+      "ok": null
+    },
+    "attendance.dayOfWeekOf([\"2026-07-10\"])": {
+      "ok": "fri"
+    },
+    "attendance.isExemptOn([[],\"2026-07-10\",\"fri\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[],\"2026-07-10\",\"fri\"])": {
+      "ok": null
+    },
+    "attendance.dayOfWeekOf([\"2026-07-11\"])": {
+      "ok": "sat"
+    },
+    "attendance.isExemptOn([[],\"2026-07-11\",\"sat\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[],\"2026-07-11\",\"sat\"])": {
+      "ok": null
+    },
+    "attendance.dayOfWeekOf([\"2026-07-13\"])": {
+      "ok": "mon"
+    },
+    "attendance.isExemptOn([[],\"2026-07-13\",\"mon\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[],\"2026-07-13\",\"mon\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-06-30\",\"tue\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-06-30\",\"tue\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-01\",\"wed\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-01\",\"wed\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-10\",\"fri\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-10\",\"fri\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-11\",\"sat\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-11\",\"sat\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-13\",\"mon\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-13\",\"mon\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-06-30\",\"tue\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-06-30\",\"tue\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-01\",\"wed\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-01\",\"wed\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-10\",\"fri\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-10\",\"fri\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-11\",\"sat\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-11\",\"sat\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-13\",\"mon\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":false,\"startDate\":\"2026-07-01\",\"endDate\":null}],\"2026-07-13\",\"mon\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-06-30\",\"tue\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-06-30\",\"tue\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-07-01\",\"wed\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-07-01\",\"wed\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-07-10\",\"fri\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-07-10\",\"fri\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-07-11\",\"sat\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-07-11\",\"sat\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-07-13\",\"mon\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-10\"}],\"2026-07-13\",\"mon\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-06-30\",\"tue\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-06-30\",\"tue\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-07-01\",\"wed\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-07-01\",\"wed\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-07-10\",\"fri\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-07-10\",\"fri\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-07-11\",\"sat\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-07-11\",\"sat\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-07-13\",\"mon\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[\"mon\"]}],\"2026-07-13\",\"mon\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-06-30\",\"tue\"])": {
+      "ok": false
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-06-30\",\"tue\"])": {
+      "ok": null
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-07-01\",\"wed\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-07-01\",\"wed\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-07-10\",\"fri\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-07-10\",\"fri\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-07-11\",\"sat\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-07-11\",\"sat\"])": {
+      "ok": "exempt"
+    },
+    "attendance.isExemptOn([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-07-13\",\"mon\"])": {
+      "ok": true
+    },
+    "attendance.defaultStatusFor([[{\"isActive\":true,\"startDate\":\"2026-07-01\",\"endDate\":null,\"daysOfWeek\":[]}],\"2026-07-13\",\"mon\"])": {
+      "ok": "exempt"
+    },
+    "attendance.withinCourseBounds([{},\"2026-06-30\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{},\"2026-07-01\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{},\"2026-07-20\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{},\"2026-07-21\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{\"startDate\":\"2026-07-01\"},\"2026-06-30\"])": {
+      "ok": false
+    },
+    "attendance.withinCourseBounds([{\"startDate\":\"2026-07-01\"},\"2026-07-01\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{\"startDate\":\"2026-07-01\"},\"2026-07-20\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{\"startDate\":\"2026-07-01\"},\"2026-07-21\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{\"endDate\":\"2026-07-20\"},\"2026-06-30\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{\"endDate\":\"2026-07-20\"},\"2026-07-01\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{\"endDate\":\"2026-07-20\"},\"2026-07-20\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{\"endDate\":\"2026-07-20\"},\"2026-07-21\"])": {
+      "ok": false
+    },
+    "attendance.withinCourseBounds([{\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-20\"},\"2026-06-30\"])": {
+      "ok": false
+    },
+    "attendance.withinCourseBounds([{\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-20\"},\"2026-07-01\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-20\"},\"2026-07-20\"])": {
+      "ok": true
+    },
+    "attendance.withinCourseBounds([{\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-20\"},\"2026-07-21\"])": {
+      "ok": false
+    },
+    "attendance.isHolidayOn([{},\"2026-07-06\"])": {
+      "ok": true
+    },
+    "attendance.isHolidayOn([{},\"2026-07-07\"])": {
+      "ok": false
+    },
+    "period.monthToIndex([2026,7])": {
+      "ok": 24318
+    },
+    "period.indexToMonth([24318])": {
+      "ok": {
+        "year": 2026,
+        "month": 7
+      }
+    },
+    "period.monthsInRange([2026,5,2026,9])": {
+      "ok": [
+        {
+          "year": 2026,
+          "month": 5
+        },
+        {
+          "year": 2026,
+          "month": 6
+        },
+        {
+          "year": 2026,
+          "month": 7
+        },
+        {
+          "year": 2026,
+          "month": 8
+        },
+        {
+          "year": 2026,
+          "month": 9
+        }
+      ]
+    },
+    "period.assertPeriodInvariants([{\"startYear\":2026,\"startMonth\":7,\"endYear\":2026,\"endMonth\":8},[{\"startYear\":2026,\"startMonth\":1,\"endYear\":2026,\"endMonth\":6},{\"startYear\":2026,\"startMonth\":9,\"endYear\":null,\"endMonth\":null}],\"month\"])": {
+      "undef": true
+    },
+    "period.assertPeriodInvariants([{\"startYear\":2026,\"startMonth\":6,\"endYear\":2026,\"endMonth\":8},[{\"startYear\":2026,\"startMonth\":1,\"endYear\":2026,\"endMonth\":6},{\"startYear\":2026,\"startMonth\":9,\"endYear\":null,\"endMonth\":null}],\"month\"])": {
+      "err": {
+        "message": "Davrlar bir-biri bilan kesishmasligi kerak",
+        "statusCode": 400
+      }
+    },
+    "period.assertPeriodInvariants([{\"startYear\":2026,\"startMonth\":10,\"endYear\":null,\"endMonth\":null},[{\"startYear\":2026,\"startMonth\":1,\"endYear\":2026,\"endMonth\":6},{\"startYear\":2026,\"startMonth\":9,\"endYear\":null,\"endMonth\":null}],\"month\"])": {
+      "err": {
+        "message": "Davrlar bir-biri bilan kesishmasligi kerak",
+        "statusCode": 400
+      }
+    },
+    "period.assertPeriodInvariants([{\"startYear\":2026,\"startMonth\":8,\"endYear\":2026,\"endMonth\":7},[{\"startYear\":2026,\"startMonth\":1,\"endYear\":2026,\"endMonth\":6},{\"startYear\":2026,\"startMonth\":9,\"endYear\":null,\"endMonth\":null}],\"month\"])": {
+      "err": {
+        "message": "Davr tugashi boshlanishidan oldin bo'lishi mumkin emas",
+        "statusCode": 400
+      }
+    },
+    "period.assertPeriodInvariants([{\"startDate\":\"2026-07-01\",\"endDate\":\"2026-08-01\"},[{\"startDate\":\"2026-01-01\",\"endDate\":\"2026-07-01\"},{\"startDate\":\"2026-09-01\",\"endDate\":null}],\"date\"])": {
+      "undef": true
+    },
+    "period.assertPeriodInvariants([{\"startDate\":\"2026-06-30\",\"endDate\":\"2026-08-01\"},[{\"startDate\":\"2026-01-01\",\"endDate\":\"2026-07-01\"},{\"startDate\":\"2026-09-01\",\"endDate\":null}],\"date\"])": {
+      "err": {
+        "message": "Davrlar bir-biri bilan kesishmasligi kerak. Mavjud davr: 01.01.2026 – 01.07.2026. Yangi sanani shu davr bilan kesishmaydigan qilib tanlang.",
+        "statusCode": 400
+      }
+    },
+    "period.assertPeriodInvariants([{\"startDate\":\"2026-10-01\",\"endDate\":null},[{\"startDate\":\"2026-01-01\",\"endDate\":\"2026-07-01\"},{\"startDate\":\"2026-09-01\",\"endDate\":null}],\"date\"])": {
+      "err": {
+        "message": "Davrlar bir-biri bilan kesishmasligi kerak. Mavjud davr: 01.09.2026 – hozircha ochiq. Yangi sanani shu davr bilan kesishmaydigan qilib tanlang.",
+        "statusCode": 400
+      }
+    },
+    "period.assertPeriodInvariants([{\"startDate\":\"2026-08-01\",\"endDate\":\"2026-07-01\"},[{\"startDate\":\"2026-01-01\",\"endDate\":\"2026-07-01\"},{\"startDate\":\"2026-09-01\",\"endDate\":null}],\"date\"])": {
+      "err": {
+        "message": "Davr tugashi boshlanishidan oldin bo'lishi mumkin emas",
+        "statusCode": 400
+      }
+    },
+    "period.assertPeriodInvariants([{\"startDate\":\"2026-08-01\",\"endDate\":\"2026-09-01\"},[{\"startDate\":\"2026-01-01\",\"endDate\":\"2026-07-01\"},{\"startDate\":\"2026-09-01\",\"endDate\":null}],\"date\"])": {
+      "undef": true
+    },
+    "period.findPeriodForMonth([[{\"startYear\":2026,\"startMonth\":1,\"endYear\":2026,\"endMonth\":6},{\"startYear\":2026,\"startMonth\":9,\"endYear\":null,\"endMonth\":null}],2026,3])": {
+      "ok": {
+        "startYear": 2026,
+        "startMonth": 1,
+        "endYear": 2026,
+        "endMonth": 6
+      }
+    },
+    "period.findPeriodForMonth([[{\"startYear\":2026,\"startMonth\":1,\"endYear\":2026,\"endMonth\":6},{\"startYear\":2026,\"startMonth\":9,\"endYear\":null,\"endMonth\":null}],2026,7])": {
+      "ok": null
+    },
+    "period.findPeriodForDate([[{\"startDate\":\"2026-01-01\",\"endDate\":\"2026-07-01\"},{\"startDate\":\"2026-09-01\",\"endDate\":null}],\"2026-03-01\"])": {
+      "ok": {
+        "startDate": "2026-01-01",
+        "endDate": "2026-07-01"
+      }
+    },
+    "period.findPeriodForDate([[{\"startDate\":\"2026-01-01\",\"endDate\":\"2026-07-01\"},{\"startDate\":\"2026-09-01\",\"endDate\":null}],\"2026-07-01\"])": {
+      "ok": null
+    },
+    "period.findPeriodForDate([[{\"startDate\":\"2026-01-01\",\"endDate\":\"2026-07-01\"},{\"startDate\":\"2026-09-01\",\"endDate\":null}],\"2026-10-01\"])": {
+      "ok": {
+        "startDate": "2026-09-01",
+        "endDate": null
+      }
+    },
+    "group.assertGroupActive([null])": {
+      "err": {
+        "message": "Guruh topilmadi",
+        "statusCode": 404
+      }
+    },
+    "group.assertGroupActive([{\"isDeleted\":true,\"isActive\":true}])": {
+      "err": {
+        "message": "Guruh topilmadi",
+        "statusCode": 404
+      }
+    },
+    "group.assertGroupActive([{\"isActive\":true,\"endDate\":null}])": {
+      "ok": {
+        "isActive": true,
+        "endDate": null
+      }
+    },
+    "group.assertGroupActive([{\"isActive\":false,\"endDate\":null}])": {
+      "err": {
+        "message": "Kurs tugagan. Davom ettirish uchun tugash sanasini o'zgartiring.",
+        "statusCode": 400
+      }
+    },
+    "group.assertGroupActive([{\"isActive\":true,\"endDate\":\"2099-01-01\"}])": {
+      "ok": {
+        "isActive": true,
+        "endDate": "2099-01-01"
+      }
+    },
+    "group.assertGroupActive([{\"isActive\":true,\"endDate\":\"2000-01-01\"}])": {
+      "err": {
+        "message": "Kurs tugagan. Davom ettirish uchun tugash sanasini o'zgartiring.",
+        "statusCode": 400
+      }
+    },
+    "attendance.dateKeyOf([\"2026-07-16\"])": {
+      "ok": "2026-07-16"
+    },
+    "attendance.dateKeyOf([\"2026-07-15\"])": {
+      "ok": "2026-07-15"
+    }
+  }
+}
