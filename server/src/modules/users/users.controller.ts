@@ -117,6 +117,7 @@ export class UsersController {
       role: v.query.role,
       search: v.query.search,
       staff: v.query.staff === '1' || v.query.staff === 'true',
+      branchId: v.query.branchId,
       status,
       sort: v.query.sort,
       order: v.query.order,

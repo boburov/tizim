@@ -27,6 +27,8 @@ import {
   FileText,
   AlertTriangle,
   Building2,
+  Store,
+  Coins,
 } from "lucide-react";
 
 // Bayyina admin panelining barcha qidiriladigan sahifalari.
@@ -38,6 +40,34 @@ import {
 // category - sidebar guruh nomi (groupedga ishlatamiz)
 // permission - RBAC kaliti (yo'q bo'lsa hamma uchun ochiq)
 export const SEARCH_INDEX = [
+  // ── MARKET VA TANGALAR ───────────────────────────────────
+  //
+  // ⚠ `capability: "coin"` — bo'lim o'chirilgan bo'lsa bu yozuvlar
+  // qidiruvda UMUMAN chiqmaydi (`GlobalSearch` dagi izohga qarang).
+  // Ular shu yerda turishi SHART: yangi ekran indeksga qo'shilmasa
+  // faqat menyudan topilardi, ya'ni "qaysi bo'limda ekanini bilish"
+  // talab qilinardi — bu fayl aynan shundan himoya qiladi.
+  {
+    title: "Market",
+    description: "Mahsulotlar, buyurtmalar va tanga sozlamalari",
+    keywords: "market, do'kon, magazin, mahsulot, sovg'a, shop, product, tanga, coin",
+    url: "/owner/market",
+    icon: Store,
+    category: "Rag'bat",
+    permission: "market.read",
+    capability: "coin",
+  },
+  {
+    title: "Buyurtmalar",
+    description: "O'quvchilar tanga evaziga olgan mahsulotlar",
+    keywords: "buyurtma, order, xarid, topshirish, yetkazish, tanga",
+    url: "/owner/market?tab=orders",
+    icon: Coins,
+    category: "Rag'bat",
+    permission: "market.fulfill",
+    capability: "coin",
+  },
+
   // ── Asosiy ──────────────────────────────────────────────
   {
     title: "Bosh sahifa",

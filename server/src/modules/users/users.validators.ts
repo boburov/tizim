@@ -29,6 +29,17 @@ export const listSchema = z.object({
     // XODIMLAR ro'yxati: o'quvchidan boshqa hamma. Rol nomlari dinamik
     // bo'lgani uchun ro'yxat emas, BAYROQ.
     staff: z.enum(['0', '1', 'true', 'false']).optional(),
+    // FILIAL KESIMI — `x-branch-id` SARLAVHASIDAN FARQLI.
+    //
+    // Sarlavha butun sessiyaning ko'lamini belgilaydi; bu parametr esa
+    // BITTA so'rovni toraytiradi. Super Admin panelidagi filial sahifasi
+    // aynan shuni talab qiladi: u ko'lamni almashtirmasdan (boshqa
+    // bo'limlar butun markazni ko'rsatib turibdi) faqat shu filialning
+    // odamlarini so'raydi.
+    //
+    // ⚠ Faqat TORAYTIRADI — servis `assertBranchInScope` bilan
+    // kengaytirishga urinishni 403 qiladi.
+    branchId: z.string().min(1).optional(),
     archived: z.enum(['0', '1', 'true', 'false']).optional(),
     status: z.enum(['active', 'archived', 'frozen', 'all']).optional(),
     sort: z.enum(['createdAt', 'firstName', 'lastName', 'debt']).optional(),

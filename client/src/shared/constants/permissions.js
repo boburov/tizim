@@ -146,6 +146,24 @@ export const PERMISSIONS = Object.freeze({
   // Barcha filiallarni birdan ko'rish (konsolidatsiya hisobotlar)
   BRANCHES_VIEW_ALL: "branches.view_all",
 
+  // ── TANGALAR VA MARKET (rag'batlantirish) ──
+  //
+  // ⚠ RUXSAT YETARLI EMAS. Butun bo'lim `CoinSettings.isEnabled`
+  // o'chirgichi ostida: ega uni o'chirsa server marshrutlari 404
+  // beradi va bo'lim HAMMA uchun yo'qoladi — ruxsati borlar uchun
+  // ham. Klientda bu `useCoinConfig()` orqali tekshiriladi.
+  //
+  // Ya'ni menyu yozuvi ikki shartga bog'liq: `has(...)` VA
+  // `config.enabled`. Faqat bittasiga tayanish "tugma bor, lekin
+  // bosilganda 404" holatini berardi.
+  COIN_READ: "coin.read",
+  COIN_MANAGE: "coin.manage",
+  // Asosiy o'chirgich va topish stavkalari — FAQAT ega.
+  COIN_SETTINGS: "coin.settings",
+  MARKET_READ: "market.read",
+  MARKET_MANAGE: "market.manage",
+  MARKET_FULFILL: "market.fulfill",
+
   // Rollar va tizim
   ROLES_READ: "roles.read",
   ROLES_CREATE: "roles.create",

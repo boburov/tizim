@@ -298,6 +298,42 @@ export const CAPABILITY_GROUPS = Object.freeze([
       },
     ],
   },
+
+  // ══════════════════════════════════════════════════════════════════
+  // RAG'BAT: TANGA VA MARKET
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // Bu guruh ega uchun eng oson tushuniladigan bo'lim, lekin ikkita
+  // yozuvi jiddiy: `coin.manage` — pul emas, LEKIN qiymat chiqaradi
+  // (chegarasiz berilsa market ma'nosini yo'qotadi), `coin.settings`
+  // esa butun bo'limni bir kalit bilan o'chiradi.
+  {
+    key: "coin",
+    label: "Tanga va market",
+    summary: "O'quvchilarni rag'batlantirish: tanga to'plash va sovg'aga almashtirish",
+    items: [
+      { key: "coin.read", label: "Boshqalarning tangasini ko'rish" },
+      {
+        key: "coin.manage",
+        label: "Qo'lda tanga berish",
+        hint: "Hech qanday chegarasi yo'q — berilgan tanga marketdagi mahsulotga aylanadi",
+        sensitive: true,
+      },
+      {
+        key: "coin.settings",
+        label: "Tanga tizimini yoqish/o'chirish va stavkalarni belgilash",
+        hint: "O'chirilsa bo'lim BARCHA foydalanuvchilar uchun yo'qoladi",
+        sensitive: true,
+      },
+      { key: "market.read", label: "Mahsulot va buyurtmalarni ko'rish" },
+      { key: "market.manage", label: "Mahsulot qo'shish va tahrirlash" },
+      {
+        key: "market.fulfill",
+        label: "Buyurtmani tasdiqlash va topshirish",
+        hint: "Rad etilgan buyurtmaning tangasi o'quvchiga qaytariladi",
+      },
+    ],
+  },
 ]);
 
 /** `"students.read"` → vakolat yozuvi (topilmasa `null`). */

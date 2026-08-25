@@ -60,6 +60,8 @@ import { StudentFreezeModule } from './modules/student-freeze/student-freeze.mod
 import { ExportsModule } from './modules/exports/exports.module.js';
 import { ImportsModule } from './modules/imports/imports.module.js';
 import { AiModule } from './modules/ai/ai.module.js';
+import { CoinModule } from './modules/coin/coin.module.js';
+import { MarketModule } from './modules/market/market.module.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -218,6 +220,17 @@ import { AiModule } from './modules/ai/ai.module.js';
     // AI maslahatchi (15/15) — tarif darvozasi MODUL ichida
     // (`AiFeatureMiddleware`), `AuthMiddleware` dan OLDIN.
     AiModule,
+    // ── RAG'BATLANTIRISH: TANGA VA MARKET ──
+    //
+    // Tanga YADRO va u marketdan OLDIN keladi: `MarketModule` uni
+    // import qiladi (tanga yechish/qaytarish), teskarisi EMAS.
+    //
+    // ⚠ IKKALASI HAM YAGONA O'CHIRGICH OSTIDA
+    // (`CoinSettings.isEnabled`). O'chirilganda marshrutlar 404
+    // beradi va tanga hisoblash to'xtaydi — ya'ni bo'lim
+    // ro'yxatdan olib tashlanmasdan ham butunlay "yo'q" bo'ladi.
+    CoinModule,
+    MarketModule,
   ],
 })
 export class AppModule {}

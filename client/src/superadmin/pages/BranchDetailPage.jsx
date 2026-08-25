@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
-  ArrowLeft, Plus, DoorOpen, Users, GraduationCap, Wallet, Pencil, Trash2,
+  ArrowLeft, Plus, DoorOpen, Users, UserCog, GraduationCap, Wallet, Pencil, Trash2,
   TrendingDown, PiggyBank, HandCoins, Banknote,
 } from "lucide-react";
 
 import Button from "@/shared/components/ui/button/Button";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
 import { cn } from "@/shared/utils/cn";
+import { formatPhone } from "@/shared/utils/formatPhone";
 import useModal from "@/shared/hooks/useModal";
 import usePermissions from "@/shared/hooks/usePermissions";
 import { MODAL } from "@/shared/constants/modals";
@@ -58,17 +59,37 @@ import EmptyState from "@/shared/components/page/EmptyState";
  * faqat "Umumiy" tab yuklanadi.
  */
 
+/**
+ * ── NEGA "ODAMLAR" EMAS, "XODIMLAR" ──
+ *
+ * Eski "Odamlar" tabi ikki jihatdan yolg'on edi:
+ *
+ *  1. U `?branchId=` ni so'rovga qo'shardi, lekin server bu parametrni
+ *     TANIMASDI (`users` ro'yxatida faqat `x-branch-id` SARLAVHASI
+ *     ko'lamni belgilardi). Natijada zod uni jimgina tashlab yuborardi
+ *     va ro'yxatda BUTUN MARKAZ ko'rinardi — "DEMO Markaz" sahifasida
+ *     boshqa filialning odamlari ham.
+ *  2. `staff` bayrog'i yuborilmagani uchun ro'yxat o'quvchi+o'qituvchi
+ *     qaytarardi — sarlavhada esa "xodim va o'qituvchilar" deb yozilgan
+ *     edi. Ekran o'nlab "Talaba…" qatori bilan to'lardi.
+ *
+ * Endi bo'lim XODIMLARNIKI: server `branchId` ni qabul qiladi
+ * (`users.validators.ts`), ro'yxat `staff: 1` bilan so'raladi va shu
+ * yerdan yangi xodim qo'shiladi. Ro'yxat "Umumiy" dagi "Xodimlar"
+ * kartochkasi bilan bir xil tushunchani sanaydi — o'quvchidan boshqa
+ * hamma — ya'ni ikki joydagi son bir-biriga mos keladi.
+ */
 const TABS = [
   { key: "overview", label: "Umumiy", icon: Wallet },
   { key: "rooms", label: "Xonalar", icon: DoorOpen },
-  { key: "people", label: "Odamlar", icon: Users },
+  { key: "staff", label: "Xodimlar", icon: UserCog },
   { key: "money", label: "Moliya", icon: Banknote },
 ];
 
 const BranchDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { has } = usePermissions();
+  const { has, hasAll } = usePermissions();
   const { openModal } = useModal();
   const { openRoot } = useDrill();
   const [tab, setTab] = useState("overview");
@@ -76,7 +97,15 @@ const BranchDetailPage = () => {
   const canFinance = has(PERMISSIONS.FINANCE_READ);
   const canRooms = has(PERMISSIONS.CLASSES_READ);
   const canCreateRoom = has(PERMISSIONS.CLASSES_CREATE);
-  const canPeople = has(PERMISSIONS.USERS_READ);
+  const canStaff = has(PERMISSIONS.USERS_READ);
+  // XODIM QO'SHISH IKKI RUXSAT TALAB QILADI — serverdagi
+  // `POST /users/staff` bilan aynan bir xil (`@AllPermissions`):
+  // odam yaratish VA rol biriktirish. Bitta ruxsatga bog'lansa tugma
+  // ko'rinardi-yu, so'rov 403 bilan qaytardi.
+  const canCreateStaff = hasAll([
+    PERMISSIONS.TEACHERS_CREATE,
+    PERMISSIONS.ROLES_UPDATE,
+  ]);
   const canEdit = has(PERMISSIONS.SYSTEM_ADMIN_ACCESS) && has(PERMISSIONS.BRANCHES_UPDATE);
   // O'CHIRISH — TAHRIRLASHDAN ALOHIDA RUXSAT.
   //
@@ -97,9 +126,11 @@ const BranchDetailPage = () => {
   useDrillFilters(filters);
   const summary = useSummary(filters, { enabled: canFinance });
   const stats = useBranchStatsQuery(id);
+  // `staff: 1` — o'quvchilarni chiqarib tashlaydi; `branchId` — shu
+  // filialga biriktirilganlar (uy filiali YOKI qo'shimcha biriktiruv).
   const staff = useUsersListQuery(
-    { branchId: id, limit: 100 },
-    { enabled: canPeople && tab === "people" },
+    { staff: 1, branchId: id, limit: 100 },
+    { enabled: canStaff && tab === "staff" },
   );
   const revenueByCourse = useRevenueBy("course", filters, {
     enabled: canFinance && tab === "money",
@@ -114,7 +145,7 @@ const BranchDetailPage = () => {
 
   const visibleTabs = TABS.filter((t) => {
     if (t.key === "rooms") return canRooms;
-    if (t.key === "people") return canPeople;
+    if (t.key === "staff") return canStaff;
     if (t.key === "money") return canFinance;
     return true;
   });
@@ -237,19 +268,19 @@ const BranchDetailPage = () => {
               label="Xodimlar" icon={Users} suffix=" ta"
               value={stats.data?.staffCount}
               status={st.status} error={st.error} onRetry={st.refetch}
-              onClick={() => setTab("people")}
+              onClick={() => setTab("staff")}
             />
           </KpiGrid>
 
           {/* KIRISH MA'LUMOTLARI — "UMUMIY" TABDA, ko'milgan joyda emas.
               Filial ochilgandan keyin beriladigan BIRINCHI savol:
-              "direktor qaysi login bilan kiradi?". Uni "Odamlar"
+              "direktor qaysi login bilan kiradi?". Uni "Xodimlar"
               tabining ichiga qo'yish o'sha savolni yana bir bosish
               orqasiga yashirardi. */}
           <BranchCredentials branchId={id} enabled={tab === "overview"} />
 
           <p className="text-xs text-muted-foreground">
-            Filialning xonalari, odamlari va pul harakati — yuqoridagi bo'limlarda.
+            Filialning xonalari, xodimlari va pul harakati — yuqoridagi bo'limlarda.
           </p>
         </>
       )}
@@ -275,8 +306,8 @@ const BranchDetailPage = () => {
         </section>
       )}
 
-      {/* ══════════ ODAMLAR ══════════ */}
-      {tab === "people" && canPeople && (
+      {/* ══════════ XODIMLAR ══════════ */}
+      {tab === "staff" && canStaff && (
         <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -285,16 +316,33 @@ const BranchDetailPage = () => {
                 Bu filialga biriktirilgan xodim va o'qituvchilar
               </p>
             </div>
-            {/* "Barcha odamlar" havolasi OLIB TASHLANDI: u Admin
-                paneliga (`/owner/staff`) olib borardi va Super Admin
-                u yerga kira olmaydi. Filial jamoasi shu ro'yxatda. */}
+            {/* QO'SHISH SHU YERDA — XONA QO'SHISH BILAN BIR MANTIQ.
+                Filial — konteyner: administratorni yaratib, keyin uni
+                filialga biriktirish uchun boshqa panelga (`/owner/staff`)
+                o'tish kerak emas edi — Super Admin u yerga KIRA OLMAYDI.
+                Filial `openModal` ma'lumoti orqali boradi, ya'ni forma
+                ochilganda filial allaqachon tanlangan. */}
+            {canCreateStaff && (
+              <Button
+                size="sm"
+                onClick={() =>
+                  openModal(MODAL.STAFF_CREATE, {
+                    branchId: id,
+                    branchName: branch?.name,
+                  })
+                }
+              >
+                <Plus className="size-4" />
+                Xodim qo&apos;shish
+              </Button>
+            )}
           </div>
 
           <QueryState
             query={staff}
             empty={!staff.data?.data?.length}
             emptyTitle="Bu filialda xodim yo'q"
-            emptyHint="Odamlar bo'limidan xodim yaratib, unga shu filialni biriktiring."
+            emptyHint="Yuqoridagi «Xodim qo'shish» tugmasi orqali administrator yoki direktor yarating — u shu filialga biriktiriladi."
             loadingRows={3}
           >
             {(res) => (
@@ -305,10 +353,28 @@ const BranchDetailPage = () => {
                   {
                     key: "fullName",
                     label: "Ism",
+                    // `sortValue` SHART: jadval standart holda `row[key]` ni
+                    // o'qiydi, `fullName` esa yo'q maydon — saralash
+                    // "o'lchanmagan" deb hisoblab hech narsa qilmasdi.
+                    sortValue: (r) =>
+                      `${r.firstName || ""} ${r.lastName || ""}`.trim() || r.username,
                     render: (r) => `${r.firstName || ""} ${r.lastName || ""}`.trim() || r.username,
                   },
-                  { key: "role", label: "Rol" },
-                  { key: "phone", label: "Telefon" },
+                  {
+                    key: "role",
+                    label: "Rol",
+                    sortValue: (r) => r.roleLabel || r.role,
+                    // `roleLabel` — SERVERDAN (`staff: 1` bilan so'ralganda).
+                    // Xom `role` qiymati ("branch_director") custom rollarda
+                    // o'qib bo'lmas kalit bo'lib chiqardi.
+                    render: (r) => r.roleLabel || r.role,
+                  },
+                  { key: "username", label: "Login" },
+                  {
+                    key: "phone",
+                    label: "Telefon",
+                    render: (r) => (r.phone ? formatPhone(r.phone) : "—"),
+                  },
                 ]}
               />
             )}

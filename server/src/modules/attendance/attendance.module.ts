@@ -8,6 +8,7 @@ import { StudentFreezeModule } from '../student-freeze/student-freeze.module.js'
 import { AttendanceSettingsModule } from '../attendance-settings/attendance-settings.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { GroupsModule } from '../groups/groups.module.js';
+import { CoinModule } from '../coin/coin.module.js';
 
 /**
  * DAVOMAT moduli.
@@ -19,6 +20,12 @@ import { GroupsModule } from '../groups/groups.module.js';
  *   • `AttendanceSettingsModule`→ chegaralar (past davomat, ketma-ket)
  *   • `NotificationsModule`     → ogohlantirish yuborish
  *   • `GroupsModule`            → `listForTeacher`
+ *   • `CoinModule`              → davomat uchun tanga (rag'bat)
+ *
+ * ⚠ `CoinModule` PUL YO'LIDA EMAS. U tranzaksiyadan KEYIN,
+ * bloklamasdan chaqiriladi va uning xatosi yutiladi — tanga
+ * hisoblanmagani uchun dars jurnali saqlanmay qolishi mumkin emas
+ * (`bulkRecord` oxiridagi izohga qarang).
  *
  * `AttendanceService` EKSPORT qilinadi: `grades` moduli unga tayanadi.
  */
@@ -29,6 +36,7 @@ import { GroupsModule } from '../groups/groups.module.js';
     AttendanceSettingsModule,
     NotificationsModule,
     GroupsModule,
+    CoinModule,
   ],
   controllers: [AttendanceController],
   providers: [AttendanceService, TeacherAbsenceService],

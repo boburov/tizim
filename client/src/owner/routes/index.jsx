@@ -90,6 +90,8 @@ import {
   FeedbackDashboardPage,
   FeedbackTypesListPage,
 } from "@/owner/features/feedback";
+import { MarketPage, UserCoinPanel } from "@/owner/features/market";
+import CoinGuard from "@/shared/components/guards/CoinGuard";
 import { AdminDashboardPage } from "@/owner/features/adminDashboard";
 import { ActivityLogsPage } from "@/owner/features/activityLogs";
 import {
@@ -276,6 +278,13 @@ const OwnerRoutes = () => (
       <Route path="baholar" element={<UserGradesPanel />} />
       <Route path="ozod" element={<UserExemptionsPanel />} />
       <Route path="depozit" element={<UserDepositPanel />} />
+      {/* Tanga hamyoni — `owner/features/market` da yashaydi
+          (`UserDepositPanel` bilan bir naqsh: karta chizish joyi,
+          egalik emas). Bo'lim o'chirilgan bo'lsa panel o'zi sababni
+          ko'rsatadi — shuning uchun bu yerda `CoinGuard` YO'Q: u
+          foydalanuvchini butun o'quvchi kartasidan uloqtirib
+          yuborardi. */}
+      <Route path="tangalar" element={<UserCoinPanel />} />
       <Route path="tarix" element={<UserHistoryPanel />} />
       <Route path="arxiv" element={<UserArchivePanel />} />
     </Route>
@@ -364,6 +373,35 @@ const OwnerRoutes = () => (
         <PermissionGuard required="storage.manage">
           <StorageAdminPage />
         </PermissionGuard>
+      }
+    />
+
+    {/* ══ MARKET VA TANGALAR ══
+
+        IKKI QAVATLI QO'RIQCHI, VA IKKALASI HAM KERAK:
+
+          `CoinGuard`       — bo'lim UMUMAN mavjudmi (ega o'chirganmi).
+          `PermissionGuard` — MENDA huquq bormi.
+
+        Faqat ruxsatga tayanilsa o'chirilgan bo'lim menyuda qolib,
+        bosilganda 404 berardi. Faqat o'chirgichga tayanilsa esa
+        ruxsatsiz xodim ham sahifani ochardi (server 403 qaytarardi,
+        lekin odam buni faqat bosgandan keyin bilardi).
+
+        `market.read` VA `market.manage` — ikkovidan biri yetarli:
+        buyurtmalarni bajaruvchi xodimda mahsulot tahrirlash huquqi
+        bo'lmasligi mumkin. */}
+    <Route
+      path="market"
+      element={
+        <CoinGuard fallback="/owner">
+          <PermissionGuard
+            anyOf={["market.read", "market.manage", "market.fulfill"]}
+            fallback="/owner"
+          >
+            <MarketPage />
+          </PermissionGuard>
+        </CoinGuard>
       }
     />
 

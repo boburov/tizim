@@ -29,6 +29,8 @@ import {
 } from "@/teacher/features/assignments";
 import { MyFeedbackPage } from "@/teacher/features/feedback";
 import { TeacherFinancePage } from "@/teacher/features/finance";
+import { TeacherCoinsPage } from "@/teacher/features/market";
+import CoinGuard from "@/shared/components/guards/CoinGuard";
 import NotFoundPage from "@/shared/components/ui/feedback/NotFoundPage";
 
 const TeacherRoutes = () => (
@@ -57,6 +59,16 @@ const TeacherRoutes = () => (
     <Route path="inbox" element={<MyInboxPage />} />
     <Route path="feedback" element={<MyFeedbackPage />} />
     <Route path="finance" element={<TeacherFinancePage />} />
+    {/* Tanga — o'qituvchi uni O'ZI chiqaradi (davomat va baho), lekin
+        natijani ko'rmasa rag'bat u uchun ko'rinmas bo'lib qoladi. */}
+    <Route
+      path="coins"
+      element={
+        <CoinGuard fallback="/teacher/groups">
+          <TeacherCoinsPage />
+        </CoinGuard>
+      }
+    />
     <Route path="profile" element={<TeacherProfilePage />} />
     <Route path="*" element={<NotFoundPage />} />
   </Routes>

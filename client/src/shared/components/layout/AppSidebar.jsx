@@ -60,6 +60,7 @@ import useAuth from "@/shared/hooks/useAuth";
 import useTheme, { THEME_OPTIONS } from "@/shared/hooks/useTheme";
 import useLogout from "@/features/auth/hooks/useLogout";
 import usePermissions from "@/shared/hooks/usePermissions";
+import useCoinConfig from "@/shared/hooks/useCoinConfig";
 import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import { useIsMobile } from "@/shared/hooks/useMobile";
 
@@ -172,6 +173,7 @@ const Main = () => {
   const { isAllBranches } = useActiveBranch();
   const { has, hasAny } = usePermissions();
   const { workspace, nav: navItems, meta } = useWorkspace();
+  const { enabled: coinEnabled } = useCoinConfig();
 
   // YARATISH TUGMASI, QIDIRUV VA MODALLAR — o'quvchidan boshqa hammaga.
   //
@@ -188,9 +190,21 @@ const Main = () => {
   // `allBranchesOnly`  - faqat "Barcha filiallar" tanlanganda ko'rinadi
   //                      (filiallararo hisobotlar bitta filial ichida
   //                      ma'nosiz).
+  // `capability`       - BO'LIM UMUMAN YOQILGANMI.
+  //
+  // ── `capability` NEGA RUXSATDAN ALOHIDA ──
+  // Ruxsat "MENDA huquq bormi" degan savolga javob beradi. Yoqilgan/
+  // o'chirilgan holat esa butunlay boshqa savol: "bu bo'lim UMUMAN
+  // mavjudmi". Tanga tizimini ega bitta kalit bilan o'chira oladi va
+  // o'shanda huquq baribir rolda qoladi — faqat ruxsat tekshirilsa
+  // menyuda ishlamaydigan yozuv turib qolardi va bosilganda odam
+  // sahifadan qaytarilardi.
+  const capabilities = { coin: coinEnabled };
+
   const allowed = (entry) => {
     if (entry.multiBranchOnly && !multiBranch) return false;
     if (entry.allBranchesOnly && !isAllBranches) return false;
+    if (entry.capability && !capabilities[entry.capability]) return false;
     if (entry.permissionAnyOf?.length) return hasAny(entry.permissionAnyOf);
     return !entry.permission || has(entry.permission);
   };

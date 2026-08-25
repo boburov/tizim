@@ -2,6 +2,7 @@ import {
   BadgeCheck,
   Building2,
   DoorOpen,
+  Store,
   GraduationCap,
   LayoutDashboard,
   MessagesSquare,
@@ -117,6 +118,29 @@ const ownerSidebar = [
     icon: DoorOpen,
     url: "/owner/rooms",
     permission: "classes.read",
+  },
+
+  // ══════════════════════════════════════════════════════════════════
+  // MARKET — YAKKA LINK, "O'quv jarayoni" DAN KEYIN
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // ── NEGA ALOHIDA QATOR, "Katalog" ICHIDA EMAS ──
+  // Market kundalik ish: buyurtma keladi, tasdiqlanadi, topshiriladi.
+  // Katalog esa sozlamaga yaqin narsa (yiliga bir marta ochiladi).
+  // Kundalik ishni sozlama ichiga yashirish "xonalar" bilan bir marta
+  // sodir bo'lgan xato edi (shu faylning yuqorisidagi izohga qarang).
+  //
+  // ── `capability` NIMA QILADI ──
+  // Bu qator RUXSATDAN tashqari BO'LIM YOQILGANLIGINI ham talab qiladi.
+  // Ega tanga tizimini o'chirsa, `AppSidebar` uni chizmaydi. Faqat
+  // ruxsat tekshirilsa menyuda ishlamaydigan yozuv qolib ketardi va
+  // bosilganda odam bosh sahifaga otilardi.
+  {
+    title: "Market",
+    icon: Store,
+    url: "/owner/market",
+    permissionAnyOf: ["market.read", "market.manage", "market.fulfill"],
+    capability: "coin",
   },
 
   {

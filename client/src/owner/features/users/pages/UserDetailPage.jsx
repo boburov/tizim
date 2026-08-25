@@ -97,6 +97,12 @@ const UserDetailPage = () => {
       { to: `${BASE}/baholar`, label: "Baholar" },
       { to: `${BASE}/ozod`, label: "Davomatdan ozod" },
       { to: `${BASE}/depozit`, label: "To'lov" },
+      // Tanga tabi — panelning o'zi `owner/features/market` da
+      // (`UserDepositPanel` bilan bir naqsh). Bo'lim o'chirilgan
+      // bo'lsa panel sababni ko'rsatadi, tab esa qoladi: uni bu
+      // yerda yashirish `useCoinConfig` ni butun kartaga olib
+      // kirardi, holbuki karta tangaga bog'liq emas.
+      { to: `${BASE}/tangalar`, label: "Tangalar" },
       { to: `${BASE}/tarix`, label: "Guruhlar tarixi" },
       { to: `${BASE}/arxiv`, label: "Arxiv" },
     );

@@ -20,7 +20,7 @@ import {
   assertCanAssignBranch,
   type BranchScope,
 } from '../../common/rbac/branch-access.service.js';
-import { userBranchCondition } from '../../common/als/branch-context.js';
+import { userBranchCondition, assertBranchInScope } from '../../common/als/branch-context.js';
 import {
   CredentialScopeService,
   type CredentialActor,
@@ -282,6 +282,7 @@ export class UsersService {
     role,
     search,
     staff = false,
+    branchId,
     status = 'active',
     page = 1,
     limit = 20,
@@ -291,6 +292,7 @@ export class UsersService {
     role?: string;
     search?: string;
     staff?: boolean;
+    branchId?: string;
     status?: string;
     page?: number;
     limit?: number;
@@ -337,6 +339,19 @@ export class UsersService {
     // qiladi, ya'ni `OR` + `AND` birga to'g'ri ishlaydi.
     const branchCond = userBranchCondition();
     if (branchCond) where.AND = [...(where.AND || []), branchCond];
+
+    // SO'RALGAN FILIAL — sessiya ko'lamining USTIGA qo'shiladi, uning
+    // O'RNIGA emas. Ikkalasi ham `AND` da tursa, ko'lamdan tashqaridagi
+    // filial so'ralganda natija bo'sh chiqardi — jimgina va chalg'ituvchi.
+    // Shuning uchun avval `assertBranchInScope` 403 beradi.
+    if (branchId) {
+      assertBranchInScope(branchId);
+      const id = String(branchId);
+      where.AND = [
+        ...(where.AND || []),
+        { OR: [{ homeBranchId: id }, { branchAssignments: { some: { branchId: id } } }] },
+      ];
+    }
 
     const dir = order === 'asc' ? 'asc' : 'desc';
     const skip = (page - 1) * limit;

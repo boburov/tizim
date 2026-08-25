@@ -944,6 +944,15 @@ model User {
   refundsApproved     Refund[]                     @relation("RefundApprovedBy")
   refundsCreated      Refund[]                     @relation("RefundCreatedBy")
   financialAuditLogs  FinancialAuditLog[]          @relation("FinAuditActor")
+
+  // ── TANGA / MARKET (rag'bat tizimi) ──
+  coinAccount      CoinAccount?      @relation("CoinAccountUser")
+  coinTransactions CoinTransaction[] @relation("CoinTxUser")
+  coinTxCreated    CoinTransaction[] @relation("CoinTxCreatedBy")
+  marketProductsCreated MarketProduct[] @relation("MarketProductCreatedBy")
+  marketOrders     MarketOrder[]     @relation("MarketOrderUser")
+  marketOrdersHandled MarketOrder[]  @relation("MarketOrderHandledBy")
+  coinSettingsUpdated CoinSettings[] @relation("CoinSettingsUpdatedBy")
   @@index([phone])
   @@index([leadId])
   @@index([homeBranchId, isDeleted, isActive])
@@ -1095,6 +1104,9 @@ model Branch {
   budgets              Budget[]                     @relation("BudgetBranch")
   refunds              Refund[]                     @relation("RefundBranch")
   financialAuditLogs   FinancialAuditLog[]          @relation("FinAuditBranch")
+  marketProducts       MarketProduct[]              @relation("MarketProductBranch")
+  marketOrders         MarketOrder[]                @relation("MarketOrderBranch")
+  coinTransactions     CoinTransaction[]            @relation("CoinTxBranch")
   @@map("branches")
 }
 
@@ -3720,4 +3732,265 @@ model FinancialAuditLog {
   @@index([branchId, createdAt])
   @@index([action, createdAt])
   @@map("financial_audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TANGA (COIN) VA MARKET — RAG'BATLANTIRISH TIZIMI
+//
+// O'quvchi darsga kelgani va olgan bahosi uchun TANGA to'playdi, keyin uni
+// MARKET dagi mahsulotga almashtiradi.
+//
+// ── NEGA PUL EMAS, INT ──
+// Tanga PUL EMAS: u kassaga tushmaydi, jurnalga yozilmaydi va hisobotga
+// kirmaydi. Shuning uchun `Decimal(18,2)` EMAS, oddiy `Int`. Butun son
+// ataylab: "0.5 tanga" degan tushuncha o'quvchiga hech narsa anglatmaydi
+// va yaxlitlash xatosi hisoblagichni sekin-asta buzardi.
+//
+// ⚠ MOLIYA MODULLARIGA UMUMAN TEGMAYDI. Tanga `journal_entries` ga ham,
+// `payment_transactions` ga ham yozilmaydi — aks holda markazning daromadi
+// o'ylab topilgan valyuta bilan aralashib ketardi.
+//
+// ── YAGONA O'CHIRGICH ──
+// `CoinSettings.isEnabled = false` bo'lsa BUTUN bo'lim (tanga ham, market
+// ham) hamma uchun yopiladi: marshrutlar 404 beradi, hisoblash to'xtaydi,
+// menyu yozuvi yo'qoladi. `marketEnabled` esa faqat do'konni yopadi —
+// tanga to'planishda davom etadi.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum CoinTxKind {
+  // Avtomatik topilgan
+  attendance
+  grade
+  // Marketdagi harakat
+  purchase
+  refund
+  // Qo'lda (admin) — sovg'a yoki tuzatish
+  manual
+}
+
+enum MarketOrderStatus {
+  pending   // tanga yechildi, tasdiq kutilmoqda
+  approved  // tasdiqlandi, tayyorlanmoqda
+  ready     // olib ketishga tayyor
+  delivered // topshirildi (yakuniy)
+  rejected  // admin rad etdi   → tanga QAYTARILADI
+  canceled  // o'quvchi bekor qildi → tanga QAYTARILADI
+}
+
+/**
+ * YAGONA QATORLI SOZLAMA (`id = "default"`) — `AttendanceSettings` naqshi.
+ *
+ * Filialga BO'LINMAYDI: tanga narxi bir filialda 1, boshqasida 5 bo'lsa
+ * bitta markaz ichida ikki xil "kurs" paydo bo'lardi va o'quvchilar buni
+ * darhol adolatsizlik deb o'qirdi.
+ */
+model CoinSettings {
+  id String @id @default("default")
+
+  /** ⚠ ASOSIY O'CHIRGICH — butun bo'lim (tanga + market). */
+  isEnabled     Boolean @default(true)
+  /** Faqat do'kon. `false` da tanga to'planadi, sarflab bo'lmaydi. */
+  marketEnabled Boolean @default(true)
+
+  /** Interfeysdagi nom — "tanga", "ball", "yulduz"... */
+  coinLabel String @default("tanga")
+
+  // ── TOPISH QOIDALARI ──
+  /** `present` uchun. 0 = bu manbadan tanga berilmaydi. */
+  attendancePresentCoins Int @default(1)
+  /** `excused` (sababli) uchun — odatda kamroq. */
+  attendanceExcusedCoins Int @default(0)
+  /** Shu balldan PAST baho tanga bermaydi. */
+  gradeMinValue          Int @default(3)
+  /** Tanga = baho qiymati × shu koeffitsient. */
+  gradeCoinsPerPoint     Int @default(1)
+
+  /** Bir kunda bitta o'quvchi topa oladigan chegara. 0 = cheksiz. */
+  dailyEarnLimit Int @default(0)
+
+  /** `true` da xarid darhol `approved` bo'ladi (qo'lda tasdiq shart emas). */
+  orderAutoApprove Boolean @default(false)
+
+  updatedById String? @db.VarChar(24)
+  updatedBy   User?   @relation("CoinSettingsUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("coin_settings")
+}
+
+/**
+ * HAMYON — foydalanuvchiga BITTA.
+ *
+ * `balance` — `CoinTransaction` yig'indisining KESHI. Haqiqat manbai
+ * ledger'da; bu ustun har yozuvda AYNI tranzaksiya ichida yangilanadi,
+ * shuning uchun ular ajralib keta olmaydi.
+ *
+ * NEGA KESH KERAK: balansni har safar `SUM(delta)` bilan hisoblash market
+ * sahifasining har ochilishida butun tarixni o'qishni talab qilardi.
+ */
+model CoinAccount {
+  id     String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  userId String @unique @db.VarChar(24)
+  user   User   @relation("CoinAccountUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  balance     Int @default(0)
+  totalEarned Int @default(0)
+  totalSpent  Int @default(0)
+
+  lastEarnedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("coin_accounts")
+}
+
+/**
+ * LEDGER — har bir harakat, o'zgarmas.
+ *
+ * ⚠ `sourceKey` QISMAN UNIQUE (NULL bo'lmaganda) — IDEMPOTENTLIK to'sig'i.
+ * Davomat qayta belgilanadi (o'qituvchi xatosini tuzatadi), baho
+ * o'zgartiriladi — har safar yangi tanga berilsa o'quvchi bitta darsdan
+ * cheksiz tanga "sog'a" olardi. Kalit shakli:
+ *     "attendance:<attendanceId>"   "grade:<gradeId>"
+ * ya'ni bitta manba bitta marta to'laydi.
+ */
+model CoinTransaction {
+  id     String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  userId String @db.VarChar(24)
+  user   User   @relation("CoinTxUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  /** Musbat = topdi, manfiy = sarfladi. HECH QACHON 0 emas. */
+  delta        Int
+  balanceAfter Int
+  kind         CoinTxKind
+
+  reason String @default("")
+
+  /** Idempotentlik kaliti — qarang model izohi. */
+  sourceKey String?
+
+  /** Bog'liq yozuv (davomat / baho / buyurtma) — FK EMAS, audit izi. */
+  refId String? @db.VarChar(24)
+
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("CoinTxBranch", fields: [branchId], references: [id])
+
+  /** Qo'lda berilgan bo'lsa — kim bergani. */
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("CoinTxCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  // QISMAN UNIQUE: (sourceKey) WHERE sourceKey IS NOT NULL
+  @@index([userId, createdAt])
+  @@index([kind, createdAt])
+  @@index([refId])
+  @@map("coin_transactions")
+}
+
+/**
+ * MARKET MAHSULOTI.
+ *
+ * `branchId = NULL` — BUTUN markaz uchun (faqat super admin qo'ya oladi).
+ * Filial administratori yaratsa `branchId` uning filialiga QO'YILADI va
+ * mahsulot faqat o'sha filial o'quvchilariga ko'rinadi.
+ */
+model MarketProduct {
+  id          String  @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  name        String
+  description String  @default("")
+  imageUrl    String  @default("")
+
+  /** Narx — TANGADA. */
+  price Int
+
+  /**
+   * Zaxira. `null` = CHEKSIZ (raqamli sovg'a, sertifikat).
+   * 0 = tugagan: ko'rinadi, lekin sotib bo'lmaydi.
+   */
+  stock Int?
+
+  /** O'quvchi mahsulotni QANDAY oladi — buyurtmaga NUSXA olinadi. */
+  deliveryInfo String @default("")
+  /** Taxminan necha kunda yetib boradi — buyurtmaga NUSXA olinadi. */
+  deliveryDays Int    @default(0)
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(100)
+
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("MarketProductBranch", fields: [branchId], references: [id])
+
+  createdById String? @db.VarChar(24)
+  createdBy   User?   @relation("MarketProductCreatedBy", fields: [createdById], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?   @db.VarChar(24)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders MarketOrder[] @relation("MarketOrderProduct")
+
+  @@index([branchId, isActive, isDeleted])
+  @@index([isDeleted, sortOrder])
+  @@map("market_products")
+}
+
+/**
+ * XARID.
+ *
+ * ⚠ NARX VA YETKAZISH MA'LUMOTI SURATGA OLINADI (`priceCoins`,
+ * `deliveryInfo`, `deliveryDays`). Mahsulot keyin qimmatlashsa yoki
+ * yetkazish sharti o'zgarsa, ALLAQACHON qilingan buyurtma eski shart
+ * bilan bajarilishi kerak — aks holda o'quvchi "menga boshqacha
+ * aytilgandi" degan holatga tushardi va uni tekshirib bo'lmasdi.
+ */
+model MarketOrder {
+  id     String @id @default(dbgenerated("gen_object_id()")) @db.VarChar(24)
+  userId String @db.VarChar(24)
+  user   User   @relation("MarketOrderUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  productId String        @db.VarChar(24)
+  product   MarketProduct @relation("MarketOrderProduct", fields: [productId], references: [id])
+
+  /** Xarid paytidagi nom va narx — mahsulot o'chirilsa ham qoladi. */
+  productName String
+  priceCoins  Int
+
+  deliveryInfo String    @default("")
+  deliveryDays Int       @default(0)
+  /** `createdAt + deliveryDays` — klient qayta hisoblamasligi uchun. */
+  expectedAt   DateTime?
+
+  status MarketOrderStatus @default(pending)
+
+  /** O'quvchining izohi (o'lcham, rang...). */
+  note       String @default("")
+  /** Admin javobi / rad etish sababi. */
+  adminNote  String @default("")
+
+  handledById String?   @db.VarChar(24)
+  handledBy   User?     @relation("MarketOrderHandledBy", fields: [handledById], references: [id])
+  handledAt   DateTime?
+  deliveredAt DateTime?
+
+  /** Tanga qaytarilganmi — ikki marta qaytarishning oldini oladi. */
+  refundedAt DateTime?
+
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("MarketOrderBranch", fields: [branchId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([branchId, status])
+  @@index([productId])
+  @@map("market_orders")
 }

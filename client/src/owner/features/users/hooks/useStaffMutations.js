@@ -18,7 +18,14 @@ export const useStaffCreateMutation = (options = {}) => {
     mutationFn: (body) => http.post(ENDPOINTS.users.staff, body).then(unwrapApproval),
     onSuccess: (res, vars, ctx) => {
       if (res.pendingApproval) qc.invalidateQueries({ queryKey: qk.expenseApprovals.all() });
-      else qc.invalidateQueries({ queryKey: qk.users.all() });
+      else {
+        qc.invalidateQueries({ queryKey: qk.users.all() });
+        // FILIAL STATISTIKASI HAM ESKIRDI: filial sahifasidagi "Xodimlar"
+        // kartochkasi shu so'rovdan oziqlanadi. Bo'lmasa yangi xodim
+        // ro'yxatda paydo bo'lardi-yu, ustidagi raqam eski qolardi -
+        // ikki son bir-biriga qarama-qarshi ko'rinardi.
+        qc.invalidateQueries({ queryKey: qk.branches.all() });
+      }
       approvalToast(toast, res, "Xodim qo'shildi");
       options.onSuccess?.(res, vars, ctx);
     },

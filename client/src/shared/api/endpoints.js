@@ -242,6 +242,41 @@ export const ENDPOINTS = Object.freeze({
     byId: (id) => `/feedback-types/${id}`,
   },
 
+  // ══════════════════════════════════════════════════════════════════
+  // TANGALAR — rag'batlantirish hisobi
+  //
+  // ⚠ `config` BOSHQALARIDAN FARQ QILADI: u bo'lim O'CHIRILGANDA HAM
+  // javob beradi (`{ enabled: false }`). Qolgan hamma manzil o'sha
+  // holatda 404 qaytaradi — ataylab, "o'chirilgan bo'lim ko'rinmasin
+  // va ishlamasin" talabi shu.
+  //
+  // Shuning uchun klient AVVAL `config` ni o'qiydi va faqat
+  // `enabled` bo'lsa qolganini so'raydi.
+  // ══════════════════════════════════════════════════════════════════
+  coins: {
+    config: "/coins/config",
+    me: "/coins/me",
+    myHistory: "/coins/me/history",
+    leaderboard: "/coins/leaderboard",
+    stats: "/coins/stats",
+    settings: "/coins/settings",
+    userWallet: (userId) => `/coins/users/${userId}`,
+    adjust: "/coins/adjust",
+  },
+
+  // MARKET — tanga sarflanadigan yagona joy.
+  market: {
+    catalog: "/market/catalog",
+    buy: "/market/buy",
+    myOrders: "/market/orders/my",
+    cancelOrder: (id) => `/market/orders/${id}/cancel`,
+    products: "/market/products",
+    productById: (id) => `/market/products/${id}`,
+    orders: "/market/orders",
+    orderById: (id) => `/market/orders/${id}`,
+    orderStatus: (id) => `/market/orders/${id}/status`,
+  },
+
   // Admin dashboard / Activity logs (Bo'lak 9)
   activityLogs: {
     base: "/activity-logs",

@@ -28,6 +28,7 @@ import { paymentMethodLabel } from "@/shared/constants/finance";
 
 import useGlobalSearchQuery from "../hooks/useGlobalSearchQuery";
 import useRecentSearches from "../hooks/useRecentSearches";
+import useCoinConfig from "@/shared/hooks/useCoinConfig";
 import { SEARCH_INDEX } from "../navigation/searchIndex";
 
 const isMac =
@@ -56,16 +57,31 @@ const GlobalSearch = ({ renderTrigger }) => {
   const isCollapsed = state === "collapsed" && !isSidebarMobile;
 
   const { recent, addRecent, clearRecent } = useRecentSearches();
+  const { enabled: coinEnabled } = useCoinConfig();
 
   const canSearchData = has("users.read");
   const { data: results, isFetching } = useGlobalSearchQuery(
     canSearchData ? debouncedTerm : "",
   );
 
-  // Foydalanuvchi ruxsatiga qarab filtrlangan sahifalar ro'yxati
+  // Foydalanuvchi ruxsatiga VA bo'lim yoqilganligiga qarab
+  // filtrlangan sahifalar ro'yxati.
+  //
+  // ⚠ `capability` RUXSATDAN ALOHIDA TEKSHIRILADI. Ega tanga bo'limini
+  // o'chirsa, huquq rolda qolaveradi — faqat ruxsat tekshirilsa
+  // "Market" ⌘K natijalarida ko'rinib, bosilganda foydalanuvchi
+  // sahifadan qaytarilardi. Qidiruv natijasi ochilmaydigan sahifaga
+  // olib borsa, butun qidiruvga ishonch yo'qoladi.
+  const capabilities = { coin: coinEnabled };
   const items = useMemo(
-    () => SEARCH_INDEX.filter((it) => !it.permission || has(it.permission)),
-    [has],
+    () =>
+      SEARCH_INDEX.filter((it) => {
+        if (it.permission && !has(it.permission)) return false;
+        if (it.capability && !capabilities[it.capability]) return false;
+        return true;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [has, coinEnabled],
   );
 
   // Ctrl+K / Cmd+K global listener

@@ -12,6 +12,8 @@ import TizimTahliliPage from "../pages/TizimTahliliPage";
 import VakolatlarPage from "../pages/VakolatlarPage";
 import RoomAnalyticsPage from "../pages/RoomAnalyticsPage";
 import { MyInboxPage } from "@/owner/features/notifications";
+import { MarketPage } from "@/owner/features/market";
+import CoinGuard from "@/shared/components/guards/CoinGuard";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -92,6 +94,34 @@ const SuperAdminRoutes = () => (
       element={<G required={PERMISSIONS.ROLES_READ}><VakolatlarPage /></G>}
     />
 
+    {/* ══ MARKET — SARLAVHA MENYUSIDAN (Moliya kabi) ══
+
+        SIDEBARGA QO'SHILMADI. Uchta yozuv qoidasi ATAYLAB saqlanadi
+        (`panelAcceptance.mjs` uni tekshiradi): to'rtinchi qator
+        panelni "tugmalari ko'paytirilgan Admin paneli"ga aylantirardi.
+        Market esa Moliya bilan bir toifada — yuqori darajadagi
+        YO'NALISH, hisobot bo'limi emas.
+
+        SAHIFA AYNI O'SHA (`owner/features/market`), nusxa
+        yaratilmadi: ko'lam — server qo'yadigan filtr, ikkinchi ekran
+        emas. Xona va moliya ekranlaridagi bilan bir xil qoida. */}
+    <Route
+      path="market"
+      element={
+        <CoinGuard fallback={ORG_HOME}>
+          <G
+            anyOf={[
+              PERMISSIONS.MARKET_READ,
+              PERMISSIONS.MARKET_MANAGE,
+              PERMISSIONS.COIN_SETTINGS,
+            ]}
+          >
+            <MarketPage />
+          </G>
+        </CoinGuard>
+      }
+    />
+
     <Route
       path="rooms/analytics"
       element={<G required={PERMISSIONS.CLASSES_READ}><RoomAnalyticsPage /></G>}
@@ -112,7 +142,7 @@ const SuperAdminRoutes = () => (
     {/* ODAMLAR VA OPERATSIYA — Admin panelining ishi, lekin Super
         Admin u yerga kira olmaydi (`AdminPanelGuard`). Shuning uchun
         bu manzillar `/org` ICHIDA qoladi: filial jamoasi filial
-        kartasining "Odamlar" tabida. */}
+        kartasining "Xodimlar" tabida. */}
     <Route path="people" element={<Navigate to="/org/filiallar" replace />} />
     <Route path="operations" element={<Navigate to="/org" replace />} />
 

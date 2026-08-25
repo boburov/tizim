@@ -31,6 +31,22 @@ export const MODAL = Object.freeze({
   STAFF_ROLE: "staff:role",
   USER_BRANCH: "user:branch",
 
+  // ── MARKET VA TANGALAR (rag'batlantirish) ──
+  //
+  // Mahsulot uchun YAGONA modal (`MARKET_PRODUCT_FORM`), yaratish va
+  // tahrirlash uchun alohida EMAS. Sabab: maydonlar to'liq bir xil
+  // (nom, narx, zaxira, yetkazish sharti) va ikki nusxada tutilsa
+  // ulardan biriga qo'shilgan maydon ikkinchisida unutilardi.
+  // Modal `product` payload'i bor-yo'qligiga qarab rejimni o'zi
+  // tanlaydi.
+  MARKET_PRODUCT_FORM: "market:productForm",
+  MARKET_PRODUCT_DELETE: "market:productDelete",
+  MARKET_ORDER_STATUS: "market:orderStatus",
+  // O'quvchi xaridni tasdiqlaydi (narx va yetkazish sharti bilan).
+  MARKET_BUY: "market:buy",
+  // Qo'lda tanga berish / olib qo'yish.
+  COIN_ADJUST: "coin:adjust",
+
   // Xonalar (filialning fizik resursi)
   ROOM_CREATE: "room:create",
 

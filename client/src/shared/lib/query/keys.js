@@ -420,4 +420,35 @@ export const qk = Object.freeze({
     // O'qituvchi standart maosh stavkasi (tarix + amaldagisi).
     compensations: (teacherId) => ["teacherSalary", "compensations", teacherId],
   },
+
+  // ── TANGALAR ──
+  //
+  // `config` ALOHIDA ILDIZDA (`coinConfig`), `coins` ostida EMAS.
+  // Sabab: xarid qilinganda `qk.coins.all()` bekor qilinadi (balans
+  // o'zgardi), lekin o'chirgich holati o'zgarmagan — uni ham qayta
+  // so'rash har xaridda ortiqcha so'rov tug'dirardi. Sozlama esa
+  // aksincha: o'chirgich bosilganda IKKALASI ham bekor qilinadi.
+  coinConfig: {
+    all: () => ["coinConfig"],
+  },
+  coins: {
+    all: () => ["coins"],
+    me: () => ["coins", "me"],
+    myHistory: (params) => ["coins", "me", "history", params],
+    leaderboard: (params) => ["coins", "leaderboard", params],
+    stats: () => ["coins", "stats"],
+    settings: () => ["coins", "settings"],
+    userWallet: (userId, params) => ["coins", "wallet", userId, params],
+  },
+
+  // ── MARKET ──
+  market: {
+    all: () => ["market"],
+    catalog: (params) => ["market", "catalog", params],
+    products: (params) => ["market", "products", params],
+    product: (id) => ["market", "product", id],
+    orders: (params) => ["market", "orders", params],
+    order: (id) => ["market", "order", id],
+    myOrders: (params) => ["market", "myOrders", params],
+  },
 });

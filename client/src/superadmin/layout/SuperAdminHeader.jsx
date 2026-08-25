@@ -13,6 +13,7 @@ import ThemeToggle from "@/shared/components/theme/ThemeToggle";
 import NotificationBell from "@/shared/components/notification/NotificationBell";
 import useAuth from "@/shared/hooks/useAuth";
 import usePermissions from "@/shared/hooks/usePermissions";
+import useCoinConfig from "@/shared/hooks/useCoinConfig";
 import useLogout from "@/features/auth/hooks/useLogout";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 import { APP_NAME, APP_LOGO } from "@/shared/constants/app";
@@ -50,11 +51,32 @@ import { SUPER_ADMIN_HEADER_NAV } from "../navigation/nav.config";
 const SuperAdminHeader = () => {
   const { user, roleLabel } = useAuth();
   const { has } = usePermissions();
+  const { enabled: coinEnabled } = useCoinConfig();
   const { mutate: logout } = useLogout();
 
-  const headerNav = SUPER_ADMIN_HEADER_NAV.filter(
-    (item) => !item.permission || has(item.permission),
-  );
+  // ══════════════════════════════════════════════════════════════════
+  // SARLAVHA YO'NALISHLARI IKKI SHART BILAN KESILADI
+  //
+  //   1. RUXSAT     — `permission` yoki `permissionAnyOf`
+  //   2. IMKONIYAT  — `capability` (bo'lim UMUMAN yoqilganmi)
+  //
+  // Ikkinchisi kerak, chunki ruxsat "menda huquq bor" deydi, xolos.
+  // Tanga bo'limini ega o'chirib qo'yishi mumkin va o'shanda huquq
+  // baribir rolda qoladi — faqat ruxsatga tayanilsa sarlavhada
+  // ishlamaydigan havola turib qolardi.
+  //
+  // Bu qobiqda "yolg'on eshik" ATAYLAB yo'q (Admin paneliga havola
+  // ham shu sababdan olib tashlangan) — o'chirilgan bo'lim yozuvi
+  // aynan shunday eshik bo'lardi.
+  // ══════════════════════════════════════════════════════════════════
+  const capabilities = { coin: coinEnabled };
+
+  const headerNav = SUPER_ADMIN_HEADER_NAV.filter((item) => {
+    if (item.permission && !has(item.permission)) return false;
+    if (item.permissionAnyOf?.length && !item.permissionAnyOf.some(has)) return false;
+    if (item.capability && !capabilities[item.capability]) return false;
+    return true;
+  });
 
   const name =
     `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
@@ -74,7 +96,7 @@ const SuperAdminHeader = () => {
         </span>
       </Link>
 
-      {/* ── YUQORI DARAJADAGI YO'NALISH: MOLIYA ── */}
+      {/* ── YUQORI DARAJADAGI YO'NALISHLAR: MOLIYA, MARKET ── */}
       <nav aria-label="Asosiy yo'nalishlar" className="ml-1 flex items-center gap-1 sm:ml-3">
         {headerNav.map((item) => (
           <NavLink

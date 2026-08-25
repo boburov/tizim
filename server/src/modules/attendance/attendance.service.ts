@@ -27,6 +27,7 @@ import { HolidaysService } from '../holidays/holidays.service.js';
 import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
 import { AttendanceSettingsService } from '../attendance-settings/attendance-settings.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { CoinService } from '../coin/coin.service.js';
 import { GroupsService } from '../groups/groups.service.js';
 import {
   computeClassDays,
@@ -95,6 +96,7 @@ export class AttendanceService {
     private readonly freezes: StudentFreezeService,
     private readonly settings: AttendanceSettingsService,
     private readonly notifications: NotificationsService,
+    private readonly coins: CoinService,
     private readonly groups: GroupsService,
     private readonly correlation: CorrelationCacheService,
   ) {}
@@ -478,6 +480,22 @@ export class AttendanceService {
     this.notifyConsecutiveAbsences({ group, items, existingMap, dateKey: dKey }).catch(
       (err) => this.logger.warn(`Ketma-ket qoldirish ogohlantirishi yuborilmadi: ${err}`),
     );
+
+    // ── TANGA (rag'bat) — BLOKLAMAYDI ──
+    //
+    // ⚠ `await` ATAYLAB YO'Q va xato YUTILADI. Davomat — PUL YO'LIDA
+    // turgan yozuv (maosh, to'lov va hisobot shunga tayanadi); tanga
+    // esa rag'bat. Tanga hisoblanmagani uchun DARS JURNALI saqlanmay
+    // qolishi mumkin emas.
+    //
+    // Idempotentlik `CoinService` ichida: kalit davomat yozuvining
+    // ID'siga bog'langan (`attendance:<id>`), ya'ni holat qayta
+    // belgilanganda ikkinchi marta to'lanmaydi. Aynan shuning uchun
+    // bu yerda "o'zgardimi" degan tekshiruv YO'Q — u ikkinchi,
+    // ajralib ketadigan haqiqat manbai bo'lardi.
+    void this.coins
+      .awardForAttendance(results as never, group.branchId ?? null)
+      .catch((err) => this.logger.warn(`Tanga hisoblanmadi: ${err}`));
 
     return results;
   }

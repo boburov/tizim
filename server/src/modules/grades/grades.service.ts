@@ -1,9 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { withLegacyId } from '../../common/utils/serialize.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { parseLocalDay, dateKeyOf, dayOfWeekOf } from '../../common/utils/date.js';
 import { scheduleActiveOn } from '../../common/utils/attendance.js';
+import { CoinService } from '../coin/coin.service.js';
 
 /**
  * BAHOLAR — `grades.service.js` NING AYNAN EKVIVALENTI.
@@ -34,6 +35,10 @@ const STUDENT_SELECT = {
 const GROUP_WITH_SCHEDULE = {
   id: true,
   name: true,
+  // Tanga yozuvi filialga bog'lanadi (hisobot va ko'lam uchun).
+  // ⚠ QO'SHILDI, olib tashlanmadi: qolgan maydonlarga tegilmagani
+  // uchun mavjud chaqiruvchilar o'zgarishni umuman sezmaydi.
+  branchId: true,
   schedule: {
     select: { day: true, startTime: true, endTime: true, effectiveFrom: true },
   },
@@ -86,7 +91,12 @@ export interface GradeItem {
 
 @Injectable()
 export class GradesService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger('Grades');
+
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    private readonly coins: CoinService,
+  ) {}
 
   private async ensureGroup(groupId: string) {
     const g = await this.prisma.group.findUnique({
@@ -323,6 +333,20 @@ export class GradesService {
       }
       return out;
     });
+
+    // ── TANGA (rag'bat) — BLOKLAMAYDI ──
+    //
+    // Davomatdagi bilan AYNI naqsh: `await` yo'q, xato yutiladi.
+    // Baho o'quvchining o'quv yozuvi, tanga esa rag'bat — tanga
+    // hisoblanmagani uchun BAHO saqlanmay qolishi mumkin emas.
+    //
+    // Idempotentlik kaliti baho yozuvining ID'siga bog'langan
+    // (`grade:<id>`): baho 3 dan 5 ga tuzatilsa IKKINCHI marta
+    // to'lanmaydi. Bu ataylab — aks holda o'qituvchi bilmasdan
+    // bahoni ikki marta saqlashi bilan tanga ikki barobar bo'lardi.
+    void this.coins
+      .awardForGrades(docs as never, group.branchId ?? null)
+      .catch((err) => this.logger.warn(`Tanga hisoblanmadi: ${err}`));
 
     return { count: docs.length, slot: normalizedSlot };
   }

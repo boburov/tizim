@@ -1,6 +1,8 @@
 import {
   LayoutDashboard,
   Wallet,
+  Store,
+  Coins,
   GraduationCap,
   Star,
   Target,
@@ -75,6 +77,9 @@ const teacherNav = [
   { title: "Jadvalim", icon: CalendarDays, url: "/work/schedule" },
   { title: "Vazifalar", icon: Briefcase, url: "/teacher/assignments" },
   { title: "Maoshim", icon: Wallet, url: "/teacher/finance" },
+  // Tanga — o'qituvchi uni O'ZI chiqaradi (davomat va baho), lekin
+  // natijani ko'rmasa rag'bat u uchun ko'rinmas bo'lib qolardi.
+  { title: "Tangalar", icon: Coins, url: "/teacher/coins", capability: "coin" },
   { title: "Xabarlar", icon: Bell, url: "/teacher/inbox" },
 ];
 
@@ -86,6 +91,15 @@ const officeNav = [
   { title: "Jadval", icon: CalendarDays, url: "/work/schedule" },
   { title: "Lidlar", icon: Target, url: "/owner/leads", permission: "leads.read" },
   { title: "Vazifalar", icon: Briefcase, url: "/owner/assignments", permission: "assignments.read" },
+  // Buyurtmani odatda AYNAN resepshin topshiradi — mahsulot uning
+  // stolida turadi. Yozuv `market.fulfill` ruxsati bo'lganda chiqadi.
+  {
+    title: "Market",
+    icon: Store,
+    url: "/owner/market",
+    permissionAnyOf: ["market.fulfill", "market.manage", "market.read"],
+    capability: "coin",
+  },
   { title: "Xabarlar", icon: Bell, url: "/owner/inbox" },
 ];
 
@@ -103,6 +117,17 @@ const studentNav = [
   { title: "To'lovlarim", icon: Wallet, url: "/me/payments" },
   { title: "Natijalarim", icon: TrendingUp, url: "/student/rating" },
   { title: "Vazifalarim", icon: Briefcase, url: "/student/assignments", badge: "studentAssignments" },
+  // ── RAG'BAT ──
+  //
+  // Ikki yozuv, bitta emas: "Tangalarim" MENING natijam (hamyon,
+  // tarix, reyting), "Market" esa SARFLASH joyi. Bittaga
+  // birlashtirilsa do'kon tarix ichiga ko'milib, o'quvchi uni
+  // topolmasdi — holbuki butun rag'bat aynan do'kon uchun ishlaydi.
+  //
+  // ⚠ `capability: "coin"` — ega bo'limni o'chirsa ikkalasi ham
+  // menyudan yo'qoladi (`AppSidebar` dagi izohga qarang).
+  { title: "Tangalarim", icon: Coins, url: "/student/coins", capability: "coin" },
+  { title: "Market", icon: Store, url: "/student/market", capability: "coin" },
   { title: "Xabarlarim", icon: Bell, url: "/student/inbox" },
   { title: "Profilim", icon: User, url: "/student/profile" },
 ];

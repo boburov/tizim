@@ -1,0 +1,88 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#173B63"/>
+      <stop offset="1" stop-color="#0B2340"/>
+    </linearGradient>
+
+    <linearGradient id="page" x1="12" y1="16" x2="12" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDFAF6"/>
+      <stop offset="1" stop-color="#F3E9E0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Badge -->
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="14.5" stroke="#FFFFFF" stroke-opacity="0.12"/>
+
+  <!-- Open book: two pages meeting at the spine -->
+  <path
+    d="M32 20.5C27 17.4 20.5 16.6 15.4 17.7C14.3 17.9 13.5 18.9 13.5 20V43.2C13.5 44.6 14.8 45.6 16.1 45.3C20.8 44.4 26.9 45.2 32 48Z"
+    fill="url(#page)"
+  />
+
+  <path
+    d="M32 20.5C37 17.4 43.5 16.6 48.6 17.7C49.7 17.9 50.5 18.9 50.5 20V43.2C50.5 44.6 49.2 45.6 47.9 45.3C43.2 44.4 37.1 45.2 32 48Z"
+    fill="url(#page)"
+  />
+
+  <!-- Spine -->
+  <path
+    d="M32 20.5V48"
+    stroke="#173B63"
+    stroke-width="2"
+    stroke-linecap="round"
+  />
+
+  <circle cx="32" cy="47.5" r="1.6" fill="#E0A458"/>
+
+  <!-- Text lines (left page) -->
+  <path
+    d="M18.5 24.5C21.5 24 25.5 24.4 28.5 25.7"
+    stroke="#9FB7CF"
+    stroke-width="1.6"
+    stroke-linecap="round"
+  />
+
+  <path
+    d="M18.5 29.5C21.5 29 25.5 29.4 28.5 30.7"
+    stroke="#9FB7CF"
+    stroke-width="1.6"
+    stroke-linecap="round"
+  />
+
+  <path
+    d="M18.5 34.5C21.5 34 25.5 34.4 28.5 35.7"
+    stroke="#9FB7CF"
+    stroke-width="1.6"
+    stroke-linecap="round"
+  />
+
+  <!-- Text lines (right page) -->
+  <path
+    d="M45.5 24.5C42.5 24 38.5 24.4 35.5 25.7"
+    stroke="#9FB7CF"
+    stroke-width="1.6"
+    stroke-linecap="round"
+  />
+
+  <path
+    d="M45.5 29.5C42.5 29 38.5 29.4 35.5 30.7"
+    stroke="#9FB7CF"
+    stroke-width="1.6"
+    stroke-linecap="round"
+  />
+
+  <path
+    d="M45.5 34.5C42.5 34 38.5 34.4 35.5 35.7"
+    stroke="#9FB7CF"
+    stroke-width="1.6"
+    stroke-linecap="round"
+  />
+
+  <!-- Bookmark ribbon -->
+  <path
+    d="M39 16.5V27L36 24L33 27V16.5Z"
+    fill="#E0A458"
+  />
+</svg>

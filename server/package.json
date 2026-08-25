@@ -101,7 +101,10 @@
     "db:reset": "bash scripts/db-reset.sh",
     "fixture:qa": "node --env-file=.env test/fixtures/qa-users.mjs",
     "audit:workspace": "node --env-file=.env test/workspace-security-audit.mjs",
-    "audit:finance": "node --env-file=.env test/finance-security-audit.mjs"
+    "audit:finance": "node --env-file=.env test/finance-security-audit.mjs",
+    "test:coin-invariants": "node --env-file=.env test/coin-market-invariants.test.mjs",
+    "test:coin-parity": "node --env-file=.env test/coin-market-parity.test.mjs",
+    "test:coin-earn": "node --env-file=.env test/coin-earn-parity.test.mjs"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

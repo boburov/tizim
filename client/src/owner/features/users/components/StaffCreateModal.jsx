@@ -52,10 +52,25 @@ const initialState = (homeBranchId) => ({
  *  - rol DINAMIK (owner yaratgan custom rollar ham tanlanadi)
  *  - filial biriktiruvi majburiy
  *  - hiredAt/enrolledAt kabi rolga xos maydonlar YO'Q
+ *
+ * ── FILIAL KONTEKSTDAN KELISHI MUMKIN (`branchId` propi) ──
+ *
+ * Super Admin panelida bu forma FILIAL SAHIFASIDAN ochiladi ("Xodimlar"
+ * bo'limi → "Qo'shish"). U yerda filial allaqachon tanlangan, shuning
+ * uchun tanlagich ko'rsatilmaydi — o'rniga qaysi filialga qo'shilayotgani
+ * YOZIB qo'yiladi.
+ *
+ * Tanlagichni ochiq qoldirish xato manbai bo'lardi: odam "DEMO Markaz"
+ * sahifasida turib, forma ichida boshqa filialni tanlab qo'yishi va
+ * xodim ko'zdan g'oyib bo'lishi mumkin edi (u boshqa filialda paydo
+ * bo'lardi, ro'yxat esa bo'sh qolardi).
  */
-const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
+const StaffCreateModal = ({ close, isLoading, setIsLoading, branchId, branchName }) => {
   const { homeBranchId, multiBranch } = useAuth();
-  const obj = useObjectState(initialState(homeBranchId));
+  // Kontekst filiali USTUN: sahifa qaysi filialni ochgan bo'lsa, xodim
+  // o'shanga tushadi.
+  const obj = useObjectState(initialState(branchId || homeBranchId));
+  const branchLocked = Boolean(branchId);
 
   const { data: roles = [] } = useRolesQuery();
   const { data: branchesData } = useBranchesQuery();
@@ -71,9 +86,9 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
   const { homeBranchId: pickedBranchId, setField } = obj;
 
   useEffect(() => {
-    if (multiBranch || pickedBranchId || !onlyBranchId) return;
+    if (branchLocked || multiBranch || pickedBranchId || !onlyBranchId) return;
     setField("homeBranchId", String(onlyBranchId));
-  }, [multiBranch, pickedBranchId, onlyBranchId, setField]);
+  }, [branchLocked, multiBranch, pickedBranchId, onlyBranchId, setField]);
 
   const { mutate } = useStaffCreateMutation({
     onSuccess: () => {
@@ -277,8 +292,20 @@ const StaffCreateModal = ({ close, isLoading, setIsLoading }) => {
 
       <div className="pt-2 border-t">
         <p className="text-sm font-medium mb-2">Filial va ruxsatlar</p>
+        {/* QULFLANGAN FILIAL — tanlagich EMAS, MA'LUMOT.
+            Forma filial sahifasidan ochilgan: qaysi filial ekani
+            ko'rinib tursin, lekin o'zgartirib bo'lmasin. */}
+        {branchLocked && (
+          <div className="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Filial</p>
+            <p className="text-sm font-medium text-foreground">
+              {branchName || "Shu filial"}
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
-          {multiBranch && (
+          {!branchLocked && multiBranch && (
             <CreatableSelectField
               name="homeBranchId"
               label="Filial"

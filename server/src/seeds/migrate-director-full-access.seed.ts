@@ -2,7 +2,32 @@ import {
   BRANCH_LOCAL_PERMISSIONS,
   OWNER_ONLY_PERMISSIONS,
 } from '../common/constants/permission-scope.js';
+import {
+  COIN_BRANCH_LOCAL_PERMISSIONS,
+  COIN_OWNER_ONLY_PERMISSIONS,
+} from '../common/constants/coin.js';
 import { runSeed } from './seed-runner.js';
+
+/**
+ * KO'LAM REYESTRI IKKI MANBADAN.
+ *
+ * Asosiy ro'yxat (`permission-scope.ts`) MUZLATILGAN oracle bilan
+ * solishtiriladi va o'zgarmaydi; undan keyin qo'shilgan bo'limlar
+ * o'z ro'yxatini olib yuradi (sabab: `common/constants/coin.ts`).
+ *
+ * ⚠ IKKALA TOMONNI HAM QO'SHISH SHART. Faqat "beriladigan" ro'yxat
+ * kengaytirilsa, yangi bo'limning owner-only kaliti (`coin.settings`)
+ * direktor rolida QOLIB KETARDI — bu skript aynan shunday sizib
+ * kirgan kalitlarni tozalash uchun yozilgan.
+ */
+const GRANT_KEYS: readonly string[] = [
+  ...BRANCH_LOCAL_PERMISSIONS,
+  ...COIN_BRANCH_LOCAL_PERMISSIONS,
+];
+const FORBID_KEYS: readonly string[] = [
+  ...OWNER_ONLY_PERMISSIONS,
+  ...COIN_OWNER_ONLY_PERMISSIONS,
+];
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -55,7 +80,7 @@ void runSeed('migrate-director-full-access', async ({ prisma, logger }) => {
   const idByKey = new Map(perms.map((p) => [p.key, p.id]));
   const keyById = new Map(perms.map((p) => [p.id, p.key]));
 
-  const missingInCatalog = BRANCH_LOCAL_PERMISSIONS.filter((k) => !idByKey.has(k));
+  const missingInCatalog = GRANT_KEYS.filter((k) => !idByKey.has(k));
   if (missingInCatalog.length) {
     logger.warn(
       `Katalogda yo'q ${missingInCatalog.length} ta kalit o'tkazib yuborildi: ` +
@@ -65,10 +90,10 @@ void runSeed('migrate-director-full-access', async ({ prisma, logger }) => {
 
   const before = new Set(role.permissions.map((p) => p.id));
   const wanted = new Set(
-    BRANCH_LOCAL_PERMISSIONS.map((k) => idByKey.get(k)).filter((id): id is string => Boolean(id)),
+    GRANT_KEYS.map((k) => idByKey.get(k)).filter((id): id is string => Boolean(id)),
   );
   const forbidden = new Set(
-    OWNER_ONLY_PERMISSIONS.map((k) => idByKey.get(k)).filter((id): id is string => Boolean(id)),
+    FORBID_KEYS.map((k) => idByKey.get(k)).filter((id): id is string => Boolean(id)),
   );
 
   const added = [...wanted].filter((id) => !before.has(id));

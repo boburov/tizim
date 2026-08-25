@@ -9,7 +9,36 @@ import {
   SYSTEM_ROLE_META,
 } from '../common/constants/permissions.js';
 import { BRANCH_LOCAL_PERMISSIONS } from '../common/constants/permission-scope.js';
+import {
+  COIN_PERMISSIONS,
+  COIN_PERMISSION_LABELS,
+  COIN_BRANCH_LOCAL_PERMISSIONS,
+  COIN_MODULE_META,
+} from '../common/constants/coin.js';
 import { runSeed } from './seed-runner.js';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * KATALOG = ASOSIY REYESTR + BO'LIM REYESTRLARI.
+ *
+ * `PERMISSIONS` MUZLATILGAN Express oracle'i bilan solishtiriladi
+ * (`test/constants-parity.test.mjs`), shuning uchun undan KEYIN qo'shilgan
+ * bo'limlar o'z ro'yxatini olib yuradi va u SHU YERDA qo'shiladi.
+ * Batafsil sabab: `common/constants/coin.ts` sarlavhasi.
+ *
+ * ⚠ `ALL_KEYS` ni yangi bo'lim uchun kengaytirishni UNUTMANG. Pastdagi
+ * "eskirgan ruxsatni tozalash" bosqichi AYNAN shu ro'yxatga tayanadi:
+ * kalit unda bo'lmasa, seed uni har yurishda BAZADAN O'CHIRIB tashlaydi
+ * va ruxsat jimgina yo'qoladi.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const EXTRA_PERMISSIONS: Record<string, string> = { ...COIN_PERMISSIONS };
+const EXTRA_LABELS: Record<string, { label: string; group: string }> = {
+  ...COIN_PERMISSION_LABELS,
+};
+const EXTRA_MODULE_META: Record<string, { label: string; order: number }> = {
+  ...COIN_MODULE_META,
+};
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -30,11 +59,21 @@ void runSeed('permissions', async ({ prisma, logger }) => {
   //
   // DIQQAT: module/action MAJBURIY maydon — eski yozuvlarda ular yo'q,
   // shuning uchun har seedda kalitdan QAYTA hisoblanadi (migratsiya).
+  const ALL_KEYS: string[] = [
+    ...Object.values(PERMISSIONS),
+    ...Object.values(EXTRA_PERMISSIONS),
+  ];
+
   const permIds: Record<string, string> = {};
-  for (const key of Object.values(PERMISSIONS)) {
-    const meta = PERMISSION_LABELS[key] || { label: key, group: 'general' };
+  for (const key of ALL_KEYS) {
+    const meta =
+      PERMISSION_LABELS[key] || EXTRA_LABELS[key] || { label: key, group: 'general' };
     const { module, action } = splitPermissionKey(key);
-    const moduleMeta = getModuleMeta(module);
+    // Yangi bo'limning modul sarlavhasi asosiy reyestrda yo'q —
+    // `getModuleMeta` esa u yerdan qidiradi va `{ label: "coin",
+    // order: 999 }` qaytarardi, ya'ni matritsada ustun "coin" deb
+    // ko'rinib, ro'yxat oxiriga tushib qolardi.
+    const moduleMeta = EXTRA_MODULE_META[module] || getModuleMeta(module);
 
     const fields = {
       label: meta.label,
@@ -57,7 +96,7 @@ void runSeed('permissions', async ({ prisma, logger }) => {
   // Kod bazasidan olib tashlangan ruxsatlar bazada QOLIB KETMASIN —
   // aks holda ular matritsada "o'lik katak" bo'lib turadi.
   const stale = await prisma.permission.deleteMany({
-    where: { key: { notIn: Object.values(PERMISSIONS) } },
+    where: { key: { notIn: ALL_KEYS } },
   });
   if (stale.count) logger.log(`Eskirgan ruxsat o'chirildi: ${stale.count}`);
 
@@ -154,7 +193,15 @@ void runSeed('permissions', async ({ prisma, logger }) => {
   // `update: {}` — BO'SH, ATAYLAB: rol allaqachon bor bo'lsa unga
   // TEGILMAYDI, chunki owner uning ruxsatlarini o'zgartirgan bo'lishi
   // mumkin va seed uni tiklab yubormasligi kerak.
-  const directorPermIds = BRANCH_LOCAL_PERMISSIONS.map((k) => permIds[k]).filter(Boolean);
+  const directorPermIds = [
+    ...BRANCH_LOCAL_PERMISSIONS,
+    // Yangi bo'limlarning filial ichi kalitlari. `coin.settings`
+    // ATAYLAB YO'Q: u butun markazni o'chirib qo'yadigan tugma
+    // (`COIN_OWNER_ONLY_PERMISSIONS`).
+    ...COIN_BRANCH_LOCAL_PERMISSIONS,
+  ]
+    .map((k) => permIds[k])
+    .filter(Boolean);
 
   await prisma.role.upsert({
     where: { value: 'director' },
