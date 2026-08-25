@@ -1,19 +1,17 @@
 import { useState } from "react";
-import {
-  Wallet, TrendingDown, PiggyBank, Banknote, HandCoins, GraduationCap,
-  Building2,
-} from "lucide-react";
+import { Wallet, Building2 } from "lucide-react";
 
-import { KpiGrid, DashboardSection } from "@/shared/components/dashboard/SectionGrid";
-import KpiTile from "@/shared/components/dashboard/KpiTile";
-import { fromQuery } from "@/shared/components/dashboard/dataStatus";
+import { DashboardSection } from "@/shared/components/dashboard/SectionGrid";
 import { AnalyticsTable, QueryState } from "@/shared/components/analytics";
 import usePermissions from "@/shared/hooks/usePermissions";
+import useObjectState from "@/shared/hooks/useObjectState";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 import { useDrill, DRILL_TYPES as T } from "@/shared/drill";
 import {
-  useSummary, useBranchProfit, useDirectionProfit, useTeacherProfit,
+  useBranchOverview, useBranchProfit, useDirectionProfit, useTeacherProfit,
 } from "@/owner/features/financeAnalytics/hooks/useFinanceAnalytics";
+import BranchMetricChart from "../components/BranchMetricChart";
+import { ALL_BRANCHES_VALUE } from "../components/branchMetrics";
 import { useIntelligence } from "@/owner/features/financeAnalytics/hooks/useFinanceIntelligence";
 import IntelligenceCenter from "@/owner/features/financeAnalytics/components/IntelligenceCenter";
 import SignalDetailDrawer from "@/owner/features/financeAnalytics/components/SignalDetailDrawer";
@@ -27,25 +25,34 @@ import EmptyState from "@/shared/components/page/EmptyState";
  *
  * BITTA EKRANDA BITTA SAVOL: "biznes qanday ketyapti?"
  *
- * ── NEGA 6 TA KPI, 20 TA EMAS ──
- * Talab ochiq aytadi: 4-6 asosiy ko'rsatkich. Yigirmata karta
- * "hammasi muhim" degani, ya'ni "hech nima muhim emas" — ko'z hech
- * qayerga tushmaydi va ekran bezakka aylanadi.
+ * ── OLTI KARTA O'RNIGA BITTA GRAFIK ──
  *
- * Tanlangan oltitasi biznesning butun konturini beradi:
- *   Daromad → Chiqim → Foyda   (natija)
- *   Pul → Qarz                  (likvidlik)
- *   O'quvchi                    (hajm)
+ * Ekranning tepasida oltita KPI kartasi turardi. Ular to'g'ri son
+ * ko'rsatardi, lekin savolni TUGATARDI: "chiqim 19.3 mln" dan keyin
+ * beriladigan yagona foydali savol — "qaysi filialda?" — va karta
+ * unga javob bermasdi. Rahbar har safar Filiallar sahifasiga o'tib,
+ * u yerdan taqqoslash jadvalini qidirardi.
+ *
+ * Endi o'sha oltita ko'rsatkich FILIAL KESIMIDA, bitta grafikda:
+ * ustunlar yonma-yon turadi va "kim ko'proq keltirdi" bir qarashda
+ * ko'rinadi. Ko'rsatkichlar YO'QOLMADI — ular grafik ostidagi
+ * qatorda qoldi va o'sha qator ayni paytda tanlagich vazifasini
+ * bajaradi (`BranchMetricChart`).
  *
  * ── HAR RAQAM BOSILADI ──
  * Talab 35: har muhim ko'rsatkich "nega?" degan savolga javob
- * berishi kerak. KPI bosilganda tegishli bo'lim ochiladi, jadval
- * qatori bosilganda esa universal drill paneli.
+ * berishi kerak. Jadval qatori bosilganda universal drill paneli
+ * ochiladi, grafik ustuni esa ulush foizini ko'rsatadi.
  *
  * ── SO'ROVLAR (talab 29) ──
- * Sahifa ochilganda TO'RTTA so'rov ketadi: xulosa, intellekt,
- * filial va yo'nalish kesimi. O'qituvchi kesimi eng "og'ir" va
+ * Sahifa ochilganda TO'RTTA so'rov ketadi: filial kesimi, intellekt,
+ * foydalilik va yo'nalish kesimi. O'qituvchi kesimi eng "og'ir" va
  * eng sezgir — u ALOHIDA ruxsat bilan va faqat ruxsat bo'lsa.
+ *
+ * ⚠ `useSummary` OLIB TASHLANDI: uning bergan oltita soni endi
+ * `branch-overview` javobining `totals` maydonida. Ikkalasini birga
+ * so'rash bir xil raqamni ikki marta olib kelardi — va ular
+ * ajralib qolsa qaysi biri to'g'ri ekani noma'lum bo'lardi.
  */
 
 const AsosiyPage = () => {
@@ -59,19 +66,30 @@ const AsosiyPage = () => {
   const canTeacherProfit =
     canProfit && (has(PERMISSIONS.SALARY_READ) || has(PERMISSIONS.PAYROLL_READ));
 
-  const summary = useSummary({}, { enabled: canFinance });
+  // GRAFIK TANLOVI. `useState` EMAS: ikkita bog'liq qiymat bitta
+  // boshqaruvga tegishli (kodbaza qoidasi — `useObjectState`).
+  const chart = useObjectState({
+    branchId: ALL_BRANCHES_VALUE,
+    metric: "revenue",
+  });
+
+  // ⚠ `branchId` FILTRDA — ya'ni TanStack kalitida. Tanlov o'zgarsa
+  // kalit o'zgaradi va so'rov o'zi qaytadan ketadi; "grafikni
+  // yangilash" uchun alohida effekt yozilmagan.
+  const overview = useBranchOverview(
+    chart.branchId === ALL_BRANCHES_VALUE ? {} : { branchId: chart.branchId },
+    { enabled: canFinance },
+  );
+
   const intelligence = useIntelligence({}, { enabled: canFinance });
   const branches = useBranchProfit({}, { enabled: canProfit });
   const directions = useDirectionProfit({ limit: 5 }, { enabled: canProfit });
   const teachers = useTeacherProfit({ limit: 5 }, { enabled: canTeacherProfit });
 
-  const s = fromQuery(summary);
-  const d = summary.data;
-
   return (
     <PageShell
       title="Umumiy holat"
-      subtitle="Butun tashkilot bo'yicha joriy oy. Har raqam bosiladi."
+      subtitle="Joriy oy, filiallar kesimida. Ko'rsatkich va filialni tanlang."
     >
       {!canFinance ? (
         <EmptyState
@@ -80,54 +98,20 @@ const AsosiyPage = () => {
           hint="Bu ekran markazning pul holatini ko'rsatadi. Uni ochish uchun moliyani ko'rish ruxsati kerak."
         />
       ) : (
-        <KpiGrid cols={3}>
-          <KpiTile
-            label="Daromad" isMoney icon={Wallet}
-            value={d?.revenue?.current} delta={d?.revenue?.changePercent}
-            status={s.status} error={s.error} onRetry={s.refetch}
-            hint="Qaytarimlar ayirilgan · bosing"
-            onClick={() => openRoot({ type: T.REVENUE, name: "Daromad manbalari" })}
-          />
-          <KpiTile
-            label="Chiqim" isMoney icon={TrendingDown} invertDelta
-            value={d?.operatingExpenses?.current} delta={d?.operatingExpenses?.changePercent}
-            status={s.status} error={s.error} onRetry={s.refetch}
-            hint="Maosh ham shu yerda · bosing"
-            onClick={() => openRoot({ type: T.EXPENSE, name: "Chiqim yo'nalishlari" })}
-          />
-          <KpiTile
-            label="Hissa foydasi" isMoney icon={PiggyBank}
-            value={d?.contributionProfit?.current} delta={d?.contributionProfit?.changePercent}
-            status={s.status} error={s.error} onRetry={s.refetch}
-            hint="Daromaddan bevosita xarajatlar ayirilgan"
-          />
-          <KpiTile
-            label="Kassadagi pul" isMoney icon={Banknote}
-            value={d?.cashBalance}
-            status={s.status} error={s.error} onRetry={s.refetch}
-            hint="Barcha hisoblar yig'indisi"
-            to="/org/moliya?tab=cash"
-          />
-          <KpiTile
-            label="Qarzdorlik" isMoney icon={HandCoins} invertDelta
-            value={d?.receivables?.outstanding?.current}
-            status={s.status} error={s.error} onRetry={s.refetch}
-            hint="To'lanmagan majburiyat"
-            to="/org/moliya?tab=receivables"
-          />
-          <KpiTile
-            label="O'quvchilar" icon={GraduationCap} suffix=" ta"
-            value={branches.data?.items?.reduce?.((acc, b) => acc + (b.students || 0), 0)}
-            status={fromQuery(branches).status}
-            error={fromQuery(branches).error}
-            onRetry={branches.refetch}
-            hint="Faol filiallar bo'yicha"
-            // ADMIN PANELIGA HAVOLA QILINMAYDI: Super Admin u yerga
-            // kira olmaydi (`AdminPanelGuard`). O'quvchilar soni
-            // filiallar kesimida ochiladi.
-            to="/org/filiallar?tab=compare"
-          />
-        </KpiGrid>
+        <BranchMetricChart
+          query={overview}
+          metricKey={chart.metric}
+          onMetricChange={(v) => chart.setField("metric", v)}
+          branchId={chart.branchId}
+          onBranchChange={(v) => chart.setField("branchId", v)}
+          // "NEGA?" ZANJIRI SAQLANDI. Ilgari har KPI kartasi drill
+          // panelini ochardi; endi o'sha rolni ustun bajaradi va u
+          // AYNAN o'sha panelga (`T.BRANCH`) olib boradi — pastdagi
+          // jadval qatori bilan bir xil joyga.
+          onBranchOpen={(row) =>
+            openRoot({ type: T.BRANCH, id: row.id, name: row.fullLabel })
+          }
+        />
       )}
 
       {/* ── NIMAGA E'TIBOR BERISH KERAK ── */}

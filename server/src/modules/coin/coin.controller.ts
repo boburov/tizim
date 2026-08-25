@@ -12,9 +12,9 @@ import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import {
   historySchema, userHistorySchema, leaderboardSchema, adjustSchema,
-  settingsUpdateSchema,
+  settingsUpdateSchema, statsSchema,
   type HistoryRequest, type UserHistoryRequest, type LeaderboardRequest,
-  type AdjustRequest, type SettingsUpdateRequest,
+  type AdjustRequest, type SettingsUpdateRequest, type StatsRequest,
 } from './coin.validators.js';
 
 /**
@@ -93,10 +93,17 @@ export class CoinController {
     return { success: true, data };
   }
 
+  /**
+   * IQTISODIYOT HOLATI — sarlavha raqami, oqim grafigi va manba kesimi.
+   *
+   * ⚠ UCHALASI BITTA SO'ROVDA. Ular AYNI oynadan hisoblanadi va
+   * alohida so'ralsa ikki so'rov orasida yangi xarid bo'lib,
+   * grafik jadval bilan mos kelmay qolishi mumkin edi.
+   */
   @Get('stats')
   @Permissions(COIN_PERMISSIONS.COIN_READ)
-  async stats() {
-    return { success: true, data: await this.coins.stats() };
+  async stats(@Validated(statsSchema) v: StatsRequest) {
+    return { success: true, data: await this.coins.stats({ days: v.query.days }) };
   }
 
   /** ⚠ O'CHIRGICHDAN OZOD — aks holda qayta yoqib bo'lmasdi. */

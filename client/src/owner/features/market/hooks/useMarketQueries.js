@@ -37,13 +37,23 @@ export const useMarketOrdersQuery = (params) => {
   });
 };
 
-/** Iqtisodiyot holati: chiqarilgan / sarflangan / muomaladagi tanga. */
-export const useCoinStatsQuery = () => {
+/**
+ * IQTISODIYOT HOLATI: sarlavha raqami + oqim grafigi + manba kesimi.
+ *
+ * ⚠ `days` KESH KALITINING BIR QISMI. Bo'lmasa 14 kunlik javob
+ * 90 kunlik so'rovga ham qaytarilardi va grafik davr almashtirilganda
+ * o'zgarmay turardi — foydalanuvchi buni "tugma ishlamayapti" deb
+ * o'qirdi.
+ */
+export const useCoinStatsQuery = (days = 30) => {
   const { enabled } = useCoinConfig();
   return useQuery({
-    queryKey: qk.coins.stats(),
-    queryFn: () => coinsAPI.stats().then((r) => r.data.data),
+    queryKey: qk.coins.stats(days),
+    queryFn: () => coinsAPI.stats({ days }).then((r) => r.data.data),
     enabled,
+    // Davr almashtirilganda oldingi javob ekranda qoladi (bo'sh
+    // holatga sakramaydi) va yangisi kelgach almashadi.
+    placeholderData: (prev) => prev,
   });
 };
 

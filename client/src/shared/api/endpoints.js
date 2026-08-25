@@ -416,6 +416,10 @@ export const ENDPOINTS = Object.freeze({
     groups: "/finance-analytics/groups",
     rooms: "/finance-analytics/rooms",
     branches: "/finance-analytics/branches",
+    // BOSH EKRANDAGI GRAFIK — oltita ko'rsatkich FILIAL kesimida.
+    // `branches` dan farqi: maosh tannarxi yo'q (shuning uchun
+    // `finance.read` yetadi) va kassa qoldig'i BOR.
+    branchOverview: "/finance-analytics/branch-overview",
     // Bitta jurnal yozuvi tafsiloti — tahlildan hujjatgacha kuzatish.
     intelligence: "/finance-analytics/intelligence",
     intelligenceAlerts: "/finance-analytics/intelligence/alerts",

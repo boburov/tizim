@@ -29,4 +29,4 @@ export { default as CoinAdjustModal } from "./components/modals/CoinAdjustModal"
 // sababi komponentning o'z izohida (`UserDepositPanel` bilan bir naqsh).
 export { default as UserCoinPanel } from "./components/UserCoinPanel";
 export { default as OrdersTable } from "./components/OrdersTable";
-export { default as CoinEconomyCards } from "./components/CoinEconomyCards";
+export { default as CoinEconomySection } from "./components/CoinEconomySection";

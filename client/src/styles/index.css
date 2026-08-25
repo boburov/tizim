@@ -55,12 +55,44 @@
     --ring: 33 33% 35%;
     --radius: 0.5rem;
 
-    /* Grafiklar */
-    --chart-1: 12 76% 45%;
-    --chart-2: 173 58% 32%;
-    --chart-3: 197 55% 34%;
-    --chart-4: 43 74% 42%;
-    --chart-5: 27 87% 47%;
+    /* ══════════════════════════════════════════════════════════════
+       GRAFIK RANGLARI — O'LCHANGAN, TANLANMAGAN
+       ══════════════════════════════════════════════════════════════
+
+       Bu qiymatlar hujjatlashtirilgan palitradan olingan va
+       tekshiruvchi skript bilan O'LCHANGAN (rang ko'rligi ajratishi,
+       yorqinlik oralig'i, xroma pol, sirtga nisbatan kontrast).
+
+       ── NEGA ALMASHTIRILDI ──
+       Oldingi ro'yxat (shadcn standarti) IKKALA rejimda ham
+       yiqilardi. Eng og'iri: yorug' rejimda 4- va 5-slot
+       (`#ba8d1c` va `#e06d10`) deuteranopiya ostida ΔE = 0.9 —
+       ya'ni deuteran o'quvchi uchun ular AYNI rang. Qorong'u rejimda
+       esa beshtasi ham yorqinlik oralig'idan tashqarida edi.
+
+       Xato hech qachon ko'rinmagan, chunki bu tokenlarni HALI HECH
+       KIM ishlatmagan (grafiklar `--primary` / `--warning` dan
+       foydalanardi). Tanga grafigi birinchi iste'molchi bo'ldi.
+
+       ⚠ BREND RANGI (`--primary`) SERIYA UCHUN ISHLATILMAYDI.
+       U `.env` dan keladi va o'zgarishi mumkin. Joriy qiymat buni
+       ko'rsatadi: `VITE_APP_PRIMARY_DARK=10 0% 85%` → `#d9d9d9`,
+       ya'ni xromasi NOL. Qorong'u rejimda u kulrang bo'lib qolardi
+       va seriya identifikatorlik vazifasini umuman bajarmasdi.
+
+       ⚠ TARTIB — HIMOYA MEXANIZMI. Seriyalar 1-slotdan boshlab
+       KETMA-KET biriktiriladi va aylantirilmaydi: aynan shu tartib
+       qo'shni juftliklarning ajralishini kafolatlaydi.
+
+       ⚠ YORUG' REJIMDA 3–5 SLOTLAR sirtga nisbatan 3:1 dan past
+       (2.17–2.82). Ular ishlatilsa YOZUV yoki jadval ko'rinishi
+       SHART. 1–2 slotlar (grafikda ishlatilayotganlari) o'tadi.
+       ══════════════════════════════════════════════════════════════ */
+    --chart-1: 213 68% 50%; /* #2a78d6 — ko'k   */
+    --chart-2: 17 82% 56%;  /* #eb6834 — to'q sariq */
+    --chart-3: 159 73% 40%; /* #1baf7a — akva  */
+    --chart-4: 41 100% 46%; /* #eda100 — sariq */
+    --chart-5: 337 70% 70%; /* #e87ba4 — magenta */
 
     /* Sidebar */
     --sidebar-background: 0 0% 100%;
@@ -115,12 +147,14 @@
     --input: 30 6% 26%;
     --ring: 33 42% 66%;
 
-    /* Grafiklar */
-    --chart-1: 12 76% 66%;
-    --chart-2: 173 48% 55%;
-    --chart-3: 197 50% 60%;
-    --chart-4: 43 74% 62%;
-    --chart-5: 27 80% 66%;
+    /* Grafiklar — AYNI sakkiz rang, qorong'u sirt uchun qayta
+       qadamlangan. Bu avtomatik "teskari" EMAS: har bir qadam
+       qorong'u sirtga qarshi alohida o'lchangan. */
+    --chart-1: 213 77% 56%; /* #3987e5 */
+    --chart-2: 17 70% 50%;  /* #d95926 */
+    --chart-3: 159 73% 36%; /* #199e70 */
+    --chart-4: 40 100% 39%; /* #c98500 */
+    --chart-5: 338 61% 58%; /* #d55181 */
 
     /* Sidebar */
     --sidebar-background: 30 8% 10%;

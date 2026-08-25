@@ -243,10 +243,30 @@ try {
   }
   await prisma.user.deleteMany({ where: { username: { startsWith: PREFIX } } });
 
-  // Sozlama HAR DOIM tiklanadi — aks holda keyingi to'plamlar
-  // o'zgargan stavkalar bilan ishlab, sababini topa olmasdi.
+  // ═══════════════════════════════════════════════════════════════════
+  // SOZLAMANI TIKLASH — STAVKALAR "QAYTARILADI", O'CHIRGICH "MAJBURLANADI"
+  //
+  // ⚠ IKKALASI BIR XIL EMAS VA BU FARQ QIMMATGA TUSHDI.
+  //
+  // STAVKALAR (7 tanga, min baho 4...) — sinovga xos qiymatlar, ular
+  // TOPILGAN holatga qaytariladi: markaz o'z stavkasini qo'ygan
+  // bo'lishi mumkin va test uni bosib ketmasligi kerak.
+  //
+  // O'CHIRGICH esa boshqa: `false` — bu BUTUN BO'LIMNI o'chiradigan
+  // holat. "Topilganini qaytarish" bu yerda XATO edi: to'plam bir
+  // marta o'chiq holatda boshlansa, u o'chiq holatni SODIQLIK bilan
+  // saqlab qolardi va keyingi har bir yurish ham shunday qilardi —
+  // ya'ni nosozlik O'ZINI KO'PAYTIRARDI. Aynan shu sodir bo'ldi:
+  // `/coins/stats` 404 bera boshladi va sabab test tozalashida edi.
+  //
+  // Shuning uchun o'chirgich SHARTSIZ `true` ga majburlanadi va
+  // buning ROSTDAN sodir bo'lgani PASTDA O'LCHANADI.
+  // ═══════════════════════════════════════════════════════════════════
   if (restoreSettings) {
-    await prisma.coinSettings.update({ where: { id: 'default' }, data: restoreSettings });
+    await prisma.coinSettings.update({
+      where: { id: 'default' },
+      data: { ...restoreSettings, isEnabled: true, marketEnabled: true },
+    });
   }
 
   const residue =
@@ -254,6 +274,11 @@ try {
     (await prisma.group.count({ where: { name: { startsWith: PREFIX } } }));
   if (residue === 0) ok('qoldiq yo`q (bazadan qayta o`qildi)');
   else bad('QOLDIQ BOR', `${residue} ta yozuv — prefiks: ${PREFIX}`);
+
+  // Da'vo emas, O'LCHOV — bazadan qayta o'qiymiz.
+  const sw = await prisma.coinSettings.findUnique({ where: { id: 'default' } });
+  if (sw?.isEnabled && sw?.marketEnabled) ok('o`chirgich YOQILGAN holatda qoldirildi');
+  else bad('O`CHIRGICH O`CHIQ QOLDI', `isEnabled=${sw?.isEnabled} marketEnabled=${sw?.marketEnabled}`);
 
   await prisma.$disconnect();
   console.log(`\n  Natija: ${R.pass} o'tdi, ${R.fail} yiqildi\n`);

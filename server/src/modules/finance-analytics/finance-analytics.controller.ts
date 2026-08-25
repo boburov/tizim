@@ -13,6 +13,7 @@ import { CashFlowService } from './cash-flow.service.js';
 import { ReceivablesService } from './receivables.service.js';
 import { DiscountService } from './discount.service.js';
 import { ProfitabilityService } from './profitability.service.js';
+import { BranchOverviewService } from './branch-overview.service.js';
 import { EntryDetailService } from './entry-detail.service.js';
 import { StudentProfileService } from './student-profile.service.js';
 import { FinancialIntelligenceService } from './financial-intelligence.service.js';
@@ -87,6 +88,7 @@ export class FinanceAnalyticsController {
     private readonly receivables: ReceivablesService,
     private readonly discounts: DiscountService,
     private readonly profit: ProfitabilityService,
+    private readonly branchOverview: BranchOverviewService,
     private readonly entries: EntryDetailService,
     private readonly students: StudentProfileService,
     private readonly intelligence: FinancialIntelligenceService,
@@ -502,6 +504,31 @@ export class FinanceAnalyticsController {
   @Permissions(PERMISSIONS.FINANCE_VIEW_PROFITABILITY)
   async branches(@Validated(analyticsFilterSchema) v: any) {
     const data = await this.profit.getBranchProfitability(this.filters(v));
+    return { success: true, data };
+  }
+
+  /**
+   * FILIAL KESIMI — BOSH EKRANDAGI GRAFIK.
+   *
+   * ⚠ `/branches` DAN FARQI VA NEGA IKKALASI HAM KERAK:
+   *
+   * `/branches` — FOYDALILIK kesimi: `payroll`, `fees`, `directCosts`
+   * ustunlari bilan. Ular maosh tannarxini ochadi, shuning uchun u
+   * `finance.view_profitability` ostida.
+   *
+   * Bu marshrut esa yaxlit ko'rsatkichlarni beradi (daromad, xarajat,
+   * marja, kassa, qarz, o'quvchi) — maosh alohida ko'rinmaydi, ya'ni
+   * `/branch-analytics/pnl` bilan bir xil sezgirlikda va bir xil
+   * ruxsat bilan.
+   *
+   * Ikkinchisini birinchisidan "kesib olish" mumkin emas edi: kassa
+   * qoldig'i u yerda UMUMAN yo'q va filiallar ro'yxati jurnaldagi
+   * harakatdan kelib chiqardi (harakatsiz filial tushib qolardi).
+   */
+  @Get('branch-overview')
+  @Permissions(PERMISSIONS.FINANCE_READ)
+  async branchOverviewMetrics(@Validated(analyticsFilterSchema) v: any) {
+    const data = await this.branchOverview.getBranchOverview(this.filters(v));
     return { success: true, data };
   }
 }

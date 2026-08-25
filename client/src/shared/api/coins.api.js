@@ -20,7 +20,7 @@ export const coinsAPI = {
   myHistory: (params) => http.get(ENDPOINTS.coins.myHistory, { params }),
   leaderboard: (params) => http.get(ENDPOINTS.coins.leaderboard, { params }),
 
-  stats: () => http.get(ENDPOINTS.coins.stats),
+  stats: (params) => http.get(ENDPOINTS.coins.stats, { params }),
   settings: () => http.get(ENDPOINTS.coins.settings),
   updateSettings: (body) => http.patch(ENDPOINTS.coins.settings, body),
 

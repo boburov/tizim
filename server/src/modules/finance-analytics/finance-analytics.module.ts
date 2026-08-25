@@ -12,6 +12,7 @@ import { CashFlowService } from './cash-flow.service.js';
 import { ReceivablesService } from './receivables.service.js';
 import { DiscountService } from './discount.service.js';
 import { ProfitabilityService } from './profitability.service.js';
+import { BranchOverviewService } from './branch-overview.service.js';
 import { EntryDetailService } from './entry-detail.service.js';
 import { StudentProfileService } from './student-profile.service.js';
 import { FinancialIntelligenceService } from './financial-intelligence.service.js';
@@ -45,6 +46,7 @@ import { ExplanationService } from './explanation.service.js';
     ReceivablesService,
     DiscountService,
     ProfitabilityService,
+    BranchOverviewService,
     EntryDetailService,
     StudentProfileService,
     FinancialIntelligenceService,

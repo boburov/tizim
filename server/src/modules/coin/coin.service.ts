@@ -2,8 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
-import { localTodayMidnight, TZ_OFFSET_MIN } from '../../common/utils/date.js';
-import { userBranchCondition } from '../../common/als/branch-context.js';
+import { localTodayMidnight, dateKeyOf, TZ_OFFSET_MIN } from '../../common/utils/date.js';
+import { userBranchCondition, branchFilter } from '../../common/als/branch-context.js';
 import { CoinSettingsService } from './coin-settings.service.js';
 
 /**
@@ -41,6 +41,8 @@ export interface AwardEntry {
   branchId?: string | null;
   createdById?: string | null;
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Kunlik chegara FAQAT avtomatik manbalarga tegishli. */
 const AUTO_KINDS: CoinKind[] = ['attendance', 'grade'];
@@ -514,15 +516,36 @@ export class CoinService {
   }
 
   /**
+   * ═════════════════════════════════════════════════════════════════
    * IQTISODIYOT HOLATI — admin uchun.
    *
    * "Qancha tanga chiqarildi va qanchasi hali sarflanmagan" — market
-   * narxlarini qo'yishdan oldin javob berilishi kerak bo'lgan savol.
-   * Muomaladagi tanga (`circulating`) ko'p bo'lsa arzon mahsulot bir
-   * kunda supurib ketiladi.
+   * narxlarini qo'yishdan OLDIN javob berilishi kerak bo'lgan savol.
+   * Muomaladagi tanga ko'p bo'lsa arzon mahsulot bir kunda supurib
+   * ketiladi.
+   *
+   * ── UCHTA JAVOB, UCHTA SHAKL ──
+   *   `circulating`  → BITTA raqam (sarlavha raqami)
+   *   `flow`         → VAQT QATORI (chiqarildi ↕ sarflandi)
+   *   `bySource`     → KESIM (qaysi manba qancha chiqardi)
+   *
+   * ⚠ MIJOZ HISOBLAMAYDI. Granularity ham, kunlik bo'shliqlar ham
+   * SHU YERDA to'ldiriladi. Aks holda "kun" ta'rifi ikki joyda
+   * bo'lardi va ular muqarrar ravishda ajralib ketardi — grafik
+   * jadval bilan mos kelmay qolardi.
+   * ═════════════════════════════════════════════════════════════════
    */
-  async stats() {
-    const [issued, spent, accounts, orders] = await Promise.all([
+  async stats({ days = 30 }: { days?: number } = {}) {
+    // ⚠ CHEGARA: 1..180 kun. Cheklovsiz `?days=100000` butun ledgerni
+    // xotiraga tortardi.
+    const windowDays = Math.min(180, Math.max(1, Math.trunc(Number(days) || 30)));
+
+    // Oyna MAHALLIY kun chegarasidan boshlanadi — grafikdagi ustun
+    // `dateKey` bilan bir xil kunni bildirishi uchun.
+    const todayStart = this.localDayStartInstant();
+    const from = new Date(todayStart.getTime() - (windowDays - 1) * DAY_MS);
+
+    const [issued, spent, accounts, orders, rows] = await Promise.all([
       this.prisma.coinTransaction.aggregate({
         where: { delta: { gt: 0 } },
         _sum: { delta: true },
@@ -536,7 +559,66 @@ export class CoinService {
         _count: { _all: true },
       }),
       this.prisma.marketOrder.count(),
+      // ⚠ FILTRLASH VA GURUHLASH JS'DA, XOM SQL'DA EMAS.
+      //
+      // Postgres kun bo'yicha guruhlay olardi (`date_trunc`), lekin
+      // o'shanda FILIAL KO'LAMINI qo'lda SQL'ga yozishga to'g'ri
+      // kelardi — ya'ni "kim nimani ko'radi" degan qoidaning
+      // IKKINCHI nusxasi paydo bo'lardi. Ko'lam bitta joyda
+      // (`branchFilter`) qolishi undan muhimroq: tanga ledgeri
+      // markazda oyiga bir necha ming qator, ya'ni bu yo'l arzon.
+      this.prisma.coinTransaction.findMany({
+        where: { createdAt: { gte: from }, ...branchFilter('branchId') } as never,
+        select: { createdAt: true, delta: true, kind: true },
+      }),
     ]);
+
+    // ── GRANULARITY: 31 kundan uzun oyna HAFTAGA yig'iladi ──
+    // 90 ta ustun ekranda o'qilmaydigan tarashaga aylanadi.
+    const granularity: 'day' | 'week' = windowDays > 31 ? 'week' : 'day';
+    const bucketMs = granularity === 'week' ? 7 * DAY_MS : DAY_MS;
+
+    const bucketStart = (at: Date): number => {
+      const offset = at.getTime() - from.getTime();
+      return from.getTime() + Math.floor(offset / bucketMs) * bucketMs;
+    };
+
+    // ⚠ BO'SH KUNLAR HAM TO'LDIRILADI. Faqat harakat bo'lgan kunlar
+    // qaytarilsa, recharts ularni TENG oraliqda chizadi va uch kunlik
+    // tanaffus bir kunlik bo'lib ko'rinardi — ya'ni grafik yolg'on
+    // gapirardi.
+    const buckets = new Map<number, { issued: number; spent: number }>();
+    for (let t = from.getTime(); t <= todayStart.getTime(); t += bucketMs) {
+      buckets.set(t, { issued: 0, spent: 0 });
+    }
+
+    const bySource = new Map<string, { coins: number; count: number }>();
+
+    for (const row of rows) {
+      const key = bucketStart(row.createdAt);
+      const bucket = buckets.get(key);
+      if (bucket) {
+        if (row.delta > 0) bucket.issued += row.delta;
+        else bucket.spent += -row.delta;
+      }
+      // Kesim FAQAT chiqarilgan tangani ko'rsatadi: "qaysi manba
+      // qancha chiqardi". Sarflash (`purchase`) manba emas, u
+      // oqimning ikkinchi tomoni va u yerda ikki marta sanalardi.
+      if (row.delta > 0) {
+        const prev = bySource.get(row.kind) || { coins: 0, count: 0 };
+        bySource.set(row.kind, { coins: prev.coins + row.delta, count: prev.count + 1 });
+      }
+    }
+
+    const flow = [...buckets.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([t, v]) => ({
+        // Sana MAHALLIY kun kaliti sifatida ("YYYY-MM-DD") — mijoz
+        // vaqt zonasini qayta hisoblamasligi uchun.
+        date: dateKeyOf(new Date(t + TZ_OFFSET_MIN * 60 * 1000)),
+        issued: v.issued,
+        spent: v.spent,
+      }));
 
     return {
       totalIssued: issued._sum.delta || 0,
@@ -545,6 +627,16 @@ export class CoinService {
       circulating: accounts._sum.balance || 0,
       walletCount: accounts._count._all || 0,
       orderCount: orders,
+      window: {
+        days: windowDays,
+        granularity,
+        from: dateKeyOf(new Date(from.getTime() + TZ_OFFSET_MIN * 60 * 1000)),
+        to: dateKeyOf(new Date(todayStart.getTime() + TZ_OFFSET_MIN * 60 * 1000)),
+      },
+      flow,
+      bySource: [...bySource.entries()]
+        .map(([kind, v]) => ({ kind, ...v }))
+        .sort((a, b) => b.coins - a.coins),
     };
   }
 

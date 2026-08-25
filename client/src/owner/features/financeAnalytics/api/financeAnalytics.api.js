@@ -40,6 +40,7 @@ export const financeAnalyticsAPI = {
   groups: (params) => http.get(E.groups, { params }),
   rooms: (params) => http.get(E.rooms, { params }),
   branches: (params) => http.get(E.branches, { params }),
+  branchOverview: (params) => http.get(E.branchOverview, { params }),
   intelligence: (params) => http.get(E.intelligence, { params }),
   briefing: (params) => http.get(E.intelligenceBriefing, { params }),
   // `explain=true` — LLM FAQAT shu yerda va faqat foydalanuvchi

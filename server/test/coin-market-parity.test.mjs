@@ -230,7 +230,9 @@ try {
   await prisma.notification.deleteMany({ where: { dedupeKey: { startsWith: 'market_order:' } } });
   if (studentId) await prisma.user.deleteMany({ where: { id: studentId } });
 
-  // Sozlama har doim YOQILGAN holatga qaytariladi.
+  // ⚠ O'CHIRGICH SHARTSIZ `true` — "topilganini qaytarish" EMAS.
+  // Sabab `coin-earn-parity.test.mjs` tozalash blokida batafsil:
+  // o'chiq holatni saqlab qolgan to'plam nosozlikni ko'paytiradi.
   await prisma.coinSettings.update({ where: { id: 'default' }, data: { isEnabled: true, marketEnabled: true } });
 
   const residue =
@@ -241,6 +243,10 @@ try {
     (await prisma.coinTransaction.count({ where: { reason: { contains: PREFIX } } }));
   if (residue === 0) ok('qoldiq yo`q (bazadan qayta o`qildi)');
   else bad('QOLDIQ BOR', `${residue} ta yozuv`);
+
+  const sw = await prisma.coinSettings.findUnique({ where: { id: 'default' } });
+  if (sw?.isEnabled && sw?.marketEnabled) ok('o`chirgich YOQILGAN holatda qoldirildi');
+  else bad('O`CHIRGICH O`CHIQ QOLDI', `isEnabled=${sw?.isEnabled}`);
 
   await prisma.$disconnect();
   console.log(`\n  Natija: ${R.pass} o'tdi, ${R.fail} yiqildi\n`);

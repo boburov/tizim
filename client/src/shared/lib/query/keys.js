@@ -370,6 +370,7 @@ export const qk = Object.freeze({
     groups: (f) => ["financeAnalytics", "groups", f],
     rooms: (f) => ["financeAnalytics", "rooms", f],
     branches: (f) => ["financeAnalytics", "branches", f],
+    branchOverview: (f) => ["financeAnalytics", "branchOverview", f],
     intelligence: (f) => ["financeAnalytics", "intelligence", f],
     briefing: (f) => ["financeAnalytics", "briefing", f],
     signal: (id, f, explain) => ["financeAnalytics", "signal", id, f, explain],
@@ -436,7 +437,8 @@ export const qk = Object.freeze({
     me: () => ["coins", "me"],
     myHistory: (params) => ["coins", "me", "history", params],
     leaderboard: (params) => ["coins", "leaderboard", params],
-    stats: () => ["coins", "stats"],
+    // ⚠ `days` kalitning bir qismi — sabab `useCoinStatsQuery` izohida.
+    stats: (days) => ["coins", "stats", days],
     settings: () => ["coins", "settings"],
     userWallet: (userId, params) => ["coins", "wallet", userId, params],
   },

@@ -26,6 +26,14 @@ export const userHistorySchema = z.object({
   }),
 });
 
+export const statsSchema = z.object({
+  query: z.object({
+    // ⚠ YUQORI CHEGARA 180. Cheklovsiz `?days=100000` butun ledgerni
+    // xotiraga tortardi; servis ham qayta chegaralaydi (ikki qatlam).
+    days: z.coerce.number().int().min(1).max(180).optional(),
+  }),
+});
+
 export const leaderboardSchema = z.object({
   query: z.object({ limit: z.coerce.number().int().min(1).max(50).optional() }),
 });
@@ -138,6 +146,7 @@ export const orderIdSchema = z.object({ params: z.object({ id: objectId }) });
 
 export type HistoryRequest = z.infer<typeof historySchema>;
 export type UserHistoryRequest = z.infer<typeof userHistorySchema>;
+export type StatsRequest = z.infer<typeof statsSchema>;
 export type LeaderboardRequest = z.infer<typeof leaderboardSchema>;
 export type AdjustRequest = z.infer<typeof adjustSchema>;
 export type SettingsUpdateRequest = z.infer<typeof settingsUpdateSchema>;

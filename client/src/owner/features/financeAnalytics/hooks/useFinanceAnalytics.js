@@ -52,6 +52,19 @@ export const useGroupProfit = make(qk.financeAnalytics.groups, financeAnalyticsA
 export const useRoomRevenue = make(qk.financeAnalytics.rooms, financeAnalyticsAPI.rooms);
 export const useBranchProfit = make(qk.financeAnalytics.branches, financeAnalyticsAPI.branches);
 
+/**
+ * FILIAL KESIMI — bosh ekrandagi grafik uchun.
+ *
+ * ⚠ `branchId` FILTRDA, kalitning bir qismi sifatida: filial
+ * almashtirilganda TanStack yangi kalit ko'radi va so'rov qaytadan
+ * ketadi. Aynan shu bilan grafik "tanlov o'zgarsa yangilanadi"
+ * talabini bajaradi — qo'shimcha effekt yozilmagan.
+ */
+export const useBranchOverview = make(
+  qk.financeAnalytics.branchOverview,
+  financeAnalyticsAPI.branchOverview,
+);
+
 /** Kesimli so'rovlar — `by` parametri bilan. */
 /**
  * CHIQIM KESIMI — "pul qayerga ketdi" zanjiri.

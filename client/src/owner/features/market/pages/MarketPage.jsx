@@ -24,7 +24,7 @@ import { MODAL } from "@/shared/constants/modals";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 
 // Feature
-import CoinEconomyCards from "../components/CoinEconomyCards";
+import CoinEconomySection from "../components/CoinEconomySection";
 import ProductsTable from "../components/ProductsTable";
 import OrdersTable from "../components/OrdersTable";
 import CoinSettingsForm from "../components/CoinSettingsForm";
@@ -78,6 +78,9 @@ const MarketPage = () => {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [status, setStatus] = useState("");
+  // Grafik davri — sahifa darajasida, chunki uni so'rov ham,
+  // boshqaruv qatori ham o'qiydi.
+  const [statsDays, setStatsDays] = useState(30);
 
   const tabs = [
     { key: "products", label: "Mahsulotlar", icon: Package },
@@ -92,7 +95,7 @@ const MarketPage = () => {
     limit: 100,
   });
   const orders = useMarketOrdersQuery({ status: status || undefined, limit: 100 });
-  const stats = useCoinStatsQuery();
+  const stats = useCoinStatsQuery(statsDays);
   const settings = useCoinSettingsQuery();
 
   const openCreate = () => openModal(MODAL.MARKET_PRODUCT_FORM, { product: null });
@@ -111,7 +114,14 @@ const MarketPage = () => {
       }
     >
       {canSeeStats && (
-        <CoinEconomyCards stats={stats.data} isLoading={stats.isLoading} />
+        <CoinEconomySection
+          stats={stats.data}
+          isLoading={stats.isLoading}
+          isError={stats.isError}
+          onRetry={stats.refetch}
+          range={statsDays}
+          onRangeChange={setStatsDays}
+        />
       )}
 
       <TabNav tabs={tabs} />
