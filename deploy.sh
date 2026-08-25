@@ -45,10 +45,12 @@ changed() {
 echo "==> Server yangilanyapti..."
 cd "$SERVER_DIR"
 
-# package-lock o'zgargan bo'lsa yoki node_modules yo'q bo'lsa paket o'rnatamiz
-if [ ! -d "node_modules" ] || changed "server/package-lock.json"; then
-  echo "==> server: npm install..."
-  npm install
+# package-lock o'zgargan bo'lsa, node_modules yo'q bo'lsa YOKI nest CLI yo'q bo'lsa
+# paket o'rnatamiz. `--include=dev` MAJBURIY: `nest build` uchun devDependencies
+# (@nestjs/cli, typescript) kerak; production o'rnatmasi ularni tashlab ketadi.
+if [ ! -d "node_modules" ] || [ ! -x "node_modules/.bin/nest" ] || changed "server/package-lock.json"; then
+  echo "==> server: npm install (dev deps ham — nest build uchun kerak)..."
+  npm install --include=dev
 fi
 
 # Prisma: client generatsiya + kutilayotgan migratsiyalarni qo'llash.
@@ -59,8 +61,17 @@ echo "==> server: prisma generate + migrate deploy..."
 npx prisma generate
 npx prisma migrate deploy
 
-echo "==> pm2 restart $PM2_APP..."
-pm2 restart "$PM2_APP" --update-env
+# NestJS TypeScript'ni dist/main.js ga kompilyatsiya qiladi. Bu qadam
+# Express'da kerak emas edi (u src'ni to'g'ridan ishlatardi) — cutover'dan
+# keyin SHART: bo'lmasa pm2 eski/yo'q faylni ishga tushiradi.
+echo "==> server: nest build..."
+npm run build
+
+echo "==> pm2 startOrReload ($PM2_APP)..."
+# `pm2 restart` MAVJUD jarayonning eski script yo'lini (Express src/index.js)
+# saqlab qolardi. ecosystem fayl orqali startOrReload to'g'ri yo'lni
+# (dist/main.js) va cwd'ni kafolatlaydi.
+pm2 startOrReload "$REPO_DIR/ecosystem.config.cjs" --only "$PM2_APP" --update-env
 pm2 save >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
@@ -89,10 +100,11 @@ chown -R "$WEB_USER":"$WEB_USER" "$WEB_ROOT"
 echo "==> Admin server yangilanyapti..."
 cd "$ADMIN_SERVER_DIR"
 
-# package-lock o'zgargan bo'lsa yoki node_modules yo'q bo'lsa paket o'rnatamiz
-if [ ! -d "node_modules" ] || changed "admin_server/package-lock.json"; then
-  echo "==> admin_server: npm install..."
-  npm install
+# package-lock o'zgargan bo'lsa, node_modules yo'q bo'lsa YOKI nest CLI yo'q bo'lsa
+# paket o'rnatamiz (`--include=dev` — nest build uchun).
+if [ ! -d "node_modules" ] || [ ! -x "node_modules/.bin/nest" ] || changed "admin_server/package-lock.json"; then
+  echo "==> admin_server: npm install (dev deps ham)..."
+  npm install --include=dev
 fi
 
 # Prisma: client generatsiya + kutilayotgan migratsiyalarni qo'llash (ikkalasi ham idempotent)
@@ -103,8 +115,8 @@ npx prisma migrate deploy
 echo "==> admin_server: nest build..."
 npm run build
 
-echo "==> pm2 restart $ADMIN_PM2_APP..."
-pm2 restart "$ADMIN_PM2_APP" --update-env
+echo "==> pm2 startOrReload ($ADMIN_PM2_APP)..."
+pm2 startOrReload "$REPO_DIR/ecosystem.config.cjs" --only "$ADMIN_PM2_APP" --update-env
 pm2 save >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
