@@ -44,6 +44,8 @@ export class BotLifecycle implements OnApplicationBootstrap, OnApplicationShutdo
   private readonly logger = new Logger('Bot');
   private polling = false;
   private handlers: { dispose: () => void } | null = null;
+  /** Qulf band bo'lganda davriy qayta urinish taymeri. */
+  private acquireRetry: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly bots: TelegramBotService,
@@ -90,11 +92,26 @@ export class BotLifecycle implements OnApplicationBootstrap, OnApplicationShutdo
     // ⚠ Bu yerga yetib kelish — ONGLI qaror. Qulf oxirgi to'siq.
     const canPoll = await this.lock.acquire();
     if (!canPoll) {
+      // ⚠ RESTART POYGASI: deploy/qayta ishga tushishda eski jarayon
+      // qulfni hali bo'shatib ulgurmagan (yoki TTL hali o'tmagan) bo'lishi
+      // mumkin. Ilgari bu instans ABADIY "faqat yuborish" rejimida qolardi
+      // va HECH KIM polling qilmasdi — Express olib tashlangач bu bot'ni
+      // har deploy'da o'lik qilardi. Endi davriy qayta urinamiz: qulf
+      // muddati o'tishi (≤90s) bilan acquire() atomik ravishda uni oladi.
       this.logger.log(
-        "Boshqa instans Telegram polling qilyapti — bu instans faqat yuborish rejimida",
+        "Qulf band — davriy qayta urinish yoqildi (hozircha faqat yuborish rejimi)",
       );
+      this.scheduleAcquireRetry();
       return;
     }
+
+    await this.beginPolling();
+  }
+
+  /** Polling'ni boshlaydi. Qulf ALLAQACHON olingan deb faraz qiladi. */
+  private async beginPolling(): Promise<void> {
+    const bot = this.bots.get();
+    if (!bot || this.polling) return;
 
     await bot.startPolling({ restart: true });
     this.lock.startHeartbeat();
@@ -113,6 +130,35 @@ export class BotLifecycle implements OnApplicationBootstrap, OnApplicationShutdo
   }
 
   /**
+   * Qulf band bo'lganda davriy qayta urinish (heartbeat bilan bir xil
+   * ritm — TTL/3 = 30s). acquire() ATOMIK: faqat qulf muddati o'tgan yoki
+   * bizniki bo'lsa muvaffaqiyat qaytaradi, shu bois IKKI POLLER xavfi yo'q.
+   */
+  private scheduleAcquireRetry(): void {
+    if (this.acquireRetry) return;
+    this.acquireRetry = setInterval(() => {
+      void (async () => {
+        if (this.polling) return;
+        const ok = await this.lock.acquire().catch(() => false);
+        if (!ok) return;
+        this.clearAcquireRetry();
+        await this.beginPolling().catch((err) =>
+          this.logger.warn(`Polling'ni boshlashda xato: ${String(err)}`),
+        );
+      })();
+    }, 30 * 1000);
+    // Taymer jarayonni tirik ushlab turmasin.
+    this.acquireRetry.unref?.();
+  }
+
+  private clearAcquireRetry(): void {
+    if (this.acquireRetry) {
+      clearInterval(this.acquireRetry);
+      this.acquireRetry = null;
+    }
+  }
+
+  /**
    * Polling'ni to'xtatadi va qulfni bo'shatadi — jarayonni O'LDIRMAY.
    *
    * ⚠ Nusxa TIRIK QOLADI: xabar YUBORISH token bilan ishlaydi va
@@ -120,6 +166,7 @@ export class BotLifecycle implements OnApplicationBootstrap, OnApplicationShutdo
    * nusxasiz `bot-not-running` qaytarardi).
    */
   private async stopPolling(reason: string): Promise<void> {
+    this.clearAcquireRetry();
     if (!this.polling) return;
     this.polling = false;
     const bot = this.bots.get();
@@ -134,6 +181,7 @@ export class BotLifecycle implements OnApplicationBootstrap, OnApplicationShutdo
    * shuncha vaqt buyruqlarga javob bermay turardi.
    */
   async onApplicationShutdown(): Promise<void> {
+    this.clearAcquireRetry();
     await this.lock.release().catch(() => null);
     const bot = this.bots.get();
     if (!bot) return;
