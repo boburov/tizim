@@ -21076,3 +21076,145 @@ The table is accurate — the bug is purely in the chart. `stackId` with mixed s
 <sub>session `06c830fb` · branch `main` · 57 ta qadam</sub>
 
 ---
+
+## 2026-08-25 07:20 — superadmin bosh sahifadagi chart desigini shunday styleda tayyorlang
+
+**So'rov**
+
+> superadmin bosh sahifadagi chart desigini shunday styleda tayyorlang
+
+**Buyruqlar (22)**
+
+```sh
+git status --short client/src/superadmin/ server/src/modules/finance-analytics/ && echo "--- AsosiyPage diff hajmi ---" && git diff --stat client/src/superadmin…
+cd client && grep -n "Chart\|import\|Section" src/superadmin/pages/AsosiyPage.jsx | head -40; echo "--- git log ---"; cd .. && git log --oneline -3
+date "+hozir: %H:%M:%S"; stat -f "%Sm %N" -t "%H:%M:%S" client/src/superadmin/components/BranchMetricChart.jsx client/src/superadmin/pages/AsosiyPage.jsx server…
+mkdir -p /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/06c830fb-d48a-4e47-80fa-ae5922e432d7/scratchpad/backup git diff client/src/superadmin/compone…
+cd client && cat src/superadmin/components/branchMetrics.js
+sed -n '1,120p' src/superadmin/components/BranchMetricChart.jsx
+sed -n '120,381p' src/superadmin/components/BranchMetricChart.jsx
+cd /private/tmp/claude-501/bundled-skills/2.1.241/9efaf543bcdab9c9849fc4f770417503/dataviz echo "══ 8 SLOT, YORUG' (#ffffff), qo'shni juftliklar (chiziqli grafi…
+cd client && node -e ' const toHsl=(hex)=>{const n=parseInt(hex.slice(1),16);const r=(n>>16&255)/255,g=(n>>8&255)/255,b=(n&255)/255; const mx=Math.max(r,g,b),mn…
+python3 - <<'PY' import io p = 'src/styles/index.css' s = io.open(p, encoding='utf-8').read() light_old = """ --chart-1: 213 68% 50%; /* #2a78d6 — ko'k */ --cha…
+cat > src/superadmin/components/BranchMetricChart.jsx <<'JSX' // React import { useMemo } from "react"; // Charts import { ResponsiveContainer, LineChart, Line,…
+cat > tests/_shot-org.tmp.mjs <<'JS' const resolvePlaywright = async () => { const { existsSync, readdirSync } = await import("node:fs"); const c = [new URL("..…
+sed -n '1,35p' src/shared/utils/formatMoney.js
+python3 - <<'PY' import io p = 'src/superadmin/components/BranchMetricChart.jsx' s = io.open(p, encoding='utf-8').read() s = s.replace( 'import { cn } from "@/s…
+python3 - <<'PY' import io p = 'tests/_shot-org.tmp.mjs' s = io.open(p, encoding='utf-8').read() s = s.replace(""" await page.goto(`${APP}/org`, { waitUntil: "d…
+python3 - <<'PY' import io p = 'src/superadmin/components/BranchMetricChart.jsx' s = io.open(p, encoding='utf-8').read() old = """ <span className={cn( "flex si…
+node tests/_shot-org.tmp.mjs 2>&1 | tail -4; rm -f tests/_shot-org.tmp.mjs echo "══ CLIENT ══" npm run lint 2>&1 | tail -2 npm run check:contrast 2>&1 | tail -2…
+npm run lint 2>&1 | grep -E "^/Users" | sed 's|.*/client/||' | sort -u | grep -iE "market|coin|Branch" || echo "(mening fayllarimda lint xatosi yo'q)" echo "══ …
+cd /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/06c830fb-d48a-4e47-80fa-ae5922e432d7/scratchpad/backup && grep -n "leader" BranchMetricChart.before…
+cd client && python3 - <<'PY' import io p = 'src/superadmin/components/BranchMetricChart.jsx' s = io.open(p, encoding='utf-8').read() # ── "Eng kattasi" — qayta…
+python3 - <<'PY' import io p = 'src/superadmin/components/BranchMetricChart.jsx' s = io.open(p, encoding='utf-8').read() old = """ * ── NUQTA HAR JOYDA EMAS, CH…
+npm run lint 2>&1 | tail -2 && npm run check:contrast 2>&1 | tail -2 && npm run check:data-contract 2>&1 | tail -2 && npm run build 2>&1 | tail -2 echo "══ o'zg…
+```
+
+**Natija**
+
+Avval `/org` sahifasining hozirgi holatini ko'ray — o'sha yerda boshqa agent ishlayotgan bo'lishi mumkin.
+
+`/org` bosh sahifasidagi chart — bu `BranchMetricChart.jsx`, va uni boshqa agent **12 daqiqa oldin** o'zgartirgan (hozir ham commit qilinmagan holatda). Siz boshida "ularning kodiga tegma" degandingiz, shuning uchun aniqlab olay.
+
+Tushunarli. Avval boshqa agentning commit qilinmagan ishini saqlab qo'yaman — yo'qolmasin.
+
+8 slot ham ikkala rejimda o'tadi. Tokenlarni 8 tagacha kengaytiraman.
+
+Endi komponentni qayta yozaman — ma'lumot shartnomasi o'zgarmaydi, faqat ko'rinish.
+
+Struktura ishlayapti, lekin kartochkalardagi summalar kesilmoqda ("6 900 000 so..."). Dark rejimni ham ko'ray.
+
+Kesilish yo'q. Endi qolgan holatlarni ham tekshiray — bitta filial va manfiy qiymatli ko'rsatkich.
+
+Mobilda summalar yana kesilyapti. Tuzatay.
+
+Barcha summalar sig'di. Yakuniy tekshiruv va tozalash.
+
+Bir narsani tekshirishim kerak — qayta yozishda boshqa agentning biror funksiyasini tushirib qoldirdimmi.
+
+Bitta o'zgarish qasddan: manfiy nuqtalar endi rang bilan emas, **joylashuv** bilan ko'rsatiladi. Buni tekshiray.
+
+Rang **filialga bog'langan** — legenda tartibi o'zgargani bilan chiziqlar qayta bo'yalmadi (Asosiy filial hamon ko'k). Yakuniy tekshiruv.
+
+<sub>session `06c830fb` · branch `main` · 31 ta qadam</sub>
+
+---
+
+## 2026-08-25 08:32 — menga hsu statistika qismi chroyli korinadigan qilish uchun fake datal
+
+**So'rov**
+
+> menga hsu statistika qismi chroyli korinadigan qilish uchun fake datalar qoshib bering
+
+**Buyruqlar (31)**
+
+```sh
+cd server && grep -n "prisma\.\|\$queryRaw\|aggregate\|groupBy\|findMany" src/modules/finance-analytics/branch-overview.service.ts | head -40
+sed -n '108,200p' src/modules/finance-analytics/branch-overview.service.ts
+grep -rn "SQL_REVENUE_NET\|SQL_EXPENSE\|SQL_SHORTAGE\|journalWhere\|planPeriodClause" src/modules/finance-analytics/*.ts src/common/**/*.ts 2>/dev/null | grep -…
+grep -rn "export const SQL_REVENUE_NET\|export const SQL_EXPENSE\b\|export const journalWhere\|export const planPeriodClause" src/ | head; echo "=== fayl ==="; …
+sed -n '200,250p' src/modules/finance-analytics/analytics-filter.ts; echo "=== TREASURY_KINDS ==="; grep -n "TREASURY_KINDS" -A 8 src/common/constants/treasury.…
+grep -n "NON_OPERATING_ENTRY_KINDS" -A 15 src/common/constants/ledger.ts | head -22; echo "=== TREASURY_KINDS ==="; grep -rn "TREASURY_KINDS" src/common/constan…
+sed -n '2420,2470p' prisma/schema.prisma; echo "=== JournalLine ==="; sed -n '2543,2575p' prisma/schema.prisma
+cat > test/_acc.tmp.mjs <<'JS' import { PrismaClient } from '@prisma/client'; const p = new PrismaClient(); const br = await p.branch.findMany({ where: { isDele…
+grep -rn "account.create\|ensureAccount\|accounts.*upsert" src/modules/journal/ src/modules/finance/ src/seeds/ 2>/dev/null | head -10; echo "=== Account model …
+sed -n '90,140p' src/modules/journal/journal.service.ts
+cat > test/_dist.tmp.mjs <<'JS' import { PrismaClient } from '@prisma/client'; const p = new PrismaClient(); const sp = await p.studentPayment.groupBy({ by: ['b…
+sed -n '/^model StudentPayment/,/^}/p' prisma/schema.prisma | head -30
+sed -n '/^enum PayStatus/,/^}/p' prisma/schema.prisma; echo "=== AccountKind ==="; sed -n '/^enum AccountKind/,/^}/p' prisma/schema.prisma | head -20; echo "===…
+cat > test/fixtures/demo-finance.mjs <<'JS' /** * ═══════════════════════════════════════════════════════════════════════════ * NAMOYISH UCHUN MOLIYAVIY MA'LUMO…
+npm run test:db-invariants 2>&1 | tail -26
+cd ../client && cat > tests/_s.tmp.mjs <<'JS' const r=async()=>{const{existsSync,readdirSync}=await import("node:fs");const c=[];const n=`${process.env.HOME}/.n…
+cd ../server && python3 - <<'PY' import io p = 'test/fixtures/demo-finance.mjs' s = io.open(p, encoding='utf-8').read() old = """const PROFILES = { 'Asosiy fili…
+cd ../client && node tests/_s.tmp.mjs 2>&1 | tail -7
+cd ../server && python3 - <<'PY' import io p = 'test/fixtures/demo-finance.mjs' s = io.open(p, encoding='utf-8').read() old = """ 'Asosiy filial': { base: 20_00…
+cd ../server && cat > test/_chk.tmp.mjs <<'JS' import { PrismaClient } from '@prisma/client'; const p = new PrismaClient(); const rows = await p.$queryRawUnsafe…
+python3 - <<'PY' import io p = 'test/fixtures/demo-finance.mjs' s = io.open(p, encoding='utf-8').read() old = """ 'Asosiy filial': { base: 20_000_000, growth: 1…
+cd ../server && python3 - <<'PY' import io p = 'test/fixtures/demo-finance.mjs' s = io.open(p, encoding='utf-8').read() s = s.replace("students: 96, seed: 11 }"…
+cd ../server && python3 - <<'PY' import io p = 'test/fixtures/demo-finance.mjs' s = io.open(p, encoding='utf-8').read() old = """ const fee = round(revenue / Ma…
+rm -f tests/_s.tmp.mjs && cd ../server && python3 -c " import io,json p='package.json' s=io.open(p,encoding='utf-8').read() old=' \"fixture:qa\": \"node --env-f…
+cd ../server && npm run test:coin-parity 2>&1 | grep -E "❌" -A2
+# … yana 6 ta
+```
+
+**Natija**
+
+Avval grafik qaysi jadvallardan o'qishini aniqlayin — fake data aynan o'sha yerga tushishi kerak.
+
+Grafik jurnal yozuvlaridan (`journal_lines`) va to'lov rejalaridan o'qiydi — ya'ni fake data qo'sh yozuv qoidasiga bo'ysunishi kerak. Konstruksiyani o'rganay.
+
+Struktura aniq. Endi mavjud hisoblarni ko'ray — jurnal qatori `accounts` ga FK bilan bog'langan.
+
+Muhim topilma: **uchta filialdan faqat bittasida hisoblar bor** — shuning uchun qolgan ikkitasi nolda tekis turibdi. Ilova hisoblarni qanday yaratishini ko'ray.
+
+Rejani aniqlashtiray — mavjud to'lovlar filiallar bo'yicha qanday taqsimlangan?
+
+Endi fikstura yozaman. `PayStatus` qiymatlarini tekshiray.
+
+Barcha ma'lumot yig'ildi. Fiksturani yozaman — `--clean` bilan, to'liq qaytariladigan.
+
+Ma'lumot yaratildi. Endi eng muhimi — jurnal invariantlari buzilmaganini tekshiray.
+
+Barcha invariantlar saqlangan. Endi grafikka qaray.
+
+Grafik rasmdagidek chiqdi. Lekin raqamlar juda katta — byudjet ogohlantirishlari yonib ketdi (`+440%`). Miqyosni markazning haqiqiy o'lchamiga keltiray.
+
+Tozalash ham ishladi (108 yozuv, 232 foydalanuvchi olib tashlandi), invariantlar joyida. Qayta ko'ray.
+
+Marja hali manfiy — mavjud real chiqim (19.3 mln) tortib turibdi. Nisbatlarni shunga qarab hisoblayman.
+
+Marja endi **+15.29%**, byudjet ogohlantirishi ham yo'qoldi. Boshqa ko'rsatkichlarni tekshiray.
+
+Marja grafigida DEMO Markaz keskin tushib ketyapti — mavjud real chiqim (19 mln) unga tegishli. O'sha filialga ko'proq daromad berib muvozanatlashtiray.
+
+DEMO Markazda real chiqim 20–25 mln, fake daromadi esa 12–17 mln — shuning uchun tushib ketyapti. O'sha filialga moslashtiraman.
+
+Marja 33%, hamma filial musbat zonada. Qolgan ko'rinishlarni tekshiray.
+
+O'quvchilar grafigida keskin sakrash — bu sizning mavjud 1262 ta to'lovingiz oxirgi oyda to'plang
+
+…(qisqartirildi)
+
+<sub>session `06c830fb` · branch `main` · 41 ta qadam</sub>
+
+---

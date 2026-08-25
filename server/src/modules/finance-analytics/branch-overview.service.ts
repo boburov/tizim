@@ -211,7 +211,7 @@ export class BranchOverviewService {
    * ("ochilish qoldig'i"), keyin har oy ustiga qo'shiladi. Faqat
    * oraliq ichini sanash grafikni noldan boshlab yolg'on ko'rsatardi.
    */
-  private async trendForBranch(branchId: string, months: MonthKey[], to: Date) {
+  private async buildTrend(months: MonthKey[], to: Date, branchId: string | null) {
     const from = new Date(Date.UTC(months[0].year, months[0].month - 1, 1));
 
     const pnlWhere = journalWhere({ from, to, branchId, excludeInternal: true });
@@ -221,78 +221,120 @@ export class BranchOverviewService {
     const [pnlRows, cashRows, planRows] = await Promise.all([
       this.prisma.$queryRaw<Record<string, unknown>[]>`
         SELECT date_trunc('month', e.date) AS "bucket",
+               e."branchId" AS "branchId",
                ${SQL_REVENUE_NET} AS "revenue",
                ${SQL_EXPENSE}     AS "expense",
                ${SQL_SHORTAGE}    AS "shortage"
         FROM journal_lines l
         JOIN journal_entries e ON e.id = l."entryId"
         WHERE ${pnlWhere}
-        GROUP BY 1
+        GROUP BY 1, 2
       `,
       // ⚠ `e.date <= to` — oraliq BOSHIDAN oldingi yozuvlar HAM keladi.
       // Ular ochilish qoldig'ini beradi (pastda `bucket < from` bo'yicha
       // yig'iladi), shuning uchun `from` sharti ATAYLAB yo'q.
       this.prisma.$queryRaw<Record<string, unknown>[]>`
         SELECT date_trunc('month', e.date) AS "bucket",
+               e."branchId" AS "branchId",
                COALESCE(SUM(l.debit - l.credit), 0) AS "delta"
         FROM journal_lines l
         JOIN journal_entries e ON e.id = l."entryId"
         WHERE l."accountKind"::text IN (${Prisma.join(TREASURY_KINDS as unknown as string[])})
           AND e.date <= ${to}
           ${cashBc}
-        GROUP BY 1
+        GROUP BY 1, 2
       `,
       this.prisma.$queryRaw<Record<string, unknown>[]>`
         SELECT sp.year AS "year", sp.month AS "month",
+               sp."branchId" AS "branchId",
                COUNT(DISTINCT sp."studentId") AS "students",
                COALESCE(SUM(GREATEST(sp."expectedAmount" - sp."paidAmount", 0))
                  FILTER (WHERE NOT sp."writtenOff"), 0) AS "outstanding"
         FROM student_payments sp
         WHERE ${planPeriodClause('sp', from, to)}
           ${planBc}
-        GROUP BY sp.year, sp.month
+        GROUP BY sp.year, sp.month, sp."branchId"
       `,
     ]);
 
-    const bucketKey = (v: unknown): string => {
+    const bucketKey = (v: unknown, bId: unknown): string => {
       const d = new Date(v as string);
-      return monthKey(d.getUTCFullYear(), d.getUTCMonth() + 1);
+      return `${monthKey(d.getUTCFullYear(), d.getUTCMonth() + 1)}_${bId}`;
     };
 
-    const pnlByMonth = new Map(pnlRows.map((r) => [bucketKey(r.bucket), r]));
-    const planByMonth = new Map(
-      planRows.map((r) => [monthKey(Number(r.year), Number(r.month)), r]),
+    const pnlMap = new Map(pnlRows.map((r) => [bucketKey(r.bucket, r.branchId), r]));
+    const planMap = new Map(
+      planRows.map((r) => [`${monthKey(Number(r.year), Number(r.month))}_${r.branchId}`, r]),
     );
 
     // Kassa: oraliqdan OLDINGI hamma narsa bitta boshlang'ich songa yig'iladi.
     const inRange = new Set(months.map((m) => m.key));
-    let running = 0;
-    const cashDelta = new Map<string, number>();
+    const runningMap = new Map<string, number>();
+    const cashDeltaMap = new Map<string, number>();
+    
     for (const r of cashRows) {
-      const key = bucketKey(r.bucket);
-      if (inRange.has(key)) cashDelta.set(key, (cashDelta.get(key) || 0) + n(r.delta));
-      else if (new Date(r.bucket as string) < from) running += n(r.delta);
+      const bId = String(r.branchId);
+      const bKey = bucketKey(r.bucket, r.branchId);
+      const key = monthKey(new Date(r.bucket as string).getUTCFullYear(), new Date(r.bucket as string).getUTCMonth() + 1);
+      
+      if (inRange.has(key)) {
+        cashDeltaMap.set(bKey, (cashDeltaMap.get(bKey) || 0) + n(r.delta));
+      } else if (new Date(r.bucket as string) < from) {
+        runningMap.set(bId, (runningMap.get(bId) || 0) + n(r.delta));
+      }
     }
 
+    const allBranches = await this.branchesInScope();
+    const branchIdsToProcess = branchId ? [branchId] : allBranches.map((b) => String(b.id));
+
     return months.map((m) => {
-      const p = pnlByMonth.get(m.key) || {};
-      const pl = planByMonth.get(m.key) || {};
-      const revenue = n(p.revenue);
-      const expense = n(p.expense);
-      const net = revenue - expense - n(p.shortage);
-      running += cashDelta.get(m.key) || 0;
+      const branchesData: Record<string, any> = {};
+      let tRevenue = 0, tExpense = 0, tNet = 0, tCash = 0, tOut = 0, tStud = 0;
+      
+      for (const bId of branchIdsToProcess) {
+        const p = pnlMap.get(`${m.key}_${bId}`) || {};
+        const pl = planMap.get(`${m.key}_${bId}`) || {};
+        
+        const revenue = n(p.revenue);
+        const expense = n(p.expense);
+        const net = revenue - expense - n(p.shortage);
+        
+        const currentRunning = runningMap.get(bId) || 0;
+        const newRunning = currentRunning + (cashDeltaMap.get(`${m.key}_${bId}`) || 0);
+        runningMap.set(bId, newRunning);
+
+        branchesData[bId] = {
+          revenue,
+          expense,
+          net,
+          profitMarginPercent: revenue > 0 ? ratioPercent(net, revenue) : null,
+          cashBalance: newRunning,
+          outstanding: n(pl.outstanding),
+          students: Number(pl.students || 0),
+        };
+
+        tRevenue += revenue;
+        tExpense += expense;
+        tNet += net;
+        tCash += newRunning;
+        tOut += n(pl.outstanding);
+        tStud += Number(pl.students || 0);
+      }
 
       return {
         key: m.key,
         year: m.year,
         month: m.month,
-        revenue,
-        expense,
-        net,
-        profitMarginPercent: revenue > 0 ? ratioPercent(net, revenue) : null,
-        cashBalance: running,
-        outstanding: n(pl.outstanding),
-        students: Number(pl.students || 0),
+        branches: branchesData,
+        total: {
+          revenue: tRevenue,
+          expense: tExpense,
+          net: tNet,
+          profitMarginPercent: tRevenue > 0 ? ratioPercent(tNet, tRevenue) : null,
+          cashBalance: tCash,
+          outstanding: tOut,
+          students: tStud,
+        },
       };
     });
   }
@@ -367,7 +409,7 @@ export class BranchOverviewService {
     const months = this.buildMonths(range.to);
     // ⚠ SO'RALGAN FILIAL KO'LAMDA BO'LMASA `branchClause` 403 tashlaydi
     // (`assertBranchInScope`) — jimgina bo'sh qator qaytarilmaydi.
-    const trend = branchId ? await this.trendForBranch(branchId, months, range.to) : null;
+    const trend = await this.buildTrend(months, range.to, branchId);
 
     return {
       period: { from: range.from, to: range.to },

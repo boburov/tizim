@@ -81,18 +81,27 @@
        va seriya identifikatorlik vazifasini umuman bajarmasdi.
 
        ⚠ TARTIB — HIMOYA MEXANIZMI. Seriyalar 1-slotdan boshlab
-       KETMA-KET biriktiriladi va aylantirilmaydi: aynan shu tartib
+       KETMA-KET biriktiriladi va AYLANTIRILMAYDI: aynan shu tartib
        qo'shni juftliklarning ajralishini kafolatlaydi.
+
+       ⚠ SAKKIZTADAN OSHMAYDI. To'qqizinchi rang GENERATSIYA
+       QILINMAYDI — u rang ko'rligi ostida mavjud slotdan farq
+       qilmaydi. Sakkiztadan ko'p seriya bo'lsa ro'yxat qisqartiriladi
+       va nechtasi ko'rsatilmagani OCHIQ yoziladi
+       (`BranchMetricChart` shunday qiladi).
 
        ⚠ YORUG' REJIMDA 3–5 SLOTLAR sirtga nisbatan 3:1 dan past
        (2.17–2.82). Ular ishlatilsa YOZUV yoki jadval ko'rinishi
        SHART. 1–2 slotlar (grafikda ishlatilayotganlari) o'tadi.
        ══════════════════════════════════════════════════════════════ */
-    --chart-1: 213 68% 50%; /* #2a78d6 — ko'k   */
-    --chart-2: 17 82% 56%;  /* #eb6834 — to'q sariq */
-    --chart-3: 159 73% 40%; /* #1baf7a — akva  */
-    --chart-4: 41 100% 46%; /* #eda100 — sariq */
-    --chart-5: 337 70% 70%; /* #e87ba4 — magenta */
+    --chart-1: 213 68% 50%;  /* #2a78d6 — ko'k        */
+    --chart-2: 17 82% 56%;   /* #eb6834 — to'q sariq  */
+    --chart-3: 159 73% 40%;  /* #1baf7a — akva        */
+    --chart-4: 41 100% 46%;  /* #eda100 — sariq       */
+    --chart-5: 337 70% 70%;  /* #e87ba4 — magenta     */
+    --chart-6: 120 100% 26%; /* #008300 — yashil      */
+    --chart-7: 249 48% 44%;  /* #4a3aa7 — binafsha    */
+    --chart-8: 0 73% 59%;    /* #e34948 — qizil       */
 
     /* Sidebar */
     --sidebar-background: 0 0% 100%;
@@ -150,11 +159,14 @@
     /* Grafiklar — AYNI sakkiz rang, qorong'u sirt uchun qayta
        qadamlangan. Bu avtomatik "teskari" EMAS: har bir qadam
        qorong'u sirtga qarshi alohida o'lchangan. */
-    --chart-1: 213 77% 56%; /* #3987e5 */
-    --chart-2: 17 70% 50%;  /* #d95926 */
-    --chart-3: 159 73% 36%; /* #199e70 */
-    --chart-4: 40 100% 39%; /* #c98500 */
-    --chart-5: 338 61% 58%; /* #d55181 */
+    --chart-1: 213 77% 56%;  /* #3987e5 */
+    --chart-2: 17 70% 50%;   /* #d95926 */
+    --chart-3: 159 73% 36%;  /* #199e70 */
+    --chart-4: 40 100% 39%;  /* #c98500 */
+    --chart-5: 338 61% 58%;  /* #d55181 */
+    --chart-6: 120 100% 26%; /* #008300 */
+    --chart-7: 247 69% 72%;  /* #9085e9 */
+    --chart-8: 0 72% 65%;    /* #e66767 */
 
     /* Sidebar */
     --sidebar-background: 30 8% 10%;
