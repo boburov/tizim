@@ -1,4 +1,4 @@
-// Tizim nomi .env orqali sozlanadi; logo/favicon public/ papkadan olinadi
+// Tizim nomi, logotip va brend ranglari .env orqali sozlanadi (VITE_APP_*)
 import { parseHsl, validateHsl } from "@/shared/utils/color";
 import {
   buildLightTokens,

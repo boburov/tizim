@@ -21218,3 +21218,124 @@ O'quvchilar grafigida keskin sakrash — bu sizning mavjud 1262 ta to'lovingiz o
 <sub>session `06c830fb` · branch `main` · 41 ta qadam</sub>
 
 ---
+
+## 2026-08-26 15:18 — you are senior frontend developer use logo url in env as favicon icon
+
+**So'rov**
+
+> you are senior frontend developer use logo url in env as favicon icon
+
+**Buyruqlar (19)**
+
+```sh
+ls && echo "---" && ls -d */ 2>/dev/null
+grep -ril "logo" --include="*.env*" --include="*.ts" --include="*.tsx" --include="*.html" --include="*.js" . 2>/dev/null | grep -v node_modules | head -50
+cd client && cat .env.example && echo "=== index.html ===" && cat index.html && echo "=== app.js ===" && cat src/shared/constants/app.js && echo "=== env files …
+cd admin_client && ls -a | grep -i env; echo "=== index.html ==="; cat index.html 2>/dev/null; echo "=== env example ==="; cat .env.example 2>/dev/null
+cd /Users/shukrullo/Desktop/lc-total && echo "=== client/.env ===" && cat client/.env && echo "=== admin_client ls ===" && ls -a admin_client | head -30
+grep -rn "APP_LOGO\|logoUrl\|favicon" --include="*.js" --include="*.jsx" --include="*.ts" --include="*.html" . 2>/dev/null | grep -v node_modules | head -40
+cd /Users/shukrullo/Desktop/lc-total/admin_client && cat .env.example && echo "=== .env.production ===" && cat .env.production && echo "=== public ===" && ls pu…
+cd /Users/shukrullo/Desktop/lc-total && ls client/public && echo "=== BrandMark ===" && cat client/src/shared/components/brand/BrandMark.jsx && echo "=== env-re…
+cd /Users/shukrullo/Desktop/lc-total/client && cat vite.config.js && echo "=== dist index ===" && (grep -n "icon\|title" dist/index.html 2>/dev/null || echo "no…
+tail -40 .claude/WORKLOG.md 2>/dev/null || echo "no worklog"
+find client/src admin_client/src client/index.html admin_client/index.html -newermt "-3 days" -type f 2>/dev/null | head -20; echo "--- settings.service 80-120 …
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "applyAppTheme" src/ && echo "=== main.jsx ===" && cat src/main.jsx && echo "=== shared/lib tree ===" &&…
+mkdir -p /Users/shukrullo/Desktop/lc-total/client/src/shared/lib/brand && cat > /Users/shukrullo/Desktop/lc-total/client/src/shared/lib/brand/favicon.js <<'EOF'…
+python3 - <<'PY' import io p = "index.html" s = io.open(p, encoding="utf-8").read() old = """ <!-- Favicon --> <link rel="icon" href="%VITE_APP_LOGO%" /> """ ne…
+sed -i '' '1s|.*|// Tizim nomi, logotip va brend ranglari .env orqali sozlanadi (VITE_APP_*)|' src/shared/constants/app.js && sed -n '1,12p' src/shared/constant…
+python3 - <<'PY' import io for p in [".env.example", ".env"]: s = io.open(p, encoding="utf-8").read() old = "# Logotip/favicon\n" new = ("# Logotip/favicon. Mah…
+npx eslint src/shared/lib/brand/favicon.js src/main.jsx 2>&1 | tail -20; echo "--- build ---"; npm run build 2>&1 | tail -15
+grep -n 'rel="icon"' dist/index.html; grep -rn "applyAppFavicon\|MIME_BY_EXTENSION" dist/assets/*.js | head -3 | cut -c1-160
+grep -l "image/x-icon" dist/assets/*.js
+```
+
+**Natija**
+
+Loyihada ikki front-end bor va holat har xil:
+
+- [client/index.html:8](client/index.html#L8) — favicon **allaqachon** `%VITE_APP_LOGO%` dan olinadi (dist'da `/logo.svg` bo'lib chiqqan).
+- [admin_client/index.html:31](admin_client/index.html#L31) — favicon qattiq `/favicon.svg`, logo uchun env o'zgaruvchisi umuman yo'q.
+
+Bajarildi — `client` da favicon endi ish vaqtida `.env` dagi logo manzilidan qo'yiladi.
+
+**O'zgarishlar**
+
+- Yangi [client/src/shared/lib/brand/favicon.js](client/src/shared/lib/brand/favicon.js) — `applyAppFavicon()`:
+  - `APP_LOGO` (ya'ni `VITE_APP_LOGO`) ni oladi, rasmni avval `new Image()` bilan yuklab ko'radi va faqat **muvaffaqiyatli yuklangach** `<link rel="icon">` ni almashtiradi;
+  - kengaytmadan MIME turini aniqlaydi (`svg/png/ico/jpg/webp/gif`), `?v=2` kabi so'rov qismini hisobga oladi; noma'lum bo'lsa `type` umuman yozilmaydi;
+  - `<link rel="icon">` bo'lmasa o'zi yaratadi; manzil o'zgarmagan bo'lsa bekorga yuklamaydi.
+- [client/index.html:14](client/index.html#L14) — `%VITE_APP_LOGO%` o'rniga doimo mavjud mahalliy `/logo.svg`. Sabab: Vite bu yozuvni faqat build paytida almashtiradi, o'zgaruvchi berilmasa esa uni **o'z holicha qoldiradi** va brauzer `/%VITE_APP_LOGO%` ni so'rab 404 oladi. Endi u zaxira sifatida turadi.
+- [client/src/main.jsx:10-12](client/src/main.jsx#L10-L12) — `applyAppTheme()` yonida chaqiriladi (React render'idan oldin).
+- [client/.env.example](client/.env.example) va `client/.env` — `VITE_APP_LOGO` izohi to'liq URL ham qo'llanishini yozib qo'ydi.
+
+**Natija:** admin panel tenantga `VITE_APP_LOGO=https://.../logo.png` yozganda favicon o'shanga o'tadi; manzil buzuq bo'lsa yoki o'zgaruvchi bo'lmasa `/logo.svg` joyida qoladi — belgi hech qachon yo'qolmaydi.
+
+Lint toza, `npm run build` o'tdi; `dist/index.html` da `/logo.svg`, 
+
+…(qisqartirildi)
+
+<sub>session `57d27dc8` · branch `main` · 20 ta qadam</sub>
+
+---
+
+## 2026-08-26 15:37 — in superadmin replcae daromad paymet select with data defaul data shou
+
+**So'rov**
+
+> in superadmin replcae daromad paymet select with data defaul data should be month so my analaictic should show monthly money flow
+
+**Buyruqlar (21)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && ls src/superadmin && echo "=== tree ===" && find src/superadmin -type f | head -80
+grep -rn "Barcha filiallar" src/ | head -20
+cat src/superadmin/components/BranchMetricChart.jsx
+cat src/superadmin/pages/AsosiyPage.jsx; echo "=== branchMetrics.js ==="; cat src/superadmin/components/branchMetrics.js
+ls src/superadmin/api src/superadmin/hooks && echo "=== hooks ===" && cat src/superadmin/hooks/*.js 2>/dev/null | head -120
+cd /Users/shukrullo/Desktop/lc-total && sed -n '1,120p' client/src/owner/features/financeAnalytics/hooks/useFinanceAnalytics.js
+grep -rn "branch-overview\|branchOverview" --include="*.ts" --include="*.js" server/src client/src | grep -v node_modules | head -20
+sed -n '1,140p' server/src/modules/finance-analytics/branch-overview.service.ts
+grep -rn "analyticsFilterSchema" server/src --include="*.ts" | head -5
+sed -n '1,70p' server/src/modules/finance-analytics/finance-analytics.validators.ts; echo "=== parseRange ==="; sed -n '1,90p' server/src/modules/finance-analyt…
+sed -n '140,400p' server/src/modules/finance-analytics/branch-overview.service.ts
+sed -n '88,120p' server/src/modules/finance-analytics/analytics-filter.ts; echo "=== tail of service ==="; sed -n '400,460p' server/src/modules/finance-analytic…
+cd /Users/shukrullo/Desktop/lc-total/client && sed -n '1,80p' src/shared/components/ui/select/Select.jsx && echo "=== PageShell ===" && cat src/shared/component…
+cd /Users/shukrullo/Desktop/lc-total && sed -n '1,60p' client/src/owner/features/financeAnalytics/hooks/useFinanceIntelligence.js; echo "=== controller intellig…
+cd /Users/shukrullo/Desktop/lc-total/client && cat >> src/superadmin/components/branchMetrics.js <<'EOF' /** * ═════════════════════════════════════════════════…
+python3 - <<'PY' import io p = "src/superadmin/components/BranchMetricChart.jsx" s = io.open(p, encoding="utf-8").read() def sub(old, new): global s assert old …
+python3 - <<'PY' import io p = "src/superadmin/pages/AsosiyPage.jsx" s = io.open(p, encoding="utf-8").read() def sub(old, new): global s assert old in s, old[:8…
+python3 - <<'PY' import io p = "src/superadmin/components/branchMetrics.js" s = io.open(p, encoding="utf-8").read() old = """export const PERIODS = [ { key: "mo…
+npx eslint src/superadmin/ 2>&1 | tail -20; echo "--- build ---"; npm run build 2>&1 | tail -6
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/57d27dc8-9ea4-4d32-891a-d199f79abf4f/scratchpad/p.mjs <<'EOF' const src = await import('fs').the…
+cd /Users/shukrullo/Desktop/lc-total && grep -n "private filters" -A 25 server/src/modules/finance-analytics/finance-analytics.controller.ts | head -35
+```
+
+**Natija**
+
+Bajarildi. Grafik sarlavhasidagi **«Daromad»** (ko'rsatkich) tanlagichi o'rniga endi **davr** tanlagichi turadi, standart holati — **«Bu oy»**.
+
+**Nima o'zgardi**
+
+[branchMetrics.js](client/src/superadmin/components/branchMetrics.js) — yangi davr reyestri:
+
+| Tanlov | Oraliq (bugun 26.08.2026) |
+|---|---|
+| **Bu oy** (standart) | 2026-08-01 … 2026-08-31 |
+| O'tgan oy | 2026-07-01 … 2026-07-31 |
+| Bu chorak | 2026-07-01 … 2026-08-31 |
+| Bu yil | 2026-01-01 … 2026-08-31 |
+
+- `periodRange()` `{from, to}` ni `YYYY-MM-DD` shaklida qaytaradi — server `analyticsFilterSchema` aynan shuni kutadi.
+- ⚠ `toISOString()` ishlatilmadi: UTC+5 da u 1-avgust 00:00 ni «31-iyul» qilib yuborardi va oyning birinchi kunidagi to'lovlar tushib qolardi. Sana mahalliy qismlardan yig'iladi.
+- ⚠ **Oxiri doim joriy oy bilan cheklanadi**: «Bu yil» 31-dekabrgacha emas. Server oylik qatorni `to` dan orqaga 12 oy qilib quradi — 31-dekabr berilsa grafik oxirida to'rtta bo'sh oy chiqib, «daromad tushib ketdi» bo'lib o'qilardi.
+- Dekabr→yanvar o'tishi, fevralning 28/29 kuni, chorak chegaralari — [tekshirildi](client/src/superadmin/components/branchMetrics.js#L165), hammasi to'g'ri.
+
+[BranchMetricChart.jsx](client/src/superadmin/components/BranchMetricChart.jsx#L1) — metric `<Select>` → period `<Select>`. Sarlavhaning tepa qatorida endi `Daromad · Avg 2026` turadi: katta raqam davrsiz o'qilmaydi (bir oyniki bilan bir yilnikining farqi o'n barobar). «Bu chorak»/«Bu yil» uchun ostidagi asos qatorida qo'shimcha izoh chiqadi («chorak boshidan joriy oygacha») — avgustda chorak atigi ikki oy bo'lgani xatoga o'xshamasligi uchun.
+
+**Ko'rsatkich tanlash yo'qolmadi** — grafik ostidagi oltita kartochka qatori allaqachon aynan shu vazifani bajaradi (`aria-pressed` bilan) va ustiga qiymatni ham ko'rsatadi. Tepadagi sele
+
+…(qisqartirildi)
+
+<sub>session `57d27dc8` · branch `main` · 21 ta qadam</sub>
+
+---

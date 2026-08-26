@@ -7,6 +7,10 @@ import "./styles/index.css";
 import { applyAppTheme } from "@/shared/constants/app";
 applyAppTheme();
 
+// Yorliq belgisini (favicon) .env dagi logo manzilidan qo'yish
+import { applyAppFavicon } from "@/shared/lib/brand/favicon";
+applyAppFavicon();
+
 // Theme (light / dark / system)
 import ThemeProvider from "@/shared/components/theme/ThemeProvider";
 

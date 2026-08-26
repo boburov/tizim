@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Wallet, Building2 } from "lucide-react";
 
 import { DashboardSection } from "@/shared/components/dashboard/SectionGrid";
@@ -11,7 +11,13 @@ import {
   useBranchOverview, useBranchProfit, useDirectionProfit, useTeacherProfit,
 } from "@/owner/features/financeAnalytics/hooks/useFinanceAnalytics";
 import BranchMetricChart from "../components/BranchMetricChart";
-import { ALL_BRANCHES_VALUE } from "../components/branchMetrics";
+import {
+  ALL_BRANCHES_VALUE,
+  DEFAULT_PERIOD,
+  findPeriod,
+  periodRange,
+  periodRangeLabel,
+} from "../components/branchMetrics";
 import { useIntelligence } from "@/owner/features/financeAnalytics/hooks/useFinanceIntelligence";
 import IntelligenceCenter from "@/owner/features/financeAnalytics/components/IntelligenceCenter";
 import SignalDetailDrawer from "@/owner/features/financeAnalytics/components/SignalDetailDrawer";
@@ -66,30 +72,51 @@ const AsosiyPage = () => {
   const canTeacherProfit =
     canProfit && (has(PERMISSIONS.SALARY_READ) || has(PERMISSIONS.PAYROLL_READ));
 
-  // GRAFIK TANLOVI. `useState` EMAS: ikkita bog'liq qiymat bitta
+  // GRAFIK TANLOVI. `useState` EMAS: bog'liq qiymatlar bitta
   // boshqaruvga tegishli (kodbaza qoidasi — `useObjectState`).
   const chart = useObjectState({
     branchId: ALL_BRANCHES_VALUE,
     metric: "revenue",
+    period: DEFAULT_PERIOD,
   });
 
-  // ⚠ `branchId` FILTRDA — ya'ni TanStack kalitida. Tanlov o'zgarsa
-  // kalit o'zgaradi va so'rov o'zi qaytadan ketadi; "grafikni
-  // yangilash" uchun alohida effekt yozilmagan.
+  /**
+   * DAVR — BUTUN SAHIFA UCHUN, faqat grafik uchun emas.
+   *
+   * ⚠ ATAYLAB HAMMASIGA BERILADI. Tanlagich grafik sarlavhasida
+   * tursa-da, u pastdagi jadvallarga ham tegishli: bitta ekranda
+   * grafik "o'tgan oy", jadval esa "bu oy" bo'lib turishi —
+   * raqamlar bir-biriga mos kelmasligining eng jimgina sababi.
+   * Shuning uchun sahifa sarlavhasida ham davr ochiq yoziladi.
+   */
+  const periodFilters = useMemo(() => periodRange(chart.period), [chart.period]);
+  const period = findPeriod(chart.period);
+
+  // ⚠ `branchId` va davr FILTRDA — ya'ni TanStack kalitida. Tanlov
+  // o'zgarsa kalit o'zgaradi va so'rov o'zi qaytadan ketadi;
+  // "grafikni yangilash" uchun alohida effekt yozilmagan.
   const overview = useBranchOverview(
-    chart.branchId === ALL_BRANCHES_VALUE ? {} : { branchId: chart.branchId },
+    chart.branchId === ALL_BRANCHES_VALUE
+      ? periodFilters
+      : { ...periodFilters, branchId: chart.branchId },
     { enabled: canFinance },
   );
 
-  const intelligence = useIntelligence({}, { enabled: canFinance });
-  const branches = useBranchProfit({}, { enabled: canProfit });
-  const directions = useDirectionProfit({ limit: 5 }, { enabled: canProfit });
-  const teachers = useTeacherProfit({ limit: 5 }, { enabled: canTeacherProfit });
+  const intelligence = useIntelligence(periodFilters, { enabled: canFinance });
+  const branches = useBranchProfit(periodFilters, { enabled: canProfit });
+  const directions = useDirectionProfit(
+    { ...periodFilters, limit: 5 },
+    { enabled: canProfit },
+  );
+  const teachers = useTeacherProfit(
+    { ...periodFilters, limit: 5 },
+    { enabled: canTeacherProfit },
+  );
 
   return (
     <PageShell
       title="Umumiy holat"
-      subtitle="Joriy oy, filiallar kesimida. Ko'rsatkich va filialni tanlang."
+      subtitle={`${period.label} (${periodRangeLabel(period.key)}), filiallar kesimida. Davr, filial va ko'rsatkichni tanlang.`}
     >
       {!canFinance ? (
         <EmptyState
@@ -102,6 +129,8 @@ const AsosiyPage = () => {
           query={overview}
           metricKey={chart.metric}
           onMetricChange={(v) => chart.setField("metric", v)}
+          periodKey={chart.period}
+          onPeriodChange={(v) => chart.setField("period", v)}
           branchId={chart.branchId}
           onBranchChange={(v) => chart.setField("branchId", v)}
           // "NEGA?" ZANJIRI SAQLANDI. Ilgari har KPI kartasi drill
@@ -234,9 +263,13 @@ const AsosiyPage = () => {
           hint="Filial, yo'nalish va o'qituvchi bo'yicha foyda tahlili maosh tannarxini ochadi — shuning uchun alohida ruxsat talab qiladi."
         />
       )}
+      {/* ⚠ Panel AYNAN o'sha davrni oladi: signal "o'tgan oy" uchun
+          chiqqan bo'lsa, uning tafsiloti joriy oydan hisoblanmasligi
+          kerak — aks holda "nega bu ogohlantirish chiqdi?" savoliga
+          boshqa davrning raqamlari javob berardi. */}
       <SignalDetailDrawer
         signalId={signalId}
-        filters={{}}
+        filters={periodFilters}
         onOpenChange={setSignalId}
       />
     </PageShell>

@@ -115,3 +115,105 @@ export const formatMetricShort = (value, kind) => {
   if (kind === "percent") return `${value}%`;
   return value.toLocaleString("uz-UZ");
 };
+
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * DAVR REYESTRI — GRAFIK SARLAVHASIDAGI TANLAGICH
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * ── NEGA KO'RSATKICH TANLAGICHI O'RNIDA ──
+ * Sarlavhaning o'ng chetida ilgari KO'RSATKICH tanlagichi turardi. U
+ * ORTIQCHA edi: grafik ostidagi oltita kartochka aynan shu vazifani
+ * bajaradi (`aria-pressed` bilan) va ular ayni paytda qiymatni ham
+ * ko'rsatadi. Bitta narsani ikki joydan boshqarish — foydalanuvchi
+ * uchun "ular boshqa-boshqa narsami?" degan ortiqcha savol.
+ *
+ * DAVR esa hech qayerdan boshqarilmasdi: ekran QOTIB joriy oyni
+ * ko'rsatardi va "o'tgan oy qanday edi?" degan eng oddiy savolga
+ * javob berish uchun boshqa sahifaga o'tish kerak edi.
+ *
+ * ── OXIRI DOIM JORIY OY BILAN CHEKLANADI ──
+ * "Bu yil" 31-dekabrgacha emas, JORIY OY oxirigacha. Ikki sabab:
+ *   1. Server oylik qatorni `to` dan orqaga 12 oy qilib quradi —
+ *      31-dekabr berilsa grafik oxirida to'rtta BO'SH oy paydo
+ *      bo'lardi va u "daromad tushib ketdi" bo'lib o'qilardi.
+ *   2. Kelajakdagi kunni davr oxiri deb ko'rsatish — kassa qoldig'i
+ *      "shu sanaga" deb yozilgani uchun ochiqdan-ochiq yolg'on.
+ * Ya'ni "Bu chorak" va "Bu yil" — DAVR BOSHIDAN BUGUNGACHA.
+ */
+/**
+ * ⚠ `hint` FAQAT TUSHUNTIRISH KERAK BO'LGANDA. "Bu oy" va "O'tgan oy"
+ * o'zini o'zi aytadi va yonida aniq oy ham yozilgan — u yerga yana bir
+ * izoh qo'yish sarlavha ostidagi asos qatorini uzaytiradi, xolos.
+ * "Bu chorak" esa avgustda ATIGI IKKI oyni qamraydi va bu tushuntirishsiz
+ * xatoga o'xshab ko'rinadi.
+ */
+export const PERIODS = [
+  { key: "month", label: "Bu oy", hint: null },
+  { key: "prevMonth", label: "O'tgan oy", hint: null },
+  { key: "quarter", label: "Bu chorak", hint: "chorak boshidan joriy oygacha" },
+  { key: "year", label: "Bu yil", hint: "yil boshidan joriy oygacha" },
+];
+
+export const DEFAULT_PERIOD = "month";
+
+export const findPeriod = (key) =>
+  PERIODS.find((p) => p.key === key) || PERIODS[0];
+
+const pad2 = (v) => String(v).padStart(2, "0");
+
+/** `YYYY-MM-DD` — server `analyticsFilterSchema` aynan shu shaklni kutadi. */
+const ymd = (year, month, day) => `${year}-${pad2(month)}-${pad2(day)}`;
+
+/** Oyning oxirgi kuni. `month` — 1 dan boshlanadi. */
+const lastDayOf = (year, month) => new Date(year, month, 0).getDate();
+
+/** Davrning boshlanish va tugash OYI (ikkalasi ham 1..12). */
+const periodMonths = (key, today) => {
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+
+  if (key === "prevMonth") {
+    const y = month === 1 ? year - 1 : year;
+    const m = month === 1 ? 12 : month - 1;
+    return { fromYear: y, fromMonth: m, toYear: y, toMonth: m };
+  }
+  if (key === "quarter") {
+    // Chorak boshi: 1, 4, 7 yoki 10-oy.
+    const start = Math.floor((month - 1) / 3) * 3 + 1;
+    return { fromYear: year, fromMonth: start, toYear: year, toMonth: month };
+  }
+  if (key === "year") {
+    return { fromYear: year, fromMonth: 1, toYear: year, toMonth: month };
+  }
+  return { fromYear: year, fromMonth: month, toYear: year, toMonth: month };
+};
+
+/**
+ * Tanlangan davrning server filtri: `{ from, to }`.
+ *
+ * ⚠ `toISOString()` ISHLATILMAYDI: u sanani UTC ga surib yuboradi va
+ * UTC+5 da 1-avgust soat 00:00 "31-iyul" bo'lib ketardi — ya'ni davr
+ * bir kunga siljib, oyning birinchi kunidagi to'lovlar tushib qolardi.
+ * Shuning uchun sana MAHALLIY qismlardan qo'lda yig'iladi.
+ */
+export const periodRange = (key, today = new Date()) => {
+  const { fromYear, fromMonth, toYear, toMonth } = periodMonths(key, today);
+  return {
+    from: ymd(fromYear, fromMonth, 1),
+    to: ymd(toYear, toMonth, lastDayOf(toYear, toMonth)),
+  };
+};
+
+/**
+ * Davrning ODAM O'QIYDIGAN yozuvi — "Bu yil" o'zi qaysi oylarni
+ * qamraganini aytmaydi, shuning uchun ekranda yonida shu turadi.
+ */
+export const periodRangeLabel = (key, today = new Date()) => {
+  const { fromYear, fromMonth, toYear, toMonth } = periodMonths(key, today);
+  const start = MONTH_LABELS[fromMonth - 1];
+  const end = MONTH_LABELS[toMonth - 1];
+  if (fromYear === toYear && fromMonth === toMonth) return `${start} ${toYear}`;
+  if (fromYear === toYear) return `${start}–${end} ${toYear}`;
+  return `${start} ${fromYear} – ${end} ${toYear}`;
+};

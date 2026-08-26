@@ -16,9 +16,12 @@ import { cn } from "@/shared/utils/cn";
 import { formatMoneyShort } from "@/shared/utils/formatMoney";
 import {
   METRICS,
+  PERIODS,
   MONTH_LABELS,
   ALL_BRANCHES_VALUE,
   findMetric,
+  findPeriod,
+  periodRangeLabel,
   formatMetric,
   formatMetricShort,
 } from "./branchMetrics";
@@ -214,11 +217,14 @@ const BranchMetricChart = ({
   query,
   metricKey,
   onMetricChange,
+  periodKey,
+  onPeriodChange,
   branchId,
   onBranchChange,
   onBranchOpen,
 }) => {
   const metric = findMetric(metricKey);
+  const period = findPeriod(periodKey);
   const data = query.data;
   const isSingle = branchId !== ALL_BRANCHES_VALUE;
 
@@ -335,6 +341,13 @@ const BranchMetricChart = ({
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <metric.icon className="size-4" />
             <span>{metric.label}</span>
+            {/* ⚠ DAVR SARLAVHADA YOZILADI. Katta raqam davrsiz
+                o'qilmaydi: "69,8 mln" bir oyniki bo'ladimi yoki bir
+                yilnikimi — farq o'n barobar. Tanlagichda "Bu yil"
+                turibdi, lekin u qaysi oylarni qamragani ko'rinmaydi,
+                shuning uchun yonida aniq oraliq ham turadi. */}
+            <span aria-hidden="true">·</span>
+            <span>{periodRangeLabel(period.key)}</span>
             {isSingle && selectedBranch && (
               <>
                 <span aria-hidden="true">·</span>
@@ -349,6 +362,7 @@ const BranchMetricChart = ({
 
           <p className="mt-2 text-xs text-muted-foreground">
             {metric.hint}
+            {period.hint && ` · ${period.hint}`}
             {canOpen && " · nuqtani bosing"}
             {leader && (
               <>
@@ -368,11 +382,17 @@ const BranchMetricChart = ({
             options={branchOptions}
             triggerClassName={pill}
           />
+          {/* ⚠ BU YERDA ILGARI KO'RSATKICH TANLAGICHI TURARDI.
+              U grafik ostidagi kartochkalar qatorini AYNAN takrorlardi
+              (o'sha qator ham tanlagich, `aria-pressed` bilan), ya'ni
+              bitta narsani ikki joydan boshqarardi. Davr esa hech
+              qayerdan boshqarilmasdi — endi o'sha bo'sh joyni u
+              egallaydi. Tafsilot: `branchMetrics.js` dagi izoh. */}
           <Select
-            name="metric"
-            value={metric.key}
-            onChange={onMetricChange}
-            options={METRICS.map((m) => ({ value: m.key, label: m.label }))}
+            name="period"
+            value={period.key}
+            onChange={onPeriodChange}
+            options={PERIODS.map((p) => ({ value: p.key, label: p.label }))}
             triggerClassName={pill}
           />
         </div>

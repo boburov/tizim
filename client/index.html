@@ -4,8 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Favicon -->
-    <link rel="icon" href="%VITE_APP_LOGO%" />
+    <!--
+      Favicon: bu yerda ATAYLAB mahalliy zaxira fayl turadi.
+      `.env` dagi VITE_APP_LOGO (masalan tenantning masofaviy logotipi)
+      ish vaqtida `shared/lib/brand/favicon.js` orqali ustiga qo'yiladi -
+      shunda o'zgaruvchi berilmagan yoki manzil buzuq bo'lsa ham belgi
+      yo'qolmaydi.
+    -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
 
     <!--
       Temani BIRINCHI bo'yashdan OLDIN qo'llaymiz.
