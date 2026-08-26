@@ -22,8 +22,8 @@ import SuperAdminSidebar from "./SuperAdminSidebar";
  * matnini o'qib emas.
  *
  * ── NIMASI BOSHQA ──
- *   • Sarlavha butun kenglikda va u yerda MOLIYA turadi
- *   • Chap ustun uch yozuvli, yig'ilmaydi, filial tanlagichi yo'q
+ *   • Sarlavha butun kenglikda va u yerda ASOSIY · MOLIYA · MARKET
+ *   • Chap ustun ikki yozuvli, yig'ilmaydi, filial tanlagichi yo'q
  *   • Yaratish menyusi/qidiruv yo'q — bular operatsion amallar
  *
  * ── NIMASI BIR XIL VA NEGA ──

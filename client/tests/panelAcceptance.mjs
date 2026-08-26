@@ -9,8 +9,9 @@
  *
  * TEKSHIRILADIGAN ARXITEKTURA:
  *
- *   SUPER ADMIN  `/org` — ALOHIDA qobiq (o'z sarlavhasi, o'z uch
- *                 yozuvli menyusi, sarlavhada MOLIYA). Oqim:
+ *   SUPER ADMIN  `/org` — ALOHIDA qobiq (o'z sarlavhasi, chap ustunda
+ *                 ikki bo'lim, sarlavhada ASOSIY · MOLIYA · MARKET).
+ *                 Oqim:
  *                 Asosiy → Filiallar → filial kartasi → Filial A →
  *                 Xonalar → "+" → xona formasi → Moliya → drill-down
  *                 zanjiri → tranzaksiya → Tizim tahlili → Xonalar
@@ -144,21 +145,51 @@ head("1) SUPER ADMIN — o'z qobig'i");
   check("Admin panelining qobig'i ISHLATILMAYDI", shadcnSidebar === 0,
     shadcnSidebar ? `${shadcnSidebar} ta [data-sidebar] element` : "o'z qobig'i");
 
-  // ── SIDEBAR: UCHTA YOZUV (talab 4) ──
+  // ── SIDEBAR: IKKI YOZUV (talab 4) ──
+  //
+  // ⚠ YO'NALISH O'ZGARDI, TALAB EMAS. Ilgari bu yerda "sidebar: Asosiy ·
+  // Filiallar · Tizim tahlili" va "3 yozuv" tekshirilardi. "Asosiy"
+  // SARLAVHAGA ko'chirildi (u bo'lim emas, bosh sahifa — hamma yo'l unga
+  // qaytadi), ya'ni chap ustunda ikkita bo'lim qoldi.
+  //
+  // Tekshiruv YUMSHATILMADI: "minimal menyu" invarianti joyida, faqat
+  // Asosiy endi sarlavha tomonida o'lchanadi (pastda). Ya'ni yozuv
+  // YO'QOLIB ketsa ham test qizil bo'ladi.
   const nav = await orgNavItems(page);
-  const EXPECT = ["Asosiy", "Filiallar", "Tizim tahlili"];
+  const EXPECT = ["Filiallar", "Tizim tahlili"];
   const missing = EXPECT.filter((t) => !nav.some((n) => n.includes(t)));
-  check("sidebar: Asosiy · Filiallar · Tizim tahlili", missing.length === 0,
+  check("sidebar: Filiallar · Tizim tahlili", missing.length === 0,
     missing.length ? `yo'q: ${missing}` : nav.join(" · "));
-  check("sidebar minimal (3 yozuv)", nav.length === 3, nav.join(" · "));
+  check("sidebar minimal (2 yozuv)", nav.length === 2, nav.join(" · "));
   check("entitetlar sidebarda YO'Q",
     !nav.some((n) => /O'quvchi|O'qituvchi|Guruh|Xona|Chiqim|To'lov/.test(n)),
     nav.join(" · "));
 
-  // ── MOLIYA SARLAVHADA (talab 3) ──
+  // ── ASOSIY · MOLIYA SARLAVHADA (talab 3) ──
+  const headerAsosiy = page.locator('header a[href="/org"]');
+  check("ASOSIY sarlavhada, sidebarda emas",
+    (await headerAsosiy.count()) > 0 && !nav.some((n) => n.includes("Asosiy")),
+    `sarlavhada ${await headerAsosiy.count()} ta · sidebar: ${nav.join(" · ")}`);
+
   const headerMoliya = page.locator('header a[href="/org/moliya"]');
   check("MOLIYA sarlavhada, sidebarda emas",
     (await headerMoliya.count()) > 0 && !nav.some((n) => n.includes("Moliya")));
+
+  // ── FAOL YOZUV BITTA (⚠ `end` bo'lmasa IKKITA bo'lardi) ──
+  //
+  // `/org` — qolgan hamma yo'lning prefiksi. `NavLink` da `end`
+  // qo'yilmasa, Moliya ochilganda "Asosiy" ham faol bo'lib qolardi va
+  // sarlavhada bir vaqtda ikki yozuv yonib turardi.
+  await page.goto(`${APP}/org/moliya`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1500);
+  const activeOnMoliya = await page
+    .locator('header nav[aria-label="Asosiy yo\'nalishlar"] a.bg-primary')
+    .allTextContents();
+  check("Moliya ochiq: sarlavhada FAQAT bitta faol yozuv",
+    activeOnMoliya.length === 1 && activeOnMoliya[0].includes("Moliya"),
+    activeOnMoliya.join(" · ") || "faol yozuv topilmadi");
+  await page.goto(`${APP}/org`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1500);
 
   // Sarlavha menyusida Admin paneliga havola BO'LMASLIGI kerak —
   // u "yolg'on eshik" bo'lardi (bosiladi, lekin qaytariladi).

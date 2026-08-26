@@ -4,10 +4,10 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
- * SUPER ADMIN NAVIGATSIYASI — UCHTA YOZUV, BOSHQA HECH NARSA
+ * SUPER ADMIN NAVIGATSIYASI — MINIMAL RO'YXAT, BOSHQA HECH NARSA
  * ══════════════════════════════════════════════════════════════════════
  *
- * ── NEGA FAQAT UCHTA ──
+ * ── NEGA SHUNCHA KAM ──
  * Bu menyu KATALOG EMAS. O'quvchi, o'qituvchi, guruh, xona, chiqim,
  * to'lov — bularning hammasi tashkilot darajasida "yozuv" emas, balki
  * biror KONTEKST ICHIDAGI narsa: xona filialning ichida, to'lov
@@ -15,11 +15,19 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
  * yasaydi va Super Admin panelini "tugmalari ko'paytirilgan Admin
  * paneli"ga aylantiradi — aynan taqiqlangan natija.
  *
- * Uchta yozuv uchta savolga javob beradi:
+ * Har bir yozuv bitta savolga javob beradi:
  *
- *   ASOSIY        "biznes umuman qanday ketyapti?"
- *   FILIALLAR     "qaysi filial qanday ishlayapti?"
- *   TIZIM TAHLILI "nimaga e'tibor berishim kerak?"
+ *   ASOSIY        "biznes umuman qanday ketyapti?"   → SARLAVHADA
+ *   FILIALLAR     "qaysi filial qanday ishlayapti?"  → chap ustun
+ *   TIZIM TAHLILI "nimaga e'tibor berishim kerak?"   → chap ustun
+ *
+ * ── NEGA ASOSIY SARLAVHAGA CHIQDI ──
+ * U bo'lim emas, BOSH SAHIFA: panel har safar o'sha yerdan ochiladi va
+ * qolgan hamma yo'l unga QAYTADI. Chap ustunning birinchi qatori
+ * bo'lganida u "Filiallar bilan bir xil darajadagi bo'lim" bo'lib
+ * o'qilardi. Sarlavhada esa u Moliya va Market bilan bitta qatorda —
+ * ya'ni panelning yuqori darajadagi yo'nalishlari BITTA joyda turadi,
+ * ikki ustunga bo'linmaydi.
  *
  * ── MOLIYA VA MARKET BU YERDA YO'Q — ULAR SARLAVHADA ──
  * Moliya sidebar'ning to'rtinchi qatori bo'lsa, u qolgan uchtasi bilan
@@ -28,21 +36,15 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
  * yo'nalish (`SuperAdminHeader`), hisobot menyusining ichida emas.
  *
  * Market ham AYNI toifada: u "biznes qanday ketyapti" degan savolga
- * javob bermaydi, u ALOHIDA ish. Sidebarga qo'shilsa uchta yozuv
- * qoidasi buzilardi (`panelAcceptance.mjs` uni tekshiradi).
+ * javob bermaydi, u ALOHIDA ish. Sidebarga qo'shilsa chap ustun
+ * minimal bo'lish qoidasi buzilardi (`panelAcceptance.mjs` uni
+ * tekshiradi).
  *
  * ── RUXSAT ──
  * Bu yerdagi `permission` faqat MENYUNI kesadi. Ma'lumot himoyasi
  * serverda: har so'rovda rol + ruxsat + filial ko'lami tekshiriladi.
  */
 export const SUPER_ADMIN_NAV = Object.freeze([
-  {
-    key: "asosiy",
-    title: "Asosiy",
-    icon: LayoutDashboard,
-    url: "/org",
-    end: true,
-  },
   {
     key: "filiallar",
     title: "Filiallar",
@@ -64,12 +66,23 @@ export const SUPER_ADMIN_NAV = Object.freeze([
 ]);
 
 /**
- * SARLAVHADAGI YO'NALISH — hozircha bitta: MOLIYA.
+ * SARLAVHADAGI YO'NALISHLAR: ASOSIY · MOLIYA · MARKET.
  *
- * Ro'yxat sifatida saqlanadi, chunki sarlavha darajasidagi yo'nalish
- * keyin ko'payishi mumkin va u paytda tuzilma tayyor bo'lishi kerak.
+ * Tartib TASODIFIY EMAS — chapdan o'ngga "qayerdan boshlanadi" dan
+ * "alohida ish" ga qarab: Asosiy (bosh manzara) → Moliya (panelni
+ * ochishning eng ko'p sababi) → Market (alohida ish).
  */
 export const SUPER_ADMIN_HEADER_NAV = Object.freeze([
+  {
+    key: "asosiy",
+    title: "Asosiy",
+    icon: LayoutDashboard,
+    url: "/org",
+    // ⚠ `end` — `/org` BARCHA `/org/*` yo'llarining prefiksi. Usiz
+    // NavLink "Asosiy" ni Moliya va Filiallar ochilganda ham faol deb
+    // bo'yardi, ya'ni sarlavhada BIR VAQTDA ikki faol yozuv turardi.
+    end: true,
+  },
   {
     key: "moliya",
     title: "Moliya",

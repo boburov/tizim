@@ -85,7 +85,13 @@ const SignalRow = ({ signal, onOpen, onAction }) => {
   );
 };
 
-const IntelligenceCenter = ({ query, onOpenSignal, onAction }) => {
+/**
+ * `showHint` — sarlavha ostidagi tushuntirish satri.
+ * Superadmin paneli uni O'CHIRADI (vizual minimalizm talabi), owner
+ * moliya ekranida esa qoladi — u yerda taqqoslash davri boshqa
+ * joyda yozilmaydi.
+ */
+const IntelligenceCenter = ({ query, onOpenSignal, onAction, showHint = true }) => {
   if (query.isLoading) return <LoadingBlock rows={2} />;
   if (query.isError) return <ErrorBlock error={query.error} onRetry={query.refetch} />;
 
@@ -101,9 +107,11 @@ const IntelligenceCenter = ({ query, onOpenSignal, onAction }) => {
             <Sparkles className="size-4 text-muted-foreground" />
             Nimaga e'tibor kerak
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Qoidalar tahlil ustida ishlaydi · taqqoslash: {d.comparison?.label}
-          </p>
+          {showHint && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Qoidalar tahlil ustida ishlaydi · taqqoslash: {d.comparison?.label}
+            </p>
+          )}
         </div>
         {d.dataQuality?.level === "limited" && (
           <span

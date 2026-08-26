@@ -27,7 +27,7 @@ import { SUPER_ADMIN_NAV } from "../navigation/nav.config";
  *
  * ── MOBIL ──
  * Tor ekranda ustun gorizontal qatorga aylanadi (`lg:` chegarasi).
- * Drawer ATAYLAB yo'q: uchta yozuv drawer ochish-yopish qadamiga
+ * Drawer ATAYLAB yo'q: ikkita yozuv drawer ochish-yopish qadamiga
  * arzimaydi va yashirin menyu "qayerdaman?" savolini kuchaytiradi.
  */
 const SuperAdminSidebar = () => {

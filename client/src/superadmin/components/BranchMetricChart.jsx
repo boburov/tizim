@@ -360,18 +360,18 @@ const BranchMetricChart = ({
             {formatMetric(headline, metric.kind)}
           </p>
 
-          <p className="mt-2 text-xs text-muted-foreground">
-            {metric.hint}
-            {period.hint && ` · ${period.hint}`}
-            {canOpen && " · nuqtani bosing"}
-            {leader && (
-              <>
-                {" · "}
-                <span className="text-foreground">Eng kattasi: {leader.name}</span>
-                {` (${leader.note})`}
-              </>
-            )}
-          </p>
+          {/* ⚠ FAQAT TOPILMA QOLDI. Ilgari shu satrda ko'rsatkich
+              ta'rifi (`metric.hint`), davr izohi (`period.hint`) va
+              "nuqtani bosing" ko'rsatmasi ham turardi — ular ekrandan
+              OLIB TASHLANDI (vizual minimalizm talabi). Ta'riflar
+              `branchMetrics.js` da saqlanadi va kerak bo'lsa tooltip
+              sifatida qaytariladi. */}
+          {leader && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              <span className="text-foreground">Eng kattasi: {leader.name}</span>
+              {` (${leader.note})`}
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">

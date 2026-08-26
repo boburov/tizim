@@ -23,22 +23,30 @@ import { SUPER_ADMIN_HEADER_NAV } from "../navigation/nav.config";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
- * SUPER ADMIN SARLAVHASI — MOLIYA SHU YERDA
+ * SUPER ADMIN SARLAVHASI — ASOSIY · MOLIYA · MARKET SHU YERDA
  * ══════════════════════════════════════════════════════════════════════
  *
- * ── NEGA MOLIYA SARLAVHADA, SIDEBAR'DA EMAS ──
+ * ── NEGA BU UCHTASI SARLAVHADA, SIDEBAR'DA EMAS ──
  * Sidebar tashkilotning TUZILISHINI ko'rsatadi (nima bor: filiallar,
- * tahlil). Moliya esa tuzilma emas — u markaz egasi panelni ochishning
- * ENG KO'P sababi. Sidebar'ning to'rtinchi qatori bo'lsa, u "yana bitta
- * bo'lim" bo'lib o'qilardi va hisobot menyusiga ko'milgan har qanday
- * moliya kabi ko'zdan qochardi.
+ * tahlil). Sarlavha esa YO'NALISH beradi — "qayerga boraman".
  *
- * Bu yerda u doim ko'rinadigan, alohida ajratilgan yo'nalish.
+ *   ASOSIY — bo'lim emas, BOSH SAHIFA. Hamma yo'l unga qaytadi, ya'ni
+ *            u chap ustunning birinchi qatori emas, doim ko'rinadigan
+ *            boshlanish nuqtasi.
+ *   MOLIYA — tuzilma emas: markaz egasi panelni ochishning ENG KO'P
+ *            sababi. Sidebar qatori bo'lsa "yana bitta bo'lim" bo'lib
+ *            o'qilardi va hisobot menyusiga ko'milgan har qanday moliya
+ *            kabi ko'zdan qochardi.
+ *   MARKET — alohida ish, "biznes qanday ketyapti" savoliga javob
+ *            bermaydi.
+ *
+ * Natijada yuqori darajadagi yo'nalishlar BITTA qatorda turadi, ikki
+ * ustunga bo'linmaydi.
  *
  * ── PROFIL MENYUSIDA NIMA BOR VA NEGA ──
  *   Vakolatlar      — "kim nima qila oladi". Bu SOZLASH ishi, kundalik
- *                     emas: sidebar'da bo'lsa uch yozuvli menyuni
- *                     to'rtga chiqarardi.
+ *                     emas: sidebar'da bo'lsa qisqa menyuni
+ *                     uzaytirardi.
  *
  * ── ADMIN PANELIGA HAVOLA ATAYLAB YO'Q ──
  * Bir muddat bu menyuda "Admin paneli" qatori turgandi. U olib
@@ -85,23 +93,45 @@ const SuperAdminHeader = () => {
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-card px-3 sm:px-4">
-      {/* ── TASHKILOT ── */}
-      <Link to="/org" className="flex min-w-0 items-center gap-2">
+      {/* ── BREND ──
+          ⚠ `lg:w-52` TASODIFIY EMAS: 13rem + sarlavhaning `px-4` (1rem)
+          = 14rem, ya'ni AYNAN sidebar kengligi (`lg:w-56`). Shu tufayli
+          yonidagi yo'nalishlar chap ustun tugagan joydan, asosiy
+          maydonning chap chetiga tekislanib boshlanadi.
+
+          Ilgari bu yerda "Tashkilot" nishoni ham turardi: u brend
+          blokining kengligini o'zgartirib turardi (nishon `md:` dan
+          past ekranda yo'q edi), shuning uchun Moliya/Market har
+          ekranda boshqa joydan boshlanardi va hech qayerga
+          tekislanmasdi. Nishon olib tashlandi — panelni sidebar
+          sarlavhasi ("Tashkilot menyusi") va yo'nalishlar o'zi
+          aytadi. */}
+      <Link
+        to="/org"
+        className="flex min-w-0 shrink-0 items-center gap-2 lg:w-52"
+      >
         <img src={APP_LOGO} width={28} height={28} alt="" className="size-7 shrink-0" />
         <span className="hidden truncate text-sm font-semibold sm:inline">
           {APP_NAME}
         </span>
-        <span className="hidden rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground md:inline">
-          Tashkilot
-        </span>
       </Link>
 
-      {/* ── YUQORI DARAJADAGI YO'NALISHLAR: MOLIYA, MARKET ── */}
-      <nav aria-label="Asosiy yo'nalishlar" className="ml-1 flex items-center gap-1 sm:ml-3">
+      {/* ── YUQORI DARAJADAGI YO'NALISHLAR: ASOSIY, MOLIYA, MARKET ── */}
+      {/* `lg:-ml-1` — yozuvning O'Z ichki chekkasi (px-2.5) hisobga
+          olinadi: shunda IKONKA aynan asosiy maydon chetiga (244px)
+          tushadi, ya'ni "Moliya" sahifa sarlavhasi bilan bir vertikalda
+          boshlanadi. */}
+      <nav
+        aria-label="Asosiy yo'nalishlar"
+        className="flex items-center gap-1 lg:-ml-1"
+      >
         {headerNav.map((item) => (
           <NavLink
             key={item.key}
             to={item.url}
+            // ⚠ `end` — `/org` qolgan hamma yo'lning prefiksi. Usiz
+            // "Asosiy" Moliya ochilganda ham faol bo'lib qolardi.
+            end={item.end}
             className={({ isActive }) =>
               cn(
                 "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition sm:px-3",

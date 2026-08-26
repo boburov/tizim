@@ -14,9 +14,7 @@ import BranchMetricChart from "../components/BranchMetricChart";
 import {
   ALL_BRANCHES_VALUE,
   DEFAULT_PERIOD,
-  findPeriod,
   periodRange,
-  periodRangeLabel,
 } from "../components/branchMetrics";
 import { useIntelligence } from "@/owner/features/financeAnalytics/hooks/useFinanceIntelligence";
 import IntelligenceCenter from "@/owner/features/financeAnalytics/components/IntelligenceCenter";
@@ -87,10 +85,9 @@ const AsosiyPage = () => {
    * tursa-da, u pastdagi jadvallarga ham tegishli: bitta ekranda
    * grafik "o'tgan oy", jadval esa "bu oy" bo'lib turishi —
    * raqamlar bir-biriga mos kelmasligining eng jimgina sababi.
-   * Shuning uchun sahifa sarlavhasida ham davr ochiq yoziladi.
+   * Tanlangan davr grafik sarlavhasida ochiq yoziladi.
    */
   const periodFilters = useMemo(() => periodRange(chart.period), [chart.period]);
-  const period = findPeriod(chart.period);
 
   // ⚠ `branchId` va davr FILTRDA — ya'ni TanStack kalitida. Tanlov
   // o'zgarsa kalit o'zgaradi va so'rov o'zi qaytadan ketadi;
@@ -114,10 +111,7 @@ const AsosiyPage = () => {
   );
 
   return (
-    <PageShell
-      title="Umumiy holat"
-      subtitle={`${period.label} (${periodRangeLabel(period.key)}), filiallar kesimida. Davr, filial va ko'rsatkichni tanlang.`}
-    >
+    <PageShell title="Umumiy holat">
       {!canFinance ? (
         <EmptyState
           icon={Wallet}
@@ -145,14 +139,17 @@ const AsosiyPage = () => {
 
       {/* ── NIMAGA E'TIBOR BERISH KERAK ── */}
       {canFinance && (
-        <IntelligenceCenter query={intelligence} onOpenSignal={setSignalId} />
+        <IntelligenceCenter
+          query={intelligence}
+          onOpenSignal={setSignalId}
+          showHint={false}
+        />
       )}
 
       {/* ── FILIALLAR: eng qisqa taqqoslash (talab 3) ── */}
       {canProfit && (
         <DashboardSection
           title="Filiallar"
-          hint="Qaysi filial kuchli, qaysi biriga e'tibor kerak"
           to="/org/filiallar"
           toLabel="To'liq taqqoslash"
         >
@@ -188,11 +185,6 @@ const AsosiyPage = () => {
       {canProfit && (
         <DashboardSection
           title="Eng foydali yo'nalishlar"
-          hint={
-            directions.data?.attribution
-              ? `Bog'lanish qamrovi: ${directions.data.attribution.coveragePercent}% — qolgan daromad yo'nalishga bog'lanmagan`
-              : undefined
-          }
           to="/org/tahlil"
           toLabel="Barcha kesimlar"
         >
@@ -223,14 +215,7 @@ const AsosiyPage = () => {
 
       {/* ── ENG FOYDALI O'QITUVCHILAR ── */}
       {canTeacherProfit && (
-        <DashboardSection
-          title="Eng foydali o'qituvchilar"
-          hint={
-            teachers.data?.attribution
-              ? `Bog'lanish qamrovi: ${teachers.data.attribution.coveragePercent}% — qolgani bir nechta o'qituvchili guruhlarda`
-              : undefined
-          }
-        >
+        <DashboardSection title="Eng foydali o'qituvchilar">
           <QueryState
             query={teachers}
             empty={!teachers.data?.items?.length}

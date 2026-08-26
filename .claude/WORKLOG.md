@@ -21406,3 +21406,168 @@ Docs cleaned up. Here's the classification.
 <sub>session `bfb671b8` · branch `main` · 39 ta qadam</sub>
 
 ---
+
+## 2026-08-26 18:19 — remove 2ndary text from superadmin dashboard (i mean explanition texts
+
+**So'rov**
+
+> remove 2ndary text from superadmin dashboard (i mean explanition texts)
+
+**Buyruqlar (20)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client/src/superadmin && ls -R | head -60
+wc -l pages/AsosiyPage.jsx components/BranchMetricChart.jsx && grep -n "Bu oy\|kesimida\|tanlang\|Qaytarimlar\|nuqtani bosing\|Eng kattasi\|Qoidalar tahlil\|taq…
+sed -n '100,200p' pages/AsosiyPage.jsx
+sed -n '200,279p' pages/AsosiyPage.jsx
+sed -n '330,400p' components/BranchMetricChart.jsx; echo "=== branchMetrics hints"; sed -n '25,60p' components/branchMetrics.js
+cd /Users/shukrullo/Desktop/lc-total/client && grep -rn "Qoidalar tahlil\|Nimaga e'tibor" src | head; echo "=== DashboardSection"; find src -name "DashboardSect…
+grep -rn "IntelligenceCenter\|DashboardSection" src --include=*.jsx -l | sort; echo "=== PageShell users (superadmin)"; grep -rn "PageShell" src/superadmin | he…
+grep -rln "IntelligenceCenter" src; echo "---DashboardSection users:"; grep -rln "DashboardSection" src
+sed -n '70,130p' src/owner/features/financeAnalytics/components/IntelligenceCenter.jsx; echo "===== PageShell"; cat src/shared/components/page/PageShell.jsx
+cd src/superadmin && grep -rn "\.hint\|hint=" components/BranchMetricChart.jsx components/branchMetrics.js pages/AsosiyPage.jsx sections/*.jsx | head -20; echo …
+grep -n "periodRangeLabel\|const period\|period\b" pages/AsosiyPage.jsx | head -20
+sed -n '12,24p' pages/AsosiyPage.jsx; echo ---; sed -n '88,96p' pages/AsosiyPage.jsx
+sed -n '74,95p' pages/AsosiyPage.jsx
+python3 - <<'PY' import io p='pages/AsosiyPage.jsx' s=io.open(p,encoding='utf-8').read() # 1. sahifa sarlavhasi ostidagi tushuntirish old=""" <PageShell title="…
+cd /Users/shukrullo/Desktop/lc-total/client && python3 - <<'PY' import io # IntelligenceCenter — tushuntirish satri IXTIYORIY bo'ldi (owner paneli o'zgarmaydi) …
+cd src/superadmin 2>/dev/null || cd /Users/shukrullo/Desktop/lc-total/client/src/superadmin; python3 - <<'PY' import io p='components/BranchMetricChart.jsx' s=i…
+grep -n "canOpen\|metric.hint\|period.hint" components/BranchMetricChart.jsx; echo "=== branchMetrics hint doc"; sed -n '18,30p' components/branchMetrics.js; ec…
+python3 - <<'PY' import io p='components/branchMetrics.js' s=io.open(p,encoding='utf-8').read() old=""" * hint — raqamning ASOSI. Foizning maxraji aytilmasa uni…
+npm run build 2>&1 | tail -12
+cd /Users/shukrullo/Desktop/lc-total && git diff --stat -- client/src && sed -n '110,125p' client/src/superadmin/pages/AsosiyPage.jsx
+```
+
+**Natija**
+
+Now applying the edits:
+
+Done — build passes, ESLint clean.
+
+## Removed from the superadmin dashboard (`/org` → Asosiy)
+
+| Where | Text removed |
+|---|---|
+| Page header | *"Bu oy (Avg 2026), filiallar kesimida. Davr, filial va ko'rsatkichni tanlang."* — subtitle dropped entirely ([AsosiyPage.jsx:114](client/src/superadmin/pages/AsosiyPage.jsx#L114)) |
+| Under the big number | *"Qaytarimlar ayirilgan · filiallararo o'tkazmalarsiz"*, *"nuqtani bosing"*, and the period note ([BranchMetricChart.jsx:363](client/src/superadmin/components/BranchMetricChart.jsx#L363)) |
+| "Nimaga e'tibor kerak" | *"Qoidalar tahlil ustida ishlaydi · taqqoslash: Oldingi oy"* |
+| Section subtitles | *"Qaysi filial kuchli, qaysi biriga e'tibor kerak"*, and the *"Bog'lanish qamrovi: N%…"* lines under **Eng foydali yo'nalishlar** / **Eng foydali o'qituvchilar** |
+
+## What I deliberately kept
+
+- **"Eng kattasi: DEMO Markaz (47% ulush)"** — that's a finding, not an explanation, so the caption line now shows only that (and disappears when there's no leader). Say the word and it goes too.
+- **Empty-state hints** ("Moliyaviy manzara yopiq", "Filial ma'lumoti yo'q" …) — they replace content rather than sit next to it, so they don't add clutter on a populated screen.
+
+Two notes worth your attention:
+
+1. `IntelligenceCenter` is shared with the owner panel's Finance page, so I made the subtitle an opt-in prop (`showHint`, default `true`) and passed `showHint={false}` only from superadmin. The owner screen is untouched.
+2. Two of the removed lines were **correctness caveats**, not just prose: the revenue basis ("refunds excluded, no inter-branch transfers") and the attribution coverage % (how much revenue couldn't be tied to a course/teacher). The numbers themselves don't change, but nothing on screen now say
+
+…(qisqartirildi)
+
+<sub>session `bfb671b8` · branch `main` · 20 ta qadam</sub>
+
+---
+
+## 2026-08-26 18:29 — remove Tashkilot badeg from super admin and fix moliya / market postio
+
+**So'rov**
+
+> remove Tashkilot badeg from super admin and fix moliya / market postion it look so wierd
+
+**Buyruqlar (16)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client/src && cat superadmin/layout/SuperAdminHeader.jsx
+cd /Users/shukrullo/Desktop/lc-total/client/src/superadmin && cat layout/SuperAdminLayout.jsx && echo "===== SIDEBAR" && sed -n '1,80p' layout/SuperAdminSidebar…
+cat navigation/nav.config.js | sed -n '1,80p'
+cd /Users/shukrullo/Desktop/lc-total && grep -rn "Tashkilot" --include=*.mjs --include=*.js --include=*.jsx client server 2>/dev/null | grep -v node_modules | g…
+grep -rn "Tashkilot" client/src server/test 2>/dev/null | grep -v node_modules | head -20; echo "=== panelAcceptance"; find . -name "panelAcceptance*" -not -pat…
+grep -n "Tashkilot\|badge\|HEADER_NAV\|SuperAdminHeader" client/tests/panelAcceptance.mjs | head -20; echo "=== test cmd"; grep -n '"test' client/package.json
+cd client/src/superadmin && python3 - <<'PY' import io p='layout/SuperAdminHeader.jsx' s=io.open(p,encoding='utf-8').read() old=""" {/* ── TASHKILOT ── */} <Lin…
+cd /Users/shukrullo/Desktop/lc-total/client && npx eslint src/superadmin/layout/SuperAdminHeader.jsx && echo LINT-OK; curl -s -o /dev/null -w "5000:%{http_code}…
+ls tests/ | head -20; sed -n '1,60p' tests/panelAcceptance.mjs
+cd /Users/shukrullo/Desktop/lc-total/client && ls tests/ && sed -n '1,55p' tests/panelAcceptance.mjs
+sed -n '56,125p' tests/panelAcceptance.mjs
+grep -n "loginAs(" tests/panelAcceptance.mjs | head -6; grep -rn "qa_admin\|QA_PASS\|password" tests/panelAcceptance.mjs | head -8
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/bfb671b8-bc06-4fd9-84d4-d4b9c2022624/scratchpad/shot.mjs <<'EOF' const { existsSync, readdirSync…
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/bfb671b8-bc06-4fd9-84d4-d4b9c2022624/scratchpad/measure.mjs <<'EOF' const { existsSync, readdirS…
+python3 - <<'PY' import io p='src/superadmin/layout/SuperAdminHeader.jsx' s=io.open(p,encoding='utf-8').read() old=""" <nav aria-label="Asosiy yo'nalishlar" cla…
+node /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/bfb671b8-bc06-4fd9-84d4-d4b9c2022624/scratchpad/shot.mjs /private/tmp/claude-501/-Users-shukrullo…
+```
+
+**Natija**
+
+Done — verified in the running dev server (I used the one already on :5173, didn't start anything).
+
+**Changes**, both in [SuperAdminHeader.jsx](client/src/superadmin/layout/SuperAdminHeader.jsx):
+
+1. **"Tashkilot" badge removed** — the muted chip next to `LcSystem` is gone.
+2. **Moliya / Market re-aligned.** The reason they looked off: the badge only rendered at `md:` and up, so the brand block's width changed per breakpoint and the nav started from a different place each time — anchored to nothing. Now the brand block is a fixed `lg:w-52` (13rem + the header's 1rem padding = 14rem = exactly the sidebar's `lg:w-56`), so the nav begins where the left column ends.
+
+Measured in the browser:
+
+| | before | after |
+|---|---|---|
+| Sidebar right edge | 224px | 224px |
+| Moliya icon | 267px (floating) | **244px** |
+| Page title / card left edge | 244px | 244px |
+
+So "Moliya" now starts on the same vertical line as "Umumiy holat" and the chart card, instead of hanging in the gap just past the sidebar border.
+
+ESLint clean, `npm run build` passes.
+
+One leftover you may or may not want: the sidebar still has a **"TASHKILOT"** caption above the three items — with the badge gone it's the only place that word appears on screen, and it labels a single group. Want it dropped too?
+
+<sub>session `bfb671b8` · branch `main` · 18 ta qadam</sub>
+
+---
+
+## 2026-08-26 18:38 — reposition Asosiy to header with icon
+
+**So'rov**
+
+> reposition Asosiy to header with icon
+
+**Buyruqlar (12)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && grep -n "orgNavItems\|Asosiy\|uch\|3 ta\|length === 3" tests/panelAcceptance.mjs | head -30
+sed -n '126,175p' tests/panelAcceptance.mjs
+sed -n '62,110p' src/superadmin/navigation/nav.config.js; echo "=== refs"; grep -rn "SUPER_ADMIN_NAV\|SUPER_ADMIN_HEADER_NAV" src tests | grep -v node_modules
+python3 - <<'PY' import io p='src/superadmin/navigation/nav.config.js' s=io.open(p,encoding='utf-8').read() # 1. "Asosiy" ni sidebardan olib tashlash old_item="…
+python3 - <<'PY' import io p='src/superadmin/layout/SuperAdminHeader.jsx' s=io.open(p,encoding='utf-8').read() old=""" <NavLink key={item.key} to={item.url} cla…
+python3 - <<'PY' import io p='src/superadmin/layout/SuperAdminHeader.jsx' s=io.open(p,encoding='utf-8').read() old=""" * SUPER ADMIN SARLAVHASI — MOLIYA SHU YER…
+python3 - <<'PY' import io fixes = [ ('src/superadmin/layout/SuperAdminLayout.jsx', " * • Sarlavha butun kenglikda va u yerda MOLIYA turadi\n * • Chap ustun uch…
+python3 - <<'PY' import io p='tests/panelAcceptance.mjs' s=io.open(p,encoding='utf-8').read() old=""" // ── SIDEBAR: UCHTA YOZUV (talab 4) ── const nav = await …
+python3 - <<'PY' import io p='tests/panelAcceptance.mjs' s=io.open(p,encoding='utf-8').read() old=""" * SUPER ADMIN `/org` — ALOHIDA qobiq (o'z sarlavhasi, o'z …
+node /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/bfb671b8-bc06-4fd9-84d4-d4b9c2022624/scratchpad/shot.mjs /private/tmp/claude-501/-Users-shukrullo…
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/bfb671b8-bc06-4fd9-84d4-d4b9c2022624/scratchpad/verify.mjs <<'EOF' const { existsSync, readdirSy…
+npm run build 2>&1 | tail -3; cd /Users/shukrullo/Desktop/lc-total && git diff --stat -- client
+```
+
+**Natija**
+
+Now updating the acceptance test, which locks the old three-item sidebar:
+
+**Asosiy** is now the first header item with its `LayoutDashboard` icon; the sidebar is down to **Filiallar · Tizim tahlili**.
+
+Verified against the running dev server:
+
+| Route | Header | Active | Sidebar |
+|---|---|---|---|
+| `/org` | Asosiy · Moliya · Market | **Asosiy** | Filiallar · Tizim tahlili |
+| `/org/moliya` | Asosiy · Moliya · Market | **Moliya** | Filiallar · Tizim tahlili |
+| `/org/filiallar` | Asosiy · Moliya · Market | — | Filiallar · Tizim tahlili |
+
+No console errors, ESLint clean, build passes.
+
+**One thing worth knowing:** `/org` is a prefix of every other org route, so a plain `NavLink` would have kept **Asosiy** lit on Moliya and Market too — two items glowing at once. I carried the entry's `end: true` flag through to the header ([SuperAdminHeader.jsx](client/src/superadmin/layout/SuperAdminHeader.jsx)); the `/org/moliya` row above is that case measured, not assumed.
+
+I also updated [panelAcceptance.mjs](client/tests/panelAcceptance.mjs), which locked the old layout ("sidebar: Asosiy · Filiallar · Tizim tahlili", "3 yozuv"). I did **not** soften it — the minimal-menu invariant stays, Asosiy is now asserted on the header side, and I added a new check that only one header item is active on `/org/moliya` (the `end` regression would otherwise pass silently). I didn't run the suite, since it creates a branch and a room partway through — run it yourself with `npm run test:browser-panels` when you want.
+
+The active pill sits ~12px left of the content column: that's the button's own padding, the same way the sidebar pills bleed left of their icons — the **icon** lines up exactly with "Umumiy holat". Tell me if you'd rather have the pill edge flush instead.
+
+<sub>session `bfb671b8` · branch `main` · 13 ta qadam</sub>
+
+---

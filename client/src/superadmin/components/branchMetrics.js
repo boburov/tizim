@@ -25,6 +25,13 @@ import { formatMoney, formatMoneyShort } from "@/shared/utils/formatMoney";
  *               uchun unda "jamidagi ulush" ham ko'rsatilmaydi.
  *   hint      — raqamning ASOSI. Foizning maxraji aytilmasa uni
  *               tekshirib bo'lmaydi (kodbaza qoidasi).
+ *
+ *               ⚠ 2026-08-26: `hint` EKRANDA KO'RSATILMAYDI —
+ *               superadmin panelidan tushuntirish matnlari olib
+ *               tashlandi. Ta'riflar shu yerda ATAYLAB saqlanadi:
+ *               ular ko'rsatkichning shartnomasi va tooltip kerak
+ *               bo'lganda birinchi manba. `PERIODS[].hint` ham
+ *               shunday — hozir hech qayerda o'qilmaydi.
  */
 export const METRICS = [
   {
