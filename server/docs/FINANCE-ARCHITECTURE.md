@@ -1,8 +1,25 @@
-# Moliya moduli — arxitektura hisoboti (STEP 1: audit)
+# Moliya moduli — arxitektura hisoboti
 
-> Holat: **audit tugadi, implementatsiya boshlanmagan.**
-> Manba: `prisma/schema.prisma` (2941 qator, ~120 model), `src/modules/*`,
-> `client/src/{owner,admin}/features/*`.
+> **Holat (2026-08-26 da qayta o'lchandi): §6 rejasi BAJARILDI.**
+> Sarlavhadagi eski "implementatsiya boshlanmagan" yozuvi ESKIRGAN edi.
+> Schemada `RecurringExpense`, `Budget`/`BudgetLine`, `Refund`,
+> `FinancialAuditLog` bor; `JournalEntry` o'lchov ustunlari
+> (`studentId`/`teacherId`/`groupId`/`courseId`…) va yangi `EntryKind`
+> qiymatlari (`refund`, `owner_investment`, `owner_withdrawal`,
+> `payment_fee`, `account_transfer`) qo'shilgan;
+> `src/modules/finance/financial-transaction.service.ts` — yagona yozuv
+> nuqtasi; `/finance-analytics` da 30 marshrut (summary, cash-flow,
+> receivables, budget, teachers/directions/groups/rooms foydasi, alerts,
+> intelligence).
+>
+> **Nega saqlanadi:** §3 dagi bo'shliq jadvali endi tarixiy, LEKIN §4
+> (nega parallel jadval EMAS, jurnal kengaytiriladi), §7 (regressiya
+> ro'yxati) va oxiridagi ruxsat xaritasi (`finance.view_*` ATAYLAB
+> `finance.read` ga kirmasligi) HAMON AMALDA. Bu qarorlar boshqa hech
+> qayerda yozilmagan.
+>
+> ⚠ §3 dagi "❌ / 🟡" belgilarini bugungi holat deb O'QIMANG — ular
+> auditning boshlanish nuqtasi.
 
 ---
 

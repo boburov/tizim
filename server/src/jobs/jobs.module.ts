@@ -26,9 +26,10 @@ import type { JobDefinition } from './job.types.js';
  * cronni ro'yxatga olsa, ish IKKI MARTA bajarilardi. Bildirishnomada bu
  * "ikkita bir xil xabar", moliyada esa "ikkita pul harakati" degani.
  *
- * ⚠ RO'YXATGA QO'SHISH ≠ KO'CHIRISH TUGADI. Job bu yerda paydo bo'lishi
- * uchun uning BARCHA biznes servislari NestJS'da tayyor bo'lishi shart —
- * `WORKERS-DEPENDENCY-MATRIX.md` §1 aynan shuni kuzatib boradi.
+ * ⚠ Yuqoridagi izoh KESISHUV davriga tegishli — u 2026-08-22 da tugadi va
+ * Express o'chirildi. Ochiq ro'yxat SAQLANDI: u endi "nima ko'chirildi" ni
+ * emas, "bu jarayon nimani yuritadi" ni belgilaydi (fail-closed).
+ * `test/jobs-infra.test.mjs` 25/25 cron egaligini o'lchaydi.
  *
  * ── NEGA OCHIQ RO'YXATGA OLISH (`register`) ──
  *

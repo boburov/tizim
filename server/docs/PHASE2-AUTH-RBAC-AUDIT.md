@@ -2,6 +2,17 @@
 
 **Read-only audit.** No code was modified. Baseline: `8b6b4d7`.
 
+> ⚠ **Fayl yo'llari EXPRESS davridan** (`helpers/*.js`, `middleware/*.js`).
+> O'sha stek 2026-08-25 da o'chirildi. NestJS ekvivalentlari:
+> `MIGRATION-CHECKLIST.md` §1 jadvali (masalan
+> `helpers/branchContext.helper.js` → `src/common/als/branch-context.ts`,
+> `middleware/requirePermission.js` → `PermissionsGuard`).
+>
+> **RBAC MODELI O'ZGARMADI** — rol/ruxsat semantikasi, ko'lam qoidalari,
+> imtiyoz oshirishga qarshi qo'riqchilar va `credentialScope` ning
+> ataylab qattiqroq bo'lishi hamon shu hujjatda tasvirlangandek. Shuning
+> uchun saqlanadi: bu semantika boshqa joyda to'liq yozilmagan.
+
 ---
 
 ## 1. Scope

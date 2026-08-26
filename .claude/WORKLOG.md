@@ -21339,3 +21339,70 @@ Bajarildi. Grafik sarlavhasidagi **«Daromad»** (ko'rsatkich) tanlagichi o'rnig
 <sub>session `57d27dc8` · branch `main` · 21 ta qadam</sub>
 
 ---
+
+## 2026-08-26 18:07 — clean up every docs from the project but tell me which document import
+
+**So'rov**
+
+> clean up every docs from the project but tell me which document important or not i mean if the task uncompleted as a document
+
+**Buyruqlar (39)**
+
+```sh
+find . -type f \( -name "*.md" -o -name "*.mdx" -o -name "*.txt" -o -name "*.rst" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -…
+ls -la && wc -l .claude/*.md QAROR-VARAQASI.md admin_server/README.md admin_server/docs/*.md client/CLAUDE.md client/README.md server/*.md server/docs/*.md serv…
+echo "===== PROMT.MD" && cat PROMT.MD && echo "===== .claude/RESUME.md" && cat .claude/RESUME.md && echo "===== QAROR-VARAQASI.md" && cat QAROR-VARAQASI.md
+for f in server/MIGRATION-CHECKLIST.md server/docs/MIGRATION.md server/docs/NESTJS-MIGRATION-AUDIT.md; do echo "############ $f"; sed -n '1,70p' "$f"; echo "...…
+cd server; echo "== CHECKLIST unchecked count"; grep -c '⬜' MIGRATION-CHECKLIST.md; echo "== headings"; grep -n '^#\{1,3\} ' MIGRATION-CHECKLIST.md; echo; echo …
+cd server; grep -n '⬜' MIGRATION-CHECKLIST.md | head -40; echo "=== tail"; sed -n '679,742p' MIGRATION-CHECKLIST.md
+echo "######## server/docs/README.md"; cat server/docs/README.md; echo; echo "######## server/test/README.md"; cat server/test/README.md; echo; echo "######## c…
+pwd; cd /Users/shukrullo/Desktop/lc-total && pwd && ls
+cd /Users/shukrullo/Desktop/lc-total; for f in server/docs/README.md server/test/README.md client/README.md; do echo "######## $f"; cat "$f"; echo; done
+cd /Users/shukrullo/Desktop/lc-total; sed -n '1,120p' .claude/AI_ADVISOR_PLAN.md
+cd /Users/shukrullo/Desktop/lc-total; grep -n '^#\{2,3\} ' .claude/AI_ADVISOR_PLAN.md; echo "=== tail 90"; tail -90 .claude/AI_ADVISOR_PLAN.md
+cd /Users/shukrullo/Desktop/lc-total/server; ls src/modules/ai/ 2>/dev/null; echo "--- genai dep:"; grep -n 'genai\|gemini\|GEMINI' package.json | head; echo "-…
+cd /Users/shukrullo/Desktop/lc-total; sed -n '264,340p' .claude/AI_ADVISOR_PLAN.md
+cd /Users/shukrullo/Desktop/lc-total; echo "== assistant/tool registry"; grep -rln "tool" server/src/modules/ai/prompts 2>/dev/null; ls server/src/modules/ai/pr…
+cd /Users/shukrullo/Desktop/lc-total/server; for m in ExamResult LeadActivity Homework TeacherObservation ExpenseCategory Course; do printf "%-20s %s\n" "$m" "$…
+cd /Users/shukrullo/Desktop/lc-total; for f in server/docs/HANDOFF-PROMPT.md server/docs/PHASE2-AUTH-RBAC-AUDIT.md server/docs/FINANCE-ARCHITECTURE.md server/WO…
+cd /Users/shukrullo/Desktop/lc-total; grep -n '^#\{2,3\} ' server/docs/FINANCE-ARCHITECTURE.md; echo "=== tail 60"; tail -60 server/docs/FINANCE-ARCHITECTURE.md
+cd /Users/shukrullo/Desktop/lc-total; sed -n '67,140p' server/docs/FINANCE-ARCHITECTURE.md; echo "..... §6"; sed -n '172,200p' server/docs/FINANCE-ARCHITECTURE.…
+cd /Users/shukrullo/Desktop/lc-total/server; for m in RecurringExpense Budget BudgetLine Refund FinancialAuditLog Discount Expense Account; do printf "%-20s %s\…
+cd /Users/shukrullo/Desktop/lc-total/server; ls src/modules | tr '\n' ' '; echo; echo "--- finance-analytics routes:"; grep -rn "@Get(\|@Post(" src/modules/fina…
+cd /Users/shukrullo/Desktop/lc-total; echo "######## admin_server/README.md"; sed -n '1,45p' admin_server/README.md; echo; echo "######## admin_server/docs/api-…
+cd /Users/shukrullo/Desktop/lc-total; du -h .claude/WORKLOG.md; head -20 .claude/WORKLOG.md; echo "..."; grep -c '^## ' .claude/WORKLOG.md; echo "first/last dat…
+cd /Users/shukrullo/Desktop/lc-total; for f in PROMT.MD QAROR-VARAQASI.md .claude/AI_ADVISOR_PLAN.md .claude/RESUME.md .claude/WORKLOG.md client/README.md clien…
+cd /Users/shukrullo/Desktop/lc-total/server; grep -rn "NEST_WORKERS_ENABLED" src --include="*.ts" | head -5; echo "--- .env:"; grep -E "NEST_WORKERS_ENABLED|NES…
+cd /Users/shukrullo/Desktop/lc-total/server; ls src/jobs; echo "--- digest/telegram in ai:"; grep -rln "telegram\|digest" src/modules/ai src/jobs | head; echo "…
+# … yana 14 ta
+```
+
+**Natija**
+
+I'll survey all the documentation in the project first.
+
+Audit complete. Now executing the cleanup.
+
+Deletions are blocked by the auto-mode permission classifier, so I can't remove files myself. I'll fix the stale status headers on the docs that stay, then hand you the exact removal command.
+
+Now rewriting the docs index to match what remains:
+
+Docs cleaned up. Here's the classification.
+
+## Kept — still load-bearing
+
+| Doc | Why it stays |
+|---|---|
+| [.claude/AI_ADVISOR_PLAN.md](.claude/AI_ADVISOR_PLAN.md) | **The one doc with unfinished work.** Phases 1–3 are built; **Phase 4 (NL assistant) is not built at all**, Phase 5 is partial. I added §17 with the measured status. |
+| [.claude/AI_ADVISOR_BRIEF.md](.claude/AI_ADVISOR_BRIEF.md) | Was `PROMT.MD` at repo root — the owner's original "AI COO" spec. Moved next to the plan it drives. |
+| [server/MIGRATION-CHECKLIST.md](server/MIGRATION-CHECKLIST.md) | Mostly history, but §6.1 lists **behaviour changes the client must be told about** (branch directors now see only their own churn/retention numbers) and §6.3/§7.5 are the registry of what each guard test locks. |
+| [server/test/README.md](server/test/README.md) | Accurate today: which suites run on a single stack, which are frozen historical evidence. |
+| [server/docs/FINANCE-ARCHITECTURE.md](server/docs/FINANCE-ARCHITECTURE.md) | Header said "implementation not started" — **false**; §6 is fully built. Fixed. §4 (why the journal was extended instead of a parallel table) and the `finance.view_*` permission decision exist nowhere else. |
+| [server/docs/PHASE2-AUTH-RBAC-AUDIT.md](server/docs/PHASE2-AUTH-RBAC-AUDIT.md) | RBAC semantics unchanged; only the file paths are Express-era. Added a pointer to the Nest equivalents. |
+| [client/CLAUDE.md](client/CLAUDE.md), [admin_serv
+
+…(qisqartirildi)
+
+<sub>session `bfb671b8` · branch `main` · 39 ta qadam</sub>
+
+---

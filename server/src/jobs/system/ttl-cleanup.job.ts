@@ -30,7 +30,8 @@ import type { JobDefinition } from '../job.types.js';
  *
  * YO'Q darajada past: `deleteMany` idempotent, ikkinchi yurish 0 qator
  * o'chiradi. Shunga qaramay job standart holda O'CHIQ — himoya qoidasi
- * "xavfsiz job" uchun ham buzilmaydi (§4, WORKERS-DEPENDENCY-MATRIX.md).
+ * "xavfsiz job" uchun ham buzilmaydi — yoqilishi `.env` dagi
+ * `NEST_WORKERS_ENABLED` + izolyatsiya ro'yxati orqali.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 

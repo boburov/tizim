@@ -98,7 +98,8 @@ export const envSchema = z.object({
   // bir vaqtda ishlasa dublikat bildirishnoma, dublikat Telegram xabari
   // va (moliya oilasida) dublikat pul harakati kelib chiqardi.
   //
-  // Batafsil: `server_nest/WORKERS-DEPENDENCY-MATRIX.md` §4.
+  // ⚠ Cutover TUGADI (2026-08-22): joblar, bot pollingi va import navbati
+  // NestJS'da. `.env` da uchalasi ham `true`. Tarix: `MIGRATION-CHECKLIST.md` §6.
   // ═══════════════════════════════════════════════════════════════════════
 
   /** pg-boss worker'lari umuman ishga tushsinmi. */

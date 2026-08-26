@@ -1,7 +1,14 @@
 # AI COO — Bayyina ERP uchun AI maslahatchi tizimi
 
-**Holat:** reja (v1 draft) · **Sana:** 2026-07-30
+**Holat:** Faza 1–3 BAJARILDI · Faza 4–5 QILINMAGAN · **Sana:** 2026-07-30
+(holat 2026-08-26 da qayta o'lchandi — §17 ga qarang)
 **Manba:** kodbaza tahlili (Claude) + Gemini 3 Pro maslahati
+
+> ⚠ **Bu hujjat Mongo/Express davrida yozilgan.** Stek o'shandan beri
+> NestJS + Prisma + PostgreSQL ga ko'chdi (`server/MIGRATION-CHECKLIST.md`).
+> Fayl yo'llari (`models/*.model.js`, `modules/ai/services/*.js`) ESKIRGAN —
+> hozirgi joylashuv `server/src/modules/ai/`. Arxitektura qarorlari
+> (5 qatlam, `sourceRefs[]`, "AI Theater" ga qarshi qoidalar) O'ZGARMADI.
 
 ---
 
@@ -453,3 +460,28 @@ npm run dev                # tungi job 01:00 da o'zi ishlaydi
 | Guruh churn signali filialdagi barcha guruhlarni oladi | Juda kichik guruhlarda shovqinli | `total < 5` uchun vazn kamaytirilishi kerak (Faza 2) |
 | `Insight.narration` shablonli | Matn quruq | Faza 3: Gemini |
 | Sovuq start vaznlari qo'lda | Kalibrlanmagan bo'lishi mumkin | `npm run ai:backtest` — AUC < 0.6 bo'lsa vaznlarni tuzatish shart |
+
+---
+
+## 17. HOLAT — 2026-08-26 da kodga qarshi o'lchandi
+
+§15 ("Faza 1 — BAJARILDI") ESKIRGAN: o'shandan keyin Faza 2 va 3 ham
+qurildi. Quyidagi jadval `server/src/modules/ai/` va `prisma/schema.prisma`
+ga qarab tekshirildi.
+
+| Faza | Holat | Dalil |
+|---|---|---|
+| 1 — Poydevor (signals, scoring, insight, nightly job) | ✅ | `src/modules/ai/{signals,scoring}/`, `insight.service.ts`, `insight-writer.service.ts` |
+| 2 — Action Center + moliya + ertalabki digest | ✅ | `GET /ai/action-center`, `ranking.service.ts`, `lifecycle.service.ts` (ack/resolve/dismiss), `src/jobs/ai/ai-morning-digest.job.ts` |
+| 3 — LLM qatlami (narrator, executive summary, lead/teacher scoring) | ✅ | `gemini.service.ts`, `narration-queue.service.ts`, `briefing.service.ts`, `report.service.ts`, `lead-insight.service.ts`, `teacher-insight.service.ts` |
+| **4 — NL assistent (tool-calling)** | ❌ **QILINMAGAN** | `ai.controller.ts` da assistent marshruti YO'Q. `ai.assistant` ruxsat kaliti (`common/constants/permissions.ts:96`) mavjud, lekin uni HECH BIR marshrut qo'riqlamaydi — ya'ni kalit bo'sh turibdi |
+| **5 — Ma'lumot kengaytirish** | 🟡 **QISMAN** | `Course` ✅ va `ExpenseCategory` ✅ bor. `ExamResult` ❌, `LeadActivity` ❌, `Homework` ❌, `TeacherObservation` ❌ — `prisma/schema.prisma` da yo'q |
+
+**Ya'ni hamon ochiq:** §10 Faza 4 (oq ro'yxatdagi tool registri, tool-calling
+loop, command palette UI) va §10 Faza 5 ning to'rt modeli. Ular ochilishi
+kerak bo'lgan funksiyalar §11 da sanalgan: "baholangan tayyorlik"
+(`ExamResult`siz — yolg'on), "eng yaxshi qo'ng'iroq vaqti" (`LeadActivity`siz —
+taxmin), uy vazifasi signali (`Homework`siz — yo'q).
+
+Boshlang'ich talab (egasining o'z so'zlari bilan):
+[`AI_ADVISOR_BRIEF.md`](AI_ADVISOR_BRIEF.md).
