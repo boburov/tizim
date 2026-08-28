@@ -129,6 +129,30 @@ export const useEntryDetail = (id) =>
   });
 
 /**
+ * KVITANSIYA MANBASI — manba hujjat kaliti bo'yicha.
+ *
+ * ── NEGA ALOHIDA HOOK ──
+ * To'lov qilingan payt qo'lda jurnal yozuvining ID si YO'Q, faqat
+ * `PaymentTransaction.id` bor. Kalit (`payment:<id>`) o'sha ID dan
+ * tuziladi.
+ *
+ * `staleTime: Infinity` — `useEntryDetail` bilan bir sabab: jurnal
+ * yozuvi o'zgarmas.
+ *
+ * `retry: false` — 404 kutilgan holat: jurnal yozuvi filialsiz
+ * hujjatda tug'ilmaydi (`postCore` "branchsiz" deb o'tkazib
+ * yuboradi). Qayta urinish faqat kutishni cho'zardi.
+ */
+export const useEntryDetailByKey = (key) =>
+  useQuery({
+    queryKey: qk.financeAnalytics.entryByKey(key),
+    queryFn: () => financeAnalyticsAPI.entryByKey(key).then((r) => r.data.data),
+    enabled: Boolean(key),
+    staleTime: Infinity,
+    retry: false,
+  });
+
+/**
  * YOZUVLAR RO'YXATI — drill-down zanjirining oxirgi bo'g'ini.
  *
  * Faqat panel ochilganda so'raladi (`enabled`), sahifa yuklanishida

@@ -25,6 +25,7 @@ import {
   expenseBreakdownSchema,
   receivablesBreakdownSchema,
   entryIdSchema,
+  entryPostingKeySchema,
   alertIdSchema,
   studentIdSchema,
 } from './finance-analytics.validators.js';
@@ -186,6 +187,32 @@ export class FinanceAnalyticsController {
     // ⚠ `req.permissions` SERVISGA UZATILADI: maosh yozuvi uchun
     // qo'shimcha tekshiruv U YERDA (yon eshik yopilishi kerak).
     const data = await this.entries.getEntryDetail(id, req.user, req.permissions);
+    return { success: true, data };
+  }
+
+  /**
+   * KVITANSIYA — manba hujjat kaliti bo'yicha.
+   *
+   * ── NEGA `entries/:id` NI BUZMAYDI ──
+   * Ikki bo'lakli yo'l (`entries/by-key/...`) bir bo'lakli
+   * `entries/:id` bilan HECH QACHON to'qnashmaydi, shuning uchun
+   * tartib ahamiyatsiz. `by-key` ni `:id` deb o'qib bo'lmaydi:
+   * `entryIdSchema` 24 hex talab qiladi.
+   *
+   * ── NEGA `finance.read` ──
+   * Javob `entries/:id` BILAN BIR XIL obyekt, faqat qidiruv kaliti
+   * boshqa. Ruxsat past bo'lsa, chek yon eshikka aylanardi.
+   */
+  @Get('entries/by-key/:key')
+  @Permissions(PERMISSIONS.FINANCE_READ)
+  async entryDetailByKey(
+    @Validated(entryPostingKeySchema) _v: any,
+    @Param('key') key: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = await this.entries.getEntryDetailByPostingKey(
+      key, req.user, req.permissions,
+    );
     return { success: true, data };
   }
 

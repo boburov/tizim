@@ -15,6 +15,7 @@ import {
 import { statusMeta } from "../../utils/status";
 import { formatDateUz } from "@/shared/utils/formatDate";
 import { Badge } from "@/shared/components/shadcn/badge";
+import ReceiptButton from "@/shared/components/finance/ReceiptButton";
 
 const METHODS = [
   { value: "cash", label: "Naqd" },
@@ -251,14 +252,22 @@ const AddPaymentModal = ({ payment, close, setIsLoading }) => {
                     </Button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-rose-500 dark:text-rose-400 active:bg-rose-50 dark:active:bg-rose-500/10"
-                    onClick={() => setConfirmId(t._id)}
-                    aria-label="O'chirish"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {/* Chek AYNAN shu yerda: kassir to'lovni qabul
+                        qilgan oynadan chiqmasdan bera oladi. Kalit
+                        `PaymentTransaction.id` dan tuziladi —
+                        `financial-transaction.service.ts` da
+                        `postingKey: payment:${trx.id}`. */}
+                    <ReceiptButton postingKey={`payment:${t._id}`} iconOnly />
+                    <button
+                      type="button"
+                      className="flex size-8 shrink-0 items-center justify-center rounded-md text-rose-500 dark:text-rose-400 active:bg-rose-50 dark:active:bg-rose-500/10"
+                      onClick={() => setConfirmId(t._id)}
+                      aria-label="O'chirish"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
                 )}
               </li>
             ))}

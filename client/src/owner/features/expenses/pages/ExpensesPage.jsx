@@ -17,6 +17,7 @@ import {
   AnalyticsTable, MetricValue, LoadingBlock, ErrorBlock, DeniedBlock,
 } from "@/shared/components/analytics";
 import { PageHeader } from "@/shared/components/page/PageShell";
+import ReceiptButton from "@/shared/components/finance/ReceiptButton";
 import FinanceFilterBar from "../../financeAnalytics/components/FinanceFilterBar";
 import useFinanceFilters from "../../financeAnalytics/hooks/useFinanceFilters";
 
@@ -238,8 +239,12 @@ const ExpensesPage = () => {
                   ? `${r.createdBy.firstName || ""} ${r.createdBy.lastName || ""}`.trim()
                   : "—",
             },
-            ...(canCreate || canManage
-              ? [
+            // ⚠ USTUN DOIM BOR: ilgari u faqat `canCreate || canManage`
+            // bilan chizilardi, ya'ni chiqimni FAQAT O'QIY oladigan
+            // xodim (buxgalter, filial rahbari) chek ololmasdi.
+            // `ReceiptButton` o'zi `finance.read` ni tekshiradi va
+            // ruxsatsiz hech narsa chizmaydi.
+            ...[
                   {
                     key: "actions",
                     label: "",
@@ -247,6 +252,13 @@ const ExpensesPage = () => {
                     align: "right",
                     render: (r) => (
                       <span className="flex justify-end gap-1">
+                        {/* Yuqoridagi `Paperclip` — YUKLANGAN skan
+                            fayli. Bu esa jurnal yozuvidan TUG'ILGAN
+                            kvitansiya: boshqa hujjat, boshqa manba. */}
+                        <ReceiptButton
+                          postingKey={`expense:${r._id || r.id}`}
+                          iconOnly
+                        />
                         {canCreate && (
                           <button
                             type="button"
@@ -270,8 +282,7 @@ const ExpensesPage = () => {
                       </span>
                     ),
                   },
-                ]
-              : []),
+                ],
           ]}
         />
       )}

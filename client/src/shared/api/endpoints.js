@@ -442,6 +442,11 @@ export const ENDPOINTS = Object.freeze({
     intelligenceAlert: (id) => `/finance-analytics/intelligence/alerts/${id}`,
     entries: "/finance-analytics/entries",
     entry: (id) => `/finance-analytics/entries/${id}`,
+    // Kvitansiya: manba hujjat kalitidan (`payment:<id>`) jurnal yozuvi.
+    // Yozish endpointlari jurnal ID sini qaytarmaydi, kalit esa mijoz
+    // tomonda TUZILADI — shuning uchun chek uchun alohida yo'l kerak.
+    entryByKey: (key) =>
+      `/finance-analytics/entries/by-key/${encodeURIComponent(key)}`,
     // O'quvchining moliyaviy yo'li: to'langan / qarz / chegirma /
     // qaytarim + guruh konteksti (talab 15).
     studentFinance: (id) => `/finance-analytics/students/${id}`,

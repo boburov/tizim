@@ -107,9 +107,70 @@ export class EntryDetailService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getEntryDetail(id: string, _currentUser: unknown, permissions: string[] = []) {
+    // FILIAL KO'LAMI: begona filial yozuvi umuman ochilmaydi.
+    return this.buildDetail({ id: String(id), ...branchFilter() }, permissions);
+  }
+
+  /**
+   * ══════════════════════════════════════════════════════════════════
+   * KVITANSIYA UCHUN: YOZUVNI `postingKey` BO'YICHA OCHISH
+   * ══════════════════════════════════════════════════════════════════
+   *
+   * ── NEGA ID YETARLI EMAS ──
+   * Chek to'lov QILINGAN PAYTDA kerak. O'sha payt qo'lda bor narsa —
+   * manba hujjat ID si (`PaymentTransaction.id`), jurnal yozuvining ID
+   * si EMAS: yozuv `postCore()` ichida, boshqa tranzaksiyada tug'iladi
+   * va uning ID si mijozga umuman qaytarilmaydi.
+   *
+   * ── NEGA YANGI MAYDON EMAS ──
+   * `postingKey` ALLAQACHON mavjud, UNIQUE va MA'NOLI:
+   *   `payment:<paymentTransactionId>` · `expense:<expenseId>`
+   *   `salary_teacher:<salaryTransactionId>` · `refund:<refundId>`
+   * Ya'ni mijoz kalitni O'ZI qura oladi va qidiruv unique indeksga
+   * tushadi. Muqobil yo'l — har bir yozish endpointiga jurnal ID sini
+   * qaytartirish — o'nlab javob shaklini o'zgartirardi.
+   *
+   * ── XAVFSIZLIK O'ZGARMAYDI ──
+   * Bir xil `buildDetail()`: o'sha filial ko'lami, o'sha maosh
+   * tekshiruvi. Kalit taxmin qilinsa ham begona filial yozuvi
+   * ochilmaydi — 404 qaytadi.
+   */
+  async getEntryDetailByPostingKey(
+    postingKey: string,
+    _currentUser: unknown,
+    permissions: string[] = [],
+  ) {
+    const key = String(postingKey);
+    return this.buildDetail(
+      {
+        // ── REVIZIYA: `expense:<id>` → `expense:<id>:v2` ──
+        // Chiqim tahrirlanganda eski yozuv storno qilinadi va yangisi
+        // `:v2` qo'shimchasi bilan yoziladi (`financial-transaction
+        // .service.ts` dagi `revision` izohiga qarang). Mijoz esa
+        // hamon MANBA kalitini (`expense:<id>`) biladi, chunki
+        // reviziya raqami unga umuman ko'rinmaydi.
+        //
+        // Prefiks mos kelishi XAVFSIZ: manba ID lari qat'iy 24 hex,
+        // ya'ni `expense:<id>` dan keyin FAQAT `:v<N>` kelishi
+        // mumkin — boshqa hujjatning kaliti bu shablonga tushmaydi.
+        OR: [{ postingKey: key }, { postingKey: { startsWith: `${key}:v` } }],
+        ...branchFilter(),
+      },
+      permissions,
+      // Eng OXIRGI reviziya — amaldagi hujjat. Storno qilingan eski
+      // yozuvdan chek berish mijozga bekor qilingan summani ko'rsatardi.
+      { createdAt: 'desc' },
+    );
+  }
+
+  private async buildDetail(
+    where: Record<string, unknown>,
+    permissions: string[],
+    orderBy?: Record<string, 'asc' | 'desc'>,
+  ) {
     const entry = await this.prisma.journalEntry.findFirst({
-      // FILIAL KO'LAMI: begona filial yozuvi umuman ochilmaydi.
-      where: { id: String(id), ...branchFilter() } as never,
+      where: where as never,
+      ...(orderBy ? { orderBy: orderBy as never } : {}),
       include: {
         lines: { orderBy: [{ debit: 'desc' }] },
         branch: { select: { id: true, name: true } },

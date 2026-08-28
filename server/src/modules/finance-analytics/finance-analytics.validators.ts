@@ -97,6 +97,27 @@ export const entryIdSchema = z.object({
   params: z.object({ id: id }),
 });
 
+/**
+ * KVITANSIYA KALITI — `JournalEntry.postingKey`.
+ *
+ * Shakl: `<tur>:<manba id>`, ba'zan uch bo'lakli
+ * (`storno:expense:<id>`, `expense:<id>:v2`). Shuning uchun `id`
+ * validatori (24 hex) BU YERGA TO'G'RI KELMAYDI.
+ *
+ * Regex ochiq emas: faqat kichik harf/raqam/`_`/`:`/`.`/`-`. Uzunlik
+ * cheklangan — kalit unique indeksga tushadi, ya'ni uzun satr
+ * skanerlashga sabab bo'lmaydi.
+ */
+export const entryPostingKeySchema = z.object({
+  params: z.object({
+    key: z
+      .string()
+      .min(3)
+      .max(128)
+      .regex(/^[a-z_]+:[A-Za-z0-9_:.-]+$/, "Kvitansiya kaliti formati noto'g'ri"),
+  }),
+});
+
 /** Intellekt signali — ID `type` yoki `type:entityId` shaklida. */
 export const alertIdSchema = z.object({
   params: z.object({

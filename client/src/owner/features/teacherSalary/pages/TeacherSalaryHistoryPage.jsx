@@ -8,6 +8,7 @@ import { MONTH_LABELS } from "@/shared/constants/calendar";
 import useTeacherSalaryHistoryQuery from "../hooks/useTeacherSalaryHistoryQuery";
 import TeacherSalaryBalanceCard from "../components/TeacherSalaryBalanceCard";
 import { statusMeta, SALARY_KIND_LABEL, isAdjustmentKind } from "../utils/status";
+import ReceiptButton from "@/shared/components/finance/ReceiptButton";
 
 const monthLabel = (m) => MONTH_LABELS[m - 1] || m;
 const methodLabel = (m) => (m === "cash" ? "Naqd" : "Karta");
@@ -165,8 +166,11 @@ const SalaryMonthCard = ({ salary }) => {
               className="flex items-baseline justify-between gap-2 text-sm"
             >
               <span className="font-medium">{formatMoney(t.amount)}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 {methodLabel(t.method)} · {formatDateUz(t.paidAt)}
+                {/* `keyPrefix: 'salary_teacher'` —
+                    `financial-transaction.service.ts:618`. */}
+                <ReceiptButton postingKey={`salary_teacher:${t._id}`} iconOnly />
               </span>
             </li>
           ))}

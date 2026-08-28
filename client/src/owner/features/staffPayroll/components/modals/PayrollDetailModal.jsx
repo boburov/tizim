@@ -5,6 +5,7 @@ import { Lock, LockOpen, Minus, Plus, RefreshCw, Trash2, Wallet } from "lucide-r
 import Button from "@/shared/components/ui/button/Button";
 import StatusBadge from "@/shared/components/ui/badge/StatusBadge";
 import PayrollTimeline from "../PayrollTimeline";
+import ReceiptButton from "@/shared/components/finance/ReceiptButton";
 
 // Hooks
 import useModal from "@/shared/hooks/useModal";
@@ -196,11 +197,17 @@ const PayrollDetailModal = ({ payrollId, close }) => {
           <h3 className="mb-1.5 text-sm font-semibold">To'lovlar</h3>
           <div className="divide-y rounded-md border">
             {data.transactions.map((t) => (
-              <div key={t._id} className="flex items-center justify-between p-2.5 text-sm">
+              <div key={t._id} className="flex items-center justify-between gap-2 p-2.5 text-sm">
                 <span className="text-muted-foreground">
                   {formatDateUzLong(t.paidAt)} · {t.method === "cash" ? "Naqd" : "Karta"}
                 </span>
-                <span className="font-medium tabular-nums">{formatMoney(t.amount)}</span>
+                <div className="flex items-center gap-1">
+                  <span className="font-medium tabular-nums">{formatMoney(t.amount)}</span>
+                  {/* `postSalaryCommon` xodim maoshini
+                      `salary_staff:<StaffSalaryTransaction.id>` kaliti
+                      bilan yozadi. */}
+                  <ReceiptButton postingKey={`salary_staff:${t._id}`} iconOnly />
+                </div>
               </div>
             ))}
           </div>

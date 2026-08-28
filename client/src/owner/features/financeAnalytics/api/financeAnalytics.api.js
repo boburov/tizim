@@ -48,6 +48,7 @@ export const financeAnalyticsAPI = {
   signal: (id, params) => http.get(E.intelligenceAlert(id), { params }),
   entries: (params) => http.get(E.entries, { params }),
   entry: (id) => http.get(E.entry(id)),
+  entryByKey: (key) => http.get(E.entryByKey(key)),
   studentFinance: (id, params) => http.get(E.studentFinance(id), { params }),
 };
 

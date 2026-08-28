@@ -387,6 +387,7 @@ export const qk = Object.freeze({
     studentFinance: (id, f) => ["financeAnalytics", "studentFinance", id, f],
     entries: (f) => ["financeAnalytics", "entries", f],
     entry: (id) => ["financeAnalytics", "entry", id],
+    entryByKey: (key) => ["financeAnalytics", "entryByKey", key],
     budgets: (f) => ["financeAnalytics", "budgets", f],
     budgetOne: (id) => ["financeAnalytics", "budgetOne", id],
   },
