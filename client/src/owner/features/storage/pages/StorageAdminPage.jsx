@@ -87,9 +87,6 @@ const StorageAdminPage = () => {
     <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-semibold">Fayl saqlagich</h1>
-        <p className="text-sm text-muted-foreground">
-          Kvota holati, avtomatik tozalash va yuklangan fayllar
-        </p>
       </header>
 
       {/* --- 1) HOLAT --- */}

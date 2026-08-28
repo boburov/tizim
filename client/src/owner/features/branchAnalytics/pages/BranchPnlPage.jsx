@@ -187,10 +187,11 @@ const BranchPnlPage = () => {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Filial tahlili</h1>
+          {/* Raqamlarni O'QISH usuli — yo'riqnoma emas: markaz xarajati
+              taqsimlanmasligini bilmagan odam filial foydasini noto'g'ri
+              taqqoslaydi. */}
           <p className="mt-1 text-sm text-muted-foreground">
-            Foyda/ziyon, normalizatsiya va anomaliyalar. Markaz xarajatlari
-            filiallarga taqsimlanmaydi — rahbar o'zi boshqara olmaydigan raqam
-            uchun javob bermasligi kerak.
+            Markaz xarajatlari filiallarga taqsimlanmaydi
           </p>
         </div>
         <label className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">

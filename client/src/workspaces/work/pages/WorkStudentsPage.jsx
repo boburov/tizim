@@ -48,7 +48,6 @@ const WorkStudentsPage = () => {
   return (
     <WorkspacePage
       title="O'quvchilarim"
-      subtitle="Guruhni bosing — o'sha guruhning o'quvchilari ochiladi"
     >
       <QueryState
         query={groups}

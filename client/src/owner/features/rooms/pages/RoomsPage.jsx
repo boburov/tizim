@@ -53,7 +53,7 @@ const RoomsPage = () => {
   return (
     <PageShell
       title="Xonalar"
-      subtitle={`${scopeNote} · guruh jadvali shu xonalarga bog'lanadi`}
+      subtitle={scopeNote}
       actions={
         <div className="flex items-center gap-2">
           <Link

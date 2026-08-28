@@ -46,6 +46,15 @@ export const qk = Object.freeze({
     sales: (params) => ["branchAnalytics", "sales", params],
     teachers: (params) => ["branchAnalytics", "teachers", params],
   },
+  // CHIQIMLAR — ro'yxat, tafsilot va kategoriya lug'ati.
+  expenses: {
+    all: () => ["expenses"],
+    lists: () => ["expenses", "list"],
+    list: (params) => ["expenses", "list", params],
+    one: (id) => ["expenses", "detail", id],
+    summary: (params) => ["expenses", "summary", params],
+    categories: (params) => ["expenses", "categories", params],
+  },
   expenseApprovals: {
     all: () => ["expenseApprovals"],
     list: (params) => ["expenseApprovals", "list", params],

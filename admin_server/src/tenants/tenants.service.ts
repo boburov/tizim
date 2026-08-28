@@ -13,6 +13,11 @@ import { SettingsService } from '../settings/settings.service.js';
 import { GithubService } from '../github/github.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateBrandDto } from './dto/update-brand.dto.js';
+import {
+  BRANCH_LIMIT_MAX,
+  BRANCH_LIMIT_MIN,
+  UNLIMITED,
+} from '../branch-config/branch-config.constants.js';
 
 const PORT_MIN = Number(process.env.TENANT_PORT_MIN || 5100);
 const PORT_MAX = Number(process.env.TENANT_PORT_MAX || 5999);
@@ -59,6 +64,27 @@ export class TenantsService {
     throw new ConflictException("Noyob DB nomi hosil qilinmadi, qayta urining");
   }
 
+  /**
+   * Yaratishda berilgan filial chegarasini tekshiradi.
+   *
+   * Qoida `BranchConfigService.update()` bilan AYNAN bir xil bo'lishi
+   * shart — aks holda yaratishda o'tgan qiymatni keyin tahrirlab
+   * bo'lmay qolardi.
+   */
+  private validBranchLimit(value: number): number {
+    if (value === UNLIMITED) return UNLIMITED;
+    if (
+      !Number.isInteger(value) ||
+      value < BRANCH_LIMIT_MIN ||
+      value > BRANCH_LIMIT_MAX
+    ) {
+      throw new BadRequestException(
+        `Filial chegarasi ${BRANCH_LIMIT_MIN}–${BRANCH_LIMIT_MAX} oralig'ida yoki ${UNLIMITED} (cheksiz) bo'lishi kerak`,
+      );
+    }
+    return value;
+  }
+
   /** Bo'sh portni tanlaydi (diapazon ichida, band bo'lmaganini). */
   private async pickFreePort(): Promise<number> {
     const used = await this.prisma.tenant.findMany({ select: { port: true } });
@@ -96,9 +122,19 @@ export class TenantsService {
     // GitHub integratsiyasi o'chiq bo'lsa yoki mijoz so'ramasa — repo yo'q.
     const wantsRepo = dto.createRepo !== false && this.github.isConfigured();
 
+    // ── FILIAL CHEGARASI: berilmasa `null` (meros) ──
+    //
+    // ⚠ `null` bilan `0` ni ARALASHTIRMASLIK muhim: `null` "tarif/standart
+    // amal qilsin", `0` esa "bitta ham filial ochilmasin" degani bo'lardi.
+    // Shuning uchun quyida `?? null` emas, ATAYLAB `undefined` tekshiruvi.
+    const branchLimitOverride =
+      dto.branchLimit === undefined ? null : this.validBranchLimit(dto.branchLimit);
+
     const tenant = await this.prisma.tenant.create({
       data: {
         name: dto.name,
+        branchesEnabled: dto.branchesEnabled ?? true,
+        branchLimitOverride,
         domain: dto.domain,
         brandColor: dto.brandColor,
         brandBackground: dto.brandBackground || null,

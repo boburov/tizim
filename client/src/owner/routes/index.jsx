@@ -83,6 +83,7 @@ import { RoomsPage, SchedulePage, RoomAnalyticsPage } from "@/owner/features/roo
 import { SystemAnalysisPage } from "@/owner/features/systemAnalysis";
 import { BranchPnlPage } from "@/owner/features/branchAnalytics";
 import { ExpenseApprovalsPage } from "@/owner/features/expenseApprovals";
+import { ExpensesPage } from "@/owner/features/expenses";
 import {
   FeedbackPage,
   FeedbackListPage,
@@ -116,7 +117,12 @@ import {
   SalaryGroupDetailPage,
 } from "@/owner/features/teacherSalary";
 import { FinanceReportPage, WriteOffsPage } from "@/owner/features/financeReport";
-import { FinanceCommandPage, CollectionsPage } from "@/owner/features/financeAnalytics";
+import {
+  FinanceCommandPage,
+  CollectionsPage,
+  CashFlowPage,
+  AccountsPage,
+} from "@/owner/features/financeAnalytics";
 import { ProfilePage } from "@/owner/features/profile";
 import { SettingsPage } from "@/owner/features/settings";
 import { StudentStatsPage } from "@/owner/features/studentStats";
@@ -785,6 +791,34 @@ const OwnerRoutes = () => (
         server ham aynan shunday qo'riqlaydi. */}
     <Route path="finance" element={<FinanceCommandPage />} />
 
+    {/* ══════════════════════════════════════════════════════════════
+        MOLIYANING TO'RT KIRISH NUQTASI
+
+          /finance             — umumiy manzara + tranzaksiyalar
+          /finance/expenses    — chiqim yozish va ro'yxati
+          /finance/cash-flow   — pul oqimi
+          /finance/accounts    — hisob qoldiqlari va harakatlari
+
+        Ular menyudagi to'rt yozuvga BIR-BIR mos keladi. Har biri
+        alohida savolga javob beradi, ya'ni "moliya" degan bitta
+        katta ekranni tab bo'ylab kovlash shart emas.
+
+        Ruxsat: chiqim `expenses.read` (u `finance.read` GA
+        KIRMAYDI), pul oqimi va hisoblar `finance.view_cashflow`.
+        Tekshiruv sahifa ICHIDA — server ham aynan shunday
+        qo'riqlaydi va bir joyda ikkita to'siq bo'lishi shart emas.
+        ══════════════════════════════════════════════════════════ */}
+    <Route
+      path="finance/expenses"
+      element={
+        <PermissionGuard required="expenses.read" fallback="/owner/finance">
+          <ExpensesPage />
+        </PermissionGuard>
+      }
+    />
+    <Route path="finance/cash-flow" element={<CashFlowPage />} />
+    <Route path="finance/accounts" element={<AccountsPage />} />
+
     {/* UNDIRISH — "kim qarzdor, qancha vaqtdan beri".
         Ilgari bu "Moliya > Boshqaruv markazi > Qarzdorlik" tabida,
         uch qadam ichkarida edi va "moliyaviy tahlil" yorlig'i ostida
@@ -800,6 +834,19 @@ const OwnerRoutes = () => (
           <CollectionsPage />
         </PermissionGuard>
       }
+    />
+
+    {/* O'ZBEKCHA MANZIL — YO'NALTIRISH, IKKINCHI SAHIFA EMAS.
+
+        Chiqim sahifasining KANONIK manzili `/owner/finance/expenses`:
+        serverdagi tranzaksiya tafsiloti manba hujjatga aynan shu
+        yo'lni qaytaradi (`entry-detail.service.ts` → `resolveSource`)
+        va "Tez amallar" ham o'sha yerga olib boradi. Ikkita ishlaydigan
+        URL bo'lsa, ikkalasi ham xatcho'plarga tushib, biri keyin
+        jimgina eskirardi. */}
+    <Route
+      path="finance/chiqimlar"
+      element={<Navigate to="/owner/finance/expenses" replace />}
     />
 
     {/* Moliyaviy hisob-kitob - umumiy hisobot sahifasi */}

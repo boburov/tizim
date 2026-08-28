@@ -19,6 +19,20 @@
  * COOKIE_DOMAIN, heartbeat kalitlari va brend ranglari. Ular tenant yozuvidan
  * HOSIL QILINADI (`settings.service.ts` → `buildManagedValues`), qo'lda
  * o'zgartirilmaydi: noto'g'ri qiymat tenantni butunlay ishdan chiqaradi.
+ *
+ * ── ⚠ `MULTI_BRANCH` BU YERDAN OLIB TASHLANDI (2026-08-29) ──
+ *
+ * Ikki sabab bilan:
+ *   1) u O'LIK edi — tenant ilova `process.env.MULTI_BRANCH` ni hech
+ *      qachon o'qimasdi (rejim bazadagi filiallar sonidan hisoblanardi),
+ *      ya'ni paneldagi o'chirgich hech narsani o'zgartirmasdi;
+ *   2) rejim endi CHEGARA bilan bir juft bo'lib yuradi va ikkalasi ham
+ *      `Tenant` yozuvida turadi (`branchesEnabled`, `branchLimitOverride`).
+ *      Erkin matnli sozlama bo'lib qolsa, chegara bilan mos kelmay
+ *      qolishi mumkin edi.
+ *
+ * Yangi kalitlar — `BRANCHES_ENABLED` va `BRANCH_LIMIT` — boshqariladigan
+ * qiymatlar sifatida `.env` ga tushadi (`branch-config` moduli).
  */
 
 export type SettingScope = 'server' | 'client';
@@ -67,7 +81,6 @@ export interface SettingDefinition {
 }
 
 export const SETTING_GROUPS = [
-  'Umumiy',
   'Telegram bot',
   'AI (Gemini)',
   'Fayl saqlash',
@@ -76,20 +89,6 @@ export const SETTING_GROUPS = [
 ] as const;
 
 export const SETTINGS: SettingDefinition[] = [
-  // ─────────────────────────────────────────────────────── Umumiy
-  {
-    key: 'MULTI_BRANCH',
-    scope: 'server',
-    type: 'boolean',
-    group: 'Umumiy',
-    label: "Ko'p filialli rejim",
-    help:
-      "Yoqilgan: filial tanlagichi, \"Filiallar\" bo'limi va jadval ustuni ko'rinadi. " +
-      "O'chirilgan: yakka o'quv markazi — filial tushunchasi UI'dan butunlay yo'qoladi.",
-    default: 'true',
-    applies: 'restart',
-  },
-
   // ─────────────────────────────────────────────────── Telegram bot
   {
     key: 'TELEGRAM_BOT_ENABLED',

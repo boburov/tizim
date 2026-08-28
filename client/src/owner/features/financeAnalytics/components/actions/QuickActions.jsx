@@ -8,6 +8,7 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
 import TransferSheet from "./TransferSheet";
 import OwnerCapitalSheet from "./OwnerCapitalSheet";
 import RefundSheet from "./RefundSheet";
+import { ExpenseFormSheet } from "@/owner/features/expenses";
 
 /**
  * TEZ AMALLAR.
@@ -22,9 +23,15 @@ import RefundSheet from "./RefundSheet";
  * kontekstni yo'qotadi: foydalanuvchi qaysi davr va filialga qarab
  * turgani esdan chiqadi. Panel esa ekranni tark etmaydi.
  *
- * CHIQIM va TO'LOV mavjud sahifalarga olib boradi — ular allaqachon
- * to'liq oqimga ega (tasdiq zanjiri, ilova, kategoriya boshqaruvi) va
- * uni panelda takrorlash ikkinchi, ajralib ketadigan forma yaratardi.
+ * ── CHIQIM PANELDA OCHILADI, SAHIFAGA O'TMAYDI ──
+ * Ilgari bu tugma `/owner/finance/expenses` ga olib borardi va u
+ * yerda yana "Yangi chiqim" bosish kerak edi — ikki bosish va
+ * yo'qolgan kontekst. Endi AYNAN o'sha panel (`ExpenseFormSheet`)
+ * shu yerda ochiladi: nusxa yo'q, ya'ni tasdiq zanjiri, chek
+ * biriktirish va filial tanlash ham o'zi bilan keladi.
+ *
+ * TO'LOV esa hamon sahifaga olib boradi: u o'quvchini, guruhni va
+ * davrni tanlashni talab qiladi — bu ro'yxat ekranining ishi.
  */
 const QuickActions = ({ className }) => {
   const { has } = usePermissions();
@@ -38,7 +45,7 @@ const QuickActions = ({ className }) => {
   const canOwner = has(PERMISSIONS.FINANCE_MANAGE_OWNER_CAPITAL);
 
   const actions = [
-    canExpense && { key: "expense", icon: Receipt, label: "Chiqim", onClick: () => navigate("/owner/finance/expenses") },
+    canExpense && { key: "expense", icon: Receipt, label: "Chiqim", onClick: () => setOpen("expense") },
     canPay && { key: "payment", icon: Plus, label: "To'lov", onClick: () => navigate("/owner/finance/deposits") },
     canRefund && { key: "refund", icon: Undo2, label: "Qaytarim", onClick: () => setOpen("refund") },
     canTransfer && { key: "transfer", icon: ArrowLeftRight, label: "O'tkazma", onClick: () => setOpen("transfer") },
@@ -63,6 +70,7 @@ const QuickActions = ({ className }) => {
       <TransferSheet open={open === "transfer"} onOpenChange={(v) => setOpen(v ? "transfer" : null)} />
       <OwnerCapitalSheet open={open === "owner"} onOpenChange={(v) => setOpen(v ? "owner" : null)} />
       <RefundSheet open={open === "refund"} onOpenChange={(v) => setOpen(v ? "refund" : null)} />
+      <ExpenseFormSheet open={open === "expense"} onOpenChange={(v) => setOpen(v ? "expense" : null)} />
     </>
   );
 };

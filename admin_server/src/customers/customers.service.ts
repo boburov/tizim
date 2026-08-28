@@ -101,11 +101,52 @@ export class CustomersService {
     });
   }
 
-  /** Mijozning bitta loyihasi — egalik tekshiriladi. */
+  /**
+   * Mijozning bitta loyihasi — egalik tekshiriladi.
+   *
+   * ⚠⚠ `include` EMAS, `select`. Ataylab.
+   *
+   * `include` butun yozuvni qaytaradi va unda MIJOZGA TEGISHLI BO'LMAGAN
+   * sirlar bor: `deployToken` (repoga deploy huquqi), `heartbeatSecret`
+   * (limitlar kanali), `botToken`. Ular chiqib ketsa mijoz o'z
+   * repositoriysiga deploy trigger qila olardi va heartbeat kanaliga
+   * soxta metrika yozib, limitlarni chalg'ita olardi.
+   *
+   * ⚠ SHUNING UCHUN QORA RO'YXAT EMAS, OQ RO'YXAT: `Tenant` ga yangi
+   * ustun qo'shilganda u AVTOMATIK oshkor bo'lmasin.
+   */
   async myTenant(customerId: string, tenantId: string) {
     const t = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
-      include: {
+      select: {
+        id: true,
+        customerId: true,
+        name: true,
+        domain: true,
+        status: true,
+        brandColor: true,
+        brandBackground: true,
+        brandColorDark: true,
+        brandBackgroundDark: true,
+        logoUrl: true,
+        serverIp: true,
+        lastHeartbeatAt: true,
+        failureReason: true,
+        suspendedAt: true,
+        suspendReason: true,
+        // ── Filial konfiguratsiyasi: FAQAT O'QISH ──
+        // Mijoz o'z chegarasini KO'RADI (panelda "3/5" chizish uchun),
+        // lekin o'zgartira olmaydi: yozish yo'li faqat Developer Admin
+        // kontrollerida (`tenants/:id/branch-config`, admin JWT).
+        branchesEnabled: true,
+        // ⚠ `branchLimitOverride` OSHKOR QILINMAYDI — bu ichki
+        // boshqaruv qiymati. Mijozga YAKUNIY chegara kerak va u
+        // `myTenantUsage()` javobida `max_branches` sifatida keladi.
+        repoFullName: true,
+        repoUrl: true,
+        gitStatus: true,
+        createdAt: true,
+        updatedAt: true,
         systemTemplate: { select: { name: true, key: true } },
         subscription: { include: { plan: true } },
       },
@@ -160,7 +201,26 @@ export class CustomersService {
       }
     }
 
-    const tenant = await this.tenants.create(dto, customer.email, customerId);
+    // ═══════════════════════════════════════════════════════════════════
+    // ⚠⚠ IMTIYOZ OSHIRISHDAN HIMOYA — FILIAL CHEGARASI MIJOZDAN KELMAYDI.
+    //
+    // `CreateTenantDto` Developer Admin oqimi bilan BAHAM KO'RILADI va
+    // unda `branchesEnabled` / `branchLimit` maydonlari bor. Ular shu
+    // yerda ATAYLAB TASHLAB YUBORILADI: aks holda mijoz oddiy
+    // `POST /customers/tenants` bilan o'ziga 1000 ta filial yozib,
+    // butun paywall'ni chetlab o'tardi.
+    //
+    // ⚠ `whitelist: true` bu yerda YETARLI EMAS — maydonlar DTO'da
+    // haqiqatan mavjud, ya'ni validatsiya ularni o'tkazib yuboradi.
+    // Kesish KODDA bo'lishi shart.
+    //
+    // Natijada mijoz loyihasi standart konfiguratsiya bilan tug'iladi
+    // (rejim yoqilgan, chegara = tarif/standart) va uni faqat Developer
+    // Admin o'zgartira oladi.
+    // ═══════════════════════════════════════════════════════════════════
+    const { branchesEnabled: _be, branchLimit: _bl, ...safeDto } = dto;
+
+    const tenant = await this.tenants.create(safeDto, customer.email, customerId);
 
     // Tarif tanlangan bo'lsa darrov biriktiramiz
     if (dto.planKey) {

@@ -64,6 +64,21 @@ export const ENDPOINTS = Object.freeze({
     transferPreview: (id) => `/branch-analytics/students/${id}/transfer-preview`,
     transfer: (id) => `/branch-analytics/students/${id}/transfer`,
   },
+  // UMUMIY CHIQIMLAR — chiqim hujjati + kategoriya lug'ati.
+  // DIQQAT: `expenseApprovals` dan BOSHQA narsa — u limitdan oshgan
+  // chiqimning TASDIQ NAVBATI, bu esa chiqimning O'ZI.
+  expenses: {
+    base: "/expenses",
+    byId: (id) => `/expenses/${id}`,
+    summary: "/expenses/summary",
+    categories: "/expenses/categories",
+    categoryById: (id) => `/expenses/categories/${id}`,
+    // CHEK / KVITANSIYA. Yuklash `finance.create_expense`, o'qish
+    // `expenses.read` bilan qo'riqlanadi — `/storage` da umumiy fayl
+    // yuklash marshruti ATAYLAB yo'q.
+    receipt: "/expenses/receipt",
+    receiptById: (id) => `/expenses/receipt/${id}`,
+  },
   expenseApprovals: {
     base: "/expense-approvals",
     byId: (id) => `/expense-approvals/${id}`,

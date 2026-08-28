@@ -53,7 +53,7 @@ const WorkSchedulePage = () => {
   const total = DAYS.reduce((acc, d) => acc + byDay[d.key].length, 0);
 
   return (
-    <WorkspacePage title="Jadvalim" subtitle="Haftalik darslaringiz">
+    <WorkspacePage title="Jadvalim">
       <QueryState
         query={groups}
         empty={total === 0}

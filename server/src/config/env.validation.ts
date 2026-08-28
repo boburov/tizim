@@ -71,6 +71,40 @@ export const envSchema = z.object({
   HEARTBEAT_SECRET: z.string().default(''),
   ENFORCE_LIMITS: boolish(true),
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // FILIALLAR — ikkalasini ham ADMIN PANEL yozadi (`.env` boshqariladigan
+  // qismi). Qo'lda tahrirlangan qiymat keyingi "Qo'llash"da yo'qoladi.
+  //
+  // ⚠ NEGA HEARTBEAT'DAN TASHQARI `.env` DA HAM BOR: heartbeat keshi
+  // jarayon ko'tarilganda BO'SH va "cheksiz" deb o'qiladi. Filial
+  // chegarasi uchun bu ~15 daqiqalik ochiq eshik bo'lardi. Batafsil:
+  // `common/entitlements/branch-limit.ts`.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /** `false` — yakka o'quv markazi: filial tushunchasi UI'dan yo'qoladi. */
+  BRANCHES_ENABLED: boolish(true),
+
+  /**
+   * Filiallar chegarasi. `-1` = cheksiz.
+   *
+   * ⚠ `positiveNumber` ISHLATILMAYDI — u `-1` ni ham buzuq deb hisoblab,
+   * cheksiz loyihani jimgina standartga qaytarardi.
+   *
+   * ⚠ STANDART QIYMAT YO'Q (`-1`): bu fayl "hech narsa berilmagan"
+   * holatda mijozni to'sib qo'ymasligi kerak. Haqiqiy standart (5) —
+   * admin panelda, `branch-config.constants.ts` da, VA U YERDA BITTA
+   * MARTA turadi. Bu yerga ham "5" yozilsa, ikkita standart paydo
+   * bo'lardi va ular vaqt o'tib ajralib ketardi.
+   */
+  BRANCH_LIMIT: z
+    .string()
+    .optional()
+    .transform((raw) => {
+      const n = Number(raw);
+      if (!Number.isInteger(n)) return -1;
+      return n > 0 || n === -1 ? n : -1;
+    }),
+
   GEMINI_API_KEY: z.string().default(''),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
   AI_MONTHLY_CALL_CAP: positiveNumber(4000),

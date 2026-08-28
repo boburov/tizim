@@ -107,9 +107,6 @@ const ImportPage = () => {
             <h1 className="truncate text-xl font-semibold">
               {importer?.label || "Import"} — Excel'dan yuklash
             </h1>
-            <p className="text-sm text-muted-foreground">
-              Fayl → jadvalda tahrirlash → yaratish
-            </p>
           </div>
         </div>
       </header>

@@ -7,6 +7,7 @@ import { PERMISSIONS } from '../../common/constants/permissions.js';
 import { branchFilter } from '../../common/als/branch-context.js';
 import { parseRange, journalWhere, type AnalyticsFilter } from './analytics-filter.js';
 import { n } from './metrics.js';
+import { TREASURY_KINDS } from '../../common/constants/ledger.js';
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -503,10 +504,53 @@ export class EntryDetailService {
         )`
       : Prisma.empty;
 
+    /**
+     * ══════════════════════════════════════════════════════════════
+     * ISHORA (`cashDelta`) — SERVERDA HISOBLANADI, UI DA EMAS
+     * ══════════════════════════════════════════════════════════════
+     *
+     * Ro'yxatdagi `amount` — yozuvning JAMI DEBETI, ya'ni HAR DOIM
+     * musbat. "+300 000 / −100 000" ko'rinishini chizish uchun UI
+     * ishorani BILISHI kerak, va uni yozuv TURIDAN taxmin qilib
+     * bo'lmaydi:
+     *
+     *   • `account_transfer` (bank → kassa) kassa uchun MANFIY,
+     *     bank uchun MUSBAT — bitta yozuv, ikki xil ishora;
+     *   • `adjustment` ikkala tomonga ham ketishi mumkin.
+     *
+     * Shuning uchun ishora XAZINA QATORLARIDAN yig'iladi
+     * (debet − kredit). Hisob tanlangan bo'lsa FAQAT o'sha hisob
+     * qatorlari — "Kassani bosdim" ko'rinishida o'tkazma to'g'ri
+     * −500 000 bo'lib chiqadi. Hisob tanlanmagan bo'lsa ichki
+     * o'tkazma nolga teng bo'ladi va bu HAQIQAT: umumiy pul
+     * miqdori o'zgarmagan.
+     *
+     * `accountKinds` — yozuv TEGIB O'TGAN xazina hisoblari. Jadvaldagi
+     * "Hisob" ustuni shu yerdan chiqadi; UI to'lov kanalidan hisob
+     * turini O'ZI chiqarib olmaydi (ular har doim ham mos kelmaydi —
+     * `card` → `terminal`).
+     */
+    const deltaScope = filters.accountKind
+      ? Prisma.sql`AND jl."accountKind"::text = ${String(filters.accountKind)}`
+      : Prisma.sql`AND jl."accountKind"::text IN (${Prisma.join(
+          TREASURY_KINDS as unknown as string[],
+        )})`;
+
     const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
       SELECT e.id, e.kind::text AS kind, e.date, e.memo, e."totalDebit" AS amount,
-             e."postingKey", e."refModel", e."paymentMethod"::text AS "paymentMethod"
+             e."postingKey", e."refModel", e."paymentMethod"::text AS "paymentMethod",
+             e."createdById" AS "createdById",
+             NULLIF(TRIM(CONCAT_WS(' ', u."firstName", u."lastName")), '') AS "createdByName",
+             COALESCE(t.delta, 0) AS "cashDelta",
+             COALESCE(t.kinds, ARRAY[]::text[]) AS "accountKinds"
       FROM journal_entries e
+      LEFT JOIN users u ON u.id = e."createdById"
+      LEFT JOIN LATERAL (
+        SELECT SUM(jl.debit - jl.credit) AS delta,
+               ARRAY_AGG(DISTINCT jl."accountKind"::text) AS kinds
+        FROM journal_lines jl
+        WHERE jl."entryId" = e.id ${deltaScope}
+      ) t ON TRUE
       WHERE ${where} ${payrollClause} ${accountClause}
       ORDER BY e.date DESC, e."createdAt" DESC
       LIMIT ${limit}
@@ -519,6 +563,12 @@ export class EntryDetailService {
       date: r.date,
       memo: r.memo || '',
       amount: n(r.amount),
+      // Xazina bo'yicha ISHORALI o'zgarish (yuqoridagi izohga qarang).
+      cashDelta: n(r.cashDelta),
+      accountKinds: (r.accountKinds as string[]) || [],
+      createdBy: r.createdById
+        ? { id: r.createdById, name: (r.createdByName as string) || '' }
+        : null,
       postingKey: r.postingKey,
       refModel: r.refModel,
       paymentMethod: r.paymentMethod,

@@ -50,7 +50,6 @@ const MyPaymentsPage = () => {
   return (
     <WorkspacePage
       title="To'lovlarim"
-      subtitle="To'lovlaringiz tarixi va joriy holatingiz"
     >
       <QueryState
         query={query}

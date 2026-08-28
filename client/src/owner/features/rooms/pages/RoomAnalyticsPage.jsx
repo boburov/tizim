@@ -5,7 +5,6 @@ const RoomAnalyticsPage = () => {
   return (
     <PageShell
       title="Xonalar tahlili"
-      subtitle="Filialdagi xonalar bandligi, bo'sh xonalar qidiruvi va haftalik yuklama"
     >
       <RoomUtilizationSection />
     </PageShell>

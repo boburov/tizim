@@ -14,7 +14,8 @@
     "seed:plans": "node prisma/seedPlans.js",
     "seed:api": "node prisma/seedApiServices.js",
     "seed:bots": "node prisma/seedBotTemplates.js",
-    "lint": "eslint \"src/**/*.ts\""
+    "lint": "eslint \"src/**/*.ts\"",
+    "test:branch-limit": "npm run build && node test/branch-limit.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",

@@ -49,7 +49,6 @@ const MyCoinsPage = () => {
   return (
     <WorkspacePage
       title={`Mening ${coinLabel}larim`}
-      subtitle="Qayerdan to'plandi va nimaga sarflandi"
     >
       {wallet.isError ? (
         <ErrorState onRetry={wallet.refetch} />

@@ -16,7 +16,6 @@ import ErrorState from "@/shared/components/ui/feedback/ErrorState";
 // Hooks
 import useModal from "@/shared/hooks/useModal";
 import usePermissions from "@/shared/hooks/usePermissions";
-import useCoinConfig from "@/shared/hooks/useCoinConfig";
 import useDebounce from "@/shared/hooks/useDebounce";
 
 // Constants
@@ -68,7 +67,6 @@ const STATUS_FILTERS = [
 const MarketPage = () => {
   const { has } = usePermissions();
   const { openModal } = useModal();
-  const { coinLabel } = useCoinConfig();
 
   const canManage = has(PERMISSIONS.MARKET_MANAGE);
   const canFulfill = has(PERMISSIONS.MARKET_FULFILL);
@@ -103,7 +101,6 @@ const MarketPage = () => {
   return (
     <WorkspacePage
       title="Market"
-      subtitle={`O'quvchilar to'plagan ${coinLabel}ni shu yerda sarflaydi`}
       actions={
         active === "products" && canManage ? (
           <Button onClick={openCreate}>

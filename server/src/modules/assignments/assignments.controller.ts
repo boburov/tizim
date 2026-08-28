@@ -12,24 +12,13 @@ import { actorOf } from '../../common/helpers/actor.js';
 import { canonicalMimeOf } from '../../common/middleware/upload-attachment.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
+import { contentDisposition } from '../../common/utils/content-disposition.js';
 import {
   createSchema, previewSchema, listSchema, idSchema, recipientListSchema,
   myListSchema,
   type CreateRequest, type PreviewRequest, type ListRequest, type IdRequest,
   type RecipientListRequest, type MyListRequest,
 } from './assignments.validators.js';
-
-/**
- * Fayl nomi sarlavhada ikki xil ko'rinishda ketadi: ASCII (eski
- * brauzerlar) va UTF-8 (kirill/o'zbek harflari saqlanib qolishi
- * uchun). Bu naqsh eksport modulida ham ishlatilgan — bir xil bo'lgani
- * ma'qul.
- */
-const contentDisposition = (name: string): string => {
-  // eslint-disable-next-line no-control-regex
-  const ascii = String(name).replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
-};
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

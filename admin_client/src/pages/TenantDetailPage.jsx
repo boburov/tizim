@@ -29,6 +29,7 @@ import {
   STATUS_STYLE,
 } from '../lib/tenantStatus';
 import UsageLimits from '../components/UsageLimits';
+import BranchLimits from '../components/BranchLimits';
 import SitePreview from '../components/SitePreview';
 import TenantBrand from '../components/TenantBrand';
 import TenantSettings from '../components/TenantSettings';
@@ -263,6 +264,13 @@ export default function TenantDetailPage() {
         />
         <Row label="Yaratgan" value={t.createdBy} />
       </div>
+
+      {/* Filiallar — chegara, foydalanish va pullik paketlar.
+          Tarif kartasidan OLDIN: filial chegarasi Developer Admin eng
+          ko'p tegadigan sozlama va u tarifdan MUSTAQIL o'zgartiriladi. */}
+      {t.status !== 'DELETED' && (
+        <BranchLimits tenantId={t.id} canEdit={isSuperAdmin || user?.role === 'ADMIN'} />
+      )}
 
       {/* Tarif va limitlar */}
       {t.status !== 'DELETED' && (

@@ -100,6 +100,33 @@ model Tenant {
   provisionLog  String?      @db.Text // provision.sh chiqishi (oxirgi)
   failureReason String?
 
+  // ─────────────────────── FILIALLAR: loyiha darajasidagi konfiguratsiya
+  //
+  // Bu YAGONA manba. Tenant serverga ikki yo'l bilan yetadi:
+  //   1) `.env` (BRANCHES_ENABLED / BRANCH_LIMIT) — provision/reconfigure
+  //      paytida yoziladi, ya'ni tenant BIRINCHI heartbeat'dan OLDIN ham
+  //      to'g'ri chegara bilan ko'tariladi;
+  //   2) heartbeat javobi (`max_branches`) — tirik yangilanish, restart
+  //      talab qilmaydi.
+  //
+  // ⚠ MIJOZ BU MAYDONLARNI O'ZGARTIRA OLMAYDI. Ular faqat Developer Admin
+  // (admin panel, SUPER_ADMIN/ADMIN) orqali yoziladi; tenant ilova ularni
+  // FAQAT O'QIYDI.
+
+  // false = yakka markaz (aynan bitta filial), true = ko'p filialli.
+  branchesEnabled Boolean @default(true)
+
+  // Developer Admin qo'lda qo'ygan chegara.
+  //
+  // null = "meros" — tarifdagi `max_branches`, u ham bo'lmasa tizim
+  // standarti (DEFAULT_BRANCH_LIMIT). Ataylab nullable: standart
+  // o'zgarsa, uni qo'lda o'zgartirmagan barcha loyihalar yangisini
+  // AVTOMATIK oladi — bu `TenantSetting` bilan bir xil qoida.
+  //
+  // -1 = cheksiz. Sotib olingan qo'shimcha filiallar bu songa QO'SHILADI
+  // (`Addon` -> `TenantAddon`, feature kaliti `max_branches`).
+  branchLimitOverride Int?
+
   // Deprovision (o'chirish) kuzatuvi
   deprovisionLog String?   @db.Text
   deletedAt      DateTime?
@@ -108,9 +135,9 @@ model Tenant {
   // Obuna tugaganda pm2 process to'xtatiladi va status SUSPENDED bo'ladi.
   // Papka, baza va yuklangan fayllar TEGILMAYDI — to'lov kelishi bilan
   // `resume` bir soniyada hammasini qaytaradi.
-  suspendedAt     DateTime?
-  suspendReason   String?
-  suspendLog      String?   @db.Text
+  suspendedAt   DateTime?
+  suspendReason String?
+  suspendLog    String?   @db.Text
 
   // Tenant server bilan aloqa (heartbeat) — noyob sirli kalit
   heartbeatSecret String?   @unique
@@ -155,6 +182,9 @@ model Tenant {
   addons         TenantAddon[]
   apiConsumers   ApiConsumer[]
   bots           Bot[]
+
+  // Tijorat konfiguratsiyasi o'zgarishlari tarixi (kim, qachon, nega).
+  commercialChanges TenantCommercialChange[]
 
   createdBy String? // qaysi admin yaratdi (email)
   createdAt DateTime @default(now())
@@ -209,7 +239,7 @@ model AdminUser {
 model Customer {
   id String @id @default(cuid())
 
-  email String @unique
+  email        String  @unique
   // Google orqali kirgan mijozda parol YO'Q — shuning uchun optional.
   // Parol bilan kirishga urinishda null bo'lsa rad etiladi.
   passwordHash String?
@@ -322,8 +352,17 @@ model Addon {
   // Qaysi feature'ni yoqadi/oshiradi
   feature     Feature? @relation(fields: [featureId], references: [id])
   featureId   String?
-  value       Int      @default(1) // feature qiymatiga qo'shiladi
+  value       Int      @default(1) // feature qiymatiga qo'shiladi (BITTA birlik)
   isActive    Boolean  @default(true)
+
+  // ⚠ PAKETLARNING O'ZI ALOHIDA `Addon` QATORLARI ("+1", "+5", "+10") —
+  // ular kodda emas, bazada. Narx yoki paket to'plami o'zgarsa deploy
+  // kerak emas. Bu yerda faqat BITTA qo'shimcha chegara turadi:
+  //
+  //   bitta loyiha shu paketdan NECHTA marta sotib olishi mumkin.
+  //   null = paket darajasida cheklanmagan (umumiy `BRANCH_LIMIT_MAX`
+  //   baribir amal qiladi).
+  maxQuantity Int?
 
   tenantAddons TenantAddon[]
 
@@ -332,14 +371,27 @@ model Addon {
 }
 
 model TenantAddon {
-  id        String    @id @default(cuid())
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tenantId  String
-  addon     Addon     @relation(fields: [addonId], references: [id], onDelete: Cascade)
-  addonId   String
+  id       String @id @default(cuid())
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  addon    Addon  @relation(fields: [addonId], references: [id], onDelete: Cascade)
+  addonId  String
+
+  // NECHTA BIRLIK SOTIB OLINGAN.
+  //
+  // ⚠ `@@unique([tenantId, addonId])` sababli bitta add-on tenantga FAQAT
+  // BIR MARTA biriktiriladi — "yana 3 ta filial" uchun ikkinchi qator
+  // ochib bo'lmaydi. Shuning uchun miqdor QATOR ICHIDA turadi va yakuniy
+  // qo'shimcha = `addon.value * quantity`.
+  //
+  // Standart 1 — eski yozuvlar (AI add-on'lari) aynan bitta birlik.
+  quantity Int @default(1)
+
   isActive  Boolean   @default(true)
   expiresAt DateTime?
-  createdAt DateTime  @default(now())
+
+  updatedAt DateTime @default(now()) @updatedAt
+  createdAt DateTime @default(now())
 
   @@unique([tenantId, addonId])
 }
@@ -423,6 +475,10 @@ model Transaction {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Bu to'lov qaysi tijorat o'zgarishini qopladi (hozircha bo'sh —
+  // billing ulanganda to'ldiriladi). Qarang: TenantCommercialChange.
+  commercialChanges TenantCommercialChange[]
 
   @@unique([provider, providerTxnId])
   @@index([status])
@@ -698,7 +754,7 @@ model Bot {
 
   // Telegram tokeni SHIFRLANGAN holda: "v1:iv:tag:data"
   // (common/crypto/secrets.util.ts). Javoblarda hech qachon ochiq qaytmaydi.
-  tokenEnc String
+  tokenEnc    String
   // getMe javobidan — panelda "@bot_username" ko'rsatish uchun
   botUsername String?
 
@@ -754,4 +810,94 @@ model BotEnvVar {
 
   @@unique([botId, key])
   @@index([botId])
+}
+
+// ============================================================================
+// TIJORAT KONFIGURATSIYASI TARIXI (audit)
+//
+// ⚠ BU BILLING EMAS. Hisob-kitob (`Transaction`), obuna (`Subscription`) va
+// imkoniyatlar (`Plan`/`Addon`/`TenantAddon`) allaqachon bor va ULAR
+// TAKRORLANMAYDI. Bu jadval faqat BITTA savolga javob beradi:
+//
+//   "Bu loyihaning filial chegarasini KIM, QACHON, QANCHAGA va NEGA
+//    o'zgartirdi?"
+//
+// Javob hozir hech qayerda yozilmaydi: `Tenant.branchLimitOverride` va
+// `TenantAddon.quantity` faqat OXIRGI holatni bildiradi. Chegara ko'tarilib
+// keyin tushirilsa, oradagi voqea butunlay yo'qoladi — aynan pul haqidagi
+// bahsda kerak bo'ladigan ma'lumot.
+//
+// ⚠ HAR YOZUV YAKUNIY CHEGARANI HAM SAQLAYDI (`limitBefore/After`).
+// Sabab: chegara UCH manbadan yig'iladi (override, tarif, paketlar) va
+// keyinchalik tarif o'zgarsa, eski yozuvlarni qayta hisoblab bo'lmaydi.
+// Natijaning O'ZI yozilmasa, tarix o'qib bo'lmas holga kelardi.
+//
+// To'lov ulanganda `transactionId` to'ldiriladi va "o'zgarish ↔ to'lov"
+// zanjiri yopiladi — shuning uchun maydon HOZIRDAN bor, lekin ixtiyoriy.
+// ============================================================================
+
+enum CommercialChangeSource {
+  DEVELOPER_ADMIN // paneldan qo'lda (hozirgi yagona yo'l)
+  BILLING // to'lov muvaffaqiyatli o'tgach avtomatik (kelajak)
+  SYSTEM // migratsiya/seed/tuzatish
+}
+
+// Nima o'zgardi. Bittasi — bitta amal; bir so'rovda ikkitasi o'zgarsa
+// (rejim + chegara) IKKI yozuv tushadi, chunki ular boshqa-boshqa
+// sabablarga ega bo'ladi.
+enum CommercialChangeAction {
+  LIMIT_OVERRIDE // qo'lda qo'yilgan chegara (yoki uning bekor qilinishi)
+  BRANCH_MODE // ko'p filialli / yakka markaz rejimi
+  ADDON_GRANT // pullik paket biriktirildi yoki miqdori oshdi
+  ADDON_REVOKE // paket olib tashlandi
+}
+
+model TenantCommercialChange {
+  id       String @id @default(cuid())
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+
+  // QAYSI imkoniyat — "max_branches". `Feature` ga FK EMAS: audit yozuvi
+  // feature o'chirilsa ham o'qilishi kerak.
+  featureKey String
+  action     CommercialChangeAction
+
+  // --- TIJORAT: pullik paket ---
+  addonKey       String?
+  quantityBefore Int?
+  quantityAfter  Int?
+
+  // --- TEXNIK: loyiha konfiguratsiyasi ---
+  // null = "qo'yilmagan" (tarif/standart amal qiladi). Shuning uchun
+  // Int? — 0 bilan aralashib ketmasin.
+  overrideBefore Int?
+  overrideAfter  Int?
+  enabledBefore  Boolean?
+  enabledAfter   Boolean?
+
+  // --- NATIJA: mijoz amalda ko'radigan raqam ---
+  limitBefore  Int // -1 = cheksiz
+  limitAfter   Int
+  // O'sha paytdagi ochilgan filiallar (oxirgi heartbeat). Metrika hali
+  // kelmagan bo'lsa null — 0 EMAS: nol "filial yo'q" degan ma'lumot.
+  usedAtChange Int?
+
+  // --- NARX SURATI ---
+  // Narx keyin o'zgarsa ham tarix haqiqat bo'lib qoladi.
+  unitPrice Decimal? @db.Decimal(12, 2)
+  currency  String?
+  amount    Decimal? @db.Decimal(12, 2)
+
+  source CommercialChangeSource @default(DEVELOPER_ADMIN)
+  actor  String? // admin emaili; tizim yozuvida null
+  reason String?                @db.Text
+
+  // To'lov bilan bog'lash — HOZIRCHA BO'SH (billing ulanmagan).
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  transactionId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([featureKey])
 }

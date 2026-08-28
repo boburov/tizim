@@ -4,6 +4,10 @@ import {
 import type { Response } from 'express';
 import { ExpenseService } from './expense.service.js';
 import { ExpenseCategoryService } from './expense-category.service.js';
+import { StorageService } from '../storage/storage.service.js';
+import { canonicalMimeOf } from '../../common/middleware/upload-attachment.js';
+import { contentDisposition } from '../../common/utils/content-disposition.js';
+import { ApiError } from '../../common/errors/api-error.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Permissions, Validated } from '../../common/decorators/index.js';
 import { PERMISSIONS } from '../../common/constants/permissions.js';
@@ -36,7 +40,80 @@ export class ExpensesController {
   constructor(
     private readonly expenses: ExpenseService,
     private readonly categories: ExpenseCategoryService,
+    private readonly storage: StorageService,
   ) {}
+
+  // ══════════════════════════════════════════════════════════════════
+  // CHEK / KVITANSIYA (`/:id` DAN OLDIN)
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // ── NEGA `/storage` DA EMAS ──
+  // `StorageModule` da yuklash marshruti YO'Q va uni umumiy qilib
+  // ochish "kim istasa fayl yuklaydi" degani bo'lardi. Chek — MOLIYAVIY
+  // hujjat ilovasi, ya'ni uni yuklash huquqi chiqim yozish huquqi
+  // bilan BIR XIL (`finance.create_expense`) va shu modulda qoladi.
+  //
+  // ── IKKI QADAM, BITTA SO'ROV EMAS ──
+  // Fayl AVVAL yuklanadi (`StoredFile` yaratiladi), keyin uning ID si
+  // chiqim tanasidagi `receipt` maydoniga qo'yiladi. Sabab: chiqim
+  // tasdiqqa tushishi mumkin va o'sha holatda hujjat hali YO'Q —
+  // faylni chiqimga bog'lab yuborish uni yetim qoldirardi. ID esa
+  // tasdiq payload'ida bemalol saqlanadi.
+
+  /**
+   * Chek yuklash. Fayl `UploadAttachmentMiddleware` orqali keladi
+   * (tur oq ro'yxati + imzo tekshiruvi + kvota) — modulda ulangan.
+   */
+  @Post('receipt')
+  @HttpCode(201)
+  @Permissions(PERMISSIONS.FINANCE_CREATE_EXPENSE)
+  async receiptUpload(@Req() req: AuthenticatedRequest) {
+    const file = (req as { file?: Express.Multer.File }).file;
+    if (!file?.buffer?.length) throw new ApiError(400, 'Fayl biriktirilmagan');
+
+    const saved = await this.storage.saveBuffer({
+      buffer: file.buffer,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      userId: req.user?.id || null,
+      // `FilePurpose.receipt` — tozalash siyosati chek fayllarini
+      // vazifa ilovalaridan AJRATIB ko'radi: moliyaviy hujjat
+      // ilovasini avtomatik tozalab yuborish mumkin emas.
+      purpose: 'receipt',
+    });
+
+    return {
+      success: true,
+      data: {
+        id: (saved as { id: string }).id,
+        originalName: (saved as { originalName: string }).originalName,
+        size: (saved as { size: number }).size,
+      },
+      message: 'Chek yuklandi',
+    };
+  }
+
+  /**
+   * Chekni yuklab olish.
+   *
+   * ⚠ Content-Type SAQLANGAN `mimeType` dan emas, KENGAYTMADAN
+   * olinadi va fayl HAR DOIM `attachment` sifatida beriladi —
+   * `assignments/:id/file` dagi bilan bir xil sabab: yuklovchi
+   * yozgan MIME'ga ishonib bo'lmaydi.
+   */
+  @Get('receipt/:id')
+  @Permissions(PERMISSIONS.EXPENSES_READ)
+  async receiptDownload(@Param('id') id: string, @Res() res: Response) {
+    const file = await this.storage.getReceipt(String(id));
+    const buffer = await this.storage.readFile(file as never);
+    const originalName = (file as { originalName: string }).originalName;
+
+    res.setHeader('Content-Type', canonicalMimeOf(originalName));
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Disposition', contentDisposition(originalName));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(buffer);
+  }
 
   // ── KATEGORIYALAR (`/:id` DAN OLDIN) ──
 

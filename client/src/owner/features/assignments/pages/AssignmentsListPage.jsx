@@ -46,9 +46,6 @@ const AssignmentsListPage = ({ basePath = "/owner/assignments" }) => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Vazifalar</h1>
-          <p className="text-sm text-muted-foreground">
-            Guruh o'quvchilariga matn va fayl ko'rinishidagi vazifalar
-          </p>
         </div>
         {canSend && (
           <Button onClick={() => openModal(MODAL.ASSIGNMENT_SEND)}>

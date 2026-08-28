@@ -1,13 +1,16 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowUpRight, Lock, FileX, Clock, User, Building2, Users, BookOpen,
-  DoorOpen, CreditCard, Tag, CalendarDays, Hash,
+  DoorOpen, CreditCard, Tag, CalendarDays, Hash, Receipt,
 } from "lucide-react";
 
 import { cn } from "@/shared/utils/cn";
 import { formatMoney } from "@/shared/utils/formatMoney";
 import { formatDateTimeUz, formatDateUz } from "@/shared/utils/formatDate";
 import { MetricValue, LoadingBlock } from "@/shared/components/analytics";
+import Button from "@/shared/components/ui/button/Button";
+import TransactionReceipt from "@/shared/components/finance/TransactionReceipt";
 import { paymentMethodLabel } from "@/shared/constants/finance";
 import { useEntryDetail } from "@/owner/features/financeAnalytics/hooks/useFinanceAnalytics";
 
@@ -118,6 +121,13 @@ const AUDIT_ACTION = {
 export const TransactionDetail = ({ entryId }) => {
   const query = useEntryDetail(entryId);
   const d = query.data;
+  // ── KVITANSIYA ──
+  // Tugma AYNAN shu yerda, chunki bu ilovadagi YAGONA joy bo'lib,
+  // har qanday moliyaviy yozuv (to'lov, chiqim, maosh, qaytarim)
+  // shu panel orqali ochiladi. Har ro'yxatga alohida "chek" tugmasi
+  // qo'yilsa, ular boshqa-boshqa ma'lumot bilan to'lardi; bu yerda
+  // esa chek panel ko'rsatayotgan AYNAN o'sha obyektni oladi.
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   return (
     <div className="space-y-5">
@@ -149,6 +159,16 @@ export const TransactionDetail = ({ entryId }) => {
                 )}
               </div>
               {d.memo && <p className="mt-2 text-xs text-foreground">{d.memo}</p>}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => setReceiptOpen(true)}
+              >
+                <Receipt className="mr-1.5 size-4" />
+                Kvitansiya
+              </Button>
             </div>
 
             {/* ── KONTEKST: faqat MAVJUD o'lchovlar ── */}
@@ -276,6 +296,11 @@ export const TransactionDetail = ({ entryId }) => {
                 </ol>
               )}
             </section>
+            <TransactionReceipt
+              entry={d}
+              open={receiptOpen}
+              onOpenChange={setReceiptOpen}
+            />
           </>
         )}
     </div>

@@ -129,7 +129,7 @@ const VakolatlarPage = () => {
   return (
     <PageShell
       title="Vakolatlar"
-      subtitle="Har rol nima qila olishi — odam tilida. O'zgarish darhol barcha shu roldagi odamlarga tegadi."
+      subtitle="O'zgarish darhol barcha shu roldagi odamlarga tegadi"
     >
       <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
         {/* ── ROLLAR ── */}

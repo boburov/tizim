@@ -364,6 +364,25 @@ export class StorageService implements OnModuleInit {
     return path.join(this.uploadDir, storedFile.relPath);
   }
 
+  /**
+   * CHEK / KVITANSIYA faylini ID bo'yicha oladi.
+   *
+   * ⚠ `purpose = "receipt"` SHARTI MAJBURIY: usiz
+   * `GET /expenses/receipt/:id` ixtiyoriy `StoredFile` ni beradigan
+   * UMUMIY fayl o'qish yo'liga aylanardi va `expenses.read` huquqi
+   * bor xodim vazifa ilovalarini ham (o'quvchi topshirig'i, ichki
+   * hujjat) o'qib olardi.
+   *
+   * ⚠ 404, 403 EMAS: fayl bor-yo'qligi oshkor qilinmaydi.
+   */
+  async getReceipt(id: string) {
+    const file = await this.prisma.storedFile.findFirst({
+      where: { id: String(id), purpose: 'receipt', isDeleted: false } as never,
+    });
+    if (!file) throw new ApiError(404, 'Chek topilmadi');
+    return withLegacyId(file);
+  }
+
   /** Faylni o'qiydi. Diskda topilmasa 404. */
   async readFile(storedFile: { relPath: string; id?: string; _id?: string }) {
     try {

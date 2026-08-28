@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
+import { PERMISSIONS } from '../../common/constants/permissions.js';
+import { hasPermission } from '../../common/rbac/permission.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { branchFilter, isBranchAllowed } from '../../common/als/branch-context.js';
@@ -29,10 +31,24 @@ interface Actor {
 }
 const actorId = (u?: Actor | null): string | null => u?.id || u?._id || null;
 
-/** Ro'yxat va tafsilotda kategoriya/muallif nomi kerak. */
+/**
+ * Ro'yxat va tafsilotda kategoriya/muallif nomi kerak.
+ *
+ * ⚠ `branch` va `receipt` — TANLANGAN MAYDONLAR bilan, to'liq obyekt
+ * EMAS. `Branch` da moliyaviy sozlamalar (`expenseApprovalThreshold`)
+ * bor va ular chiqim ro'yxatiga tushishi kerak emas; `StoredFile` da
+ * esa diskdagi YO'L (`relPath`) bor — uni klientga berish server
+ * fayl tizimining ichki tuzilishini oshkor qilardi.
+ *
+ * `branch` KERAK: «Barcha filiallar» ko'rinishida jadvalda filial
+ * ustuni chiqadi. Usiz UI filial ID sini o'zi nomga aylantirishi
+ * kerak bo'lardi — ya'ni ikkinchi so'rov va ikkinchi haqiqat manbasi.
+ */
 const LIST_INCLUDE = {
   category: { select: { id: true, name: true, kind: true } },
   createdBy: { select: { id: true, firstName: true, lastName: true } },
+  branch: { select: { id: true, name: true } },
+  receipt: { select: { id: true, originalName: true, size: true } },
 };
 
 /**
@@ -51,6 +67,36 @@ const scopeClause = (branchScope?: string): Record<string, unknown>[] => {
   if (!Object.keys(bf).length) return [];
   if (branchScope === 'branch-only') return [bf];
   return [{ OR: [bf, { branchId: null }] }];
+};
+
+/**
+ * CHIQIMNING JURNALGA TUSHADIGAN PROYEKSIYASI.
+ *
+ * `postExpense` jurnal yozuvini AYNAN shu maydonlardan quradi:
+ * summa (qatorlar), kanal (qaysi xazina hisobi kreditlanadi), sana
+ * (`entry.date`), filial (`entry.branchId`), kategoriya
+ * (`expenseCategoryId` o'lchovi) va sarlavha (`memo`).
+ *
+ * Boshqa maydon — izoh, yetkazib beruvchi, chek, allokatsiya —
+ * jurnalda AKS ETMAYDI, ya'ni o'zgarganda storno qilishning ma'nosi
+ * yo'q.
+ *
+ * ⚠ RO'YXAT `postExpense` BILAN BIRGA YANGILANSIN: u yerga yangi
+ * maydon qo'shilsa va bu yerga qo'shilmasa, o'sha maydonni
+ * tahrirlash jurnalni yana JIMGINA eskirtiradi.
+ */
+const materialProjection = (e: Record<string, unknown>): string => {
+  const spentAt = e.spentAt instanceof Date
+    ? e.spentAt.getTime()
+    : new Date(String(e.spentAt)).getTime();
+  return JSON.stringify([
+    Number(e.amount) || 0,
+    String(e.method || ''),
+    Number.isNaN(spentAt) ? 0 : spentAt,
+    e.branchId ? String(e.branchId) : null,
+    String(e.categoryId || ''),
+    String(e.title || ''),
+  ]);
 };
 
 @Injectable()
@@ -187,30 +233,55 @@ export class ExpenseService {
   async create(body: Record<string, unknown>, currentUser?: Actor | null) {
     const draft = await this.buildDraft(body, currentUser);
 
-    // CHIQIM LIMITI: markaz umumiy chiqimida (branchId=null) limit
-    // tekshiruvi ASOSIY filial limiti bilan qilinmaydi - u yerda
-    // "qaysi filial limiti?" degan savol javobsiz. Shuning uchun
-    // umumiy chiqim HAR DOIM tasdiqdan o'tadi (u odatda eng katta
-    // xarajat - ijara, brend reklamasi).
+    // ══════════════════════════════════════════════════════════════
+    // MARKAZ UMUMIY CHIQIMI (branchId = null) — TASDIQ MARSHRUTI
+    // ══════════════════════════════════════════════════════════════
+    //
+    // ILGARI [TUZATILDI]: umumiy chiqim `needsApproval = true` ga
+    // majburlanardi va keyin `createRequest({ branchId: null })`
+    // chaqirilardi. `Approval.branchId` esa NOT NULL — ya'ni ijara va
+    // brend reklamasi kabi ENG KATTA xarajatlarni yozib BO'LMASDI:
+    // har urinish 500 bilan tugardi.
+    //
+    // ENDI: so'rov ASOSIY filialga (`isMain`) yoziladi. Bu SIYOSAT
+    // qarori — "umumiy chiqimni markazning asosiy filiali tasdiqlaydi".
+    // Chiqimning O'ZI filialsiz QOLADI: payload'dagi
+    // `resolvedBranchId: null` shuni saqlaydi va
+    // `executeApprovedExpense` aynan o'shandan o'qiydi. Ya'ni tasdiq
+    // marshruti hujjatning filialini O'ZGARTIRMAYDI.
+    const approvalBranchId = (draft.branchId as string | null)
+      || (await this.branchAccess.resolveMainBranchId());
+
+    // ⚠ `checkExpenseLimit` UMUMIY chiqimda `branchId` YO'QLIGI uchun
+    // ham `needsApproval: false` qaytaradi — ya'ni uning javobi bu
+    // yerda "ozod" va "filial yo'q" ni AJRATA olmaydi. Shuning uchun
+    // umumiy chiqimda ozodlik BEVOSITA ruxsatdan o'qiladi.
     const { needsApproval, threshold } = draft.branchId
       ? await this.approvals.checkExpenseLimit({
           branchId: draft.branchId as string,
           amount: draft.amount as number,
           permissions: currentUser?.permissions,
         })
-      : { needsApproval: true, threshold: null };
+      : {
+          // Umumiy chiqim limitga TAQQOSLANMAYDI ("qaysi filial
+          // limiti?" degan savol javobsiz) — u HAR DOIM tasdiqdan
+          // o'tadi, tasdiqlash huquqi bor odam yozgan holatdan tashqari.
+          needsApproval: !hasPermission(
+            currentUser?.permissions,
+            PERMISSIONS.FINANCE_APPROVE,
+          ),
+          threshold: null,
+        };
 
     if (needsApproval) {
-      // [MAVJUD XATO] `Approval.branchId` MAJBURIY (Postgres'da ham
-      // NOT NULL). Ya'ni markaz umumiy chiqimi (branchId = null) shu
-      // yerda HAR DOIM yiqiladi.
-      //
-      // Bu ko'chirish regressiyasi EMAS — Express'da ham aynan shunday.
-      // Tuzatish "umumiy chiqimni kim tasdiqlaydi?" degan SIYOSAT
-      // savolini talab qiladi (asosiy filial? owner? alohida navbat?),
-      // shuning uchun ko'chirish bilan birga jimgina o'zgartirilmadi.
+      if (!approvalBranchId) {
+        throw new ApiError(
+          400,
+          "Tasdiq so'rovi uchun filial aniqlanmadi — markazda asosiy filial yo'q",
+        );
+      }
       const approval = await this.approvals.createRequest({
-        branchId: draft.branchId as string,
+        branchId: approvalBranchId,
         kind: APPROVAL_KINDS.EXPENSE_CREATE,
         amount: draft.amount as number,
         threshold,
@@ -298,15 +369,36 @@ export class ExpenseService {
   }
 
   async list({
-    categoryId, kind, year, month, from, to, branchScope, page = 1, limit = 50,
+    categoryId, kind, year, month, from, to, search, branchId,
+    branchScope, page = 1, limit = 50,
   }: {
     categoryId?: string; kind?: string; year?: number; month?: number;
-    from?: string; to?: string; branchScope?: string;
+    from?: string; to?: string; search?: string; branchId?: string;
+    branchScope?: string;
     page?: number; limit?: number;
   }) {
     const where: Record<string, unknown> = {
       isDeleted: false, AND: scopeClause(branchScope),
     };
+
+    // ⚠ ANIQ FILIAL KO'LAMNI ALMASHTIRMAYDI, unga QO'SHILADI.
+    // `scopeClause()` allaqachon `AND` ichida turibdi, ya'ni bu shart
+    // u bilan KESISHADI. Boshqa filialning ID sini yuborgan
+    // administrator bo'sh ro'yxat oladi — 403 emas, chunki filial ID
+    // client'da saqlanadi va eskirishi mumkin (`branch-access`
+    // dagi bir xil qaror).
+    if (branchId) where.branchId = String(branchId);
+
+    // ERKIN QIDIRUV: nom / izoh / yetkazib beruvchi.
+    // `mode: "insensitive"` — Postgres ILIKE ga tushadi.
+    const q = String(search || '').trim();
+    if (q) {
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { vendor: { contains: q, mode: 'insensitive' } },
+      ];
+    }
 
     if (categoryId) where.categoryId = String(categoryId);
     if (kind) where.categoryKind = kind;
@@ -391,8 +483,70 @@ export class ExpenseService {
     const draft = await this.buildDraft(
       { ...(doc as unknown as Record<string, unknown>), ...body }, currentUser);
 
-    const saved = await this.prisma.expense.update({
-      where: { id: doc.id }, data: draft as never });
+    // ══════════════════════════════════════════════════════════════
+    // JURNAL TAHRIR BILAN BIRGA YANGILANADI
+    // ══════════════════════════════════════════════════════════════
+    //
+    // ILGARI [TUZATILDI]: bu metod chiqim qatorini yangilardi va
+    // jurnalga UMUMAN tegmasdi. Summani 500 000 dan 700 000 ga
+    // o'zgartirgan odam hujjatda 700 000 ni ko'rardi, kassa qoldig'i
+    // esa 500 000 bo'yicha qolardi.
+    //
+    // BU XATO ENG YOMON TURDAN: jurnal ICHIDAN muvozanatda qolardi
+    // (debet = kredit), ya'ni `journal-verify` ham, `reconcile()` ham
+    // uni TOPMASDI. Faqat oy oxirida kassa sanog'i to'g'ri kelmay
+    // qolardi va sabab topilmasdi.
+    //
+    // ENDI: `remove()` bilan BIR XIL yo'l — eski yozuv STORNO
+    // qilinadi va yangi qiymatlar bilan qaytadan yoziladi. Tarixda
+    // IKKALASI ham ko'rinadi (asl yozuv, uning stornosi, yangi
+    // yozuv) — hech narsa qayta yozilmaydi.
+    //
+    // ⚠ SHART BILAN: faqat PULGA TEGISHLI maydon o'zgarganda. Izoh
+    // yoki yetkazib beruvchi nomini tuzatish jurnalga uch qator
+    // shovqin qo'shmasligi kerak.
+    const wasMaterial = materialProjection(
+      doc as unknown as Record<string, unknown>);
+    const nowMaterial = materialProjection(draft as Record<string, unknown>);
+    const needsRepost = wasMaterial !== nowMaterial;
+
+    if (!needsRepost) {
+      const saved = await this.prisma.expense.update({
+        where: { id: doc.id }, data: draft as never });
+      return withLegacyId(saved);
+    }
+
+    const saved = await this.prisma.$transaction(async (t) => {
+      const tx = t as unknown as TxClient;
+      const row = await tx.expense.update({
+        where: { id: doc.id }, data: draft as never });
+
+      // Shu hujjatning BARCHA jurnal yozuvlarini teskari aylantiradi.
+      // Oldingi tahrirlarning stornolari `refModel = "JournalEntry"`
+      // bilan turadi, ya'ni bu yerga TUSHMAYDI; allaqachon storno
+      // qilingan yozuv esa `storno:<kalit>` unique bo'lgani uchun
+      // ikkinchi marta yozilmaydi (idempotent).
+      await this.financialTx.reverseByRef(
+        { refModel: 'Expense', refId: doc.id },
+        currentUser,
+        { tx: tx as never, memo: 'Storno: chiqim tahrirlandi' },
+      );
+
+      // REVIZIYA RAQAMI yozuvlar SONIDAN olinadi — alohida ustunsiz.
+      // Birinchi yozuvdan keyin bu 1, ya'ni yangi kalit
+      // `expense:<id>:v2`. Parallel ikki tahrir bir xil raqamni
+      // hisoblasa ikkinchisi unique indeksga uriladi va BUTUN
+      // tranzaksiya qaytariladi — foydalanuvchi xatoni KO'RADI,
+      // jimgina ikkilanish YO'Q.
+      const revision = await tx.journalEntry.count({
+        where: { refModel: 'Expense', refId: doc.id },
+      });
+      await this.financialTx.postExpense(
+        { expenseId: doc.id, revision }, currentUser, { tx });
+
+      return row;
+    }, FINANCE_TXN_OPTIONS);
+
     return withLegacyId(saved);
   }
 

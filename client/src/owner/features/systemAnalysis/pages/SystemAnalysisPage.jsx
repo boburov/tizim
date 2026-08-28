@@ -40,7 +40,7 @@ const SystemAnalysisPage = () => {
   return (
     <PageShell
       title="Tizim tahlili"
-      subtitle={`${scope} · nimaga e'tibor berish kerak`}
+      subtitle={scope}
     >
       <SystemAnalysisTabs />
     </PageShell>

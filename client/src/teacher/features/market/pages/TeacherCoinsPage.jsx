@@ -58,7 +58,7 @@ const RANK_TONE = ["bg-amber-500", "bg-slate-500", "bg-orange-500"];
 const TeacherCoinsPage = () => {
   const { has } = usePermissions();
   const { openModal } = useModal();
-  const { coinLabel, earn } = useCoinConfig();
+  const { earn } = useCoinConfig();
 
   const canAward = has(PERMISSIONS.COIN_MANAGE);
 
@@ -76,7 +76,6 @@ const TeacherCoinsPage = () => {
   return (
     <WorkspacePage
       title="Tangalar"
-      subtitle={`Davomat va baho uchun o'quvchilar ${coinLabel} to'playdi`}
     >
       {earn && (
         <Card className="flex items-start gap-2 bg-muted/40 text-xs text-muted-foreground">

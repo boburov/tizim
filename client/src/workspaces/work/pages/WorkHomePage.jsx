@@ -81,7 +81,6 @@ const WorkHomePage = () => {
   return (
     <WorkspacePage
       title={user?.firstName ? `${user.firstName}, salom` : "Ish joyim"}
-      subtitle="Sizga biriktirilgan ish shu yerda"
     >
       {visible.length === 0 ? (
         <EmptyState

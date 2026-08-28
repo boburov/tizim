@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsHexColor,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
@@ -54,4 +55,30 @@ export class CreateTenantDto {
   @IsOptional()
   @IsBoolean()
   createRepo?: boolean;
+
+  // ────────────────────────────────────────────────────────── FILIALLAR
+  //
+  // ⚠⚠ BU IKKI MAYDON FAQAT DEVELOPER ADMIN OQIMIDA O'QILADI.
+  //
+  // Shu DTO mijozning self-service yo'lida ham ishlatiladi
+  // (`POST /customers/tenants`). O'sha yerda maydonlar ATAYLAB
+  // TASHLAB YUBORILADI (`customers.service.ts` → `createTenant`) —
+  // aks holda mijoz ro'yxatdan o'tayotib o'ziga 1000 ta filial
+  // yozib qo'yardi. Xato emas, JIMGINA TASHLANADI: mijoz umuman
+  // bilmasligi kerak bo'lgan maydon uchun 400 qaytarish uni
+  // maydonning borligidan xabardor qilardi.
+
+  /** Ko'p filialli rejim. Berilmasa — yoqilgan (standart). */
+  @IsOptional()
+  @IsBoolean()
+  branchesEnabled?: boolean;
+
+  /**
+   * Boshlang'ich filial chegarasi. Berilmasa `null` bo'lib qoladi va
+   * tarif/tizim standarti (DEFAULT_BRANCH_LIMIT) amal qiladi — ya'ni
+   * yangi loyiha standart holda 5 ta filial bilan boshlaydi.
+   */
+  @IsOptional()
+  @IsInt()
+  branchLimit?: number;
 }

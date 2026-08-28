@@ -280,10 +280,6 @@ const CatalogPage = () => {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold">Katalog</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Kurslar butun tarmoq uchun umumiy — filiallar o'zicha yangi nom
-          o'ylab topa olmaydi. Xonalar esa har filialning o'z resursi.
-        </p>
       </div>
 
       {/* ── KURSLAR ── */}

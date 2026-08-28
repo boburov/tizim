@@ -9,6 +9,7 @@ import useFinanceFilters from "../hooks/useFinanceFilters";
 import { useSummary } from "../hooks/useFinanceAnalytics";
 import { useIntelligence, useBriefing } from "../hooks/useFinanceIntelligence";
 import FinanceFilterBar from "../components/FinanceFilterBar";
+import BranchFilter from "../components/BranchFilter";
 import FinanceKpiGrid from "../components/FinanceKpiGrid";
 import IntelligenceCenter from "../components/IntelligenceCenter";
 import BriefingCard from "../components/BriefingCard";
@@ -17,6 +18,7 @@ import QuickActions from "../components/actions/QuickActions";
 import { DeniedBlock } from "@/shared/components/analytics";
 import { useDrill, useDrillFilters } from "@/shared/drill";
 
+import TransactionsSection from "../components/sections/TransactionsSection";
 import RevenueSection from "../components/sections/RevenueSection";
 import ExpenseSection from "../components/sections/ExpenseSection";
 import ProfitabilitySection from "../components/sections/ProfitabilitySection";
@@ -48,6 +50,11 @@ import BudgetSection from "../components/sections/BudgetSection";
 
 const TABS = [
   { key: "overview", label: "Umumiy" },
+  // TRANZAKSIYALAR — "Umumiy" dan KEYIN, qolgan hamma tahlildan
+  // OLDIN. KPI kartadagi raqamni ko'rgan odamning keyingi savoli
+  // deyarli har doim "shu davrda nima bo'ldi?" bo'ladi; javob
+  // diagrammalar ostida turmasligi kerak.
+  { key: "transactions", label: "Tranzaksiyalar" },
   { key: "revenue", label: "Daromad" },
   { key: "expenses", label: "Chiqim" },
   { key: "profitability", label: "Foydalilik", permission: PERMISSIONS.FINANCE_VIEW_PROFITABILITY },
@@ -112,12 +119,7 @@ const FinanceCommandPage = () => {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Moliya</h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Barcha raqam serverdagi qo'sh yozuv jurnalidan
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold text-foreground">Moliya</h1>
         <QuickActions />
       </header>
 
@@ -127,6 +129,8 @@ const FinanceCommandPage = () => {
         onReset={reset}
         activeCount={activeCount}
         showGranularity={["revenue", "expenses", "cash"].includes(tab)}
+        // FILIAL — faqat Super Admin qobig'ida (izoh: BranchFilter).
+        slots={<BranchFilter value={filters.branchId} onChange={set} />}
       />
 
       {/* KPI — HAR DOIM ko'rinadi: bo'lim almashganda ham kontekst qoladi */}
@@ -159,6 +163,9 @@ const FinanceCommandPage = () => {
             onAction={handleSignalAction}
           />
         </>
+      )}
+      {tab === "transactions" && (
+        <TransactionsSection filters={filters} onFilter={set} />
       )}
       {tab === "revenue" && (
         <RevenueSection filters={filters} onFilter={set} onDrill={openDrill} />

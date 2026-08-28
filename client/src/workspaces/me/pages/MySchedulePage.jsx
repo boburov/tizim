@@ -28,7 +28,7 @@ const MySchedulePage = () => {
   const schedule = data?.group?.schedule || [];
 
   return (
-    <WorkspacePage title="Jadvalim" subtitle="Haftaning qaysi kunlari darsingiz bor">
+    <WorkspacePage title="Jadvalim">
       {isLoading ? (
         <LoadingBlock rows={3} />
       ) : schedule.length === 0 ? (

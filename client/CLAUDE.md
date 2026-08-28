@@ -149,6 +149,56 @@ Rules that follow from this, and why:
   the numbers next to it. The universal number→journal chain is a separate registry:
   `shared/drill/drillNodes.js`.
 
+### Finance: four entry points, one journal
+
+The `Moliya` sidebar group opens with four items, each answering a different
+question. They are pages, not tabs of one screen — a daily task should not sit
+three clicks inside an analysis dashboard.
+
+| Menu item | Route | Question | Main source |
+|---|---|---|---|
+| Umumiy | `/owner/finance` | how are we doing, and what happened? | `/finance-analytics/summary`, `/entries` |
+| Chiqimlar | `/owner/finance/expenses` | write an expense, list today's | `/expenses` |
+| Pul oqimi | `/owner/finance/cash-flow` | in / out / net, over time | `/finance-analytics/cash-flow*` |
+| Kassa va hisoblar | `/owner/finance/accounts` | how much is in each account, today | `/finance-analytics/cash-flow/accounts` |
+
+Rules that hold across all four:
+
+- **The UI never derives a sign.** `entries[].amount` is total debit and is always
+  positive; `entries[].cashDelta` is the *signed* treasury movement and is
+  computed server-side. It has to be: a bank→cash transfer is negative for cash
+  and positive for bank — one entry, two signs. When an account filter is set,
+  `cashDelta` is scoped to that account; with no filter an internal transfer is
+  `0`, which is the truth (total cash did not move) and renders neutral with an
+  "ichki" tag rather than as `+0`.
+- **`/cash-flow/trend` carries `inflow`/`outflow` next to `change`.** Internal
+  transfers are excluded from the two bars (they would inflate both sides) but
+  not from `change`, so `inflow − outflow === change` still holds exactly and the
+  bars can never contradict the balance line.
+- **`expenses.read` is not implied by `finance.read`.** The server guards the
+  expense module with the old key; `PERMISSION_IMPLIES` has no rule for it. Both
+  the sidebar entry and the route use `expenses.read`.
+- **Branch stays global.** `FinanceFilterBar` has no branch selector — the
+  sidebar switcher owns `x-branch-id`. The one exception is `superadmin/`
+  (`/org/*`), whose shell has no switcher at all: `BranchFilter` renders there
+  and only there.
+- **Receipts come from the journal.** `shared/components/finance/TransactionReceipt`
+  takes an already-fetched `/finance-analytics/entries/:id` object and formats it;
+  it computes nothing. It is mounted once, inside `shared/drill/TransactionDetail`,
+  so student payment / expense / salary / refund all print the same document.
+  Printing is `window.print()` plus the `.print-receipt` / `.print-hide` rules in
+  `styles/index.css` — no PDF library.
+
+### Page headers: subtitle is information, not explanation
+
+`PageHeader`'s `subtitle` used to be "recommended", and the result was a line
+under almost every `<h1>` restating the title in different words. Those were
+removed. A subtitle now earns its place only when it carries something the screen
+cannot show by itself: context data (branch code, scope, period), a consequence
+("a change reaches everyone with this role immediately"), or how to read a number
+("central costs are not allocated to branches"). Warnings on destructive and
+financial actions are untouched.
+
 ### Room occupancy: one computation, three screens
 
 "How busy is this room?" is asked in three places — the branch comparison, the

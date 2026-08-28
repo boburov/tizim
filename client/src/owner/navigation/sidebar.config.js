@@ -143,18 +143,69 @@ const ownerSidebar = [
     capability: "coin",
   },
 
+  // ══════════════════════════════════════════════════════════════════
+  // MOLIYA — TO'RT SAVOL, TO'RT YOZUV
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // Ilgari bu yerda IKKI guruh bor edi ("Moliya" va "Kassa") va
+  // ularning chegarasi faqat ichkaridan tushunarli edi: birida
+  // "qancha hisoblangan", ikkinchisida "qancha pul bor". Foydalanuvchi
+  // uchun ikkalasi ham "pul" degan bitta so'z, shuning uchun u har
+  // safar ikkalasini ham ochib ko'rardi.
+  //
+  // Endi bitta guruh va uning boshida TO'RT asosiy yozuv turadi —
+  // har biri ALOHIDA savolga javob beradi:
+  //
+  //   Umumiy      — manzara + shu davrdagi tranzaksiyalar
+  //   Chiqimlar   — chiqim yozish va ro'yxati
+  //   Pul oqimi   — qancha kirdi, chiqdi, sof qancha
+  //   Kassa va hisoblar — qaysi hisobda qancha bor, bugun nima bo'ldi
+  //
+  // Qolgan uchtasi (undirish, to'lovlar, hisobot) o'z joyida qoladi:
+  // ular ham kundalik ish va menyudan olib tashlansa, ularga yo'l
+  // faqat xotira orqali qolardi.
+  //
+  // ── BIR DARAJA, IKKINCHISI YO'Q ──
+  // Hech qaysi yozuv ichida yana ro'yxat yo'q. Ichki bo'linish
+  // sahifaning O'ZIDA (tab) bo'ladi — menyu esa "qayerga borish"
+  // savoliga javob beradi, "u yerda nima bor" savoliga emas.
   {
     title: "Moliya",
     icon: Wallet,
     isActive: true,
     items: [
-      // BOSHQARUV MARKAZI birinchi o'rinda: u "pul qayerda, foyda
-      // qayerda, nimaga e'tibor kerak" savollarining boshlang'ich
-      // nuqtasi.
+      // UMUMIY: KPI, signal va shu davrdagi tranzaksiyalar ro'yxati.
+      // Raqamdan hujjatgacha bo'lgan yo'l shu yerdan boshlanadi.
       {
-        title: "Boshqaruv markazi",
+        title: "Umumiy",
         url: "/owner/finance",
         permission: "finance.read",
+      },
+      // CHIQIMLAR — "bugun nima yozildi va yana bittasini qanday
+      // yozaman". Bu tahlil EMAS: «Umumiy > Chiqim» tabi diagramma
+      // ko'rsatadi ("pul qayerga ketdi"), bu esa kunlik ish ro'yxati.
+      //
+      // ⚠ `expenses.read` — `finance.read` uni QAMRAMAYDI (serverda
+      // ham shunday). Moliyani ko'radigan har xodim chiqim hujjatini
+      // ko'ra olmaydi.
+      {
+        title: "Chiqimlar",
+        url: "/owner/finance/expenses",
+        permission: "expenses.read",
+      },
+      {
+        title: "Pul oqimi",
+        url: "/owner/finance/cash-flow",
+        permission: "finance.view_cashflow",
+      },
+      // KASSA VA HISOBLAR: qoldiq kartalari + tanlangan hisobning
+      // kunlik harakati. Smena va inkassatsiya AMALLARI o'z sahifasida
+      // qoladi (`/owner/cash-desk`) — ular kassirning ishi, bu esa
+      // "qancha bor" degan savol.
+      {
+        title: "Kassa va hisoblar",
+        url: "/owner/finance/accounts",
+        permission: "finance.view_cashflow",
       },
       // UNDIRISH — "kim qarzdor va nima qilamiz". Bu administratorning
       // ENG kundalik moliyaviy ishi, lekin u ilgari hisobot ichidagi
@@ -165,25 +216,24 @@ const ownerSidebar = [
         permissionAnyOf: ["finance.view_receivables", "finance.read"],
       },
       {
-        title: "Hisobot & statistika",
-        url: "/owner/finance/accounting",
-        permission: "finance.read",
-      },
-      {
         title: "To'lovlar",
         url: "/owner/finance/deposits",
         permission: "finance.read",
       },
-    ],
-  },
-
-  // KASSA — qo'sh yozuv jurnali. Moliya bo'limidan ALOHIDA: u
-  // "qancha hisoblangan" ni ko'rsatadi, bu esa "qancha PUL BOR" ni.
-  {
-    title: "Kassa",
-    icon: Wallet,
-    items: [
-      { title: "Qoldiq va smena", url: "/owner/cash-desk", permission: "finance.read" },
+      {
+        title: "Hisobot & statistika",
+        url: "/owner/finance/accounting",
+        permission: "finance.read",
+      },
+      // SMENA VA INKASSATSIYA — kassirning AMALLARI (smena ochish/
+      // yopish, pul jo'natish). Ilgari bu alohida "Kassa" guruhi edi;
+      // guruh bitta yozuvdan iborat bo'lsa, u guruh emas — bir bosish
+      // ortiqcha.
+      {
+        title: "Smena va inkassatsiya",
+        url: "/owner/cash-desk",
+        permission: "finance.read",
+      },
     ],
   },
 

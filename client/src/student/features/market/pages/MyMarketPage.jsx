@@ -45,7 +45,7 @@ import { useCancelOrderMutation } from "../hooks/useStudentMarketMutations";
  */
 const MyMarketPage = () => {
   const { openModal } = useModal();
-  const { marketEnabled, coinLabel } = useCoinConfig();
+  const { marketEnabled } = useCoinConfig();
   const [cancelingId, setCancelingId] = useState(null);
 
   const tabs = [
@@ -72,7 +72,6 @@ const MyMarketPage = () => {
   return (
     <WorkspacePage
       title="Market"
-      subtitle={`To'plagan ${coinLabel}ingizni sovg'aga almashtiring`}
       actions={<CoinAmount value={balance} size="md" />}
     >
       <TabNav tabs={tabs} />

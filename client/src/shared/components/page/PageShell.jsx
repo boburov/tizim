@@ -7,9 +7,21 @@ import { cn } from "@/shared/utils/cn";
  * minimalizm" ni so'raydi: bir xil narsa har sahifada boshqacha
  * ko'rinsa, foydalanuvchi har safar qaytadan o'rganadi.
  *
- * `subtitle` — ATAYLAB majburiy emas, lekin tavsiya etiladi: u
- * sahifa NIMA UCHUN kerakligini bir jumlada aytadi va yangi
- * foydalanuvchi uchun eng arzon o'quv materiali.
+ * ── `subtitle` — MA'LUMOT UCHUN, TUSHUNTIRISH UCHUN EMAS ──
+ * Ilgari bu yerda "tavsiya etiladi, u sahifa nima uchun kerakligini
+ * aytadi" deb yozilgandi va natijada deyarli har sahifa sarlavhasi
+ * ostida o'sha sarlavhani boshqa so'z bilan takrorlaydigan qator
+ * paydo bo'ldi ("Rollar va ruxsatlar" → "Har bir rol tizimning qaysi
+ * qismlariga kira olishini belgilaydi"). Bunday qator hech kimga
+ * hech narsa aytmaydi, lekin har ekranda birinchi jadvalni pastga
+ * suradi.
+ *
+ * Endi qoida teskari: `subtitle` FAQAT ekranda boshqa yerdan
+ * ko'rinmaydigan narsani aytsa yoziladi —
+ *   • KONTEKST MA'LUMOTI (filial kodi, davr, ko'lam);
+ *   • OQIBAT ("o'zgarish darhol hamma shu roldagi odamga tegadi");
+ *   • RAQAMNI O'QISH USULI ("markaz xarajati taqsimlanmaydi").
+ * Sahifa nima qilishini interfeysning O'ZI aytishi kerak.
  */
 export const PageHeader = ({ title, subtitle, actions, className }) => (
   <header className={cn("flex flex-wrap items-start justify-between gap-3", className)}>

@@ -45,7 +45,6 @@ const MyHomePage = () => {
   return (
     <WorkspacePage
       title={user?.firstName ? `Salom, ${user.firstName}` : "Mening sahifam"}
-      subtitle="O'qishingiz va to'lovlaringiz bir joyda"
     >
       {/* ── HOLAT: bitta jumla ── */}
       <Link

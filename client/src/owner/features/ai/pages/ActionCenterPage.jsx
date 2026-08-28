@@ -71,9 +71,6 @@ const ActionCenterPage = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Vazifalar markazi</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Bugun nimaga e'tibor qaratish kerak — biznes ta'siri bo'yicha tartiblangan
-          </p>
         </div>
         <button
           type="button"

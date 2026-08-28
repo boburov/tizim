@@ -4,6 +4,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { TemplatesModule } from './templates/templates.module.js';
 import { TenantsModule } from './tenants/tenants.module.js';
+import { BranchConfigModule } from './branch-config/branch-config.module.js';
 import { UsersModule } from './users/users.module.js';
 import { MaintenanceModule } from './maintenance/maintenance.module.js';
 import { EntitlementsModule } from './entitlements/entitlements.module.js';
@@ -24,6 +25,9 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
     AuthModule,
     TemplatesModule,
     TenantsModule,
+    // ⚠ TenantsModule'dan KEYIN: `tenants/:id/branch-*` yo'llari
+    // `tenants/:id` dan uzunroq, ya'ni ular bilan to'qnashmaydi.
+    BranchConfigModule,
     UsersModule,
     MaintenanceModule,
     EntitlementsModule,

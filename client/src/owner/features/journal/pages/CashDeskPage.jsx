@@ -207,10 +207,6 @@ const CashDeskPage = () => {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold">Kassa</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Qoldiqlar, smena va inkassatsiya. Har bir amal qo'sh yozuv jurnaliga
-          tushadi — qoldiq hech qachon qo'lda o'zgartirilmaydi.
-        </p>
       </div>
 
       {/* ── QOLDIQLAR ── */}

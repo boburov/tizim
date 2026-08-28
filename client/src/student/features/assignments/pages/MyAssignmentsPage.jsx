@@ -143,9 +143,6 @@ const MyAssignmentsPage = () => {
     <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-semibold">Vazifalarim</h1>
-        <p className="text-sm text-muted-foreground">
-          O'qituvchi yuborgan vazifalar va biriktirilgan fayllar
-        </p>
       </header>
 
       {isLoading ? (

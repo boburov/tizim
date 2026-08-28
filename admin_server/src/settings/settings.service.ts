@@ -24,6 +24,11 @@ import {
   maskSecret,
 } from '../common/crypto/secrets.util.js';
 import { hexToHslChannels } from '../common/color/brand-color.util.js';
+import { BranchConfigService } from '../branch-config/branch-config.service.js';
+import {
+  BRANCHES_ENABLED_ENV_KEY,
+  BRANCH_LIMIT_ENV_KEY,
+} from '../branch-config/branch-config.constants.js';
 import {
   ApplyMode,
   SETTINGS,
@@ -57,7 +62,10 @@ export interface ConfigDiffEntry {
 export class SettingsService {
   private readonly logger = new Logger(SettingsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly branchConfig: BranchConfigService,
+  ) {}
 
   // ───────────────────────────────────────────────── qiymatlarni yig'ish
 
@@ -67,7 +75,14 @@ export class SettingsService {
    * Bular panelda tahrirlanmaydi: noto'g'ri port yoki baza nomi tenantni
    * butunlay ishdan chiqaradi, to'g'ri qiymat esa allaqachon yozuvda bor.
    */
-  private buildManagedValues(tenant: Tenant): ResolvedConfig {
+  private buildManagedValues(
+    tenant: Tenant,
+    /**
+     * Filial konfiguratsiyasi — `BranchConfigService` hisoblab beradi.
+     * Ataylab parametr: hisoblash mantig'i BITTA joyda qolsin.
+     */
+    branch: { branchesEnabled: boolean; limit: number },
+  ): ResolvedConfig {
     // Tenant bazasi endi PostgreSQL (Prisma). Har tenantga ALOHIDA baza
     // ochiladi - nomi `tenant.dbName`, ya'ni izolyatsiya avvalgidek qat'iy.
     const pgBase =
@@ -88,6 +103,20 @@ export class SettingsService {
       ADMIN_API_URL: process.env.ADMIN_API_PUBLIC_URL || '',
       TENANT_ID: tenant.id,
       HEARTBEAT_SECRET: tenant.heartbeatSecret || '',
+
+      // ── FILIALLAR ──
+      //
+      // ⚠ NEGA `.env` DA HAM BOR, HEARTBEAT'DA HAM: heartbeat har 15
+      // daqiqada keladi va tenant server BIRINCHI heartbeat'gacha
+      // limitlarni BILMAYDI (kesh bo'sh → "cheksiz"). Ya'ni har restart
+      // dan keyin qisqa oyna ochilardi va aynan o'sha oynada mijoz
+      // chegaradan ortiq filial ocha olardi.
+      //
+      // `.env` shu oynani yopadi: qiymat jarayon ko'tarilishi bilan
+      // mavjud bo'ladi. Heartbeat esa uni restart'siz YANGILAYDI —
+      // ikkalasi bir-birini almashtirmaydi, to'ldiradi.
+      [BRANCHES_ENABLED_ENV_KEY]: branch.branchesEnabled ? 'true' : 'false',
+      [BRANCH_LIMIT_ENV_KEY]: String(branch.limit),
     };
 
     const client: Record<string, string> = {
@@ -145,7 +174,8 @@ export class SettingsService {
     });
     if (!tenant) throw new NotFoundException('Tenant topilmadi');
 
-    const config = this.buildManagedValues(tenant);
+    const branch = await this.branchConfig.effective(tenantId);
+    const config = this.buildManagedValues(tenant, branch);
     const overrides = this.decodeOverrides(tenant.settings);
 
     for (const def of SETTINGS) {
@@ -300,6 +330,11 @@ export class SettingsService {
         DATABASE_URL: `…/${tenant.dbName}?schema=public`,
         CLIENT_URL: `https://${tenant.domain}`,
         TENANT_ID: tenant.id,
+        // Filial sozlamalari SHU YERDA — "faqat ko'rish" bo'limida.
+        // Ular "Sozlamalar" formasida TAHRIRLANMAYDI: chegara savdo
+        // qarori va uning o'z bo'limi bor (Filiallar kartasi).
+        [BRANCHES_ENABLED_ENV_KEY]: config.server[BRANCHES_ENABLED_ENV_KEY],
+        [BRANCH_LIMIT_ENV_KEY]: config.server[BRANCH_LIMIT_ENV_KEY],
       },
       pending: {
         count: diff.length,

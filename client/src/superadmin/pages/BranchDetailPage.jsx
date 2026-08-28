@@ -156,7 +156,7 @@ const BranchDetailPage = () => {
       subtitle={
         branch?.code
           ? `Kod: ${branch.code}${branch.address ? ` · ${branch.address}` : ""}`
-          : "Filialning barcha resurslari shu yerda"
+          : branch?.address || undefined
       }
       actions={
         <>

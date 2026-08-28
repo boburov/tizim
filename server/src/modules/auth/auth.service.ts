@@ -23,6 +23,7 @@ import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
 import { UserProfileService } from './user-profile.service.js';
 import { TeacherCompensationService } from '../teacher-salary/teacher-compensation.service.js';
 import { OpeningBalanceService } from '../opening-balance/opening-balance.service.js';
+import { PlanLimitsService } from '../../common/entitlements/plan-limits.service.js';
 import type { AppConfig } from '../../config/env.validation.js';
 import type { ResolvedRole } from '../../common/rbac/permission.service.js';
 
@@ -43,6 +44,8 @@ export class AuthService {
     // MANTIQ NUSXALANMAYDI.
     private readonly compensations: TeacherCompensationService,
     private readonly openingBalances: OpeningBalanceService,
+    // FILIAL CHEGARASI — `/auth/me` da FAQAT O'QISH uchun.
+    private readonly planLimits: PlanLimitsService,
     config: ConfigService<AppConfig, true>,
   ) {
     this.jwt = {
@@ -300,6 +303,23 @@ export class AuthService {
       ),
       multiBranch: await this.branchAccess.isMultiBranch(),
       branchCount,
+
+      // ═══════════════════════════════════════════════════════════════
+      // FILIAL CHEGARASI — MIJOZGA FAQAT O'QISH UCHUN.
+      //
+      // Klient shu qiymatlar bilan "Filial qo'shish" tugmasini
+      // o'chiradi va "Chegara tugadi — tarifni kengaytiring" deb
+      // yozadi, ya'ni mijoz to'sig'ni FORMANI TO'LDIRIB BO'LGANDAN
+      // KEYIN emas, OLDIN ko'radi.
+      //
+      // ⚠ BU HIMOYA EMAS. Haqiqiy to'siq `POST /branches` da
+      // (`assertBranchLimit`). Bu yerdagi qiymat KO'RSATISH uchun.
+      //
+      // ⚠ MIJOZ BU YERDAN CHEGARANI O'ZGARTIRA OLMAYDI — u faqat
+      // javobda qaytadi. Yozish yo'li tenant serverida UMUMAN YO'Q:
+      // qiymat admin paneldan `.env` va heartbeat orqali keladi.
+      // ═══════════════════════════════════════════════════════════════
+      branchLimits: await this.planLimits.branchUsage(),
       homeBranchId: user.homeBranchId ? String(user.homeBranchId) : null,
       roleMeta: {
         value: role.value,

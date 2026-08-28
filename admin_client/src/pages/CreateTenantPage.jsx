@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
+  Building2,
   Check,
   GraduationCap,
   Layers,
@@ -41,6 +42,13 @@ export default function CreateTenantPage() {
     logoUrl: '',
     botToken: '',
     createRepo: true,
+    // ── Filiallar ──
+    // `branchLimit: ''` = "berilmagan" — server tarif/standartni qo'llaydi
+    // (yangi loyiha 5 ta filial bilan boshlaydi). Bu yerga "5" yozib
+    // qo'yish standartni IKKINCHI joyda takrorlagan bo'lardi va u
+    // serverdagisi bilan vaqt o'tib ajralib ketardi.
+    branchesEnabled: true,
+    branchLimit: '',
   });
 
   // Dinamik tizimlar ro'yxati (select uchun)
@@ -102,6 +110,9 @@ export default function CreateTenantPage() {
       logoUrl: optional(form.logoUrl),
       botToken: optional(form.botToken),
       createRepo: form.createRepo,
+      branchesEnabled: form.branchesEnabled,
+      // Bo'sh qoldirilsa umuman yuborilmaydi — server standartni qo'llaydi.
+      branchLimit: form.branchLimit === '' ? undefined : Number(form.branchLimit),
     });
   };
 
@@ -221,6 +232,54 @@ export default function CreateTenantPage() {
           <div className="border-t border-border pt-5">
             <h2 className="mb-4 text-sm font-semibold text-foreground">Brend</h2>
             <BrandFields value={form} onChange={setForm} />
+          </div>
+
+          {/* Filiallar — SaaS chegarasi. Mijoz buni O'ZGARTIRA OLMAYDI:
+              maydonlar faqat shu (Developer Admin) formada bor. */}
+          <div className="space-y-4 border-t border-border pt-5">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Building2 size={14} /> Filiallar
+            </h2>
+
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-4 transition hover:bg-muted">
+              <input
+                type="checkbox"
+                checked={form.branchesEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, branchesEnabled: e.target.checked }))
+                }
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground">
+                  Ko'p filialli rejim
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                  O'chirilsa loyiha yakka o'quv markazi bo'ladi — filial
+                  tushunchasi mijoz panelidan butunlay yo'qoladi.
+                </span>
+              </span>
+            </label>
+
+            {form.branchesEnabled && (
+              <div>
+                <label className={label}>Filial chegarasi</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  className={field}
+                  value={form.branchLimit}
+                  onChange={set('branchLimit')}
+                  placeholder="Bo'sh qoldiring — tarif/standart qo'llanadi"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Bo'sh qoldirilsa loyiha tarifdagi qiymatni, tarif bo'lmasa
+                  tizim standartini oladi. Keyinchalik loyiha sahifasidan
+                  oshirsa/kamaytirsa bo'ladi.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Integratsiyalar */}

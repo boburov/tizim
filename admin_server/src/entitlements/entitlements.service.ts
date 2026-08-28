@@ -1,5 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BranchConfigService } from '../branch-config/branch-config.service.js';
+import {
+  BRANCHES_ENABLED_FEATURE_KEY,
+  BRANCH_COUNT_METRIC,
+  BRANCH_LIMIT_FEATURE_KEY,
+} from '../branch-config/branch-config.constants.js';
 
 /** Cheksiz limitni bildiruvchi qiymat (PlanFeature.value = -1). */
 export const UNLIMITED = -1;
@@ -12,6 +18,15 @@ export interface ResolvedLimit {
   metricKey: string | null;
   /** Tarif + add-on'lardan hisoblangan yakuniy qiymat. -1 = cheksiz. */
   value: number;
+  /**
+   * TARIFDAN kelgan qiymat (add-on'siz). -1 = cheksiz, 0 = tarifda yo'q.
+   *
+   * ⚠ `value` dan ATAYLAB alohida: "5 ta kiritilgan + 3 ta sotib olingan"
+   * ni ko'rsatish uchun ikkalasi ham kerak, yig'indining o'zi yetmaydi.
+   */
+  included: number;
+  /** Faol add-on'lardan qo'shilgan qiymat (`addon.value * quantity`). */
+  purchased: number;
   /** Hozirgi foydalanish (metricKey bo'lsa, oxirgi snapshot). */
   usage: number | null;
   /** usage/value foizi (0-100+). Cheksiz yoki BOOLEAN bo'lsa null. */
@@ -29,7 +44,10 @@ export interface ResolvedLimit {
  */
 @Injectable()
 export class EntitlementsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly branchConfig: BranchConfigService,
+  ) {}
 
   /** Tenantning oxirgi usage qiymatlarini metrika bo'yicha qaytaradi. */
   async latestUsage(tenantId: string): Promise<Record<string, number>> {
@@ -85,6 +103,8 @@ export class EntitlementsService {
         unit: f.unit,
         metricKey: f.metricKey,
         value: pf.value,
+        included: pf.value,
+        purchased: 0,
         usage: null,
         percent: null,
         exceeded: false,
@@ -99,14 +119,23 @@ export class EntitlementsService {
       const f = ta.addon.feature;
       if (!f) continue;
 
+      // ⚠ MIQDOR: bitta add-on qatori N ta birlikni bildirishi mumkin
+      // (`@@unique([tenantId, addonId])` sababli ikkinchi qator ochilmaydi).
+      // BOOLEAN uchun miqdorning ma'nosi yo'q — "yoqilgan" ikki barobar
+      // yoqilmaydi.
+      const qty = Math.max(1, ta.quantity ?? 1);
+      const added =
+        f.type === 'BOOLEAN' ? ta.addon.value : ta.addon.value * qty;
+
       const existing = limits.get(f.key);
       if (existing) {
+        existing.purchased += added;
         // Cheksizga qo'shib bo'lmaydi — cheksiz cheksizligicha qoladi
         if (existing.value !== UNLIMITED) {
           existing.value =
             f.type === 'BOOLEAN'
-              ? Math.max(existing.value, ta.addon.value)
-              : existing.value + ta.addon.value;
+              ? Math.max(existing.value, added)
+              : existing.value + added;
         }
       } else {
         limits.set(f.key, {
@@ -115,13 +144,69 @@ export class EntitlementsService {
           type: f.type,
           unit: f.unit,
           metricKey: f.metricKey,
-          value: ta.addon.value,
+          value: added,
+          // Tarifda bu imkoniyat umuman yo'q — hammasi sotib olingan.
+          included: 0,
+          purchased: added,
           usage: null,
           percent: null,
           exceeded: false,
         });
       }
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 2.5) FILIAL CHEGARASI — YAGONA HISOBLOVCHIDAN, USTIGA YOZILADI.
+    //
+    // Yuqoridagi umumiy mantiq (tarif + add-on) filial uchun YETARLI EMAS:
+    //   • loyihada `branchLimitOverride` bo'lishi mumkin — u tarifdan ustun;
+    //   • `branchesEnabled=false` bo'lsa chegara doim 1 ta;
+    //   • tarifi UMUMAN yo'q loyiha `max_branches` siz qolardi va tenant
+    //     server uni "cheksiz" deb o'qib, mijozga cheksiz filial ochib
+    //     berardi — aynan shu teshikni yopish uchun bu blok bor.
+    //
+    // Shuning uchun qiymat `BranchConfigService` dan olinadi va ustiga
+    // YOZILADI: bitta savolga bitta javob beruvchi bo'lsin.
+    // ═══════════════════════════════════════════════════════════════════
+    const branch = await this.branchConfig.effective(tenantId);
+    const branchFeature = await this.prisma.feature.findUnique({
+      where: { key: BRANCH_LIMIT_FEATURE_KEY },
+      select: { name: true, unit: true },
+    });
+
+    limits.set(BRANCH_LIMIT_FEATURE_KEY, {
+      key: BRANCH_LIMIT_FEATURE_KEY,
+      name: branchFeature?.name ?? 'Filiallar soni',
+      type: 'LIMIT',
+      unit: branchFeature?.unit ?? 'ta',
+      metricKey: BRANCH_COUNT_METRIC,
+      value: branch.limit,
+      // "5 ta kiritilgan + 2 ta sotib olingan" ko'rinishi shu ikkisidan
+      // chiziladi. `base` — tarif/qo'lda qo'yilgan asos, `addonBonus` —
+      // sotib olingan paketlar.
+      included: branch.base,
+      purchased: branch.addonBonus,
+      usage: null,
+      percent: null,
+      exceeded: false,
+    });
+
+    // Rejimning O'ZI ham tenant serverga yetishi kerak: yakka markazda
+    // filial bo'limi UI'dan butunlay yo'qoladi, chegara esa 1 ta bo'ladi.
+    limits.set(BRANCHES_ENABLED_FEATURE_KEY, {
+      key: BRANCHES_ENABLED_FEATURE_KEY,
+      name: "Ko'p filialli rejim",
+      type: 'BOOLEAN',
+      unit: null,
+      metricKey: null,
+      value: branch.branchesEnabled ? 1 : 0,
+      // Rejim SOTILMAYDI — u loyiha konfiguratsiyasi, add-on emas.
+      included: branch.branchesEnabled ? 1 : 0,
+      purchased: 0,
+      usage: null,
+      percent: null,
+      exceeded: false,
+    });
 
     // 3) Usage'ni bog'lash va oshganini hisoblash
     for (const lim of limits.values()) {

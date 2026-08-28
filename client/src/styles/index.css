@@ -326,3 +326,52 @@ select:-webkit-autofill {
   caret-color: hsl(var(--foreground));
   transition: background-color 5000s ease-in-out 0s;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   CHOP ETISH — KVITANSIYA
+   ══════════════════════════════════════════════════════════════════════
+
+   Kvitansiya modal ichida turadi, lekin qog'ozga FAQAT u chiqishi
+   kerak: sidebar, panel sarlavhasi va tugmalar chekni ikki betga
+   cho'zib yuborardi.
+
+   `visibility` ishlatiladi, `display: none` EMAS. Sabab: modal
+   portal orqali `body` ostiga chiqadi va uning ota-onalari ekranda
+   absolute joylashgan. `display:none` bilan butun zanjirni kesib
+   tashlash kerak bo'lardi; `visibility` esa meros bo'ladi va faqat
+   kerakli shoxni qayta ko'rinadigan qiladi.
+
+   Ranglar chop etishda ATAYLAB qora/oq: token ranglari (dark
+   rejimdagi och matn) oq qog'ozda o'qilmasdi. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print-receipt,
+  .print-receipt * {
+    visibility: visible;
+  }
+
+  .print-receipt {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: #fff;
+    color: #000;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}

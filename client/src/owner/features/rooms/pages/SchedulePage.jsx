@@ -117,7 +117,6 @@ const SchedulePage = () => {
   return (
     <PageShell
       title="Haftalik jadval"
-      subtitle="Qaysi guruh, qaysi kuni, qaysi xonada — va xona to'qnashuvlari"
     >
       {conflicts.length > 0 && (
         <div className="space-y-1 rounded-xl border border-destructive/40 bg-destructive/5 p-3">

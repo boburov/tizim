@@ -39,7 +39,6 @@ const CollectionsPage = () => {
   return (
     <PageShell
       title="Undirish"
-      subtitle="Kim qancha qarzdor, qancha vaqtdan beri — va qaysi to'lovdan kelib chiqqan"
     >
       <FinanceFilterBar
         filters={filters}

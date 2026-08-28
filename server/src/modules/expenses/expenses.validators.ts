@@ -73,6 +73,13 @@ export const listSchema = z.object({
     month: z.coerce.number().int().min(1).max(12).optional(),
     from: z.string().optional(),
     to: z.string().optional(),
+    // ERKIN QIDIRUV — nom, izoh yoki yetkazib beruvchi bo'yicha.
+    // Kassir "kim uchun to'ladim" ni ESLAYDI, kategoriya nomini emas.
+    search: z.string().trim().max(200).optional(),
+    // ANIQ FILIAL. Super Admin uchun kesim tanlash vositasi; oddiy
+    // administratorda u baribir `branchFilter()` bilan KESISHTIRILADI
+    // (`scopeClause`), ya'ni begona filial ID si hech narsa ochmaydi.
+    branchId: objectId.optional(),
     branchScope: z.enum(["branch-only", "with-shared"]).optional(),
     page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().positive().max(200).default(50),

@@ -69,9 +69,6 @@ const RolesPage = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Rollar va ruxsatlar</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Har bir rol tizimning qaysi qismlariga kira olishini belgilaydi
-          </p>
         </div>
         <Button onClick={() => navigate("/owner/settings/rollar/new")}>
           <Plus className="mr-1.5 size-4" />

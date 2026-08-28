@@ -116,7 +116,6 @@ const FiliallarPage = () => {
   return (
     <PageShell
       title="Filiallar"
-      subtitle="Har filial — o'z xonalari, odamlari va moliyasi bilan. Kartani bosing."
       actions={
         canCreate && (
           <Button size="sm" onClick={() => openModal(MODAL.BRANCH_CREATE)}>

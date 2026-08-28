@@ -107,7 +107,8 @@
     "audit:finance": "node --env-file=.env test/finance-security-audit.mjs",
     "test:coin-invariants": "node --env-file=.env test/coin-market-invariants.test.mjs",
     "test:coin-parity": "node --env-file=.env test/coin-market-parity.test.mjs",
-    "test:coin-earn": "node --env-file=.env test/coin-earn-parity.test.mjs"
+    "test:coin-earn": "node --env-file=.env test/coin-earn-parity.test.mjs",
+    "test:branch-limit": "node test/branch-limit.test.mjs"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

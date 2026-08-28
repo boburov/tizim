@@ -52,10 +52,6 @@ const StaffPage = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Xodimlar</h1>
-          <p className="text-sm text-muted-foreground">
-            Ega, o'qituvchilar va boshqaruv xodimlari - roli, filiali,
-            faolligi va maoshi
-          </p>
         </div>
         {isList && canCreateStaff && (
           <div className="flex items-center gap-2">

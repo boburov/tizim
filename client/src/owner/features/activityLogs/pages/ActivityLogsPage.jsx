@@ -43,9 +43,6 @@ const ActivityLogsPage = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Faoliyat loglari</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Tizimda bajarilgan amallar tarixi
-          </p>
         </div>
         <div className="text-sm text-muted-foreground">
           Jami: <span className="font-semibold">{total}</span>

@@ -45,8 +45,9 @@ const WriteOffsPage = () => {
             <h1 className="text-2xl font-semibold text-foreground">
               Undirilmagan to'lovlar
             </h1>
+            {/* Atama o'zi tushunarli emas — bu ta'rif, tavsif emas. */}
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Qarzi bilan chiqib ketgan o'quvchilar - hisobdan chiqarilgan (zarar)
+              Hisobdan chiqarilgan qarz (zarar)
             </p>
           </div>
         </div>

@@ -98,6 +98,13 @@ export const PERMISSIONS = Object.freeze({
   // ── GRANULYAR MOLIYA RUXSATLARI ──
   // Server bilan AYNAN bir xil (server/src/constants/permissions.js).
   // Chiqim yozish/boshqarish — eski `expenses.*` ning yangi nomi.
+  //
+  // ⚠ O'QISH kaliti ESKI NOMDA QOLGAN (`expenses.read`) va uni
+  // `finance.read` QAMRAMAYDI (server `PERMISSION_IMPLIES` da bunday
+  // qoida yo'q). Ya'ni chiqim ro'yxatini ochish uchun aynan shu kalit
+  // kerak — `finance.read` bilan almashtirilsa, ruxsati bo'lmagan
+  // xodimga sahifa ochilib, so'rov 403 bilan qaytardi.
+  EXPENSES_READ: "expenses.read",
   FINANCE_CREATE_EXPENSE: "finance.create_expense",
   FINANCE_MANAGE_EXPENSE: "finance.manage_expense",
   FINANCE_MANAGE_ACCOUNTS: "finance.manage_accounts",

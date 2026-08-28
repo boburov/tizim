@@ -13,6 +13,7 @@ import {
   type CredentialActor,
 } from '../../common/rbac/credential-scope.js';
 import { RolesHelperService } from '../../common/rbac/roles.helper.js';
+import { PlanLimitsService } from '../../common/entitlements/plan-limits.service.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -64,6 +65,7 @@ export class BranchesService {
     private readonly branchAccess: BranchAccessService,
     private readonly credentials: CredentialScopeService,
     private readonly roles: RolesHelperService,
+    private readonly planLimits: PlanLimitsService,
   ) {}
 
   /**
@@ -218,6 +220,24 @@ export class BranchesService {
   }) {
     const name = String(body.name || '').trim();
     if (!name) throw new ApiError(400, 'Filial nomi kerak');
+
+    // ═════════════════════════════════════════════════════════════════
+    // ⚠ TARIF CHEGARASI — SERVER TOMONIDA, NOM TEKSHIRUVIDAN OLDIN.
+    //
+    // Tartib ataylab shunday: chegara tugagan bo'lsa mijoz "bu nom band"
+    // degan xabarni umuman ko'rmasligi kerak — javob bitta va aniq
+    // bo'lsin (`BRANCH_LIMIT_REACHED`), aks holda u nomni o'zgartirib
+    // qayta-qayta urinardi.
+    //
+    // ⚠ FRONTENDGA TAYANMAYDI. Klientdagi tekshiruv faqat qulaylik;
+    // `POST /branches` ga to'g'ridan-to'g'ri murojaat ham SHU YERDA
+    // to'siladi.
+    //
+    // ⚠ `createWithDirector` ham shu metodga tushadi — ya'ni direktor
+    // bilan birga ochish yo'li ham himoyalangan. Ikkinchi tekshiruv
+    // qo'shilmaydi: bitta darvoza, bitta joyda.
+    // ═════════════════════════════════════════════════════════════════
+    await this.planLimits.assertBranchLimit();
 
     const exists = await this.prisma.branch.findFirst({ where: { name, isDeleted: false } });
     if (exists) throw new ApiError(409, 'Bunday nomli filial allaqachon mavjud');

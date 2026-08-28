@@ -47,7 +47,6 @@ const WorkGroupsPage = () => {
   return (
     <WorkspacePage
       title="Guruhlarim"
-      subtitle="Menga biriktirilgan guruhlar. Qatorni bosing — guruh sahifasi ochiladi."
     >
       <QueryState
         query={groups}

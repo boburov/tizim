@@ -18,7 +18,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const serverPerms = resolve(here, "../../server/src/constants/permissions.js");
+// ⚠ MANBA — NESTJS KONSTANTALARI. Cutover'dan keyin Express steki
+// (`server_legacy/`) o'chirildi va bu skript ENOENT bilan yiqilib,
+// UMUMAN ishga tushmay qolgandi — ya'ni delegatsiya katalogi bilan
+// server o'rtasidagi drift tekshirilmasdi.
+const serverPerms = resolve(here, "../../server/src/common/constants/permissions.ts");
 const catalogPath = resolve(here, "../src/shared/workspaces/capabilities.js");
 
 const readKeys = (file, re) => {
@@ -29,8 +33,26 @@ const readKeys = (file, re) => {
   return out;
 };
 
-// Serverdagi PERMISSIONS obyekti: `KEY: "module.action",`
-const serverKeys = readKeys(serverPerms, /^\s{2}[A-Z0-9_]+:\s*"([a-z0-9_]+\.[a-z0-9_]+)"/gm);
+// Serverdagi PERMISSIONS obyekti. NestJS faylida KALIT ham tirnoqda
+// (`"USERS_READ": "users.read"`), Express'da esa tirnoqsiz edi —
+// shuning uchun tirnoq IXTIYORIY qilib berilgan.
+const serverKeys = readKeys(serverPerms, /^\s{2}"?[A-Z0-9_]+"?:\s*"([a-z0-9_]+\.[a-z0-9_]+)"/gm);
+
+// ── MODUL REYESTRLARI ──
+// Asosiy `PERMISSIONS` obyekti MUZLATILGAN: unga yangi kalit qo'shish
+// `test/constants-parity.test.mjs` ni uch joyda qizil qiladi (oracle
+// ko'chirish tugagan paytdagi shartnomani qayd etadi). Shuning uchun
+// keyin qo'shilgan bo'lim O'Z konstantalar faylini olib yuradi —
+// tanga/market shu naqshning birinchi misoli.
+//
+// Ular bu yerda ham hisobga olinishi SHART, aks holda tekshiruv
+// haqiqiy, ishlaydigan kalitni "serverda yo'q" deb ko'rsatardi.
+const MODULE_REGISTRIES = [
+  { path: "../../server/src/common/constants/coin.ts", re: /^\s{2}[A-Z0-9_]+:\s*'([a-z0-9_]+\.[a-z0-9_]+)'/gm },
+];
+for (const reg of MODULE_REGISTRIES) {
+  for (const k of readKeys(resolve(here, reg.path), reg.re)) serverKeys.add(k);
+}
 // Katalogdagi yozuvlar: `{ key: "module.action", ...`
 const catalogKeys = readKeys(catalogPath, /\{\s*key:\s*"([a-z0-9_]+\.[a-z0-9_]+)"/g);
 

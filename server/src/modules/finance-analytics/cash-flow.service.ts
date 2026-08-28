@@ -195,8 +195,39 @@ export class CashFlowService {
     const bucket = truncExpr(granularity);
 
     const opening = await this.balanceAt(range.from, branchId, null);
+
+    /**
+     * ══════════════════════════════════════════════════════════════
+     * KIRIM va CHIQIM ALOHIDA — "kirim/chiqim dinamikasi" grafigi
+     * ══════════════════════════════════════════════════════════════
+     *
+     * Ilgari faqat `change` qaytarardi va UI "qancha kirdi, qancha
+     * chiqdi" degan savolga javob berish uchun daromad/chiqim
+     * trendlaridan foydalanishga majbur bo'lardi — ular esa FOYDA
+     * o'lchovi, PUL emas. Grafik jimgina boshqa raqamni chizardi.
+     *
+     * ── ICHKI KO'CHIRISH KIRIM/CHIQIMDAN CHIQARILADI ──
+     * Bank → kassa o'tkazmasi xazina qatorlarida IKKI tomonda turadi:
+     * kassaga debet, bankdan kredit. Xom `SUM(debit)` / `SUM(credit)`
+     * da u IKKALA ustunni ham shishirardi — 500 000 lik ichki
+     * ko'chirish "500 000 kirdi va 500 000 chiqdi" bo'lib ko'rinardi,
+     * holbuki markazga bir tiyin ham kirmagan.
+     *
+     * `change` esa BARCHA harakatni oladi — qoldiq chizig'i shundan
+     * chiziladi va u to'g'ri bo'lishi SHART.
+     *
+     * Ikkalasi ZID EMAS: ichki ko'chirishning NETTOSI nol, ya'ni
+     * `inflow − outflow` hamon `change` ga TENG. Grafikdagi ustunlar
+     * va chiziq bir-birini tasdiqlaydi.
+     */
+    const internalFilter = Prisma.sql`e.kind::text NOT IN (${Prisma.join(
+      INTERNAL_KINDS,
+    )})`;
+
     const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
       SELECT ${bucket} AS "bucket",
+        COALESCE(SUM(CASE WHEN ${internalFilter} THEN l.debit  ELSE 0 END), 0) AS "inflow",
+        COALESCE(SUM(CASE WHEN ${internalFilter} THEN l.credit ELSE 0 END), 0) AS "outflow",
         COALESCE(SUM(l.debit - l.credit), 0) AS "change"
       FROM journal_lines l
       JOIN journal_entries e ON e.id = l."entryId"
@@ -214,7 +245,13 @@ export class CashFlowService {
       points: rows.map((r) => {
         const change = n(r.change);
         running += change;
-        return { date: r.bucket, change, balance: running };
+        return {
+          date: r.bucket,
+          inflow: n(r.inflow),
+          outflow: n(r.outflow),
+          change,
+          balance: running,
+        };
       }),
     };
   }

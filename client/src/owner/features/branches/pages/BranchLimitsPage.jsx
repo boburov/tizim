@@ -144,11 +144,10 @@ const BranchLimitsPage = () => {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Limitlar va cheklovlar</h1>
+        {/* OQIBATI EKRANDAN KO'RINMAYDI: bo'sh maydon "cheksiz" degani.
+            Moliyaviy nazorat sozlamasi, shuning uchun izoh qoladi. */}
         <p className="mt-1 text-sm text-muted-foreground">
-          Limitdan oshgan chiqim tasdiqdan o'tadi. Bo'sh qoldirilsa tasdiq
-          talab qilinmaydi. Filial rahbari standart holatda o'z filialida
-          hamma sozlamani o'zi hal qiladi — cheklov qo'shsangiz o'sha amal
-          sizning tasdig'ingizga qaytadi.
+          Limitdan oshgan chiqim tasdiqdan o'tadi; bo'sh qoldirilsa — tasdiqsiz
         </p>
       </div>
 

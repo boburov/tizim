@@ -88,8 +88,14 @@ export class UsageHeartbeatJob implements JobDefinition {
   async collectMetrics(): Promise<Record<string, number>> {
     const notDeleted = { isDeleted: false };
 
-    const [userCount, studentCount, teacherCount, groupCount, activeGroupCount] =
-      await Promise.all([
+    const [
+      userCount,
+      studentCount,
+      teacherCount,
+      groupCount,
+      activeGroupCount,
+      branchCount,
+    ] = await Promise.all([
         // ⚠ `role: { not: STUDENT }` — "foydalanuvchi" = xodim + o'qituvchi.
         // O'quvchilar ALOHIDA sanaladi, chunki tarif ikkalasini boshqa-boshqa
         // chegaralaydi.
@@ -100,6 +106,14 @@ export class UsageHeartbeatJob implements JobDefinition {
         this.prisma.user.count({ where: { ...notDeleted, role: ROLES.TEACHER } }),
         this.prisma.group.count({ where: notDeleted }),
         this.prisma.group.count({ where: { ...notDeleted, isActive: true } }),
+        // ⚠ FILIALLAR — `isActive` FILTRISIZ, ATAYLAB.
+        //
+        // Chegara "nechta filial YARATILGAN" ni sanaydi, "nechtasi
+        // hozir yoqilgan" ni emas. Aks holda mijoz filiallarni
+        // navbatma-navbat o'chirib-yoqib, chegaradan istagancha ko'p
+        // filial ochib olardi. `PlanLimitsService.branchCount()` ham
+        // AYNAN shunday sanaydi — ikki raqam ajralib qolmasin.
+        this.prisma.branch.count({ where: notDeleted }),
       ]);
 
     const metrics: Record<string, number> = {
@@ -108,6 +122,8 @@ export class UsageHeartbeatJob implements JobDefinition {
       teacher_count: teacherCount,
       group_count: groupCount,
       active_group_count: activeGroupCount,
+      // Admin panel "Used: 3 / Limit: 5" ni shundan chizadi.
+      branch_count: branchCount,
     };
 
     // ⚠ QO'SHIMCHA METRIKALAR YIQILSA HEARTBEAT YIQILMAYDI. Ular

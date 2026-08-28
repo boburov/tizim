@@ -158,9 +158,6 @@ const RoleFormPage = ({ mode = "edit" }) => {
             <h1 className="text-2xl font-semibold">
               {isCreate ? "Yangi rol" : role?.label}
             </h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Rol tizimning qaysi qismlariga kira olishini belgilang
-            </p>
           </div>
         </div>
 

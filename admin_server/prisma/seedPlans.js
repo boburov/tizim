@@ -25,6 +25,21 @@ const FEATURES = [
     metricKey: 'user_count',
   },
   {
+    // ── FILIALLAR ──
+    //
+    // ⚠ Bu tarifdagi ASOSIY qiymat, YAKUNIY chegara EMAS. Yakuniysi
+    // `admin_server/src/branch-config` da hisoblanadi:
+    //     loyihaning qo'lda qo'yilgan qiymati > tarif > tizim standarti,
+    //     ustiga sotib olingan paketlar qo'shiladi.
+    // Shuning uchun "5" soni kodda TARQALMAYDI — u bitta konstantada.
+    key: 'max_branches',
+    name: 'Filiallar soni',
+    description: "Ochish mumkin bo'lgan maksimal filial",
+    type: 'LIMIT',
+    unit: 'ta',
+    metricKey: 'branch_count',
+  },
+  {
     key: 'max_groups',
     name: 'Guruhlar soni',
     description: 'Yaratish mumkin bo\'lgan maksimal guruh',
@@ -88,6 +103,9 @@ const PLANS = [
     features: {
       max_students: 50,
       max_users: 3,
+      // Bepul tarif — yakka markaz uchun. Filial ochish sotuv chizig'i
+      // ortida turadi.
+      max_branches: 1,
       max_groups: 5,
       max_storage_mb: 200,
       telegram_bot: 0,
@@ -109,6 +127,9 @@ const PLANS = [
     features: {
       max_students: 300,
       max_users: 10,
+      // Standart taklif: 5 ta filial. Ko'proq kerak bo'lsa —
+      // `branch_pack_*` add-on'lari orqali sotiladi.
+      max_branches: 5,
       max_groups: 30,
       max_storage_mb: 2000,
       telegram_bot: 1,
@@ -132,6 +153,7 @@ const PLANS = [
     features: {
       max_students: 1000,
       max_users: 30,
+      max_branches: 15,
       max_groups: 100,
       max_storage_mb: 10000,
       telegram_bot: 1,
@@ -153,6 +175,9 @@ const PLANS = [
     features: {
       max_students: -1,
       max_users: -1,
+      // Filial bizga hech narsaga tushmaydi (o'z serverimiz) — AI dan
+      // farqli o'laroq bu yerda "cheksiz" ochiq hisob emas.
+      max_branches: -1,
       max_groups: -1,
       max_storage_mb: -1,
       telegram_bot: 1,
@@ -181,6 +206,39 @@ const ADDONS = [
     currency: 'UZS',
     featureKey: 'ai_advisor',
     value: 1,
+  },
+  {
+    // ── PULLIK FILIAL KENGAYTMASI ──
+    //
+    // Add-on qiymati tarif/loyiha chegarasiga QO'SHILADI:
+    //     5 (asos) + 1 (paket) = 6
+    // Ikki xil paket ataylab: bittalab qo'shish ham, bir yo'la beshtalik
+    // ham talab qilinadi va ular BIRGA olinishi mumkin (5+5+1 = 11).
+    key: 'branch_pack_1',
+    name: 'Qo\'shimcha filial +1',
+    description:
+      "Tarifdagi filial chegarasiga bitta filial qo'shadi. Qayta sotib olinsa miqdor ustiga qo'shiladi.",
+    price: 90000,
+    currency: 'UZS',
+    featureKey: 'max_branches',
+    value: 1,
+    // ⚠ 4 tadan keyin +5 paketi ARZONROQ (4×90 000 = 360 000 > 400 000/5).
+    // Chegara sun'iy emas: usiz mijoz bittalab olib, o'ziga qimmatga
+    // tushirardi va bu bizning ayb bo'lardi.
+    maxQuantity: 4,
+  },
+  {
+    key: 'branch_pack_5',
+    name: 'Qo\'shimcha filial +5',
+    description:
+      "Tarifdagi filial chegarasiga besh filial qo'shadi. +1 paketi bilan birga va bir necha marta olinishi mumkin.",
+    price: 400000,
+    currency: 'UZS',
+    featureKey: 'max_branches',
+    value: 5,
+    // 20 × 5 = 100 ta qo'shimcha filial. Bundan kattasi — alohida
+    // kelishuv, avtomatik sotuv emas.
+    maxQuantity: 20,
   },
   {
     key: 'ai_calls_5k',
@@ -266,6 +324,9 @@ async function main() {
         currency: addonData.currency,
         featureId: feature.id,
         value: addonData.value,
+        // ⚠ `?? null` — ro'yxatdan olib tashlangan chegara bazada
+        // QOLIB KETMASIN (undefined bo'lsa Prisma ustunga TEGMAYDI).
+        maxQuantity: addonData.maxQuantity ?? null,
         isActive: true,
       },
       create: { ...addonData, featureId: feature.id },

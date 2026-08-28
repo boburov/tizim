@@ -492,7 +492,7 @@ export class FinancialTransactionService {
    * xulq-atvor saqlanadi.
    */
   postExpense(
-    { expenseId }: { expenseId: string },
+    { expenseId, revision = 0 }: { expenseId: string; revision?: number },
     actor?: Actor | null,
     { tx }: { tx?: TxClient | null } = {},
   ): Promise<PostResult> {
@@ -518,7 +518,19 @@ export class FinancialTransactionService {
         ],
         refModel: 'Expense',
         refId: expense.id,
-        postingKey: `expense:${expense.id}`,
+        // ── REVIZIYA (tahrirlash yo'li) ──
+        // Chiqim tahrirlanganda eski yozuv STORNO qilinadi va YANGISI
+        // yoziladi. Ikkalasi ham `refModel = "Expense"` bilan turadi,
+        // ya'ni kalit BIR XIL bo'lsa ikkinchi yozuv unique indeksga
+        // urilib butun tahrirni yiqitardi.
+        //
+        // `revision = 0` — birinchi yozuv, kalit O'ZGARMAYDI
+        // (`expense:<id>`). Mavjud yozuvlar va `reverseByRef` ning
+        // `storno:expense:<id>` kaliti shu tufayli joyida qoladi.
+        postingKey:
+          revision > 0
+            ? `expense:${expense.id}:v${revision + 1}`
+            : `expense:${expense.id}`,
         dimensions: await this.dim.fromExpense(
           expense as unknown as Record<string, unknown>, t),
         actor,

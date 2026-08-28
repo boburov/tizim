@@ -26,6 +26,9 @@ const KEYS = [
   "branchId", "teacherId", "courseId", "groupId", "roomId", "studentId",
   "expenseCategoryId", "paymentMethod", "costType", "accountKind",
   "granularity",
+  // Ro'yxat uzunligi. Serverdagi `analyticsFilterSchema` ham `limit`
+  // ni biladi (1..200), shuning uchun u to'g'ridan-to'g'ri uzatiladi.
+  "limit",
 ];
 
 const now = new Date();
@@ -78,7 +81,14 @@ const useFinanceFilters = () => {
 
   /** Faol (standart bo'lmagan) filtrlar soni — UI belgisi uchun. */
   const activeCount = useMemo(
-    () => KEYS.filter((k) => !["year", "month", "granularity"].includes(k) && params.get(k)).length,
+    () =>
+      KEYS.filter(
+        (k) =>
+          // Davr, guruhlash va ro'yxat uzunligi — KO'RINISH sozlamasi,
+          // filtr emas. Ular "3 filtr faol" belgisiga kirsa, belgi
+          // hech qachon nolga tushmasdi va ma'nosini yo'qotardi.
+          !["year", "month", "granularity", "limit"].includes(k) && params.get(k),
+      ).length,
     [params],
   );
 

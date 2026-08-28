@@ -140,12 +140,28 @@ if (missingEp.length) fail("22 tahlil endpoint'i", `yo'q: ${missingEp.join(", ")
 else ok("22 tahlil endpoint'i", `${REQUIRED_ENDPOINTS.length} ta`);
 
 // ── 6) SERVER MARSHRUTLARI BILAN MOSLIK ──
-const serverRoutes = read(join(SERVER, "modules/financeAnalytics/financeAnalytics.routes.js"));
+//
+// ⚠ MANBA — NESTJS KONTROLLERI. Ilgari bu yerda Express marshrut
+// fayli (`modules/financeAnalytics/financeAnalytics.routes.js`)
+// o'qilardi. Cutover'dan keyin `server_legacy/` o'chirildi va
+// `readFileSync` ENOENT bilan yiqilib, BUTUN tekshiruv ishga
+// tushmay qolgandi — ya'ni u yashil ham, qizil ham emas, JIM edi.
+//
+// NestJS'da yo'l ikki bo'lakdan yig'iladi: `@Controller('...')` va
+// `@Get('...')`. Bo'sh `@Get()` — kontroller ildizi.
+const serverRoutes = read(
+  join(SERVER, "modules/finance-analytics/finance-analytics.controller.ts"),
+);
 const norm = (p) => p.replace(/:[A-Za-z]+/g, ":p").replace(/\$\{[^}]+\}/g, ":p");
-const serverPaths = [...serverRoutes.matchAll(/router\.get\("([^"]+)"/g)].map((m) => norm(m[1]));
+const serverPaths = [...serverRoutes.matchAll(/@Get\((?:'([^']*)')?\)/g)].map((m) =>
+  norm(m[1] ? `/${m[1]}` : "/"),
+);
 const clientPaths = [...analyticsBlock.matchAll(/"\/finance-analytics([^"`]*)"/g)].map((m) => norm(m[1]));
 const clientTemplates = [...analyticsBlock.matchAll(/`\/finance-analytics([^`]*)`/g)].map((m) => norm(m[1]));
-const allClient = [...clientPaths, ...clientTemplates];
+// Kontroller ildizi (`@Get()`) client'da `"/finance-analytics"` bo'lib
+// yoziladi va `norm` uni bo'sh satrga aylantiradi — ikkalasi bir xil
+// shaklga keltiriladi.
+const allClient = [...clientPaths, ...clientTemplates].map((p) => p || "/");
 const unmatched = serverPaths.filter((sp) => !allClient.includes(sp));
 if (unmatched.length) fail("Server marshrutlari qoplangan", `client'da yo'q: ${unmatched.join(", ")}`);
 else ok("Server marshrutlari qoplangan", `${serverPaths.length} marshrut`);
@@ -156,12 +172,17 @@ else ok("Server marshrutlari qoplangan", `${serverPaths.length} marshrut`);
 // qolsa, huquqi BOR foydalanuvchida tugma yashirinadi — va buni
 // hech qanday xato ko'rsatmaydi.
 const clientImplies = read(join(ROOT, "shared/hooks/usePermissions.js"));
-const serverImplies = read(join(SERVER, "helpers/permission.helper.js"));
+// ⚠ MANBA — NESTJS RUXSAT SERVISI (Express `helpers/permission.helper.js`
+// o'chirilgan). Tirnoq TURI ham farq qiladi: client `"..."`, server
+// `'...'` yozadi, shuning uchun ikkalasi ham qabul qilinadi — aks
+// holda server tomoni BO'SH bo'lib o'qilib, tekshiruv "hamma qoida
+// yo'qolibdi" deb yolg'on qizil berardi.
+const serverImplies = read(join(SERVER, "common/rbac/permission.service.ts"));
 const parseImplies = (src) => {
   const block = src.slice(src.indexOf("PERMISSION_IMPLIES"), src.indexOf("};", src.indexOf("PERMISSION_IMPLIES")));
   const out = {};
-  for (const m of block.matchAll(/"([a-z_.]+)":\s*\[([^\]]*)\]/g)) {
-    out[m[1]] = [...m[2].matchAll(/"([a-z_.]+)"/g)].map((x) => x[1]).sort();
+  for (const m of block.matchAll(/["']([a-z_.]+)["']:\s*\[([^\]]*)\]/g)) {
+    out[m[1]] = [...m[2].matchAll(/["']([a-z_.]+)["']/g)].map((x) => x[1]).sort();
   }
   return out;
 };

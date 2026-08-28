@@ -21,7 +21,6 @@ import { SystemAnalysisTabs } from "@/owner/features/systemAnalysis";
 const TizimTahliliPage = () => (
   <PageShell
     title="Tizim tahlili"
-    subtitle="Butun tashkilot bo'yicha — nimaga e'tibor berish kerak"
   >
     <SystemAnalysisTabs />
   </PageShell>

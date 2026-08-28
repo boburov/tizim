@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, Repeat, Landmark, Info } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Repeat, Landmark } from "lucide-react";
 
 import { cn } from "@/shared/utils/cn";
 import { MetricValue, TrendChart, AnalyticsTable, LoadingBlock, ErrorBlock, QueryState } from "@/shared/components/analytics";
@@ -14,16 +14,21 @@ import { useCashFlow, useCashTrend, useAccounts } from "../../hooks/useFinanceAn
  * PUL OQIMI.
  *
  * ═══════════════════════════════════════════════════════════════════
- * BU SAHIFANING BUTUN MAQSADI — "FOYDA ≠ PUL" FARQINI KO'RSATISH
+ * TO'RT SAVOLGA JAVOB, SHU TARTIBDA
  *
- * Shuning uchun tepada ochiq izoh turadi va uch bo'lim ATAYLAB
- * ajratilgan:
- *   OPERATSION      — biznesning o'zi ishlab topgani
+ *   Qancha kirdi / chiqdi / sof qancha?  → tepadagi uch raqam
+ *   Vaqt bo'yicha qanday o'zgardi?        → kirim/chiqim grafigi
+ *   Pul qayerdan qayerga ketdi?           → oqim tarkibi
+ *   Hozir qaysi hisobda qancha bor?       → hisoblar jadvali
+ *
+ * ── UCH BO'LIM ATAYLAB AJRATILGAN ──
+ *   OPERATSION       — biznesning o'zi ishlab topgani
  *   MOLIYALASHTIRISH — egasining puli (daromad EMAS)
- *   ICHKI           — hisoblar orasidagi ko'chirish (nettosi nol)
+ *   ICHKI            — hisoblar orasidagi ko'chirish (nettosi nol)
  *
  * Ular qo'shib yuborilsa, egasi 20 mln kiritgan oy "juda muvaffaqiyatli"
- * bo'lib ko'rinardi.
+ * bo'lib ko'rinardi. Aynan shu sababdan tepadagi uchlik ham FAQAT
+ * operatsion bo'limdan olinadi.
  * ═══════════════════════════════════════════════════════════════════
  */
 const KIND_LABEL = {
@@ -99,35 +104,72 @@ const CashFlowSection = ({ filters }) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-        <Info className="mt-0.5 size-3.5 shrink-0" />
-        <span>
-          Pul oqimi <b className="text-foreground">foyda emas</b>. Qarzga o'qiyotgan
-          o'quvchi foyda beradi, pul bermaydi; egasining investitsiyasi pul beradi,
-          foyda bermaydi.
-        </span>
-      </div>
+      {/* ── UCH RAQAM, ENG TEPADA ──
+          "Qancha kirdi, qancha chiqdi, qancha qoldi" — pul oqimi
+          sahifasining butun mazmuni shu. Ular OPERATSION bo'limdan
+          olinadi: egasining puli va ichki ko'chirish shu yerga
+          qo'shilsa, 20 mln kiritilgan oy "juda muvaffaqiyatli"
+          bo'lib ko'rinardi. */}
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Kirim</p>
+          <p className="mt-1 text-xl font-semibold text-success">
+            <MetricValue value={d?.operating?.inflow} kind="moneyShort" />
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Chiqim</p>
+          <p className="mt-1 text-xl font-semibold text-destructive">
+            <MetricValue value={d?.operating?.outflow} kind="moneyShort" />
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Sof oqim (operatsion)</p>
+          <p className="mt-1 text-xl font-semibold text-foreground">
+            <MetricValue value={d?.operating?.net} kind="moneyShort" />
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Yopilish qoldig'i</p>
+          <p className="mt-1 text-xl font-semibold text-foreground">
+            <MetricValue value={d?.closingBalance} kind="moneyShort" />
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Ochilish: <MetricValue value={d?.openingBalance} kind="moneyShort" />
+          </p>
+        </div>
+      </section>
+
+      {/* ── KIRIM va CHIQIM DINAMIKASI ──
+          Ustunlar — davr ichidagi harakat, chiziq — yig'ilib boruvchi
+          qoldiq. Uchalasi BITTA so'rovdan keladi (`/cash-flow/trend`),
+          ya'ni ustun bilan chiziq hech qachon bir-biriga zid bo'lmaydi.
+          Ichki ko'chirish ustunlarga KIRMAYDI — u ikkala tomonda ham
+          ko'rinib, ikkalasini ham shishirardi (server izohiga qarang). */}
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-3 font-semibold text-foreground">Kirim va chiqim</h2>
+        <TrendChart
+          query={trend}
+          series={[
+            { key: "inflow", label: "Kirim", type: "bar", color: "hsl(var(--success))" },
+            { key: "outflow", label: "Chiqim", type: "bar", color: "hsl(var(--destructive))" },
+            { key: "balance", label: "Qoldiq", type: "line", color: "hsl(var(--primary))" },
+          ]}
+          emptyTitle="Bu davrda pul harakati yo'q"
+        />
+      </section>
 
       <section className="rounded-2xl border border-border bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Ochilish qoldig'i</p>
-            <p className="mt-1 text-lg font-semibold text-foreground">
-              <MetricValue value={d?.openingBalance} kind="moneyShort" />
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Yopilish qoldig'i</p>
-            <p className="mt-1 text-2xl font-semibold text-foreground">
-              <MetricValue value={d?.closingBalance} kind="moneyShort" />
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              O'zgarish: <MetricValue value={d?.netChange} kind="moneyShort" />
-            </p>
-          </div>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-foreground">Oqim tarkibi</h2>
+          {/* Bir qatorlik izoh — bu YO'RIQNOMA emas, moliyaviy
+              chalkashlikning oldini olish: egasining puli daromad
+              emas va u alohida bo'limda turishi shart. */}
+          <p className="text-xs text-muted-foreground">
+            Pul oqimi foyda emas — egasining puli va ichki ko'chirish alohida
+          </p>
         </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           <FlowGroup title="Operatsion" icon={ArrowDownLeft} data={d?.operating} tone="text-primary" />
           <FlowGroup
             title="Moliyalashtirish" icon={ArrowUpRight} data={d?.financing}
@@ -138,15 +180,6 @@ const CashFlowSection = ({ filters }) => {
             tone="text-muted-foreground" note={d?.internal?.note}
           />
         </div>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-4">
-        <h2 className="mb-3 font-semibold text-foreground">Qoldiq dinamikasi</h2>
-        <TrendChart
-          query={trend}
-          series={[{ key: "balance", label: "Kassa qoldig'i", type: "line", color: "hsl(var(--primary))" }]}
-          emptyTitle="Bu davrda pul harakati yo'q"
-        />
       </section>
 
       <section className="rounded-2xl border border-border bg-card p-4">
