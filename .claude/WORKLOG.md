@@ -22470,3 +22470,84 @@ Ikki raqobatchi dizayn oxir-oqibat birlashtirilgan (`commercial/` tashlangan, un
 <sub>session `10358572` · branch `main` · 19 ta qadam</sub>
 
 ---
+
+## 2026-08-29 01:49 — ha ishni boshlang
+
+**So'rov**
+
+> ha ishni boshlang
+
+**Buyruqlar (44)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total git checkout -b feat/finance-branch-limits 2>&1 git add -A 2>&1 git commit -q -F - <<'EOF' feat(finance,saas): moliya IA, c…
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== TransactionReceipt.jsx ==="; cat src/shared/components/finance/TransactionReceipt.jsx echo; echo "=== qand…
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== TransactionDetail: entry qanday olinadi ==="; sed -n '1,60p' src/shared/drill/TransactionDetail.jsx echo; …
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== AddPaymentModal ==="; sed -n '1,80p' src/owner/features/finance/components/modals/AddPaymentModal.jsx echo…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== StudentPaymentTransaction modeli (journal bog'lanishi) ==="; grep -n "model PaymentTransaction\|model Stud…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== addTransaction / student payment yozish yo'li ==="; grep -rn "addTransaction\|async addTransaction" src/mo…
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/finance-analytics echo "=== entries endpointlari ==="; grep -n "@Get\|@Post\|async \|Permissions\|Param\…
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/finance-analytics echo "=== entry-detail.service.ts ==="; sed -n '1,90p' entry-detail.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/finance-analytics echo "=== controller entryDetail ==="; sed -n '175,205p' finance-analytics.controller.…
+cd /Users/shukrullo/Desktop/lc-total/server/src/modules/finance-analytics sed -n '95,175p' entry-detail.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== postingKey qanday quriladi ==="; grep -rn "postingKey:" src/modules --include='*.ts' | head -30 echo; echo…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== maosh keyPrefix ==="; sed -n '520,545p' src/modules/finance/financial-transaction.service.ts; echo "---"; …
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== AddPaymentModal: tranzaksiya qatori ==="; sed -n '80,180p' src/owner/features/finance/components/modals/Ad…
+cd /Users/shukrullo/Desktop/lc-total/client sed -n '180,272p' src/owner/features/finance/components/modals/AddPaymentModal.jsx
+cd /Users/shukrullo/Desktop/lc-total/server && python3 - <<'PY' import io,sys p='src/modules/finance-analytics/entry-detail.service.ts' s=io.open(p,encoding='ut…
+python3 - <<'PY' import io p='src/modules/finance-analytics/finance-analytics.validators.ts' s=io.open(p,encoding='utf-8').read() old = """export const entryIdS…
+python3 - <<'PY' import io p='src/modules/finance-analytics/finance-analytics.controller.ts' s=io.open(p,encoding='utf-8').read() old = """ const data = await t…
+npx tsc --noEmit -p tsconfig.json 2>&1 | tail -20; echo "exit=$?"
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== endpoints.js:438-450 ==="; sed -n '438,450p' src/shared/api/endpoints.js echo; echo "=== useFinanceAnalyti…
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== financeAnalyticsAPI.entry ==="; grep -rn "entry:" src/shared/api/*.js src/owner/features/financeAnalytics/…
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== keys.js financeAnalytics ==="; grep -n "financeAnalytics" -A 25 src/shared/lib/query/keys.js | head -35 ec…
+python3 - <<'PY' import io def patch(p, old, new, n=1): s=io.open(p,encoding='utf-8').read() assert s.count(old)==n, f"{p}: {s.count(old)} ta topildi" io.open(p…
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== ruxsat hooki ==="; grep -rn "export const useCan\|export function useCan\|usePermission" src/shared --incl…
+cd /Users/shukrullo/Desktop/lc-total/client mkdir -p src/shared/components/finance cat > src/shared/components/finance/ReceiptButton.jsx <<'JSX' import { useSta…
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== permissions export ==="; grep -n "^export" src/shared/constants/permissions.js | head echo; echo "=== useP…
+# … yana 19 ta
+```
+
+**Natija**
+
+Boshladim. Avval ishni xavfsizlantiraman.
+
+Ish xavfsiz: `feat/finance-branch-limits` · `92e6624` · ish daraxti toza.
+
+Endi chek bo'shlig'i. Avval mavjud chek komponentining shartnomasini o'qiyman.
+
+Kalit topildi: jurnal yozuvining `postingKey` si aniq va oldindan bilinadigan — `payment:<id>`, `salary_teacher:<id>`. Chekni shu orqali topsa bo'ladi.
+
+Hammasi aniq. Endi yozaman. **Server** — chekni `postingKey` bo'yicha ochish (yangi jadval yo'q, mavjud servis qayta ishlatiladi):
+
+Server tayyor. Endi **client** — chekni istalgan joydan chaqirsa bo'ladigan bitta tugma.
+
+Endi client tomonini simlayman.
+
+Endi chek tugmasini to'lov va maosh joylariga qo'yaman.
+
+Chiqim tahrirlanganda kalit `expense:<id>:v2` ga o'zgaradi — chek yo'qolmasligi uchun buni ham qamrayman.
+
+Ikkala ish ham bajarildi.
+
+## Natija
+
+**1. Ish xavfsizlandi** — `92e6624`
+4 agentning 99 fayllik commitlanmagan ishi `feat/finance-branch-limits` shoxiga tushdi. `main` tegilmadi.
+
+**2. Chek bo'shlig'i yopildi** — `2c72b03`
+
+Muammo shu edi: chek jurnal yozuvini talab qiladi, lekin to'lov yozish endpointlari jurnal ID sini **qaytarmaydi** — u `postCore()` ichida tug'iladi. Shuning uchun agent chekni faqat moliya ro'yxatidagi drill panelidan ochib qo'ya olgan.
+
+Yechim — mavjud `JournalEntry.postingKey` (unique va ma'noli: `payment:<id>`, `salary_teacher:<id>`). Kalitni **mijoz o'zi tuzadi**, ya'ni hech qaysi javob shakli o'zgarmadi.
+
+- `server` — `GET /finance-analytics/entries/by-key/:key`, `entries/:id` bilan bir xil javob, **bir xil filial ko'lami va maosh ruxsati** (`buildDetail` ajratildi, mantiq nusxalanmadi)
+- `client` — `ReceiptButton`: bitta qator bilan ulanadi, so'rov **faqat bosilganda** ketadi, `finance.read` bo'lmasa umuman chizilmaydi
+
+Ulangan joylar: **o'quvchi to'lovi** · **o'qituvchi maoshi** · **xod
+
+…(qisqartirildi)
+
+<sub>session `10358572` · branch `feat/finance-branch-limits` · 44 ta qadam</sub>
+
+---
