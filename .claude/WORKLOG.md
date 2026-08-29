@@ -22551,3 +22551,197 @@ Ulangan joylar: **o'quvchi to'lovi** · **o'qituvchi maoshi** · **xod
 <sub>session `10358572` · branch `feat/finance-branch-limits` · 44 ta qadam</sub>
 
 ---
+
+## 2026-08-29 02:06 — brenchlarni merge qilib qolgan brenchlarni ochirib tashla va gitga pus
+
+**So'rov**
+
+> brenchlarni merge qilib qolgan brenchlarni ochirib tashla va gitga push qilib yubor
+
+**Buyruqlar (8)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total echo "=== LOKAL SHOXLAR ==="; git branch -vv echo; echo "=== REMOTE ==="; git remote -v echo; echo "=== UZOQDAGI SHOXLAR ==…
+cd /Users/shukrullo/Desktop/lc-total echo "=== migration/nestjs: main ga merge qilinganmi? ===" git branch --merged main | sed 's/^/ merged-into-main: /' echo e…
+cd /Users/shukrullo/Desktop/lc-total echo "=== e7c5903 (NestJS cutover) origin/main ichidami? ===" git merge-base --is-ancestor e7c5903 origin/main && echo " ✅ …
+cd /Users/shukrullo/Desktop/lc-total echo "=== iflos fayl nima? ==="; git status --porcelain echo; echo "=== 1) main ga o'tish va merge ===" git checkout main 2…
+cd /Users/shukrullo/Desktop/lc-total git add .claude/WORKLOG.md && git commit -q -m "chore(worklog): sessiya yozuvi Co-Authored-By: Claude Opus 5 (1M context) <…
+cd /Users/shukrullo/Desktop/lc-total echo "=== PUSH main ==="; git push origin main 2>&1 | tail -6 echo echo "=== lokal shoxlarni o'chirish (xavfsiz -d: merge q…
+cd /Users/shukrullo/Desktop/lc-total echo "=== yana bir bor: e7c5903 origin/main da bormi? ===" git merge-base --is-ancestor e7c5903 origin/main && echo " ✅ HA …
+cd /Users/shukrullo/Desktop/lc-total echo "=== O'chirishdan oldin oxirgi tekshiruv ===" git merge-base --is-ancestor origin/migration/nestjs origin/main \ && ec…
+```
+
+**Natija**
+
+Avval qanday shoxlar borligini ko'ray — o'chirishdan oldin nima yo'qotilishini bilish kerak.
+
+Bu yerda to'xtashim kerak — `migration/nestjs` da **push qilinmagan 5 ta commit** bor. O'chirishdan oldin nima borligini tekshiraman.
+
+Hammasi xavfsiz: `migration/nestjs` to'liq `main` ga singgan, uning "push qilinmagan" 5 commiti allaqachon `origin/main` ichida. Bajaraman.
+
+`.claude/WORKLOG.md` (hook avtomatik yozadi) yo'lni to'sdi — uni commit qilib davom etaman.
+
+Lokal tomon toza: faqat `main` qoldi va u push qilindi. Bitta narsa qoldi va u GitHub tomonda — shuni tasdiqlashingizni so'rayman.
+
+Bajarildi.
+
+## Natija
+
+**Lokal va GitHub'da endi faqat `main` bor va u to'liq sinxron.**
+
+| Amal | Holat |
+|---|---|
+| `feat/finance-branch-limits` → `main` | ✅ fast-forward (merge commit yo'q, tarix tekis) |
+| `main` → GitHub | ✅ `771979c..ae77eb1` |
+| `feat/finance-branch-limits` o'chirildi | ✅ lokal |
+| `migration/nestjs` o'chirildi | ✅ lokal + GitHub |
+
+`main` dagi 3 ta yangi commit:
+- `92e6624` — 4 agentning moliya IA / chiqimlar UI / kassa / filial chegarasi ishi
+- `2c72b03` — chek to'lov qilingan joyda beriladi
+- `ae77eb1` — worklog
+
+### Yo'lda ikkita to'xtash bo'ldi
+
+**`migration/nestjs` da "push qilinmagan 5 commit" ko'rindi** — o'chirishdan oldin tekshirdim: uchalasi ham (`e7c5903` NestJS cutover ichida) allaqachon `origin/main` ichida edi. Ya'ni "ahead 5" faqat eskirgan ko'rsatkich edi, yo'qoladigan kod emas. `git branch -d` buni bilmay rad etdi (u faqat *upstream* ga qaraydi), shuning uchun ancestor tekshiruvini qo'lda o'tkazib, keyin `-D` qildim.
+
+**`.claude/WORKLOG.md` shox almashishni to'sdi** — hook har turdan keyin yozadi, shuning uchun ish daraxti hech qachon toza qolmaydi. Uni alohida `chore` commit qilib o'tdim.
+
+---
+
+Eslatib qo'yaman: `admin_server` dagi ikkita migr
+
+…(qisqartirildi)
+
+<sub>session `10358572` · branch `main` · 9 ta qadam</sub>
+
+---
+
+## 2026-08-29 02:09 — hzoir men terminaldan multi branchni flase qilsam filialsiz ishlaydimi
+
+**So'rov**
+
+> hzoir men terminaldan multi branchni flase qilsam filialsiz ishlaydimi ?
+
+**Buyruqlar (5)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== 1) BRANCHES_ENABLED env validatsiyada ==="; grep -n "BRANCHES_ENABLED\|BRANCH_LIMIT" src/config/env.valida…
+cd /Users/shukrullo/Desktop/lc-total/client echo "=== client: multiBranch ishlatilishi ==="; grep -rn "multiBranch" src/ | head -20 echo; echo "=== useActiveBra…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== BRANCHES_ENABLED haqiqatda qayerda O'QILADI? ==="; grep -rn "BRANCHES_ENABLED\|branchesEnabled" src/ | gre…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== branches.service.ts:255-280 (eskalatsiya teshigi izohi) ==="; sed -n '255,280p' src/modules/branches/branc…
+cd /Users/shukrullo/Desktop/lc-total/server node -e " const {PrismaClient}=require('@prisma/client'); const p=new PrismaClient(); p.branch.findMany({where:{isDe…
+```
+
+**Natija**
+
+Tekshirib javob beraman — bu aynan o'sha "hisobotga ishonmaslik" kerak bo'lgan joy.
+
+Yo'q — hozir ishlamaydi. Uchta alohida sabab bor, va ular ketma-ket.
+
+## 1. `.env` dagi kalit o'lik
+
+`server/.env:32` da `MULTI_BRANCH=false` turibdi. Bu kalitni **kod umuman o'qimaydi**:
+
+```
+grep -rn "MULTI_BRANCH" server/src/   →  hech narsa
+```
+
+Agent 3 uni ataylab olib tashlagan ("dead setting"). Ya'ni bu qatorni o'zgartirsangiz **hech nima bo'lmaydi**.
+
+## 2. Tirik kalit boshqa ishni qiladi
+
+Yangi kalit — `BRANCHES_ENABLED` (`env.validation.ts:85`). Lekin u faqat bitta joyda o'qiladi: `PlanLimitsService` → `branch-limit.ts`, ya'ni **filial YARATISHNI** cheklaydi. Interfeys rejimiga umuman ta'sir qilmaydi.
+
+`BRANCHES_ENABLED=false` qo'ysangiz: chegara 1 ga tushadi va `branches.service.ts:240` yangi filial ochishni to'sadi. Mavjudlari joyida qoladi.
+
+## 3. Interfeys rejimi bazadan olinadi, env dan emas
+
+`/auth/me` → `multiBranch` ← `BranchAccessService.isMultiBranch()`, va u:
+
+```js
+this.multiBranchCache = rows.length > 1;   // faol filiallar SONI
+```
+
+Kodning o'z izohi buni ochiq aytadi: *"BAZADAN aniqlanadi (env bayrog'i EMAS)"*.
+
+**Sizning bazangizda hozir 3 ta faol filial bor:**
+
+| Filial | |
+|---|---|
+| Asosiy filial | asosiy |
+| DEMO Markaz | |
+| DEMO Yunusobod | |
+
+Demak `multiBranch: true` — `.env` ga nima yozsangiz ham filial tanlagichi, filiallararo bo'limlar va "Barcha filiallar" varianti chiqaveradi.
+
+---
+
+## Xulosa
+
+**Filialsiz rejimga o'tish uchun hozir env yetarli emas — bazada faol filialni 1 taga tushirish kerak.** Ikkita DEMO filialni o'chirsangiz (yoki `isActive=false` qilsangiz), interfeys o'zi yakka markaz rejimiga o'tadi, `BRANCHES_ENABLED=false` esa uni o'sha holatda qulflaydi.
+
+## Bu — 4 agent ishidagi qolgan bo'shliq
+
+Sizning talabingiz *"envdan filialli bor
+
+…(qisqartirildi)
+
+<sub>session `10358572` · branch `main` · 5 ta qadam</sub>
+
+---
+
+## 2026-08-29 02:52 — hosh unda ening talabim boyicha filialsiz oquv markazlar uchun biz uni
+
+**So'rov**
+
+> hosh unda ening talabim boyicha filialsiz oquv markazlar uchun biz uni qanday qilib sozlab ebrishimiz mumkun bo'ladi dev admin panel orqali ?
+
+**Buyruqlar (6)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/admin_server echo "=== 1) Loyiha yaratishda branchesEnabled bormi? ==="; grep -n "branchesEnabled\|branchLimit" src/tenants…
+cd /Users/shukrullo/Desktop/lc-total echo "=== admin_client: loyiha yaratish formasida bormi? ==="; grep -rn "branchesEnabled\|branchLimit\|Filial" admin_client…
+cd /Users/shukrullo/Desktop/lc-total/admin_server echo "=== heartbeat javobi (myTenantUsage) ==="; grep -n "max_branches\|branches_enabled\|limits\|features" -B…
+cd /Users/shukrullo/Desktop/lc-total/server echo "=== tenant: heartbeat javobini qanday o'qiydi ==="; grep -n "max_branches\|branches_enabled" src/common/entitl…
+cd /Users/shukrullo/Desktop/lc-total/admin_server echo "=== myTenantUsage javobidagi limits ==="; grep -rn "myTenantUsage" src/ | head -3 echo "---"; awk '/myTe…
+cd /Users/shukrullo/Desktop/lc-total echo "=== tenant heartbeat: qaysi endpoint, javobdan nima olinadi ==="; grep -n "url\|post\|limits\|entitlement" server/src…
+```
+
+**Natija**
+
+Yaxshi savol — bu boshqa holat. **Yangi, tug'ilishidan filialsiz** markaz — mavjud 3 filialli markazni yig'ishtirish emas. Buni tekshiray.
+
+To'liq zanjirni kod bo'yicha kuzatib chiqdim. **Yangi, filialsiz markaz uchun hech narsa yozish kerak emas — hammasi tayyor va ulangan.**
+
+## Dev admin panel orqali yo'l
+
+**1. Loyiha yaratish** — `CreateTenantPage.jsx:247`
+"Filiallar" checkbox'ini **belgilamaysiz** → `branchesEnabled: false`. Filial chegarasi maydoni o'zi yashirinadi (`:264`), chunki yakka markazda uning ma'nosi yo'q.
+
+**2. Saqlanadi** — `tenants.service.ts:136` → `Tenant.branchesEnabled = false`
+
+**3. `.env` render qilinadi** — `settings.service.ts:118-119` mijoz serverining `.env` iga yozadi:
+```
+BRANCHES_ENABLED=false
+BRANCH_LIMIT=1
+```
+Chegara `1` — `branch-limit.ts` dagi `SINGLE_CENTER_BRANCH_LIMIT`.
+
+**4. Mijoz serveri birinchi ko'tarilganda** — `branch-access.service.ts:161` → `ensureMainBranch()` roppa-rosa **bitta** filial yaratadi: `Asosiy filial` / `MAIN` / `isMain: true`. Bu invariant: `branchId` ko'p jadvalda majburiy, filialsiz baza umuman yozolmasdi.
+
+**5. Interfeys o'zi yakka rejimga tushadi** — `isMultiBranch()` = `count > 1` = **false** → `/auth/me` `multiBranch: false` → filial tanlagichi chizilmaydi, filiallararo bo'limlar yopiladi, hamma narsa yagona filialga qisiladi.
+
+**6. Qulf** — mijoz o'zi ikkinchi filial ochib rejimdan chiqib keta olmaydi: `branches.service.ts:240` → `assertBranchLimit()` → chegara 1 → `BRANCH_LIMIT_REACHED`.
+
+**7. Keyin filial sotsangiz** — `TenantDetailPage` → `BranchLimits.jsx` da checkbox'ni yoqasiz. Heartbeat (`POST /tenant-api/:id/heartbeat`, har 15 daqiqa) `branches_enabled: 1` va `max_branches: 5` ni olib boradi — **restart kerak emas**. `.env` esa restartdan keyingi oynani yopadi.
+
+---
+
+## Ya'ni sizning talabingiz
+
+…(qisqartirildi)
+
+<sub>session `10358572` · branch `main` · 6 ta qadam</sub>
+
+---
