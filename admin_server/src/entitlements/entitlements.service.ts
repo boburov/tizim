@@ -239,6 +239,16 @@ export class EntitlementsService {
 
     const moduleValue = new Map<string, number>();
     for (const f of moduleFeatures) {
+      // ⚠ TIZIM O'ZAGI DOIM OCHIQ — tarifdan ham, obunadan ham qat'i
+      // nazar. Ikki sabab:
+      //   1. `auth`/`users` o'chsa ilova umuman ishlamaydi;
+      //   2. TO'SIQ MANTIG'I unga tayanadi — `auth` "o'chiq" ko'rinsa
+      //      u `attendance` ni o'chirishdan to'smasdi va login javobi
+      //      jimgina buzilardi.
+      if (f.isCore) {
+        moduleValue.set(f.key, 1);
+        continue;
+      }
       // Tarifdan kelgan qiymat (yo'q bo'lsa — o'chiq).
       const fromPlan = limits.get(f.key)?.value ?? 0;
       moduleValue.set(f.key, subDead ? 0 : fromPlan > 0 ? 1 : 0);
@@ -248,6 +258,8 @@ export class EntitlementsService {
       tenant.featureOverrides.map((o) => [o.featureKey, o]),
     );
     for (const f of moduleFeatures) {
+      // ⚠ O'ZAKKA USTUN QAROR HAM TA'SIR QILMAYDI (yuqoridagi sabab).
+      if (f.isCore) continue;
       const ov = overrideByKey.get(f.key);
       if (ov) moduleValue.set(f.key, ov.enabled ? 1 : 0);
     }

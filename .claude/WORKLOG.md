@@ -23602,3 +23602,76 @@ Admin server up (401 = auth required, correct). Now let me trigger the tenant to
 <sub>session `f9eb6595` · branch `main` · 27 ta qadam</sub>
 
 ---
+
+## 2026-08-31 00:02 — yaxhis endilikda qaolgan functionlarni ham ochirib yoqadigan qilib ber
+
+**So'rov**
+
+> yaxhis endilikda qaolgan functionlarni ham ochirib yoqadigan qilib bering admin panelni ozidan
+
+**O'zgargan fayllar (3)**
+
+- `server/src/common/features/global-feature-gate.ts` — yaratildi/qayta yozildi
+- `server/test/feature-graph.test.mjs` — yaratildi/qayta yozildi
+- `/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/memory/feature-reyestri-generatsiya-qilinadi.md` — yaratildi/qayta yozildi
+
+**Buyruqlar (37)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && node -e ' import("node:fs").then(({readdirSync,readFileSync})=>{ const D="src/modules"; const mods={}; for(const …
+node -e ' import("node:fs").then(({readdirSync,readFileSync,existsSync})=>{ const D="src/modules"; const out={}; for(const d of readdirSync(D,{withFileTypes:tru…
+mkdir -p scripts && cat > scripts/gen-feature-registry.mjs <<'JS' /** * MODUL REYESTRINI KODDAN GENERATSIYA QILADI. * * `requires` QO'LDA YOZILMAYDI — u haqiqiy…
+python3 - <<'PY' import io p='scripts/gen-feature-registry.mjs' s=io.open(p,encoding='utf-8').read() old=""" for (const f of readdirSync(`${DIR}/${d.name}`)) { …
+python3 - <<'PY' import io entries = io.open('/tmp/entries.txt', encoding='utf-8').read().rstrip('\n') header = '''/** * ═══════════════════════════════════════…
+node -e " import('./src/common/features/feature-registry.ts').then(m=>{ const F=m.FEATURES.filter(f=>f.nestModule); const g={}; F.forEach(f=>g[f.key]=(f.require…
+python3 - <<'PY' import io p='scripts/gen-feature-registry.mjs' s=io.open(p,encoding='utf-8').read() s = s.replace("""const DIR = 'src/modules';""", """const DI…
+python3 - <<'PY' import io p='scripts/gen-feature-registry.mjs' s=io.open(p,encoding='utf-8').read() old=""" // Birlashgan guruhda "asosiy" — kalitni beradigan …
+sed -n '55,90p' src/main.ts
+python3 - <<'PY' import io # 1) main.ts: mount the global gate right after the prefix, before body parsers. p='src/main.ts' s=io.open(p,encoding='utf-8').read()…
+npm run test:feature-graph 2>&1 | tail -25
+python3 - <<'PY' import io p='scripts/gen-feature-registry.mjs' s=io.open(p,encoding='utf-8').read() old=" const routes = opt.gatedElsewhere ? [] : dirs.flatMap…
+cd /Users/shukrullo/Desktop/lc-total/admin_server && python3 - <<'PY' import io p='prisma/schema.prisma' s=io.open(p,encoding='utf-8').read() old=""" /// Bu kal…
+python3 - <<'PY' import io p='src/tenant-features/tenant-features.service.ts' s=io.open(p,encoding='utf-8').read() s=s.replace("""export interface TenantFeature…
+npm run build 2>&1 | tail -3 && npm run features:sync 2>&1 | tail -8 && echo "=== restart admin ===" && (lsof -ti tcp:4000 | xargs kill 2>/dev/null); sleep 2; (…
+python3 - <<'PY' import io p='src/entitlements/entitlements.service.ts' s=io.open(p,encoding='utf-8').read() old=""" const moduleValue = new Map<string, number>…
+(lsof -ti tcp:4000 | xargs kill 2>/dev/null); sleep 1; (npm start > /tmp/admin-server.log 2>&1 &) cd ../server && npm run build 2>&1 | tail -2 && (lsof -ti tcp:…
+J=/tmp/admin-cookies.txt; T=cmtg5zc8s0001f330qo1d0eyv; A=http://localhost:4000/api rm -f $J; curl -s -c $J -X POST $A/auth/login -H 'Content-Type: application/j…
+J=/tmp/admin-cookies.txt; T=cmtg5zc8s0001f330qo1d0eyv; A=http://localhost:4000/api code(){ curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/$1; …
+J=/tmp/admin-cookies.txt; T=cmtg5zc8s0001f330qo1d0eyv; A=http://localhost:4000/api for k in rooms leads grades search; do curl -s -b $J -X DELETE $A/tenants/$T/…
+J=/tmp/admin-cookies.txt; T=cmtg5zc8s0001f330qo1d0eyv; A=http://localhost:4000/api for k in rooms leads grades search; do curl -s -b $J -X PUT $A/tenants/$T/fea…
+sed -n '44,150p' src/owner/navigation/sidebar.config.js
+python3 - <<'PY' import io FILTER_OLD = ''' const allowed = (entry) => { if (entry.multiBranchOnly && !multiBranch) return false; if (entry.allBranchesOnly && !…
+python3 - <<'PY' import io, re p='src/owner/navigation/sidebar.config.js' s=io.open(p,encoding='utf-8').read() # (anchor, capability-line-to-insert-after-anchor…
+echo "=== searchIndex sample ==="; sed -n '40,72p' src/owner/navigation/searchIndex.js; echo "=== workspaces nav sample ==="; sed -n '73,105p' src/shared/worksp…
+# … yana 12 ta
+```
+
+**Natija**
+
+Phase 2. Rather than trust the earlier survey, let me compute the actual dependency graph from the code:
+
+49 modules total. The real graph confirms the earlier read: 27 leaves, but several of those are infrastructure (`auth`, `roles`, `branches`, `bot-auth`) rather than sellable features, and 11 modules are load-bearing.
+
+Here's the set I'd wire — 18 new keys, grouping catalogue modules with their parent:
+
+`leads` (+lead-options) · `assignments` · `grades` · `exports` · `market` · `ai` · `feedback` (+feedback-types) · `rooms` · `activity_logs` (+activity-history) · `search` · `notification_templates` · `finance_analytics` (+finance-report +branch-analytics) · `finance_ops` · `ledger` · `teacher_attendance` · `lesson_cancellations` · `attendance_exemptions` · `admin_dashboard`
+
+One fork I need from you before wiring, because "qolgan funksiyalar" reads two ways:
+
+Registering all 49. One consequence you should know up front: `auth` imports `attendance`, so the auto-derived graph will **block disabling attendance** until that dependency is broken — the switch will exist but refuse, naming `auth`. That's the honest state, and it points at exactly what to fix.
+
+Let me gather controller prefixes and existing Uzbek labels so the registry is generated from code, not hand-typed:
+
+`expense-approvals` has no routes of its own (infra). Now generating the registry from the graph rather than hand-typing 48 entries:
+
+49 entries. Now assembling the full registry with the new fields:
+
+Generated — but the smoke test surfaced a real problem I need to check: `finance` requires `deposits` **and** `deposits` requires `finance`. That's a cycle, and it would deadlock — neither could ever be disabled. Let me find all of them:
+
+Clear picture now: **40 switches, 24 freely disableable.** Two struct
+
+…(qisqartirildi)
+
+<sub>session `f9eb6595` · branch `main` · 41 ta qadam</sub>
+
+---

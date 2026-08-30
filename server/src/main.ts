@@ -8,6 +8,7 @@ import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { generalLimiter } from './common/middleware/rate-limit.js';
 import type { AppConfig } from './config/env.validation.js';
+import { mountGlobalFeatureGate } from './common/features/global-feature-gate.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -69,6 +70,13 @@ async function bootstrap(): Promise<void> {
 
   // ── Marshrut prefiksi: Express bilan bir xil (`/api/...`) ──
   app.setGlobalPrefix('api');
+
+  // ── TARIF DARVOZASI — HAMMA MARSHRUTDAN OLDIN ──
+  //
+  // ⚠ AUTENTIFIKATSIYADAN OLDIN turishi SHART: aks holda tarifda
+  // bo'lmagan bo'lim 402 emas, 401 qaytarardi va mijoz "tizimga kiring"
+  // degan noto'g'ri xabar ko'rardi.
+  mountGlobalFeatureGate(app);
 
   // ── Tana hajmi: Express `app.js` dagi bilan bir xil chegara ──
   app.use(json({ limit: '1mb' }));

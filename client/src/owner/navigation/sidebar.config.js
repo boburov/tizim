@@ -41,6 +41,21 @@ import {
  * odamda umuman mavjud emas.
  *
  * Yozuv turlari:
+ * ── `capability` — TARIF KALITI (yoki massiv) ──
+ *
+ * `permission` "menda huquq bormi" degan savolga javob beradi;
+ * `capability` esa "bu bo'lim shu loyihada UMUMAN bormi". Ikkisi
+ * ORTOGONAL: tarifda yo'q bo'lim to'liq huquqli egaga ham
+ * ko'rinmasligi kerak. Kalitlar `useFeatures()` dan keladi va manbai
+ * server reyestri (`common/features/feature-registry.ts`).
+ *
+ * ⚠ Massiv berilsa HAMMASI talab qilinadi. Market shunday: tarifda
+ * sotib olingan VA ega tanga tizimini yoqgan bo'lishi kerak.
+ *
+ * ⚠ O'ZAK bo'limlarga (`users`, `groups`, `auth`, `branches`,
+ * `courses`) `capability` QO'YILMAYDI — ular hech qachon
+ * o'chirilmaydi va yozuv faqat shovqin bo'lardi.
+ *
  *   • GURUH      — `items` massivi bor, ochiladigan collapsible
  *   • YAKKA LINK — `url` bor, `items` yo'q
  *   • PANEL      — `sheet` bor, yonboshdan panel ochadi
@@ -51,6 +66,7 @@ const ownerSidebar = [
     icon: LayoutDashboard,
     url: "/owner/dashboard",
     permission: "admin_dashboard.read",
+    capability: "admin-dashboard",
   },
 
   // PANEL ochadigan qator (`sheet`), oddiy havola emas.
@@ -78,6 +94,7 @@ const ownerSidebar = [
     icon: Target,
     url: "/owner/leads",
     permission: "leads.read",
+    capability: "leads",
   },
 
   {
@@ -92,8 +109,8 @@ const ownerSidebar = [
       // XODIMLAR: ega, o'qituvchilar va custom rollar bitta ro'yxatda.
       { title: "Xodimlar", url: "/owner/staff", permission: "users.read" },
       { title: "Guruhlar", url: "/owner/groups", permission: "groups.read" },
-      { title: "Davomat", url: "/owner/attendance", permission: "attendance.read" },
-      { title: "Baholash", url: "/owner/grades", permission: "grades.record" },
+      { title: "Davomat", url: "/owner/attendance", permission: "attendance.read", capability: "attendance" },
+      { title: "Baholash", url: "/owner/grades", permission: "grades.record", capability: "grades" },
     ],
   },
 
@@ -118,6 +135,7 @@ const ownerSidebar = [
     icon: DoorOpen,
     url: "/owner/rooms",
     permission: "classes.read",
+    capability: "rooms",
   },
 
   // ══════════════════════════════════════════════════════════════════
@@ -140,7 +158,9 @@ const ownerSidebar = [
     icon: Store,
     url: "/owner/market",
     permissionAnyOf: ["market.read", "market.manage", "market.fulfill"],
-    capability: "coin",
+    // Ikki qatlam: tarifda "market" sotib olingan VA ega tanga
+    // tizimini yoqgan bo'lishi kerak.
+    capability: ["market", "coin"],
   },
 
   // ══════════════════════════════════════════════════════════════════
@@ -191,11 +211,13 @@ const ownerSidebar = [
       {
         title: "Chiqimlar",
         url: "/owner/finance/expenses",
+        capability: "expenses",
         permission: "expenses.read",
       },
       {
         title: "Pul oqimi",
         url: "/owner/finance/cash-flow",
+        capability: "finance-analytics",
         permission: "finance.view_cashflow",
       },
       // KASSA VA HISOBLAR: qoldiq kartalari + tanlangan hisobning
@@ -205,6 +227,7 @@ const ownerSidebar = [
       {
         title: "Kassa va hisoblar",
         url: "/owner/finance/accounts",
+        capability: "finance-analytics",
         permission: "finance.view_cashflow",
       },
       // UNDIRISH — "kim qarzdor va nima qilamiz". Bu administratorning
@@ -223,6 +246,7 @@ const ownerSidebar = [
       {
         title: "Hisobot & statistika",
         url: "/owner/finance/accounting",
+        capability: "finance-report",
         permission: "finance.read",
       },
       // SMENA VA INKASSATSIYA — kassirning AMALLARI (smena ochish/
@@ -282,6 +306,7 @@ const ownerSidebar = [
       {
         title: "Tahlil (P&L)",
         url: "/owner/branch-analytics",
+        capability: "branch-analytics",
         permission: "finance.read",
       },
       {
@@ -301,11 +326,12 @@ const ownerSidebar = [
       {
         title: "Bildirishnomalar",
         url: "/owner/notifications",
+        capability: "notifications",
         permission: "notifications.read",
       },
-      { title: "Vazifalar", url: "/owner/assignments", permission: "assignments.read" },
-      { title: "Fayl saqlagich", url: "/owner/storage", permission: "storage.manage" },
-      { title: "Feedback", url: "/owner/feedback", permission: "feedback.read" },
+      { title: "Vazifalar", url: "/owner/assignments", permission: "assignments.read", capability: "assignments" },
+      { title: "Fayl saqlagich", url: "/owner/storage", permission: "storage.manage", capability: "storage" },
+      { title: "Feedback", url: "/owner/feedback", permission: "feedback.read", capability: "feedback" },
     ],
   },
 
@@ -316,6 +342,7 @@ const ownerSidebar = [
     title: "Audit loglari",
     icon: ScrollText,
     url: "/owner/activity-logs",
+    capability: "activity-logs",
     permission: "activity_logs.read",
   },
 

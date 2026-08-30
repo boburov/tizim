@@ -19,7 +19,6 @@ import { TeacherSalaryModule } from '../teacher-salary/teacher-salary.module.js'
 import { StaffPayrollModule } from '../staff-payroll/staff-payroll.module.js';
 import { OpeningBalanceModule } from '../opening-balance/opening-balance.module.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
-import { FeatureGate } from '../../common/features/feature-gate.middleware.js';
 
 /**
  * EXCEL IMPORT — 11/11 marshrut.
@@ -62,18 +61,12 @@ import { FeatureGate } from '../../common/features/feature-gate.middleware.js';
 })
 export class ImportsModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    // ⚠ TARIF DARVOZASI AUTENTIFIKATSIYADAN OLDIN.
+    // ⚠ TARIF DARVOZASI BU YERDA EMAS.
     //
-    // `ai-feature.middleware.ts` dagi bilan bir xil sabab: tartib
-    // teskari bo'lsa tarifi yetmagan mijoz 402 emas, 401 olardi va
-    // "tizimga kiring" degan noto'g'ri xabar ko'rardi.
-    //
-    // ⚠ VA BU MODUL DARAJASIDA: kontrollerga keyin qo'shiladigan har
-    // qanday endpoint avtomatik yopiq bo'ladi. Har marshrutga dekorator
-    // qo'yish — paywall'ni bitta yangi endpoint bilan jimgina teshib
-    // qo'yishning eng oson yo'li.
-    consumer
-      .apply(FeatureGate('imports'), AuthMiddleware)
-      .forRoutes(ImportsController);
+    // U `main.ts` da GLOBAL qo'yilgan (`mountGlobalFeatureGate`) va
+    // marshrut prefiksi bo'yicha ishlaydi. Sabab: 47 ta modulning har
+    // biriga qo'lda ulash — bittasini unutib paywall'ni jimgina teshib
+    // qo'yish demakdir. Bu yerda faqat autentifikatsiya qoladi.
+    consumer.apply(AuthMiddleware).forRoutes(ImportsController);
   }
 }

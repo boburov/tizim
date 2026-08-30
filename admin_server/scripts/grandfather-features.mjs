@@ -40,7 +40,12 @@ const main = async () => {
       where: { status: 'ACTIVE' },
       select: { id: true, name: true, domain: true },
     }),
-    prisma.feature.findMany({ where: { isModule: true, isActive: true } }),
+    prisma.feature.findMany({
+      // ⚠ O'ZAK kalitlarga ustun qaror KERAK EMAS: ular yechishda
+      // shartsiz ochiq (`entitlements.service.ts`). Ularga qator yozish
+      // faqat shovqin bo'lardi.
+      where: { isModule: true, isActive: true, isCore: false },
+    }),
   ]);
 
   console.log(

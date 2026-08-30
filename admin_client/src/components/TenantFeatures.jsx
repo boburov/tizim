@@ -89,7 +89,13 @@ export default function TenantFeatures({ tenantId, canEdit }) {
 
   // Imkoniyatlar (capability) otasi ostida chiziladi — ro'yxat tekis
   // bo'lsa "davomat-excel" ning "davomat" ga bog'liqligi ko'rinmasdi.
-  const modules = rows.filter((r) => !r.parentKey);
+  //
+  // ⚠ O'ZAK bo'limlar ALOHIDA, pastda: ular hech qachon o'chirilmaydi,
+  // ya'ni ular uchun o'chirgich chizish yolg'on va'da bo'lardi. Lekin
+  // ular ro'yxatda TURISHI kerak — yuqoridagi qulflangan yozuvlarning
+  // sababi aynan shular.
+  const modules = rows.filter((r) => !r.parentKey && !r.isCore);
+  const coreRows = rows.filter((r) => r.isCore);
   const childrenOf = (key) => rows.filter((r) => r.parentKey === key);
 
   return (
@@ -139,6 +145,29 @@ export default function TenantFeatures({ tenantId, canEdit }) {
           </FeatureRow>
         ))}
       </div>
+
+      {coreRows.length > 0 && (
+        <details className="rounded-xl border border-border">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+            Tizim o'zagi — {coreRows.length} ta bo'lim (o'chirilmaydi)
+          </summary>
+          <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+            Bular ilova ishlashi uchun zarur va sotilmaydi. Ro'yxatda turishi
+            sabab: yuqoridagi ba'zi bo'limlar aynan shularga tayanadi va
+            shuning uchun qulflangan.
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {coreRows.map((r) => (
+                <span
+                  key={r.key}
+                  className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px]"
+                >
+                  {r.key}
+                </span>
+              ))}
+            </div>
+          </div>
+        </details>
+      )}
     </div>
   );
 }
@@ -155,6 +184,10 @@ function FeatureRow({
 }) {
   const isEditing = editing?.key === row.key;
   const badge = SOURCE_BADGE[row.source];
+  // ⚠ To'siq faqat O'CHIRISHGA taalluqli. Yoqilgan bo'lim to'silgan
+  // bo'lsa uni o'chirib bo'lmaydi; o'chiq bo'limni esa yoqish har doim
+  // mumkin (u hech kimga xalaqit bermaydi).
+  const blocked = row.enabled && row.blockedBy?.length > 0;
 
   return (
     <>
@@ -184,6 +217,18 @@ function FeatureRow({
               </div>
             )}
 
+            {blocked && (
+              <div className="mt-1 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-400">
+                <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                <span>
+                  {row.permanentlyBlocked
+                    ? "Tizim o'zagi shu bo'limga tayanadi, shuning uchun hozircha o'chirib bo'lmaydi: "
+                    : "O'chirish uchun avval bularni o'chiring: "}
+                  <span className="font-mono">{row.blockedBy.join(', ')}</span>
+                </span>
+              </div>
+            )}
+
             {row.override && (
               <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs dark:border-amber-500/25 dark:bg-amber-500/10">
                 <div className="font-medium">
@@ -200,7 +245,18 @@ function FeatureRow({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {!canEdit ? (
+            {blocked ? (
+              // ⚠ TO'SIQ OLDINDAN KO'RSATILADI, bosilgandan keyin emas.
+              // Aks holda odam o'chirgichni bosib 409 olardi va sababini
+              // faqat xato matnidan bilardi.
+              <span
+                className="flex items-center gap-1 text-xs text-muted-foreground"
+                title={`Avval o'chirilishi kerak: ${row.blockedBy.join(', ')}`}
+              >
+                <Lock size={13} />
+                {row.permanentlyBlocked ? "o'zakka bog'liq" : "bog'liqlik"}
+              </span>
+            ) : !canEdit ? (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Lock size={13} /> SUPER_ADMIN
               </span>

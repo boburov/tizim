@@ -77,12 +77,14 @@ const GlobalSearch = ({ renderTrigger }) => {
   // ⚠ Tarif imkoniyatlari (dev panel) va ega o'chirgichi (`coin`) —
   // bitta xaritada: ikkalasi ham "bo'lim UMUMAN bormi" degan savolga
   // javob beradi.
-  const capabilities = { ...featureMap, coin: coinEnabled };
+  const capabilities = { ...featureMap, coin: coinEnabled && featureMap.coin !== false };
   const items = useMemo(
     () =>
       SEARCH_INDEX.filter((it) => {
         if (it.permission && !has(it.permission)) return false;
-        if (it.capability && !capabilities[it.capability]) return false;
+        // Massiv bo'lsa HAMMASI talab qilinadi (AppSidebar bilan bir xil).
+        if (![].concat(it.capability ?? []).every((k) => capabilities[k] !== false))
+          return false;
         return true;
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -95,12 +95,13 @@ const SuperAdminHeader = () => {
   // ⚠ Tarif imkoniyatlari (dev panel) va ega o'chirgichi (`coin`) —
   // bitta xaritada: ikkalasi ham "bo'lim UMUMAN bormi" degan savolga
   // javob beradi.
-  const capabilities = { ...featureMap, coin: coinEnabled };
+  const capabilities = { ...featureMap, coin: coinEnabled && featureMap.coin !== false };
 
   const headerNav = SUPER_ADMIN_HEADER_NAV.filter((item) => {
     if (item.permission && !has(item.permission)) return false;
     if (item.permissionAnyOf?.length && !item.permissionAnyOf.some(has)) return false;
-    if (item.capability && !capabilities[item.capability]) return false;
+    if (![].concat(item.capability ?? []).every((k) => capabilities[k] !== false))
+      return false;
     return true;
   });
 

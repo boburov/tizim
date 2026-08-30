@@ -77,6 +77,7 @@ export const SEARCH_INDEX = [
     icon: LayoutDashboard,
     category: "Asosiy",
     permission: "admin_dashboard.read",
+    capability: "admin-dashboard",
   },
 
   // ══════════════════════════════════════════════════════════════════
@@ -355,6 +356,7 @@ export const SEARCH_INDEX = [
     icon: Target,
     category: "Lidlar",
     permission: "leads.read",
+    capability: "leads",
   },
   {
     title: "Lidlar statistikasi",
@@ -407,6 +409,7 @@ export const SEARCH_INDEX = [
     icon: CalendarCheck,
     category: "Davomat",
     permission: "attendance.read",
+    capability: "attendance",
   },
   {
     title: "Davomat sozlamalari",
@@ -428,6 +431,7 @@ export const SEARCH_INDEX = [
     icon: Award,
     category: "Baholash",
     permission: "grades.record",
+    capability: "grades",
   },
   {
     title: "Reyting",
@@ -460,6 +464,7 @@ export const SEARCH_INDEX = [
     icon: Bell,
     category: "Bildirishnomalar",
     permission: "notifications.read",
+    capability: "notifications",
   },
   {
     title: "Bildirishnoma shablonlari",
@@ -492,6 +497,7 @@ export const SEARCH_INDEX = [
     icon: MessageSquare,
     category: "Feedback",
     permission: "feedback.read",
+    capability: "feedback",
   },
   {
     title: "Feedback hisobotlari",
@@ -530,6 +536,7 @@ export const SEARCH_INDEX = [
     icon: ShieldCheck,
     category: "Tizim",
     permission: "activity_logs.read",
+    capability: "activity-logs",
   },
 ];
 

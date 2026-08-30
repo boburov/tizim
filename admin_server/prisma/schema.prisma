@@ -318,6 +318,12 @@ model Feature {
   /// Bu kalit MODUL o'chirgichimi (yoqilsa `parentKey`/`requiresKeys` ma'noli).
   isModule Boolean @default(false)
 
+  /// TIZIM O'ZAGI — panelda o'chirgich KO'RSATILMAYDI.
+  ///
+  /// ⚠ Lekin katalogda TURADI: `requiresKeys` orqali boshqa bo'limlarni
+  /// o'chirishni to'sadi (masalan `auth` → `attendance`).
+  isCore Boolean @default(false)
+
   /// Ota modul kaliti — imkoniyat (capability) uchun. Otasi o'chiq bo'lsa bola ham o'chiq.
   parentKey String?
 

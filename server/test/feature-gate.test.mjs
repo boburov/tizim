@@ -18,6 +18,7 @@ import {
   ModuleFeaturesService,
   MODULE_GRACE_MS,
 } from '../dist/common/features/module-features.service.js';
+import { ALL_FEATURE_KEYS } from '../dist/common/features/feature-registry.js';
 
 /** Provision qilingan loyiha (uchala sozlama ham bor). */
 const PROVISIONED = {
@@ -153,9 +154,27 @@ test('enabledMap reyestrdagi HAMMA kalitni qaytaradi', () => {
   const { entitlements, features } = makeService();
   entitlements.set({ limits: { imports: 1 } });
   const map = features.enabledMap();
-  assert.deepEqual(Object.keys(map).sort(), ['imports', 'imports.finance']);
+  // ⚠ Kalitlar QATTIQ YOZILMAYDI — reyestr o'sganda test yolg'on
+  // qizil bo'lardi. Tekshiriladigan narsa SHAKL: har bir kalit bor va
+  // qiymat berilganlargina ochiq.
+  assert.deepEqual([...ALL_FEATURE_KEYS].sort(), Object.keys(map).sort());
   assert.equal(map.imports, true);
   assert.equal(map['imports.finance'], false);
+  // Berilmagan kalitlar — YOPIQ.
+  for (const key of ALL_FEATURE_KEYS) {
+    if (key === 'imports') continue;
+    assert.equal(map[key], false, `${key}: berilmagan, lekin ochiq`);
+  }
+});
+
+test('O\'ZAK kalitlar ham xaritada bor (to\'siq mantig\'i uchun)', () => {
+  const { entitlements, features } = makeService();
+  entitlements.set({ limits: {} });
+  const map = features.enabledMap();
+  // Tenant tomonda o'zak alohida ko'rilmaydi — u admin tomonda doim
+  // ochiq yechiladi va shu holida keladi. Bu yerda faqat kalit
+  // xaritada borligi tekshiriladi.
+  assert.ok(Object.prototype.hasOwnProperty.call(map, 'auth'));
 });
 
 console.log(`\n✅ ${passed} ta shart o'tdi\n`);

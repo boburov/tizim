@@ -210,12 +210,28 @@ const Main = () => {
   //
   // ⚠ Faza 2 da `coin` ham umumiy mexanizmga ko'chadi va bu qator
   // butunlay `featureMap` bo'lib qoladi.
-  const capabilities = { ...featureMap, coin: coinEnabled };
+  // ⚠ `coin` IKKI QATLAM: tarifda sotib olinganmi (featureMap) VA ega
+  // yoqganmi (coinEnabled). Ikkisi bir xil nom ostida turadi, chunki
+  // menyu uchun savol bitta: "bu bo'lim bormi". Tartib muhim —
+  // `coin` yozuvi featureMap'dan KEYIN kelib, uni to'ldiradi.
+  const capabilities = {
+    ...featureMap,
+    coin: coinEnabled && featureMap.coin !== false,
+  };
+
+  // `capability` bitta kalit YOKI massiv bo'lishi mumkin va massiv
+  // HAMMASINI talab qiladi (VA, YOKI emas). Market shuning uchun:
+  // u tarifda sotib olingan BO'LISHI va ega tanga tizimini yoqgan
+  // bo'lishi kerak — ikki xil savol, ikkalasi ham "yo'q" deyishi mumkin.
+  const hasCapability = (entry) =>
+    []
+      .concat(entry.capability ?? [])
+      .every((key) => capabilities[key] !== false);
 
   const allowed = (entry) => {
     if (entry.multiBranchOnly && !multiBranch) return false;
     if (entry.allBranchesOnly && !isAllBranches) return false;
-    if (entry.capability && !capabilities[entry.capability]) return false;
+    if (!hasCapability(entry)) return false;
     if (entry.permissionAnyOf?.length) return hasAny(entry.permissionAnyOf);
     return !entry.permission || has(entry.permission);
   };

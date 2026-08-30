@@ -1,21 +1,19 @@
 /**
- * BOG'LIQLIK GRAFIGI — REYESTR HAQIQIY IMPORT'LARGA MOS KELADIMI.
+ * BOG'LIQLIK GRAFIGI — REYESTR HAQIQIY KODGA MOS KELADIMI.
  *
  * NEGA KERAK: dev panel bo'limni o'chirishga ruxsat berishdan oldin
- * `requires` ro'yxatiga qaraydi. Agar bu ma'lumot kodning o'zidan
- * ajralib qolsa, panel "o'chirish xavfsiz" deb aytadi-yu, aslida
- * bog'liq modul ish vaqtida yiqiladi yoki — bundan ham yomoni —
- * JIMGINA noto'g'ri natija beradi (masalan davomat o'chirilganda
- * xodim KPI bonusi noto'g'ri hisoblanadi).
+ * `requires` ro'yxatiga qaraydi. Bu ma'lumot koddan ajralib qolsa panel
+ * "o'chirish xavfsiz" deydi-yu, bog'liq modul ish vaqtida yiqiladi —
+ * yoki bundan ham yomoni, JIMGINA noto'g'ri natija beradi (davomat
+ * o'chirilganda xodim KPI bonusi noto'g'ri hisoblanadi).
  *
- * Shuning uchun bog'liqlik ma'lumoti QO'LDA YOZILMAYDI, balki har
- * yurishda haqiqiy `@Module({ imports: [...] })` ro'yxatiga qarshi
- * tekshiriladi. Eskira olmaydi.
+ * Reyestr `scripts/gen-feature-registry.mjs` bilan generatsiya qilinadi;
+ * bu test uni har yurishda qayta tekshiradi, ya'ni qo'lda tahrir yoki
+ * kod o'zgarishi jimgina o'tib ketolmaydi.
  *
- * ⚠ MANBA `src/` DAN O'QILADI, `dist/` DAN EMAS.
- * Reyestrda dekorator yo'q, ya'ni Node uni to'g'ridan-to'g'ri o'qiy
- * oladi (tip'lar tashlab yuboriladi). Bu ataylab: `dist/` eskirgan
- * bo'lsa test YASHIL bo'lib, hech narsani isbotlamasdi.
+ * ⚠ MANBA `src/` DAN O'QILADI, `dist/` DAN EMAS. Reyestrda dekorator
+ * yo'q, ya'ni Node uni to'g'ridan-to'g'ri o'qiy oladi. Bu ataylab:
+ * eskirgan `dist/` bilan test YASHIL bo'lib, hech narsani isbotlamasdi.
  */
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -24,6 +22,9 @@ import { fileURLToPath } from 'node:url';
 import {
   FEATURES,
   FEATURE_BY_KEY,
+  SWITCHABLE_KEYS,
+  ROUTE_TO_FEATURE,
+  featureForPath,
   featureChain,
   blockersForDisabling,
 } from '../src/common/features/feature-registry.ts';
@@ -38,31 +39,34 @@ const test = (name, fn) => {
   console.log(`  ✓ ${name}`);
 };
 
-/** Barcha `*.module.ts` fayllari: klass nomi → fayl yo'li. */
-const moduleFiles = new Map();
+const strip = (src) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+// ── Kodni o'qish ──────────────────────────────────────────────────────────
+const moduleFiles = new Map(); // klass nomi -> fayl yo'li
+const controllerRoutes = new Set(); // haqiqiy @Controller prefikslari
 for (const dir of readdirSync(MODULES_DIR, { withFileTypes: true })) {
   if (!dir.isDirectory()) continue;
   for (const file of readdirSync(path.join(MODULES_DIR, dir.name))) {
-    if (!file.endsWith('.module.ts')) continue;
+    if (!file.endsWith('.ts')) continue;
     const full = path.join(MODULES_DIR, dir.name, file);
-    const src = readFileSync(full, 'utf8');
-    for (const m of src.matchAll(/export class (\w+Module)\b/g)) {
-      moduleFiles.set(m[1], full);
+    const raw = readFileSync(full, 'utf8');
+    if (file.endsWith('.module.ts')) {
+      for (const m of strip(raw).matchAll(/export class (\w+Module)\b/g)) {
+        moduleFiles.set(m[1], full);
+      }
+    }
+    if (file.endsWith('.controller.ts')) {
+      for (const m of raw.matchAll(/@Controller\(\s*['"`]([^'"`]*)['"`]/g)) {
+        controllerRoutes.add(m[1]);
+      }
     }
   }
 }
 
-/**
- * `@Module({ imports: [...] })` ichidagi modul klasslari.
- *
- * ⚠ Izohlar OLIB TASHLANADI: bu fayllar izohlarda boshqa modul
- * nomlarini tez-tez tilga oladi va ularni haqiqiy bog'liqlik deb
- * o'qish yolg'on qizil berardi.
- */
+/** `@Module({ imports: [...] })` ichidagi modul klasslari (izohlarsiz). */
 const importsOf = (file) => {
-  const src = readFileSync(file, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
+  const src = strip(readFileSync(file, 'utf8'));
   const block = src.match(/@Module\(\{[\s\S]*?imports:\s*\[([\s\S]*?)\]/);
   if (!block) return [];
   return [...block[1].matchAll(/\b(\w+Module)\b/g)].map((m) => m[1]);
@@ -83,7 +87,7 @@ test('har bir `parent` reyestrda mavjud', () => {
   }
 });
 
-test('har bir `requires` reyestrda mavjud', () => {
+test('har bir `requires` reyestrda mavjud va o\'ziga ishora qilmaydi', () => {
   for (const f of FEATURES) {
     for (const req of f.requires || []) {
       assert.ok(FEATURE_BY_KEY.has(req), `${f.key}: noma'lum bog'liqlik (${req})`);
@@ -95,60 +99,121 @@ test('har bir `requires` reyestrda mavjud', () => {
 test('ota zanjirida AYLANA yo\'q', () => {
   for (const f of FEATURES) {
     const chain = featureChain(f.key);
-    assert.equal(
-      new Set(chain).size,
-      chain.length,
-      `${f.key}: ota zanjirida aylana (${chain.join(' → ')})`,
-    );
+    assert.equal(new Set(chain).size, chain.length, `${f.key}: ota zanjirida aylana`);
   }
 });
 
 test('imkoniyat (capability) o\'zi NestJS moduli emas', () => {
   for (const f of FEATURES) {
-    if (f.parent) assert.equal(f.nestModule, undefined, `${f.key}: ortiqcha nestModule`);
+    if (f.parent) assert.equal(f.nestModules, undefined, `${f.key}: ortiqcha nestModules`);
   }
+});
+
+// ── ⚠ AYLANA YO'Q: aks holda o'chirib bo'lmaydigan tugun paydo bo'ladi ──
+test('BOG\'LIQLIK grafigida aylana yo\'q (o\'chirib bo\'lmaydigan tugun bo\'lmasin)', () => {
+  // Aylana bo'lsa A ni o'chirish B ochiq deb to'siladi va aksincha —
+  // ikkalasi ham MANGU ochiq qolardi. Generator bunday modullarni
+  // bitta kalitga birlashtiradi; bu test birlashmaganini ushlaydi.
+  const graph = Object.fromEntries(FEATURES.map((f) => [f.key, f.requires || []]));
+  const state = {}; // 1 = ko'rilmoqda, 2 = tugadi
+  const walk = (node, trail) => {
+    if (state[node] === 2) return;
+    assert.notEqual(
+      state[node],
+      1,
+      `AYLANA: ${[...trail, node].join(' → ')}. ` +
+        `Generatordagi MERGE ga qo'shing — aks holda bu kalitlarni hech ` +
+        `qachon o'chirib bo'lmaydi.`,
+    );
+    state[node] = 1;
+    for (const next of graph[node] || []) walk(next, [...trail, node]);
+    state[node] = 2;
+  };
+  for (const key of Object.keys(graph)) walk(key, []);
 });
 
 // ── Kodga qarshi tekshiruv ────────────────────────────────────────────────
-test('e\'lon qilingan `nestModule` HAQIQATAN mavjud', () => {
+test('e\'lon qilingan `nestModules` HAQIQATAN mavjud', () => {
   for (const f of FEATURES) {
-    if (!f.nestModule) continue;
-    assert.ok(
-      moduleFiles.has(f.nestModule),
-      `${f.key}: ${f.nestModule} topilmadi`,
-    );
-  }
-});
-
-test('MODUL IMPORTLARI `requires` da to\'liq aks etgan', () => {
-  // Toggle qilinadigan NestJS modullari: klass nomi → tarif kaliti.
-  const gated = new Map(
-    FEATURES.filter((f) => f.nestModule).map((f) => [f.nestModule, f.key]),
-  );
-
-  for (const f of FEATURES) {
-    if (!f.nestModule) continue;
-    const declared = new Set(f.requires || []);
-
-    for (const imported of importsOf(moduleFiles.get(f.nestModule))) {
-      const key = gated.get(imported);
-      // Toggle qilinmaydigan modulga bog'liqlik `requires` ga tushmaydi —
-      // u har doim mavjud.
-      if (!key || key === f.key) continue;
-      assert.ok(
-        declared.has(key),
-        `${f.key} → ${imported} ni import qiladi, lekin requires da "${key}" yo'q. ` +
-          `Reyestrga qo'shing, aks holda dev panel "${key}" ni o'chirishga ` +
-          `xato ruxsat beradi.`,
-      );
+    for (const cls of f.nestModules || []) {
+      assert.ok(moduleFiles.has(cls), `${f.key}: ${cls} topilmadi`);
     }
   }
 });
 
+test('e\'lon qilingan `routes` HAQIQIY @Controller prefiksi', () => {
+  // ⚠ Bu global darvozaning YAGONA himoyasi: prefiks noto'g'ri yozilsa
+  // darvoza JIMGINA hech narsani to'smasdi.
+  for (const f of FEATURES) {
+    for (const r of f.routes || []) {
+      assert.ok(controllerRoutes.has(r), `${f.key}: "${r}" kontrolleri yo'q`);
+    }
+  }
+});
+
+test('har bir gate qilinadigan kontroller prefiksi reyestrda qamralgan', () => {
+  // Teskari yo'nalish: yangi modul qo'shilib reyestrga tushmasa,
+  // u tarif darvozasidan TASHQARIDA qolardi — jimgina bepul.
+  const declared = new Set(FEATURES.flatMap((f) => f.routes || []));
+  const missing = [...controllerRoutes].filter((r) => !declared.has(r));
+  assert.deepEqual(
+    missing,
+    [],
+    `Reyestrga tushmagan marshrut(lar): ${missing.join(', ')}. ` +
+      `scripts/gen-feature-registry.mjs ni qayta yurgizing.`,
+  );
+});
+
+test('MODUL IMPORTLARI `requires` da to\'liq aks etgan', () => {
+  const keyOfClass = new Map();
+  for (const f of FEATURES) {
+    for (const cls of f.nestModules || []) keyOfClass.set(cls, f.key);
+  }
+  const coreKeys = new Set(FEATURES.filter((f) => f.core).map((f) => f.key));
+
+  for (const f of FEATURES) {
+    if (!f.nestModules) continue;
+    const declared = new Set(f.requires || []);
+
+    for (const cls of f.nestModules) {
+      for (const imported of importsOf(moduleFiles.get(cls))) {
+        const key = keyOfClass.get(imported);
+        // O'z guruhi, reyestrsiz modul yoki O'ZAK — `requires` ga tushmaydi.
+        if (!key || key === f.key || coreKeys.has(key)) continue;
+        assert.ok(
+          declared.has(key),
+          `${f.key} → ${imported} ni import qiladi, lekin requires da "${key}" yo'q. ` +
+            `scripts/gen-feature-registry.mjs ni qayta yurgizing.`,
+        );
+      }
+    }
+  }
+});
+
+// ── Yo'l bo'yicha topish ──────────────────────────────────────────────────
+test('featureForPath chuqur yo\'lni ham to\'g\'ri topadi', () => {
+  assert.equal(featureForPath('/imports/students/preview'), 'imports');
+  assert.equal(featureForPath('imports'), 'imports');
+});
+
+test('O\'ZAK marshrutlar darvozadan TASHQARIDA', () => {
+  // ⚠ Eng muhim shart: `/features` yopilib qolsa mijoz nima o'chganini
+  // bilolmasdi, `/internal/entitlements` yopilsa esa admin panel
+  // yangilash turtkisini yubora olmasdi — ya'ni bo'limni QAYTA YOQISH
+  // yo'li yo'qolardi.
+  for (const f of FEATURES) {
+    if (!f.core) continue;
+    for (const r of f.routes || []) {
+      assert.equal(ROUTE_TO_FEATURE.get(r), undefined, `${r} darvoza ostida qolgan`);
+    }
+  }
+  assert.equal(featureForPath('/features'), undefined);
+  assert.equal(featureForPath('/internal/entitlements/refresh'), undefined);
+  assert.equal(featureForPath('/auth/login'), undefined);
+});
+
 // ── To'siq hisoblash ──────────────────────────────────────────────────────
 test('blockersForDisabling ochiq bog\'liqni ushlaydi', () => {
-  // Reyestrga bog'liq bo'lmagan sintetik holat — funksiyaning O'ZI
-  // tekshiriladi, hozirgi ma'lumot emas.
   const all = () => true;
   for (const f of FEATURES) {
     for (const req of f.requires || []) {
@@ -162,9 +227,44 @@ test('blockersForDisabling ochiq bog\'liqni ushlaydi', () => {
 
 test('o\'chiq bog\'liq to\'siq bo\'lmaydi', () => {
   const none = () => false;
-  for (const f of FEATURES) {
-    assert.deepEqual(blockersForDisabling(f.key, none), []);
+  for (const f of FEATURES) assert.deepEqual(blockersForDisabling(f.key, none), []);
+});
+
+test('har bir o\'chirgich OXIR-OQIBAT o\'chirilishi mumkin', () => {
+  // Kaskad: bog'liqlarni avval o'chirsak, kalitning o'zi ham o'chadimi.
+  // ⚠ O'ZAK bog'liqlik bundan MUSTASNO: `auth` hech qachon o'chmaydi,
+  // ya'ni unga tayanadigan bo'lim (masalan `attendance`) hozircha
+  // o'chirilmaydi. Bu MA'LUM cheklov — test uni qayd etadi, yashirmaydi.
+  const coreKeys = new Set(FEATURES.filter((f) => f.core).map((f) => f.key));
+  const blockedByCore = SWITCHABLE_KEYS.filter((k) =>
+    FEATURES.some((f) => coreKeys.has(f.key) && (f.requires || []).includes(k)),
+  );
+  console.log(
+    `      (o'zak tufayli hozircha o'chmaydigan: ${blockedByCore.join(', ') || 'yo\'q'})`,
+  );
+  for (const key of SWITCHABLE_KEYS) {
+    if (blockedByCore.includes(key)) continue;
+    // Faqat shu kalit va unga bog'liq bo'lmaganlar ochiq deb faraz qilamiz.
+    const dependents = new Set();
+    const collect = (k) => {
+      for (const f of FEATURES) {
+        if ((f.requires || []).includes(k) && !dependents.has(f.key)) {
+          dependents.add(f.key);
+          collect(f.key);
+        }
+      }
+    };
+    collect(key);
+    const enabled = (k) => k === key || !dependents.has(k);
+    assert.deepEqual(
+      blockersForDisabling(key, enabled),
+      [],
+      `${key}: bog'liqlari o'chirilgandan keyin ham to'silgan`,
+    );
   }
 });
 
-console.log(`\n✅ ${passed} ta shart o'tdi (${FEATURES.length} ta kalit)\n`);
+console.log(
+  `\n✅ ${passed} ta shart o'tdi (${FEATURES.length} ta kalit, ` +
+    `${SWITCHABLE_KEYS.length} ta o'chirgich)\n`,
+);

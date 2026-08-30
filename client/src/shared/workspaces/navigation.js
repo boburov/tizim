@@ -72,14 +72,14 @@ import ownerSidebar from "@/owner/navigation/sidebar.config";
 const teacherNav = [
   { title: "Bosh sahifa", icon: LayoutDashboard, url: "/work", end: true },
   { title: "Guruhlarim", icon: BookOpen, url: "/teacher/groups" },
-  { title: "Davomat", icon: ClipboardCheck, url: "/teacher/attendance" },
-  { title: "Baholash", icon: Star, url: "/teacher/grades" },
+  { title: "Davomat", icon: ClipboardCheck, url: "/teacher/attendance", capability: "attendance" },
+  { title: "Baholash", icon: Star, url: "/teacher/grades", capability: "grades" },
   { title: "Jadvalim", icon: CalendarDays, url: "/work/schedule" },
-  { title: "Vazifalar", icon: Briefcase, url: "/teacher/assignments" },
+  { title: "Vazifalar", icon: Briefcase, url: "/teacher/assignments", capability: "assignments" },
   { title: "Maoshim", icon: Wallet, url: "/teacher/finance" },
   // Tanga — o'qituvchi uni O'ZI chiqaradi (davomat va baho), lekin
   // natijani ko'rmasa rag'bat u uchun ko'rinmas bo'lib qolardi.
-  { title: "Tangalar", icon: Coins, url: "/teacher/coins", capability: "coin" },
+  { title: "Tangalar", icon: Coins, url: "/teacher/coins", capability: ["coin"] },
   { title: "Xabarlar", icon: Bell, url: "/teacher/inbox" },
 ];
 
@@ -87,10 +87,10 @@ const officeNav = [
   { title: "Bosh sahifa", icon: LayoutDashboard, url: "/work", end: true },
   { title: "Guruhlarim", icon: BookOpen, url: "/work/groups", permission: "groups.read" },
   { title: "O'quvchilarim", icon: GraduationCap, url: "/work/students", permission: "groups.read" },
-  { title: "Davomat", icon: ClipboardCheck, url: "/owner/attendance", permission: "attendance.read" },
+  { title: "Davomat", icon: ClipboardCheck, url: "/owner/attendance", permission: "attendance.read", capability: "attendance" },
   { title: "Jadval", icon: CalendarDays, url: "/work/schedule" },
-  { title: "Lidlar", icon: Target, url: "/owner/leads", permission: "leads.read" },
-  { title: "Vazifalar", icon: Briefcase, url: "/owner/assignments", permission: "assignments.read" },
+  { title: "Lidlar", icon: Target, url: "/owner/leads", permission: "leads.read", capability: "leads" },
+  { title: "Vazifalar", icon: Briefcase, url: "/owner/assignments", permission: "assignments.read", capability: "assignments" },
   // Buyurtmani odatda AYNAN resepshin topshiradi — mahsulot uning
   // stolida turadi. Yozuv `market.fulfill` ruxsati bo'lganda chiqadi.
   {
@@ -98,7 +98,7 @@ const officeNav = [
     icon: Store,
     url: "/owner/market",
     permissionAnyOf: ["market.fulfill", "market.manage", "market.read"],
-    capability: "coin",
+    capability: ["market", "coin"],
   },
   { title: "Xabarlar", icon: Bell, url: "/owner/inbox" },
 ];
@@ -113,10 +113,10 @@ const studentNav = [
   { title: "Bosh sahifa", icon: LayoutDashboard, url: "/me", end: true },
   { title: "O'qishim", icon: BookOpen, url: "/student/group" },
   { title: "Jadvalim", icon: CalendarDays, url: "/me/schedule" },
-  { title: "Davomatim", icon: ClipboardCheck, url: "/student/attendance" },
+  { title: "Davomatim", icon: ClipboardCheck, url: "/student/attendance", capability: "attendance" },
   { title: "To'lovlarim", icon: Wallet, url: "/me/payments" },
   { title: "Natijalarim", icon: TrendingUp, url: "/student/rating" },
-  { title: "Vazifalarim", icon: Briefcase, url: "/student/assignments", badge: "studentAssignments" },
+  { title: "Vazifalarim", icon: Briefcase, url: "/student/assignments", badge: "studentAssignments", capability: "assignments" },
   // ── RAG'BAT ──
   //
   // Ikki yozuv, bitta emas: "Tangalarim" MENING natijam (hamyon,

@@ -15,6 +15,28 @@ export interface TenantFeatureRow {
   key: string;
   name: string;
   isModule: boolean;
+  /**
+   * TIZIM O'ZAGI — o'chirgich ko'rsatilmaydi.
+   *
+   * ⚠ Ro'yxatda BARIBIR qaytariladi: panelda "nega bu bo'limni
+   * o'chirib bo'lmayapti" savoliga javob beradigan to'siq aynan shu
+   * yozuvlar bo'lishi mumkin.
+   */
+  isCore: boolean;
+  /**
+   * Hozir shu kalitni o'chirishga TO'SQINLIK qilayotgan ochiq bo'limlar.
+   *
+   * ⚠ OLDINDAN hisoblanadi, bosilgandan keyin emas. Aks holda odam
+   * o'chirgichni bosib, 409 olib, nima uchunligini faqat xato
+   * matnidan bilardi.
+   */
+  blockedBy: string[];
+  /**
+   * To'siq O'ZAK modul tufaylimi — ya'ni uni bartaraf etib bo'lmaydi.
+   * Panel bunday o'chirgichni QULFLANGAN holda ko'rsatadi va sababini
+   * yozadi, chunki bosilsa har doim 409 qaytarardi.
+   */
+  permanentlyBlocked: boolean;
   parentKey: string | null;
   requiresKeys: string[];
   /** Mijoz AMALDA ko'radigan holat (ota zanjiri hisobga olingan). */
@@ -86,15 +108,33 @@ export class TenantFeaturesService {
         .map((pf) => pf.feature.key),
     );
 
+    const isOn = (key: string) => (resolvedByKey.get(key)?.value ?? 0) > 0;
+
+    // Kim kimga tayanadi — to'siqni OLDINDAN hisoblash uchun.
+    const dependentsOf = (key: string) =>
+      features
+        .filter(
+          (d) =>
+            d.key !== key &&
+            (d.requiresKeys.includes(key) || d.parentKey === key) &&
+            isOn(d.key),
+        );
+
     return features.map((f) => {
       const ov = overrideByKey.get(f.key);
+      const blockers = dependentsOf(f.key);
       return {
         key: f.key,
         name: f.name,
         isModule: f.isModule,
+        isCore: f.isCore,
+        blockedBy: blockers.map((b) => b.key),
+        // ⚠ O'ZAK to'siqni bartaraf etib bo'lmaydi: uni o'chirish
+        // imkoni yo'q, ya'ni bu o'chirgich hech qachon ishlamaydi.
+        permanentlyBlocked: blockers.some((b) => b.isCore),
         parentKey: f.parentKey,
         requiresKeys: f.requiresKeys,
-        enabled: (resolvedByKey.get(f.key)?.value ?? 0) > 0,
+        enabled: isOn(f.key),
         source: ov ? 'override' : planKeys.has(f.key) ? 'plan' : 'default',
         override: ov
           ? {
@@ -151,6 +191,14 @@ export class TenantFeaturesService {
     const feature = await this.prisma.feature.findUnique({ where: { key } });
     if (!feature || !feature.isModule) {
       throw new NotFoundException(`Modul kaliti topilmadi: ${key}`);
+    }
+    // ⚠ O'ZAK MODUL HECH QACHON O'CHIRILMAYDI. Panel uni ko'rsatmaydi,
+    // lekin API to'g'ridan-to'g'ri chaqirilishi mumkin — `auth` yoki
+    // `users` ni o'chirish butun ilovani yiqitardi.
+    if (feature.isCore) {
+      throw new ConflictException(
+        `"${key}" — tizim o'zagi, uni o'chirib/yoqib bo'lmaydi`,
+      );
     }
 
     const trimmed = reason.trim();
