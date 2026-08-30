@@ -4,6 +4,7 @@ import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { CommonModule } from './common/common.module.js';
 import { HealthModule } from './health/health.module.js';
+import { FeaturesModule } from './modules/features/features.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
@@ -91,6 +92,13 @@ import { MarketModule } from './modules/market/market.module.js';
     PrismaModule,
     CommonModule,
     HealthModule,
+    // ── TARIF IMKONIYATLARI ──
+    // `GET /features` (mijoz UI'si nimani ko'rsatishini biladi) va
+    // `POST /internal/entitlements/refresh` (dev panel turtkisi).
+    // ⚠ ERTA TURADI: bu endpoint'ning o'zi hech qachon darvoza ortida
+    // qolmasligi kerak — aks holda bo'lim o'chgach mijoz nima
+    // o'chganini ham bilolmasdi.
+    FeaturesModule,
     // ── FAZA 2.3: auth moduli ──
     AuthModule,
     // ── FAZA 2.2: birinchi ko'chirilgan marshrutlar ──

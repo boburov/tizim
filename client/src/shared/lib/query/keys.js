@@ -442,6 +442,11 @@ export const qk = Object.freeze({
   coinConfig: {
     all: () => ["coinConfig"],
   },
+  // Tarif imkoniyatlari. ALOHIDA ILDIZ: dev panelda modul yoqilganda
+  // faqat shu kalit bekor qilinadi, butun kesh emas.
+  features: {
+    all: () => ["features"],
+  },
   coins: {
     all: () => ["coins"],
     me: () => ["coins", "me"],

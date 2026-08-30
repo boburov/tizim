@@ -16,6 +16,8 @@ import { Validated } from '../../common/decorators/index.js';
 import { Logger } from '@nestjs/common';
 import type { AppConfig } from '../../config/env.validation.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
+import { ModuleFeaturesService } from '../../common/features/module-features.service.js';
+import { FEATURE_BY_KEY } from '../../common/features/feature-registry.js';
 import { ImportRegistryService } from './import-registry.service.js';
 import { ImportEngineService, MAX_GRID_ROWS, type Importer } from './import-engine.service.js';
 import { ImportTemplateService } from './import-template.service.js';
@@ -58,6 +60,7 @@ export class ImportsController {
     private readonly engine: ImportEngineService,
     private readonly templates: ImportTemplateService,
     private readonly queue: ImportQueueService,
+    private readonly features: ModuleFeaturesService,
     @Inject(ConfigService) config: ConfigService<AppConfig, true>,
   ) {
     this.syncMaxRows = config.get('IMPORT_SYNC_MAX_ROWS', { infer: true }) as number;
@@ -74,6 +77,12 @@ export class ImportsController {
     if (!req.user) throw new ApiError(401, "Avtorizatsiyadan o'tilmagan");
     const importer = this.registry.getImporter(key);
     if (!importer) throw new ApiError(404, 'Bunday import turi topilmadi');
+    // ⚠ TARIF RUXSATDAN OLDIN. Importer sotib olinmagan bo'lsa u
+    // foydalanuvchining huquqiga UMUMAN bog'liq emas — to'liq huquqli
+    // owner ham 402 oladi. Dekorator ishlatilmadi: importer marshrut
+    // emas, `:importerKey` PARAMETRI, ya'ni kalit faqat ish vaqtida
+    // ma'lum bo'ladi (`permission` ham aynan shu sabab shu yerda).
+    this.assertImporterCapability(importer);
     if (!hasPermission(req.permissions, importer.permission)) {
       throw new ApiError(403, 'Ruxsat etilmagan');
     }
@@ -83,6 +92,23 @@ export class ImportsController {
       }
     }
     return importer;
+  }
+
+  /** Importer shu loyihaning tarifida bormi. */
+  private hasImporterCapability(importer: Importer): boolean {
+    return (
+      !importer.capability || this.features.isModuleEnabled(importer.capability)
+    );
+  }
+
+  private assertImporterCapability(importer: Importer): void {
+    if (this.hasImporterCapability(importer)) return;
+    const key = importer.capability as string;
+    throw new ApiError(
+      402,
+      `${FEATURE_BY_KEY.get(key)?.label ?? key} tarifingizda mavjud emas`,
+      { code: 'FEATURE_NOT_AVAILABLE', details: { featureKey: key } },
+    );
   }
 
   private actorOf(req: AuthenticatedRequest) {
@@ -103,6 +129,10 @@ export class ImportsController {
       .listImporters()
       .filter(
         (imp) =>
+          // ⚠ TARIFDA YO'Q IMPORTER RO'YXATGA HAM TUSHMAYDI — aks holda
+          // client uni chizar edi-yu, bosilganda 402 chiqardi (huquq
+          // bilan bir xil mantiq, pastdagi izohga qarang).
+          this.hasImporterCapability(imp) &&
           hasPermission(req.permissions, imp.permission) &&
           // ⚠ Qo'shimcha huquqlar HAM tekshiriladi — aks holda tugma
           // ko'rinardi-yu, bosilganda 403 chiqardi.
@@ -146,7 +176,13 @@ export class ImportsController {
 
     const allowedKeys = this.registry
       .listImporters()
-      .filter((imp) => hasPermission(req.permissions, imp.permission))
+      .filter(
+        (imp) =>
+          // Tarifda yo'q importer tarixi ham ko'rinmaydi: aks holda
+          // mijoz sotib olmagan bo'limining IZLARINI ko'rardi.
+          this.hasImporterCapability(imp) &&
+          hasPermission(req.permissions, imp.permission),
+      )
       .map((imp) => imp.key);
 
     if (!allowedKeys.length) {

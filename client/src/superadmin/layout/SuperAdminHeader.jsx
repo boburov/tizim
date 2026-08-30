@@ -20,6 +20,7 @@ import NotificationBell from "@/shared/components/notification/NotificationBell"
 import useAuth from "@/shared/hooks/useAuth";
 import usePermissions from "@/shared/hooks/usePermissions";
 import useCoinConfig from "@/shared/hooks/useCoinConfig";
+import useFeatures from "@/shared/hooks/useFeatures";
 import useLogout from "@/features/auth/hooks/useLogout";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 import { APP_NAME, APP_LOGO } from "@/shared/constants/app";
@@ -73,6 +74,7 @@ const SuperAdminHeader = () => {
   const { user, roleLabel } = useAuth();
   const { has } = usePermissions();
   const { enabled: coinEnabled } = useCoinConfig();
+  const { features: featureMap } = useFeatures();
   const { mutate: logout } = useLogout();
 
   // ══════════════════════════════════════════════════════════════════
@@ -90,7 +92,10 @@ const SuperAdminHeader = () => {
   // ham shu sababdan olib tashlangan) — o'chirilgan bo'lim yozuvi
   // aynan shunday eshik bo'lardi.
   // ══════════════════════════════════════════════════════════════════
-  const capabilities = { coin: coinEnabled };
+  // ⚠ Tarif imkoniyatlari (dev panel) va ega o'chirgichi (`coin`) —
+  // bitta xaritada: ikkalasi ham "bo'lim UMUMAN bormi" degan savolga
+  // javob beradi.
+  const capabilities = { ...featureMap, coin: coinEnabled };
 
   const headerNav = SUPER_ADMIN_HEADER_NAV.filter((item) => {
     if (item.permission && !has(item.permission)) return false;

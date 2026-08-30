@@ -62,6 +62,7 @@ import useTheme, { THEME_OPTIONS } from "@/shared/hooks/useTheme";
 import useLogout from "@/features/auth/hooks/useLogout";
 import usePermissions from "@/shared/hooks/usePermissions";
 import useCoinConfig from "@/shared/hooks/useCoinConfig";
+import useFeatures from "@/shared/hooks/useFeatures";
 import useActiveBranch from "@/shared/hooks/useActiveBranch";
 import { useIsMobile } from "@/shared/hooks/useMobile";
 
@@ -176,6 +177,7 @@ const Main = () => {
   const { has, hasAny } = usePermissions();
   const { workspace, nav: navItems, meta } = useWorkspace();
   const { enabled: coinEnabled } = useCoinConfig();
+  const { features: featureMap } = useFeatures();
 
   // YARATISH TUGMASI, QIDIRUV VA MODALLAR — o'quvchidan boshqa hammaga.
   //
@@ -201,7 +203,14 @@ const Main = () => {
   // o'shanda huquq baribir rolda qoladi — faqat ruxsat tekshirilsa
   // menyuda ishlamaydigan yozuv turib qolardi va bosilganda odam
   // sahifadan qaytarilardi.
-  const capabilities = { coin: coinEnabled };
+  // `coin` — MAVJUD, EGA boshqaradigan o'chirgich (tenant sozlamasi).
+  // Qolganlari — TARIF imkoniyatlari (dev paneldan beriladi). Ikkalasi
+  // ham bitta savolga javob beradi ("bo'lim UMUMAN bormi"), shuning
+  // uchun bitta xaritada turadi va yozuvlar farqini bilmaydi.
+  //
+  // ⚠ Faza 2 da `coin` ham umumiy mexanizmga ko'chadi va bu qator
+  // butunlay `featureMap` bo'lib qoladi.
+  const capabilities = { ...featureMap, coin: coinEnabled };
 
   const allowed = (entry) => {
     if (entry.multiBranchOnly && !multiBranch) return false;

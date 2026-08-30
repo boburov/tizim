@@ -1,4 +1,13 @@
 export const ENDPOINTS = Object.freeze({
+  // TARIF IMKONIYATLARI — qaysi bo'limlar shu loyihada ochiq.
+  //
+  // ⚠ `/auth/me` DAN ALOHIDA. `me` klientda ham, serverda ham 5
+  // daqiqa keshlanadi; ikkisi qo'shilib yoqilgan bo'lim 10 daqiqagacha
+  // ko'rinmasdi. Bu esa dev paneldagi "darhol yoqish" ni yo'qqa
+  // chiqarardi. `coins.config` ham aynan shu sabab alohida turadi.
+  features: {
+    base: "/features",
+  },
   auth: {
     login: "/auth/login",
     logout: "/auth/logout",

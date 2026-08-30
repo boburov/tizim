@@ -53,6 +53,16 @@ export interface Importer {
   sheetName?: string;
   permission: string;
   extraPermissions?: string[];
+  /**
+   * TARIF imkoniyati (`imports.finance` kabi). Bo'sh bo'lsa importer
+   * modul kalitining O'ZI bilan ochiladi.
+   *
+   * ⚠ RUXSATDAN FARQI: `permission` — "menda shu ishga HAQ bormi" (rol),
+   * bu esa "bu importer shu loyihada SOTIB OLINGANMI" (tarif). Ikkisi
+   * ortogonal: to'liq huquqli owner ham tarifda yo'q importerni
+   * ko'rmaydi.
+   */
+  capability?: string;
   gridEnabled?: boolean;
   columns: any[];
   prepare(rawRows: any[], actor?: any): Promise<any>;

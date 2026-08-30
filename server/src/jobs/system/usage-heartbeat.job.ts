@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { EntitlementsService } from '../../common/entitlements/entitlements.service.js';
+import { EntitlementCacheStore } from '../../common/entitlements/entitlement-cache.store.js';
 import { ROLES } from '../../common/constants/permissions.js';
 import { usageMonthKey } from '../../common/utils/ai-usage.js';
 import type { AppConfig } from '../../config/env.validation.js';
@@ -52,6 +53,7 @@ export class UsageHeartbeatJob implements JobDefinition {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly entitlements: EntitlementsService,
+    private readonly cacheStore: EntitlementCacheStore,
     private readonly config: ConfigService<AppConfig, true>,
   ) {}
 
@@ -193,7 +195,13 @@ export class UsageHeartbeatJob implements JobDefinition {
       }
 
       const data = await res.json();
-      this.entitlements.set(data);
+      const receivedAt = new Date();
+      this.entitlements.set(data, receivedAt);
+      // ⚠ BAZAGA HAM YOZILADI: modul darvozalari yopiq yiqilgani uchun
+      // qayta ishga tushishda kesh bo'sh qolsa bo'limlar o'chib ketardi.
+      // `await` — saqlanmagani jimgina yo'qolmasin (xato ichkarida
+      // yutiladi, so'rovni yiqitmaydi).
+      await this.cacheStore.save(data, receivedAt);
       this.logger.debug(`Heartbeat yuborildi (plan: ${data?.planKey ?? '-'})`);
       return data;
     } catch (err) {

@@ -93,6 +93,7 @@ import {
 } from "@/owner/features/feedback";
 import { MarketPage, UserCoinPanel } from "@/owner/features/market";
 import CoinGuard from "@/shared/components/guards/CoinGuard";
+import FeatureGuard from "@/shared/components/guards/FeatureGuard";
 import { AdminDashboardPage } from "@/owner/features/adminDashboard";
 import { ActivityLogsPage } from "@/owner/features/activityLogs";
 import {
@@ -368,8 +369,20 @@ const OwnerRoutes = () => (
         Sidebar'da yo'q: ro'yxat sahifalaridagi "Excel'dan yuklash"
         tugmasi olib keladi. Ruxsat shu yerda tekshirilmaydi - importerlar
         ro'yxati serverda filtrlanadi va yozish yo'li ham qayta
-        qo'riqlanadi (requireImporterPermission). */}
-    <Route path="import/:importerKey" element={<ImportPage />} />
+        qo'riqlanadi (requireImporterPermission).
+
+        ⚠ `FeatureGuard` ESA KERAK: tarifda import bo'lmasa chuqur
+        havola (`/owner/import/students`) sahifani ochib, keyin bo'sh
+        xato ko'rsatardi. Ruxsatdan farqli o'laroq bu savol "bo'lim
+        UMUMAN bormi" — shuning uchun tashqarida turadi. */}
+    <Route
+      path="import/:importerKey"
+      element={
+        <FeatureGuard feature="imports">
+          <ImportPage />
+        </FeatureGuard>
+      }
+    />
 
     {/* Fayl saqlagich boshqaruvi - sidebar'dagi kvota ko'rsatkichi
         shu sahifaga olib keladi. */}

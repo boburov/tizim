@@ -3994,3 +3994,32 @@ model MarketOrder {
   @@index([productId])
   @@map("market_orders")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TARIF KESHINING DOIMIY NUSXASI — YAGONA QATOR.
+//
+// Heartbeat javobi (`{ planKey, subscriptionActive, limits, exceeded }`)
+// xotirada `EntitlementsService` da turadi. MODUL DARVOZALARI yopiq
+// yiqilgani uchun bo'sh kesh "hamma bo'lim o'chiq" degani bo'lardi va har
+// PM2 qayta ishga tushishi mijoz ilovasini birinchi heartbeat'gacha
+// qorong'i qilardi. Shu qator o'sha bo'shliqni yopadi.
+//
+// ⚠ `receivedAt` ALOHIDA USTUN, `updatedAt` EMAS: tiklashda javob ASLIDA
+// qachon kelgani kerak. Aks holda uzoq aloqasiz turgan server har qayta
+// ishga tushganda 72 soatlik muhlatni QAYTA BOSHLAB, pullik modullarni
+// cheksiz bepul qoldirardi.
+// ═══════════════════════════════════════════════════════════════════════════
+model EntitlementCache {
+  /** Doim "singleton" — jadvalda bittadan ortiq qator bo'lmaydi. */
+  id String @id @default("singleton")
+
+  /** Heartbeat javobining o'zi, o'zgartirilmagan holda. */
+  payload Json
+
+  /** Javob ASLIDA kelgan vaqt — muhlat shundan hisoblanadi. */
+  receivedAt DateTime
+
+  updatedAt DateTime @updatedAt
+
+  @@map("entitlement_cache")
+}

@@ -7,14 +7,29 @@ import { importAPI } from "@/shared/api/import.api";
 import { qk } from "@/shared/lib/query/keys";
 import { saveResponseAsFile, readErrorMessage } from "@/shared/utils/downloadFile";
 
-/** Foydalanuvchi ishlata oladigan import turlari + ustun tavsifi. */
-export const useImportersQuery = (options = {}) =>
-  useQuery({
+// Hooks
+import useFeatures from "@/shared/hooks/useFeatures";
+
+/**
+ * Foydalanuvchi ishlata oladigan import turlari + ustun tavsifi.
+ *
+ * ⚠ TARIFDA IMPORT BO'LMASA SO'ROV UMUMAN YUBORILMAYDI. Usiz har bir
+ * ro'yxat sahifasi 402 bilan tugaydigan bekor so'rov qilardi: tugma
+ * baribir ko'rinmasdi (`ImportButton` bo'sh ro'yxatda `null` qaytaradi),
+ * lekin tarmoq panelida va serverda ma'nosiz shovqin qolardi.
+ */
+export const useImportersQuery = (options = {}) => {
+  const { has, isLoading } = useFeatures();
+  const available = !isLoading && has("imports");
+
+  return useQuery({
     queryKey: qk.imports.importers(),
     queryFn: () => importAPI.importers().then((r) => r.data.data),
     staleTime: 30 * 60 * 1000,
     ...options,
+    enabled: available && (options.enabled ?? true),
   });
+};
 
 /**
  * Tanlov ustunlari uchun variantlar (guruh, filial, rol).

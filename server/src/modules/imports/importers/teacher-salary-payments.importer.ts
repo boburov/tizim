@@ -33,6 +33,14 @@ export class TeacherSalaryPaymentsImporter implements Importer {
   readonly fileBase = 'oqituvchi-maosh-import';
   readonly sheetName = "Maosh to'lovlari";
   readonly permission = PERMISSIONS.SALARY_PAY;
+  /**
+   * ⚠ MOLIYAVIY IMPORT ALOHIDA SOTILADI. Mijoz "excel'dan
+   * foydalanuvchi yuklash" ni olib, to'lov/maosh yuklashni OLMASLIGI
+   * mumkin — shuning uchun bu ikki importer `imports` modulining
+   * ostidagi alohida imkoniyat kaliti bilan yopiladi.
+   */
+  readonly capability = 'imports.finance';
+
 
   readonly columns = [
     {

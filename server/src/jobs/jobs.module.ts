@@ -201,6 +201,12 @@ export class SystemJobsRegistrar implements OnModuleInit {
   // (`@Global`) ga ko'chdi: AI moduli ham unga tayanadi va ikkinchi
   // nusxa paydo bo'lsa tarif darvozasi jimgina o'chib qolardi
   // (heartbeat bir nusxaga yozib, paywall boshqasini o'qirdi).
-  exports: [SchedulerService, JobsRegistry],
+  //
+  // `UsageHeartbeatJob` — `FeaturesModule` ga kerak: dev panelda modul
+  // yoqilganda `POST /internal/entitlements/refresh` shu job'ning
+  // `send()` ini DARHOL chaqiradi, 15 daqiqalik keyingi yurishni
+  // kutmasdan. Eksport YANGI NUSXA YARATMAYDI — Nest provayderlari
+  // singleton, ya'ni yuqoridagi "ikkinchi nusxa" xavfi bu yerda yo'q.
+  exports: [SchedulerService, JobsRegistry, UsageHeartbeatJob],
 })
 export class JobsModule {}

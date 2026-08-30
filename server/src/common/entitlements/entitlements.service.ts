@@ -52,7 +52,18 @@ export class EntitlementsService {
     updatedAt: null,
   };
 
-  set(payload: EntitlementsPayload | null | undefined): void {
+  /**
+   * @param receivedAt Javob ASLIDA qachon kelgani. Standart — hozir.
+   *
+   * ⚠ Bu parametr FAQAT bazadan tiklashda beriladi
+   * (`EntitlementCacheStore`). Usiz qayta ishga tushish har safar
+   * "yangi" holat yasab, modul darvozalarining 72 soatlik muhlatini
+   * cheksiz uzaytirardi.
+   */
+  set(
+    payload: EntitlementsPayload | null | undefined,
+    receivedAt: Date = new Date(),
+  ): void {
     if (!payload || typeof payload !== 'object') return;
     this.state = {
       planKey: payload.planKey ?? null,
@@ -61,7 +72,7 @@ export class EntitlementsService {
       limits:
         payload.limits && typeof payload.limits === 'object' ? payload.limits : {},
       exceeded: Array.isArray(payload.exceeded) ? payload.exceeded : [],
-      updatedAt: new Date(),
+      updatedAt: receivedAt,
     };
     this.logger.debug(`Entitlements yangilandi (plan: ${this.state.planKey})`);
   }

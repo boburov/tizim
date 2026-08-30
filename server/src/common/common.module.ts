@@ -20,6 +20,9 @@ import {
 import { AuthMiddleware } from '../middleware/auth.middleware.js';
 import { EntitlementsService } from './entitlements/entitlements.service.js';
 import { PlanLimitsService } from './entitlements/plan-limits.service.js';
+import { EntitlementCacheStore } from './entitlements/entitlement-cache.store.js';
+import { ModuleFeaturesService } from './features/module-features.service.js';
+import { CapabilityGuard } from './features/capability.guard.js';
 
 /**
  * Umumiy infratuzilma — RBAC servislari, qo'riqchilar va auth middleware.
@@ -74,6 +77,16 @@ import { PlanLimitsService } from './entitlements/plan-limits.service.js';
     // `isFeatureEnabled` har doim "ha" (ochiq yiqilish). Natijada tarif
     // darvozasi JIMGINA o'chib qolardi va buni hech narsa ko'rsatmasdi.
     EntitlementsService,
+    // ⚠ KESHNING DOIMIY NUSXASI — `EntitlementsService` BILAN BIR JOYDA.
+    //
+    // Modul darvozalari YOPIQ yiqiladi, ya'ni bo'sh kesh = "hamma bo'lim
+    // o'chiq". PM2 qayta ishga tushganda kesh bo'shaydi va birinchi
+    // heartbeat'gacha (15 daqiqagacha) mijoz ilovasi qorong'i qolardi.
+    // Shu store ko'tarilishda oxirgi ma'lum holatni bazadan tiklaydi.
+    EntitlementCacheStore,
+    // "Bu bo'lim shu loyihada BORMI" darvozasi. Ruxsatdan (rol) ORTOGONAL.
+    ModuleFeaturesService,
+    CapabilityGuard,
   ],
   exports: [
     PermissionService,
@@ -95,6 +108,9 @@ import { PlanLimitsService } from './entitlements/plan-limits.service.js';
     AuthMiddleware,
     EntitlementsService,
     PlanLimitsService,
+    EntitlementCacheStore,
+    ModuleFeaturesService,
+    CapabilityGuard,
   ],
 })
 export class CommonModule {}

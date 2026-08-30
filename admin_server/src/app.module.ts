@@ -8,6 +8,7 @@ import { BranchConfigModule } from './branch-config/branch-config.module.js';
 import { UsersModule } from './users/users.module.js';
 import { MaintenanceModule } from './maintenance/maintenance.module.js';
 import { EntitlementsModule } from './entitlements/entitlements.module.js';
+import { TenantFeaturesModule } from './tenant-features/tenant-features.module.js';
 import { UsageModule } from './usage/usage.module.js';
 import { PlansModule } from './plans/plans.module.js';
 import { CustomersModule } from './customers/customers.module.js';
@@ -31,6 +32,8 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
     UsersModule,
     MaintenanceModule,
     EntitlementsModule,
+    // Loyiha modullarini yoqish/o'chirish (tarifdan ustun qaror).
+    TenantFeaturesModule,
     UsageModule,
     PlansModule,
     CustomersModule,

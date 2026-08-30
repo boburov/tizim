@@ -15,7 +15,9 @@
     "seed:api": "node prisma/seedApiServices.js",
     "seed:bots": "node prisma/seedBotTemplates.js",
     "lint": "eslint \"src/**/*.ts\"",
-    "test:branch-limit": "npm run build && node test/branch-limit.test.mjs"
+    "test:branch-limit": "npm run build && node test/branch-limit.test.mjs",
+    "features:sync": "node scripts/sync-features.mjs",
+    "features:grandfather": "node scripts/grandfather-features.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",

@@ -29,6 +29,7 @@ import { paymentMethodLabel } from "@/shared/constants/finance";
 import useGlobalSearchQuery from "../hooks/useGlobalSearchQuery";
 import useRecentSearches from "../hooks/useRecentSearches";
 import useCoinConfig from "@/shared/hooks/useCoinConfig";
+import useFeatures from "@/shared/hooks/useFeatures";
 import { SEARCH_INDEX } from "../navigation/searchIndex";
 
 const isMac =
@@ -58,6 +59,7 @@ const GlobalSearch = ({ renderTrigger }) => {
 
   const { recent, addRecent, clearRecent } = useRecentSearches();
   const { enabled: coinEnabled } = useCoinConfig();
+  const { features: featureMap } = useFeatures();
 
   const canSearchData = has("users.read");
   const { data: results, isFetching } = useGlobalSearchQuery(
@@ -72,7 +74,10 @@ const GlobalSearch = ({ renderTrigger }) => {
   // "Market" ⌘K natijalarida ko'rinib, bosilganda foydalanuvchi
   // sahifadan qaytarilardi. Qidiruv natijasi ochilmaydigan sahifaga
   // olib borsa, butun qidiruvga ishonch yo'qoladi.
-  const capabilities = { coin: coinEnabled };
+  // ⚠ Tarif imkoniyatlari (dev panel) va ega o'chirgichi (`coin`) —
+  // bitta xaritada: ikkalasi ham "bo'lim UMUMAN bormi" degan savolga
+  // javob beradi.
+  const capabilities = { ...featureMap, coin: coinEnabled };
   const items = useMemo(
     () =>
       SEARCH_INDEX.filter((it) => {
@@ -81,7 +86,7 @@ const GlobalSearch = ({ renderTrigger }) => {
         return true;
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [has, coinEnabled],
+    [has, coinEnabled, featureMap],
   );
 
   // Ctrl+K / Cmd+K global listener

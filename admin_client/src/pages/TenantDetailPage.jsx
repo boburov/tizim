@@ -16,6 +16,7 @@ import {
   Server,
   Settings2,
   Database,
+  Package,
   Trash2,
   X,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ import {
 import Github from '../components/GithubIcon';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import TenantFeatures from '../components/TenantFeatures';
 import {
   BUSY_STATUSES,
   STATUS_LABEL,
@@ -39,6 +41,9 @@ import PendingChanges from '../components/PendingChanges';
 const TABS = [
   { key: 'umumiy', label: 'Umumiy', icon: LayoutDashboard },
   { key: 'brend', label: 'Brend', icon: Palette },
+  // Bo'limlar — qaysi modullar shu loyihada ochiq. Sozlamalardan
+  // ALOHIDA: sozlama ".env qiymati", bu esa tijorat qarori.
+  { key: 'bolimlar', label: "Bo'limlar", icon: Package },
   { key: 'sozlamalar', label: 'Sozlamalar', icon: Settings2 },
   { key: 'github', label: 'GitHub', icon: Github },
 ];
@@ -214,6 +219,18 @@ export default function TenantDetailPage() {
 
       {tab === 'sozlamalar' && (
         <TenantSettings tenantId={t.id} canEdit={t.status !== 'DELETED'} />
+      )}
+
+      {tab === 'bolimlar' && (
+        <TenantFeatures
+          tenantId={t.id}
+          /* ⚠ FAQAT SUPER_ADMIN. Modulni yoqish — tijorat qarori:
+             qo'llab-quvvatlash paytidagi "shunchaki yoqib qo'yaqol"
+             bosimi ADMIN roliga ochilsa jimgina narx qaroriga
+             aylanardi. ADMIN va VIEWER holatni ko'radi, o'zgartira
+             olmaydi. */
+          canEdit={isSuperAdmin && t.status !== 'DELETED'}
+        />
       )}
 
       {tab === 'github' && <TenantRepo tenant={t} canEdit={t.status !== 'DELETED'} />}

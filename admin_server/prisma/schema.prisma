@@ -183,6 +183,9 @@ model Tenant {
   apiConsumers   ApiConsumer[]
   bots           Bot[]
 
+  // Modul o'chirgichlari — tarifdan USTUN turadigan loyihaviy qaror.
+  featureOverrides TenantFeatureOverride[]
+
   // Tijorat konfiguratsiyasi o'zgarishlari tarixi (kim, qachon, nega).
   commercialChanges TenantCommercialChange[]
 
@@ -300,8 +303,30 @@ model Feature {
   metricKey   String? // masalan "user_count" — UsageSnapshot bilan bog'lash
   isActive    Boolean     @default(true)
 
+  // ── MODUL REYESTRIDAN SINXRONLANADIGAN MAYDONLAR ───────────────────────
+  //
+  // ⚠ YAGONA HAQIQAT MANBAI SHU YERDA EMAS. Bu uch ustunni
+  // `admin_server/scripts/sync-features.mjs` tenant kodidagi reyestrdan
+  // (`server/src/common/features/feature-registry.ts`) ko'chirib yozadi.
+  // Sabab: bog'liqlik grafigi KOD bo'lishi shart — uni haqiqiy NestJS
+  // import'lariga qarshi tekshirib turamiz. Bu yerda esa uning ish
+  // vaqtidagi PROYEKSIYASI turadi, chunki admin_server tenant kodini
+  // import qila olmaydi.
+  //
+  // Qo'lda tahrirlamang: keyingi sinxronlash ustiga yozadi.
+
+  /// Bu kalit MODUL o'chirgichimi (yoqilsa `parentKey`/`requiresKeys` ma'noli).
+  isModule Boolean @default(false)
+
+  /// Ota modul kaliti — imkoniyat (capability) uchun. Otasi o'chiq bo'lsa bola ham o'chiq.
+  parentKey String?
+
+  /// Shu bo'lim ishlashi uchun ochiq bo'lishi SHART bo'lgan kalitlar.
+  requiresKeys String[] @default([])
+
   planFeatures PlanFeature[]
   addons       Addon[]
+  overrides    TenantFeatureOverride[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -850,6 +875,7 @@ enum CommercialChangeAction {
   BRANCH_MODE // ko'p filialli / yakka markaz rejimi
   ADDON_GRANT // pullik paket biriktirildi yoki miqdori oshdi
   ADDON_REVOKE // paket olib tashlandi
+  MODULE_TOGGLE // bo'lim (modul) yoqildi yoki o'chirildi
 }
 
 model TenantCommercialChange {
@@ -900,4 +926,64 @@ model TenantCommercialChange {
 
   @@index([tenantId, createdAt])
   @@index([featureKey])
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODUL O'CHIRGICHI — LOYIHA DARAJASIDAGI USTUN QAROR.
+//
+// YECHISH TARTIBI (`EntitlementsService.forTenant`):
+//     TenantFeatureOverride  →  PlanFeature (faol obuna)  →  standart O'CHIQ
+//
+// ⚠ NEGA TARIFNING O'ZI YETMAYDI
+//   "Bitta mijozga davomatni yoqib qo'y" so'rovi tarif bilan hal qilinsa,
+//   har bunday holat uchun ALOHIDA tarif tug'ilardi va bir yildan keyin
+//   40 ta bir martalik "pro-plus-najot" tarifi qolardi. Ustun qaror esa
+//   tarifni buzmaydi: paket o'z o'rnida, istisno esa qayd etilgan va
+//   sababi yozilgan.
+//
+// ⚠ MAVJUD LOYIHALARNI SAQLASH (grandfather)
+//   Kalitlar joriy qilinganda HAR BIR faol loyihaga shu jadval orqali
+//   ochiq qilib beriladi — obunasi bor-yo'qligidan qat'i nazar. Aks holda
+//   kalitlarni joriy qilgan deploy hamma mijozning bo'limlarini birdan
+//   o'chirib qo'yardi.
+//
+// ⚠ `branchId` HOZIRCHA DOIM null
+//   Filial darajasidagi o'chirgich ATAYLAB QURILMAGAN (ikki qavatli
+//   yechish mantig'i va "nega ko'rinmayapti" savolining ikki qavatli
+//   otladi). Ustun esa hozir qo'yiladi: keyinchalik kerak bo'lsa
+//   migratsiyasiz ochiladi.
+// ═══════════════════════════════════════════════════════════════════════════
+model TenantFeatureOverride {
+  id       String @id @default(cuid())
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+
+  feature   Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  featureId String
+
+  /// Kalitning O'ZI ham saqlanadi — audit va sinxronlashda qulay.
+  featureKey String
+
+  /// true = majburan ochiq, false = majburan yopiq. Qator yo'q = tarif hal qiladi.
+  enabled Boolean
+
+  /// ⚠ MAJBURIY. Olti oydan keyin "nega bu loyihada bepul?" degan savolga javob.
+  reason String
+
+  /// Kelajak uchun zaxira — hozir DOIM "" (loyiha darajasi).
+  ///
+  /// ⚠ NEGA `String?` EMAS: PostgreSQL unique indeksda NULL'larni BIR-BIRIGA
+  /// TENG DEB HISOBLAMAYDI. Nullable bo'lganda `@@unique` amalda ishlamas,
+  /// `upsert` esa har bosishda YANGI qator yaratib, eski ustun qaror
+  /// jimgina kuchda qolardi. Bo'sh satr sentineli bu teshikni yopadi.
+  branchId String @default("")
+
+  createdBy String // admin email
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, featureKey, branchId])
+  @@index([tenantId])
+  @@index([featureId])
 }
