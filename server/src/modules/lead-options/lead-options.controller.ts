@@ -2,8 +2,8 @@ import { Controller, Delete, Get, HttpCode, Patch, Post, Req, UseGuards } from '
 import { LeadOptionsService } from './lead-options.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { Permissions, Roles, Validated } from '../../common/decorators/index.js';
-import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
+import { Permissions, Validated } from '../../common/decorators/index.js';
+import { PERMISSIONS } from '../../common/constants/permissions.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import {
   idSchema, listSchema, createSchema, updateSchema,
@@ -42,7 +42,6 @@ export class LeadOptionsController {
 
   @Post()
   @HttpCode(201)
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.LEADS_MANAGE)
   async create(@Validated(createSchema) v: CreateRequest, @Req() req: AuthenticatedRequest) {
     const data = await this.options.create(v.body, req.user);
@@ -50,7 +49,6 @@ export class LeadOptionsController {
   }
 
   @Patch(':id')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.LEADS_MANAGE)
   async update(@Validated(updateSchema) v: UpdateRequest) {
     const data = await this.options.update(v.params.id, v.body);
@@ -59,7 +57,6 @@ export class LeadOptionsController {
 
   /** Javobda `data` YO'Q — Express handler'i faqat xabar qaytaradi. */
   @Delete(':id')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.LEADS_MANAGE)
   async remove(@Validated(idSchema) v: IdRequest) {
     await this.options.softRemove(v.params.id);

@@ -56,6 +56,30 @@ const withBranchScope = (filter: Record<string, unknown>): Record<string, unknow
   return condition ? { AND: [filter, condition] } : filter;
 };
 
+/**
+ * XABAR RO'YXATINI YUBORUVCHINING FILIALI BO'YICHA KESISH.
+ *
+ * ⚠ `Notification` da `branchId` YO'Q (`schema.prisma`), shuning uchun
+ * ko'lam YUBORUVCHI orqali olinadi: filial rahbari o'z filialidagi
+ * odamlar yuborgan xabarlarni ko'radi.
+ *
+ * `senderId: null` ATAYLAB O'TKAZILADI — tizim (`auto_system`) xabarlari
+ * hech kimning filialiga tegishli emas; ularni kessak filial rahbari
+ * avtomatik ogohlantirishlarni umuman ko'rmasdi.
+ *
+ * ⚠ `AND` ISHLATILADI: `where.OR` qidiruv uchun band, ustiga yozilsa
+ * qidiruv JIMGINA yo'qolardi.
+ */
+const withSenderBranchScope = (
+  filter: Record<string, unknown>,
+): Record<string, unknown> => {
+  const condition = userBranchCondition();
+  if (!condition) return filter;
+  return {
+    AND: [filter, { OR: [{ senderId: null }, { sender: { is: condition } }] }],
+  };
+};
+
 const SENDER_SELECT = { id: true, firstName: true, lastName: true, role: true };
 
 /** O'qituvchi uchun ruxsat etilgan auditoriya turlari. */
@@ -729,10 +753,14 @@ export class NotificationsService {
       if (toDate) where.sentAt.lte = new Date(toDate);
     }
 
+    // ⚠ FILIAL KO'LAMI OXIRIDA QO'LLANADI — yuqoridagi `where.OR`
+    // (qidiruv) allaqachon yozilgan bo'lishi mumkin.
+    const scoped = withSenderBranchScope(where);
+
     const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
       this.prisma.notification.findMany({
-        where,
+        where: scoped,
         orderBy: { sentAt: 'desc' },
         skip,
         take: limit,
@@ -741,7 +769,7 @@ export class NotificationsService {
           template: { select: { id: true, name: true, category: true } },
         },
       }),
-      this.prisma.notification.count({ where }),
+      this.prisma.notification.count({ where: scoped }),
     ]);
 
     return { items: withLegacyIds(items), total, page, limit };
@@ -762,6 +790,26 @@ export class NotificationsService {
       },
     });
     if (!notif) throw new ApiError(404, 'Xabar topilmadi');
+
+    // ⚠ FILIAL KO'LAMI — RO'YXAT BILAN BIR XIL QOIDA.
+    //
+    // `list()` `withSenderBranchScope` bilan kesiladi; bu yerda ham
+    // kesilmasa, ro'yxatda ko'rinmagan xabarni ID bo'yicha ochib olish
+    // mumkin bo'lardi (`GET /notifications/:id`).
+    //
+    // Qoida `branch-access.service.ts` dagi `assertUserInBranchScope`
+    // bilan bir xil: 404 EMAS, 403 — yozuv bor-yo'qligini oshkor
+    // qilmaymiz. Tizim xabarlari (`senderId: null`) o'tkaziladi.
+    const cond = userBranchCondition();
+    if (cond && notif.senderId) {
+      const inScope = await this.prisma.user.findFirst({
+        where: { AND: [{ id: String(notif.senderId) }, cond] } as never,
+        select: { id: true },
+      });
+      if (!inScope) {
+        throw new ApiError(403, "Bu filial bo'yicha amal bajarib bo'lmaydi");
+      }
+    }
 
     // Frontend `notif.audience.type`, `notif.audience.groupIds[].name`,
     // `notif.audience.userIds[].firstName` shaklida o'qiydi. Prisma'da bu

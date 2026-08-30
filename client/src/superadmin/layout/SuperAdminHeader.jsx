@@ -1,5 +1,11 @@
 import { NavLink, Link } from "react-router-dom";
-import { ChevronDown, LogOut, ShieldCheck, User } from "lucide-react";
+import {
+  ChevronDown,
+  LayoutDashboard,
+  LogOut,
+  ShieldCheck,
+  User,
+} from "lucide-react";
 
 import {
   DropdownMenu,
@@ -48,13 +54,20 @@ import { SUPER_ADMIN_HEADER_NAV } from "../navigation/nav.config";
  *                     emas: sidebar'da bo'lsa qisqa menyuni
  *                     uzaytirardi.
  *
- * ── ADMIN PANELIGA HAVOLA ATAYLAB YO'Q ──
- * Bir muddat bu menyuda "Admin paneli" qatori turgandi. U olib
- * tashlandi: Admin paneli — filial direktorlarining ish joyi va Super
- * Admin u yerda ishlamaydi (`AdminPanelGuard` uni qaytaradi).
+ * ── ADMIN PANELIGA HAVOLA QAYTARILDI ──
+ * Bu qator bir muddat olib tashlangan edi, sababi haqli: o'sha paytda
+ * `AdminPanelGuard` tashkilot darajasidagi odamni `/owner/*` dan
+ * darhol qaytarardi, ya'ni havola "yolg'on eshik" edi.
  *
- * Havolani qoldirish "yolg'on eshik" bo'lardi: bosiladi, lekin odam
- * darhol shu yerga qaytariladi.
+ * Endi qaytarish YO'Q — ega aynan `/owner` da yashaydi
+ * (`resolveWorkspace` → `ADMIN`) va `/org` unga ikkinchi, ixtiyoriy
+ * ko'rinish. Shuning uchun havola endi haqiqiy eshik va IKKI TOMONLAMA
+ * yurish uchun kerak: `/owner` tomonidagi jufti — yon menyu
+ * pastidagi "Markaz ko'rinishi" (`AppSidebar`).
+ *
+ * ⚠ Ruxsat tekshirilmaydi: bu yergacha yetib kelgan odam
+ * `SuperAdminGuard` dan o'tgan, ya'ni unda tashkilot vakolati bor va
+ * admin paneli unga baribir ochiq.
  */
 const SuperAdminHeader = () => {
   const { user, roleLabel } = useAuth();
@@ -177,6 +190,13 @@ const SuperAdminHeader = () => {
                 </Link>
               </DropdownMenuItem>
             )}
+
+            <DropdownMenuItem asChild>
+              <Link to="/owner/dashboard">
+                <LayoutDashboard className="size-4" />
+                Admin paneli
+              </Link>
+            </DropdownMenuItem>
 
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => logout()}>

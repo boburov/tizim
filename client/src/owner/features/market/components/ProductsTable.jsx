@@ -97,19 +97,40 @@ const ProductsTable = ({ items, isLoading, onEdit, onDelete, onCreate }) => {
           <StatusBadge tone="neutral">Yashirilgan</StatusBadge>
         ),
     },
+    // ⚠ AMALLAR RUXSAT BILAN BOG'LIQ.
+    //
+    // `onEdit`/`onDelete` `market.manage` bo'lmasa `undefined` keladi
+    // (`MarketPage`). Ilgari tugmalar SHARTSIZ chizilardi va `market.read`
+    // li odam ularni bosib 403 olardi. Endi ishlov beruvchi bo'lmasa
+    // tugma ham yo'q — `OrdersTable` dagi `canFulfill` naqshi bilan bir xil.
     {
       key: "actions",
       header: "",
-      cell: (row) => (
-        <div className="flex justify-end gap-1">
-          <Button size="icon" variant="ghost" onClick={() => onEdit(row)} aria-label="Tahrirlash">
-            <Pencil className="size-4" />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => onDelete(row)} aria-label="O'chirish">
-            <Trash2 className="size-4 text-red-600 dark:text-red-400" />
-          </Button>
-        </div>
-      ),
+      cell: (row) =>
+        onEdit || onDelete ? (
+          <div className="flex justify-end gap-1">
+            {onEdit && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => onEdit(row)}
+                aria-label="Tahrirlash"
+              >
+                <Pencil className="size-4" />
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => onDelete(row)}
+                aria-label="O'chirish"
+              >
+                <Trash2 className="size-4 text-red-600 dark:text-red-400" />
+              </Button>
+            )}
+          </div>
+        ) : null,
     },
   ];
 
@@ -133,14 +154,30 @@ const ProductsTable = ({ items, isLoading, onEdit, onDelete, onCreate }) => {
               <StatusBadge tone="neutral">Yashirilgan</StatusBadge>
             )}
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="flex-1" onClick={() => onEdit(row)}>
-              Tahrirlash
-            </Button>
-            <Button size="sm" variant="outline" className="flex-1" onClick={() => onDelete(row)}>
-              O'chirish
-            </Button>
-          </div>
+          {(onEdit || onDelete) && (
+            <div className="flex gap-2">
+              {onEdit && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => onEdit(row)}
+                >
+                  Tahrirlash
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => onDelete(row)}
+                >
+                  O'chirish
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
       empty={

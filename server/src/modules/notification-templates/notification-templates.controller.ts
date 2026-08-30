@@ -2,8 +2,8 @@ import { Controller, Delete, Get, HttpCode, Patch, Post, Req, UseGuards } from '
 import { NotificationTemplatesService } from './notification-templates.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { Permissions, Roles, Validated } from '../../common/decorators/index.js';
-import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
+import { Permissions, Validated } from '../../common/decorators/index.js';
+import { PERMISSIONS } from '../../common/constants/permissions.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import {
@@ -64,7 +64,6 @@ export class NotificationTemplatesController {
 
   @Post()
   @HttpCode(201)
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.NOTIFICATION_TEMPLATES_MANAGE)
   async create(@Validated(createSchema) v: CreateRequest) {
     const data = await this.templates.create(v.body);
@@ -72,7 +71,6 @@ export class NotificationTemplatesController {
   }
 
   @Patch(':id')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.NOTIFICATION_TEMPLATES_MANAGE)
   async update(@Validated(updateSchema) v: UpdateRequest) {
     const data = await this.templates.update(v.params.id, v.body);
@@ -81,7 +79,6 @@ export class NotificationTemplatesController {
 
   /** Javobda `data` YO'Q — Express handler'i faqat xabar qaytaradi. */
   @Delete(':id')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.NOTIFICATION_TEMPLATES_MANAGE)
   async remove(@Validated(idSchema) v: IdRequest) {
     await this.templates.softRemove(v.params.id);

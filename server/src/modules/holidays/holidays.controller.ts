@@ -2,8 +2,8 @@ import { Controller, Delete, Get, HttpCode, Patch, Post, Req, UseGuards } from '
 import { HolidaysService } from './holidays.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { Permissions, Roles, Validated } from '../../common/decorators/index.js';
-import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
+import { Permissions, Validated } from '../../common/decorators/index.js';
+import { PERMISSIONS } from '../../common/constants/permissions.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import {
@@ -22,11 +22,16 @@ import {
  * qolardi va tug'ilgan kunlar ro'yxati 404 berardi.
  *
  * ⚠ IKKI XIL RUXSAT GURUHI:
- *   • tug'ilgan kunlar — OWNER roli VA `notifications.send` (chunki bu
- *     amal HAQIQIY xabar yuboradi);
- *   • bayram CRUD    — OWNER roli VA `holidays.manage`.
- * Ikkalasi ham AND semantikasi (Express ikki middleware'ni ketma-ket
- * ulaydi).
+ *   • tug'ilgan kunlar — `notifications.send` (chunki bu amal HAQIQIY
+ *     xabar yuboradi);
+ *   • bayram CRUD    — `holidays.manage`.
+ *
+ * ⚠ ILGARI ikkalasida `@Roles(OWNER)` HAM bor edi (AND). U OLIB
+ * TASHLANDI: `notifications.send` filial rahbarida BOR, ya'ni rol
+ * to'sig'i uni ruxsat matritsasiga zid ravishda 403 qilardi.
+ * `holidays.manage` esa `OWNER_ONLY_PERMISSIONS` da qoladi — demak
+ * xulq bugun O'ZGARMAYDI, lekin ega uni xohlasa BERA oladi. To'siq
+ * endi bitta joyda: `permission-scope.ts`.
  *
  * ⚠ O'QISH (`GET /` va `GET /:id`) RUXSATSIZ: bayram kalendarini har
  * qanday auth'langan foydalanuvchi ko'radi.
@@ -39,7 +44,6 @@ export class HolidaysController {
 
   /** ⚠ `GET /:id` DAN OLDIN. */
   @Get('teacher-birthdays')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.NOTIFICATIONS_SEND)
   async teacherBirthdays() {
     return { success: true, data: await this.holidays.listTeacherBirthdays() };
@@ -48,7 +52,6 @@ export class HolidaysController {
   /** ⚠ `GET /:id` DAN OLDIN (POST bo'lsa-da, tartib Express bilan bir xil). */
   @Post('teacher-birthdays/:id/congratulate')
   @HttpCode(201)
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.NOTIFICATIONS_SEND)
   async congratulate(
     @Validated(congratulateSchema) v: CongratulateRequest,
@@ -79,7 +82,6 @@ export class HolidaysController {
 
   @Post()
   @HttpCode(201)
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.HOLIDAYS_MANAGE)
   async create(@Validated(createSchema) v: CreateRequest, @Req() req: AuthenticatedRequest) {
     const data = await this.holidays.create(v.body, req.user);
@@ -87,7 +89,6 @@ export class HolidaysController {
   }
 
   @Patch(':id')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.HOLIDAYS_MANAGE)
   async update(@Validated(updateSchema) v: UpdateRequest) {
     const data = await this.holidays.update(v.params.id, v.body);
@@ -95,7 +96,6 @@ export class HolidaysController {
   }
 
   @Delete(':id')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.HOLIDAYS_MANAGE)
   async remove(@Validated(idSchema) v: IdRequest) {
     await this.holidays.softRemove(v.params.id);

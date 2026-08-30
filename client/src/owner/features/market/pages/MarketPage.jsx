@@ -68,10 +68,20 @@ const MarketPage = () => {
   const { has } = usePermissions();
   const { openModal } = useModal();
 
+  const canRead = has(PERMISSIONS.MARKET_READ);
   const canManage = has(PERMISSIONS.MARKET_MANAGE);
   const canFulfill = has(PERMISSIONS.MARKET_FULFILL);
   const canSettings = has(PERMISSIONS.COIN_SETTINGS);
   const canSeeStats = has(PERMISSIONS.COIN_READ);
+
+  // ⚠ SERVER TALABI BILAN AYNI BO'LISHI SHART (`market.controller.ts`):
+  //   GET /market/products — `market.read` YOKI `market.manage`
+  //   GET /market/orders   — `market.read` YOKI `market.fulfill`
+  // Marshrut qo'riqchisi uchtasidan BIRINI yetarli deb biladi, ya'ni
+  // `market.fulfill` li odam sahifaga kiradi-yu, mahsulotlar so'rovida
+  // 403 olardi.
+  const canSeeProducts = canRead || canManage;
+  const canSeeOrders = canRead || canFulfill;
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
@@ -81,20 +91,38 @@ const MarketPage = () => {
   const [statsDays, setStatsDays] = useState(30);
 
   const tabs = [
-    { key: "products", label: "Mahsulotlar", icon: Package },
-    { key: "orders", label: "Buyurtmalar", icon: ShoppingBag },
+    { key: "products", label: "Mahsulotlar", icon: Package, visible: canSeeProducts },
+    { key: "orders", label: "Buyurtmalar", icon: ShoppingBag, visible: canSeeOrders },
     { key: "settings", label: "Sozlamalar", icon: Settings2, visible: canSettings },
   ];
   const active = useActiveTab(tabs);
 
-  const products = useMarketProductsQuery({
-    search: debouncedSearch || undefined,
-    includeInactive: true,
-    limit: 100,
+  // ═══════════════════════════════════════════════════════════════════
+  // SO'ROVLAR — `enabled` BILAN: TAB OCHIQMI **VA** RUXSAT BORMI.
+  //
+  // ⚠ TAB'NI YASHIRISH YETARLI EMAS. Ilgari to'rttala so'rov sahifa
+  // ochilishi bilan SHARTSIZ yurardi: "Sozlamalar" tabi to'g'ri
+  // yashirilgan bo'lsa ham `GET /coins/settings` baribir jo'natilardi,
+  // server `coin.settings` (owner-only) talab qilib 403 qaytarardi va
+  // global `QueryCache.onError` qizil "Ruxsat etilmagan" tostini
+  // chiqarardi — foydalanuvchi hech nima bosmagan bo'lsa ham.
+  //
+  // Naqsh `SystemAnalysisTabs` dan olindi: u ham `visible`, ham
+  // `enabled` ni ishlatadi. Ruxsat SHARTNING BIR QISMI bo'lishi shart —
+  // yolg'iz `active === "settings"` bo'lsa, `?tab=settings` yozgan
+  // odam yana 403 olardi.
+  const products = useMarketProductsQuery(
+    { search: debouncedSearch || undefined, includeInactive: true, limit: 100 },
+    { enabled: active === "products" && canSeeProducts },
+  );
+  const orders = useMarketOrdersQuery(
+    { status: status || undefined, limit: 100 },
+    { enabled: active === "orders" && canSeeOrders },
+  );
+  const stats = useCoinStatsQuery(statsDays, { enabled: canSeeStats });
+  const settings = useCoinSettingsQuery({
+    enabled: active === "settings" && canSettings,
   });
-  const orders = useMarketOrdersQuery({ status: status || undefined, limit: 100 });
-  const stats = useCoinStatsQuery(statsDays);
-  const settings = useCoinSettingsQuery();
 
   const openCreate = () => openModal(MODAL.MARKET_PRODUCT_FORM, { product: null });
 
@@ -140,11 +168,25 @@ const MarketPage = () => {
           {products.isError ? (
             <ErrorState onRetry={products.refetch} />
           ) : (
+            /* ⚠ TAHRIRLASH/O'CHIRISH ham `market.manage` ostida.
+               Ilgari faqat `onCreate` tekshirilardi, `onEdit`/`onDelete`
+               esa DOIM uzatilardi — `ProductsTable` ularni shartsiz
+               chizardi va `market.read` li odam bosganda 403 olardi
+               (`PATCH/DELETE /market/products/:id`). `OrdersTable`
+               shu ishni allaqachon to'g'ri qiladi (`canFulfill`). */
             <ProductsTable
               items={products.data?.data || []}
               isLoading={products.isLoading}
-              onEdit={(product) => openModal(MODAL.MARKET_PRODUCT_FORM, { product })}
-              onDelete={(product) => openModal(MODAL.MARKET_PRODUCT_DELETE, { product })}
+              onEdit={
+                canManage
+                  ? (product) => openModal(MODAL.MARKET_PRODUCT_FORM, { product })
+                  : undefined
+              }
+              onDelete={
+                canManage
+                  ? (product) => openModal(MODAL.MARKET_PRODUCT_DELETE, { product })
+                  : undefined
+              }
               onCreate={canManage ? openCreate : undefined}
             />
           )}

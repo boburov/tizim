@@ -2,7 +2,7 @@ import { Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common'
 import { NotificationsService } from './notifications.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { Permissions, Roles, Validated } from '../../common/decorators/index.js';
+import { Permissions, Validated } from '../../common/decorators/index.js';
 import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
@@ -31,20 +31,27 @@ import {
  *
  * `/inbox/...` va `/stats` `/:id` DAN OLDIN turadi. Aksi bo'lsa Nest
  * `GET /inbox` ni `GET /:id` ga moslardi (`id = "inbox"`) va o'quvchi
- * o'z pochtasi o'rniga 404 olardi — bundan ham yomoni, `/:id` ROL
- * to'sig'i ostida (`owner`/`teacher`), ya'ni O'QUVCHI UMUMAN 403
- * olardi va inbox butunlay ishlamay qolardi.
+ * o'z pochtasi o'rniga 404 olardi — bundan ham yomoni, `/:id` ruxsat
+ * to'sig'i ostida, ya'ni O'QUVCHI UMUMAN 403 olardi va inbox butunlay
+ * ishlamay qolardi.
  *
- * ── UCH XIL HIMOYA DARAJASI ──
+ * ── IKKI XIL HIMOYA DARAJASI ──
  *
  *  1. `/inbox/*` — FAQAT `requireAuth`. Har bir tizimga kirgan odam o'z
  *     pochtasini ko'radi; ko'lam `userId` ning O'ZI (boshqa parametr yo'q).
- *  2. `/stats`, `/preview`, `/`, `/:id/cancel` — RUXSAT bo'yicha.
- *  3. `/`(GET), `/:id`, `/:id/recipients` — ROL bo'yicha
- *     (`owner`/`teacher`). Bu sahifalarda OLUVCHILARNING PII si
- *     (telefon raqami) bor, shuning uchun o'quvchilar butunlay
- *     to'siladi va o'qituvchi FAQAT O'ZI yuborganini ko'radi
- *     (egalik tekshiruvi quyida).
+ *  2. QOLGAN HAMMASI — RUXSAT bo'yicha. Boshqaruv sahifalarida
+ *     (`/`, `/:id`, `/:id/recipients`) OLUVCHILARNING PII si (telefon
+ *     raqami) bor, shuning uchun ular `notifications.read` YOKI
+ *     `notifications.send` talab qiladi — o'quvchida ikkalasi ham yo'q.
+ *
+ * ⚠ ILGARI (3) — ROL to'sig'i (`@Roles(owner, teacher)`) bor edi. U
+ * OLIB TASHLANDI: filial rahbarida `notifications.read` BOR edi, lekin
+ * rol to'sig'i uni baribir 403 qilardi — ruxsat matritsasi yolg'on
+ * va'da berardi. Endi ko'lam ROL NOMIDAN emas, ikki qatlamdan keladi:
+ *   • ruxsat kaliti — kim umuman kira oladi;
+ *   • `withSenderBranchScope` (servis) — kim NIMANI ko'radi.
+ * O'qituvchining "faqat o'ziniki" cheklovi quyida, `senderId` ni
+ * majburan o'ziga qo'yish bilan saqlanadi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 @Controller('notifications')
@@ -105,11 +112,17 @@ export class NotificationsController {
   }
 
   /**
-   * Ro'yxat — owner uchun barchasi, o'qituvchi uchun FAQAT O'ZINIKI.
+   * Ro'yxat — owner uchun barchasi, o'qituvchi uchun FAQAT O'ZINIKI,
+   * filial rahbari uchun O'Z FILIALI (`withSenderBranchScope`).
    * O'quvchilar bu yerda emas, `/inbox` dan foydalanadi.
+   *
+   * ⚠ IKKI KALIT, "YOKI" MANTIG'I (`PermissionsGuard` — `hasAnyPermission`).
+   * `notifications.read` YETARLI EMAS: o'qituvchi rolida u YO'Q, faqat
+   * `notifications.send` bor. Yolg'iz `READ` qo'yilsa o'qituvchi paneli
+   * JIMGINA buzilardi. O'quvchida ikkalasi ham yo'q — u baribir to'siladi.
    */
   @Get()
-  @Roles(ROLES.OWNER, ROLES.TEACHER)
+  @Permissions(PERMISSIONS.NOTIFICATIONS_READ, PERMISSIONS.NOTIFICATIONS_SEND)
   async list(@Validated(listSchema) v: ListRequest, @Req() req: AuthenticatedRequest) {
     const { page, limit } = parsePagination(req.query as Record<string, unknown>);
     // ⚠ O'QITUVCHIGA `senderId` MAJBURAN O'ZINIKI QILIB QO'YILADI —
@@ -165,7 +178,7 @@ export class NotificationsController {
    * to'sig'ida bloklanadi, o'qituvchi esa FAQAT O'ZI yuborganini ko'radi.
    */
   @Get(':id')
-  @Roles(ROLES.OWNER, ROLES.TEACHER)
+  @Permissions(PERMISSIONS.NOTIFICATIONS_READ, PERMISSIONS.NOTIFICATIONS_SEND)
   async getById(@Validated(idSchema) v: IdRequest, @Req() req: AuthenticatedRequest) {
     const data = await this.notifications.getById(v.params.id);
     if (
@@ -178,7 +191,7 @@ export class NotificationsController {
   }
 
   @Get(':id/recipients')
-  @Roles(ROLES.OWNER, ROLES.TEACHER)
+  @Permissions(PERMISSIONS.NOTIFICATIONS_READ, PERMISSIONS.NOTIFICATIONS_SEND)
   async getRecipients(
     @Validated(recipientListSchema) v: RecipientListRequest,
     @Req() req: AuthenticatedRequest,

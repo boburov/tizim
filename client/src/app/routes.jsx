@@ -20,9 +20,7 @@ import useAuth from "@/shared/hooks/useAuth";
 import useWorkspace from "@/shared/hooks/useWorkspace";
 
 // Constants
-import { ROLES, ROLE_TYPES } from "@/shared/constants/roles";
-import usePermissions from "@/shared/hooks/usePermissions";
-import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
+import { ROLES } from "@/shared/constants/roles";
 
 // Features
 import { LoginPage, BotAuthPage } from "@/features/auth";
@@ -111,14 +109,18 @@ const AiReportRedirect = () => {
  * Shuning uchun yo'nalish ODAMGA qarab tanlanadi. Sahifa mazmuni
  * ikkalasida ham AYNI (`SystemAnalysisTabs`) — faqat ko'lam boshqa.
  */
-const AnalysisRedirect = () => {
-  const auth = useAuth();
-  const { has } = usePermissions();
-  if (auth.isLoading) return null;
-  const type = auth.roleType || auth.role;
-  const isOrgLevel = type === ROLE_TYPES.OWNER || hasOrgAuthority(has);
-  return <Navigate to={isOrgLevel ? "/org/tahlil" : "/owner/tahlil"} replace />;
-};
+/**
+ * ⚠ ENDI DOIM `/owner/tahlil`.
+ *
+ * Ilgari bu yerda odam tashkilot darajasidami deb tekshirilardi va ega
+ * `/org/tahlil` ga yuborilardi — chunki `/owner/*` unga YOPIQ edi.
+ * Endi yopiq emas: ega `/owner` da yashaydi (`resolveWorkspace`), ya'ni
+ * bu ayirish faqat qo'shimcha sakrash bo'lib qolardi.
+ *
+ * Sahifa mazmuni ikkalasida ham AYNI (`SystemAnalysisTabs`) — faqat
+ * ko'lam boshqa, uni esa server aniqlaydi.
+ */
+const AnalysisRedirect = () => <Navigate to="/owner/tahlil" replace />;
 
 const RoleHomeRedirect = () => {
   const { role } = useAuth();
@@ -166,11 +168,10 @@ const Routes = () => (
       <Route path="/admin/oquv" element={<Navigate to="/org/tahlil?tab=academic" replace />} />
       <Route path="/admin/jamoa" element={<Navigate to="/org/tahlil?tab=team" replace />} />
       <Route path="/admin/tavsiyalar" element={<Navigate to="/org/tahlil?tab=insights" replace />} />
-      {/* TAHLIL — endi `/org/tahlil` da.
-          Ilgari bu `/owner/ai` ga yo'naltirilardi, lekin ega Admin
-          paneliga kira olmaydi (`AdminPanelGuard`) va o'sha manzil
-          u uchun o'lik havolaga aylangandi. `/owner/ai*` marshrutlari
-          O'Z JOYIDA qoladi — ular direktor uchun ishlaydi. */}
+      {/* TAHLIL — `/owner/tahlil` ga (qarang `AnalysisRedirect`).
+          Bir muddat bu ega uchun `/org/tahlil` ga ayirilgandi, chunki
+          `/owner/*` unga yopiq edi. Endi yopiq emas, ya'ni ayirish
+          keraksiz. `/owner/ai*` marshrutlari O'Z JOYIDA qoladi. */}
       <Route path="/admin/tahlil" element={<AnalysisRedirect />} />
       <Route path="/admin/tahlil/vazifalar" element={<Navigate to="/owner/ai/tasks" replace />} />
       <Route path="/admin/tahlil/hisobotlar" element={<Navigate to="/owner/ai/reports" replace />} />

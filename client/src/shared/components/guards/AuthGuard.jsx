@@ -7,7 +7,6 @@ import { Navigate, Outlet } from "react-router-dom";
 // Hooks
 import useAuth from "@/shared/hooks/useAuth";
 import useActiveBranch from "@/shared/hooks/useActiveBranch";
-import useWorkspace from "@/shared/hooks/useWorkspace";
 
 // Lib
 import { ALL_BRANCHES } from "@/shared/lib/branch/activeBranch";
@@ -59,17 +58,29 @@ const ConnectionError = ({ error, onRetry }) => (
 const AuthGuard = () => {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-  const { isLoading, isError, isSessionExpired, error, refetch } = useAuth();
+  const {
+    isLoading,
+    isError,
+    isSessionExpired,
+    error,
+    refetch,
+    canSeeAllBranches,
+  } = useAuth();
   const { needsBranchChoice, branchId, changeBranch } = useActiveBranch();
-  const { isSuperAdmin } = useWorkspace();
 
   // ═══════════════════════════════════════════════════════════════════
-  // SUPERADMIN — FILIAL TANLASH EKRANI KO'RSATILMAYDI.
+  // BARCHA FILIALNI KO'RA OLADIGANDAN "QAYSI FILIAL?" DEB SO'RALMAYDI.
   //
-  // Tashkilot paneli (`/org`) ta'rifi bo'yicha BUTUN tashkilot bo'yicha
-  // ishlaydi. Undan "qaysi filialda ishlaysiz?" deb so'rash mantiqan
-  // ortiqcha: keyingi ekranning o'zi baribir hamma filialni birga
-  // ko'rsatadi.
+  // ⚠ ILGARI BU SHART `isSuperAdmin` EDI (ish makoni). U buzildi:
+  // ega endi `SUPER_ADMIN` emas, `ADMIN` makonida yashaydi
+  // (`resolveWorkspace`), ya'ni shart YOLG'ON bo'lib qoldi va ega har
+  // kirganda filial tanlash ekraniga taqalardi.
+  //
+  // To'g'ri o'lchov — ish makoni EMAS, QOBILIYAT: `branches.view_all`
+  // bo'lgan odam baribir hamma filialni birga ko'radi, undan bittasini
+  // tanlashni so'rash mantiqan ortiqcha. Bu ta'rif qaysi panelda
+  // turishidan MUSTAQIL, shuning uchun panel modeli yana o'zgarsa ham
+  // buzilmaydi.
   //
   // ⚠ NEGA `null` QOLDIRILMAYDI, "barcha filiallar" QO'YILADI:
   // server `x-branch-id` bo'lmasa ham `branches.view_all` egasiga
@@ -82,10 +93,10 @@ const AuthGuard = () => {
   // ⚠ TANLASH IMKONIYATI YO'QOLMAYDI: yon panel tanlagichi joyida
   // qoladi, ya'ni superadmin xohlasa aniq filialga o'tishi mumkin.
   useEffect(() => {
-    if (isSuperAdmin && needsBranchChoice && !branchId) {
+    if (canSeeAllBranches && needsBranchChoice && !branchId) {
       changeBranch(ALL_BRANCHES);
     }
-  }, [isSuperAdmin, needsBranchChoice, branchId, changeBranch]);
+  }, [canSeeAllBranches, needsBranchChoice, branchId, changeBranch]);
 
   if (!token) return <Navigate to="/login" replace />;
 
@@ -111,10 +122,10 @@ const AuthGuard = () => {
   // FILIAL TANLASH: bir nechta filiali borlar avval qaysi biri bilan
   // ishlashini tanlaydi. Bitta filiali borlar bu ekranni ko'rmaydi.
   //
-  // ⚠ SUPERADMIN ham ko'rmaydi (yuqoridagi izohga qarang) — ekran
-  // umuman CHIZILMAYDI, aks holda effekt ishlaguncha u bir lahza
-  // "chaqnab" ketardi.
-  if (needsBranchChoice && !isSuperAdmin) return <BranchPicker />;
+  // ⚠ `branches.view_all` egasi ham ko'rmaydi (yuqoridagi izohga
+  // qarang) — ekran umuman CHIZILMAYDI, aks holda effekt ishlaguncha u
+  // bir lahza "chaqnab" ketardi.
+  if (needsBranchChoice && !canSeeAllBranches) return <BranchPicker />;
 
   return <Outlet />;
 };

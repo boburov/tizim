@@ -2,8 +2,8 @@ import { Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { AttendanceSettingsService } from './attendance-settings.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { Permissions, Roles, Validated } from '../../common/decorators/index.js';
-import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
+import { Permissions, Validated } from '../../common/decorators/index.js';
+import { PERMISSIONS } from '../../common/constants/permissions.js';
 import { updateSchema, type UpdateRequest } from './attendance-settings.validators.js';
 
 /**
@@ -27,7 +27,6 @@ export class AttendanceSettingsController {
   }
 
   @Patch()
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.ATTENDANCE_MANAGE)
   async update(@Validated(updateSchema) v: UpdateRequest) {
     const data = await this.settings.update(v.body);

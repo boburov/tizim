@@ -19,21 +19,32 @@ import useCoinConfig from "@/shared/hooks/useCoinConfig";
  * yuz berdi" chiqardi — holbuki hech qanday xato yo'q, bo'lim
  * shunchaki o'chirilgan. Shuning uchun so'rov UMUMAN yuborilmaydi.
  */
-export const useMarketProductsQuery = (params) => {
+/**
+ * ⚠ IKKINCHI `enabled` — CHAQIRUVCHIDAN.
+ *
+ * O'chirgich (`useCoinConfig`) "bo'lim bormi" degan savolga javob
+ * beradi. Chaqiruvchi esa "shu tab ochiqmi va odamda RUXSAT bormi"
+ * degan boshqa savolga. Ikkalasi HAM bajarilishi kerak, shuning uchun
+ * `&&` bilan birlashtiriladi.
+ *
+ * Bu naqsh `useCatalogQueries.js` da allaqachon bor (`options`
+ * o'tkazgichi) — shu yerda ham aynan shunday qilinadi.
+ */
+export const useMarketProductsQuery = (params, { enabled: allowed = true } = {}) => {
   const { enabled } = useCoinConfig();
   return useQuery({
     queryKey: qk.market.products(params),
     queryFn: () => marketAPI.products(params).then((r) => r.data),
-    enabled,
+    enabled: enabled && allowed,
   });
 };
 
-export const useMarketOrdersQuery = (params) => {
+export const useMarketOrdersQuery = (params, { enabled: allowed = true } = {}) => {
   const { enabled } = useCoinConfig();
   return useQuery({
     queryKey: qk.market.orders(params),
     queryFn: () => marketAPI.orders(params).then((r) => r.data),
-    enabled,
+    enabled: enabled && allowed,
   });
 };
 
@@ -45,12 +56,15 @@ export const useMarketOrdersQuery = (params) => {
  * o'zgarmay turardi — foydalanuvchi buni "tugma ishlamayapti" deb
  * o'qirdi.
  */
-export const useCoinStatsQuery = (days = 30) => {
+export const useCoinStatsQuery = (days = 30, { enabled: allowed = true } = {}) => {
   const { enabled } = useCoinConfig();
   return useQuery({
     queryKey: qk.coins.stats(days),
     queryFn: () => coinsAPI.stats({ days }).then((r) => r.data.data),
-    enabled,
+    // ⚠ RUXSAT HAM SHART: server `coin.read` talab qiladi
+    // (`coin.controller.ts`), ya'ni faqat `market.manage` bo'lgan odam
+    // shu so'rovda 403 olardi.
+    enabled: enabled && allowed,
     // Davr almashtirilganda oldingi javob ekranda qoladi (bo'sh
     // holatga sakramaydi) va yangisi kelgach almashadi.
     placeholderData: (prev) => prev,
@@ -58,16 +72,24 @@ export const useCoinStatsQuery = (days = 30) => {
 };
 
 /**
- * SOZLAMALAR — `enabled` SHARTI ATAYLAB YO'Q.
+ * SOZLAMALAR — O'CHIRGICHDAN OZOD, LEKIN RUXSATDAN EMAS.
  *
- * Bu yagona so'rov bo'lim O'CHIRILGANDA ham ishlashi kerak: aks holda
- * ega uni qayta yoqadigan formani UMUMAN ko'ra olmasdi (server ham
- * shu marshrutni o'chirgichdan ozod qilgan — `BypassCoinSwitch`).
+ * Bo'lim O'CHIRILGANDA ham ishlashi kerak: aks holda ega uni qayta
+ * yoqadigan formani UMUMAN ko'ra olmasdi (server ham shu marshrutni
+ * o'chirgichdan ozod qilgan — `BypassCoinSwitch`). Shuning uchun
+ * `useCoinConfig` bu yerda ATAYLAB o'qilmaydi.
+ *
+ * ⚠ LEKIN RUXSAT BOSHQA O'LCHOV, VA U UNUTILGAN EDI. Server
+ * `coin.settings` (owner-only) talab qiladi, so'rov esa shartsiz
+ * yurardi — natijada Market sahifasini ochgan HAR QANDAY direktor
+ * hech nima bosmasdan qizil "Ruxsat etilmagan" tostini olardi.
+ * `enabled` endi CHAQIRUVCHIDAN keladi (tab + ruxsat).
  */
-export const useCoinSettingsQuery = () =>
+export const useCoinSettingsQuery = ({ enabled = true } = {}) =>
   useQuery({
     queryKey: qk.coins.settings(),
     queryFn: () => coinsAPI.settings().then((r) => r.data.data),
+    enabled,
   });
 
 /** Bitta foydalanuvchining hamyoni va tarixi (admin ko'rinishi). */

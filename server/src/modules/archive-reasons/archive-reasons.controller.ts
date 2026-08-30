@@ -59,7 +59,6 @@ export class ArchiveReasonsController {
 
   @Post()
   @HttpCode(201)
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.ARCHIVE_REASONS_MANAGE)
   async create(@Validated(createSchema) v: CreateRequest, @Req() req: AuthenticatedRequest) {
     const data = await this.reasons.create(v.body, req.user);
@@ -67,7 +66,6 @@ export class ArchiveReasonsController {
   }
 
   @Patch(':id')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.ARCHIVE_REASONS_MANAGE)
   async update(@Validated(updateSchema) v: UpdateRequest) {
     const data = await this.reasons.update(v.params.id, v.body);
@@ -75,7 +73,6 @@ export class ArchiveReasonsController {
   }
 
   @Delete(':id')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.ARCHIVE_REASONS_MANAGE)
   async remove(@Validated(idSchema) v: IdRequest) {
     await this.reasons.softRemove(v.params.id);

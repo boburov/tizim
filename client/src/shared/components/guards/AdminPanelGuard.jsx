@@ -1,43 +1,44 @@
 import { Navigate } from "react-router-dom";
 
 import useAuth from "@/shared/hooks/useAuth";
-import usePermissions from "@/shared/hooks/usePermissions";
 import { ROLE_TYPES } from "@/shared/constants/roles";
-import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
- * ADMIN PANELI — DIREKTORLAR UCHUN
+ * ADMIN PANELI — EGA VA DIREKTORLAR UCHUN
  * ══════════════════════════════════════════════════════════════════════
  *
  * ── NIMANI TO'SADI ──
- * Tashkilot vakolatiga ega odam (ega yoki `branches.view_all` +
- * `system.admin_access`) `/owner/*` ga KIRA OLMAYDI — u o'z paneliga
- * (`/org`) qaytariladi.
+ * FAQAT o'quvchi va o'qituvchini: ularning to'liq o'z panellari bor
+ * (`/me`, `/teacher`) va operatsion panel ularga hech qachon ochiq
+ * emas edi.
  *
- * ── NEGA ──
- * Ikki panel bir-birining ichiga kirib turgan bo'lsa, ular amalda
- * bitta panel bo'lib qoladi:
+ * ── EGA ENDI TO'SILMAYDI (O'ZGARISH) ──
  *
- *   • Super Admin operatsion ekranlarda ishlay boshlaydi va tashkilot
- *     ko'rinishi "hisobot" darajasiga tushib qoladi;
- *   • Admin paneli esa "kimningdir bir qismi" bo'lib o'qiladi —
- *     direktor o'zi ko'ra olmaydigan bo'limga olib boradigan tugmani
- *     bosib yuradi.
+ * Ilgari tashkilot vakolatiga ega odam (`branches.view_all` +
+ * `system.admin_access`, yoki `roleType === owner`) `/owner/*` dan
+ * `/org` ga QAYTARILARDI. Devor ikki tomonlama edi va bu ATAYLAB
+ * shunday qilingan (izohi shu faylda va `client/CLAUDE.md` da).
  *
- * Shuning uchun devor IKKI TOMONLAMA: bu qo'riqchi Super Adminni
- * `/owner/*` dan, `SuperAdminGuard` esa direktorni `/org/*` dan
- * qaytaradi. Panellar orasida navigatsiya havolasi ham YO'Q.
+ * Amalda u boshqacha his qilindi: admin panelga kirmoqchi bo'lgan ega
+ * `/org` ga otilib, keyin qo'lda qaytib kelardi. Foydalanuvchi buni
+ * "superadminga otib keyin qayta adminga sakrash" deb ta'rifladi.
  *
- * ── XODIM VA O'QITUVCHI ──
- * Xodim (resepshin) ATAYLAB to'silmaydi: uning o'z paneli `/work`, lekin
- * bir nechta operatsion sahifa (`/owner/leads`, `/owner/attendance`)
- * o'sha menyudan ochiladi va bu ilgari ham shunday edi. Bu ish
- * "Admin panelida ishlash" emas — unga menyu ham, bosh sahifa ham
- * berilmaydi.
+ * YANGI QOIDA: qo'riqchi MENYUNI belgilaydi, KIRISHNI emas.
+ *   • ega `/owner` da yashaydi (`resolveWorkspace` → `ADMIN`);
+ *   • `/org` yo'qolmadi — u "Markaz ko'rinishi" havolasi orqali
+ *     ochiladi (`AppHeader`) va `SuperAdminGuard` uni qo'riqlaydi;
+ *   • yakka filialli nashrda (`MULTI_BRANCH=false`) `/org` umuman
+ *     yo'q, ya'ni bu yerda qaytarish CHEKSIZ SAKRASH bo'lardi.
  *
- * O'qituvchi CHIQARIB tashlanadi: uning to'liq paneli bor
- * (`/teacher/*`) va operatsion panel unga ilgari ham yopiq edi.
+ * ⚠ `useDrilldown()` ham shunga qarab tuzatildi: u tashkilot
+ * darajasidagi odamga bo'sh xarita qaytarardi (chunki havolalar
+ * `/owner/*` ga borardi va o'sha paytda u yopiq edi). Ega endi
+ * `/owner` da bo'lgani uchun havolalar TIRIK bo'lishi kerak.
+ *
+ * ── XODIM ──
+ * Xodim (resepshin) ilgarigidek to'silmaydi: uning menyusi `/work`,
+ * lekin bir nechta operatsion sahifa o'sha menyudan ochiladi.
  *
  * ── BU XAVFSIZLIK EMAS ──
  * Ma'lumotni server qo'riqlaydi (rol + ruxsat + filial ko'lami, har
@@ -45,7 +46,6 @@ import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
  */
 const AdminPanelGuard = ({ children }) => {
   const auth = useAuth();
-  const { has } = usePermissions();
 
   if (auth.isLoading) return null;
 
@@ -53,11 +53,6 @@ const AdminPanelGuard = ({ children }) => {
 
   if (type === ROLE_TYPES.STUDENT) return <Navigate to="/me" replace />;
   if (type === ROLE_TYPES.TEACHER) return <Navigate to="/teacher" replace />;
-
-  // Tashkilot darajasidagi odam — o'z paneliga.
-  if (type === ROLE_TYPES.OWNER || hasOrgAuthority(has)) {
-    return <Navigate to="/org" replace />;
-  }
 
   return children;
 };

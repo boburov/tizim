@@ -24,10 +24,6 @@
  *     (o'qituvchi va xodim tafsiloti UMUMIY sahifada ochiladi)
  * ═══════════════════════════════════════════════════════════════════
  */
-import useAuth from "@/shared/hooks/useAuth";
-import usePermissions from "@/shared/hooks/usePermissions";
-import { ROLE_TYPES } from "@/shared/constants/roles";
-import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
 
 const OWNER = "/owner";
 
@@ -109,40 +105,36 @@ export const branchHref = () => DRILLDOWN.branches;
 
 /**
  * ══════════════════════════════════════════════════════════════════════
- * KONTEKSTGA QARAB: HAVOLA BORMI YOKI YO'QMI
+ * HAVOLALAR — ENDI HAMMA UCHUN TIRIK
  * ══════════════════════════════════════════════════════════════════════
  *
- * Yuqoridagi manzillarning HAMMASI Admin panelida (`/owner/*`). Super
- * Admin esa u yerga KIRA OLMAYDI (`AdminPanelGuard`) — ikki panel
- * ataylab ajratilgan.
+ * ── ILGARI NIMA BO'LGAN ──
+ * Yuqoridagi manzillarning HAMMASI Admin panelida (`/owner/*`), va
+ * `AdminPanelGuard` tashkilot darajasidagi odamni u yerdan QAYTARARDI.
+ * Ya'ni Super Admin panelida bu havolalar "yolg'on eshik" edi:
+ * bosiladi, lekin odam darhol `/org` ga otiladi. Shuning uchun
+ * `useDrilldown()` unga BO'SH xarita qaytarar, `DashboardSection`
+ * (`{to && ...}`) esa havolani umuman chizmasdi.
  *
- * Ya'ni Super Admin panelida bu havolalar "yolg'on eshik" bo'lardi:
- * bosiladi, lekin odam darhol `/org` ga qaytariladi. Bu eng yomon
- * turdagi nosozlik — sahifa buzilmaydi, shunchaki ISHONCH yo'qoladi
- * ("demak yonidagi raqamlar ham ishonchsiz").
+ * ── NEGA O'ZGARDI ──
+ * `AdminPanelGuard` endi egani `/owner/*` dan QAYTARMAYDI va ega
+ * o'zining kundalik ishini aynan o'sha panelda bajaradi
+ * (`resolveWorkspace` → `ADMIN`). Eshik ochiq bo'lgach, havolani
+ * o'chirib turishning sababi qolmadi — aksincha, bo'sh xarita endi
+ * EGAGA BOSILMAYDIGAN RAQAMLAR ko'rsatardi.
  *
- * Shuning uchun havolalar SHU YERDA, bitta joyda o'chiriladi:
- * `useDrilldown()` Super Adminda bo'sh xarita qaytaradi va
- * `DashboardSection` (`{to && ...}`) havolani umuman chizmaydi.
- * Har karta joyida `if (isSuperAdmin)` yozish o'nlab joyda
- * takrorlanardi va bittasi albatta unutilardi.
+ * `/org` sahifalaridan `/org/*` ga bosilganda odam boshqa qobiqqa
+ * o'tadi. Bu MAQBUL: o'tish foydalanuvchi BOSGANIDA sodir bo'ladi
+ * (avtomatik otish emas) va orqaga qaytish uchun sarlavhada
+ * "Markaz ko'rinishi" havolasi bor.
+ *
+ * ⚠ Bu funksiya ataylab saqlanib qoldi: chaqiruv joylari (o'nlab
+ * karta) o'zgarmasin va kelajakda ko'lamga qarab yana kesish kerak
+ * bo'lsa, u yana BITTA joyda bo'lsin.
  */
-const EMPTY = Object.freeze(
-  Object.fromEntries(Object.keys(DRILLDOWN).map((k) => [k, null])),
-);
+export const useDrilldown = () => DRILLDOWN;
 
-export const useDrilldown = () => {
-  const auth = useAuth();
-  const { has } = usePermissions();
-
-  if (auth.isLoading) return EMPTY;
-  const type = auth.roleType || auth.role;
-  const isOrgLevel = type === ROLE_TYPES.OWNER || hasOrgAuthority(has);
-
-  return isOrgLevel ? EMPTY : DRILLDOWN;
-};
-
-/** Odam kartasiga havola — Super Adminda `null` (qarang `useDrilldown`). */
+/** Odam kartasiga havola. */
 export const useUserHref = () => {
   const map = useDrilldown();
   return (id) => (map.staff ? userHref(id) : null);

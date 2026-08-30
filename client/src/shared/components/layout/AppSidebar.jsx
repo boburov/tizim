@@ -8,6 +8,7 @@ import {
   LogOut,
   Monitor,
   PanelLeft,
+  Building2,
   ChevronRight,
   ArrowLeftToLine,
 } from "lucide-react";
@@ -98,6 +99,7 @@ const OwnerApprovalsBell = lazy(() =>
 // ISH MAKONI — menyuning YAGONA manbai.
 import useWorkspace from "@/shared/hooks/useWorkspace";
 import { WORKSPACES } from "@/shared/workspaces";
+import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -414,10 +416,22 @@ const THEME_ITEMS = [
 ];
 
 const Footer = () => {
-  const { user } = useAuth();
+  const { user, multiBranch } = useAuth();
+  const { has } = usePermissions();
   const { mutate: logout } = useLogout();
   const isMobile = useIsMobile();
   const { theme, setTheme } = useTheme();
+
+  // MARKAZ KO'RINISHIGA O'TISH.
+  //
+  // `AdminPanelGuard` endi egani `/owner` dan qaytarmaydi, ya'ni ega
+  // shu panelda yashaydi. `/org` esa yo'qolmadi — unga faqat SHU
+  // havola orqali, ODAM O'ZI BOSGANDA o'tiladi.
+  //
+  // ⚠ IKKI SHART: `multiBranch` ham tekshiriladi, chunki yakka
+  // filialli nashrda `/org` umuman yo'q — havola bo'lsa u "yolg'on
+  // eshik" bo'lardi va `SuperAdminGuard` odamni darhol qaytarardi.
+  const canSeeOrgView = multiBranch && hasOrgAuthority(has);
 
   if (!user) return null;
 
@@ -476,6 +490,18 @@ const Footer = () => {
               </DropdownMenuLabel>
 
               <DropdownMenuSeparator />
+
+              {canSeeOrgView && (
+                <>
+                  <DropdownMenuItem asChild>
+                    <Link to="/org">
+                      <Building2 strokeWidth={1.5} />
+                      Markaz ko'rinishi
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
 
               {/* Mavzu: Yorug' / Qorong'i / Tizim bo'yicha (avtomatik) */}
               <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">

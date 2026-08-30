@@ -4,8 +4,8 @@ import {
 import { AttendanceExemptionsService } from './attendance-exemptions.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { Permissions, Roles, Validated } from '../../common/decorators/index.js';
-import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
+import { Permissions, Validated } from '../../common/decorators/index.js';
+import { PERMISSIONS } from '../../common/constants/permissions.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import {
@@ -18,20 +18,21 @@ import {
  * DAVOMATDAN OZOD DAVRLARI — Express `attendanceExemptions.routes.js`
  * EKVIVALENTI (4/4).
  *
- * ⚠ QO'RIQCHI TARTIBI EXPRESS BILAN AYNAN BIR XIL BO'LISHI SHART:
- *   requireAuth → requireRole(...) → requirePermission(...)
+ * ⚠ CREATE/PATCH/DELETE `ATTENDANCE_RECORD` bilan gate qilinadi.
+ * Teacher'da `ATTENDANCE_MANAGE` YO'Q, `ATTENDANCE_RECORD` esa BOR —
+ * ya'ni u davomatni belgilay olgani kabi ozod davrini ham qo'ya oladi.
+ * Kim qaysi o'quvchiga tega olishi (EGALIK) SERVIS QATLAMIDA
+ * tekshiriladi, qo'riqchida emas.
  *
- * NestJS `@UseGuards(A, B)` ni E'LON TARTIBIDA ishlatadi, shuning uchun
- * `RolesGuard` `PermissionsGuard` DAN OLDIN yoziladi. Tartib almashsa
- * XATO KODI o'zgarardi: rol ham, ruxsat ham yo'q foydalanuvchi Express'da
- * rol xatosini oladi, teskarisida esa ruxsat xatosini — ya'ni `message`
- * boshqacha bo'lardi.
+ * ⚠ ILGARI `@Roles(OWNER, TEACHER)` HAM bor edi (AND) va u Express
+ * `requireRole → requirePermission` tartibini ko'chirardi. OLIB
+ * TASHLANDI: filial rahbarida `attendance.record` BOR, lekin rol
+ * to'sig'i uni 403 qilardi. Owner va teacher uchun hech narsa
+ * o'zgarmaydi — ikkalasida ham kalit bor.
  *
- * ⚠ CREATE/PATCH/DELETE: owner — barchasi; teacher — faqat O'Z guruhidagi
- * o'quvchi uchun (EGALIK SERVIS QATLAMIDA tekshiriladi). Teacher'da
- * `ATTENDANCE_MANAGE` yo'q, shuning uchun `ATTENDANCE_RECORD` bilan gate
- * qilinadi (teacher davomatni belgilay olgani kabi ozod davrini ham
- * qo'ya oladi).
+ * ⚠ `RolesGuard` `@UseGuards` da QOLDIRILDI: metodda `@Roles` metama'lumoti
+ * bo'lmasa u `true` qaytaradi (`roles.guard.ts:34`), ya'ni zararsiz. Uni
+ * olib tashlash importlar zanjirini o'zgartirardi, xulqni emas.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 @Controller('attendance-exemptions')
@@ -61,7 +62,6 @@ export class AttendanceExemptionsController {
   @Post()
   @HttpCode(201)
   @UseGuards(RolesGuard, PermissionsGuard)
-  @Roles(ROLES.OWNER, ROLES.TEACHER)
   @Permissions(PERMISSIONS.ATTENDANCE_RECORD)
   async create(
     @Validated(createSchema) v: CreateRequest,
@@ -79,7 +79,6 @@ export class AttendanceExemptionsController {
   @Patch(':id')
   @HttpCode(200)
   @UseGuards(RolesGuard, PermissionsGuard)
-  @Roles(ROLES.OWNER, ROLES.TEACHER)
   @Permissions(PERMISSIONS.ATTENDANCE_RECORD)
   async update(
     @Param('id') id: string,
@@ -93,7 +92,6 @@ export class AttendanceExemptionsController {
   @Delete(':id')
   @HttpCode(200)
   @UseGuards(RolesGuard, PermissionsGuard)
-  @Roles(ROLES.OWNER, ROLES.TEACHER)
   @Permissions(PERMISSIONS.ATTENDANCE_RECORD)
   async remove(
     @Param('id') id: string,

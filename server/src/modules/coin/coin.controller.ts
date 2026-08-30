@@ -4,8 +4,7 @@ import { CoinSettingsService } from './coin-settings.service.js';
 import { BypassCoinSwitch, CoinSwitchGuard } from './coin-switch.guard.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { Permissions, Roles, Validated } from '../../common/decorators/index.js';
-import { ROLES } from '../../common/constants/permissions.js';
+import { Permissions, Validated } from '../../common/decorators/index.js';
 import { COIN_PERMISSIONS } from '../../common/constants/coin.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
@@ -117,7 +116,6 @@ export class CoinController {
   /** ⚠ O'CHIRGICHDAN OZOD — bu aynan o'chirgichning o'zi. */
   @Patch('settings')
   @BypassCoinSwitch()
-  @Roles(ROLES.OWNER)
   @Permissions(COIN_PERMISSIONS.COIN_SETTINGS)
   async updateSettings(
     @Validated(settingsUpdateSchema) v: SettingsUpdateRequest,

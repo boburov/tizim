@@ -130,9 +130,25 @@ export const resolveWorkspace = (auth = {}, has = () => false) => {
   // boshqarmaydi. Filialni boshqarish kerak bo'lsa, unga filialga xos
   // ROL beriladi (UserBranchAssignment.role) va u boshqa makonga tushadi.
   if (type === ROLE_TYPES.TEACHER) return WORKSPACES.STAFF;
-  if (type === ROLE_TYPES.OWNER) return WORKSPACES.SUPER_ADMIN;
 
-  if (hasOrgAuthority(has)) return WORKSPACES.SUPER_ADMIN;
+  // ⚠ EGA HAM `ADMIN` MAKONIDA TURADI — `SUPER_ADMIN` DA EMAS.
+  //
+  // Ilgari ega `/org` ga tushardi va `AdminPanelGuard` uni `/owner/*`
+  // dan qaytarardi. Natijada admin panelga kirmoqchi bo'lgan odam
+  // `/org` ga otilib, keyin qo'lda qaytib kelardi — foydalanuvchi buni
+  // "sakrash" deb ta'rifladi va aynan shu bug tuzatilmoqda.
+  //
+  // `/org` YO'Q BO'LMADI: u ko'p filialli markazda "Markaz ko'rinishi"
+  // havolasi orqali ochiladi (`AppHeader`) va `SuperAdminGuard` uni
+  // avvalgidek qo'riqlaydi. O'zgargani — BOSH SAHIFA: ega kundalik
+  // ishini admin panelda boshlaydi, tashkilot ko'rinishiga esa O'ZI
+  // kirganda o'tadi.
+  //
+  // Yakka filialli nashrda `/org` umuman yo'q, ya'ni bu yagona
+  // to'g'ri javob (qarang: MULTI_BRANCH, `branch-access.service.ts`).
+  if (type === ROLE_TYPES.OWNER) return WORKSPACES.ADMIN;
+  if (hasOrgAuthority(has)) return WORKSPACES.ADMIN;
+
   if (hasBranchAuthority(has)) return WORKSPACES.ADMIN;
   return WORKSPACES.STAFF;
 };

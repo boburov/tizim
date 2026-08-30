@@ -11,12 +11,11 @@ import {
   StudentAccess,
 } from '../../common/guards/attendance-scope.guard.js';
 import {
-  Roles,
   Permissions,
   PermissionOrSelf,
   Validated,
 } from '../../common/decorators/index.js';
-import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
+import { PERMISSIONS } from '../../common/constants/permissions.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import {
   bulkRecordSchema, listForDateSchema, groupRangeSchema, studentRangeSchema,
@@ -92,13 +91,19 @@ export class GradesController {
   }
 
   /**
-   * ⚠ `@Roles(OWNER)` VA `@Permissions(RATING_MANAGE)` — IKKALASI HAM.
-   * Express'da ham ikkalasi bor; bittasini olib tashlash reyting
-   * vaznlarini (ya'ni butun reyting jadvalini) o'zgartirish huquqini
-   * kengaytirardi.
+   * ⚠ FAQAT `@Permissions(RATING_MANAGE)` — `@Roles(OWNER)` OLIB TASHLANDI.
+   *
+   * Ilgari ikkalasi ham bor edi (Express merosi) va izoh uni "huquqni
+   * kengaytirmaslik" bilan izohlardi. Aslida u TESKARI ishlardi: markaz
+   * egasi `rating.manage` ni biror rolga BERSA HAM, `RolesGuard` uni
+   * baribir to'sardi — ruxsat matritsasi yolg'on va'da berardi.
+   *
+   * Reyting vaznlarini kim o'zgartirishini ENDI EGA HAL QILADI: kalit
+   * kimda bo'lsa, o'sha o'zgartiradi. Uni hech kimga bermaslik kerak
+   * bo'lsa, `permission-scope.ts` dagi `OWNER_ONLY_PERMISSIONS` ga
+   * qo'shiladi — to'siq bitta joyda turadi.
    */
   @Patch('rating/settings')
-  @Roles(ROLES.OWNER)
   @Permissions(PERMISSIONS.RATING_MANAGE)
   async updateRatingSettings(
     @Validated(ratingSettingsUpdateSchema) v: RatingSettingsUpdateRequest,

@@ -51,24 +51,39 @@ client/src/
 | Layout | `OperationalLayout` (shadcn `SidebarProvider`) | `SuperAdminLayout` — **its own shell** |
 | Header | `AppHeader` (mobile only) | `SuperAdminHeader`, full width, **MOLIYA** lives here |
 | Menu | `owner/navigation/sidebar.config.js`, ~12 groups | `superadmin/navigation/nav.config.js`, **exactly 3**: Asosiy · Filiallar · Tizim tahlili |
-| Who | branch **directors** and staff | owner / org-level authority |
+| Who | **everyone operational** — owner, directors, staff | owner / org-level authority, as a second view |
 | Scope | the user's assigned branch(es) | the whole organization |
-| Guarded by | `AdminPanelGuard` — org-level users are sent to `/org` | `SuperAdminGuard` — everyone else is sent to their own panel |
+| Guarded by | `AdminPanelGuard` — only students and teachers are redirected | `SuperAdminGuard` — everyone else is sent to their own panel |
 
-**The wall is two-way and there is no link across it.** A Super Admin cannot open
-`/owner/*`; a director cannot open `/org/*`. Neither shell renders a link to the
-other, because a link that always bounces is a false door — it costs more trust
-than the missing shortcut saves.
+**The wall used to be two-way. It is now one-way, on purpose.**
+
+`/owner` is where *everyone operational lives, the owner included*
+(`resolveWorkspace` returns `ADMIN` for `roleType === owner` and for
+org-authority). `/org` is a **second, optional view** reached by an explicit
+click, never by an automatic redirect.
+
+The old design bounced org-level users out of `/owner` into `/org`. In practice
+that read as a bug: you click into the admin panel, get thrown to superadmin, and
+walk back. It also could not survive the single-branch edition, where `/org` does
+not exist at all and the bounce would loop forever.
 
 Consequences to keep in mind when adding a screen:
 
-- Anything the owner needs must exist **inside `/org`**. `/owner/settings`,
-  `/owner/catalog` and the operational lists are director territory.
-- Deep links into `/owner/*` from analysis cards are switched off centrally by
-  `useDrilldown()` (`owner/features/systemAnalysis/navigation/drilldown.js`):
-  it returns an all-`null` map for org-level users, and `DashboardSection`
-  renders no link when `to` is falsy. Never re-add a hardcoded `/owner/...`
-  `<Link>` inside `superadmin/`.
+- Put an operational screen in **`/owner`**. `/org` is for genuinely
+  cross-branch questions (comparison, per-branch P&L, the branch roll-up).
+  A screen duplicated into `/org` is almost always a mistake — the same
+  component with a server-applied scope is the pattern.
+- **Crossing between shells is by link, not by guard.** `/owner` → `/org` sits in
+  the sidebar user menu ("Markaz ko'rinishi", gated on `hasOrgAuthority` **and**
+  `multiBranch`); `/org` → `/owner` sits in the SuperAdminHeader profile menu
+  ("Admin paneli").
+- `useDrilldown()` (`owner/features/systemAnalysis/navigation/drilldown.js`)
+  now returns the real map for everyone. It used to blank every link for
+  org-level users because `/owner/*` was closed to them; with the door open,
+  blanking would only leave the owner staring at unclickable numbers.
+- **Single-branch edition (`MULTI_BRANCH=false`): `/org` is absent.** Anything
+  reachable only from `/org` is invisible to those customers, so it must have a
+  home in `/owner` too.
 
 **They are different shells on purpose.** `/org/*` is mounted *outside*
 `OperationalLayout` in `app/routes.jsx` — it has to be: `OperationalLayout` wraps
