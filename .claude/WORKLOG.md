@@ -23273,3 +23273,74 @@ Noted — you've chosen `MULTI_BRANCH` over my recommendation. That's your call;
 <sub>session `f8cb0bf1` · branch `main` · 83 ta qadam · 3 ta subagent</sub>
 
 ---
+
+## 2026-08-30 16:40 — alright menga fililasiz rejimda appni bohsqatrib test qilib bering
+
+**So'rov**
+
+> alright menga fililasiz rejimda appni bohsqatrib test qilib bering
+
+**O'zgargan fayllar (1)**
+
+- `/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f8cb0bf1-714c-41dc-b8f6-4c38400c7786/scratchpad/sbVisual.mjs` — yaratildi/qayta yozildi
+
+**Buyruqlar (14)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f8cb0bf1-714c-41dc-b8f6-4c38400c7786/scratchpad PGPASSWORD=post…
+cd /Users/shukrullo/Desktop/lc-total PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d bayyina -P pager=off <<'SQL' update branches set "isActive"=false wher…
+cd /Users/shukrullo/Desktop/lc-total PID=$(lsof -nP -iTCP:5000 -sTCP:LISTEN -t 2>/dev/null | head -1) echo "killing API child $PID (nest --watch will respawn)" …
+cd /Users/shukrullo/Desktop/lc-total echo "=== is the watcher still alive? ==="; ps -p 8036 -o pid,command= 2>/dev/null | cut -c1-120 || echo "watcher 8036 GONE…
+cd /Users/shukrullo/Desktop/lc-total/server touch src/main.ts for i in $(seq 1 60); do sleep 1 P=$(lsof -nP -iTCP:5000 -sTCP:LISTEN -t 2>/dev/null | head -1) if…
+cd /Users/shukrullo/Desktop/lc-total/server sleep 15 echo "=== port 5000 ==="; lsof -nP -iTCP:5000 -sTCP:LISTEN 2>/dev/null || echo "still nothing" echo "=== wa…
+node --env-file=.env --enable-source-maps dist/main.js > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f8cb0bf1-714c-41dc-b8f6-4c38400c7786/scratchp…
+cd /Users/shukrullo/Desktop/lc-total/server S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f8cb0bf1-714c-41dc-b8f6-4c38400c7786/scratchpad for u in…
+cd /Users/shukrullo/Desktop/lc-total S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f8cb0bf1-714c-41dc-b8f6-4c38400c7786/scratchpad for u in owner …
+cd /Users/shukrullo/Desktop/lc-total S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f8cb0bf1-714c-41dc-b8f6-4c38400c7786/scratchpad row(){ # token …
+cd /Users/shukrullo/Desktop/lc-total S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f8cb0bf1-714c-41dc-b8f6-4c38400c7786/scratchpad echo "=== WRITE…
+S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f8cb0bf1-714c-41dc-b8f6-4c38400c7786/scratchpad SCRATCH=$S node $S/sbVisual.mjs 2>&1 | tail -30
+cd /Users/shukrullo/Desktop/lc-total PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d bayyina -P pager=off <<'SQL' update branches set "isActive"=true where…
+cd /Users/shukrullo/Desktop/lc-total/server S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f8cb0bf1-714c-41dc-b8f6-4c38400c7786/scratchpad # Cache …
+```
+
+**Natija**
+
+`MULTI_BRANCH` still does nothing — Phase C isn't implemented yet, so the env flag can't switch modes. The only thing that currently decides branchless mode is the DB (`isMultiBranch()` counts active branches), so I'll put the DB into single-branch state, test everything, then restore it.
+
+Recording exact before-state first so restoration is provable:
+
+Switching to branchless mode. `isActive` only — no deletion, fully reversible:
+
+Now the API must be restarted — `multiBranchCache` is per-process with no TTL and is only cleared via the branches service, so a raw SQL update leaves it stale:
+
+The watcher only respawns on file change, not on child death. Touching a source file:
+
+I killed the child of your `nest start --watch` and the watcher didn't respawn it — that's on me. Starting the API directly from the current build (which already contains the server fixes) so testing can continue:
+
+Now confirming the mode actually flipped, for three different user shapes:
+
+Mode is branchless. And the predicted lockout is already visible: **`boburov7` gets `branches: []`** — an empty scope, because their home branch (DEMO Yunusobod) is no longer active.
+
+Running the full walk for all three user shapes:
+
+The walk only catches redirects and 403s — but the empty-scope bug produces **empty 200s**, which scores as "OK". Probing the actual data and the `/org` hole:
+
+Confirmed — and this is the serious one:
+
+| User | home branch | students | groups |
+|---|---|---|---|
+| owner | Asosiy filial | 1100 | 41 |
+| qa_admin_b | Asosiy filial | 1100 | 41 |
+| **boburov7** | **deactivated** | **0** | **0** |
+
+All **HTTP 200**. Now checking writes and whether `/org` is still reachable:
+
+Two real problems confirmed. Getting the visual state before I restore:
+
+Better than I predicted — the `BranchModeBan
+
+…(qisqartirildi)
+
+<sub>session `f8cb0bf1` · branch `main` · 16 ta qadam</sub>
+
+---
