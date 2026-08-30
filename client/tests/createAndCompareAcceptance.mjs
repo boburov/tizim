@@ -28,11 +28,13 @@ const resolvePlaywright = async () => {
   for (const c of candidates) if (existsSync(c)) return import(`file://${c}`);
   console.error(
     "\nPLAYWRIGHT TOPILMADI - brauzer testi BAJARILMADI.\n" +
-      "O'rnatish: npx playwright install chromium\n",
+      "O'rnatish: npx playwright install chromium webkit\n",
   );
   process.exit(2);
 };
-const { chromium } = await resolvePlaywright();
+const pw = await resolvePlaywright();
+const { pickEngine } = await import("./_engine.mjs");
+const engine = pickEngine(pw);
 
 const APP = process.env.APP_URL || "http://localhost:5173";
 const API = process.env.API_URL || "http://localhost:5000/api";
@@ -67,7 +69,7 @@ const passBranchGate = async (page) => {
 };
 
 
-const browser = await chromium.launch();
+const browser = await engine.launch();
 const consoleErrors = [];
 const badRequests = [];
 const allRequests = [];

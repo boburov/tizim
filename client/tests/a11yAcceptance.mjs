@@ -35,14 +35,15 @@ for (const d of readdirSync(npx)) {
   const p = `${npx}/${d}/node_modules/playwright/index.mjs`;
   if (existsSync(p)) { pw = await import(`file://${p}`); break; }
 }
-const { chromium } = pw;
+const { pickEngine } = await import("./_engine.mjs");
+const engine = pickEngine(pw);
 const APP = "http://localhost:5173";
 const R = { pass: 0, fail: 0, warn: 0 };
 const ok = (n, x = "") => { R.pass++; console.log(`  ✅ ${n}${x ? ` — ${x}` : ""}`); };
 const bad = (n, x = "") => { R.fail++; console.log(`  ❌ ${n}${x ? ` — ${x}` : ""}`); };
 const warn = (n, x = "") => { R.warn++; console.log(`  ⚠️  ${n}${x ? ` — ${x}` : ""}`); };
 
-const browser = await chromium.launch();
+const browser = await engine.launch();
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await ctx.newPage();
 await page.goto(`${APP}/login`, { waitUntil: "domcontentloaded" });
@@ -180,3 +181,15 @@ if (await row.count()) {
 
 await browser.close();
 console.log(`\nNATIJA: ${R.pass} o'tdi, ${R.fail} yiqildi, ${R.warn} ogohlantirish\n`);
+/**
+ * CHIQISH KODI — qolgan to'plamlardagidek.
+ *
+ * Bu yerda u YO'Q edi: ❌ chiqsa ham jarayon 0 qaytarardi, ya'ni
+ * `npm run test:a11y` har doim yashil ko'rinardi va zanjirdagi keyingi
+ * buyruq ishlayverardi. Yiqilgan tekshiruv o'tgan tekshiruvdan
+ * farqlanmasa, testning o'zi bezakka aylanadi.
+ *
+ * Ogohlantirish (⚠️) chiqish kodiga TA'SIR QILMAYDI — u "tekshirilmadi"
+ * degani, "buzuq" degani emas.
+ */
+process.exit(R.fail ? 1 : 0);

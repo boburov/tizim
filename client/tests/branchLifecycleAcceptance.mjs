@@ -44,7 +44,9 @@ const resolvePlaywright = async () => {
   console.error("\nPLAYWRIGHT TOPILMADI - brauzer testi BAJARILMADI.\n");
   process.exit(2);
 };
-const { chromium } = await resolvePlaywright();
+const pw = await resolvePlaywright();
+const { pickEngine } = await import("./_engine.mjs");
+const engine = pickEngine(pw);
 
 const APP = process.env.APP_URL || "http://localhost:5173";
 const API = process.env.API_URL || "http://localhost:5000/api";
@@ -84,7 +86,7 @@ const TAG = `t${Date.now().toString(36)}`;
 const BRANCH_NAME = `Test filial ${TAG}`;
 const LOGIN = `dir_${TAG}`;
 
-const browser = await chromium.launch();
+const browser = await engine.launch();
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await ctx.newPage();
 

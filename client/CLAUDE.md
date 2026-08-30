@@ -452,7 +452,24 @@ npm run test:browser           # legacy shell checks, redirects, mobile
 npm run test:browser-create    # create split button + branch cross-section
 npm run test:browser-branch    # create a branch -> multi-branch mode -> compare
 npm run test:a11y              # landmarks, focus, contrast on key screens
+
+# Safari: the same suites on the WebKit engine (BROWSER=chromium|webkit|firefox)
+BROWSER=webkit npm run test:browser-panels
+npm run test:safari            # panels + a11y, both under WebKit
 ```
+
+`BROWSER` is read by `tests/_engine.mjs`. **WebKit is Safari's engine, not
+Safari.app** - Playwright cannot drive Safari.app at all (that needs
+`safaridriver` + Selenium, which has no headless mode). It does catch the
+engine-level differences: CSS grid/flex, `Date` parsing, `:has()`, IndexedDB,
+scroll behaviour. It does not catch ITP/cookie policy, extensions or the PWA
+install flow.
+
+**A check that fails only under WebKit is not automatically an app bug.** Run the
+same suite under chromium and compare before reporting it - Safari platform
+defaults (Tab not moving to links, for one) look exactly like a broken app.
+An unknown `BROWSER` value exits 2 rather than silently falling back to chromium,
+because a green run on the wrong engine is worse than no run.
 
 A check that cannot run for lack of data is reported as **⏭️ tekshirilmadi**, not
 as a pass. An empty database makes a leak assertion ("branch B sees nothing")

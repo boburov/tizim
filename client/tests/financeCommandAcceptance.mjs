@@ -80,8 +80,10 @@ const run = async () => {
     await page.waitForTimeout(2500);
   };
 
-  const { chromium } = await resolvePlaywright();
-  const browser = await chromium.launch();
+  const pw = await resolvePlaywright();
+  const { pickEngine } = await import("./_engine.mjs");
+  const engine = pickEngine(pw);
+  const browser = await engine.launch();
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
 

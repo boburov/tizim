@@ -33,12 +33,14 @@ const resolvePlaywright = async () => {
   }
   console.error(
     "\nPLAYWRIGHT TOPILMADI - brauzer qabul testi BAJARILMADI.\n" +
-      "O'rnatish: npx playwright install chromium\n" +
+      "O'rnatish: npx playwright install chromium webkit\n" +
       "yoki PLAYWRIGHT_PATH=/yo'l/playwright/index.mjs bilan ishga tushiring.\n",
   );
   process.exit(2);
 };
-const { chromium } = await resolvePlaywright();
+const pw = await resolvePlaywright();
+const { pickEngine } = await import("./_engine.mjs");
+const engine = pickEngine(pw);
 
 const APP = process.env.APP_URL || "http://localhost:5174";
 const API = "http://localhost:5000/api";
@@ -82,7 +84,7 @@ const passBranchGate = async (page) => {
 };
 
 
-const browser = await chromium.launch();
+const browser = await engine.launch();
 
 // ── Konsol xatolari va tarmoq muammolari YIG'ILADI ──
 const consoleErrors = [];
