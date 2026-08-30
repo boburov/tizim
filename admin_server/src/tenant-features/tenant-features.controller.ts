@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { TenantFeaturesService } from './tenant-features.service.js';
+import { EntitlementsService } from '../entitlements/entitlements.service.js';
 import { SetFeatureOverrideDto } from './dto/tenant-features.dto.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { DeveloperAdminGuard } from '../common/guards/developer-admin.guard.js';
@@ -79,5 +80,28 @@ export class TenantFeaturesController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.features.clearOverride(tenantId, key, user.email);
+  }
+}
+
+/**
+ * BARCHA LOYIHALARNING yoqilgan bo'limlari — ro'yxat sahifasidagi
+ * pill'lar uchun.
+ *
+ * ⚠ NEGA ALOHIDA PREFIKS (`tenants/:id/features` EMAS)
+ * `tenants/features/summary` yozilsa `:id` parametri "features" so'zini
+ * yutib yuborardi va marshrut o'zining boshqa endpointi bilan
+ * to'qnashardi. Alohida prefiks bu noaniqlikni butunlay yo'q qiladi.
+ *
+ * ⚠ O'QISH — HAMMA XODIMGA. Bu tijorat qarori emas, holat ko'rinishi.
+ */
+@UseGuards(JwtAuthGuard, DeveloperAdminGuard, RolesGuard)
+@Controller('feature-summary')
+export class FeatureSummaryController {
+  constructor(private readonly entitlements: EntitlementsService) {}
+
+  @Get()
+  @Roles('SUPER_ADMIN', 'ADMIN', 'VIEWER')
+  all() {
+    return this.entitlements.moduleSummary();
   }
 }

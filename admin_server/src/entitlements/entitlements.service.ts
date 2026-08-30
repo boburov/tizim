@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { resolveModules } from './module-resolve.js';
 import { BranchConfigService } from '../branch-config/branch-config.service.js';
 import {
   BRANCHES_ENABLED_FEATURE_KEY,
@@ -234,49 +235,20 @@ export class EntitlementsService {
       where: { isModule: true, isActive: true },
     });
 
-    const subDead =
-      !!sub && (sub.status === 'EXPIRED' || sub.status === 'CANCELED');
-
-    const moduleValue = new Map<string, number>();
-    for (const f of moduleFeatures) {
-      // ⚠ TIZIM O'ZAGI DOIM OCHIQ — tarifdan ham, obunadan ham qat'i
-      // nazar. Ikki sabab:
-      //   1. `auth`/`users` o'chsa ilova umuman ishlamaydi;
-      //   2. TO'SIQ MANTIG'I unga tayanadi — `auth` "o'chiq" ko'rinsa
-      //      u `attendance` ni o'chirishdan to'smasdi va login javobi
-      //      jimgina buzilardi.
-      if (f.isCore) {
-        moduleValue.set(f.key, 1);
-        continue;
-      }
-      // Tarifdan kelgan qiymat (yo'q bo'lsa — o'chiq).
-      const fromPlan = limits.get(f.key)?.value ?? 0;
-      moduleValue.set(f.key, subDead ? 0 : fromPlan > 0 ? 1 : 0);
-    }
-
     const overrideByKey = new Map(
       tenant.featureOverrides.map((o) => [o.featureKey, o]),
     );
-    for (const f of moduleFeatures) {
-      // ⚠ O'ZAKKA USTUN QAROR HAM TA'SIR QILMAYDI (yuqoridagi sabab).
-      if (f.isCore) continue;
-      const ov = overrideByKey.get(f.key);
-      if (ov) moduleValue.set(f.key, ov.enabled ? 1 : 0);
-    }
 
-    // OTA ZANJIRI: otasi yopiq bo'lsa bola ham yopiq. Ustun qaror ham
-    // buni buzolmaydi — "davomat o'chiq, davomat-excel ochiq" degan
-    // ziddiyat mijozga hech qachon yetib bormasligi kerak.
-    const byKey = new Map(moduleFeatures.map((f) => [f.key, f]));
-    const resolveWithParents = (key: string, seen = new Set<string>()): number => {
-      if (seen.has(key)) return 0; // aylanadan himoya
-      seen.add(key);
-      const own = moduleValue.get(key) ?? 0;
-      if (own <= 0) return 0;
-      const parent = byKey.get(key)?.parentKey;
-      if (!parent) return own;
-      return resolveWithParents(parent, seen) > 0 ? own : 0;
-    };
+    // ⚠ YECHISH MANTIG'I SHU YERDA EMAS — `module-resolve.ts` da.
+    // Panel kartalaridagi pill'lar ham AYNAN o'sha funksiyadan chiqadi;
+    // ikkinchi nusxa yozilsa karta "yoqilgan" deb ko'rsatib, mijozda
+    // o'chiq bo'lishi mumkin edi va bu farqni hech narsa ushlamasdi.
+    const moduleValues = resolveModules({
+      features: moduleFeatures,
+      planGrants: (key) => (limits.get(key)?.value ?? 0) > 0,
+      subDead: !!sub && (sub.status === 'EXPIRED' || sub.status === 'CANCELED'),
+      override: (key) => overrideByKey.get(key)?.enabled,
+    });
 
     for (const f of moduleFeatures) {
       limits.set(f.key, {
@@ -285,7 +257,7 @@ export class EntitlementsService {
         type: 'BOOLEAN',
         unit: null,
         metricKey: null,
-        value: resolveWithParents(f.key),
+        value: moduleValues.get(f.key) ?? 0,
         // Modul SOTILADI, lekin add-on sifatida emas — "kiritilgan"
         // qiymati tarifdan keladi, ustun qaror esa alohida ko'rsatiladi.
         included: limits.get(f.key)?.included ?? 0,
@@ -326,6 +298,101 @@ export class EntitlementsService {
       limits: Array.from(limits.values()),
       usage,
     };
+  }
+
+  /**
+   * HAMMA loyihaning yoqilgan bo'limlari — panel kartalaridagi pill'lar.
+   *
+   * ⚠ OMMAVIY SO'ROV, `forTenant()` LOOP'I EMAS.
+   * `forTenant` har chaqiruvda 4+ so'rov qiladi (tenant, usage, filial,
+   * feature). 50 ta loyiha uchun bu 200+ so'rov bo'lardi va ro'yxat
+   * sahifasi sekinlashardi. Bu yerda 3 ta so'rov — loyihalar soni
+   * qanchaligidan qat'i nazar.
+   *
+   * ⚠ YECHISH BARIBIR BITTA JOYDA (`resolveModules`), ya'ni karta va
+   * mijoz HECH QACHON boshqa javob ko'rsatmaydi.
+   *
+   * ⚠ FILIAL LIMITI HISOBGA OLINMAYDI — u BOOLEAN modul emas, LIMIT.
+   * Karta faqat "qaysi bo'limlar bor" degan savolga javob beradi.
+   */
+  async moduleSummary(tenantIds?: string[]) {
+    const where = tenantIds?.length ? { tenantId: { in: tenantIds } } : {};
+
+    const [features, overrides, subs] = await Promise.all([
+      this.prisma.feature.findMany({
+        where: { isModule: true, isActive: true },
+        orderBy: { key: 'asc' },
+      }),
+      this.prisma.tenantFeatureOverride.findMany({ where }),
+      this.prisma.subscription.findMany({
+        where: tenantIds?.length ? { tenantId: { in: tenantIds } } : {},
+        include: { plan: { include: { features: { include: { feature: true } } } } },
+      }),
+    ]);
+
+    const overridesByTenant = new Map<string, Map<string, boolean>>();
+    for (const o of overrides) {
+      let m = overridesByTenant.get(o.tenantId);
+      if (!m) overridesByTenant.set(o.tenantId, (m = new Map()));
+      m.set(o.featureKey, o.enabled);
+    }
+
+    const subByTenant = new Map(subs.map((x) => [x.tenantId, x]));
+
+    // Qaysi loyihalar uchun hisoblaymiz: berilganlar, yoki ustun qaror /
+    // obunasi bo'lganlarning birlashmasi.
+    const ids =
+      tenantIds ??
+      [...new Set([...overridesByTenant.keys(), ...subByTenant.keys()])];
+
+    const nameOf = new Map(features.map((f) => [f.key, f.name]));
+
+    return ids.map((tenantId) => {
+      const sub = subByTenant.get(tenantId);
+      const ov = overridesByTenant.get(tenantId);
+      const planKeys = new Set(
+        (sub?.plan.features ?? [])
+          .filter((pf) => pf.value > 0)
+          .map((pf) => pf.feature.key),
+      );
+
+      const values = resolveModules({
+        features,
+        planGrants: (key) => planKeys.has(key),
+        subDead:
+          !!sub && (sub.status === 'EXPIRED' || sub.status === 'CANCELED'),
+        override: (key) => ov?.get(key),
+      });
+
+      // ⚠ O'ZAK CHIQARIB TASHLANADI. U hamma loyihada bir xil ochiq,
+      // ya'ni pill sifatida hech qanday ma'lumot bermaydi va faqat
+      // haqiqiy farqni ko'rsatadigan pill'larni bosib qo'yardi.
+      const sellable = features.filter((f) => !f.isCore);
+      const pick = (on: boolean) =>
+        sellable
+          .filter((f) => ((values.get(f.key) ?? 0) > 0) === on)
+          .map((f) => ({ key: f.key, name: nameOf.get(f.key) ?? f.key }))
+          // ⚠ NOM bo'yicha tartiblanadi, KALIT bo'yicha emas. Kalit
+          // tartibida kartadagi birinchi oltita tasodifiy chiqardi
+          // ("activity-history" alifboda birinchi, lekin mahsulot
+          // sifatida eng ahamiyatsizi). Odam ekranni NOM bo'yicha
+          // o'qiydi, shuning uchun tartib ham shunday.
+          .sort((a, b) => a.name.localeCompare(b.name, 'uz'));
+
+      const enabled = pick(true);
+      const disabled = pick(false);
+
+      return {
+        tenantId,
+        enabled,
+        // ⚠ O'CHIQLARI HAM QAYTADI. "37/38 yoqilgan" holatida eng qimmatli
+        // ma'lumot — yoqilgan 37 tasi emas, O'CHIQ qolgan bittasi. Karta
+        // uni alohida ko'rsatadi.
+        disabled,
+        enabledCount: enabled.length,
+        total: sellable.length,
+      };
+    });
   }
 
   /**

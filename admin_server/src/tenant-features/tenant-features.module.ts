@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
-import { TenantFeaturesController } from './tenant-features.controller.js';
+import {
+  TenantFeaturesController,
+  FeatureSummaryController,
+} from './tenant-features.controller.js';
 import { TenantFeaturesService } from './tenant-features.service.js';
 import { TenantRefreshService } from './tenant-refresh.service.js';
 import { EntitlementsModule } from '../entitlements/entitlements.module.js';
@@ -14,7 +17,7 @@ import { EntitlementsModule } from '../entitlements/entitlements.module.js';
  */
 @Module({
   imports: [EntitlementsModule],
-  controllers: [TenantFeaturesController],
+  controllers: [TenantFeaturesController, FeatureSummaryController],
   providers: [TenantFeaturesService, TenantRefreshService],
   exports: [TenantFeaturesService],
 })
