@@ -166,7 +166,9 @@ export default function TenantDetailPage() {
     );
 
   // Brend va sozlamalar bo'limlarida preview yonma-yon turadi — kengroq joy kerak
-  const wide = tab === 'brend' || tab === 'sozlamalar';
+  // ⚠ `bolimlar` ham keng: jadvalda 5 ta ustun bor va tor konteynerda
+  // oxirgi ustun ("Amal") qirqilib qolardi.
+  const wide = tab === 'brend' || tab === 'sozlamalar' || tab === 'bolimlar';
   const pendingCount = settingsInfo?.pending?.count ?? 0;
 
   return (

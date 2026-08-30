@@ -23675,3 +23675,80 @@ Clear picture now: **40 switches, 24 freely disableable.** Two struct
 <sub>session `f9eb6595` · branch `main` · 41 ta qadam</sub>
 
 ---
+
+## 2026-08-31 00:27 — hammasi yaxhsi endlikda menga superadmin panelda http://localhost:5174
+
+**So'rov**
+
+> hammasi yaxhsi endlikda menga superadmin panelda http://localhost:5174/tenants/cmtg5zc8s0001f330qo1d0eyv project details da bo'limlar qismida table sifatida qilib bering qayta joylashtrib bering va hammasi tushunarli korinishida bo'lishi kerak
+
+**O'zgargan fayllar (1)**
+
+- `admin_client/src/components/TenantFeatures.jsx` — yaratildi/qayta yozildi
+
+**Buyruqlar (14)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/admin_client && grep -n "<table\|<thead\|<th \|<th>\|<td" src/pages/TenantsPage.jsx | head -20; echo "=== classes used ==="…
+grep -rln "<table" src/ | head; echo "--- grid-based lists? ---"; grep -rn "grid-cols\|divide-y" src/pages/TenantsPage.jsx src/components/UsageLimits.jsx 2>/dev…
+npm run build 2>&1 | grep -iE "error|✓ built" | head -5; echo "--- lint ---"; npx eslint src/components/TenantFeatures.jsx 2>&1 | tail -5 && echo "lint OK"
+for p in 5173 5174; do printf " :%s -> %s\n" "$p" "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:$p 2>/dev/null)"; done; lsof -nP -iTCP:5174 -sTCP:L…
+cd /Users/shukrullo/Desktop/lc-total/client && sed -n '1,30p' tests/_engine.mjs 2>/dev/null; echo "--- playwright available? ---"; node -e "import('playwright')…
+grep -n "playwright" package.json; echo "--- npx cache? ---"; ls ~/Library/Caches/ms-playwright/ 2>/dev/null | head -5; echo "--- how do suites import it? ---";…
+grep -rn "playwright" tests/_engine.mjs | head -5; echo "---"; grep -rln "pickEngine\|chromium" tests/*.mjs | head -3; echo "--- a11y import block ---"; grep -n…
+sed -n '28,40p' tests/a11yAcceptance.mjs
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f9eb6595-9735-4fe4-98c2-5cafcb3e93ed/scratchpad/features-tab-check.mjs <<'JS' const { existsSync…
+S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f9eb6595-9735-4fe4-98c2-5cafcb3e93ed/scratchpad cat > $S/diag.mjs <<'JS' const { existsSync, readdir…
+S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f9eb6595-9735-4fe4-98c2-5cafcb3e93ed/scratchpad cat > $S/check2.mjs <<'JS' const { existsSync, readd…
+cd /Users/shukrullo/Desktop/lc-total/admin_client && grep -n "const wide" -A 3 src/pages/TenantDetailPage.jsx
+python3 - <<'PY' import io p='src/pages/TenantDetailPage.jsx' s=io.open(p,encoding='utf-8').read() old=" const wide = tab === 'brend' || tab === 'sozlamalar';" …
+S=/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f9eb6595-9735-4fe4-98c2-5cafcb3e93ed/scratchpad; node $S/check2.mjs > $S/check3.log 2>&1; echo "exit…
+```
+
+**Natija**
+
+Let me match the existing table styling in the panel first:
+
+No `<table>` exists in the panel yet (it's card-based), so I'll build one using the same tokens. Rewriting the section as a proper table with search, filters, and inline reason entry:
+
+Build passes. Let me verify it actually renders correctly — checking if your dev server is up:
+
+Both dev servers are up. Let me verify it visually in a real browser:
+
+Services are up. There's no existing suite covering the admin panel's tenant tabs, so I'll write a one-off visual check using the project's Playwright:
+
+Login submitted but the tab wasn't found. Let me see what's actually on screen:
+
+Login works (SUPER_ADMIN confirmed). The first run navigated too early. Let me go to the tenant page and inspect the tabs:
+
+All working. Let me look at it:
+
+The table renders, but three real problems are visible: the **AMAL column is clipped**, the **MANBA column repeats the same grandfather reason on every row**, and long dependency lists **blow up row heights** (the `finance` row is enormous). Fixing all three:
+
+That's much better. Let me check the full list view:
+
+Redesigned as a table and verified in the browser.
+
+## What the table gives you
+
+Five columns, each answering one question:
+
+| Column | Question |
+|---|---|
+| **BO'LIM** | name + technical key |
+| **HOLAT** | does the client see it right now |
+| **MANBA** | *why* — from the plan, set by hand, or default |
+| **BOG'LIQLIK** | why it can't be turned off |
+| **AMAL** | what you can do |
+
+Plus search by name/key, filter chips with live counts (**Hammasi 38 · Ochiq 37 · O'chiq 1 · Qulflangan 14**), capabilities nested under their parent with a `↳`, and the 10 core modules hidden behind a checkbox since they're never switchable.
+
+## Three problems the first render exposed
+
+I scre
+
+…(qisqartirildi)
+
+<sub>session `f9eb6595` · branch `main` · 19 ta qadam</sub>
+
+---
