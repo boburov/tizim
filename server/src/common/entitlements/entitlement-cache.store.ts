@@ -1,4 +1,4 @@
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import {
   EntitlementsService,
@@ -34,7 +34,11 @@ export class EntitlementCacheStore implements OnModuleInit {
   private readonly logger = new Logger('EntitlementCache');
 
   constructor(
-    private readonly prisma: PrismaService,
+    // ⚠ `@Inject(...)` SHART: `PrismaService` — sinf emas, SYMBOL token
+    // (`prisma.service.ts:98`). Tip bo'yicha aniqlash ishlamaydi, chunki
+    // TypeScript metadata'ga `Object` yozadi va Nest ko'tarilishda
+    // "can't resolve dependencies" bilan yiqiladi.
+    @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly entitlements: EntitlementsService,
   ) {}
 

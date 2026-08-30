@@ -23527,3 +23527,78 @@ Ready to proceed with the migration + sync + grandfather and the live end-to-end
 <sub>session `f9eb6595` · branch `main` · 4 ta qadam</sub>
 
 ---
+
+## 2026-08-30 23:47 — hoq can i test switch models ? like i said
+
+**So'rov**
+
+> hoq can i test switch models ? like i said
+
+**Buyruqlar (25)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && echo "=== tenant .env (gate-relevant) ==="; for k in ADMIN_API_URL TENANT_ID HEARTBEAT_SECRET PORT NEST_WORKERS_E…
+(pg_isready -h localhost -p 5432 2>&1 | head -2); echo "--- admin DB tenants ---"; node -e " import('@prisma/client').then(async ({PrismaClient})=>{const p=new …
+npx prisma migrate deploy 2>&1 | tail -12
+cd /Users/shukrullo/Desktop/lc-total/server && grep -E "^DATABASE_URL=" .env | sed 's|://[^@]*@|://***@|'; npx prisma migrate deploy 2>&1 | tail -12
+cd /Users/shukrullo/Desktop/lc-total/admin_server && npm run features:sync 2>&1 | tail -12
+grep -rn "setGlobalPrefix" src/main.ts; echo "=== usage controller ==="; grep -n "@Controller\|@Post\|@Get\|heartbeat" src/usage/usage.controller.ts | head -12;…
+cat > /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f9eb6595-9735-4fe4-98c2-5cafcb3e93ed/scratchpad/setup-test-tenant.mjs <<'JS' import { PrismaClie…
+cp /private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f9eb6595-9735-4fe4-98c2-5cafcb3e93ed/scratchpad/setup-test-tenant.mjs ./scripts/.tmp-setup-test-ten…
+cd /Users/shukrullo/Desktop/lc-total/server && cp .env .env.bak.pre-features && cat >> .env <<'ENV' # ── TARIF DARVOZASI (lokal sinov) ─────────────────────────…
+cd /Users/shukrullo/Desktop/lc-total/admin_server && (npm run start:prod > /tmp/admin-server.log 2>&1 &) ; sleep 1; echo "admin starting..."; cd ../server && (n…
+for i in $(seq 1 40); do a=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/api/health 2>/dev/null); t=$(curl -s -o /dev/null -w "%{http_code}" ht…
+cd /Users/shukrullo/Desktop/lc-total/admin_server && python3 -c "import json;print(json.load(open('package.json'))['scripts'])" | tr ',' '\n' | grep -iE "start|…
+(npm start > /tmp/admin-server.log 2>&1 &); for i in $(seq 1 30); do a=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/api/plans 2>/dev/null); [ …
+S=3cb15c8ebf76bbea551761c2a4ea5fef90b2cbc77f7541c1 echo "=== wrong secret (must be 401) ==="; curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:…
+echo "=== tenant log ==="; tail -15 /tmp/tenant-server.log; echo "=== who owns :5000 ==="; lsof -nP -iTCP:5000 -sTCP:LISTEN 2>/dev/null | head -5; echo "=== is …
+cd /Users/shukrullo/Desktop/lc-total/server && echo "=== tenant start scripts ==="; python3 -c "import json;print(json.load(open('package.json'))['scripts'])" |…
+kill 32668 2>/dev/null; for i in $(seq 1 15); do lsof -nP -iTCP:5000 -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 1; done; echo "port free: $(lsof -nP -iTCP:500…
+grep -nE "export (const|class|abstract|declare|type|interface) PrismaService|export type PrismaService" src/prisma/prisma.service.ts | head -5
+python3 - <<'PY' import io p='src/common/entitlements/entitlement-cache.store.ts' s=io.open(p,encoding='utf-8').read() s=s.replace( "import { Injectable, Logger…
+echo "=== persisted cache row (tenant DB) ==="; node -e " import('@prisma/client').then(async ({PrismaClient})=>{const p=new PrismaClient(); const r=await p.ent…
+cd /Users/shukrullo/Desktop/lc-total/admin_server && grep -n "@Post\|@Controller" src/auth/auth.controller.ts | head -6
+J=/tmp/admin-cookies.txt; T=cmtg5zc8s0001f330qo1d0eyv; A=http://localhost:4000/api rm -f $J echo "=== 1) admin login ===" curl -s -c $J -X POST $A/auth/login -H…
+J=/tmp/admin-cookies.txt; T=cmtg5zc8s0001f330qo1d0eyv; A=http://localhost:4000/api; S=3cb15c8ebf76bbea551761c2a4ea5fef90b2cbc77f7541c1 gate(){ printf " tenant G…
+J=/tmp/admin-cookies.txt; T=cmtg5zc8s0001f330qo1d0eyv; A=http://localhost:4000/api gate(){ printf " GET /api/imports/importers -> %s%s\n" "$(curl -s -o /dev/nul…
+cd /Users/shukrullo/Desktop/lc-total/admin_server && node -e " import('@prisma/client').then(async ({PrismaClient})=>{const p=new PrismaClient(); const rows=awa…
+```
+
+**Natija**
+
+Good question — and there's a catch you need to know about before anything else. Let me check your local setup:
+
+Important finding: **you can't test the switch on your machine right now.** Your tenant `.env` has none of `ADMIN_API_URL` / `TENANT_ID` / `HEARTBEAT_SECRET`, and I deliberately made the gate **inert** when those are missing — otherwise local dev and standalone installs would boot with every module dark. So today every feature reads as "on" no matter what you do in the panel.
+
+Let me see what's actually available to work with:
+
+Here's the situation and your options.
+
+**Current state:** Postgres is up. The admin DB has 4 plans and 5 features, but its only tenant is `DELETED` with no `heartbeatSecret` — so there's nothing pointing at your local tenant server on :5000. Neither migration is applied yet.
+
+**The recipe, in order** (all three routes need steps 1–2):
+
+1. Apply both migrations — `admin_server` (override table) and `server` (`entitlement_cache`)
+2. `cd admin_server && npm run features:sync` — creates the `imports` + `imports.finance` rows
+3. Arm the gate on the tenant: set `ADMIN_API_URL`, `TENANT_ID`, `HEARTBEAT_SECRET` in `server/.env` — **without these three the switch does nothing**, which is exactly why you can't test it today
+4. Give the tenant something to talk to, or fake it
+
+Step 4 is where the routes diverge:
+
+Full loop it is. Applying both migrations first:
+
+Both applied. Now syncing the registry into the admin catalogue:
+
+Now let me verify the heartbeat route contract before wiring the tenant:
+
+`POST /api/tenant-api/:id/heartbeat`. Now creating a real ACTIVE tenant wired to your local server:
+
+Now arming the gate on the tenant server:
+
+Admin server up (401 = auth required, correct). Now let me trigger the tenant to pull its entitlements — u
+
+…(qisqartirildi)
+
+<sub>session `f9eb6595` · branch `main` · 27 ta qadam</sub>
+
+---
