@@ -92,6 +92,12 @@ export class SettingsService {
     const server: Record<string, string> = {
       NODE_ENV: 'production',
       PORT: String(tenant.port),
+      // NEST_PORT = PORT: server NestJS ilovasi (dist/main.js) aynan shu
+      // portda tinglaydi va nginx `/api` ni shu portga proxy qiladi. Usiz
+      // NEST_PORT default 5001 ga tushib qoladi — hamma tenant 5001'da
+      // to'qnashadi va nginx tenant portiga (masalan 5101) ulanolmay API
+      // 502 qaytaradi.
+      NEST_PORT: String(tenant.port),
       // Brend nomi YAGONA manbadan - `tenant.name`. Server (bot matnlari,
       // {markaz} tokeni, Excel muallifi) va client (VITE_APP_NAME) ayni shu
       // qiymatni oladi, shuning uchun panelda nomni o'zgartirish ikkala

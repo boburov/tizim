@@ -78,7 +78,8 @@ if [ "$APPLY_MODE" = "resume" ]; then
   if ! pm2 start "$TENANT_PM2_NAME" --update-env 2>/dev/null; then
     echo "    (ro'yxatda yo'q — papkadan qayta ishga tushirilmoqda)"
     cd "$APP_DIR/server"
-    pm2 start src/index.js --name "$TENANT_PM2_NAME" --update-env
+    # NestJS kirish nuqtasi dist/main.js (kompilyatsiya natijasi).
+    pm2 start dist/main.js --name "$TENANT_PM2_NAME" --update-env
   fi
   pm2 save >/dev/null 2>&1 || true
   echo "==> ✅ Qayta yoqildi: ${TENANT_DOMAIN}"
@@ -187,7 +188,20 @@ write_b64 "${TENANT_WORKFLOW_B64:-}"    "$APP_DIR/.github/workflows/deploy.yml"
 if [ "$APPLY_MODE" = "deploy" ]; then
   echo "==> server: bog'lamalar yangilanmoqda..."
   cd "$APP_DIR/server"
-  npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+  # --include=dev SHART: serverni `nest build` bilan qurish kerak, `nest` va
+  # `typescript` esa devDependencies (client'dagi vite bilan bir xil sabab).
+  npm ci --include=dev 2>/dev/null || npm install --include=dev
+
+  # Yangi kod yangi migratsiyalar bilan kelishi mumkin — repodan tortilgach
+  # bazani ham yangilaymiz (migrate deploy hech qachon ma'lumot o'chirmaydi).
+  echo "==> server: prisma migrate deploy + generate..."
+  npx prisma migrate deploy
+  npx prisma generate
+
+  # NestJS kodini kompilyatsiya qilamiz -> dist/main.js. `dist` gitignore'da
+  # bo'lgani uchun git reset --hard'dan keyin uni shu yerda qayta quramiz.
+  echo "==> server: build (nest build)..."
+  npm run build
 fi
 
 if [ "$APPLY_MODE" = "rebuild" ] || [ "$APPLY_MODE" = "deploy" ]; then
@@ -195,7 +209,9 @@ if [ "$APPLY_MODE" = "rebuild" ] || [ "$APPLY_MODE" = "deploy" ]; then
   cd "$APP_DIR/client"
 
   if [ ! -d node_modules ] || [ "$APPLY_MODE" = "deploy" ]; then
-    npm ci 2>/dev/null || npm install
+    # --include=dev SHART: NODE_ENV=production meros bo'lgani uchun usiz `vite`
+    # (devDependency) o'rnatilmaydi va `vite build` -> "vite: not found" (kod 127).
+    npm ci --include=dev 2>/dev/null || npm install --include=dev
   fi
 
   npm run build

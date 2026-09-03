@@ -171,7 +171,11 @@ write_b64 "${TENANT_WORKFLOW_B64:-}"    "$APP_DIR/.github/workflows/deploy.yml"
 # ---------------------------------------------------------------------------
 echo "==> server: npm ci..."
 cd "$APP_DIR/server"
-npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+# --include=dev SHART: server NestJS ilovasi va uni `nest build` bilan
+# kompilyatsiya qilish kerak. `nest` va `typescript` — devDependencies.
+# NODE_ENV=production meros bo'lgani uchun usiz ular o'rnatilmaydi va
+# `npm run build` -> "nest: not found" beradi.
+npm ci --include=dev 2>/dev/null || npm install --include=dev
 
 # ---------------------------------------------------------------------------
 # 4b) PostgreSQL bazasi + Prisma migratsiyalari
@@ -201,12 +205,22 @@ echo "==> Prisma migratsiyalari..."
 npx prisma migrate deploy
 npx prisma generate
 
+# Server NestJS TypeScript kodini kompilyatsiya qilamiz -> dist/main.js
+# (pm2 ayni shu faylni ishga tushiradi). Bu qadamsiz `dist` faqat
+# shablondan ko'chirilgan eski nusxa bo'lardi va `deploy` rejimida
+# (git reset --hard, `dist` gitignore'da) umuman bo'lmasdi.
+echo "==> server: build (nest build)..."
+npm run build
+
 # ---------------------------------------------------------------------------
 # 5) Client build
 # ---------------------------------------------------------------------------
 echo "==> client: npm ci + build..."
 cd "$APP_DIR/client"
-npm ci 2>/dev/null || npm install
+# --include=dev SHART: admin-api pm2 ostida NODE_ENV=production bilan ishlaydi va
+# bu qiymat skriptga meros bo'ladi. Usiz `npm ci` devDependencies'ni (jumladan
+# `vite`) o'tkazib yuboradi, natijada `vite build` -> "vite: not found" (kod 127).
+npm ci --include=dev 2>/dev/null || npm install --include=dev
 npm run build
 
 echo "==> client dist -> $WEB_ROOT"
@@ -220,7 +234,8 @@ chown -R "$WEB_USER":"$WEB_USER" "$WEB_ROOT"
 # ---------------------------------------------------------------------------
 echo "==> pm2 start ${TENANT_PM2_NAME}..."
 cd "$APP_DIR/server"
-pm2 start src/index.js --name "$TENANT_PM2_NAME" --update-env
+# NestJS kirish nuqtasi dist/main.js (start skripti: `node dist/main.js`).
+pm2 start dist/main.js --name "$TENANT_PM2_NAME" --update-env
 pm2 save >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
