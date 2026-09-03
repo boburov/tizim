@@ -78,7 +78,8 @@ if [ "$APPLY_MODE" = "resume" ]; then
   if ! pm2 start "$TENANT_PM2_NAME" --update-env 2>/dev/null; then
     echo "    (ro'yxatda yo'q — papkadan qayta ishga tushirilmoqda)"
     cd "$APP_DIR/server"
-    pm2 start src/index.js --name "$TENANT_PM2_NAME" --update-env
+    # NestJS entrypoint (eski Express `src/index.js` mavjud emas).
+    pm2 start dist/main.js --name "$TENANT_PM2_NAME" --update-env
   fi
   pm2 save >/dev/null 2>&1 || true
   echo "==> ✅ Qayta yoqildi: ${TENANT_DOMAIN}"
@@ -187,7 +188,21 @@ write_b64 "${TENANT_WORKFLOW_B64:-}"    "$APP_DIR/.github/workflows/deploy.yml"
 if [ "$APPLY_MODE" = "deploy" ]; then
   echo "==> server: bog'lamalar yangilanmoqda..."
   cd "$APP_DIR/server"
-  npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+  # --omit=dev QO'YMANG: `nest build` uchun @nestjs/cli va typescript kerak.
+  npm ci 2>/dev/null || npm install
+
+  # Repodan yangi kod keldi — u yangi migratsiya bilan kelgan bo'lishi mumkin.
+  # Migratsiyasiz eski schema ustida ko'tarilsa, xato faqat ish vaqtida
+  # chiqadi va sababi ko'rinmaydi.
+  echo "==> server: prisma migrate deploy + generate..."
+  npx prisma migrate deploy
+  npx prisma generate
+
+  # Kompilyatsiya. Busiz `git pull` qilingan kod hech qachon ishga tushmaydi:
+  # pm2 eski dist/main.js ni qayta ishga tushirib, "deploy muvaffaqiyatli"
+  # deb ko'rsatardi.
+  echo "==> server: build..."
+  npm run build
 fi
 
 if [ "$APPLY_MODE" = "rebuild" ] || [ "$APPLY_MODE" = "deploy" ]; then

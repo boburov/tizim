@@ -196,13 +196,17 @@ test('featureForPath chuqur yo\'lni ham to\'g\'ri topadi', () => {
   assert.equal(featureForPath('imports'), 'imports');
 });
 
-test('O\'ZAK marshrutlar darvozadan TASHQARIDA', () => {
+test('QULFLANGAN marshrutlar darvozadan TASHQARIDA', () => {
   // ⚠ Eng muhim shart: `/features` yopilib qolsa mijoz nima o'chganini
   // bilolmasdi, `/internal/entitlements` yopilsa esa admin panel
   // yangilash turtkisini yubora olmasdi — ya'ni bo'limni QAYTA YOQISH
-  // yo'li yo'qolardi.
+  // yo'li yo'qolardi. Tenant TIKLANMAS holatga tushardi.
+  //
+  // ⚠ SHART `f.locked`, ilgarigidek `f.core` EMAS. `core` modullar endi
+  // haqiqatan darvozaga tushadi (talab: har bir feature sotiladi va
+  // o'chiriladi); `locked` esa atigi ikkita — `auth` va `features`.
   for (const f of FEATURES) {
-    if (!f.core) continue;
+    if (!f.locked) continue;
     for (const r of f.routes || []) {
       assert.equal(ROUTE_TO_FEATURE.get(r), undefined, `${r} darvoza ostida qolgan`);
     }
@@ -210,6 +214,36 @@ test('O\'ZAK marshrutlar darvozadan TASHQARIDA', () => {
   assert.equal(featureForPath('/features'), undefined);
   assert.equal(featureForPath('/internal/entitlements/refresh'), undefined);
   assert.equal(featureForPath('/auth/login'), undefined);
+
+  // Teskari yo'nalish: `core` (lekin qulflanmagan) modul darvozaga
+  // TUSHISHI shart. Aks holda panelda o'chiriladi-yu, bo'lim ishlab
+  // turaverardi — ya'ni sotuv qarori kuchga kirmasdi.
+  const gatedCore = FEATURES.filter(
+    (f) => f.core && !f.locked && !f.gatedElsewhere && (f.routes || []).length,
+  );
+  assert.ok(gatedCore.length > 0, "hech bo'lmasa bitta core modul darvozada bo'lishi kerak");
+  for (const f of gatedCore) {
+    assert.equal(
+      ROUTE_TO_FEATURE.get(f.routes[0]),
+      f.key,
+      `${f.key} core, lekin darvozadan tashqarida qolgan`,
+    );
+  }
+});
+
+test('QULFLANGAN kalitlar — atigi ikkita, va aynan o\'shalar', () => {
+  // ⚠ Bu ro'yxat O'SMASLIGI kerak. Har bir yangi `locked` kalit — bu
+  // "sotib bo'lmaydigan" modul, ya'ni talabga zid. Ikkalasining sababi
+  // `feature-registry.ts` da yozilgan va u sabab TEXNIK, tijorat emas.
+  const locked = FEATURES.filter((f) => f.locked).map((f) => f.key).sort();
+  assert.deepEqual(locked, ['auth', 'features']);
+
+  // `NEVER_GATED` ro'yxati (`global-feature-gate.ts`) shu qarorni
+  // TAKRORLAYDI — ikki qatlam ataylab. Bu yerda faqat reyestr tomonini
+  // tekshiramiz: qulflangan kalit `SWITCHABLE_KEYS` ga tushmasin.
+  for (const key of locked) {
+    assert.ok(!SWITCHABLE_KEYS.includes(key), `${key} o'chirgichda ko'rinmasligi kerak`);
+  }
 });
 
 // ── To'siq hisoblash ──────────────────────────────────────────────────────
@@ -232,15 +266,20 @@ test('o\'chiq bog\'liq to\'siq bo\'lmaydi', () => {
 
 test('har bir o\'chirgich OXIR-OQIBAT o\'chirilishi mumkin', () => {
   // Kaskad: bog'liqlarni avval o'chirsak, kalitning o'zi ham o'chadimi.
-  // ⚠ O'ZAK bog'liqlik bundan MUSTASNO: `auth` hech qachon o'chmaydi,
-  // ya'ni unga tayanadigan bo'lim (masalan `attendance`) hozircha
-  // o'chirilmaydi. Bu MA'LUM cheklov — test uni qayd etadi, yashirmaydi.
-  const coreKeys = new Set(FEATURES.filter((f) => f.core).map((f) => f.key));
+  //
+  // ⚠ QULFLANGAN bog'liqlik bundan MUSTASNO: `auth` va `features` hech
+  // qachon o'chmaydi, ya'ni ularga tayanadigan bo'lim ham o'chirilmaydi.
+  // Bu MA'LUM cheklov — test uni qayd etadi, yashirmaydi.
+  //
+  // ⚠ Ilgari bu ro'yxat butun `core` to'plamiga qarardi va ancha uzun
+  // edi. Endi `core` o'chiriladi, ya'ni ro'yxat qisqardi — aynan shu
+  // "har bir feature sotiladi" talabining o'lchovi.
+  const lockedKeys = new Set(FEATURES.filter((f) => f.locked).map((f) => f.key));
   const blockedByCore = SWITCHABLE_KEYS.filter((k) =>
-    FEATURES.some((f) => coreKeys.has(f.key) && (f.requires || []).includes(k)),
+    FEATURES.some((f) => lockedKeys.has(f.key) && (f.requires || []).includes(k)),
   );
   console.log(
-    `      (o'zak tufayli hozircha o'chmaydigan: ${blockedByCore.join(', ') || 'yo\'q'})`,
+    `      (qulflangan bog'liqlik tufayli o'chmaydigan: ${blockedByCore.join(', ') || 'yo\'q'})`,
   );
   for (const key of SWITCHABLE_KEYS) {
     if (blockedByCore.includes(key)) continue;

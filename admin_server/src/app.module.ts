@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { TenantDbModule } from './tenant-db/tenant-db.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { TemplatesModule } from './templates/templates.module.js';
 import { TenantsModule } from './tenants/tenants.module.js';
@@ -18,11 +19,14 @@ import { GithubModule } from './github/github.module.js';
 import { ApiServicesModule } from './api-services/api-services.module.js';
 import { BotsModule } from './bots/bots.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
+import { UploadsModule } from './uploads/uploads.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    // Tenant bazasiga to'g'ridan-to'g'ri ulanish (ega hisobi). Global.
+    TenantDbModule,
     AuthModule,
     TemplatesModule,
     TenantsModule,
@@ -43,6 +47,8 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
     ApiServicesModule,
     BotsModule,
     SubscriptionsModule,
+    // Logo yuklash (`tenants/:id/logo`).
+    UploadsModule,
   ],
 })
 export class AppModule {}

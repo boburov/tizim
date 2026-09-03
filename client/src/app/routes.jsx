@@ -120,7 +120,24 @@ const AiReportRedirect = () => {
  * Sahifa mazmuni ikkalasida ham AYNI (`SystemAnalysisTabs`) — faqat
  * ko'lam boshqa, uni esa server aniqlaydi.
  */
-const AnalysisRedirect = () => <Navigate to="/owner/tahlil" replace />;
+/**
+ * `/admin/tahlil` — kimga qarab ayriladi.
+ *
+ * ⚠ Filialli tarifdagi ega uchun `/org/tahlil`: u `/owner/*` ga kira
+ * olmaydi (`AdminPanelGuard`), ya'ni `/owner/tahlil` ga yuborsak odam
+ * darhol `/org` ga qaytarilardi — IKKI SAKRASH va noto'g'ri sahifa.
+ * Qolgan hamma uchun `/owner/tahlil` (bir xil komponent, ko'lami
+ * serverda qo'llanadi).
+ */
+const AnalysisRedirect = () => {
+  const auth = useAuth();
+  if (auth.isLoading) return null;
+
+  const type = auth.roleType || auth.role;
+  const toOrg = auth.branchesEnabled && type === ROLES.OWNER;
+
+  return <Navigate to={toOrg ? "/org/tahlil" : "/owner/tahlil"} replace />;
+};
 
 const RoleHomeRedirect = () => {
   const { role } = useAuth();
@@ -168,10 +185,8 @@ const Routes = () => (
       <Route path="/admin/oquv" element={<Navigate to="/org/tahlil?tab=academic" replace />} />
       <Route path="/admin/jamoa" element={<Navigate to="/org/tahlil?tab=team" replace />} />
       <Route path="/admin/tavsiyalar" element={<Navigate to="/org/tahlil?tab=insights" replace />} />
-      {/* TAHLIL — `/owner/tahlil` ga (qarang `AnalysisRedirect`).
-          Bir muddat bu ega uchun `/org/tahlil` ga ayirilgandi, chunki
-          `/owner/*` unga yopiq edi. Endi yopiq emas, ya'ni ayirish
-          keraksiz. `/owner/ai*` marshrutlari O'Z JOYIDA qoladi. */}
+      {/* TAHLIL — foydalanuvchiga qarab ayriladi (`AnalysisRedirect`).
+          `/owner/ai*` marshrutlari O'Z JOYIDA qoladi. */}
       <Route path="/admin/tahlil" element={<AnalysisRedirect />} />
       <Route path="/admin/tahlil/vazifalar" element={<Navigate to="/owner/ai/tasks" replace />} />
       <Route path="/admin/tahlil/hisobotlar" element={<Navigate to="/owner/ai/reports" replace />} />

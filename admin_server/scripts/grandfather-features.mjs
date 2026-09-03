@@ -41,10 +41,27 @@ const main = async () => {
       select: { id: true, name: true, domain: true },
     }),
     prisma.feature.findMany({
-      // ⚠ O'ZAK kalitlarga ustun qaror KERAK EMAS: ular yechishda
-      // shartsiz ochiq (`entitlements.service.ts`). Ularga qator yozish
-      // faqat shovqin bo'lardi.
-      where: { isModule: true, isActive: true, isCore: false },
+      // ══════════════════════════════════════════════════════════════
+      // ⚠ FILTR `isLocked`, ILGARIGIDEK `isCore` EMAS
+      // ══════════════════════════════════════════════════════════════
+      //
+      // Bu bir belgilik o'zgarish — va u BUTUN MIJOZ BAZASINI qorayishdan
+      // saqlaydi.
+      //
+      // Ilgari `core` kalitlar yechishda SHARTSIZ ochiq edi
+      // (`module-resolve.ts`), ya'ni ularga ustun qaror yozish shovqin
+      // bo'lardi. Endi shartsiz ochiq faqat `isLocked` — qolgan hamma
+      // kalit "tarifda bormi?" savolidan o'tadi.
+      //
+      // Ya'ni bu skript `isCore: false` bilan qolsa: `users`, `groups`,
+      // `courses`, `journal`, `roles`, `branches` mavjud har bir
+      // tenantda ustun qarorsiz qoladi, tarifda esa ular yo'q (hech
+      // qachon `PlanFeature` sifatida sotilmagan) — va deploy'dan keyin
+      // JIMGINA o'chadi. Mijoz ertalab bo'sh ilova ochadi.
+      //
+      // Qulflangan kalitlarga qator yozish esa haqiqatan ortiqcha: ular
+      // baribir shartsiz ochiq.
+      where: { isModule: true, isActive: true, isLocked: false },
     }),
   ]);
 

@@ -3,6 +3,7 @@ import { FeaturesController } from './features.controller.js';
 import { InternalEntitlementsController } from './internal-entitlements.controller.js';
 import { JobsModule } from '../../jobs/jobs.module.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
+import { BotModule } from '../../bot/bot.module.js';
 
 /**
  * TARIF IMKONIYATLARI — mijoz uchun o'qish, admin server uchun turtki.
@@ -15,7 +16,9 @@ import { AuthMiddleware } from '../../middleware/auth.middleware.js';
  * tenant ilovasida foydalanuvchi emas, uning sessiyasi ham yo'q.
  */
 @Module({
-  imports: [JobsModule],
+  // `BotModule` hech narsa import qilmaydi, ya'ni aylana bog'liqlik xavfi
+  // yo'q (`notifications` va `assignments` ham xuddi shunday import qiladi).
+  imports: [JobsModule, BotModule],
   controllers: [FeaturesController, InternalEntitlementsController],
 })
 export class FeaturesModule implements NestModule {

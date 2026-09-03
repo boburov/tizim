@@ -1,7 +1,16 @@
-import { Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  NotFoundException,
+  Post,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { BotAuthService } from './bot-auth.service.js';
+import { TelegramBotService } from '../../bot/telegram-bot.service.js';
 import { Validated } from '../../common/decorators/index.js';
 import { setRefreshCookie, type CookieSettings } from '../../common/utils/cookie.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
@@ -37,12 +46,30 @@ export class BotAuthController {
 
   constructor(
     private readonly botAuth: BotAuthService,
+    private readonly bots: TelegramBotService,
     config: ConfigService<AppConfig, true>,
   ) {
     this.cookie = {
       isProd: config.get('isProd', { infer: true }),
       domain: config.get('COOKIE_DOMAIN', { infer: true }),
     };
+  }
+
+  /**
+   * ⚠ BOT O'CHIQ BO'LSA — 404, 403 EMAS.
+   *
+   * Sozlanmagan imkoniyat "mavjud, lekin sizga ruxsat yo'q" emas,
+   * "umuman yo'q" degani. `internal-entitlements.controller.ts` ham
+   * `HEARTBEAT_SECRET` qo'yilmaganda aynan shu qarorni qabul qiladi.
+   *
+   * Bu sahifa LOGIN'DAN OLDIN turadi, ya'ni `GET /features` (sessiya
+   * talab qiladi) undan o'qib bo'lmaydi — mijoz botning o'chiqligini
+   * FAQAT shu 404 javobidan biladi.
+   */
+  private assertBotEnabled(): void {
+    if (!this.bots.isConfigured()) {
+      throw new NotFoundException("Telegram orqali kirish bu tizimda yoqilmagan");
+    }
   }
 
   @Post('verify')
@@ -52,6 +79,8 @@ export class BotAuthController {
     @Req() req: AuthenticatedRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.assertBotEnabled();
+
     const result = await this.botAuth.verifyAndIssue({
       initData: v.body.initData,
       userAgent: req.get('user-agent'),
@@ -88,6 +117,8 @@ export class BotAuthController {
     @Req() req: AuthenticatedRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.assertBotEnabled();
+
     const { accessToken, refreshToken, user, roleMeta } = await this.botAuth.loginAndLink({
       login: v.body.login,
       password: v.body.password,

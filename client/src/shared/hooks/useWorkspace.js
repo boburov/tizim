@@ -25,12 +25,31 @@ const useWorkspace = () => {
   const auth = useAuth();
   const { has } = usePermissions();
 
+  // ══════════════════════════════════════════════════════════════════
+  // SERVER JAVOBI USTUN
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // `/auth/me` endi `workspace` ni O'ZI hisoblab yuboradi
+  // (`server/src/common/workspaces/workspace-resolve.ts`). Qoida bir
+  // xil bo'lsa ikki hisob ham bir xil natija beradi — lekin kelajakda
+  // server qoidasi o'zgarsa (masalan yangi tarif turi), eski klient
+  // JIMGINA boshqa panelga yuborardi.
+  //
+  // Klientdagi `resolveWorkspace` ZAXIRA sifatida qoladi: eski backend
+  // bilan ishlayotgan nusxa `workspace` maydonini olmaydi.
   const workspace = useMemo(
-    () => resolveWorkspace(auth, has),
+    () => auth.workspace || resolveWorkspace(auth, has),
     // `permissions` massivi har render'da yangi bo'lishi mumkin —
     // shuning uchun uzunlik + rol bo'yicha bog'lanamiz.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [auth.role, auth.roleType, auth.permissions?.length, auth.isLoading],
+    [
+      auth.workspace,
+      auth.role,
+      auth.roleType,
+      auth.branchesEnabled,
+      auth.permissions?.length,
+      auth.isLoading,
+    ],
   );
 
   // O'qituvchi — xodim makonining ALOHIDA ko'rinishi: manzillari
@@ -43,7 +62,10 @@ const useWorkspace = () => {
     workspace,
     nav,
     meta,
-    home: meta?.home || "/me",
+    // ⚠ Server `home` ni ham yuboradi — `workspace` bilan bir juftlik
+    // bo'lishi shart, aks holda odam bir panelda, bosh sahifasi
+    // boshqasida qolardi.
+    home: auth.workspaceHome || meta?.home || "/me",
     isSuperAdmin: workspace === WORKSPACES.SUPER_ADMIN,
     isAdmin: workspace === WORKSPACES.ADMIN,
     isStaff: workspace === WORKSPACES.STAFF,

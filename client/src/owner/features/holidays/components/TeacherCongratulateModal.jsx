@@ -2,6 +2,7 @@ import { useState } from "react";
 import ChannelSelector from "@/owner/features/notifications/components/ChannelSelector";
 import Button from "@/shared/components/ui/button/Button";
 import { useCongratulateTeacherMutation } from "../hooks/useHolidayMutations";
+import useFeatures from "@/shared/hooks/useFeatures";
 
 // O'qituvchini tug'ilgan kuni bilan tabriklash modali.
 // 2 ta kanal: Telegram (tg orqali) va Platforma (inapp) - biri yoki ikkalasi.
@@ -12,7 +13,12 @@ const TeacherCongratulateModal = ({
   isLoading,
   setIsLoading,
 }) => {
-  const [channels, setChannels] = useState(["telegram", "inapp"]);
+  // ⚠ Bot o'chiq bo'lsa "telegram" standart bo'lib turmasin — pastdagi
+  // `ChannelSelector` kartani ham yashiradi, ham qiymatni tozalaydi.
+  const { botEnabled } = useFeatures();
+  const [channels, setChannels] = useState(
+    botEnabled ? ["telegram", "inapp"] : ["inapp"],
+  );
   const [message, setMessage] = useState("");
 
   const { mutate } = useCongratulateTeacherMutation({

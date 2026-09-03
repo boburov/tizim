@@ -102,6 +102,20 @@ const BotAuthPage = () => {
     useBotAuthLoginMutation({
       onSuccess: (data) => goHome(data.user?.role, data.roleMeta),
       onError: (err) => {
+        // ── ⚠ 404 = BOT BU TIZIMDA YOQILMAGAN ──
+        //
+        // Bu sahifa LOGIN'DAN OLDIN turadi, ya'ni `GET /features` (sessiya
+        // talab qiladi) undan o'qib bo'lmaydi. Bot holatini bilishning
+        // yagona yo'li — serverning 404 javobi. "Login yoki parol
+        // noto'g'ri" deb ko'rsatish mijozni parolini qayta-qayta
+        // terishga majburlardi.
+        if (err?.response?.status === 404) {
+          ui.setField(
+            "errorMsg",
+            "Telegram orqali kirish bu tizimda yoqilmagan. Login va parol bilan kiring.",
+          );
+          return;
+        }
         ui.setField(
           "errorMsg",
           extractApiErrorMessage(err, "Login yoki parol noto'g'ri."),

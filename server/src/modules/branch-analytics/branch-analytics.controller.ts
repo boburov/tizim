@@ -19,6 +19,7 @@ import {
   type TransferPreviewRequest, type TransferRequest,
   type RoomDashboardRequest, type RoomFinderRequest, type RoomScheduleRequest, type RoomDetailsRequest,
 } from './branch-analytics.validators.js';
+import { BranchesEnabledGuard } from '../../common/guards/branches-enabled.guard.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -45,7 +46,11 @@ import {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 @Controller('branch-analytics')
-@UseGuards(PermissionsGuard)
+// ⚠ `BranchesEnabledGuard` BIRINCHI: filialsiz tarifda bu bo'limning
+// hammasi 402 qaytaradi. Ruxsat tekshiruvidan oldin turishi kerak —
+// aks holda ruxsati yo'q odam 403, ruxsati bori esa bo'sh hisobot
+// olardi va ikkalasi ham "tarifda yo'q" degan haqiqatni yashirardi.
+@UseGuards(BranchesEnabledGuard, PermissionsGuard)
 export class BranchAnalyticsRoomsController {
   constructor(
     private readonly roomUtilization: RoomUtilizationService,

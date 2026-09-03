@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  GoneException,
   HttpCode,
   Logger,
   Param,
@@ -75,9 +76,24 @@ export class CustomerAuthController {
 
   constructor(private readonly auth: CustomerAuthService) {}
 
+  /**
+   * ⚠ YOPILGAN — mijoz o'zi ro'yxatdan o'ta olmaydi.
+   *
+   * Loyiha endi FAQAT developer paneldan yaratiladi, chunki har bir yangi
+   * loyiha uchun ega login/paroli majburiy va uni admin belgilaydi.
+   * Self-service oqimida bunday maydon yo'q edi — mijoz ishlaydigan domen
+   * olardi-yu, unga kira olmasdi.
+   *
+   * Marshrutning o'zi SAQLANADI: 404 qaytarish eski frontend nusxalarini
+   * "server ishlamayapti" holatiga tushirardi, 410 esa aniq javob beradi.
+   * Mavjud mijoz yozuvlari va ularning kirishi TEGILMAGAN.
+   */
   @Post('signup')
-  signup(@Body() dto: SignupDto) {
-    return this.auth.signup(dto);
+  @HttpCode(410)
+  signup(@Body() _dto: SignupDto) {
+    throw new GoneException(
+      "Ro'yxatdan o'tish yopilgan — loyiha ochish uchun biz bilan bog'laning",
+    );
   }
 
   @Post('login')
@@ -304,12 +320,19 @@ export class CustomerPortalController {
     return this.customers.myTenantUsage(currentCustomer(req).sub, id);
   }
 
+  /**
+   * ⚠ YOPILGAN — yuqoridagi `signup` bilan bir sabab: loyiha yaratish endi
+   * ega login/parolini talab qiladi va u faqat developer panelda beriladi.
+   */
   @Post('tenants')
+  @HttpCode(410)
   createTenant(
-    @Req() req: CustomerRequest,
-    @Body() dto: CreateTenantDto & { planKey?: string },
+    @Req() _req: CustomerRequest,
+    @Body() _dto: CreateTenantDto & { planKey?: string },
   ) {
-    return this.customers.createTenant(currentCustomer(req).sub, dto);
+    throw new GoneException(
+      "Loyihani o'zingiz yarata olmaysiz — yangi loyiha uchun biz bilan bog'laning",
+    );
   }
 
   @Delete('tenants/:id')

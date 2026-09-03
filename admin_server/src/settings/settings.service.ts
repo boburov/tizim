@@ -43,6 +43,7 @@ import {
   renderEnvExample,
   renderServerEnv,
 } from './env-renderer.js';
+import { tenantPrismaDsn } from '../common/db/tenant-dsn.js';
 
 /** Boshqariladigan kalitlar o'zgarganda ham client qayta qurilishi kerak. */
 const CLIENT_MANAGED_APPLY: ApplyMode = 'rebuild';
@@ -67,6 +68,33 @@ export class SettingsService {
     private readonly branchConfig: BranchConfigService,
   ) {}
 
+  /**
+   * "Qo'llanmagan o'zgarish bor" belgisi.
+   *
+   * ⚠ ATAYLAB ALOHIDA METOD. Bu blok ilgari faqat `update()` ichida edi.
+   * Logo yuklash yo'li `update()` ni chaqirmaydi (u `Tenant.logoUrl`
+   * ustunini to'g'ridan-to'g'ri yozadi), ya'ni nusxa ko'chirilsa
+   * ikkinchisi vaqt o'tib eskirardi — va natijasi jimgina yo'qolgan
+   * o'zgarish bo'lardi: panel "kutilmoqda" ko'rsatmaydi, hech kim
+   * "Qo'llash" bosmaydi, logo esa hech qachon saytga chiqmaydi.
+   *
+   * `APPLYING` holatida belgi QO'YILMAYDI: qo'llash allaqachon ketyapti
+   * va u tugagach `markApplied()` yangi holatni suratga oladi.
+   */
+  async markPending(tenantId: string): Promise<ConfigDiffEntry[]> {
+    const { tenant, config } = await this.resolve(tenantId);
+    const diff = this.computeDiff(tenant, config);
+
+    if (diff.length && tenant.applyStatus !== 'APPLYING') {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: { applyStatus: 'PENDING' },
+      });
+    }
+
+    return diff;
+  }
+
   // ───────────────────────────────────────────────── qiymatlarni yig'ish
 
   /**
@@ -85,8 +113,10 @@ export class SettingsService {
   ): ResolvedConfig {
     // Tenant bazasi endi PostgreSQL (Prisma). Har tenantga ALOHIDA baza
     // ochiladi - nomi `tenant.dbName`, ya'ni izolyatsiya avvalgidek qat'iy.
-    const pgBase =
-      process.env.POSTGRES_BASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432';
+    //
+    // ⚠ Ulanish satri `common/db/tenant-dsn.ts` da — admin_server tenant
+    // bazasiga o'zi ham ulanadi (ega hisobi uchun) va ikkala tomon AYNI
+    // satrni qurishi shart.
     const clientUrl = `https://${tenant.domain}`;
 
     const server: Record<string, string> = {
@@ -97,7 +127,7 @@ export class SettingsService {
       // qiymatni oladi, shuning uchun panelda nomni o'zgartirish ikkala
       // tomonni birdan yangilaydi.
       APP_NAME: tenant.name,
-      DATABASE_URL: `${pgBase}/${tenant.dbName}?schema=public`,
+      DATABASE_URL: tenantPrismaDsn(tenant),
       COOKIE_DOMAIN: tenant.domain,
       CLIENT_URL: clientUrl,
       ADMIN_API_URL: process.env.ADMIN_API_PUBLIC_URL || '',
@@ -436,15 +466,7 @@ export class SettingsService {
       });
     }
 
-    const { tenant: fresh, config } = await this.resolve(tenantId);
-    const diff = this.computeDiff(fresh, config);
-
-    if (diff.length && fresh.applyStatus !== 'APPLYING') {
-      await this.prisma.tenant.update({
-        where: { id: tenantId },
-        data: { applyStatus: 'PENDING' },
-      });
-    }
+    const diff = await this.markPending(tenantId);
 
     return {
       ok: true,

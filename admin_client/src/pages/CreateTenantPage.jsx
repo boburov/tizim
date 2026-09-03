@@ -18,6 +18,9 @@ import { api } from '../api/client';
 import { cn } from '../lib/utils';
 import BrandPreview from '../components/BrandPreview';
 import BrandFields from '../components/BrandFields';
+import OwnerCredentialsFields, {
+  ownerCredentialsValid,
+} from '../components/OwnerCredentialsFields';
 
 // Sahifa ochilganda shu tizim avtomatik tanlanadi (topilmasa — ro'yxatdagi birinchisi).
 const DEFAULT_TEMPLATE_KEY = 'study-center';
@@ -49,6 +52,12 @@ export default function CreateTenantPage() {
     // serverdagisi bilan vaqt o'tib ajralib ketardi.
     branchesEnabled: true,
     branchLimit: '',
+    // ── Ega hisobi ──
+    // Login oldindan to'ldirilgan, lekin tahrirlanadi. Parol ataylab bo'sh:
+    // avtomatik to'ldirib qo'ysak, admin uni ko'rmasdan yuborib yuborardi
+    // va mijozga aytadigan hech narsasi bo'lmasdi.
+    ownerUsername: 'owner',
+    ownerPassword: '',
   });
 
   // Dinamik tizimlar ro'yxati (select uchun)
@@ -94,6 +103,8 @@ export default function CreateTenantPage() {
   const submit = (e) => {
     e.preventDefault();
     if (!form.systemTemplateId) return toast.error('Tizimni tanlang');
+    if (!ownerCredentialsValid(form))
+      return toast.error("Ega login va parolini to'g'ri kiriting");
 
     // Bo'sh ixtiyoriy maydonlar umuman yuborilmaydi — serverda ular
     // "berilmagan" (avtomatik hosil qilinsin) degani.
@@ -113,6 +124,9 @@ export default function CreateTenantPage() {
       branchesEnabled: form.branchesEnabled,
       // Bo'sh qoldirilsa umuman yuborilmaydi — server standartni qo'llaydi.
       branchLimit: form.branchLimit === '' ? undefined : Number(form.branchLimit),
+      // Ega hisobi — provisioning tugagach tenant bazasiga yoziladi.
+      ownerUsername: form.ownerUsername.trim(),
+      ownerPassword: form.ownerPassword,
     });
   };
 
@@ -232,6 +246,19 @@ export default function CreateTenantPage() {
           <div className="border-t border-border pt-5">
             <h2 className="mb-4 text-sm font-semibold text-foreground">Brend</h2>
             <BrandFields value={form} onChange={setForm} />
+          </div>
+
+          {/* Ega hisobi — MAJBURIY. Busiz yaratilgan loyihaga kirib
+              bo'lmaydi (avval aynan shunday edi). */}
+          <div className="space-y-4 border-t border-border pt-5">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Lock size={14} /> Ega hisobi
+            </h2>
+            <OwnerCredentialsFields
+              value={form}
+              onChange={setForm}
+              disabled={mutation.isPending}
+            />
           </div>
 
           {/* Filiallar — SaaS chegarasi. Mijoz buni O'ZGARTIRA OLMAYDI:

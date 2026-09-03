@@ -30,12 +30,56 @@ import { ModuleFeaturesService } from './module-features.service.js';
  *
  * ── ⚠ O'ZINI QULFLAB QO'YMASLIK ──
  *
- * `features` va `internal/entitlements` marshrutlari reyestrda `core`
- * deb belgilangan, ya'ni xaritaga UMUMAN tushmaydi. Usiz bo'lim
- * o'chirilgach mijoz nima o'chganini bilolmasdi va admin server
- * yangilash turtkisini yubora olmasdi.
+ * Pastdagi `NEVER_GATED` — bu faylning eng muhim qatori. Izohi o'sha
+ * yerda.
  * ═══════════════════════════════════════════════════════════════════════════
  */
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HECH QACHON TO'SILMAYDIGAN PREFIKSLAR
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ⚠ BU RO'YXAT QO'LDA YOZILGAN VA SHUNDAY QOLISHI KERAK.
+ *
+ * `feature-registry.ts` GENERATSIYA qilinadi va uning `locked` bayrog'i
+ * ham xuddi shu himoyani beradi. Ikkinchi qatlam ataylab: generatorda
+ * yoki META jadvalida bitta xato — va tenant TIKLANMAS holatga tushadi.
+ *
+ * Har bir prefiks nega shu yerda:
+ *
+ *   `features`               — bu endpoint o'chsa mijoz NIMA o'chganini
+ *                              bilolmaydi: bo'lim ham yo'q, sababi ham
+ *                              yo'q. Ekran shunchaki bo'sh.
+ *   `internal/entitlements`  — admin serverning turtkisi. O'chsa
+ *                              yangilanish faqat 15 daqiqalik heartbeat
+ *                              bilan keladi; heartbeat ham yiqilsa
+ *                              tenantni tashqaridan TUZATIB BO'LMAYDI.
+ *   `auth`                   — o'chsa tenantga hech kim, hatto ega ham
+ *                              kira olmaydi.
+ *   `health`                 — monitoring. Reyestrda umuman yo'q
+ *                              (`src/health` `src/modules` ichida emas),
+ *                              ya'ni bu qator hozir ortiqcha — lekin
+ *                              modul ko'chirilsa kerak bo'ladi.
+ *
+ * ⚠ BU RO'YXATGA "shunchaki muhim" bo'lim QO'SHMANG. Mezon bitta:
+ * o'chirilsa TIKLASH YO'LI YO'QOLADIMI. Yo'qolmasa — bu oddiy modul.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const NEVER_GATED: readonly string[] = Object.freeze([
+  'features',
+  'internal/entitlements',
+  'auth',
+  'health',
+]);
+
+/** Yo'l `NEVER_GATED` prefikslaridan biriga tushadimi. */
+const isNeverGated = (path: string): boolean => {
+  const clean = path.replace(/^\/+/, '');
+  return NEVER_GATED.some(
+    (prefix) => clean === prefix || clean.startsWith(`${prefix}/`),
+  );
+};
 export const mountGlobalFeatureGate = (app: INestApplication): void => {
   const features = app.get(ModuleFeaturesService);
   const logger = new Logger('FeatureGate');
@@ -44,6 +88,11 @@ export const mountGlobalFeatureGate = (app: INestApplication): void => {
     // ⚠ Global prefiks olib tashlanadi: bu middleware Nest
     // yo'naltirishidan OLDIN turadi, ya'ni yo'l hali `/api/...` holida.
     const path = req.path.replace(/^\/api(?=\/|$)/, '');
+
+    // ⚠ Reyestrdan OLDIN: bu tekshiruv generator xatosidan ham himoya
+    // qiladi (izohi `NEVER_GATED` ustida).
+    if (isNeverGated(path)) return next();
+
     const key = featureForPath(path);
     if (!key) return next();
     if (features.isModuleEnabled(key)) return next();

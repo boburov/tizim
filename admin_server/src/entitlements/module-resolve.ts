@@ -21,7 +21,10 @@
 /** Yechish uchun kerakli minimal feature ma'lumoti. */
 export interface ModuleFeatureLike {
   key: string;
+  /** Xavfli (panelda ogohlantirish), lekin O'CHIRILADI. */
   isCore: boolean;
+  /** Hech qachon o'chmaydi — `auth` va `features`. */
+  isLocked: boolean;
   parentKey: string | null;
 }
 
@@ -51,13 +54,22 @@ export const resolveModules = ({
   const value = new Map<string, number>();
 
   for (const f of features) {
-    // ⚠ TIZIM O'ZAGI DOIM OCHIQ — tarifdan ham, obunadan ham, ustun
-    // qarordan ham qat'i nazar. Ikki sabab:
-    //   1. `auth`/`users` o'chsa ilova umuman ishlamaydi;
-    //   2. TO'SIQ MANTIG'I unga tayanadi — `auth` "o'chiq" ko'rinsa u
-    //      `attendance` ni o'chirishdan to'smasdi va login javobi
-    //      jimgina buzilardi.
-    if (f.isCore) {
+    // ⚠ QULFLANGAN KALIT DOIM OCHIQ — tarifdan ham, obunadan ham, ustun
+    // qarordan ham qat'i nazar.
+    //
+    // ⚠ SHART `isLocked`, ILGARIGIDEK `isCore` EMAS. Bu WS-4 dagi asosiy
+    // o'zgarish: `core` modullar endi SOTILADI va o'chiriladi. Qulflangani
+    // atigi ikkitasi:
+    //   • `auth`     — o'chsa tenantga hech kim kira olmaydi;
+    //   • `features` — o'chsa `GET /features` ning o'zi 402 qaytaradi va
+    //                  tenantni tashqaridan tuzatib bo'lmaydi.
+    //
+    // ⚠ TO'SIQ MANTIG'I ENDI BOSHQACHA ISHLAYDI. Ilgari core doim `1`
+    // bo'lgani uchun u har doim "ochiq bog'liq" sifatida to'siq bo'lardi.
+    // Endi core o'chirilishi mumkin — o'rniga `requires` grafigi to'ldi:
+    // generator core nishonlarni ham yozadigan bo'ldi, ya'ni `groups` ni
+    // o'chirishda `attendance` to'siq sifatida CHIQADI.
+    if (f.isLocked) {
       value.set(f.key, 1);
       continue;
     }

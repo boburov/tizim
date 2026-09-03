@@ -56,6 +56,7 @@ const main = async () => {
       type: 'BOOLEAN',
       isModule: true,
       isCore: Boolean(f.core),
+      isLocked: Boolean(f.locked),
       parentKey: f.parent ?? null,
       requiresKeys: f.requires ?? [],
       isActive: true,
@@ -63,7 +64,7 @@ const main = async () => {
 
     const existing = await prisma.feature.findUnique({ where: { key: f.key } });
     const verb = existing ? 'yangilanadi' : 'YARATILADI';
-    const tag = f.core ? " [o'zak]" : '';
+    const tag = f.locked ? ' [QULFLANGAN]' : f.core ? " [o'zak — xavfli]" : '';
     console.log(`  ${verb.padEnd(11)} ${f.key.padEnd(24)}${f.label}${tag}`);
 
     if (dry) continue;

@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ModuleFeaturesService } from '../../common/features/module-features.service.js';
+import { TelegramBotService } from '../../bot/telegram-bot.service.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -23,7 +24,10 @@ import { ModuleFeaturesService } from '../../common/features/module-features.ser
  */
 @Controller('features')
 export class FeaturesController {
-  constructor(private readonly features: ModuleFeaturesService) {}
+  constructor(
+    private readonly features: ModuleFeaturesService,
+    private readonly bots: TelegramBotService,
+  ) {}
 
   /**
    * `{ features: { imports: true, "imports.finance": false }, stale: false }`
@@ -36,8 +40,26 @@ export class FeaturesController {
     features: Record<string, boolean>;
     stale: boolean;
     planKey: string | null;
+    bot: { enabled: boolean };
   } {
     const { stale, planKey } = this.features.diagnostics();
-    return { features: this.features.enabledMap(), stale, planKey };
+    return {
+      features: this.features.enabledMap(),
+      stale,
+      planKey,
+      // ── ⚠ NEGA `features` ICHIDA EMAS, ALOHIDA MAYDON ──
+      //
+      // Bu IKKI XIL narsa va ularni bitta bayroqqa qo'shish diagnostikani
+      // yo'q qilardi:
+      //   • `features['bot-auth']` / `features.notifications` — TIJORAT
+      //     qarori: mijoz sotib olganmi;
+      //   • `bot.enabled` — TEXNIK holat: `.env` da bayroq yoqiqmi va
+      //     token bormi (`settings.service.ts` tokensiz bayroqni majburan
+      //     `false` qiladi).
+      //
+      // Aralashtirilsa "nega Telegram yo'q?" savoliga javob berolmasdik:
+      // sotilmaganmi yoki token qo'yilmaganmi — bilinmasdi.
+      bot: { enabled: this.bots.isConfigured() },
+    };
   }
 }

@@ -18,6 +18,7 @@ import {
   BRANCH_LIMIT_MIN,
   UNLIMITED,
 } from '../branch-config/branch-config.constants.js';
+import type { ProvisionOwner } from '../provisioning/provisioning.service.js';
 
 const PORT_MIN = Number(process.env.TENANT_PORT_MIN || 5100);
 const PORT_MAX = Number(process.env.TENANT_PORT_MAX || 5999);
@@ -95,7 +96,16 @@ export class TenantsService {
     throw new ConflictException("Bo'sh port qolmadi");
   }
 
-  async create(dto: CreateTenantDto, createdBy?: string, customerId?: string) {
+  async create(
+    dto: CreateTenantDto,
+    createdBy?: string,
+    customerId?: string,
+    /**
+     * Ega hisobi — FAQAT developer admin oqimida beriladi. Provisioning
+     * tugagach tenant bazasiga yoziladi va admin bazasida saqlanmaydi.
+     */
+    owner?: ProvisionOwner,
+  ) {
     // Domen bandligini tekshirish
     const domainTaken = await this.prisma.tenant.findUnique({
       where: { domain: dto.domain },
@@ -166,7 +176,7 @@ export class TenantsService {
 
     // Provisioning'ni fon rejimida boshlaymiz — javob darrov qaytadi
     this.provisioning
-      .provision(tenant.id)
+      .provision(tenant.id, owner)
       .catch((err) =>
         this.logger.error(`Provisioning boshlashda xato: ${err.message}`),
       );

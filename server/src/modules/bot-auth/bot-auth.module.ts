@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/c
 import { BotAuthController } from './bot-auth.controller.js';
 import { BotAuthService } from './bot-auth.service.js';
 import { AuthModule } from '../auth/auth.module.js';
+import { BotModule } from '../../bot/bot.module.js';
 import { authLimiter, botVerifyLimiter } from '../../common/middleware/rate-limit.js';
 
 /**
@@ -13,7 +14,9 @@ import { authLimiter, botVerifyLimiter } from '../../common/middleware/rate-limi
  * bot orqali kirgan sessiya oddiy sessiyadan boshqacha yashardi.
  */
 @Module({
-  imports: [AuthModule],
+  // `BotModule` — `isConfigured()` uchun: bot o'chiq bo'lsa marshrutlar
+  // 404 qaytaradi (imzo tekshirishga ham yetib bormaydi).
+  imports: [AuthModule, BotModule],
   controllers: [BotAuthController],
   providers: [BotAuthService],
   // Testlar servisga DI konteyneridan murojaat qiladi (marshrutsiz).

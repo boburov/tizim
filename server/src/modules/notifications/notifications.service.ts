@@ -8,6 +8,7 @@ import { userBranchCondition } from '../../common/als/branch-context.js';
 import { SchedulerService } from '../../jobs/scheduler.service.js';
 import { PersonalizeBodyService } from './personalize-body.service.js';
 import { NotificationDeliverService } from '../../bot/notification-deliver.service.js';
+import { TelegramBotService } from '../../bot/telegram-bot.service.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -107,7 +108,31 @@ export class NotificationsService {
     @Inject(PersonalizeBodyService) private readonly personalize: PersonalizeBodyService,
     @Inject(NotificationDeliverService)
     private readonly botDeliver: NotificationDeliverService,
+    @Inject(TelegramBotService)
+    private readonly bots: TelegramBotService,
   ) {}
+
+  /**
+   * Tanlangan kanallardan bot O'CHIQ bo'lsa `telegram` ni olib tashlaydi.
+   *
+   * ── ⚠ NEGA 400 EMAS, JIMGINA TOZALASH ──
+   *
+   * Xabar yuborish — foydalanuvchining ASOSIY maqsadi; kanal esa uning
+   * qanday yetkazilishi. Bot o'chiq bo'lgani uchun butun xabarni rad
+   * etish, in-app yetkazish mumkin bo'lsa ham, foydalanuvchi ishini
+   * to'xtatardi. Bundan tashqari eski klient nusxalari va serverdagi
+   * avtomatik xabarlar (`inapp`+`telegram` standarti) baribir `telegram`
+   * yuboradi — ular 400 oladigan bo'lsa jimgina ishlamay qo'yardi.
+   *
+   * Bo'sh qolsa `inapp` ga tushamiz: validator kamida bitta kanal talab
+   * qiladi va bo'sh massiv keyingi qatlamlarda `['inapp','telegram']`
+   * standartiga qaytib, bloklashni bekor qilardi.
+   */
+  private allowedChannels(channels: string[]): string[] {
+    if (this.bots.isConfigured()) return channels;
+    const filtered = channels.filter((c) => c !== 'telegram');
+    return filtered.length ? filtered : ['inapp'];
+  }
 
   /** Bitta o'qituvchining barcha faol guruhlari ID'lari. */
   private async getTeacherGroupIds(teacherId: string): Promise<string[]> {
@@ -378,7 +403,13 @@ export class NotificationsService {
     if (!notif) return;
 
     // Telegram kanali tanlanmagan bo'lsa — bot push YO'Q (faqat in-app).
-    const channels = notif.channels?.length ? notif.channels : ['inapp', 'telegram'];
+    // ⚠ `allowedChannels` ham qo'llanadi: xabar bot YOQIQ paytda
+    // yaratilib, keyin bot o'chirilgan bo'lishi mumkin (rejalashtirilgan
+    // xabarlar, qayta yetkazish). Yozuvdagi kanal — o'sha paytdagi niyat,
+    // hozirgi imkoniyat emas.
+    const channels = this.allowedChannels(
+      notif.channels?.length ? notif.channels : ['inapp', 'telegram'],
+    );
     if (!channels.includes('telegram')) return;
 
     const recipients = await this.prisma.notificationRecipient.findMany({
@@ -499,7 +530,9 @@ export class NotificationsService {
       : null;
 
     const recipientIds = await this.resolveAudience(audience as never, sender);
-    const channels = notif.channels?.length ? notif.channels : ['inapp', 'telegram'];
+    const channels = this.allowedChannels(
+      notif.channels?.length ? notif.channels : ['inapp', 'telegram'],
+    );
 
     const claimed = await this.prisma.notification.updateMany({
       where: { id: notif.id, status: 'scheduled' },
@@ -554,9 +587,11 @@ export class NotificationsService {
 
     // Kanallar — kamida bittasi (validator `min(1)`). Berilmasa eski
     // xulq: ikkalasi.
-    const channels = body.channels?.length
-      ? [...new Set(body.channels as string[])]
-      : ['inapp', 'telegram'];
+    const channels = this.allowedChannels(
+      body.channels?.length
+        ? [...new Set(body.channels as string[])]
+        : ['inapp', 'telegram'],
+    );
 
     // Rejalashtirish: `scheduleAt` kelajakda bo'lsa hoziroq yubormaymiz.
     // ⚠ 30 SONIYALIK ORALIQ SAQLANADI: undan yaqin vaqt "hozir" deb

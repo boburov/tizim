@@ -364,10 +364,14 @@ export class EntitlementsService {
         override: (key) => ov?.get(key),
       });
 
-      // ⚠ O'ZAK CHIQARIB TASHLANADI. U hamma loyihada bir xil ochiq,
-      // ya'ni pill sifatida hech qanday ma'lumot bermaydi va faqat
-      // haqiqiy farqni ko'rsatadigan pill'larni bosib qo'yardi.
-      const sellable = features.filter((f) => !f.isCore);
+      // ⚠ QULFLANGAN KALITLAR CHIQARIB TASHLANADI. Ular hamma loyihada
+      // bir xil ochiq, ya'ni pill sifatida hech qanday ma'lumot bermaydi
+      // va haqiqiy farqni ko'rsatadigan pill'larni bosib qo'yardi.
+      //
+      // ⚠ `isCore` ENDI CHIQARIB TASHLANMAYDI: core modullar sotiladi,
+      // ya'ni ular loyihadan loyihaga FARQ QILADI — aynan pill ko'rsatishi
+      // kerak bo'lgan ma'lumot.
+      const sellable = features.filter((f) => !f.isLocked);
       const pick = (on: boolean) =>
         sellable
           .filter((f) => ((values.get(f.key) ?? 0) > 0) === on)
