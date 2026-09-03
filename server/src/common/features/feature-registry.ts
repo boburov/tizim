@@ -158,7 +158,7 @@ export const FEATURES: readonly FeatureDef[] = Object.freeze([
   {
     key: 'attendance',
     label: 'Davomat',
-    tier: 'load-bearing',
+    tier: 'near-leaf',
     nestModules: ['AttendanceModule'],
     routes: ['attendance'],
     requires: ['attendance-settings', 'coin', 'groups', 'holidays', 'notifications', 'student-freeze'],
@@ -185,7 +185,6 @@ export const FEATURES: readonly FeatureDef[] = Object.freeze([
     locked: true,
     nestModules: ['AuthModule'],
     routes: ['auth'],
-    requires: ['attendance', 'finance', 'groups', 'opening-balance', 'student-freeze'],
   },
   {
     key: 'bot-auth',

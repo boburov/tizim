@@ -24073,3 +24073,77 @@ Hammasi bajarildi. Yakuniy holat:
 <sub>session `55aef08d` · branch `main` · 84 ta qadam</sub>
 
 ---
+
+## 2026-09-03 21:36 — 1chi bosqichdagi attendance, finance, groups, opening-balance, student
+
+**So'rov**
+
+> 1chi bosqichdagi attendance, finance, groups, opening-balance, student-freeze ushbu dfeaturelarni ham authdan uzing va bularni ham ochirib yoqsa bo'ladigan qilib bering va hodimlar faqta ozining brenchini kora olishadi holos shu bilan tammom , 3
+
+**Buyruqlar (45)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server && cat src/modules/auth/auth.module.ts
+grep -n "GroupsService\|AttendanceService\|StudentFreezeService\|TeacherSalaryService\|OpeningBalanceService" src/modules/auth/*.ts
+grep -n "TeacherSalary\|teacherSalary\|compensation\|setCompensation" src/modules/auth/auth.service.ts | head; echo "--- registerUser 425-500 ---"; sed -n '425,…
+sed -n '505,570p' src/modules/auth/auth.service.ts
+grep -n "groups\.\|attendance\.\|freezes\." src/modules/auth/user-profile.service.ts
+sed -n '100,190p' src/modules/auth/user-profile.service.ts
+cd ../client && grep -rn "attendanceSummary\|removalNotice\|activeGroups" src/ --include=*.jsx --include=*.js | head -12
+grep -rn "attendanceSummary\|removalNotice\|activeGroups" src/ | head -12
+grep -n "summary" src/shared/components/attendance/AttendanceSummaryCard.jsx 2>/dev/null | head -5 || grep -rn "AttendanceSummaryCard" src/ | head -3
+f=$(grep -rl "AttendanceSummaryCard" src/ | grep -v UserAttendancePanel | head -1); echo "$f"; grep -n "summary" "$f" | head -8
+grep -rn "AttendanceSummaryCard" src/ | head
+sed -n '1,45p' src/owner/features/users/components/tabs/UserAttendancePanel.jsx
+cd ../server && cat > src/common/features/optional-module.service.ts <<'TS' import { Injectable, Logger, type Type } from '@nestjs/common'; import { ModuleRef }…
+sed -n '55,80p' src/modules/auth/user-profile.service.ts
+python3 - <<'PY' p='src/modules/auth/user-profile.service.ts' s=open(p,encoding='utf-8').read() s=s.replace(""" private readonly groups: GroupsService, private …
+python3 - <<'PY' p='src/modules/auth/auth.service.ts' s=open(p,encoding='utf-8').read() s=s.replace(""" private readonly compensations: TeacherCompensationServi…
+python3 - <<'PY' p='src/modules/auth/auth.module.ts' s=open(p,encoding='utf-8').read() old = """import { GroupsModule } from '../groups/groups.module.js'; impor…
+node scripts/gen-feature-registry.mjs > /tmp/new2.txt 2>/dev/null && python3 - <<'PY' p='src/common/features/feature-registry.ts' lines=open(p,encoding='utf-8')…
+for m in GroupsModule AttendanceModule StudentFreezeModule TeacherSalaryModule OpeningBalanceModule; do printf "%-22s " "$m"; grep -c "$m," src/app.module.ts; d…
+for s in GroupsService AttendanceService StudentFreezeService TeacherCompensationService OpeningBalanceService; do f=$(grep -rl "export class $s" src/modules/ |…
+grep -n "Test.createTestingModule\|createApplicationContext\|AppModule" test/feature-gate.test.mjs | head -5
+cat > src/modules/auth/optional-wiring.check.ts <<'TS' import { Injectable, Logger, type OnApplicationBootstrap, type Type } from '@nestjs/common'; import { Mod…
+for t in feature-graph feature-gate workspace-resolve branch-limit constants module-registration; do printf "%-22s " "$t"; npm run test:$t 2>&1 | grep -oE "(✅ […
+npm run test:constants 2>&1 | tail -3; cd ../admin_server && node scripts/sync-features.mjs 2>&1 | tail -2
+cd ../server && grep -rn "BRANCHES_VIEW_ALL\|branches.view_all" src/seeds/permissions.seed.ts | head -10
+# … yana 20 ta
+```
+
+**Natija**
+
+Tushundim. `AuthModule`'ning o'sha 5 modulga bog'liqligini tekshiraman.
+
+Klient `null`/`[]`'ga chidamli. Endi ajratishni bajaraman:
+
+Endi `UserProfileService` va `AuthService`'ni ixtiyoriy bog'liqlikka o'tkazaman:
+
+`auth` endi hech narsaga bog'liq emas. Reyestrni yangilayman:
+
+Jimgina buzilish xavfi bor — modul ochiq-u servis topilmasa profil bo'sh qoladi. Ishga tushishda tekshiruv qo'shaman:
+
+`hodimlar faqat o'z filialini ko'radi` — hozirgi holatni tekshiray:
+
+`branches.view_all` hujjatlarda owner-only, lekin **yozishda majburlanmagan** — drift aynan shundan kelib chiqqan. Buni yopaman:
+
+Ikkala talab ham bajarildi.
+
+## 1. Beshta modul `auth`dan uzildi
+
+Sabab shu edi: [auth.module.ts](server/src/modules/auth/auth.module.ts) beshta biznes modulini `imports` bilan olardi, generator esa buni "auth ularga tayanadi" deb yozardi. `auth` qulflangan bo'lgani uchun beshtasi ham abadiy o'chmaydigan bo'lib qolgan edi.
+
+Aslida hech biri autentifikatsiya uchun zarur emas — `groups`/`attendance`/`student-freeze` **profilni boyitadi**, `finance`/`opening-balance` esa `registerUser`ning **ixtiyoriy yon ta'siri**.
+
+`AuthModule`da endi `imports` umuman yo'q. Servislar [OptionalModuleService](server/src/common/features/optional-module.service.ts) orqali ish vaqtida so'raladi va **oldin tarif tekshiriladi**:
+
+- modul o'chiq → `null` qaytadi, profildagi maydon bo'sh qoladi (`attendanceSummary: null`, `activeGroups: []` — klient ikkalasiga ham chidamli, tekshirdim);
+- `registerUser` yon ta'sir so'ralsa-yu modul o'chiq bo'lsa — **odam yaratilishidan oldin** 402 qaytaradi, chunki maosh yoki boshlang'ich qarz jimgina yo'qolmasligi kerak.
+
+Importni shunchaki olib tashlash yetarli emasdi: tarif tekshiruvisiz `attendance` o'chirilgan tenantda `/auth/me` javobida davomat xulosasi **baribir chiqardi
+
+…(qisqartirildi)
+
+<sub>session `55aef08d` · branch `main` · 45 ta qadam</sub>
+
+---

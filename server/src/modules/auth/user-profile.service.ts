@@ -5,6 +5,7 @@ import { withLegacyId } from '../../common/utils/serialize.js';
 import { ROLES } from '../../common/constants/permissions.js';
 import { BOT_STATUS, botStatusOf } from '../../common/rbac/bot-status.js';
 import { PermissionService } from '../../common/rbac/permission.service.js';
+import { OptionalModuleService } from '../../common/features/optional-module.service.js';
 import { GroupsService } from '../groups/groups.service.js';
 import { AttendanceService } from '../attendance/attendance.service.js';
 import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
@@ -63,10 +64,25 @@ export class UserProfileService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
-    private readonly groups: GroupsService,
-    private readonly attendance: AttendanceService,
-    private readonly freezes: StudentFreezeService,
+    /**
+     * ⚠ `groups`, `attendance`, `student-freeze` — IXTIYORIY.
+     *
+     * Ular profilni BOYITADI, autentifikatsiya uchun zarur emas.
+     * Ilgari `AuthModule` ularni `imports` bilan olardi va grafik buni
+     * "auth ularga tayanadi" deb o'qirdi — natijada `auth` qulflangani
+     * uchun o'sha uch modul ham hech qachon o'chirilmasdi.
+     *
+     * Endi ular tarif orqali so'raladi: o'chiq bo'lsa `null` qaytadi va
+     * profildagi mos maydon bo'sh qoladi. Izohi
+     * `common/features/optional-module.service.ts` da.
+     */
+    private readonly optional: OptionalModuleService,
   ) {}
+
+  /** Guruhlar moduli ochiq bo'lsa servisi, aks holda `null`. */
+  private groupsSvc(): GroupsService | null {
+    return this.optional.get('groups', GroupsService);
+  }
 
   /**
    * Bog'lanish MA'LUMOTI (kim) va HOLATI (yetadimi) — ikki xil savol.
@@ -126,10 +142,17 @@ export class UserProfileService {
       // qiladi — `AttendanceModule` `AuthModule` ni import QILMAYDI,
       // ya'ni aylana yo'q.
       // ═══════════════════════════════════════════════════════════════
-      const activeGroups = await this.groups.findAllActiveForStudent(String(user.id));
+      // ⚠ HAR BIRI ALOHIDA TEKSHIRILADI. `groups` ochiq-u `attendance`
+      // o'chiq bo'lishi mumkin — bu normal holat, tarif shunday sotilgan.
+      const groupsSvc = this.groupsSvc();
+      const activeGroups = groupsSvc
+        ? await groupsSvc.findAllActiveForStudent(String(user.id))
+        : [];
 
       // Guruhdan chiqarilgan bo'lsa — login qilganda BIR MARTA modal.
-      const removalNotice = await this.groups.findPendingRemovalNotice(String(user.id));
+      const removalNotice = groupsSvc
+        ? await groupsSvc.findPendingRemovalNotice(String(user.id))
+        : null;
 
       // ⚠ ORALIQ AYNAN EXPRESS'DAGIDEK: joriy oyning birinchi kunidan
       // oxirgi kunining 23:59:59.999 gacha. Chegarani "soddalashtirish"
@@ -139,11 +162,22 @@ export class UserProfileService {
       const monthEnd = new Date(
         Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999),
       );
-      const attendanceSummary = await this.attendance.getStudentSummary(
-        String(user.id), { fromDate: monthStart, toDate: monthEnd },
-      );
+      // ⚠ `null` — "o'lchanmagan", `0` EMAS. Klient `if (!summary) return
+      // null` bilan kartani umuman chizmaydi (`UserAttendancePanel.jsx`);
+      // nolga aylantirsak "0 dars, 0 keldi" degan ISHONCHLI yolg'on
+      // chiqardi.
+      const attendanceSvc = this.optional.get('attendance', AttendanceService);
+      const attendanceSummary = attendanceSvc
+        ? await attendanceSvc.getStudentSummary(String(user.id), {
+            fromDate: monthStart,
+            toDate: monthEnd,
+          })
+        : null;
 
-      const activeFreeze = await this.freezes.getActiveFreeze(String(user.id));
+      const freezeSvc = this.optional.get('student-freeze', StudentFreezeService);
+      const activeFreeze = freezeSvc
+        ? await freezeSvc.getActiveFreeze(String(user.id))
+        : null;
 
       return {
         ...base,
@@ -162,11 +196,14 @@ export class UserProfileService {
       // "yaxshilash" emas, SHARTNOMANI o'zgartirish bo'lardi: 100 dan
       // ortiq guruhi bor o'qituvchi ikkala stekda ham bir xil kesilishi
       // kerak, aks holda paritet aynan chekka holatda buzilardi.
-      const { items } = await this.groups.list({
-        teacherId: String(user.id),
-        page: 1,
-        limit: 100,
-      });
+      const teacherGroupsSvc = this.groupsSvc();
+      const { items } = teacherGroupsSvc
+        ? await teacherGroupsSvc.list({
+            teacherId: String(user.id),
+            page: 1,
+            limit: 100,
+          })
+        : { items: [] as Record<string, unknown>[] };
       // ⚠ FAQAT TO'RT MAYDON. `groups.list` guruh kartochkasi uchun
       // ancha ko'p narsa qaytaradi (o'qituvchilar ro'yxati, oylik tarif,
       // filial). Ularni profilga o'tkazib yuborish shartnomani

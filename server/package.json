@@ -111,7 +111,8 @@
     "test:branch-limit": "node test/branch-limit.test.mjs",
     "test:feature-gate": "node test/feature-gate.test.mjs",
     "test:feature-graph": "node test/feature-graph.test.mjs",
-    "test:workspace-resolve": "node test/workspace-resolve.test.mjs"
+    "test:workspace-resolve": "node test/workspace-resolve.test.mjs",
+    "test:owner-only-keys": "node test/owner-only-keys.test.mjs"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

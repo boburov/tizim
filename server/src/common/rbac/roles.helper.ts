@@ -44,6 +44,66 @@ export const assertCanGrantPermissions = (
   }
 };
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * OWNER-ONLY RUXSATLAR FAQAT `owner` ROLIDA QOLADI.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ── QANDAY XATODAN SAQLAYDI ──
+ *
+ * `OWNER_ONLY_PERMISSIONS` ro'yxati allaqachon bor edi va nima uchun
+ * xavfli ekani u yerda batafsil yozilgan. Lekin u FAQAT ikki joyda
+ * ishlatilardi: seed shablonida (yangi baza) va drift'ni tuzatadigan
+ * `migrate-director-full-access` skriptida.
+ *
+ * YOZISH YO'LIDA tekshiruv YO'Q edi. Yagona himoya —
+ * `assertCanGrantPermissions` ("o'zingda yo'q narsani bera olmaysan"), u
+ * esa owner uchun HAR DOIM o'tadi (`["*"]`). Ya'ni owner panel orqali
+ * direktorga `branches.view_all` berib qo'ya olardi.
+ *
+ * Bu nazariy emas: drift skriptining o'z izohida "jonli bazada direktor
+ * rolida `branches.view_all` va `system.admin_access` paydo bo'lgan edi"
+ * deb yozilgan va oqibati — A filial direktori B filial xodimining
+ * PAROLINI o'qiy olardi.
+ *
+ * ⚠ TALAB: xodim FAQAT o'z filialini ko'radi. `branches.view_all` shu
+ * talabni bitta klik bilan bekor qiladigan yagona kalit, shuning uchun
+ * himoya seed'da emas, YOZISH YO'LIDA turishi kerak.
+ *
+ * ── NEGA `owner` ROLIGA RUXSAT ETILADI ──
+ *
+ * `permissions.seed.ts` owner roliga BARCHA kalitni biriktiradi va uni
+ * har seedda qayta yozadi. Blanket taqiq o'sha seedni va owner rolini
+ * panel orqali saqlashni yiqitardi. Owner uchun bu kalitlar baribir
+ * ortiqcha — kod `["*"]` bypass'ini ishlatadi — lekin ular o'sha yerda
+ * turgani zarar qilmaydi.
+ *
+ * ── DRIFT ALLAQACHON BOR BO'LSA ──
+ *
+ * Mavjud rolni tahrirlaganda ham ushbu tekshiruv ishlaydi, ya'ni eski
+ * drift'li rolni saqlash 403 beradi. Bu ATAYLAB: xato ko'rinib turishi
+ * va tuzatilishi kerak. Tozalash yo'li tayyor:
+ * `npm run migrate:director-full`.
+ */
+export const assertOwnerOnlyKeysNotGranted = (
+  roleValue: string | null | undefined,
+  permissionKeys: string[],
+  ownerOnlyKeys: readonly string[],
+): void => {
+  if (roleValue === ROLES.OWNER) return;
+
+  const ownerOnly = new Set(ownerOnlyKeys);
+  const leaked = permissionKeys.filter((k) => ownerOnly.has(k));
+  if (!leaked.length) return;
+
+  throw new ApiError(
+    403,
+    'Bu ruxsatlar faqat egaga tegishli va boshqa rolga berilmaydi: ' +
+      `${leaked.join(', ')}. Ular berilsa xodim o'z filialidan tashqarini ` +
+      "ham ko'ra boshlaydi.",
+  );
+};
+
 /** Built-in rolni himoya qilish. */
 export const assertNotSystemRole = (
   role: { isSystem?: boolean | null },
