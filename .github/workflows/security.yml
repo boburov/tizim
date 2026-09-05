@@ -98,6 +98,37 @@ jobs:
       - name: Password format (hash + legacy)
         run: npm run test:password-format
 
+  # ═══════════════════════════════════════════════════════════════════════
+  # ADMIN_SERVER — ESM ↔ CJS NOMLI IMPORT
+  #
+  # `tsc` bu xatoni KO'RMAYDI: tiplar `@types/...` da bor, lekin Node
+  # CommonJS paketdan nomli eksportni statik tahlil bilan topadi va
+  # hammasini ko'ra olmaydi. Natija — build yashil, ishga tushirish
+  # yiqiladi ("does not provide an export named 'utils'").
+  # ═══════════════════════════════════════════════════════════════════════
+  admin-server-runtime:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin_server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: admin_server/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Build
+        run: npm run build
+      - name: ESM/CJS named imports resolve at runtime
+        run: npm run test:esm-imports
+      - name: ESLint
+        run: npm run lint
+
       # Naqsh bilan ifodalanadigan chegaralar (begona validator, common→modules)
       # — IDE'da ham ko'rinadi. `--max-warnings` YO'Q: ogohlantirishlar
       # (unused-vars) kod sifati, chegara emas; ular qizil qilmaydi.

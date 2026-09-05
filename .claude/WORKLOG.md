@@ -25544,3 +25544,89 @@ Qayta yo'naltirish tiplarni ham qamrab oldi — yetishmayotgan eksportlarni avto
 <sub>session `f5c8cf86` · branch `main` · 114 ta qadam</sub>
 
 ---
+
+## 2026-09-05 22:16 — [10:14:46 PM] Starting compilation in watch mode... [10:14:47 PM] Foun
+
+**So'rov**
+
+> [10:14:46 PM] Starting compilation in watch mode...
+>
+> [10:14:47 PM] Found 0 errors. Watching for file changes.
+>
+> (node:32622) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+> (Use `node --trace-deprecation ...` to show where the warning was created)
+> /Users/shukrullo/Desktop/lc-total/admin_server/src/vps/ssh.service.ts:4
+> import { Client, utils as sshUtils, type ConnectConfig } from 'ssh2';
+>                  ^
+> SyntaxError: The requested module 'ssh2' does not provide an export named 'utils'
+>     at #asyncInstantiate (node:internal/modules/esm/module_job:327:21)
+>     at async ModuleJob.run (node:internal/modules/esm/module_job:431:5)
+>     at async node:internal/modules/esm/loader:633:26
+>     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+>
+> Node.js v24.16.0
+>  fix it
+
+**Buyruqlar (12)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/admin_server && node -e " const m = require('ssh2'); console.log('keys:', Object.keys(m).join(', ')); console.log('utils ke…
+python3 - <<'PY' import io p="src/vps/ssh.service.ts" s=io.open(p,encoding="utf-8").read() old="import { Client, utils as sshUtils, type ConnectConfig } from 's…
+node -e " const m = await import('./dist/vps/ssh.service.js'); const svc = new m.SshService(); console.log('SshService yuklandi ✅'); const bad = svc.validatePri…
+ssh-keygen -t ed25519 -N '' -C test -f /tmp/lc_test_key -q 2>/dev/null && node -e " const fs = await import('node:fs'); const m = await import('./dist/vps/ssh.s…
+python3 - <<'PY' import io,glob,re,json,os,subprocess # Barcha nomli importlarni yig'ib, CJS paketlardan kelayotganini tekshiramiz. pkgs=set() for path in glob.…
+for f in dist/common/guards/roles.guard.js dist/prisma/prisma.service.js dist/tenants/dto/update-brand.dto.js; do printf "%-42s " "$(basename $f)"; grep -oE "^i…
+cat > test/esm-cjs-imports.test.mjs <<'EOF' /** * ═══════════════════════════════════════════════════════════════════════════ * ESM ↔ CJS NOMLI IMPORT — ISH VAQ…
+git stash push -q -- src && npm run build >/dev/null 2>&1 && node test/esm-cjs-imports.test.mjs >/dev/null 2>&1 && echo "❌ NEGATIV NAZORAT YIQILDI — test eski x…
+python3 - <<'PY' import json,io p=json.load(io.open('package.json',encoding='utf-8')) p['scripts']['test:esm-imports']='node test/esm-cjs-imports.test.mjs' io.o…
+(node dist/main.js > /tmp/adm.log 2>&1 & echo $! > /tmp/adm.pid); for i in $(seq 1 25); do sleep 1; grep -qE "Nest application successfully started|listening|ru…
+head -20 /tmp/adm.log; echo "=== modul xatolari bormi? ==="; grep -ciE "SyntaxError|Cannot resolve|does not provide|Nest can't" /tmp/adm.log; echo "=== VpsModul…
+grep -oE "\{/[a-z:/_-]*(vps|migrate|analytics|deployments|password[a-z/]*)[a-z:/_-]*, (GET|POST|PATCH|DELETE)\}" /tmp/adm.log | sort -u
+```
+
+**Natija**
+
+`ssh2` — CommonJS paketi; ESM'dan nomli eksportlarni Node aniqlay olmagan. Avval nima eksport qilinishini tekshiraman.
+
+Tasdiqlandi: Node `Client` ni ko'radi, `utils` ni ko'rmaydi. Standart importdan destrukturatsiya qilaman.
+
+Barmoq izi `ssh-keygen` bilan mos. Endi shu tuzoq boshqa joyda ham bor-yo'qligini tekshiraman — `tsc` uni ushlamaydi.
+
+Bular TypeScript **interfeyslari** (`CanActivate`, `OnModuleInit`, ...) — kompilyatsiyada o'chiriladi. Qurilgan chiqishda tekshiraman.
+
+Tiplar o'chirilgan — boshqa xavf yo'q. Bu sinf xatosini `tsc` ushlamagani uchun doimiy test qo'shaman.
+
+Test asl xatoni haqiqatan ushlaydi. CI'ga ulab, serverni ko'taraman.
+
+Port 4000 band — sizning watch-rejimingiz ishlayapti. Muhimi: ilova `listen()` gacha yetdi, ya'ni **barcha modullar muvaffaqiyatli yuklandi**. Logni tasdiqlayman.
+
+Tuzatildi va tasdiqlandi.
+
+## Sabab
+
+`ssh2` — CommonJS paketi, `admin_server` esa ESM (`"type": "module"`). Node bunday paketdan nomli eksportlarni statik tahlil bilan topadi va **hammasini ko'ra olmaydi**: `Client` topilgan, `utils` topilmagan.
+
+TypeScript esa `@types/ssh2` ga qaraydi — u yerda `utils` **bor**. Shuning uchun `tsc --noEmit` ham, `nest build` ham yashil o'tgan. Xato faqat ishga tushirishda chiqadi.
+
+## Tuzatish
+
+[ssh.service.ts](admin_server/src/vps/ssh.service.ts) da nomli import o'rniga standart importdan destrukturatsiya:
+
+```ts
+import ssh2 from 'ssh2';
+import type { ConnectConfig } from 'ssh2';
+const { Client, utils: sshUtils } = ssh2;
+```
+
+Tiplar alohida `import type` bilan — ular kompilyatsiyada o'chiriladi.
+
+## Tekshirildi
+
+- Haqiqiy `ed25519` kaliti bilan: `validatePrivateKey` xato bermadi, `fingerprintOf` natijasi `ssh-keygen` ning barmoq izi bilan **aynan mos**.
+- **Admin server ko'tarildi** — 0 ta modul xatosi, barcha yangi marshrutlar joy
+
+…(qisqartirildi)
+
+<sub>session `f5c8cf86` · branch `main` · 12 ta qadam</sub>
+
+---
