@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { BranchConfigController } from './branch-config.controller.js';
 import { BranchConfigService } from './branch-config.service.js';
+import { SettingsModule } from '../settings/settings.module.js';
 
 /**
  * ⚠ `@Global()`: filial chegarasini `EntitlementsService` (heartbeat
@@ -10,6 +11,9 @@ import { BranchConfigService } from './branch-config.service.js';
  */
 @Global()
 @Module({
+  // ⚠ HALQA YO'Q: `SettingsModule` hech narsa import qilmaydi va
+  // `BranchConfigService` ni GLOBAL sifatida oladi.
+  imports: [SettingsModule],
   controllers: [BranchConfigController],
   providers: [BranchConfigService],
   exports: [BranchConfigService],

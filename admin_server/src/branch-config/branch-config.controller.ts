@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { BranchConfigService } from './branch-config.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 import {
   AdjustBranchLimitDto,
   GrantBranchAddonDto,
@@ -61,7 +62,45 @@ import {
 @UseGuards(JwtAuthGuard, DeveloperAdminGuard, RolesGuard)
 @Controller('tenants/:id')
 export class BranchConfigController {
-  constructor(private readonly branchConfig: BranchConfigService) {}
+  constructor(
+    private readonly branchConfig: BranchConfigService,
+    private readonly settings: SettingsService,
+  ) {}
+
+  /**
+   * ═════════════════════════════════════════════════════════════════════
+   * FILIAL CHEGARASI O'ZGARGACH TENANT `.env` NI "KUTILMOQDA" DEB BELGILASH.
+   *
+   * ── NEGA KERAK ──
+   *
+   * `BRANCHES_ENABLED` va `BRANCH_LIMIT` tenant `.env` iga YOZILADI
+   * (`settings.service.buildManagedValues`). Bu qiymat ATAYLAB bor:
+   * heartbeat har 15 daqiqada keladi va jarayon ko'tarilgandan keyingi
+   * BIRINCHI heartbeat'gacha tenant limitni bilmaydi — kesh bo'sh
+   * bo'lsa "cheksiz" deb o'qiladi.
+   *
+   * Panelda chegara o'zgartirilganda admin bazasi va audit yozuvi
+   * yangilanardi, lekin `.env` "kutilmoqda" deb BELGILANMASDI. Natijada:
+   * operator chegarani 10 dan 2 ga tushiradi → heartbeat uni yetkazadi →
+   * ammo tenant qayta ishga tushsa, `.env` dagi ESKI qiymat (10) yana
+   * kuchga kirardi va keyingi heartbeat'gacha oyna ochilib qolardi.
+   *
+   * `markPending()` HECH NARSANI qayta ishga tushirmaydi — u faqat
+   * "qo'llash kutilmoqda" belgisini qo'yadi, ya'ni panel buni ko'rsatadi
+   * va keyingi "Qo'llash" `.env` ni yangilaydi. Jonli yetkazib berish
+   * ilgarigidek heartbeat zimmasida qoladi.
+   *
+   * ⚠ XATO SO'ROVNI YIQITMAYDI: chegara ALLAQACHON saqlangan va audit
+   * yozilgan. Belgilashdagi nosozlik uchun butun amalni bekor qilish
+   * holatni yomonlashtirardi (`tenant-logo.service` dagi bilan bir xil
+   * mulohaza).
+   * ═════════════════════════════════════════════════════════════════════
+   */
+  private async withEnvSync<T>(tenantId: string, run: () => Promise<T>): Promise<T> {
+    const result = await run();
+    await this.settings.markPending(tenantId).catch(() => undefined);
+    return result;
+  }
 
   /** Loyihaning filial konfiguratsiyasi + foydalanish + paketlar. */
   @Get('branch-config')
@@ -83,7 +122,7 @@ export class BranchConfigController {
     @Body() dto: UpdateBranchConfigDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.branchConfig.update(id, dto, user.email);
+    return this.withEnvSync(id, () => this.branchConfig.update(id, dto, user.email));
   }
 
   /** Chegarani bittalab oshirish/kamaytirish (panel "+/-"). */
@@ -94,7 +133,9 @@ export class BranchConfigController {
     @Body() dto: AdjustBranchLimitDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.branchConfig.adjust(id, dto.delta, user.email, dto.reason);
+    return this.withEnvSync(id, () =>
+      this.branchConfig.adjust(id, dto.delta, user.email, dto.reason),
+    );
   }
 
   /** Pullik filial paketini biriktirish (+1, +5 …). */
@@ -106,12 +147,14 @@ export class BranchConfigController {
     @Body() dto: GrantBranchAddonDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.branchConfig.grantAddon(id, dto.addonKey, {
-      quantity: dto.quantity,
-      expiresAt: dto.expiresAt,
-      grantedBy: user.email,
-      reason: dto.reason,
-    });
+    return this.withEnvSync(id, () =>
+      this.branchConfig.grantAddon(id, dto.addonKey, {
+        quantity: dto.quantity,
+        expiresAt: dto.expiresAt,
+        grantedBy: user.email,
+        reason: dto.reason,
+      }),
+    );
   }
 
   /** Paketni olib qo'yish. */

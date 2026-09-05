@@ -153,6 +153,33 @@ export class SettingsService {
       // ikkalasi bir-birini almashtirmaydi, to'ldiradi.
       [BRANCHES_ENABLED_ENV_KEY]: branch.branchesEnabled ? 'true' : 'false',
       [BRANCH_LIMIT_ENV_KEY]: String(branch.limit),
+
+      // ── FON ISHLARI VA NAVBAT (cutover'dan KEYINGI holat) ──
+      //
+      // ⚠ NEGA BU YERDA: bu bayroqlar tenant tomonida `false`/`''` bilan
+      // boshlanadi (`server/src/config/env.validation.ts`) va o'sha
+      // standart qiymat KESISHUV DAVRI uchun edi — o'shanda fon ishlarini
+      // EXPRESS bajarardi va ikkala stek bir navbatni iste'mol qilsa
+      // import IKKI MARTA ishlab, pul yozuvlari ikkilanardi.
+      //
+      // Express `2c7e221` da O'CHIRILDI. Provisioning bu qiymatlarni
+      // yozmagani uchun HAR BIR yangi tenant fon ishlarisiz ko'tarilardi:
+      //   • oylik maosh/to'lov generatsiyasi ishlamaydi
+      //   • davomat va AI joblari ishlamaydi
+      //   • TTL tozalash ishlamaydi
+      //   • import "queued" holatida ABADIY qotib qoladi (xato ham yo'q —
+      //     `NEST_IMPORT_WORKER` izohida aynan shu ogohlantirish bor)
+      //
+      // Navbat dvigateli — pg-boss, ya'ni FAQAT `DATABASE_URL` kerak
+      // (Redis SHART EMAS); u yuqorida allaqachon yozilgan.
+      NEST_WORKERS_ENABLED: 'true',
+      // `*` = barcha joblar. Ro'yxat `env.validation.ts` da fail-closed:
+      // bo'sh satr HECH BIR jobni ro'yxatga olmaydi.
+      NEST_WORKER_JOBS: '*',
+      // ⚠ `REDIS_URL` bo'sh bo'lsa import SINXRON bajariladi — bayroq
+      // zarar qilmaydi, lekin Redis qo'shilgan kunda navbat DARHOL
+      // ishlaydi.
+      NEST_IMPORT_WORKER: 'true',
     };
 
     const client: Record<string, string> = {
@@ -235,6 +262,27 @@ export class SettingsService {
     if (!config.server.TELEGRAM_BOT_TOKEN) {
       config.server.TELEGRAM_BOT_ENABLED = 'false';
     }
+
+    // ── BOT SO'ROV OLISHI (polling) ──
+    //
+    // ⚠ TOKENGA BOG'LIQ, shuning uchun `buildManagedValues` da EMAS —
+    // token faqat shu yerda, sozlama va eski `tenant.botToken` ustuni
+    // birlashtirilgandan KEYIN ma'lum bo'ladi.
+    //
+    // Express o'chirilgach buyruqlarni HECH KIM qabul qilmay qoldi:
+    // `NEST_BOT_POLLING` tenant tomonida `false` bilan boshlanadi va
+    // provisioning uni yozmasdi — ya'ni provisioning qilingan har bir
+    // botda /start jimgina javobsiz qolardi.
+    //
+    // ⚠ TOKENSIZ YOQIB BO'LMAYDI: polling tokensiz Telegram API'ga
+    // ura boshlaydi va jarayon qayta-qayta yiqiladi. Har tenantning
+    // O'Z boti bor (`bot-provision.sh`), ya'ni bitta token bo'yicha
+    // ikki jarayon poll qilish holati YUZAGA KELMAYDI.
+    config.server.NEST_BOT_POLLING =
+      config.server.TELEGRAM_BOT_ENABLED === 'true' &&
+      config.server.TELEGRAM_BOT_TOKEN
+        ? 'true'
+        : 'false';
 
     return { tenant, config };
   }

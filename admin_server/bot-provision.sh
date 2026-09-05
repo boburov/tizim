@@ -188,9 +188,9 @@ echo "==> [3/6] Bog'lamalar..."
 cd "$APP_DIR"
 if [ "$BOT_RUNTIME" = "NODEJS" ]; then
   if [ -f package-lock.json ]; then
-    npm ci --omit=dev
+    env -u GIT_TOKEN npm ci --omit=dev
   else
-    npm install --omit=dev
+    env -u GIT_TOKEN npm install --omit=dev
   fi
 else
   if [ -f composer.json ]; then

@@ -191,7 +191,7 @@ if [ "$APPLY_MODE" = "deploy" ]; then
   # --include=dev SHART: serverni `nest build` bilan qurish kerak, `nest` va
   # `typescript` esa devDependencies (client'dagi vite bilan bir xil sabab).
   # NODE_ENV=production meros bo'lgani uchun plain `npm ci` ham ularni tashlaydi.
-  npm ci --include=dev 2>/dev/null || npm install --include=dev
+  env -u GIT_TOKEN npm ci --include=dev 2>/dev/null || env -u GIT_TOKEN npm install --include=dev
 
   # Repodan yangi kod keldi — u yangi migratsiya bilan kelgan bo'lishi mumkin.
   # Migratsiyasiz eski schema ustida ko'tarilsa, xato faqat ish vaqtida
@@ -204,7 +204,7 @@ if [ "$APPLY_MODE" = "deploy" ]; then
   # bo'lgani uchun git reset --hard'dan keyin uni shu yerda qayta quramiz.
   # Busiz pm2 eski dist/main.js ni ishga tushirib, "deploy muvaffaqiyatli" derdi.
   echo "==> server: build (nest build)..."
-  npm run build
+  env -u GIT_TOKEN npm run build
 fi
 
 if [ "$APPLY_MODE" = "rebuild" ] || [ "$APPLY_MODE" = "deploy" ]; then
@@ -214,10 +214,10 @@ if [ "$APPLY_MODE" = "rebuild" ] || [ "$APPLY_MODE" = "deploy" ]; then
   if [ ! -d node_modules ] || [ "$APPLY_MODE" = "deploy" ]; then
     # --include=dev SHART: NODE_ENV=production meros bo'lgani uchun usiz `vite`
     # (devDependency) o'rnatilmaydi va `vite build` -> "vite: not found" (kod 127).
-    npm ci --include=dev 2>/dev/null || npm install --include=dev
+    env -u GIT_TOKEN npm ci --include=dev 2>/dev/null || env -u GIT_TOKEN npm install --include=dev
   fi
 
-  npm run build
+  env -u GIT_TOKEN npm run build
 
   # Yangi build tayyor bo'lgandan KEYIN almashtiramiz: eski papkani
   # oldin tozalab qo'ysak, build yiqilganda sayt butunlay yo'qolardi.

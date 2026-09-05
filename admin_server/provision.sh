@@ -174,6 +174,20 @@ write_b64 "${TENANT_WORKFLOW_B64:-}"    "$APP_DIR/.github/workflows/deploy.yml"
 # DIQQAT: --omit=dev QO'YMANG. Server NestJS'da yozilgan va `npm run build`
 # (nest build) uchun @nestjs/cli + typescript kerak — ular devDependencies'da.
 # Ular tashlansa dist/main.js hech qachon paydo bo'lmaydi va pm2 yiqiladi.
+# ═══════════════════════════════════════════════════════════════════════════
+# ⚠ `env -u GIT_TOKEN` — TA'MINOT ZANJIRI HIMOYASI.
+#
+# `GIT_TOKEN` — GitHub PAT (Administration / Contents / Secrets RW). U
+# skript MUHITIDA turadi, chunki oxirgi bosqichdagi `git push` unga
+# muhtoj. Lekin bash muhiti BARCHA bola jarayonlarga meros bo'ladi, ya'ni
+# `npm ci` va u ishga tushiradigan HAR BIR paketning `postinstall`
+# skriptiga ham. Tenant bog'liqliklari ichidagi bitta buzilgan paket
+# tokenni o'qib, butun tashkilotning repolariga yozish huquqini olardi.
+#
+# `env -u GIT_TOKEN` uni AYNAN SHU chaqiruv muhitidan olib tashlaydi;
+# skriptning o'zida token saqlanadi va pastdagi `git push` ilgarigidek
+# ishlaydi.
+# ═══════════════════════════════════════════════════════════════════════════
 echo "==> server: npm ci..."
 cd "$APP_DIR/server"
 # --include=dev SHART: server NestJS ilovasi va uni `nest build` bilan
@@ -181,7 +195,7 @@ cd "$APP_DIR/server"
 # NODE_ENV=production meros bo'lgani uchun usiz ular o'rnatilmaydi va
 # `npm run build` -> "nest: not found" beradi. (Plain `npm ci` ham yetarli
 # emas — NODE_ENV=production o'zi devDependencies'ni tashlab ketadi.)
-npm ci --include=dev 2>/dev/null || npm install --include=dev
+env -u GIT_TOKEN npm ci --include=dev 2>/dev/null || env -u GIT_TOKEN npm install --include=dev
 
 # ---------------------------------------------------------------------------
 # 4b) PostgreSQL bazasi + Prisma migratsiyalari
@@ -225,12 +239,12 @@ npx prisma generate
 # haqiqat manbai paydo bo'lardi.
 # ---------------------------------------------------------------------------
 echo "==> server: build (nest build)..."
-npm run build
+env -u GIT_TOKEN npm run build
 
 echo "==> server: seedlar (ruxsatlar katalogi va standart ma'lumotlar)..."
-npm run seed:permissions
-npm run seed:communication
-npm run seed:expense-categories
+env -u GIT_TOKEN npm run seed:permissions
+env -u GIT_TOKEN npm run seed:communication
+env -u GIT_TOKEN npm run seed:expense-categories
 
 # ---------------------------------------------------------------------------
 # 5) Client build
@@ -240,8 +254,8 @@ cd "$APP_DIR/client"
 # --include=dev SHART: admin-api pm2 ostida NODE_ENV=production bilan ishlaydi va
 # bu qiymat skriptga meros bo'ladi. Usiz `npm ci` devDependencies'ni (jumladan
 # `vite`) o'tkazib yuboradi, natijada `vite build` -> "vite: not found" (kod 127).
-npm ci --include=dev 2>/dev/null || npm install --include=dev
-npm run build
+env -u GIT_TOKEN npm ci --include=dev 2>/dev/null || env -u GIT_TOKEN npm install --include=dev
+env -u GIT_TOKEN npm run build
 
 echo "==> client dist -> $WEB_ROOT"
 mkdir -p "$WEB_ROOT"

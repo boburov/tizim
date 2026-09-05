@@ -24764,3 +24764,68 @@ Security suite   6/6 PASS (97
 <sub>session `10f1ab6f` · branch `main` · 16 ta qadam</sub>
 
 ---
+
+## 2026-09-05 13:02 — alright lets start fixing dev systemt completly
+
+**So'rov**
+
+> alright lets start fixing dev systemt completly
+
+**Buyruqlar (44)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/admin_server; echo "=== NEST_PORT anywhere in admin_server? ==="; grep -rn "NEST_PORT" --include="*.ts" --include="*.sh" --…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; echo "=== buildManagedValues: full list of written vars ==="; sed -n '106,175p' src/settings/settings.service…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; for v in BRANCHES_ENABLED BRANCH_LIMIT NEST_WORKERS_ENABLED NEST_WORKER_JOBS NEST_BOT_POLLING NEST_IMPORT_WOR…
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== tenant defaults ==="; grep -n -A2 "NEST_WORKERS_ENABLED\|NEST_WORKER_JOBS\|NEST_BOT_POLLING\|NEST_IMPORT_…
+cd /Users/shukrullo/Desktop/lc-total; echo "=== local dev .env (intent) ==="; grep -E "^NEST_WORKERS_ENABLED|^NEST_WORKER_JOBS|^NEST_BOT_POLLING|^NEST_IMPORT_WO…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; sed -n '96,175p' src/settings/settings.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== do jobs need Redis or pg-boss? ==="; grep -rn "pg-boss\|ioredis\|bullmq\|BullMQ" src/jobs/*.ts src/jobs/*…
+cd /Users/shukrullo/Desktop/lc-total/server; sed -n '164,179p' src/config/env.validation.ts; echo "════ bot token provisioning (admin_server) ════"; cd ../admin…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; sed -n '208,250p' src/settings/settings.service.ts
+cd /Users/shukrullo/Desktop/lc-total/admin_server; python3 - <<'PY' p='src/settings/settings.service.ts' s=open(p).read() # 1) worker flags in buildManagedValue…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; find src -name "env-renderer*"; echo "=== renderServerEnv ==="; grep -n -A25 "export const renderServerEnv\|e…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; echo "=== are the worker keys in the SETTINGS registry? ==="; grep -n "NEST_WORKERS_ENABLED\|NEST_WORKER_JOBS…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; npm run build > /tmp/ab.out 2>&1; echo "build exit=$?"; tail -4 /tmp/ab.out; echo; echo "=== admin DB tenants…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; AU=$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2- | tr -d '"' | sed 's/?.*//'); echo "=== tables ==…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; AU=$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2- | tr -d '"' | sed 's/?.*//'); psql "$AU" -c "SELE…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; ls dist/ | head; echo "---"; grep -n "AppModule" dist/app.module.js 2>/dev/null | head -2; SP="/private/tmp/c…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; python3 -c "import json;d=json.load(open('package.json'));print('type:',d.get('type','commonjs'))"; head -3 d…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; cat > .verify-env.tmp.mjs <<'EOF' import { NestFactory } from '@nestjs/core'; import { AppModule } from './di…
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== permissions.seed.ts: director upsert ==="; sed -n '190,225p' src/seeds/permissions.seed.ts; echo "=== doe…
+cd /Users/shukrullo/Desktop/lc-total/server; grep -n -B4 -A12 "ALL_KEYS" src/seeds/permissions.seed.ts | head -30
+cd /Users/shukrullo/Desktop/lc-total/admin_server; echo "=== deprovision.sh: set -e? ==="; head -12 deprovision.sh; echo "=== exit handling ==="; grep -n "exit\…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; grep -n -A30 "async deprovision" src/provisioning/provisioning.service.ts | head -40
+cd /Users/shukrullo/Desktop/lc-total/admin_server; sed -n '538,575p' src/provisioning/provisioning.service.ts
+cd /Users/shukrullo/Desktop/lc-total/admin_server; echo "=== branch-config update: does it schedule an apply? ==="; grep -n -A30 "async update" src/branch-confi…
+cd /Users/shukrullo/Desktop/lc-total/admin_server; sed -n '296,350p' src/branch-config/branch-config.service.ts; echo "=== logo precedent ==="; sed -n '143,172p…
+# … yana 19 ta
+```
+
+**Natija**
+
+Before changing anything in the DEV SYSTEM, I need to verify the findings myself — that map was single-source and never adversarially checked. Let me start with the highest-impact claim: that `NEST_PORT` is never written to tenant `.env`.
+
+The map's headline claim is **wrong** — `NEST_PORT` *is* written ([settings.service.ts:130](admin_server/src/settings/settings.service.ts#L130)), with a comment describing exactly the failure it prevents. Good thing I checked. Let me verify the rest properly.
+
+Now the substantive question — which operational vars are **missing**. Let me check.
+
+Confirmed — **zero** references. Let me check what the tenant defaults to and what that means now that Express is gone.
+
+Confirmed the core DEV SYSTEM bug. All four default OFF, and the comment says *"FAQAT to'liq cutover'dan keyin"* (only after full cutover) — **the cutover is complete** (Express deleted in `2c7e221`), but provisioning never turns them on.
+
+So every tenant provisioned today runs with **no background jobs, no Telegram bot, no import worker**. Let me confirm intent from local `.env` and understand the settings mechanism.
+
+Confirmed: local dev enables all four; provisioning writes none. Let me read `buildManagedValues` in full to add them correctly.
+
+Both `BRANCHES_ENABLED` and `BRANCH_LIMIT` **are** written — the map was wrong there too. The genuine gap is the four worker/bot vars. But before enabling them I must check two things that could break tenants: whether jobs need Redis, and whether every tenant has a bot token.
+
+Key fact: jobs use **pg-boss** (Postgres-backed), so they need only `DATABASE_URL` — already provisioned. But the import worker mentions Redis. Let me read that and check bot-token provisioning.
+
+Decisive: the comment says **"⚠ EXPRESS O'CHIRILGANDA `true` QILI
+
+…(qisqartirildi)
+
+<sub>session `10f1ab6f` · branch `main` · 44 ta qadam</sub>
+
+---
