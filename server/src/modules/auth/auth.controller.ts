@@ -72,6 +72,32 @@ export class AuthController {
       ip: req.ip,
     });
     setRefreshCookie(res, refreshToken, this.cookie);
+
+    // ── AUDIT AKTYORI ──
+    //
+    // Login autentifikatsiyadan OLDIN keladi, ya'ni `req.user` YO'Q va
+    // `AuditLogMiddleware` yozuvni `userId: null, userRole: 'system'`
+    // deb qoldirardi. Bazada shu sababdan 2 395 ta ANONIM login yig'ilgan
+    // — "kim tizimga kirdi" savoliga audit javob bera olmasdi.
+    //
+    // ⚠ FAQAT MUVAFFAQIYATDAN KEYIN: yuqoridagi `login()` xato tashlasa
+    // bu qator umuman bajarilmaydi va muvaffaqiyatsiz urinish anonim
+    // qolaveradi — u yerda `actorLabel` (kiritilgan login) yetarli.
+    //
+    // Filial — aktyorning ASOSIY filiali: shunda filial administratori
+    // o'z filialiga kimlar kirganini ko'radi.
+    const actor = user as { _id?: string; id?: string; role?: string; homeBranchId?: unknown } | null;
+    if (actor?.id || actor?._id) {
+      req.auditActor = {
+        id: String(actor.id ?? actor._id),
+        role: String(actor.role ?? 'user'),
+        branchId:
+          typeof actor.homeBranchId === 'string'
+            ? actor.homeBranchId
+            : ((actor.homeBranchId as { id?: string } | null)?.id ?? null),
+      };
+    }
+
     return {
       success: true,
       data: { accessToken, user, roleMeta },
@@ -100,7 +126,10 @@ export class AuthController {
     @Req() req: AuthenticatedRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
-    await this.auth.logout({ rawRefresh: getRefreshFromCookies(req) });
+    // Kim chiqdi — audit uchun (logout ham `req.user` siz keladi).
+    const actor = await this.auth.logout({ rawRefresh: getRefreshFromCookies(req) });
+    if (actor) req.auditActor = actor;
+
     clearRefreshCookie(res, this.cookie);
     return { success: true, message: 'Tizimdan chiqdingiz' };
   }

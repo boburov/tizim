@@ -241,13 +241,42 @@ export class AuthService {
     return { accessToken, refreshToken, user: this.sanitizeUser(user as never) };
   }
 
-  async logout({ rawRefresh }: { rawRefresh: string | null }) {
-    if (!rawRefresh) return;
+  /**
+   * @returns KIM chiqdi — audit jurnali uchun.
+   *
+   * ⚠ Logout ochiq marshrut (`auth.module.ts` da `AuthMiddleware`
+   * ulanmagan): u cookie bilan ishlaydi, access token bilan emas. Ya'ni
+   * `req.user` yo'q va yozuv anonim `system` bo'lib qolardi. Egasini
+   * TOKENNING O'ZI biladi — shuni qaytaramiz.
+   *
+   * `null` — token yo'q yoki allaqachon bekor qilingan (ikki marta
+   * chiqish, eskirgan cookie). Bu xato emas, shunchaki aktyor noma'lum.
+   */
+  async logout({
+    rawRefresh,
+  }: {
+    rawRefresh: string | null;
+  }): Promise<{ id: string; role: string; branchId: string | null } | null> {
+    if (!rawRefresh) return null;
     const tokenHash = sha256(rawRefresh);
+
+    // Bekor qilishdan OLDIN o'qiymiz: `updateMany` egasini qaytarmaydi.
+    const token = await this.prisma.refreshToken.findFirst({
+      where: { tokenHash, revokedAt: null },
+      select: { user: { select: { id: true, role: true, homeBranchId: true } } },
+    });
+
     await this.prisma.refreshToken.updateMany({
       where: { tokenHash, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+
+    if (!token?.user) return null;
+    return {
+      id: token.user.id,
+      role: token.user.role,
+      branchId: token.user.homeBranchId ?? null,
+    };
   }
 
   /**

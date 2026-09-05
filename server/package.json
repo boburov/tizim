@@ -121,7 +121,8 @@
     "arch:baseline": "node scripts/arch-scan.mjs baseline",
     "arch:cruise": "depcruise src --config .dependency-cruiser.cjs",
     "test:architecture": "node test/architecture.test.mjs",
-    "test:password-format": "node test/password-format.test.mjs"
+    "test:password-format": "node test/password-format.test.mjs",
+    "test:audit-actor": "node test/audit-actor.test.mjs"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

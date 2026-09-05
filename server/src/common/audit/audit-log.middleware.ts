@@ -101,14 +101,26 @@ export class AuditLogMiddleware implements NestMiddleware {
           const safeBody = truncateBody(sanitize(req.body || {}));
           const resource = extractResource(req.originalUrl || req.path);
 
+          // ⚠ `req.user` BO'LMASA `req.auditActor`. Login/logout
+          // autentifikatsiyadan OLDIN keladi va `AuthMiddleware` ularga
+          // ulanmagan — `req.user` hech qachon paydo bo'lmaydi. Handler
+          // muvaffaqiyat bo'lsa `auditActor` ni to'ldiradi, biz esa uni
+          // `finish` da o'qiymiz (handler allaqachon tugagan).
+          //
+          // Usiz har login `userId: null, userRole: 'system'` bo'lib
+          // yozilardi — o'lchandi: 2 395 ta anonim login.
+          const actor = req.user
+            ? { id: String(req.user.id), role: req.user.role, branchId: req.branchId }
+            : req.auditActor;
+
           await this.prisma.activityLog.create({
             data: {
               // `user` EMAS, `userId` — Prisma'da `user` bu RELATION.
-              userId: req.user?.id ? String(req.user.id) : null,
-              userRole: req.user?.role || 'system',
+              userId: actor?.id ? String(actor.id) : null,
+              userRole: actor?.role || 'system',
               // Hodisa QAYSI filialda. `undefined` bo'lsa `null` —
               // ustun ixtiyoriy va "filialsiz" haqiqiy holat.
-              branchId: req.branchId ? String(req.branchId) : null,
+              branchId: actor?.branchId ? String(actor.branchId) : null,
               actorLabel,
               method: req.method as never,
               path: req.originalUrl || req.path,

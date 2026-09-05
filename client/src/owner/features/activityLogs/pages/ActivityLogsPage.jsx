@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SearchX } from "lucide-react";
 
 import Pagination from "@/shared/components/ui/pagination/Pagination";
 import ModalWrapper from "@/shared/components/ui/modal/ModalWrapper";
@@ -133,6 +134,41 @@ const ActivityLogsPage = ({ showBranchFilter = false }) => {
   const total = current.data?.meta?.total || 0;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
+  // ── BO'SH HOLAT NEGA BO'SH ──
+  //
+  // "Qayd yo'q" ikki BUTUNLAY boshqa holatni bildiradi va ularni
+  // aralashtirish odamni noto'g'ri yo'lga soladi:
+  //
+  //   1) FILTR hech narsani topmadi — filtrni bo'shatsa natija chiqadi;
+  //   2) umuman ma'lumot yo'q — filtr bilan ovora bo'lish behuda.
+  //
+  // Ilgari ikkalasiga ham bir xil "Hozircha qayd yo'q" chizilardi va
+  // filtr yoqilganini hech narsa eslatmasdi. Aynan shu holat jonli
+  // tizimda chalkashlik bergan: "Xodim" tanlangan holda sahifa bo'sh
+  // ko'rinardi va sabab ko'rinmasdi.
+  const activeFilters = [
+    filters.userId && "Xodim",
+    filters.branchId && "Filial",
+    filters.action && "Amal turi",
+    filters.resourceType && "Modul",
+    filters.fromDate && "Boshlanish sanasi",
+    filters.toDate && "Tugash sanasi",
+    filters.dangerousOnly && "Faqat xavfli amallar",
+  ].filter(Boolean);
+
+  const clearFilters = () => {
+    filters.setFields({
+      userId: "",
+      branchId: "",
+      action: "",
+      resourceType: "",
+      fromDate: "",
+      toDate: "",
+      dangerousOnly: false,
+    });
+    setPage(1);
+  };
+
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -160,9 +196,35 @@ const ActivityLogsPage = ({ showBranchFilter = false }) => {
         <ActivityLogsTableSkeleton />
       ) : (
         <>
-          {tab === "activity" && <ActivityLogsTable items={items} />}
-          {tab === "financial" && <FinancialAuditTable items={items} />}
-          {tab === "payroll" && <PayrollAuditTable items={items} />}
+          {/* Filtr yoqilgan-u natija yo'q — sababni AYTAMIZ va bo'shatish
+              tugmasini beramiz. Jadvalning o'z bo'sh holati faqat
+              "haqiqatan ma'lumot yo'q" uchun qoladi. */}
+          {items.length === 0 && activeFilters.length > 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-card py-16 text-center">
+              <SearchX className="size-10 text-muted-foreground" strokeWidth={1.5} />
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Tanlangan filtrlar bo'yicha qayd topilmadi
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Faol filtrlar: {activeFilters.join(", ")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                Filtrlarni tozalash
+              </button>
+            </div>
+          ) : (
+            <>
+              {tab === "activity" && <ActivityLogsTable items={items} />}
+              {tab === "financial" && <FinancialAuditTable items={items} />}
+              {tab === "payroll" && <PayrollAuditTable items={items} />}
+            </>
+          )}
 
           {totalPages > 1 && (
             <Pagination

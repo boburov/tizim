@@ -98,6 +98,13 @@ jobs:
       - name: Password format (hash + legacy)
         run: npm run test:password-format
 
+      # Login/logout audit yozuvida AKTYOR bo'lishi shart. Ilgari ular
+      # `userId: null, userRole: 'system'` bo'lib yozilardi — jonli bazada
+      # 2 395 ta anonim login yig'ilgan va "kim tizimga kirdi" savoliga
+      # audit javob bera olmasdi.
+      - name: Audit actor (login/logout attribution)
+        run: npm run test:audit-actor
+
   # ═══════════════════════════════════════════════════════════════════════
   # ADMIN_SERVER — ESM ↔ CJS NOMLI IMPORT
   #

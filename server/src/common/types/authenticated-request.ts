@@ -40,4 +40,37 @@ export interface AuthenticatedRequest extends Request {
    * o'zi o'qitmaydigan guruhlardagi davomatni ham ko'rardi (A-1).
    */
   scopeGroupIds?: string[] | null;
+
+  /**
+   * ═════════════════════════════════════════════════════════════════════
+   * AUDIT AKTYORI — `req.user` MAVJUD BO'LMAGAN OQIMLAR UCHUN
+   * ═════════════════════════════════════════════════════════════════════
+   *
+   * `AuditLogMiddleware` aktyorni `req.user` dan oladi. Lekin LOGIN va
+   * LOGOUT — autentifikatsiyadan OLDINGI so'rovlar: `AuthMiddleware`
+   * ularga umuman ulanmagan (`auth.module.ts` — faqat `me`,
+   * `change-password`, `register-user`). Ya'ni `req.user` hech qachon
+   * o'rnatilmaydi va yozuv `userRole: 'system', userId: null` bo'lib
+   * qolardi.
+   *
+   * Natijasi o'lchandi: bazadagi 2 866 ta "system" yozuvning 2 395 tasi
+   * — LOGIN. Ya'ni "kim tizimga kirdi" degan savolga audit jurnali
+   * javob BERA OLMASDI, garchi har bir muvaffaqiyatli login aynan kim
+   * ekanini bilsa ham.
+   *
+   * Shu maydonni handler MUVAFFAQIYATDAN KEYIN to'ldiradi. Middleware
+   * uni `res.on('finish')` da o'qiydi — ya'ni handler tugagandan keyin,
+   * demak qiymat joyida bo'ladi.
+   *
+   * ⚠ `req.user` NING O'RNINI BOSMAYDI. Uni soxta `req.user` bilan
+   * to'ldirish ham mumkin edi, lekin `req.user` — "bu so'rov
+   * autentifikatsiyadan o'tgan" degan MA'NO. Login so'rovi o'tmagan
+   * (u aynan autentifikatsiyaning o'zi), shuning uchun alohida maydon.
+   */
+  auditActor?: {
+    id: string;
+    role: string;
+    /** Hodisa qaysi filialda — logini uchun aktyorning asosiy filiali. */
+    branchId?: string | null;
+  };
 }

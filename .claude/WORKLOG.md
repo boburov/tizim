@@ -25630,3 +25630,83 @@ Tiplar alohida `import type` bilan — ular kompilyatsiyada o'chiriladi.
 <sub>session `f5c8cf86` · branch `main` · 12 ta qadam</sub>
 
 ---
+
+## 2026-09-05 22:22 — audit log in admin panel isnt working analize and dix it but explain i
+
+**So'rov**
+
+> audit log in admin panel isnt working analize and dix it but explain it in uzbek first then fix it
+
+**Buyruqlar (29)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && sed -n '1,80p' src/shared/components/ui/select/SelectField.jsx
+cd /Users/shukrullo/Desktop/lc-total/server && node --env-file=.env -e " const {PrismaClient}=await import('@prisma/client'); const p=new PrismaClient(); const …
+cd /Users/shukrullo/Desktop/lc-total/client && sed -n '1,70p' src/shared/components/ui/select/Select.jsx
+sed -n '70,130p' src/shared/components/ui/select/Select.jsx
+node --env-file=.env -e " const {PrismaClient}=await import('@prisma/client'); const p=new PrismaClient(); const u=await p.user.findFirst({where:{username:'bobu…
+node --env-file=.env -e " const {PrismaClient}=await import('@prisma/client'); const p=new PrismaClient(); const id='6a92c9c08a641213f9d70793'; console.log('bob…
+grep -n "@Post('login')" -A 22 src/modules/auth/auth.controller.ts | head -30
+grep -n "async login" -A 40 src/modules/auth/auth.service.ts | grep -nE "return|user:|const user|_id|id:" | head -12; echo "=== users list javob shakli ==="; gr…
+grep -n "async list" -A 30 src/modules/users/users.service.ts | grep -E "return|map\(|withLegacyId|items" | head -8
+sed -n '108,125p' src/modules/users/users.service.ts; echo "=== withLegacyId ==="; grep -n "export const withLegacyId" -A 12 src/common/utils/serialize.ts
+grep -n "AuthMiddleware" -A 12 src/modules/auth/auth.module.ts | head -20; echo "=== logout handler ==="; grep -n "@Post('logout')" -A 14 src/modules/auth/auth.…
+grep -n "async logout" -A 22 src/modules/auth/auth.service.ts | head -28
+sed -n '130,200p' src/modules/auth/auth.service.ts | grep -nE "return|user\b|role|homeBranch|profile|sanitize" | head -14; echo "---"; grep -n "return {" -A 8 s…
+python3 - <<'PY' import io # ── 1) So'rov tipiga audit aktyori ──────────────────────────────────── p="src/common/types/authenticated-request.ts" s=io.open(p,en…
+python3 - <<'PY' import io p="src/common/audit/audit-log.middleware.ts" s=io.open(p,encoding="utf-8").read() old=""" await this.prisma.activityLog.create({ // ⚠…
+python3 - <<'PY' import io # ── logout servisi kimni chiqarganini qaytarsin ── p="src/modules/auth/auth.service.ts" s=io.open(p,encoding="utf-8").read() old="""…
+grep -n "homeBranchId" -B3 -A6 src/modules/auth/auth.service.ts | grep -n "sanitizeUser" -A 12 | head -16; echo "=== sanitizeUser tanasi ==="; sed -n '/sanitize…
+curl -s -o /dev/null -w "5000: %{http_code}\n" --max-time 3 http://127.0.0.1:5000/api/health; curl -s -o /dev/null -w "5001: %{http_code}\n" --max-time 3 http:/…
+ps -o command= -p 34732 | cut -c1-120; ps -o lstart= -p 34732
+stat -f "%Sm dist/main.js" -t "%H:%M:%S" dist/main.js; stat -f "%Sm audit-log.middleware.js" -t "%H:%M:%S" dist/common/audit/audit-log.middleware.js; echo "jara…
+cat > test/audit-actor.test.mjs <<'EOF' /** * ═══════════════════════════════════════════════════════════════════════════ * AUDIT AKTYORI — LOGIN VA LOGOUT ANON…
+git stash push -q -- src && npm run build >/dev/null 2>&1 && (node test/audit-actor.test.mjs >/dev/null 2>&1 && echo "❌ NEGATIV NAZORAT YIQILDI" || echo "✅ Nega…
+cd /Users/shukrullo/Desktop/lc-total/client && python3 - <<'PY' import io p="src/owner/features/activityLogs/pages/ActivityLogsPage.jsx" s=io.open(p,encoding="u…
+grep -n "tab === 'activity' &&\|tab === 'financial' &&\|tab === 'payroll' &&" -B2 -A2 src/owner/features/activityLogs/pages/ActivityLogsPage.jsx
+grep -n "ActivityLogsTable\|FinancialAuditTable\|PayrollAuditTable\|activeFilters" src/owner/features/activityLogs/pages/ActivityLogsPage.jsx
+# … yana 4 ta
+```
+
+**Natija**
+
+Avval tekshiraman — taxmin qilmayman.
+
+14,883 yozuv **bor**. Muammo ma'lumotda emas. "Xodim" tanlagichi anomaliya — uni tekshiraman.
+
+Select komponenti to'g'ri. Endi haqiqiy sababni aniqlayman — foydalanuvchi roli va so'rovni bazada simulyatsiya qilaman.
+
+Sabab aniqlandi. Bazaga qarab tushuntiraman.
+
+Sabab to'liq aniqlandi. Tushuntiraman, keyin tuzataman.
+
+## Nima bo'lyapti
+
+Sahifa **buzilmagan** — u to'g'ri ishlayapti va rostdan ham ko'rsatadigan narsa yo'q. Bazada 14 883 yozuv bor, lekin ularning **hech biri** sizga tegishli emas.
+
+**Asosiy sabab:** `boburov7` foydalanuvchisi **0 ta** audit yozuviga ega. DEMO Yunusobod filialida 91 ta foydalanuvchi bor (siz + 90 demo o'quvchi), va ularning hammasi birgalikda ham **0 ta** log yozgan. Qolgan 14 883 yozuv test/parity fikstura foydalanuvchilari va seed egasiga tegishli.
+
+Bu mening o'zgarishimdan kelib chiqmagan — eski kod ham aynan shu `userId` filtrini qo'llardi va sahifa **avval ham bo'sh edi**.
+
+## Nega sizning harakatlaringiz yozilmagan
+
+Siz tizimga kirgansiz — bazada bugungi loginlar bor. Lekin ular shunday saqlanadi:
+
+```
+2026-09-05T14:23:58Z  system  POST /api/auth/login  branch=null  user=null
+```
+
+**`user=null`.** Sababi: audit middleware `req.user` ni o'qiydi, lekin login — autentifikatsiyadan **oldingi** so'rov, ya'ni `req.user` hech qachon o'rnatilmaydi. Natijada kim kirgani yo'qoladi.
+
+Bu kichik chekka holat emas: **2 395 ta login** aynan shu sababdan `system` deb yozilgan. Va men qo'shgan rol filtri `system` yozuvlarini filial darajasidagi foydalanuvchidan yashiradi — demak siz "kim tizimga kirdi" ni **hech qachon** ko'ra olmaysiz. Bu sizning talabingizga to'g'ridan-to'g'ri zid.
+
+Uchta tuzatish kerak:
+
+1. **Login/logout haqiqiy foydalanuvchiga bog'lansin** — hozir ular anonim.
+2. **"Xodim" tanlagichi** — skr
+
+…(qisqartirildi)
+
+<sub>session `f5c8cf86` · branch `main` · 30 ta qadam</sub>
+
+---
