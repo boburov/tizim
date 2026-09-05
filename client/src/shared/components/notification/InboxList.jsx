@@ -44,7 +44,25 @@ import {
   useUnreadCountQuery,
 } from "@/owner/features/notifications/hooks/useInboxQuery";
 
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * MATN NECHTA QATORDAN KEYIN YIG'ILADI
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * Uzun xabar kartani cho'zib yuboradi va gridda YONIDAGI karta ham
+ * o'sha balandlikka tortiladi — natijada qator "bir tekis" bo'lsa ham
+ * yarmi bo'sh joy bo'lardi. To'rt qator — ikki qatorli sarlavha va bir
+ * qatorli izohni sig'diradigan eng kichik chegara.
+ *
+ * ⚠ MATN YO'QOLMAYDI. Cheklash faqat KO'RINISHDA: "Batafsil" tugmasi
+ * to'liq matnni ochadi. Kesib tashlash (`truncate`) noto'g'ri bo'lardi
+ * — bildirishnomaning oxiri ko'pincha eng muhim qismi (sana, summa).
+ */
+const BODY_CLAMP_LINES = 4;
+
 const InboxItem = ({ recipient, onMarkRead }) => {
+  // Bitta primitiv holat — `useObjectState` shart emas (istisno 1).
+  const [expanded, setExpanded] = useState(false);
   const n = recipient.notification;
   if (!n) return null;
   const isUnread = !recipient.readAt;
@@ -66,7 +84,10 @@ const InboxItem = ({ recipient, onMarkRead }) => {
         }
       }}
       className={cn(
-        "relative flex gap-3 rounded-2xl border p-3.5 transition-colors",
+        // `h-full` — grid katakchasining TO'LIQ balandligini egallaydi.
+        // Usiz karta o'z matniga qarab qisqarardi va yonidagi baland
+        // karta bilan bir tekisda turmasdi.
+        "relative flex h-full gap-3 rounded-2xl border p-3.5 transition-colors",
         isUnread
           ? "cursor-pointer border-primary/20 bg-primary/5 hover:bg-primary/10"
           : "border-border/60 bg-card",
@@ -81,7 +102,11 @@ const InboxItem = ({ recipient, onMarkRead }) => {
         <Icon className="size-5" />
       </div>
 
-      <div className="min-w-0 flex-1">
+      {/* `flex-col` — pastki qator (yuboruvchi + "o'qilgan") `mt-auto`
+          bilan kartaning ETAGIGA yopishadi. Shu tufayli u qo'shni
+          kartalarda BIR VERTIKALDA turadi, matn uzunligidan qat'i
+          nazar. */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex flex-wrap items-center gap-1.5">
           {categoryLabel && (
             <span
@@ -109,11 +134,33 @@ const InboxItem = ({ recipient, onMarkRead }) => {
           </p>
         )}
 
-        <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/90">
+        <p
+          className={cn(
+            "mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/90",
+            !expanded && "line-clamp-4",
+          )}
+        >
           {n.body}
         </p>
 
-        <div className="mt-2 flex items-center justify-between gap-2">
+        {/* Tugma FAQAT matn haqiqatan uzun bo'lsa kerak, lekin uning
+            uzunligini render'gacha o'lchab bo'lmaydi. Taxminiy chegara:
+            qatoriga ~90 belgi. Noto'g'ri tomonga adashish xavfsiz —
+            ortiqcha tugma matnni yashirmaydi, yo'q tugma esa yashirardi. */}
+        {n.body?.length > BODY_CLAMP_LINES * 90 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded((v) => !v);
+            }}
+            className="mt-1 self-start text-xs font-medium text-primary hover:underline"
+          >
+            {expanded ? "Yig'ish" : "Batafsil"}
+          </button>
+        )}
+
+        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
           <span className="truncate text-xs text-muted-foreground">
             {n.sender ? `${n.sender.firstName} ${n.sender.lastName}` : "Tizim"}
           </span>
@@ -233,7 +280,11 @@ const InboxList = () => {
           </p>
         </div>
       ) : (
-        <div className="grid items-start gap-2.5 md:grid-cols-2">
+        /* `items-start` OLIB TASHLANDI. U har bir kartani o'z matniga
+           qarab qisqartirardi va qator "arra tishli" bo'lib qolardi.
+           Standart `stretch` bilan bitta qatordagi kartalar bir xil
+           balandlikka cho'ziladi — aynan so'ralgan "bir tekis" grid. */
+        <div className="grid gap-2.5 md:grid-cols-2">
           {items.map((r) => (
             <InboxItem
               key={r._id}

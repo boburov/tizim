@@ -25267,3 +25267,60 @@ Sxema to'g'ri. Endi m
 <sub>session `f5c8cf86` · branch `main` · 123 ta qadam</sub>
 
 ---
+
+## 2026-09-05 16:54 — super admin va admin apendlagi bildirishnomalar qismini bir tekistda q
+
+**So'rov**
+
+> super admin va admin apendlagi bildirishnomalar qismini bir tekistda qilib bering grid kornishida
+
+**Buyruqlar (12)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/client && ls src/owner/features/notifications/pages/ src/owner/features/notifications/components/ 2>/dev/null; echo "=== in…
+grep -rn "MyInboxPage\|notifications" src/superadmin/routes/index.jsx | head; echo "=== owner routes ==="; grep -rn "notifications" src/owner/routes/index.jsx |…
+cat src/owner/features/notifications/pages/MyInboxPage.jsx
+cat src/shared/components/notification/InboxList.jsx
+grep -rn "InboxList\|to=\|navigate\|href" src/shared/components/notification/NotificationBell.jsx | head -20
+cat src/shared/components/notification/NotificationBell.jsx; echo "=== owner inbox route ==="; grep -n "inbox\|xabarlar\|my-notifications" src/owner/routes/inde…
+grep -rn "OwnerInboxPage" src/owner/routes/index.jsx | head -3; echo "==="; find src -name "OwnerInboxPage*"; echo "=== content ==="; cat $(find src -name "Owne…
+python3 - <<'PY' import io p="src/shared/components/notification/InboxList.jsx" s=io.open(p,encoding="utf-8").read() # 1) Karta: flex-ustun + pastki qator pastg…
+python3 - <<'PY' import io p="src/shared/components/notification/InboxList.jsx" s=io.open(p,encoding="utf-8").read() old = """ // `items-start` OLIB TASHLANDI. …
+grep -n "items-start OLIB" -B 4 -A 3 src/shared/components/notification/InboxList.jsx
+grep -n "grid gap-2.5 md:grid-cols-2" -B 6 src/shared/components/notification/InboxList.jsx
+npx eslint src/shared/components/notification/InboxList.jsx && npm run build 2>&1 | tail -4
+```
+
+**Natija**
+
+Bildirishnomalar sahifalarini ikkala panelda ko'rib chiqaman.
+
+Ikkala panel ham **ayni bitta komponentni** ishlatadi (`InboxList`) — farq yo'q. Muammo boshqa joyda: gridda `items-start` va matn uzunligi cheklanmagani uchun kartalar **har xil balandlikda** turadi, ya'ni qator tekis emas. Shuni tuzataman.
+
+Grid o'zgarishida JSX ichiga `//` izoh tushib qolgan — tuzataman.
+
+Lint toza, build o'tdi.
+
+## Nima o'zgardi
+
+Avval bir narsani aniqlashtiray: **ikkala panel allaqachon bitta komponentni ishlatadi** — [InboxList.jsx](client/src/shared/components/notification/InboxList.jsx). Admin panelda `/owner/inbox`, super admin panelda `/org/xabarlar`, lekin ekran ayni o'sha. Ya'ni "bir xil emas" muammosi panellar orasida emas edi — **gridning o'zida** edi:
+
+- `items-start` har bir kartani o'z matniga qarab qisqartirardi → qator **arra tishli** ko'rinardi;
+- xabar matni cheklanmagani uchun bitta uzun xabar butun qatorni cho'zib yuborardi.
+
+**Tuzatildi:**
+
+1. **`items-start` olib tashlandi** — endi bitta qatordagi kartalar bir xil balandlikka cho'ziladi (`stretch`).
+2. **Kartaga `h-full`** — grid katakchasining to'liq balandligini egallaydi.
+3. **Ichki blok `flex-col`, pastki qator `mt-auto`** — yuboruvchi nomi va "O'qilgan deb belgilash" tugmasi endi qo'shni kartalarda **bir vertikalda** turadi, matn uzunligidan qat'i nazar.
+4. **Matn 4 qatorda yig'iladi** (`line-clamp-4`) — aks holda bitta uzun xabar yonidagi qisqa kartani ham cho'zib, qatorning yarmini bo'sh qoldirardi.
+
+Oxirgi nuqta bo'yicha bir qaror qabul qildim: **matnni kesib tashlamadim**. `truncate` bildirishnomaning oxirini yo'qotardi, u yerda esa ko'pincha eng muhim ma'lumot turadi (summa, sana). Buning o'rniga uzun xabarga **"Batafsil"** tugmasi qo'shildi — bosilganda to'liq ochiladi, "Yig'ish" bilan qaytadi.
+
+Tugma matn
+
+…(qisqartirildi)
+
+<sub>session `f5c8cf86` · branch `main` · 12 ta qadam</sub>
+
+---
