@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { toUtcMidnight } from '../../common/utils/date.js';
 import { getClassDaysInRange } from '../../common/utils/attendance.js';
-import { HolidaysService } from '../holidays/holidays.service.js';
+import { HolidaysService } from '../holidays/index.js';
 import {
   LessonCancellationService,
   isCancelledSession,

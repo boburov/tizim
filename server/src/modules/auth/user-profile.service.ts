@@ -6,9 +6,9 @@ import { ROLES } from '../../common/constants/permissions.js';
 import { BOT_STATUS, botStatusOf } from '../../common/rbac/bot-status.js';
 import { PermissionService } from '../../common/rbac/permission.service.js';
 import { OptionalModuleService } from '../../common/features/optional-module.service.js';
-import { GroupsService } from '../groups/groups.service.js';
-import { AttendanceService } from '../attendance/attendance.service.js';
-import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
+import { GroupsService } from '../groups/index.js';
+import { AttendanceService } from '../attendance/index.js';
+import { StudentFreezeService } from '../student-freeze/index.js';
 
 /**
  * `helpers/userProfile.helper.js` — `/auth/me` javobidagi `profile`.

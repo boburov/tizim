@@ -10,7 +10,7 @@ import { localTodayMidnight, toUtcMidnight } from '../../common/utils/date.js';
 import { branchFilter } from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
-import { DepositsService } from '../deposits/deposits.service.js';
+import { DepositsService } from '../deposits/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -552,9 +552,9 @@ export class OpeningBalanceService {
 
     for (const ob of pending as any[]) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         const refs = await this.materializer(ob.kind)(ob, { currentUser });
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.prisma.openingBalance.update({
           where: { id: ob.id },
           data: {

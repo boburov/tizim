@@ -28,7 +28,7 @@ import {
 } from '../../common/utils/date.js';
 import { scheduleActiveOn } from '../../common/utils/attendance.js';
 import { branchFilter, userBranchCondition } from '../../common/als/branch-context.js';
-import { TeacherAbsenceService } from '../attendance/teacher-absence.service.js';
+import { TeacherAbsenceService } from '../attendance/index.js';
 import type { AuthenticatedUser } from '../../common/types/authenticated-request.js';
 
 const TEACHER_SELECT = {
@@ -122,10 +122,10 @@ export class TeacherAttendanceService {
       if (isAbsent) {
         // dars kuni bo'lmasa o'tkazib yuboramiz
         if (!isClassDayFor(g as never, dow, date)) continue;
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.absences.setAbsent(g.id, date, currentUser);
       } else {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.absences.setPresent(g.id, date);
       }
     }
@@ -240,12 +240,12 @@ export class TeacherAttendanceService {
         // `deleteMany` - `delete` Prisma'da unique kalit talab qiladi
         // va yozuv topilmasa OTADI. Bu yerda "yo'q bo'lsa ham mayli"
         // xulqi kerak (Mongo `deleteOne` shunday edi).
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.prisma.teacherAttendance.deleteMany({
           where: { teacherId: String(it.teacherId), dateKey },
         });
         // Keldi → barcha guruhlardagi "kelmadi" belgilarini olib tashlaymiz
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.syncTeacherGroupAbsences(it.teacherId, date, false, currentUser);
         present += 1;
       } else {
@@ -265,7 +265,7 @@ export class TeacherAttendanceService {
           deletedAt: null,
           deletedBy: null,
         };
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.prisma.teacherAttendance.upsert({
           where: {
             teacherId_dateKey: { teacherId: String(it.teacherId), dateKey },
@@ -275,7 +275,7 @@ export class TeacherAttendanceService {
         });
         // Kelmadi/sababli → o'qituvchining dars kuni bo'lgan barcha
         // guruhlari "kelmadi"
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.syncTeacherGroupAbsences(it.teacherId, date, true, currentUser);
         marked += 1;
       }

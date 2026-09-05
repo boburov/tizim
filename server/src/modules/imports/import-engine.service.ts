@@ -239,7 +239,7 @@ export class ImportEngineService {
     for (const row of results) {
       if (row.status !== ROW_STATUS.OK) continue;
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         const out = await importer.commitRow(row.data, ctx, { currentUser });
         row.status = out?.status || ROW_STATUS.IMPORTED;
         row.message = out?.message || null;
@@ -326,7 +326,7 @@ export class ImportEngineService {
     // yiqilardi.
     const drafted: any[] = [];
     for (const { rowNumber, raw } of rows) {
-      // eslint-disable-next-line no-await-in-loop
+       
       const filled = importer.draftRow ? await importer.draftRow(raw, ctx) : raw;
       drafted.push({ rowNumber, raw: filled });
     }
@@ -391,7 +391,7 @@ export class ImportEngineService {
       processed += 1;
       if (row.status === ROW_STATUS.OK) {
         try {
-          // eslint-disable-next-line no-await-in-loop
+           
           const out = await importer.commitRow(row.data, ctx, {
             currentUser, importJobId,
           });
@@ -411,7 +411,7 @@ export class ImportEngineService {
 
       if (onProgress
         && (processed % PROGRESS_EVERY === 0 || processed === results.length)) {
-        // eslint-disable-next-line no-await-in-loop
+         
         await onProgress(processed);
       }
     }

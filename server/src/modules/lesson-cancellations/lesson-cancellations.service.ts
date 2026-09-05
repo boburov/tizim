@@ -5,8 +5,8 @@ import { parseLocalDay, dateKeyOf } from '../../common/utils/date.js';
 import { branchFilter } from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
-import { StudentPaymentService } from '../finance/student-payment.service.js';
-import { TeacherSalaryService } from '../teacher-salary/teacher-salary.service.js';
+import { StudentPaymentService } from '../finance/index.js';
+import { TeacherSalaryService } from '../teacher-salary/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

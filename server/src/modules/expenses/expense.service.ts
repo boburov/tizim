@@ -8,10 +8,10 @@ import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { branchFilter, isBranchAllowed, getBranchContext } from '../../common/als/branch-context.js';
 import { parseLocalDay, localTodayMidnight } from '../../common/utils/date.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
-import { FinancialTransactionService } from '../finance/financial-transaction.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
+import { FinancialTransactionService } from '../finance/index.js';
 import { FINANCE_TXN_OPTIONS } from '../../common/utils/finance-txn.js';
-import type { TxClient } from '../journal/journal.service.js';
+import type { TxClient } from '../journal/index.js';
 
 /**
  * UMUMIY CHIQIMLAR - servis qatlami.

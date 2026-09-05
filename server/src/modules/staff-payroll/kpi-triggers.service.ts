@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { computeRate } from '../attendance/attendance.internals.js';
+import { computeRate } from '../attendance/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

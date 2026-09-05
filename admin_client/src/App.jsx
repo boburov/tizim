@@ -14,6 +14,8 @@ import ApiServiceDetailPage from './pages/ApiServiceDetailPage';
 import BotsPage from './pages/BotsPage';
 import CreateBotPage from './pages/CreateBotPage';
 import BotDetailPage from './pages/BotDetailPage';
+import VpsPage from './pages/VpsPage';
+import VpsDetailPage from './pages/VpsDetailPage';
 
 // Mijoz kabineti
 import PortalHomePage from './portal/pages/PortalHomePage';
@@ -101,6 +103,8 @@ export default function App() {
         <Route path="bots" element={<BotsPage />} />
         <Route path="bots/new" element={<CreateBotPage />} />
         <Route path="bots/:id" element={<BotDetailPage />} />
+        <Route path="vps" element={<VpsPage />} />
+        <Route path="vps/:id" element={<VpsDetailPage />} />
         <Route path="usage" element={<UsagePage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

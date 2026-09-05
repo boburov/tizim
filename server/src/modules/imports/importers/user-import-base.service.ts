@@ -5,7 +5,7 @@ import { hasPermission } from '../../../common/rbac/permission.service.js';
 import { normalizePhone } from '../../../common/utils/phone.js';
 import {
   baseUsername, generatePassword, nextUsernameCandidate,
-} from '../../../common/utils/credentials.js';
+} from '../credentials.js';
 import { toUtcMidnight, localTodayMidnight } from '../../../common/utils/date.js';
 import {
   getActiveBranchId, getAllowedBranchIds, canSeeAllBranches,
@@ -14,7 +14,7 @@ import {
 import {
   OPENING_MAX_AMOUNT, OPENING_WARN_AMOUNT,
 } from '../../../common/constants/opening-balance.js';
-import { OpeningBalanceService } from '../../opening-balance/opening-balance.service.js';
+import { OpeningBalanceService } from '../../opening-balance/index.js';
 import { asText, asNumber, asDate, isBlank } from '../coerce.js';
 
 /**
@@ -410,7 +410,7 @@ export class UserImportBaseService {
     let username = data.username;
     for (let attempt = 0; attempt < 5; attempt += 1) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         return await createFn({ ...data, username });
       } catch (err: any) {
         const isLoginClash =

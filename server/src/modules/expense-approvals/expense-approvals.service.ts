@@ -907,10 +907,10 @@ export class ExpenseApprovalsService {
     for (const id of ids) {
       try {
         if (action === 'reject') {
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.reject(id, { note }, currentUser, permissions);
         } else {
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.approve(id, { note }, currentUser, permissions);
         }
         succeeded.push(String(id));

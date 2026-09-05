@@ -6,7 +6,7 @@ import { TeacherSalaryService } from './teacher-salary.service.js';
 import { SalaryTransactionService } from './salary-transaction.service.js';
 import { SalaryAdjustmentService } from './salary-adjustment.service.js';
 import { TeacherCompensationService } from './teacher-compensation.service.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Permissions, Validated } from '../../common/decorators/index.js';
 import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';

@@ -5,9 +5,9 @@ import {
   AlertTriangle,
   Check,
   Copy,
-  Eye,
-  EyeOff,
   KeyRound,
+  ShieldCheck,
+  ShieldAlert,
   Loader2,
   RefreshCw,
   UserPlus,
@@ -16,26 +16,36 @@ import { api } from '../api/client';
 import OwnerCredentialsFields, {
   ownerCredentialsValid,
 } from './OwnerCredentialsFields';
-import { DEFAULT_PASSWORD_LENGTH, generatePassword } from '../lib/password';
 
 /**
- * LOYIHA EGASI — KIRISH MA'LUMOTLARI.
+ * ══════════════════════════════════════════════════════════════════════
+ * LOYIHA EGASI — LOGIN KO'RINADI, PAROL KO'RINMAYDI
+ * ══════════════════════════════════════════════════════════════════════
  *
- * ── ⚠ NEGA PAROL OCHIQ KO'RSATILADI ──
+ * ── ⚠ "PAROLNI KO'RSATISH" TUGMASI OLIB TASHLANDI ──
  *
- * Mijoz tizimida parollar ATAYLAB ochiq matnda saqlanadi
- * (`server/src/common/utils/password.ts`). Ya'ni parolni "faqat bir marta"
- * ko'rsatib keyin yashirish hech narsani himoya qilmasdi — u baribir
- * bazada turadi — lekin qo'llab-quvvatlashni qiyinlashtirardi.
+ * Ilgari parol tenant bazasida ochiq matnda yotardi va shu yerda ko'z
+ * tugmasi bilan ko'rsatilardi. Endi u `scrypt` hash: qaytarib bo'lmaydi
+ * va hech bir endpoint uni bermaydi.
  *
- * ── NEGA HAR SAFAR TENANT BAZASIDAN O'QILADI ──
+ * Buning o'rniga IKKI aniq amal:
+ *   • "Parolni qayta o'rnatish" — yangi parol yaratiladi va BIR MARTA
+ *     ko'rsatiladi. Ikkinchi marta olib bo'lmaydi.
+ *   • "Parolni himoyalash" — eski ochiq yozuvni parolni O'ZGARTIRMASDAN
+ *     hash'ga o'giradi (mijoz o'z paroli bilan kirishda davom etadi).
  *
- * Admin bazasida nusxa saqlanmaydi. Mijoz parolni o'zi almashtirsa, panel
- * eskisini ko'rsatib turaverardi — ya'ni ikkinchi haqiqat manbai.
+ * Sabab: parolni ko'rish uchun uni qaytariladigan shaklda saqlash kerak,
+ * ya'ni bitta baza nusxasi har bir markazning to'liq huquqli hisobini
+ * ochib berardi. Qo'llab-quvvatlash uchun "ko'rish" shart emas.
+ *
+ * ── HOLAT HAR SAFAR TENANTDAN O'QILADI ──
+ * Admin bazasida nusxa yo'q — ikkinchi haqiqat manbai bo'lmasin.
  */
 export default function TenantOwner({ tenantId, canEdit }) {
   const qc = useQueryClient();
-  const [visible, setVisible] = useState(false);
+  // ⚠ Faqat qayta o'rnatishdan KEYIN, bir marta ko'rsatiladigan parol.
+  // U hech qayerda saqlanmaydi va sahifa yangilansa yo'qoladi — ataylab.
+  const [oneTime, setOneTime] = useState(null);
   const [copied, setCopied] = useState('');
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ ownerUsername: 'owner', ownerPassword: '' });
@@ -56,7 +66,6 @@ export default function TenantOwner({ tenantId, canEdit }) {
     onSuccess: () => {
       toast.success('Ega hisobi yaratildi');
       setCreating(false);
-      setVisible(true);
       qc.invalidateQueries({ queryKey: key });
     },
     onError: (err) => {
@@ -65,17 +74,31 @@ export default function TenantOwner({ tenantId, canEdit }) {
     },
   });
 
-  const passwordMut = useMutation({
-    mutationFn: (password) =>
-      api.put(`/tenants/${tenantId}/owner/password`, { password }).then((r) => r.data),
-    onSuccess: () => {
-      toast.success('Parol almashtirildi — eski seanslar bekor qilindi');
-      setVisible(true);
+  const resetMut = useMutation({
+    mutationFn: () =>
+      api.post(`/tenants/${tenantId}/owner/password/reset`).then((r) => r.data),
+    onSuccess: (r) => {
+      // Parol FAQAT shu yerda va FAQAT hozir. Serverda hash qoldi.
+      setOneTime(r.password);
+      toast.success('Yangi parol yaratildi — nusxa oling');
       qc.invalidateQueries({ queryKey: key });
     },
     onError: (err) => {
       const msg = err.response?.data?.message;
-      toast.error(Array.isArray(msg) ? msg[0] : msg || 'Almashtirishda xatolik');
+      toast.error(Array.isArray(msg) ? msg[0] : msg || 'Qayta o\'rnatishda xatolik');
+    },
+  });
+
+  const upgradeMut = useMutation({
+    mutationFn: () =>
+      api.post(`/tenants/${tenantId}/owner/password/upgrade`).then((r) => r.data),
+    onSuccess: (r) => {
+      toast.success(r.message || 'Parol himoyalandi');
+      qc.invalidateQueries({ queryKey: key });
+    },
+    onError: (err) => {
+      const msg = err.response?.data?.message;
+      toast.error(Array.isArray(msg) ? msg[0] : msg || 'Xatolik');
     },
   });
 
@@ -217,20 +240,79 @@ export default function TenantOwner({ tenantId, canEdit }) {
             <KeyRound size={14} /> Ega hisobi
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Mijoz shu ma'lumot bilan o'z tizimiga kiradi.
+            Mijoz shu login bilan o'z tizimiga kiradi. Parol ko'rsatilmaydi —
+            faqat qayta o'rnatiladi.
           </p>
         </div>
-        <button
-          onClick={() => setVisible((v) => !v)}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted"
+        <span
+          className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+            owner.hashed
+              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+              : 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'
+          }`}
         >
-          {visible ? <EyeOff size={13} /> : <Eye size={13} />}
-          {visible ? 'Yashirish' : "Parolni ko'rsatish"}
-        </button>
+          {owner.hashed ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}
+          {owner.hashed ? 'Himoyalangan' : 'Ochiq saqlangan'}
+        </span>
       </div>
 
       <Row label="Login" value={owner.username} mono />
-      <Row label="Parol" value={visible ? owner.password : '••••••••••••'} mono />
+
+      {!owner.passwordSet && (
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          Parol o'rnatilmagan — mijoz kira olmaydi. Qayta o'rnating.
+        </div>
+      )}
+
+      {/* ── ESKI OCHIQ YOZUV ── */}
+      {owner.passwordSet && !owner.hashed && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <div className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
+            <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+            <span>
+              Bu hisobning paroli bazada OCHIQ saqlangan. Uni himoyalash mumkin —
+              mijozning paroli O'ZGARMAYDI, u avvalgidek kirishda davom etadi.
+            </span>
+          </div>
+          {canEdit && (
+            <button
+              disabled={upgradeMut.isPending}
+              onClick={() => upgradeMut.mutate()}
+              className="mt-2 flex items-center gap-1.5 rounded-lg border border-amber-300 bg-card px-3 py-1.5 text-xs font-medium transition hover:bg-muted disabled:opacity-50 dark:border-amber-500/40"
+            >
+              {upgradeMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+              Parolni himoyalash
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── BIR MARTALIK PAROL ── */}
+      {oneTime && (
+        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <div className="mb-2 text-xs font-medium text-emerald-800 dark:text-emerald-300">
+            Yangi parol — FAQAT HOZIR ko'rinadi. Yopilsa qayta olib bo'lmaydi.
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 select-all rounded bg-card px-2 py-1.5 font-mono text-sm ring-1 ring-border">
+              {oneTime}
+            </code>
+            <button
+              onClick={() => copy('Yangi parol', oneTime)}
+              className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs hover:bg-muted"
+            >
+              {copied === 'Yangi parol' ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+            </button>
+            <button
+              onClick={() => setOneTime(null)}
+              className="rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+            >
+              Yopish
+            </button>
+          </div>
+        </div>
+      )}
 
       {!owner.isActive && (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
@@ -242,25 +324,24 @@ export default function TenantOwner({ tenantId, canEdit }) {
       {canEdit && (
         <div className="mt-4 border-t border-border pt-4">
           <button
-            disabled={passwordMut.isPending}
+            disabled={resetMut.isPending}
             onClick={() => {
-              const next = generatePassword(DEFAULT_PASSWORD_LENGTH);
               if (
                 !window.confirm(
-                  `Yangi parol: ${next}\n\nAlmashtirilsa eganing tirik seanslari bekor qilinadi va u qaytadan kirishi kerak bo'ladi.`,
+                  "Parol qayta o'rnatilsinmi?\n\nYangi parol BIR MARTA ko'rsatiladi va uni qayta olib bo'lmaydi.\nEganing tirik seanslari bekor qilinadi — u yangi parol bilan qaytadan kiradi.",
                 )
               )
                 return;
-              passwordMut.mutate(next);
+              resetMut.mutate();
             }}
             className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
           >
-            {passwordMut.isPending ? (
+            {resetMut.isPending ? (
               <Loader2 size={14} className="animate-spin" />
             ) : (
               <RefreshCw size={14} />
             )}
-            Yangi parol yaratish
+            Parolni qayta o'rnatish
           </button>
         </div>
       )}

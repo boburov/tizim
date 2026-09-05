@@ -33,17 +33,19 @@ import {
 } from '../../common/rbac/roles.helper.js';
 import { StudentCompletionService } from '../../common/helpers/student-completion.service.js';
 import { UserRelationsService } from '../../common/helpers/user-relations.service.js';
-import { ArchiveReasonsService } from '../archive-reasons/archive-reasons.service.js';
-import { SystemNotificationsService } from '../system-notifications/system-notifications.service.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
-import { TeacherCompensationService } from '../teacher-salary/teacher-compensation.service.js';
-import { OpeningBalanceService } from '../opening-balance/opening-balance.service.js';
-import { UserProfileService } from '../auth/user-profile.service.js';
-import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
+import { ArchiveReasonsService } from '../archive-reasons/index.js';
+import { SystemNotificationsService } from '../system-notifications/index.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
+import { TeacherCompensationService } from '../teacher-salary/index.js';
+import { OpeningBalanceService } from '../opening-balance/index.js';
+// ⚠ `../auth/index.js` — ommaviy API. Ichki faylga to'g'ridan-to'g'ri
+// murojaat chegara buzilishi (`scripts/arch-scan.mjs` R1).
+import { UserProfileService } from '../auth/index.js';
+import { StudentFreezeService } from '../student-freeze/index.js';
 import {
   PayrollAuditService,
   PAYROLL_AUDIT_ACTIONS,
-} from '../staff-payroll/payroll-audit.service.js';
+} from '../staff-payroll/index.js';
 import type { AuthenticatedUser } from '../../common/types/authenticated-request.js';
 
 /**

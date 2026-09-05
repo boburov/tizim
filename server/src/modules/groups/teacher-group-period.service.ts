@@ -16,7 +16,7 @@ import {
   runWithBranchContext,
 } from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -534,15 +534,15 @@ export class TeacherGroupPeriodService {
     const months = monthsSpanned(startDate, endDate);
     if (!months.length) return;
     const { TeacherSalaryService } = await import(
-      '../teacher-salary/teacher-salary.service.js'
+      '../teacher-salary/index.js'
     );
     const salaryService = this.moduleRef.get(TeacherSalaryService, { strict: false });
     for (const { year, month } of months) {
-      // eslint-disable-next-line no-await-in-loop
+       
       const sal = await salaryService.ensureSalaryForTeacherGroup(
         teacherId, groupId, year, month,
       );
-      // eslint-disable-next-line no-await-in-loop
+       
       if (sal) await salaryService.recalc(String((sal as { id: string }).id));
     }
   }
@@ -1035,7 +1035,7 @@ export class TeacherGroupPeriodService {
       if (targetByGroup.has(gid)) continue;
       const grp = groupById.get(gid);
       if (!grp || grp.isActive === false) continue; // arxiv guruh — muhim emas
-      // eslint-disable-next-line no-await-in-loop
+       
       const activeIds = await this.activeTeacherIdsForGroup(gid, cutoff);
       const others = activeIds.filter((id) => String(id) !== String(outgoing.id));
       if (!others.length) orphans.push(grp.name);
@@ -1053,10 +1053,10 @@ export class TeacherGroupPeriodService {
       const grp = groupById.get(gid)!;
       const candidate = { startDate: cutoff, endDate: null };
       assertWithinGroupBounds(candidate, grp as never);
-      // eslint-disable-next-line no-await-in-loop
+       
       const existing = await this.loadScope(a.toTeacher, gid);
       assertPeriodInvariants(candidate, existing as never, 'date');
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.assertTeacherScheduleFree(
         a.toTeacher, (grp as never as { schedule: ScheduleSlot[] }).schedule, gid);
     }
@@ -1066,12 +1066,12 @@ export class TeacherGroupPeriodService {
     const opened: { group: string; teacher: string; period: string }[] = [];
     for (const p of live) {
       const gid = String(p.groupId);
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.update(p.id, { endDate: cutoff }, currentUser);
       closed.push({ group: gid, period: p.id });
     }
     for (const [gid, a] of targetByGroup) {
-      // eslint-disable-next-line no-await-in-loop
+       
       const doc = await this.create(
         {
           teacher: a.toTeacher,

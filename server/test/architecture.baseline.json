@@ -1,0 +1,13 @@
+{
+  "_comment": "Mavjud arxitektura qarzi. FAQAT qisqaradi — `npm run arch:baseline`. Yangi buzilish bu ro'yxatga tushmaydi.",
+  "generatedAt": "2026-09-05",
+  "violations": [
+    "CYCLE|modules/finance|modules/finance → modules/deposits → modules/finance",
+    "CYCLE|modules/finance|modules/finance → modules/teacher-salary → modules/finance",
+    "CYCLE|modules/finance|modules/finance → modules/teacher-salary → modules/groups → modules/deposits → modules/finance",
+    "CYCLE|modules/finance|modules/finance → modules/teacher-salary → modules/groups → modules/finance",
+    "CYCLE|modules/finance|modules/finance → modules/teacher-salary → modules/groups → modules/opening-balance → modules/deposits → modules/finance",
+    "CYCLE|modules/student-freeze|modules/student-freeze → modules/finance → modules/student-freeze",
+    "CYCLE|modules/teacher-salary|modules/teacher-salary → modules/groups → modules/teacher-salary"
+  ]
+}

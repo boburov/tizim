@@ -39,6 +39,9 @@ import TenantBrand from '../components/TenantBrand';
 import TenantSettings from '../components/TenantSettings';
 import TenantRepo from '../components/TenantRepo';
 import PendingChanges from '../components/PendingChanges';
+import TenantVps from '../components/TenantVps';
+import TenantDeployments from '../components/TenantDeployments';
+import TenantAnalytics from '../components/TenantAnalytics';
 
 const TABS = [
   { key: 'umumiy', label: 'Umumiy', icon: LayoutDashboard },
@@ -47,9 +50,14 @@ const TABS = [
   // ALOHIDA: sozlama ".env qiymati", bu esa tijorat qarori.
   { key: 'bolimlar', label: "Bo'limlar", icon: Package },
   { key: 'sozlamalar', label: 'Sozlamalar', icon: Settings2 },
-  // ⚠ FAQAT SUPER_ADMIN — javobda ega paroli OCHIQ MATNDA keladi,
-  // ya'ni bu tab mijoz tizimiga to'liq kirish huquqini beradi.
+  // ⚠ FAQAT SUPER_ADMIN — parol KO'RSATILMAYDI (endi hash), lekin bu
+  // tab uni QAYTA O'RNATA oladi, ya'ni mijoz tizimiga kirish yo'lini
+  // ochadi. Shuning uchun chegara o'zgarmadi.
   { key: 'ega', label: 'Ega', icon: KeyRound, superAdminOnly: true },
+  // Analitika — loyihaning O'Z serveridan tortib olinadi, nusxa saqlanmaydi.
+  { key: 'analitika', label: 'Analitika', icon: BarChart3 },
+  // Deploy — o'rnatish, qo'llash va ko'chirish tarixi + tirik log.
+  { key: 'deploy', label: 'Deploy', icon: Server },
   { key: 'github', label: 'GitHub', icon: Github },
 ];
 
@@ -173,7 +181,7 @@ export default function TenantDetailPage() {
   // Brend va sozlamalar bo'limlarida preview yonma-yon turadi — kengroq joy kerak
   // ⚠ `bolimlar` ham keng: jadvalda 5 ta ustun bor va tor konteynerda
   // oxirgi ustun ("Amal") qirqilib qolardi.
-  const wide = tab === 'brend' || tab === 'sozlamalar' || tab === 'bolimlar';
+  const wide = tab === 'brend' || tab === 'sozlamalar' || tab === 'bolimlar' || tab === 'deploy' || tab === 'analitika';
   const pendingCount = settingsInfo?.pending?.count ?? 0;
 
   return (
@@ -245,6 +253,10 @@ export default function TenantDetailPage() {
         <TenantOwner tenantId={t.id} canEdit={t.status !== 'DELETED'} />
       )}
 
+      {tab === 'analitika' && <TenantAnalytics tenantId={t.id} />}
+
+      {tab === 'deploy' && <TenantDeployments tenantId={t.id} />}
+
       {tab === 'github' && <TenantRepo tenant={t} canEdit={t.status !== 'DELETED'} />}
 
       {tab !== 'umumiy' ? null : (
@@ -264,6 +276,10 @@ export default function TenantDetailPage() {
 
       {/* Sayt preview — tirik bo'lsa iframe, bo'lmasa brend mock */}
       <SitePreview tenant={t} />
+
+      {/* Server (VPS) — loyiha qayerda turadi. DNS blokidan OLDIN: IP
+          aynan shu serverdan keladi. */}
+      <TenantVps tenant={t} canEdit={isSuperAdmin} />
 
       {/* DNS / IP bo'limi — Cloudflare uchun */}
       <div className="mb-5 rounded-xl border border-brand/20 bg-brand/5 p-5">

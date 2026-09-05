@@ -12,7 +12,10 @@ import type { Response } from 'express';
 import { BotAuthService } from './bot-auth.service.js';
 import { TelegramBotService } from '../../bot/telegram-bot.service.js';
 import { Validated } from '../../common/decorators/index.js';
-import { setRefreshCookie, type CookieSettings } from '../../common/utils/cookie.js';
+// ⚠ `../auth/index.js` — modulning OMMAVIY API'si. Ichki faylga
+// to'g'ridan-to'g'ri murojaat chegara buzilishi bo'lardi
+// (`scripts/arch-scan.mjs` R1).
+import { setRefreshCookie, type CookieSettings } from '../auth/index.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import type { AppConfig } from '../../config/env.validation.js';
 import {

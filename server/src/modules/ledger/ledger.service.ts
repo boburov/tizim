@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { ROLES } from '../../common/constants/permissions.js';
 import { userBranchCondition } from '../../common/als/branch-context.js';
-import { OpeningBalanceService } from '../opening-balance/opening-balance.service.js';
+import { OpeningBalanceService } from '../opening-balance/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

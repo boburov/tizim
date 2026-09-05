@@ -4,7 +4,7 @@ import { z } from 'zod';
 import {
   dateInputSchema,
   recordDateSchema,
-} from '../attendance/attendance.validators.js';
+} from '../../common/utils/date-schemas.js';
 
 // Student davomati bilan bir xil sana qoidalari (A-2 timezone bug parity):
 // o'qish - moslashuvchan; YOZISH - faqat "YYYY-MM-DD" (ISO instant +5 soat

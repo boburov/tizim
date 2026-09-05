@@ -12,8 +12,8 @@ import {
   getAllowedBranchIds,
   canSeeAllBranches,
 } from '../../common/als/branch-context.js';
-import { AuthService } from '../auth/auth.service.js';
-import { GroupsService } from '../groups/groups.service.js';
+import { AuthService } from '../auth/index.js';
+import { GroupsService } from '../groups/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -890,7 +890,7 @@ export class LeadsService {
     for (const item of leads) {
       const { id, ...body } = item;
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         const lead = await this.prisma.lead.findFirst({
           where: { id, ...branchFilter() },
         });
@@ -902,10 +902,10 @@ export class LeadsService {
         // ⚠ Guruh HAR LID uchun tekshiriladi: tanlovga TURLI filial
         // lidlari tushishi mumkin, va boshqa filial o'quvchisini bu
         // guruhga qo'shib bo'lmaydi.
-        // eslint-disable-next-line no-await-in-loop
+         
         if (groupId) await this.ensureGroupInScope(groupId, lead.branchId);
 
-        // eslint-disable-next-line no-await-in-loop
+         
         const { student, groupError } = await this.convertOne(
           lead, body, currentUser, groupId,
         );

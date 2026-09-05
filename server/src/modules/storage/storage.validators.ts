@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CLEANUP_FREQUENCIES } from '../../common/constants/storage.js';
+import { CLEANUP_FREQUENCIES } from './storage.constants.js';
 
 /** `modules/storage/validators/storage.validator.js` NING AYNAN KO'CHIRMASI. */
 

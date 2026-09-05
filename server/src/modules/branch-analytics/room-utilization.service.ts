@@ -505,7 +505,7 @@ export class RoomUtilizationService {
 
     const cancelSet = new Set(cancellations.map(c => `${c.groupId}_${c.dateKey}`));
 
-    let curr = new Date(targetFrom);
+    const curr = new Date(targetFrom);
     curr.setHours(0,0,0,0);
     const end = new Date(targetTo);
     end.setHours(0,0,0,0);
@@ -521,7 +521,7 @@ export class RoomUtilizationService {
       const dKey = this.formatDateKey(curr);
       const dayStr = this.getDayKey(curr);
       let dayLessons = 0;
-      let dayOccupiedRooms = new Set();
+      const dayOccupiedRooms = new Set();
       
       for (const g of groups) {
         if (!g.schedule) continue;
@@ -722,7 +722,7 @@ export class RoomUtilizationService {
     const cancelSet = new Set(cancellations.map(c => `${c.groupId}_${c.dateKey}`));
 
     const dates = [];
-    let curr = new Date(targetFrom);
+    const curr = new Date(targetFrom);
     curr.setHours(0,0,0,0);
     const end = new Date(targetTo);
     end.setHours(0,0,0,0);

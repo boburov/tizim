@@ -1,13 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
-import { AI_ENGINE_VERSION } from "../../common/constants/ai.js";
+import { AI_ENGINE_VERSION } from './ai.constants.js';
 import {
   DEFAULT_CHURN_WEIGHTS,
   DEFAULT_PAYMENT_WEIGHTS,
   DEFAULT_THRESHOLDS,
   DEFAULT_CONFIDENCE_FLOOR,
-} from "../../common/constants/ai.js";
+} from './ai.constants.js';
 
 /**
  * AI SOZLAMALARI — `services/aiConfig.service.js` ning KO'CHIRMASI.

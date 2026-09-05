@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { TRANSFER_STATUSES, SHIFT_STATUSES } from '../../common/constants/treasury.js';
-import { JournalService } from '../journal/journal.service.js';
-import { JournalVerifyService } from '../journal/journal-verify.service.js';
+import { JournalService } from '../journal/index.js';
+import { JournalVerifyService } from '../journal/index.js';
 import { BranchMetricsService } from './branch-metrics.service.js';
 
 /**

@@ -318,7 +318,7 @@ export class PayrollHistoryService {
       }
 
       // Yozmasdan hisoblab ko'ramiz (`save: false`).
-      // eslint-disable-next-line no-await-in-loop
+       
       const projected = (await this.payroll.computePayroll(user.id, year, month, {
         save: false,
       })) as { fixedAmount?: number } | null;
@@ -412,7 +412,7 @@ export class PayrollHistoryService {
 
     for (const { year, month } of months) {
       // `(employeeId, year, month)` HAQIQIY unique kalit — `findUnique`.
-      // eslint-disable-next-line no-await-in-loop
+       
       const existing = await this.prisma.staffPayroll.findUnique({
         where: { employeeId_year_month: { employeeId: user.id, year, month } },
         select: { id: true },
@@ -425,7 +425,7 @@ export class PayrollHistoryService {
       }
 
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.payroll.computePayroll(user.id, year, month, {
           source: 'generated',
           actor: currentUser,
@@ -500,7 +500,7 @@ export class PayrollHistoryService {
     for (const r of inRange) {
       try {
         // ⚠ `force` BERILMAYDI: yopilgan oy o'z-o'zidan ochilmasligi kerak.
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.payroll.computePayroll(user.id, r.year, r.month, {
           source: 'manual',
           actor: currentUser,

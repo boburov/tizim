@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
 import { hasPermission } from '../../common/rbac/permission.service.js';
-import { UsersService } from '../users/users.service.js';
-import { StudentPaymentService } from '../finance/student-payment.service.js';
+import { UsersService } from '../users/index.js';
+import { StudentPaymentService } from '../finance/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

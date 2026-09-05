@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { withLegacyId } from '../../common/utils/serialize.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { GradesService } from './grades.service.js';
-import { AttendanceService } from '../attendance/attendance.service.js';
+import { AttendanceService } from '../attendance/index.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 
 const STUDENT_SELECT = {

@@ -194,7 +194,7 @@ export class ExpenseApprovalsController {
     const failed: { id: string; reason: string }[] = [];
     for (const id of v.body.ids) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.approvals.reject(
           id,
           { note: v.body.note },

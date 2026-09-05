@@ -5,7 +5,7 @@ import { ROLES } from '../../common/constants/permissions.js';
 import { ACCOUNT_KINDS, ENTRY_KINDS } from '../../common/constants/ledger.js';
 import { isBranchAllowed } from '../../common/als/branch-context.js';
 import { assertTargetInScope } from '../../common/rbac/branch-access.service.js';
-import { JournalService } from '../journal/journal.service.js';
+import { JournalService } from '../journal/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

@@ -9,7 +9,7 @@ import { branchFilter } from '../../common/als/branch-context.js';
 import { FINANCE_TXN_OPTIONS } from '../../common/utils/finance-txn.js';
 import { StudentPaymentService } from './student-payment.service.js';
 import { FinancialTransactionService } from './financial-transaction.service.js';
-import { DepositsService } from '../deposits/deposits.service.js';
+import { DepositsService } from '../deposits/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -164,14 +164,14 @@ export class TransactionService {
 
           // Balans SHARTLI-ATOMIK oshiriladi. `null` → parallel so'rov shu
           // oyni allaqachon yopgan; keyingi oyga o'tamiz.
-          // eslint-disable-next-line no-await-in-loop
+           
           const updated = await this.payments.applyPaidDelta(plan.id, take, {
             capToRemaining: true,
             tx,
           });
           if (!updated) continue;
 
-          // eslint-disable-next-line no-await-in-loop
+           
           const created = await tx.paymentTransaction.create({
             data: {
               // FILIAL: oylik plandan meros (plan guruhdan olgan).
@@ -193,7 +193,7 @@ export class TransactionService {
           });
 
           // JURNAL + AUDIT + o'lchovlar — markaziy servis orqali.
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.financialTx.postStudentPayment(
             { paymentTransactionId: created.id },
             currentUser,
@@ -281,7 +281,7 @@ export class TransactionService {
         // Yutmagan so'rov shu bo'lakni JIMGINA o'tkazib yuboradi:
         // batch'ning qolgan bo'laklari boshqa so'rovga tegishli
         // bo'lishi mumkin va butun amalni yiqitish noto'g'ri bo'lardi.
-        // eslint-disable-next-line no-await-in-loop
+         
         const claimed = await tx.paymentTransaction.updateMany({
           where: { id: t.id, isDeleted: false },
           data: {
@@ -291,7 +291,7 @@ export class TransactionService {
         });
         if (claimed.count === 0) continue;
 
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.payments.applyPaidDelta(t.paymentId, -Number(t.amount), { tx });
 
         // ── YOMON QARZ TUZATISHI ──
@@ -301,13 +301,13 @@ export class TransactionService {
         // haqiqiy yo'qotish o'sha summaga OSHADI, lekin `writeOffAmount`
         // eski qiymatda qolib ketardi — natijada bekor qilingan summa
         // hech qayerda ko'rinmay, JIMGINA yo'qolardi.
-        // eslint-disable-next-line no-await-in-loop
+         
         const paymentDoc = await tx.studentPayment.findUnique({
           where: { id: t.paymentId },
           select: { writtenOff: true },
         });
         if (paymentDoc?.writtenOff) {
-          // eslint-disable-next-line no-await-in-loop
+           
           await tx.studentPayment.update({
             where: { id: t.paymentId },
             data: { writeOffAmount: { increment: t.amount } },
@@ -318,7 +318,7 @@ export class TransactionService {
         // qaytadi (naqdga emas). Void bilan bir xil tranzaksiyada —
         // tashqi abort'da double-credit bo'lmasin.
         if (t.source === 'deposit') {
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.deposits.refundToDeposit(t.studentId, Number(t.amount), { tx });
         }
 
@@ -330,7 +330,7 @@ export class TransactionService {
         //
         // ⚠ AYNI TRANZAKSIYADA: void yarim bajarilib qolsa jurnal ham,
         // `paidAmount` ham qaytariladi.
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.financialTx.reverseByRef(
           { refModel: 'PaymentTransaction', refId: t.id },
           currentUser,

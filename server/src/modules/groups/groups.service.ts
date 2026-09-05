@@ -14,17 +14,17 @@ import { assertPeriodInvariants } from '../../common/utils/period.js';
 import { FINANCE_TXN_OPTIONS } from '../../common/utils/finance-txn.js';
 import { UserRelationsService } from '../../common/helpers/user-relations.service.js';
 import { StudentCompletionService } from '../../common/helpers/student-completion.service.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
-import { SystemNotificationsService } from '../system-notifications/system-notifications.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
+import { SystemNotificationsService } from '../system-notifications/index.js';
 import { TeacherGroupPeriodService } from './teacher-group-period.service.js';
 // ⚠ Quyidagi TO'RTTASI faqat `ModuleRef` TOKENI sifatida ishlatiladi —
 // modul grafiga qo'shilmaydi (izoh `lazy()` ustida). ESM aylanasi YO'Q:
 // ularning birortasi `groups.service.ts` ni import qilmaydi.
-import { GroupFeeService } from '../finance/group-fee.service.js';
-import { StudentPaymentService } from '../finance/student-payment.service.js';
-import { TeacherSalaryService } from '../teacher-salary/teacher-salary.service.js';
-import { DepositsService } from '../deposits/deposits.service.js';
-import { OpeningBalanceService } from '../opening-balance/opening-balance.service.js';
+import { GroupFeeService } from '../finance/index.js';
+import { StudentPaymentService } from '../finance/index.js';
+import { TeacherSalaryService } from '../teacher-salary/index.js';
+import { DepositsService } from '../deposits/index.js';
+import { OpeningBalanceService } from '../opening-balance/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -810,7 +810,7 @@ export class GroupsService {
     // Jadval to'qnashuvi: o'qituvchi bir vaqtda ikkita guruhda dars
     // bera olmaydi.
     for (const teacherId of body.teachers || []) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.periods.assertTeacherScheduleFree(teacherId, body.schedule, null);
     }
 
@@ -872,7 +872,7 @@ export class GroupsService {
     const startDate = group.startDate || today;
     for (const teacherId of body.teachers || []) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.periods.assignTeacher(group.id, teacherId, { startDate }, currentUser);
       } catch (err) {
         // ═══════════════════════════════════════════════════════════
@@ -887,17 +887,17 @@ export class GroupsService {
         // qayerda ishlatilmagan) va xatoni AYNAN sababi bilan beramiz.
         // ═══════════════════════════════════════════════════════════
         try {
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.userRelations.hardDeleteGroupData(group.id);
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.prisma.groupScheduleItem.deleteMany({
             where: { groupId: group.id },
           });
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.prisma.group.update({
             where: { id: group.id }, data: { teachers: { set: [] } },
           });
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.prisma.group.delete({ where: { id: group.id } });
         } catch (cleanupErr) {
           // Tozalash yiqilsa ham ASL xatoni yashirmaymiz.
@@ -917,7 +917,7 @@ export class GroupsService {
       // Maosh yozuvi — IKKILAMCHI: yiqilsa ham guruh yaroqli qoladi,
       // yozuv keyingi hisoblashda o'zi yaratiladi.
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.salaries.ensureSalaryForTeacherGroup(
           teacherId, group.id, year, month,
         );
@@ -967,7 +967,7 @@ export class GroupsService {
           .forEach((t: string) => toCheck.add(t));
       }
       for (const teacherId of toCheck) {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.periods.assertTeacherScheduleFree(
           teacherId, scheduleForCheck, group.id,
         );
@@ -1067,7 +1067,7 @@ export class GroupsService {
         const month = today.getUTCMonth() + 1;
         for (const teacherId of removed) {
           try {
-            // eslint-disable-next-line no-await-in-loop
+             
             await this.periods.unassignTeacher(group.id, teacherId, { endDate: today });
           } catch (err) {
             this.logger.warn(
@@ -1077,9 +1077,9 @@ export class GroupsService {
         }
         for (const teacherId of added) {
           try {
-            // eslint-disable-next-line no-await-in-loop
+             
             await this.periods.assignTeacher(group.id, teacherId, { startDate: today });
-            // eslint-disable-next-line no-await-in-loop
+             
             await this.salaries.ensureSalaryForTeacherGroup(
               teacherId, group.id, year, month,
             );
@@ -1114,7 +1114,7 @@ export class GroupsService {
     const closedIds: string[] = [];
     for (const teacherId of activeIds) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         const closed = await this.periods.unassignTeacher(
           group.id, teacherId, { endDate: endExclusive },
         );
@@ -1145,14 +1145,14 @@ export class GroupsService {
     const closedIds: string[] = [];
     for (const m of open) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.prisma.groupMembership.update({
           where: { id: m.id },
           data: { leftAt: endExclusive, leftReason: 'graduated' },
         });
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.recalcFinanceOnLeave(group.id, m.studentId);
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.completion.safeRecompute(m.studentId);
         closedIds.push(String(m.id));
       } catch (err) {
@@ -1218,7 +1218,7 @@ export class GroupsService {
     if (hadClosed) {
       for (const pid of group.archivedClosedPeriods || []) {
         try {
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.periods.reopenPeriod(pid);
         } catch (err) {
           this.logger.warn(
@@ -1228,7 +1228,7 @@ export class GroupsService {
       }
       for (const mid of group.archivedClosedMemberships || []) {
         try {
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.reopenMembership(mid);
         } catch (err) {
           this.logger.warn(
@@ -1265,7 +1265,7 @@ export class GroupsService {
     let archived = 0;
     for (const group of due) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.reconcileGroupEnd(group);
         archived += 1;
       } catch (err) {
@@ -1359,7 +1359,7 @@ export class GroupsService {
       }
       for (const [sid, total] of perStudent) {
         if (total > 0) {
-          // eslint-disable-next-line no-await-in-loop
+           
           await this.deposits.refundToDeposit(sid, total, {
             tx, note: "Guruh o'chirildi - to'lovga qaytarildi",
           });
@@ -1381,7 +1381,7 @@ export class GroupsService {
 
     // A'zolik o'chgani uchun yakunlash sanasini qayta hisoblaymiz.
     for (const sid of studentIds) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.completion.safeRecompute(sid);
     }
 
@@ -1460,11 +1460,11 @@ export class GroupsService {
       let month = join.getUTCMonth() + 1;
 
       while (year < endYear || (year === endYear && month <= endMonth)) {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.fees.ensureGroupFeeBackfill(groupId, year, month);
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.payments.ensurePaymentForMembership(membership, year, month);
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.salaries.recalcForGroupMonth(groupId, year, month);
 
         month += 1;
@@ -1516,7 +1516,7 @@ export class GroupsService {
       // Tarif hali yaratilmagan bo'lsa o'sha vaqtda amalda bo'lgan ENG
       // YAQIN tarif bilan taxmin qilamiz — AYNAN `ensureGroupFeeBackfill`
       // ishlatadigan qiymat, ya'ni preview haqiqiy natijaga mos keladi.
-      // eslint-disable-next-line no-await-in-loop
+       
       const amount = Number(await this.fees.nearestFeeAmount(group.id, year, month)) || 0;
       const isPast = year * 100 + month < currentKey;
       months.push({ year, month, amount, isPast });
@@ -1706,7 +1706,7 @@ export class GroupsService {
     const failed: { studentId: string; message: string }[] = [];
     for (const studentId of ids) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         const membership: any = await this.addStudent(groupId, studentId, {
           joinedAt, leftAt,
         });

@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { ENTRY_KINDS, METHOD_TO_ACCOUNT } from '../../common/constants/ledger.js';
-import type { TxClient } from '../journal/journal.service.js';
+import type { TxClient } from '../journal/index.js';
 
 /**
  * ══════════════════════════════════════════════════════════════════════

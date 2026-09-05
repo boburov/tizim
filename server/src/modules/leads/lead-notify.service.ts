@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ROLES } from '../../common/constants/permissions.js';
-import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationsService } from '../notifications/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

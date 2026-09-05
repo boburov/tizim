@@ -407,6 +407,15 @@ export const FEATURES: readonly FeatureDef[] = Object.freeze([
     requires: ['finance'],
   },
   {
+    key: 'platform-analytics',
+    label: 'Platforma analitikasi',
+    tier: 'leaf',
+    core: true,
+    locked: true,
+    nestModules: ['PlatformAnalyticsModule'],
+    routes: ['internal/analytics'],
+  },
+  {
     key: 'roles',
     label: 'Rollar va ruxsatlar',
     tier: 'leaf',

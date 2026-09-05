@@ -217,7 +217,7 @@ export class RolesHelperService {
     const base = slugifyRole(label) || 'rol';
     let value = base;
     let n = 1;
-    // eslint-disable-next-line no-await-in-loop
+     
     while (await this.prisma.role.findUnique({ where: { value }, select: { id: true } })) {
       n += 1;
       value = `${base}-${n}`;

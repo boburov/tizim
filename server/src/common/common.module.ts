@@ -5,7 +5,6 @@ import { CredentialScopeService } from './rbac/credential-scope.js';
 import { RolesHelperService } from './rbac/roles.helper.js';
 import { StudentCompletionService } from './helpers/student-completion.service.js';
 import { ApprovalExecutorRegistry } from './approvals/approval-executor.registry.js';
-import { MembershipService } from './helpers/membership.service.js';
 import { CorrelationCacheService } from './helpers/correlation-cache.service.js';
 import { LessonCancellationService } from './helpers/lesson-cancellation.service.js';
 import { UserRelationsService } from './helpers/user-relations.service.js';
@@ -56,7 +55,6 @@ import { CapabilityGuard } from './features/capability.guard.js';
     RolesHelperService,
     StudentCompletionService,
     ApprovalExecutorRegistry,
-    MembershipService,
     CorrelationCacheService,
     LessonCancellationService,
     UserRelationsService,
@@ -99,7 +97,6 @@ import { CapabilityGuard } from './features/capability.guard.js';
     RolesHelperService,
     StudentCompletionService,
     ApprovalExecutorRegistry,
-    MembershipService,
     CorrelationCacheService,
     LessonCancellationService,
     UserRelationsService,

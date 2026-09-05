@@ -10,7 +10,7 @@ import { buildMeta } from '../../common/utils/pagination.js';
 import { actorOf } from '../../common/helpers/actor.js';
 import { discountMetrics, groupFeeMetrics } from '../../common/helpers/config-metrics.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
 import { StudentPaymentService } from './student-payment.service.js';
 import { GroupFeeService } from './group-fee.service.js';
 import { DiscountService } from './discount.service.js';

@@ -4,7 +4,7 @@ import { withLegacyId } from '../../common/utils/serialize.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { parseLocalDay, dateKeyOf, dayOfWeekOf } from '../../common/utils/date.js';
 import { scheduleActiveOn } from '../../common/utils/attendance.js';
-import { CoinService } from '../coin/coin.service.js';
+import { CoinService } from '../coin/index.js';
 
 /**
  * BAHOLAR — `grades.service.js` NING AYNAN EKVIVALENTI.
@@ -293,11 +293,11 @@ export class GradesService {
 
         let doc: unknown = null;
         if (prev) {
-          // eslint-disable-next-line no-await-in-loop
+           
           doc = await tx.grade.update({ where: { id: prev.id }, data });
         } else {
           try {
-            // eslint-disable-next-line no-await-in-loop
+             
             doc = await tx.grade.create({
               data: {
                 groupId: String(groupId),
@@ -313,7 +313,7 @@ export class GradesService {
             // `11000` edi, Prisma'da `P2002` — yozuv baribir bor,
             // ustiga yozamiz.
             if ((err as { code?: string })?.code !== 'P2002') throw err;
-            // eslint-disable-next-line no-await-in-loop
+             
             const again = await tx.grade.findFirst({
               where: {
                 groupId: String(groupId),
@@ -324,7 +324,7 @@ export class GradesService {
               },
             });
             doc = again
-              // eslint-disable-next-line no-await-in-loop
+               
               ? await tx.grade.update({ where: { id: again.id }, data })
               : null;
           }

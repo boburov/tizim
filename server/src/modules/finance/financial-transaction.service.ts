@@ -12,7 +12,7 @@ import {
   JournalService,
   type JournalLineInput,
   type TxClient,
-} from '../journal/journal.service.js';
+} from '../journal/index.js';
 import { DimensionResolverService, type Dimensions } from './dimension-resolver.service.js';
 
 /**

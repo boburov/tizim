@@ -34,7 +34,7 @@ export class ExportsService {
     let page = 1;
 
     for (;;) {
-      // eslint-disable-next-line no-await-in-loop
+       
       const result = await dataset.fetchPage({ filters, page, limit: PAGE_SIZE });
       const items = result?.items || [];
       const total = Number(result?.total ?? 0);

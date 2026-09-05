@@ -4,32 +4,12 @@ import { z } from 'zod';
  * `modules/attendance/validators/*.js` NING AYNAN KO'CHIRMASI.
  */
 
-/**
- * ⚠ O'QISH uchun sana — TIMEZONE-XAVFSIZ.
- *
- * "YYYY-MM-DD" satri AFZAL (aniq kalendar kuni, zona aralashmaydi).
- * Orqaga-moslik uchun ISO instant ham qabul qilinadi; servisdagi
- * `parseLocalDay` uni mahalliy (Asia/Tashkent) kalendar kuniga
- * keltiradi. Satr holati SAQLANADI — servis o'zi aylantiradi.
- */
-export const dateInputSchema = z
-  .union([
-    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana formati YYYY-MM-DD bo'lishi kerak"),
-    z.coerce.date(),
-  ])
-  .transform((v) => (v instanceof Date ? v.toISOString() : v));
-
-/**
- * ⚠⚠ YOZISH uchun sana — QAT'IY "YYYY-MM-DD", ISO INSTANT QABUL
- * QILINMAYDI (A-2 timezone xatosi).
- *
- * Aks holda kechki dars (masalan 20:30Z) `parseLocalDay` da +5 soat
- * bilan KEYINGI kunga siljib, davomat NOTO'G'RI kunga yozilardi.
- * Yozuvda kalendar kuni ANIQ bo'lishi shart.
- */
-export const recordDateSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Sana formati YYYY-MM-DD bo'lishi kerak");
+// Sana sxemalari `common/utils/date-schemas.ts` ga KO'CHIRILDI — uchta
+// modul (attendance, teacher-attendance, grades) bir xil qoidani
+// ishlatadi va ikkitasi shu faylni to'g'ridan-to'g'ri import qilardi.
+// Re-eksport: bu fayldagi mavjud iste'molchilar o'zgarmasin.
+import { dateInputSchema, recordDateSchema } from '../../common/utils/date-schemas.js';
+export { dateInputSchema, recordDateSchema };
 
 /** Sessiya (slot): "" yoki "HH:mm". */
 export const slotSchema = z

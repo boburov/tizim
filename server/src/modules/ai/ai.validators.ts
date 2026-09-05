@@ -7,7 +7,7 @@ import {
   INSIGHT_STATUSES,
   INSIGHT_SUBJECT_TYPES,
 } from './insight-kinds.js';
-import { AI_REPORT_PERIODS } from '../../common/constants/ai.js';
+import { AI_REPORT_PERIODS } from './ai.constants.js';
 
 /**
  * AI VALIDATORLARI — `ai/validators/insight.validator.js` NING TO'LIQ

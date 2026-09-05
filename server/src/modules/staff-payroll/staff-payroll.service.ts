@@ -14,7 +14,7 @@ import { monthRange } from './kpi-triggers.service.js';
 // Tranzaksiya klientining yagona ta'rifi `journal.service.ts` da —
 // `applyPaidDelta` xom SQL ni AYNI o'sha klientda bajarishi shart
 // (B20). Takroriy ta'rif ikki joyda ajralib ketardi.
-import type { TxClient } from '../journal/journal.service.js';
+import type { TxClient } from '../journal/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -441,7 +441,7 @@ export class StaffPayrollService {
       if (remaining <= 0) continue;
 
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.prisma.staffPayrollAdjustment.create({
           data: {
             employeeId: p.employeeId,
@@ -532,7 +532,7 @@ export class StaffPayrollService {
     let computed = 0;
     for (const id of targetIds) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.computePayroll(id, year, month);
         computed += 1;
       } catch (err) {

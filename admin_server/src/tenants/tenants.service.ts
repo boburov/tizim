@@ -11,6 +11,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProvisioningService } from '../provisioning/provisioning.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { GithubService } from '../github/github.service.js';
+import { VpsService } from '../vps/vps.service.js';
+import { MigrationService } from '../provisioning/migration.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateBrandDto } from './dto/update-brand.dto.js';
 import {
@@ -32,6 +34,8 @@ export class TenantsService {
     private readonly provisioning: ProvisioningService,
     private readonly settings: SettingsService,
     private readonly github: GithubService,
+    private readonly vps: VpsService,
+    private readonly migration: MigrationService,
   ) {}
 
   /** Nomdan xavfsiz slug hosil qiladi (DB nomi/pm2 nomi uchun asos). */
@@ -140,6 +144,12 @@ export class TenantsService {
     const branchLimitOverride =
       dto.branchLimit === undefined ? null : this.validBranchLimit(dto.branchLimit);
 
+    // ── VPS ──
+    // Tanlangan yoki standart. `serverIp` ham VPS host'idan to'ldiriladi:
+    // eski o'quvchilar (`tenant-dsn`, `tenant-refresh`, DNS) hozircha shu
+    // ustunga qaraydi. 3-fazada ular `vps.host` ga o'tadi.
+    const vps = await this.resolveVpsForNewTenant(dto.vpsId);
+
     const tenant = await this.prisma.tenant.create({
       data: {
         name: dto.name,
@@ -160,7 +170,8 @@ export class TenantsService {
         status: 'DRAFT',
         gitStatus: wantsRepo ? 'PENDING' : 'DISABLED',
         createdBy,
-        serverIp: process.env.SERVER_PUBLIC_IP || null,
+        vpsId: vps?.id ?? null,
+        serverIp: vps?.host ?? process.env.SERVER_PUBLIC_IP ?? null,
       },
     });
 
@@ -176,7 +187,7 @@ export class TenantsService {
 
     // Provisioning'ni fon rejimida boshlaymiz — javob darrov qaytadi
     this.provisioning
-      .provision(tenant.id, owner)
+      .provision(tenant.id, owner, createdBy)
       .catch((err) =>
         this.logger.error(`Provisioning boshlashda xato: ${err.message}`),
       );
@@ -250,7 +261,7 @@ export class TenantsService {
    * Kutilayotgan o'zgarishlarni tenantga yetkazadi.
    * Kerakli amal (restart / rebuild) farqdan o'zi aniqlanadi.
    */
-  async applyPending(id: string) {
+  async applyPending(id: string, actor?: string | null) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new NotFoundException('Tenant topilmadi');
 
@@ -280,7 +291,7 @@ export class TenantsService {
     }
 
     this.provisioning
-      .applyConfig(id, mode)
+      .applyConfig(id, mode, actor)
       .catch((err) => this.logger.error(`Qo'llashda xato: ${err.message}`));
 
     return {
@@ -387,7 +398,8 @@ export class TenantsService {
 
   /** DNS uchun kerakli IP va yo'riqnomani javobga qo'shadi. */
   private withDnsInfo(tenant: any) {
-    const ip = tenant.serverIp || process.env.SERVER_PUBLIC_IP || null;
+    // VPS host — asosiy manba; `serverIp` — eski yozuvlar uchun zaxira.
+    const ip = tenant.vps?.host || tenant.serverIp || process.env.SERVER_PUBLIC_IP || null;
     return {
       ...tenant,
       dns: {
@@ -397,15 +409,23 @@ export class TenantsService {
         ip,
         note: ip
           ? `Cloudflare'da "${tenant.domain}" uchun A record → ${ip} qo'shing (proxy: DNS only tavsiya)`
-          : "SERVER_PUBLIC_IP .env'da sozlanmagan — IP ni qo'lda kiriting",
+          : "Tenant VPS'ga biriktirilmagan — VPS tanlang yoki SERVER_PUBLIC_IP ni sozlang",
       },
     };
   }
 
+  /** Javobga qo'shiladigan VPS bo'lagi — sirsiz, faqat ko'rsatish uchun. */
+  private static readonly VPS_SELECT = {
+    select: { id: true, name: true, host: true, status: true, isLocal: true, isActive: true },
+  } as const;
+
   async findAll() {
     const list = await this.prisma.tenant.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { systemTemplate: { select: { name: true, key: true } } },
+      include: {
+        systemTemplate: { select: { name: true, key: true } },
+        vps: TenantsService.VPS_SELECT,
+      },
     });
     return list.map((t) => this.withDnsInfo(t));
   }
@@ -413,10 +433,112 @@ export class TenantsService {
   async findOne(id: string) {
     const t = await this.prisma.tenant.findUnique({
       where: { id },
-      include: { systemTemplate: true },
+      include: { systemTemplate: true, vps: TenantsService.VPS_SELECT },
     });
     if (!t) throw new NotFoundException('Tenant topilmadi');
     return this.withDnsInfo(t);
+  }
+
+  // ── VPS BIRIKTIRISH ────────────────────────────────────────────────────
+
+  /**
+   * Yangi tenant uchun VPS: so'ralgan (faol bo'lsa) yoki standart.
+   * Standart ham yo'q bo'lsa `null` — VPS'siz DRAFT (deploy paytida
+   * tanlash talab qilinadi).
+   */
+  private async resolveVpsForNewTenant(requestedId?: string) {
+    const id = requestedId ?? (await this.vps.defaultVpsId());
+    if (!id) return null;
+    const v = await this.prisma.vps.findUnique({
+      where: { id },
+      include: { _count: { select: { tenants: true } } },
+    });
+    if (!v) throw new BadRequestException('Tanlangan VPS topilmadi');
+    if (!v.isActive) throw new BadRequestException(`VPS "${v.name}" deaktivatsiya qilingan`);
+    if (v.maxTenants != null && v._count.tenants >= v.maxTenants) {
+      throw new BadRequestException(`VPS "${v.name}" to'lgan (${v._count.tenants}/${v.maxTenants})`);
+    }
+    return v;
+  }
+
+  // ── KO'CHIRISH ─────────────────────────────────────────────────────────
+
+  /**
+   * Boshqa VPS'ga ko'chirishni FON rejimida boshlaydi.
+   *
+   * Tekshiruvlar `MigrationService.migrate()` ichida — u yerda manba,
+   * nishon va tenant holati birga baholanadi. Bu yerda faqat "boshlandi"
+   * javobi: jarayon 5–30 daqiqa davom etadi va HTTP so'rovni ushlab
+   * turish mumkin emas.
+   *
+   * ⚠ Dastlabki tekshiruvlar SINXRON bajariladi (`await` yo'q, lekin
+   * xato darrov qaytadi): noto'g'ri nishon yoki band tenant uchun
+   * foydalanuvchi "boshlandi" degan yolg'on javob olmasligi kerak.
+   */
+  async migrateToVps(tenantId: string, targetVpsId: string, actor?: string | null) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { vps: { select: { id: true, name: true } } },
+    });
+    if (!tenant) throw new NotFoundException('Tenant topilmadi');
+
+    this.migration
+      .migrate({ tenantId, targetVpsId, startedBy: actor })
+      .catch((err) => this.logger.error(`Ko'chirishda xato: ${err.message}`));
+
+    return {
+      ok: true,
+      status: 'MIGRATING',
+      from: tenant.vps?.name ?? null,
+      message:
+        "Ko'chirish boshlandi. Jarayon tugaguncha loyiha ESKI serverda ishlashda davom etadi; " +
+        'holatni "Deploy" bo\'limidan kuzating.',
+    };
+  }
+
+  /** Ko'chirishdan keyin eski nusxani tozalash (oshkora, domen tasdiqi bilan). */
+  async decommissionSource(
+    tenantId: string,
+    dto: { sourceVpsId: string; confirmDomain: string },
+    actor?: string | null,
+  ) {
+    this.migration
+      .decommissionSource({ tenantId, ...dto, startedBy: actor })
+      .catch((err) => this.logger.error(`Manbani tozalashda xato: ${err.message}`));
+
+    return { ok: true, status: 'DECOMMISSIONING' };
+  }
+
+  /**
+   * Mavjud tenantni VPS'ga biriktirish.
+   *
+   * ⚠ FAQAT DEPLOY QILINMAGAN tenant uchun (DRAFT / FAILED). Ishlab
+   * turgan tenantning VPS'ini shunchaki o'zgartirish — uni "qog'ozda"
+   * ko'chirish: kod, baza va nginx eski serverda qolaveradi, panel esa
+   * yangisini ko'rsatadi. Bu uchun alohida, xavfsiz MIGRATSIYA oqimi bor
+   * (3-faza: zaxira → yangi VPS'da provision → tekshirish → routing →
+   * eski deploy'ni o'chirish). Shu sabab 409.
+   */
+  async assignVps(tenantId: string, vpsId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Tenant topilmadi');
+    if (tenant.vpsId === vpsId) return this.findOne(tenantId);
+
+    const deployed = !['DRAFT', 'FAILED'].includes(tenant.status);
+    if (deployed && tenant.vpsId) {
+      throw new ConflictException(
+        `Tenant "${tenant.name}" allaqachon "${tenant.status}" holatida deploy qilingan — ` +
+          "VPS'ni o'zgartirish uchun MIGRATSIYA oqimidan foydalaning, to'g'ridan-to'g'ri biriktirish emas",
+      );
+    }
+
+    const v = await this.resolveVpsForNewTenant(vpsId);
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { vpsId: v!.id, serverIp: v!.host },
+    });
+    this.logger.log(`Tenant ${tenant.domain} → VPS "${v!.name}" (${v!.host})`);
+    return this.findOne(tenantId);
   }
 
   /**
@@ -509,7 +631,7 @@ export class TenantsService {
   }
 
   /** Muvaffaqiyatsiz provisioning'ni qayta urinish. */
-  async retry(id: string) {
+  async retry(id: string, actor?: string | null) {
     const t = await this.prisma.tenant.findUnique({
       where: { id },
       include: { systemTemplate: true },
@@ -528,7 +650,7 @@ export class TenantsService {
     }
     // Fon rejimida — javob darrov qaytadi, holat panelda kuzatiladi
     this.provisioning
-      .provision(t.id)
+      .provision(t.id, undefined, actor)
       .catch((err) => this.logger.error(`Qayta urinishda xato: ${err.message}`));
 
     return { ok: true, status: 'PROVISIONING' };

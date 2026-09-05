@@ -8,8 +8,13 @@ import {
   verifyRefresh,
   type JwtSettings,
 } from '../../common/utils/jwt.js';
-import { hashPassword, comparePassword } from '../../common/utils/password.js';
-import { sha256 } from '../../common/utils/hash-token.js';
+import {
+  hashPassword,
+  hashPasswordSecure,
+  comparePassword,
+  isHashed,
+} from '../../common/utils/password.js';
+import { sha256 } from './hash-token.js';
 import { withLegacyId } from '../../common/utils/serialize.js';
 import { normalizePhone, isPhoneLike } from '../../common/utils/phone.js';
 import { parseLocalDay, localTodayMidnight } from '../../common/utils/date.js';
@@ -21,8 +26,8 @@ import {
 import { getActiveBranchId } from '../../common/als/branch-context.js';
 import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
 import { UserProfileService } from './user-profile.service.js';
-import { TeacherCompensationService } from '../teacher-salary/teacher-compensation.service.js';
-import { OpeningBalanceService } from '../opening-balance/opening-balance.service.js';
+import { TeacherCompensationService } from '../teacher-salary/index.js';
+import { OpeningBalanceService } from '../opening-balance/index.js';
 import { OptionalModuleService } from '../../common/features/optional-module.service.js';
 import { PlanLimitsService } from '../../common/entitlements/plan-limits.service.js';
 import type { AppConfig } from '../../config/env.validation.js';
@@ -411,7 +416,17 @@ export class AuthService {
     // Ikki alohida so'rov bo'lsa, oradagi xato "parol o'zgardi, lekin
     // eski sessiyalar TIRIK" degan xavfli holatni qoldirardi.
     // BU IKKISINI AJRATMANG.
-    const newHash = await hashPassword(newPassword);
+    // ⚠ FORMAT SAQLANADI. Hisob hash bilan himoyalangan bo'lsa, yangi
+    // parol ham hash bo'lib yoziladi.
+    //
+    // Usiz jimgina ORQAGA QAYTISH bo'lardi: dev panel markaz egasining
+    // parolini hash qilib qo'yadi, ega esa o'z panelidan parolni
+    // almashtirgan lahzada u yana OCHIQ MATNGA aylanardi va buni hech
+    // kim sezmasdi. Himoya "bir marta qo'llanadigan" emas, DOIMIY
+    // bo'lishi kerak.
+    const newHash = isHashed(user.passwordHash)
+      ? await hashPasswordSecure(newPassword)
+      : await hashPassword(newPassword);
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },

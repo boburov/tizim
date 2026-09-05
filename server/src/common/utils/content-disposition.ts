@@ -19,7 +19,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const contentDisposition = (name: unknown): string => {
-  // eslint-disable-next-line no-control-regex
+   
   const ascii = String(name).replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(String(name))}`;
 };

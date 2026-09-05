@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AssignmentsService } from './assignments.service.js';
-import { StorageService } from '../storage/storage.service.js';
+import { StorageService } from '../storage/index.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles, Permissions, Validated } from '../../common/decorators/index.js';

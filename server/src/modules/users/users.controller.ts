@@ -22,7 +22,7 @@ import { AllPermissionsGuard } from '../../common/guards/all-permissions.guard.j
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
 import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
 import { credentialScope } from '../../common/rbac/credential-scope.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';

@@ -83,3 +83,23 @@ jobs:
 
       - name: Feature graph integrity
         run: npm run test:feature-graph
+
+      # ── ARXITEKTURA CHEGARASI ──
+      # `scripts/arch-scan.mjs` + `test/architecture.baseline.json`.
+      # Mavjud qarz baseline'da; YANGI modullararo chuqur import, begona
+      # validator importi, `common/` → `modules/` yoki yangi sikl — qizil.
+      # Baseline faqat qisqaradi (`npm run arch:baseline` o'sishni rad etadi).
+      - name: Architecture boundaries (no new violations)
+        run: npm run test:architecture
+
+      # Parol formati — markaz egasi hash bilan, qolganlar ochiq matnda.
+      # Bu test buzuq hash har qanday parolni qabul qilgan HAQIQIY
+      # teshikni ushlagan; regressiya qaytmasin.
+      - name: Password format (hash + legacy)
+        run: npm run test:password-format
+
+      # Naqsh bilan ifodalanadigan chegaralar (begona validator, common→modules)
+      # — IDE'da ham ko'rinadi. `--max-warnings` YO'Q: ogohlantirishlar
+      # (unused-vars) kod sifati, chegara emas; ular qizil qilmaydi.
+      - name: ESLint (boundaries as errors)
+        run: npm run lint

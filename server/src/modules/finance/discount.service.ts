@@ -8,8 +8,8 @@ import { BranchAccessService } from '../../common/rbac/branch-access.service.js'
 import { ROLES } from '../../common/constants/permissions.js';
 import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 import { StudentPaymentService } from './student-payment.service.js';
-import { TeacherSalaryService } from '../teacher-salary/teacher-salary.service.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { TeacherSalaryService } from '../teacher-salary/index.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

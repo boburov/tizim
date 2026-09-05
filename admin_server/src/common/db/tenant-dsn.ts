@@ -22,6 +22,23 @@ export interface TenantDsnSource {
    * ulanish o'sha mashinaga ketadi, boshqa hech narsa o'zgarmaydi.
    */
   serverIp?: string | null;
+  /**
+   * Tenant turgan VPS (sirlar bilan yoki bo'lmasa — DSN uchun faqat
+   * `isLocal`, `host`, `postgresBaseUrl` kerak). Berilsa va masofaviy
+   * bo'lsa `tenant-db.service.ts` ulanishni SSH TUNNEL orqali ochadi —
+   * Postgres tashqariga ochilmaydi. `serverIp` yo'li faqat zaxira.
+   */
+  vps?: {
+    id: string;
+    isLocal: boolean;
+    host: string;
+    sshPort: number;
+    sshUser: string;
+    authMethod: 'SSH_KEY' | 'PASSWORD';
+    sshPrivateKey: string | null;
+    sshPassword: string | null;
+    postgresBaseUrl: string | null;
+  } | null;
 }
 
 const DEFAULT_BASE = 'postgresql://postgres:postgres@127.0.0.1:5432';

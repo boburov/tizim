@@ -4,7 +4,7 @@ import {
 import type { Response } from 'express';
 import { ExpenseService } from './expense.service.js';
 import { ExpenseCategoryService } from './expense-category.service.js';
-import { StorageService } from '../storage/storage.service.js';
+import { StorageService } from '../storage/index.js';
 import { canonicalMimeOf } from '../../common/middleware/upload-attachment.js';
 import { contentDisposition } from '../../common/utils/content-disposition.js';
 import { ApiError } from '../../common/errors/api-error.js';

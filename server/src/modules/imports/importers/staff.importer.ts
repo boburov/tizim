@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ApiError } from '../../../common/errors/api-error.js';
 import { ROLES, PERMISSIONS } from '../../../common/constants/permissions.js';
 import { STAFF_SALARY_TYPES } from '../../../common/constants/staff-payroll.js';
-import { UsersService } from '../../users/users.service.js';
-import { StaffCompensationService } from '../../staff-payroll/staff-compensation.service.js';
+import { UsersService } from '../../users/index.js';
+import { StaffCompensationService } from '../../staff-payroll/index.js';
 import { ROW_STATUS, type Importer } from '../import-engine.service.js';
 import { asDate, asNumber, asEnum, isBlank } from '../coerce.js';
 import {

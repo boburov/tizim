@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
-import { AI_ENGINE_VERSION } from "../../common/constants/ai.js";
+import { AI_ENGINE_VERSION } from './ai.constants.js';
 import { kindMeta, isOpportunity } from "./insight-kinds.js";
 import { subjectHref } from "./subject-link.service.js";
 

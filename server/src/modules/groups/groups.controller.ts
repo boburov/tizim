@@ -4,7 +4,7 @@ import {
 import type { Response } from 'express';
 import { GroupsService } from './groups.service.js';
 import { TeacherGroupPeriodService } from './teacher-group-period.service.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
 import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 import { salaryTermsMetrics } from '../../common/helpers/config-metrics.js';
 import { actorOf } from '../../common/helpers/actor.js';

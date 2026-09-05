@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
-import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationsService } from '../notifications/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

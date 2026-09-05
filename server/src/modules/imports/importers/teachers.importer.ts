@@ -4,7 +4,7 @@ import { ROLES, PERMISSIONS } from '../../../common/constants/permissions.js';
 import {
   COMP_BASE_TYPES, COMP_VARIABLE_TYPES, COMP_PERCENT_BASES,
 } from '../../../common/constants/compensation.js';
-import { AuthService } from '../../auth/auth.service.js';
+import { AuthService } from '../../auth/index.js';
 import { ROW_STATUS, type Importer } from '../import-engine.service.js';
 import { asDate, asNumber, asEnum, isBlank } from '../coerce.js';
 import {

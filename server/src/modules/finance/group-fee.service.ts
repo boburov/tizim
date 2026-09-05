@@ -6,9 +6,9 @@ import { localTodayMidnight } from '../../common/utils/date.js';
 import { branchFilter, runWithBranchContext } from '../../common/als/branch-context.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { StudentPaymentService } from './student-payment.service.js';
-import { CoursePriceService, PRICE_SOURCES } from '../courses/course-price.service.js';
-import { TeacherSalaryService } from '../teacher-salary/teacher-salary.service.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { CoursePriceService, PRICE_SOURCES } from '../courses/index.js';
+import { TeacherSalaryService } from '../teacher-salary/index.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
 import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 
 /**
@@ -441,13 +441,13 @@ export class GroupFeeService {
     });
     let created = 0;
     for (const g of groups) {
-      // eslint-disable-next-line no-await-in-loop
+       
       const existed = await this.prisma.groupFee.findUnique({
         where: this.feeKey(g.id, year, month),
         select: { id: true },
       });
       if (existed) continue;
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.ensureGroupFee(g.id, year, month);
       created += 1;
     }

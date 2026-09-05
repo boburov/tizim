@@ -7,7 +7,7 @@ import { ROLES } from '../../common/constants/permissions.js';
 import { HOLIDAY_AUDIENCES } from '../../common/constants/calendar.js';
 import { userBranchCondition } from '../../common/als/branch-context.js';
 import { dateKeyOf, toUtcMidnight, localTodayMidnight } from '../../common/utils/date.js';
-import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationsService } from '../notifications/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

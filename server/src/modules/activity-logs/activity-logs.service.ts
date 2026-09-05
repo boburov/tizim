@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
-import { describeLog } from '../../common/constants/audit-actions.js';
+import { describeLog } from './audit-actions.js';
 import { branchFilter } from '../../common/als/branch-context.js';
 import { ROLES } from '../../common/constants/permissions.js';
 import { withLegacyId } from '../../common/utils/serialize.js';

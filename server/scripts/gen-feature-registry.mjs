@@ -68,6 +68,10 @@ const META = {
   'courses':               ["Kurslar katalogi", { core: true }],
   'deposits':              ["Oldindan to'lov"],
   'expense-approvals':     ["Chiqim tasdiqlari", { core: true }],
+  // Dev panel o'qiydigan analitika proyeksiyasi (`internal/analytics`).
+  // `core` — o'chirib bo'lmaydi: platforma tenant holatini shu orqali
+  // ko'radi. `locked` — tarif bilan sotilmaydi, u infratuzilma kanali.
+  'platform-analytics':    ["Platforma analitikasi", { core: true, locked: true }],
   'expenses':              ["Chiqimlar"],
   'exports':               ["Excel eksport"],
   'features':              ["Tarif imkoniyatlari", { core: true, locked: true }],

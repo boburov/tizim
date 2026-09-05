@@ -3,7 +3,7 @@ import { PrismaService } from '../../../prisma/prisma.service.js';
 import { ROLES, PERMISSIONS } from '../../../common/constants/permissions.js';
 import { branchFilter, userBranchCondition } from '../../../common/als/branch-context.js';
 import { normalizePhone } from '../../../common/utils/phone.js';
-import { SalaryTransactionService } from '../../teacher-salary/salary-transaction.service.js';
+import { SalaryTransactionService } from '../../teacher-salary/index.js';
 import { ROW_STATUS, type Importer } from '../import-engine.service.js';
 import { asText, asMoney, asDate, asYear, asMonth, asEnum, isBlank } from '../coerce.js';
 

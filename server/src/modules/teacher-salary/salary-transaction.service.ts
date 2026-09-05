@@ -7,8 +7,8 @@ import { branchFilter, isBranchAllowed } from '../../common/als/branch-context.j
 import { assertGroupActive } from '../../common/helpers/group-state.js';
 import { parseLocalDay, localTodayMidnight } from '../../common/utils/date.js';
 import { FINANCE_TXN_OPTIONS } from '../../common/utils/finance-txn.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
-import { FinancialTransactionService } from '../finance/financial-transaction.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
+import { FinancialTransactionService } from '../finance/index.js';
 import { TeacherSalaryService } from './teacher-salary.service.js';
 
 /**

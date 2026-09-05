@@ -7,8 +7,8 @@ import { isBranchAllowed } from '../../common/als/branch-context.js';
 import { parseLocalDay, localTodayMidnight } from '../../common/utils/date.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { FINANCE_TXN_OPTIONS } from '../../common/utils/finance-txn.js';
-import { FinancialTransactionService } from '../finance/financial-transaction.service.js';
-import type { TxClient } from '../journal/journal.service.js';
+import { FinancialTransactionService } from '../finance/index.js';
+import type { TxClient } from '../journal/index.js';
 
 /**
  * ══════════════════════════════════════════════════════════════════════

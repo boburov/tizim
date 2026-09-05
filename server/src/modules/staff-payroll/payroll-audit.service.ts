@@ -6,7 +6,7 @@ import { withLegacyIds } from '../../common/utils/serialize.js';
 import {
   PAYROLL_AUDIT_ACTIONS,
   PAYROLL_AUDIT_ACTION_LABELS,
-} from '../../common/constants/payroll-audit.js';
+} from './payroll-audit.constants.js';
 
 export { PAYROLL_AUDIT_ACTIONS };
 

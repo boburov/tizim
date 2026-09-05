@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'node:path';
 import type { NextFunction, Request, Response } from 'express';
 import { ApiError } from '../errors/api-error.js';
-import { formatBytes } from '../../modules/storage/storage.service.js';
+import { formatBytes } from '../utils/format-bytes.js';
 import type { AppConfig } from '../../config/env.validation.js';
 
 /**

@@ -6,6 +6,7 @@ import { CommonModule } from './common/common.module.js';
 import { AuditLogMiddleware } from './common/audit/audit-log.middleware.js';
 import { HealthModule } from './health/health.module.js';
 import { FeaturesModule } from './modules/features/features.module.js';
+import { PlatformAnalyticsModule } from './modules/platform-analytics/platform-analytics.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
@@ -100,6 +101,8 @@ import { MarketModule } from './modules/market/market.module.js';
     // qolmasligi kerak — aks holda bo'lim o'chgach mijoz nima
     // o'chganini ham bilolmasdi.
     FeaturesModule,
+    // Dev panel o'qiydigan analitika proyeksiyasi (`internal/analytics`).
+    PlatformAnalyticsModule,
     // ── FAZA 2.3: auth moduli ──
     AuthModule,
     // ── FAZA 2.2: birinchi ko'chirilgan marshrutlar ──

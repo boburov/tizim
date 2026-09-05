@@ -93,7 +93,26 @@ model Tenant {
   pm2Name String @unique
   port    Int    @unique
 
-  // DNS uchun beriladigan IP (bitta VPS bo'lsa doim bir xil)
+  // ── VPS ──
+  //
+  // Tenant QAYSI SERVERDA turadi. `Vps` yozuvi SSH ulanish ma'lumotini
+  // (shifrlangan kalit bilan) va deploy katalogini saqlaydi; provisioning
+  // skriptlari `vps.isLocal` bo'lsa lokal `spawn`, aks holda SSH orqali
+  // ishlaydi (`provisioning/script-runner.ts`).
+  //
+  // ⚠ IXTIYORIY (nullable) — sabab MIGRATSIYA: ustun qo'shilganda mavjud
+  // tenantlar `vps_local` yozuviga bog'lanadi (migration.sql da), lekin
+  // sxema darajasida `null` ruxsat etiladi — DRAFT tenant hali VPS
+  // tanlanmagan bo'lishi mumkin.
+  vps   Vps?    @relation(fields: [vpsId], references: [id])
+  vpsId String?
+
+  // DNS uchun beriladigan IP.
+  //
+  // ⚠ ESKIRGAN — `vps.host` shu ma'lumotning YAGONA manbai. Ustun hozircha
+  // qoladi: `tenant-dsn.ts`, `tenant-refresh.service.ts` va
+  // `customers.service.ts` uni o'qiydi. 3-fazada ular `vps.host` ga
+  // o'tkaziladi va ustun olib tashlanadi. Yangi kod bu maydonga YOZMASIN.
   serverIp String?
 
   status        TenantStatus @default(DRAFT)
@@ -186,6 +205,9 @@ model Tenant {
   // Modul o'chirgichlari — tarifdan USTUN turadigan loyihaviy qaror.
   featureOverrides TenantFeatureOverride[]
 
+  // Deploy jurnali — har provision/apply/suspend/migrate bitta yozuv.
+  deployments Deployment[]
+
   // Tijorat konfiguratsiyasi o'zgarishlari tarixi (kim, qachon, nega).
   commercialChanges TenantCommercialChange[]
 
@@ -195,6 +217,156 @@ model Tenant {
 
   @@index([status])
   @@index([customerId])
+  @@index([vpsId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VPS — TENANTLAR JOYLASHADIGAN SERVER
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Ilgari bitta VPS edi va u admin_server bilan bir mashinada turardi —
+// provisioning lokal `spawn('bash')` bilan ishlardi, `Tenant.serverIp`
+// esa faqat DNS ko'rsatish uchun edi. Bu model VPS'ni haqiqiy obyekt
+// qiladi: bir nechta server, har birida o'z tenantlari.
+//
+// ── SIRLAR ──
+// `sshPrivateKey` va `sshPassword` — AES-256-GCM (`common/crypto/
+// secrets.util.ts`, `SETTINGS_ENCRYPTION_KEY`). API hech qachon ochiq
+// qiymatni QAYTARMAYDI: ro'yxat/tafsilotda faqat `sshKeyFingerprint`
+// va "kalit bor/yo'q" bayrog'i. Yangilashda yangi kalit YUBORILADI,
+// eskisi o'qilmaydi.
+//
+// ── `isLocal` ──
+// admin_server'ning o'zi turgan mashina. Unda SSH kerak emas — skriptlar
+// hozirgidek lokal ishlaydi. Migratsiya mavjud tenantlarni shu yozuvga
+// bog'laydi, shunda xatti-harakat o'zgarmaydi.
+
+enum VpsAuthMethod {
+  SSH_KEY
+  PASSWORD
+}
+
+enum VpsStatus {
+  UNKNOWN // hali tekshirilmagan
+  ONLINE // oxirgi test o'tdi
+  OFFLINE // ulanib bo'lmadi
+  ERROR // ulandi, lekin talab bajarilmadi (masalan pm2 yo'q)
+}
+
+model Vps {
+  id String @id @default(cuid())
+
+  name String // "Hetzner-1", "Asosiy"
+  host String // IP yoki domen — DNS ham shundan
+  sshPort Int @default(22)
+  sshUser String @default("root")
+
+  authMethod    VpsAuthMethod @default(SSH_KEY)
+  sshPrivateKey String?       @db.Text // shifrlangan
+  sshPassword   String? // shifrlangan
+  // Ochiq kalitning barmoq izi — UI'da "qaysi kalit" ni ko'rsatish uchun,
+  // sirni ochmasdan.
+  sshKeyFingerprint String?
+
+  // Deploy ildizi. provision.sh shu yerdan `tenants/<dbName>` va
+  // `admin` yo'llarini hisoblaydi.
+  rootDir String @default("/root")
+
+  // Shu VPS'dagi Postgres bazaviy URL'i (parolsiz DB nomi bilan tugaydi:
+  // `postgresql://user:pass@127.0.0.1:5432`). Skriptlar bazani SHU
+  // yerda yaratadi; admin_server esa unga SSH TUNNEL orqali ulanadi
+  // (`tenant-db.service.ts`) — Postgres tashqariga ochilmaydi.
+  // `null` = standart (`postgresql://postgres:postgres@127.0.0.1:5432`).
+  // Parol bor — SHIFRLANGAN saqlanadi.
+  postgresBaseUrl String?
+
+  // admin_server shu mashinada — SSH'siz lokal bajarish.
+  isLocal Boolean @default(false)
+
+  status         VpsStatus @default(UNKNOWN)
+  lastCheckedAt  DateTime?
+  lastCheckError String?
+  lastCheckLog   String?   @db.Text
+  // Oxirgi testdagi resurslar: { cpu, memTotalMb, memFreeMb, diskTotalGb,
+  // diskFreeGb, load1, tools: { node, pm2, nginx, psql, certbot } }
+  resources Json?
+
+  // O'chirish o'rniga deaktivatsiya: tenantlari bor VPS o'chirilmaydi.
+  isActive   Boolean @default(true)
+  // Ixtiyoriy sig'im — tenant tayinlashda tekshiriladi, null = cheksiz.
+  maxTenants Int?
+  notes      String?
+
+  tenants     Tenant[]
+  deployments Deployment[]
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([isActive])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEPLOYMENT — HAR BIR INFRATUZILMA AMALINING JURNALI
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Ilgari log `Tenant.provisionLog/applyLog/suspendLog` ustunlarida — faqat
+// OXIRGISI qolardi va jarayon tugaguncha panel hech narsa ko'rmasdi. Endi
+// har amal alohida yozuv: tirik log (skript ishlayotganda to'ldiriladi),
+// kim boshlagan, qaysi VPS'da, qanday tugagan. Eski ustunlar moslik uchun
+// hozircha yozilaveradi.
+//
+// `meta` — amalga xos ma'lumot; MIGRATE uchun `{ sourceVpsId, targetVpsId,
+// step, dumpPath, ... }`.
+
+enum DeploymentKind {
+  PROVISION
+  RESTART
+  REBUILD
+  DEPLOY // kod repodan tortiladi + rebuild
+  PUSH // faqat GitHub'ga
+  SUSPEND
+  RESUME
+  DEPROVISION
+  MIGRATE // boshqa VPS'ga ko'chirish
+  STOP_SOURCE // migratsiyadan keyin eski VPS'da pm2 stop
+  DECOMMISSION_SOURCE // migratsiyadan keyin eski VPS'da deprovision
+  BOOTSTRAP_VPS // skript/shablon sinxron
+}
+
+enum DeploymentStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model Deployment {
+  id String @id @default(cuid())
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+
+  vps   Vps?    @relation(fields: [vpsId], references: [id], onDelete: SetNull)
+  vpsId String?
+
+  kind   DeploymentKind
+  status DeploymentStatus @default(RUNNING)
+
+  // Tirik log — jarayon davomida ~1 soniyada bir yangilanadi, oxirgi
+  // 60 KB saqlanadi (LOG_LIMIT).
+  log      String  @default("") @db.Text
+  exitCode Int?
+  error    String?
+  meta     Json?
+
+  startedBy  String? // admin email
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([tenantId, startedAt])
+  @@index([status])
 }
 
 // Tenantning .env sozlamasi — FAQAT standartdan farq qiladigan qiymatlar.

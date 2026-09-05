@@ -278,7 +278,7 @@ export class UserRelationsService {
     // `disconnect` bilan uziladi — join jadvalidagi qator o'chadi.
     // Guruhning O'ZI tegilmaydi.
     for (const gid of groupRows.map((g: any) => g.id)) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await client.group.update({
         where: { id: gid },
         data: { teachers: { disconnect: { id } } },

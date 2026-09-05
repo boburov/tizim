@@ -9,7 +9,7 @@ import {
 import {
   openingAmountSchema,
   openingNoteSchema,
-} from '../opening-balance/opening-balance.validators.js';
+} from '../opening-balance/index.js';
 
 /**
  * `modules/auth/validators/*.js` ning ko'chirmasi — SHAKL AYNAN BIR XIL

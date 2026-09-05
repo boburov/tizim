@@ -19,7 +19,7 @@ import {
   clearRefreshCookie,
   getRefreshFromCookies,
   type CookieSettings,
-} from '../../common/utils/cookie.js';
+} from './cookie.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import type { AppConfig } from '../../config/env.validation.js';
 import {

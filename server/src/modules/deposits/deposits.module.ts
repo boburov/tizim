@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { DepositsController } from './deposits.controller.js';
 import { DepositsService } from './deposits.service.js';
-import { StudentPaymentService } from '../finance/student-payment.service.js';
+import { StudentPaymentService } from '../finance/index.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
 import { ApprovalExecutorRegistry } from '../../common/approvals/approval-executor.registry.js';
 import { APPROVAL_KINDS } from '../../common/constants/approvals.js';

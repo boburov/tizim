@@ -4,7 +4,7 @@ import { StudentSignalService } from './signals/student.signal.js';
 import { InsightWriterService } from './insight-writer.service.js';
 import { AiConfigService } from './ai-config.service.js';
 
-import { DEFAULT_THRESHOLDS } from "../../common/constants/ai.js";
+import { DEFAULT_THRESHOLDS } from './ai.constants.js';
 import { ROLES } from "../../common/constants/permissions.js";
 import { branchMatchStage } from "../../common/als/branch-context.js";
 import { scoreChurn, churnActions } from "./scoring/churn.scoring.js";

@@ -8,9 +8,10 @@ import { TenantOwnerController } from './tenant-owner.controller.js';
 import { ProvisioningModule } from '../provisioning/provisioning.module.js';
 import { SettingsModule } from '../settings/settings.module.js';
 import { GithubModule } from '../github/github.module.js';
+import { VpsModule } from '../vps/vps.module.js';
 
 @Module({
-  imports: [ProvisioningModule, SettingsModule, GithubModule],
+  imports: [ProvisioningModule, SettingsModule, GithubModule, VpsModule],
   // ⚠ TenantOwnerController TenantsController'dan OLDIN: `tenants/:id/owner`
   // `tenants/:id` dan uzunroq bo'lsa ham, Nest ro'yxat tartibida moslashtiradi
   // va aniqroq yo'l birinchi turishi kerak.

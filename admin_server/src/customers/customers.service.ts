@@ -218,7 +218,8 @@ export class CustomersService {
     // (rejim yoqilgan, chegara = tarif/standart) va uni faqat Developer
     // Admin o'zgartira oladi.
     // ═══════════════════════════════════════════════════════════════════
-    const { branchesEnabled: _be, branchLimit: _bl, ...safeDto } = dto;
+    // `vpsId` ham: mijoz serverni tanlamaydi — standart VPS beriladi.
+    const { branchesEnabled: _be, branchLimit: _bl, vpsId: _v, ...safeDto } = dto;
 
     const tenant = await this.tenants.create(safeDto, customer.email, customerId);
 

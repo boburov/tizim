@@ -6,7 +6,7 @@ import { CourseSignalService } from './signals/course.signal.js';
 import { GroupSignalService } from './signals/group.signal.js';
 
 import { withLegacyId, withLegacyIds } from "../../common/utils/serialize.js";
-import { AI_ENGINE_VERSION } from "../../common/constants/ai.js";
+import { AI_ENGINE_VERSION } from './ai.constants.js';
 import ApiError from "../../common/errors/api-error.js";
 import { parsePagination, buildMeta } from "../../common/utils/pagination.js";
 import { MONTH_NAMES_UZ } from "../../common/constants/calendar.js";

@@ -12,12 +12,12 @@ import {
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { deriveStatus, daysInMonth } from '../../common/utils/proration.js';
 import { localTodayMidnight, toUtcMidnight } from '../../common/utils/date.js';
-import { TeacherGroupPeriodService } from '../groups/teacher-group-period.service.js';
+import { TeacherGroupPeriodService } from '../groups/index.js';
 // ⚠ `Prisma.TransactionClient` EMAS — kengaytirilgan klient (omit +
 // decimal normalizatsiyasi) standart turga mos kelmaydi. Loyihada
 // yagona ta'rif `journal.service.ts` da (`TxClient`) va u klientning
 // O'ZIDAN keltirib chiqarilgan.
-import type { TxClient } from '../journal/journal.service.js';
+import type { TxClient } from '../journal/index.js';
 import {
   segmentPeriod,
   baseSegmentsForMonth,

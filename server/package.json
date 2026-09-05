@@ -115,7 +115,13 @@
     "test:owner-only-keys": "node test/owner-only-keys.test.mjs",
     "test:role-type-escalation": "node test/role-type-escalation.test.mjs",
     "redact:audit-secrets": "node scripts/redact-activity-log-secrets.mjs",
-    "test:provisioned-env": "node test/provisioned-env.test.mjs"
+    "test:provisioned-env": "node test/provisioned-env.test.mjs",
+    "arch:map": "node scripts/arch-scan.mjs map",
+    "arch:map:verbose": "node scripts/arch-scan.mjs verbose",
+    "arch:baseline": "node scripts/arch-scan.mjs baseline",
+    "arch:cruise": "depcruise src --config .dependency-cruiser.cjs",
+    "test:architecture": "node test/architecture.test.mjs",
+    "test:password-format": "node test/password-format.test.mjs"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"
@@ -146,7 +152,10 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^22.7.4",
     "@types/node-telegram-bot-api": "^0.64.15",
+    "dependency-cruiser": "^16.10.4",
+    "eslint": "^9.39.5",
     "prisma": "^6.19.3",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "typescript-eslint": "^8.69.0"
   }
 }

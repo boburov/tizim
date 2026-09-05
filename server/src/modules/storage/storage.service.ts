@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { formatBytes } from '../../common/utils/format-bytes.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
@@ -33,19 +34,6 @@ import { withLegacyId } from '../../common/utils/serialize.js';
 /** Mongo modelidagi konstanta shu yerga ko'chdi. */
 export const USAGE_KEY = 'global';
 
-/** Baytni odam o'qiydigan ko'rinishga o'giradi ("4.2 MB"). */
-export const formatBytes = (bytes: unknown): string => {
-  const n = Number(bytes) || 0;
-  if (n < 1024) return `${n} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let value = n / 1024;
-  let i = 0;
-  while (value >= 1024 && i < units.length - 1) {
-    value /= 1024;
-    i += 1;
-  }
-  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[i]}`;
-};
 
 /**
  * Fayl nomidan XAVFSIZ kengaytma.

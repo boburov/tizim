@@ -5,7 +5,7 @@ import {
   EXPENSE_METHODS,
   EXPENSE_CURRENCIES,
   EXPENSE_CATEGORY_KINDS,
-} from '../../common/constants/expenses.js';
+} from './expenses.constants.js';
 
 /** `z.enum` faqat literal kortejni qabul qiladi — ro'yxatlar `string[]`. */
 const asEnum = (list: string[]) => z.enum(list as [string, ...string[]]);

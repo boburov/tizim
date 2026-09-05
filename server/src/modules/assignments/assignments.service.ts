@@ -7,7 +7,7 @@ import { branchFilter } from '../../common/als/branch-context.js';
 import { botStatusOf, BOT_STATUS } from '../../common/rbac/bot-status.js';
 import { hasPermission } from '../../common/rbac/permission.service.js';
 import { PERMISSIONS } from '../../common/constants/permissions.js';
-import { StorageService } from '../storage/storage.service.js';
+import { StorageService } from '../storage/index.js';
 import { SchedulerService } from '../../jobs/scheduler.service.js';
 import { AssignmentDeliverService } from '../../bot/assignment-deliver.service.js';
 
@@ -70,7 +70,7 @@ const runPool = async <T>(
       while (idx < items.length) {
         const cur = idx;
         idx += 1;
-        // eslint-disable-next-line no-await-in-loop
+         
         await worker(items[cur]);
       }
     },

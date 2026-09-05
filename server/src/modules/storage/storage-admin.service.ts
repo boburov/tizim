@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId } from '../../common/utils/serialize.js';
-import { CLEANUP_FREQUENCIES, FREQUENCY_DAYS } from '../../common/constants/storage.js';
+import { CLEANUP_FREQUENCIES, FREQUENCY_DAYS } from './storage.constants.js';
 import { StorageService } from './storage.service.js';
 
 /**

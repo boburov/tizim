@@ -11,6 +11,7 @@ import {
   Loader2,
   Lock,
   Rocket,
+  Server,
 } from 'lucide-react';
 // lucide v1 brend ikonkalarini olib tashladi — GitHub belgisi lokal.
 import Github from '../components/GithubIcon';
@@ -58,6 +59,10 @@ export default function CreateTenantPage() {
     // va mijozga aytadigan hech narsasi bo'lmasdi.
     ownerUsername: 'owner',
     ownerPassword: '',
+    // ── VPS ──
+    // '' = "berilmagan" — server standart VPS'ni (lokal yoki birinchi
+    // faol) tanlaydi. Ro'yxat pastda faol VPS'lardan tuziladi.
+    vpsId: '',
   });
 
   // Dinamik tizimlar ro'yxati (select uchun)
@@ -68,6 +73,12 @@ export default function CreateTenantPage() {
 
   // GitHub integratsiyasi sozlanganmi — sozlanmagan bo'lsa katakcha
   // ko'rsatilmaydi, aks holda foydalanuvchi ishlamaydigan narsani yoqardi.
+  // Faol VPS'lar — tanlov uchun. Bo'sh bo'lsa server standartni qo'llaydi.
+  const { data: vpsList } = useQuery({
+    queryKey: ['vps'],
+    queryFn: () => api.get('/vps').then((r) => r.data),
+  });
+
   const { data: gh } = useQuery({
     queryKey: ['github-status'],
     queryFn: () => api.get('/github/status').then((r) => r.data),
@@ -127,6 +138,7 @@ export default function CreateTenantPage() {
       // Ega hisobi — provisioning tugagach tenant bazasiga yoziladi.
       ownerUsername: form.ownerUsername.trim(),
       ownerPassword: form.ownerPassword,
+      vpsId: form.vpsId || undefined,
     });
   };
 
@@ -307,6 +319,36 @@ export default function CreateTenantPage() {
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Server (VPS) — loyiha qayerga joylashadi. Faqat faol VPS'lar.
+              Bo'sh = standart (lokal bo'lsa u, aks holda birinchi faol). */}
+          <div className="space-y-4 border-t border-border pt-5">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Server size={14} /> Server (VPS)
+            </h2>
+            <div>
+              <select className={field} value={form.vpsId} onChange={set('vpsId')}>
+                <option value="">Standart (avtomatik)</option>
+                {(vpsList || [])
+                  .filter((v) => v.isActive)
+                  .map((v) => {
+                    const full = v.maxTenants != null && (v.tenantCount ?? 0) >= v.maxTenants;
+                    return (
+                      <option key={v.id} value={v.id} disabled={full}>
+                        {v.name} — {v.host}
+                        {v.isLocal ? ' (lokal)' : ''}
+                        {v.status === 'ONLINE' ? '' : ` · ${v.status === 'UNKNOWN' ? 'tekshirilmagan' : v.status.toLowerCase()}`}
+                        {full ? " · to'lgan" : ''}
+                      </option>
+                    );
+                  })}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Loyiha kodi, bazasi va nginx sozlamasi shu serverda ko'tariladi.
+                Keyinchalik ko'chirish migratsiya oqimi orqali qilinadi.
+              </p>
+            </div>
           </div>
 
           {/* Integratsiyalar */}

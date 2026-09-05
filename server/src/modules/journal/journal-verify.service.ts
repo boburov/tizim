@@ -202,7 +202,7 @@ export class JournalVerifyService {
     // ulanish hovuzini band qilib, ishlab turgan so'rovlarni kutishga
     // majbur qilardi. Bu tekshiruv shoshilinch emas.
     for (const src of SOURCES) {
-      // eslint-disable-next-line no-await-in-loop
+       
       sources.push(await this.verifySource(src, { sampleLimit }));
     }
 

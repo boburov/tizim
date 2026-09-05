@@ -8,9 +8,9 @@ import { branchFilter } from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { FINANCE_TXN_OPTIONS } from '../../common/utils/finance-txn.js';
-import { FinancialTransactionService } from '../finance/financial-transaction.service.js';
-import { StudentPaymentService } from '../finance/student-payment.service.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { FinancialTransactionService } from '../finance/index.js';
+import { StudentPaymentService } from '../finance/index.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -533,12 +533,12 @@ export class DepositsService {
 
     let applied = 0;
     for (const plan of plans) {
-      // eslint-disable-next-line no-await-in-loop
+       
       const fresh = await client.studentDeposit.findUnique({
         where: { id: deposit.id },
       });
       if ((fresh?.balance || 0) <= 0) break;
-      // eslint-disable-next-line no-await-in-loop
+       
       const used = await this.applyToPayment(
         fresh,
         plan,
@@ -563,7 +563,7 @@ export class DepositsService {
     let applied = 0;
     for (const sid of studentIds) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         const r = await this.autoApply(sid, null);
         applied += r.applied;
       } catch (err) {
@@ -641,20 +641,20 @@ export class DepositsService {
       const take = Math.min(txn.amount as any, excess - reversed);
       if (take >= (txn.amount as any)) {
         // Butun tranzaksiya — o'chiramiz.
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.prisma.paymentTransaction.update({
           where: { id: txn.id },
           data: { isDeleted: true, deletedAt: new Date() },
         });
       } else {
         // Qisman — faqat ortiqcha ulushni yechamiz, qolgani qoplama bo'lib qoladi.
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.prisma.paymentTransaction.update({
           where: { id: txn.id },
           data: { amount: { decrement: take } },
         });
       }
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.refundOverpayChunk(
         deposit,
         plan.id,

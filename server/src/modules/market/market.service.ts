@@ -9,9 +9,9 @@ import {
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { hasPermission } from '../../common/rbac/permission.service.js';
 import { PERMISSIONS } from '../../common/constants/permissions.js';
-import { CoinService } from '../coin/coin.service.js';
-import { CoinSettingsService } from '../coin/coin-settings.service.js';
-import { NotificationsService } from '../notifications/notifications.service.js';
+import { CoinService } from '../coin/index.js';
+import { CoinSettingsService } from '../coin/index.js';
+import { NotificationsService } from '../notifications/index.js';
 import {
   MARKET_ORDER_STATUS_LABELS,
   MARKET_ORDER_TRANSITIONS,

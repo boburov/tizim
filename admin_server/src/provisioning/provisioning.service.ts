@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { Tenant } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -10,7 +10,10 @@ import {
   renderReadme,
   renderTenantMeta,
 } from './tenant-repo.templates.js';
-import { b64, runScript, tailLog } from './script-runner.js';
+import { b64, tailLog } from './script-runner.js';
+import { ScriptRunnerService } from './script-runner.service.js';
+import { DeploymentsService } from './deployments.service.js';
+import type { Vps } from '@prisma/client';
 import { TenantDbService } from '../tenant-db/tenant-db.service.js';
 
 /** Qo'llash rejimi — reconfigure.sh shu qiymatga qarab ish tutadi. */
@@ -25,6 +28,8 @@ export class ProvisioningService {
     private readonly settings: SettingsService,
     private readonly github: GithubService,
     private readonly tenantDb: TenantDbService,
+    private readonly runner: ScriptRunnerService,
+    private readonly deployments: DeploymentsService,
   ) {}
 
   // ────────────────────────────────────────────────────── yordamchilar
@@ -34,14 +39,13 @@ export class ProvisioningService {
   // yetib bormasdi.
   private b64 = b64;
   private tail = tailLog;
-  private runScript = runScript;
 
   /**
    * Tenant fayllari va `.env` mazmunini skript ENV'iga yig'adi.
    * provision.sh ham, reconfigure.sh ham bir xil to'plamni oladi —
    * ikkalasi ham fayllarni bir xil yozishi uchun.
    */
-  private async buildFileEnv(tenantId: string) {
+  async buildFileEnv(tenantId: string) {
     const { tenant, config, serverEnv, clientEnv, envExample } =
       await this.settings.renderEnvFiles(tenantId);
 
@@ -73,7 +77,7 @@ export class ProvisioningService {
   }
 
   /** Tenant asosiy ma'lumotlari — skriptga har doim kerak. */
-  private baseEnv(tenant: Tenant, templateDir: string): Record<string, string> {
+  baseEnv(tenant: Tenant, templateDir: string): Record<string, string> {
     return {
       TENANT_DB_NAME: tenant.dbName,
       TENANT_DOMAIN: tenant.domain,
@@ -164,13 +168,44 @@ export class ProvisioningService {
     }
   }
 
+
+  // ────────────────────────────────────────────────────────────── VPS
+
+  /**
+   * Tenant turgan VPS (sirlar bilan — skript bajarish uchun). `null` —
+   * VPS biriktirilmagan: bunda faqat LOKAL bajarish mumkin va bu eski
+   * (migratsiyadan oldingi) xatti-harakat bilan bir xil.
+   */
+  async vpsOf(tenantId: string): Promise<Vps | null> {
+    const t = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { vps: true },
+    });
+    return t?.vps ?? null;
+  }
+
+  /** Provision uchun VPS SHART: masofaviy deploy'da "qayerga" savoli javobsiz qolmasin. */
+  private async requireVps(tenantId: string): Promise<Vps> {
+    const vps = await this.vpsOf(tenantId);
+    if (!vps) throw new BadRequestException("Tenant hech qaysi VPS'ga biriktirilmagan — avval VPS tanlang");
+    if (!vps.isActive) throw new BadRequestException(`VPS "${vps.name}" deaktivatsiya qilingan`);
+    return vps;
+  }
+
   // ─────────────────────────────────────────────────────── provisioning
 
   /**
    * Yangi tenantni to'liq ishga tushiradi (fon rejimida).
    * Holat DB'da yangilanadi — panel uni 3 soniyada bir so'rab turadi.
    */
-  async provision(tenantId: string, owner?: ProvisionOwner): Promise<void> {
+  async provision(tenantId: string, owner?: ProvisionOwner, startedBy?: string | null): Promise<void> {
+    // VPS — deploy'dan OLDIN hal bo'lishi shart. Xato bo'lsa holat
+    // o'zgarmaydi (tenant DRAFT/FAILED da qoladi, panel sababini ko'radi).
+    const vps = await this.requireVps(tenantId);
+    if (await this.deployments.running(tenantId)) {
+      throw new ConflictException('Bu tenantda boshqa deploy ishlayapti — tugashini kuting');
+    }
+
     await this.prisma.tenant.update({
       where: { id: tenantId },
       data: {
@@ -181,6 +216,8 @@ export class ProvisioningService {
       },
     });
 
+    const handle = await this.deployments.start({ tenantId, vpsId: vps.id, kind: 'PROVISION', startedBy });
+
     const { tenant, config, template, fileEnv } = await this.buildFileEnv(tenantId);
 
     if (!template) {
@@ -188,27 +225,29 @@ export class ProvisioningService {
         where: { id: tenantId },
         data: { status: 'FAILED', failureReason: 'Tizim shabloni topilmadi' },
       });
+      await handle.fail('Tizim shabloni topilmadi');
       return;
     }
 
     const git = await this.ensureRepo(tenant);
 
-    const scriptPath = process.env.PROVISION_SCRIPT || '/root/admin/provision.sh';
-
     this.logger.log(
-      `Provisioning boshlandi: ${tenant.domain} (db=${tenant.dbName}, port=${tenant.port})`,
+      `Provisioning boshlandi: ${tenant.domain} (db=${tenant.dbName}, port=${tenant.port}) → VPS ${vps.name} (${vps.host})`,
     );
+    handle.log(`==> VPS: ${vps.name} (${vps.isLocal ? 'lokal' : `${vps.sshUser}@${vps.host}:${vps.sshPort}`})\n`);
 
-    const { code, log } = await this.runScript(scriptPath, {
+    const { code, log } = await this.runner.run(vps, 'provision.sh', {
       ...this.baseEnv(tenant, template.templateDir),
       ...fileEnv,
       GIT_ENABLED: git ? 'true' : 'false',
       GIT_REMOTE: git?.remote || '',
       GIT_TOKEN: git?.token || '',
       GIT_BRANCH: git?.branch || 'main',
-    });
+    }, handle.log);
 
-    const serverIp = process.env.SERVER_PUBLIC_IP || null;
+    // DNS uchun IP — VPS host'i. `SERVER_PUBLIC_IP` faqat lokal VPS host'i
+    // 127.0.0.1 bo'lib qolgan eski o'rnatma uchun zaxira.
+    const serverIp = vps.isLocal ? (process.env.SERVER_PUBLIC_IP || vps.host) : vps.host;
 
     if (code === 0) {
       // ── EGA HISOBI ──
@@ -223,7 +262,7 @@ export class ProvisioningService {
       // uzatilgani ham aynan shu sabab.
       if (owner) {
         try {
-          await this.tenantDb.createOwner({ dbName: tenant.dbName, serverIp }, owner);
+          await this.tenantDb.createOwner({ dbName: tenant.dbName, serverIp, vps }, owner);
           this.logger.log(`Ega hisobi yaratildi: ${owner.username}@${tenant.domain}`);
         } catch (err) {
           // Kirib bo'lmaydigan loyiha ACTIVE deb ko'rsatilmasligi kerak:
@@ -243,6 +282,7 @@ export class ProvisioningService {
           this.logger.error(
             `Provisioning tugadi, lekin ega yaratilmadi: ${tenant.domain} ❌`,
           );
+          await handle.fail(`Ega hisobi yaratilmadi: ${(err as Error).message}`);
           return;
         }
       }
@@ -254,6 +294,7 @@ export class ProvisioningService {
       // Qo'llangan konfiguratsiya surati — endi farq hisoblanadigan nuqta shu
       await this.settings.markApplied(tenantId, config);
       await this.markGitResult(tenantId, log, git !== null);
+      await handle.finish({ code });
       this.logger.log(`Provisioning tugadi: ${tenant.domain} ✅`);
     } else {
       await this.prisma.tenant.update({
@@ -266,6 +307,7 @@ export class ProvisioningService {
           applyError: `Provisioning yiqildi (kod ${code})`,
         },
       });
+      await handle.finish({ code });
       this.logger.error(`Provisioning muvaffaqiyatsiz: ${tenant.domain} ❌`);
     }
   }
@@ -312,15 +354,21 @@ export class ProvisioningService {
    *   rebuild — yuqoridagi + client .env va qayta build
    *   deploy  — repodan kod tortiladi, keyin to'liq rebuild
    */
-  async applyConfig(tenantId: string, kind: ApplyKind): Promise<void> {
+  async applyConfig(tenantId: string, kind: ApplyKind, startedBy?: string | null): Promise<void> {
+    const vps = await this.vpsOf(tenantId);
+    if (await this.deployments.running(tenantId)) {
+      throw new ConflictException('Bu tenantda boshqa deploy ishlayapti — tugashini kuting');
+    }
+
     await this.prisma.tenant.update({
       where: { id: tenantId },
       data: { applyStatus: 'APPLYING', applyError: null, applyLog: '' },
     });
 
-    const { tenant, config, template, fileEnv } = await this.buildFileEnv(tenantId);
+    const KIND = { restart: 'RESTART', rebuild: 'REBUILD', deploy: 'DEPLOY' } as const;
+    const handle = await this.deployments.start({ tenantId, vpsId: vps?.id, kind: KIND[kind], startedBy });
 
-    const scriptPath = process.env.RECONFIGURE_SCRIPT || '/root/admin/reconfigure.sh';
+    const { tenant, config, template, fileEnv } = await this.buildFileEnv(tenantId);
 
     this.logger.log(`Qo'llash boshlandi (${kind}): ${tenant.domain}`);
 
@@ -328,7 +376,7 @@ export class ProvisioningService {
     const needsGit = kind === 'deploy';
     const gitToken = needsGit && this.github.isConfigured() ? this.github.token : '';
 
-    const { code, log } = await this.runScript(scriptPath, {
+    const { code, log } = await this.runner.run(vps, 'reconfigure.sh', {
       ...this.baseEnv(tenant, template?.templateDir || ''),
       ...fileEnv,
       APPLY_MODE: kind,
@@ -338,7 +386,7 @@ export class ProvisioningService {
         : '',
       GIT_TOKEN: gitToken,
       GIT_BRANCH: 'main',
-    });
+    }, handle.log);
 
     if (code === 0) {
       await this.settings.markApplied(tenantId, config, this.tail(log));
@@ -355,6 +403,7 @@ export class ProvisioningService {
       });
       this.logger.error(`Qo'llash muvaffaqiyatsiz: ${tenant.domain} ❌`);
     }
+    await handle.finish({ code });
   }
 
   /**
@@ -369,10 +418,10 @@ export class ProvisioningService {
     if (!git) return;
 
     const { template, fileEnv } = await this.buildFileEnv(tenantId);
+    const vps = await this.vpsOf(tenantId);
+    const handle = await this.deployments.start({ tenantId, vpsId: vps?.id, kind: 'PUSH' });
 
-    const scriptPath = process.env.RECONFIGURE_SCRIPT || '/root/admin/reconfigure.sh';
-
-    const { code, log } = await this.runScript(scriptPath, {
+    const { code, log } = await this.runner.run(vps, 'reconfigure.sh', {
       ...this.baseEnv(tenant, template?.templateDir || ''),
       ...fileEnv,
       APPLY_MODE: 'push',
@@ -380,8 +429,9 @@ export class ProvisioningService {
       GIT_REMOTE: git.remote,
       GIT_TOKEN: git.token,
       GIT_BRANCH: git.branch,
-    });
+    }, handle.log);
 
+    await handle.finish({ code });
     await this.markGitResult(tenantId, log, true);
 
     if (code !== 0) {
@@ -415,15 +465,19 @@ export class ProvisioningService {
     });
     if (!tenant) return false;
 
-    const scriptPath = process.env.RECONFIGURE_SCRIPT || '/root/admin/reconfigure.sh';
-
     this.logger.warn(`To'xtatilmoqda: ${tenant.domain} — ${reason}`);
 
-    const { code, log } = await this.runScript(scriptPath, {
+    const vps = await this.vpsOf(tenantId);
+    const handle = await this.deployments.start({
+      tenantId, vpsId: vps?.id, kind: 'SUSPEND', meta: { reason },
+    });
+
+    const { code, log } = await this.runner.run(vps, 'reconfigure.sh', {
       ...this.baseEnv(tenant, ''),
       APPLY_MODE: 'suspend',
       SUSPEND_REASON: reason,
-    });
+    }, handle.log);
+    await handle.finish({ code });
 
     if (code === 0) {
       await this.prisma.tenant.update({
@@ -457,14 +511,16 @@ export class ProvisioningService {
     });
     if (!tenant) return false;
 
-    const scriptPath = process.env.RECONFIGURE_SCRIPT || '/root/admin/reconfigure.sh';
-
     this.logger.log(`Qayta yoqilmoqda: ${tenant.domain}`);
 
-    const { code, log } = await this.runScript(scriptPath, {
+    const vps = await this.vpsOf(tenantId);
+    const handle = await this.deployments.start({ tenantId, vpsId: vps?.id, kind: 'RESUME' });
+
+    const { code, log } = await this.runner.run(vps, 'reconfigure.sh', {
       ...this.baseEnv(tenant, ''),
       APPLY_MODE: 'resume',
-    });
+    }, handle.log);
+    await handle.finish({ code });
 
     if (code === 0) {
       await this.prisma.tenant.update({
@@ -511,15 +567,22 @@ export class ProvisioningService {
       data: { status: 'DEPROVISIONING', failureReason: null, deprovisionLog: '' },
     });
 
-    const scriptPath = process.env.DEPROVISION_SCRIPT || '/root/admin/deprovision.sh';
-
     this.logger.warn(`Deprovisioning boshlandi: ${input.domain} (db=${input.dbName})`);
 
-    const { code, log } = await this.runScript(scriptPath, {
+    // ⚠ VPS `input` dan EMAS, bazadan: o'chirish HOZIR tenant turgan
+    // mashinada bajarilishi shart. Chaqiruvchi eski nusxani uzatib
+    // yuborsa, boshqa serverdagi tirik tenant o'chib ketardi.
+    const vps = await this.vpsOf(input.tenantId);
+    const handle = await this.deployments.start({
+      tenantId: input.tenantId, vpsId: vps?.id, kind: 'DEPROVISION',
+    });
+
+    const { code, log } = await this.runner.run(vps, 'deprovision.sh', {
       TENANT_DB_NAME: input.dbName,
       TENANT_DOMAIN: input.domain,
       TENANT_PM2_NAME: input.pm2Name,
-    });
+    }, handle.log);
+    await handle.finish({ code });
 
     let repoNote = '';
 

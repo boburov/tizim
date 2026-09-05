@@ -81,4 +81,15 @@ export class CreateTenantDto {
   @IsOptional()
   @IsInt()
   branchLimit?: number;
+
+  /**
+   * Tenant qaysi VPS'ga joylashadi. Berilmasa — standart VPS (lokal
+   * bo'lsa u, aks holda birinchi faol). Faqat FAOL VPS qabul qilinadi.
+   *
+   * ⚠ Self-service oqimida ham JIMGINA TASHLANADI (yuqoridagi filial
+   * maydonlari bilan bir xil sabab): mijoz serverni tanlamaydi.
+   */
+  @IsOptional()
+  @IsString()
+  vpsId?: string;
 }

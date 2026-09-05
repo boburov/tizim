@@ -21,8 +21,8 @@ import {
 import {
   StudentFreezeService,
   isFrozenOn,
-} from '../student-freeze/student-freeze.service.js';
-import { HolidaysService } from '../holidays/holidays.service.js';
+} from '../student-freeze/index.js';
+import { HolidaysService } from '../holidays/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -595,7 +595,7 @@ export class StudentPaymentService {
       select: { id: true },
     });
     for (const p of payments) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.recalc(p.id);
     }
     return payments.length;
@@ -620,7 +620,7 @@ export class StudentPaymentService {
       select: { id: true },
     });
     for (const p of payments) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.recalc(p.id);
     }
     return payments.length;
@@ -633,7 +633,7 @@ export class StudentPaymentService {
       select: { id: true },
     });
     for (const p of payments) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.recalc(p.id);
     }
     return payments.length;
@@ -654,7 +654,7 @@ export class StudentPaymentService {
     let recalculated = 0;
     for (const p of payments) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await this.recalc(p.id);
         recalculated += 1;
       } catch (err: any) {
@@ -973,7 +973,7 @@ export class StudentPaymentService {
     for (const m of memberships as any[]) {
       // ⚠ `isOpening: false` — boshlang'ich qarz qatori oylik planning
       // o'rnini BOSA OLMAYDI.
-      // eslint-disable-next-line no-await-in-loop
+       
       const existed = await this.prisma.studentPayment.findUnique({
         where: {
           studentId_groupId_year_month_isOpening: {
@@ -983,7 +983,7 @@ export class StudentPaymentService {
         select: { id: true },
       });
       if (existed) continue;
-      // eslint-disable-next-line no-await-in-loop
+       
       await this.ensurePaymentForMembership(m, year, month);
       created += 1;
     }

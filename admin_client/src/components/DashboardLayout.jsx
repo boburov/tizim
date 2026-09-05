@@ -9,6 +9,7 @@ import {
   Server,
   Bot,
   Users,
+  HardDrive,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
@@ -54,6 +55,9 @@ export default function DashboardLayout() {
           </NavLink>
           <NavLink to="/users" className={linkClass}>
             <Users size={18} /> Foydalanuvchilar
+          </NavLink>
+          <NavLink to="/vps" className={linkClass}>
+            <HardDrive size={18} /> Serverlar (VPS)
           </NavLink>
           <NavLink to="/usage" className={linkClass}>
             <BarChart3 size={18} /> Foydalanish

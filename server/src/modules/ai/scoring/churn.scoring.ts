@@ -1,7 +1,7 @@
 import {
   DEFAULT_CHURN_WEIGHTS,
   DEFAULT_THRESHOLDS,
-} from "../../../common/constants/ai.js";
+} from '../ai.constants.js';
 import { softNorm } from "./common.scoring.js";
 
 // SCORING QATLAMI - sof funksiyalar. DB yo'q, I/O yo'q, LLM yo'q.

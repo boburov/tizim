@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
-import { AuthService } from '../auth/auth.service.js';
+import { AuthService } from '../auth/index.js';
 import { PermissionService } from '../../common/rbac/permission.service.js';
 import { comparePassword } from '../../common/utils/password.js';
 import { normalizePhone, isPhoneLike } from '../../common/utils/phone.js';

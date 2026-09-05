@@ -23,12 +23,12 @@ import {
   withinCourseBounds,
   isHolidayOn,
 } from '../../common/utils/attendance.js';
-import { HolidaysService } from '../holidays/holidays.service.js';
-import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
-import { AttendanceSettingsService } from '../attendance-settings/attendance-settings.service.js';
-import { NotificationsService } from '../notifications/notifications.service.js';
-import { CoinService } from '../coin/coin.service.js';
-import { GroupsService } from '../groups/groups.service.js';
+import { HolidaysService } from '../holidays/index.js';
+import { StudentFreezeService } from '../student-freeze/index.js';
+import { AttendanceSettingsService } from '../attendance-settings/index.js';
+import { NotificationsService } from '../notifications/index.js';
+import { CoinService } from '../coin/index.js';
+import { GroupsService } from '../groups/index.js';
 import {
   computeClassDays,
   summarizeCells,

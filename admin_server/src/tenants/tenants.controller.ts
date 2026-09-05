@@ -15,6 +15,8 @@ import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { DeleteTenantDto } from './dto/delete-tenant.dto.js';
 import { UpdateBrandDto } from './dto/update-brand.dto.js';
 import { UpdateSettingsDto } from './dto/update-settings.dto.js';
+import { AssignVpsDto } from '../vps/dto/vps.dto.js';
+import { DecommissionSourceDto, MigrateTenantDto } from './dto/migrate-tenant.dto.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -89,8 +91,46 @@ export class TenantsController {
 
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post(':id/retry')
-  retry(@Param('id') id: string) {
-    return this.tenants.retry(id);
+  retry(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.tenants.retry(id, user?.email);
+  }
+
+  // ───────────────────────────────────────────────────────────────── VPS
+
+  /**
+   * Tenantni VPS'ga biriktirish — FAQAT deploy qilinmagan (DRAFT/FAILED).
+   * Ishlab turgan tenant uchun 409: migratsiya oqimi kerak (3-faza).
+   */
+  @Roles('SUPER_ADMIN')
+  @Patch(':id/vps')
+  assignVps(@Param('id') id: string, @Body() dto: AssignVpsDto) {
+    return this.tenants.assignVps(id, dto.vpsId);
+  }
+
+  /**
+   * Boshqa VPS'ga KO'CHIRISH — fon rejimida. Javob darrov qaytadi,
+   * jarayon `GET /tenants/:id/deployments` orqali kuzatiladi.
+   *
+   * Manba AVTOMATIK O'CHIRILMAYDI: muvaffaqiyatdan keyin ham eski
+   * VPS'da papka/baza/nginx qoladi (faqat pm2 to'xtaydi) — qaytish yo'li.
+   */
+  @Roles('SUPER_ADMIN')
+  @Post(':id/migrate')
+  @HttpCode(202)
+  migrate(@Param('id') id: string, @Body() dto: MigrateTenantDto, @CurrentUser() user: AuthUser) {
+    return this.tenants.migrateToVps(id, dto.targetVpsId, user?.email);
+  }
+
+  /** Ko'chirishdan keyin eski nusxani tozalash — OSHKORA, domen tasdiqi bilan. */
+  @Roles('SUPER_ADMIN')
+  @Post(':id/decommission-source')
+  @HttpCode(202)
+  decommissionSource(
+    @Param('id') id: string,
+    @Body() dto: DecommissionSourceDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tenants.decommissionSource(id, dto, user?.email);
   }
 
   // ─────────────────────────────────────────────────────────────── brend
@@ -122,8 +162,8 @@ export class TenantsController {
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post(':id/apply')
   @HttpCode(200)
-  apply(@Param('id') id: string) {
-    return this.tenants.applyPending(id);
+  apply(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.tenants.applyPending(id, user?.email);
   }
 
   // ───────────────────────────────────────────────────────── GitHub repo

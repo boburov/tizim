@@ -230,7 +230,7 @@ export class JournalService {
         throw new ApiError(400, "Jurnal qatorida summa bo'lishi shart");
       }
 
-      // eslint-disable-next-line no-await-in-loop
+       
       const account = await this.ensureAccount(
         branchId,
         line.accountKind,

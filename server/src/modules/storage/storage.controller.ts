@@ -1,5 +1,6 @@
 import { Controller, Delete, Get, HttpCode, Patch, Post, Req, UseGuards } from '@nestjs/common';
-import { StorageService, formatBytes } from './storage.service.js';
+import { StorageService } from './storage.service.js';
+import { formatBytes } from '../../common/utils/format-bytes.js';
 import { StorageAdminService } from './storage-admin.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Permissions, Validated } from '../../common/decorators/index.js';

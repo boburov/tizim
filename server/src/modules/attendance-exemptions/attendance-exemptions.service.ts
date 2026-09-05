@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { ROLES } from '../../common/constants/permissions.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
-import { MembershipService } from '../../common/helpers/membership.service.js';
+import { MembershipService } from './membership.service.js';
 import { CorrelationCacheService } from '../../common/helpers/correlation-cache.service.js';
 import { userBranchCondition } from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';

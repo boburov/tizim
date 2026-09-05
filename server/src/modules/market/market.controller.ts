@@ -2,8 +2,8 @@ import {
   Controller, Delete, Get, HttpCode, Patch, Post, Req, UseGuards,
 } from '@nestjs/common';
 import { MarketService } from './market.service.js';
-import { CoinSettingsService } from '../coin/coin-settings.service.js';
-import { CoinSwitchGuard, RequiresMarket } from '../coin/coin-switch.guard.js';
+import { CoinSettingsService } from '../coin/index.js';
+import { CoinSwitchGuard, RequiresMarket } from '../coin/index.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Permissions, Validated } from '../../common/decorators/index.js';
 import { COIN_PERMISSIONS } from '../../common/constants/coin.js';
@@ -15,7 +15,7 @@ import {
   type ProductIdRequest, type ProductListRequest, type ProductCreateRequest,
   type ProductUpdateRequest, type BuyRequest, type OrderListRequest,
   type OrderStatusRequest, type OrderIdRequest,
-} from '../coin/coin.validators.js';
+} from './market.validators.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

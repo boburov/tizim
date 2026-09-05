@@ -3,8 +3,8 @@ import { PrismaService } from '../../../prisma/prisma.service.js';
 import { ApiError } from '../../../common/errors/api-error.js';
 import { ROLES, PERMISSIONS } from '../../../common/constants/permissions.js';
 import { toUtcMidnight } from '../../../common/utils/date.js';
-import { AuthService } from '../../auth/auth.service.js';
-import { GroupsService } from '../../groups/groups.service.js';
+import { AuthService } from '../../auth/index.js';
+import { GroupsService } from '../../groups/index.js';
 import { ROW_STATUS, type Importer } from '../import-engine.service.js';
 import { asDate, asEnum, isBlank } from '../coerce.js';
 import {

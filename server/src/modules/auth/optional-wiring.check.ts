@@ -1,10 +1,10 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type Type } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
-import { GroupsService } from '../groups/groups.service.js';
-import { AttendanceService } from '../attendance/attendance.service.js';
-import { StudentFreezeService } from '../student-freeze/student-freeze.service.js';
-import { TeacherCompensationService } from '../teacher-salary/teacher-compensation.service.js';
-import { OpeningBalanceService } from '../opening-balance/opening-balance.service.js';
+import { GroupsService } from '../groups/index.js';
+import { AttendanceService } from '../attendance/index.js';
+import { StudentFreezeService } from '../student-freeze/index.js';
+import { TeacherCompensationService } from '../teacher-salary/index.js';
+import { OpeningBalanceService } from '../opening-balance/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

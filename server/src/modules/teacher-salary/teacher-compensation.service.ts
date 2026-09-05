@@ -8,7 +8,7 @@ import { assertPeriodInvariants } from '../../common/utils/period.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { assertNotSelfSalary } from '../../common/rbac/self-salary.guard.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
-import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
+import { ExpenseApprovalsService } from '../expense-approvals/index.js';
 import { TeacherSalaryService } from './teacher-salary.service.js';
 
 /**

@@ -231,12 +231,19 @@ test('QULFLANGAN marshrutlar darvozadan TASHQARIDA', () => {
   }
 });
 
-test('QULFLANGAN kalitlar — atigi ikkita, va aynan o\'shalar', () => {
+test('QULFLANGAN kalitlar — atigi uchta, va aynan o\'shalar', () => {
   // ⚠ Bu ro'yxat O'SMASLIGI kerak. Har bir yangi `locked` kalit — bu
-  // "sotib bo'lmaydigan" modul, ya'ni talabga zid. Ikkalasining sababi
-  // `feature-registry.ts` da yozilgan va u sabab TEXNIK, tijorat emas.
+  // "sotib bo'lmaydigan" modul, ya'ni odatda talabga zid. Sabab TEXNIK
+  // bo'lgandagina qo'shiladi va shu yerda yoziladi.
+  //
+  //   `auth`                — kirishsiz tenant tiklanmas holatga tushadi.
+  //   `features`            — o'chsa mijoz NIMA o'chganini bilolmaydi.
+  //   `platform-analytics`  — dev panelning tenant holatini ko'rish
+  //                           kanali (`internal/analytics`). Infratuzilma,
+  //                           mijozga sotiladigan bo'lim emas; o'chsa
+  //                           platforma egasi nosozlikni ko'rmay qoladi.
   const locked = FEATURES.filter((f) => f.locked).map((f) => f.key).sort();
-  assert.deepEqual(locked, ['auth', 'features']);
+  assert.deepEqual(locked, ['auth', 'features', 'platform-analytics']);
 
   // `NEVER_GATED` ro'yxati (`global-feature-gate.ts`) shu qarorni
   // TAKRORLAYDI — ikki qatlam ataylab. Bu yerda faqat reyestr tomonini

@@ -450,7 +450,7 @@ export class FinanceReportService {
       const { start, end } = monthRange(p.year, p.month);
       // Trend ham JAMI chiqimni ko'rsatishi kerak - aks holda grafik va KPI
       // kartochkasi bir-biriga zid raqam ko'rsatardi.
-      // eslint-disable-next-line no-await-in-loop
+       
       const [income, salary, studentBilled, opex, staffSalary] = await Promise.all([
         this.sumTransactions('paymentTransaction', start, end),
         this.sumTransactions('salaryTransaction', start, end),

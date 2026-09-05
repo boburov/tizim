@@ -146,7 +146,7 @@ export class KpiEngineService {
 
       let events: Awaited<ReturnType<KpiTriggersService['evaluate']>> = [];
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         events = await this.triggers.evaluate(rule.trigger, {
           employeeId,
           year: payroll.year,
@@ -204,7 +204,7 @@ export class KpiEngineService {
           amount,
           meta: ev.meta || {},
         };
-        // eslint-disable-next-line no-await-in-loop
+         
         const doc = await this.prisma.staffPayrollItem.upsert({
           where: {
             employeeId_ruleId_eventKey: { employeeId, ruleId: rule.id, eventKey },

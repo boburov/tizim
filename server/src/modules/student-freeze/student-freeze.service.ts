@@ -8,7 +8,7 @@ import { toUtcMidnight, localTodayMidnight } from '../../common/utils/date.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { assertTargetInScope } from '../../common/rbac/branch-access.service.js';
 import { CorrelationCacheService } from '../../common/helpers/correlation-cache.service.js';
-import { StudentPaymentService } from '../finance/student-payment.service.js';
+import { StudentPaymentService } from '../finance/index.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

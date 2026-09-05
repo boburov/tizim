@@ -20,6 +20,8 @@ import { ApiServicesModule } from './api-services/api-services.module.js';
 import { BotsModule } from './bots/bots.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
 import { UploadsModule } from './uploads/uploads.module.js';
+import { VpsModule } from './vps/vps.module.js';
+import { TenantAnalyticsModule } from './tenant-analytics/tenant-analytics.module.js';
 
 @Module({
   imports: [
@@ -49,6 +51,10 @@ import { UploadsModule } from './uploads/uploads.module.js';
     SubscriptionsModule,
     // Logo yuklash (`tenants/:id/logo`).
     UploadsModule,
+    // VPS — tenantlar joylashadigan serverlar (SSH ulanish, resurslar).
+    VpsModule,
+    // Tenantdan tortib olinadigan biznes/moliya analitikasi.
+    TenantAnalyticsModule,
   ],
 })
 export class AppModule {}

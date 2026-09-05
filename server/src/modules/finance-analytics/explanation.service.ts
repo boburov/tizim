@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { GeminiService } from '../ai/gemini.service.js';
-import { AiBudgetService } from '../ai/ai-budget.service.js';
+import { GeminiService } from '../ai/index.js';
+import { AiBudgetService } from '../ai/index.js';
 
 /**
  * ══════════════════════════════════════════════════════════════════════

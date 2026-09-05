@@ -8,7 +8,7 @@ import { LeadInsightService } from './lead-insight.service.js';
 import { FinanceInsightService } from './finance-insight.service.js';
 import { RankingService } from './ranking.service.js';
 
-import { AI_ENGINE_VERSION } from "../../common/constants/ai.js";
+import { AI_ENGINE_VERSION } from './ai.constants.js';
 import {
   runWithBranchContext,
   branchFilter,

@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import {
   PAYROLL_AUDIT_ACTIONS,
   PAYROLL_AUDIT_ACTION_LABELS,
-} from '../dist/common/constants/payroll-audit.js';
+} from '../dist/modules/staff-payroll/payroll-audit.constants.js';
 import {
   OWNER_ONLY_PERMISSIONS,
   BRANCH_LOCAL_PERMISSIONS,

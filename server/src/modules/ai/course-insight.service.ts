@@ -13,7 +13,7 @@ import {
   norm,
   readMap,
 } from "./scoring/common.scoring.js";
-import { DEFAULT_THRESHOLDS } from "../../common/constants/ai.js";
+import { DEFAULT_THRESHOLDS } from './ai.constants.js';
 import { narrate } from "./narration.service.js";
 import { buildInsight, mkStats, fmtMoney } from './insight-writer.service.js';
 

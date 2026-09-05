@@ -69,6 +69,12 @@ import { ModuleFeaturesService } from './module-features.service.js';
 const NEVER_GATED: readonly string[] = Object.freeze([
   'features',
   'internal/entitlements',
+  // Dev panel tenantning holatini SHU kanal orqali ko'radi. O'chsa,
+  // platforma egasi markazning tirikligini ham, o'lchovlarini ham
+  // yo'qotadi — ya'ni nosozlikni aynan eng kerak paytda ko'rmaydi.
+  // `internal/entitlements` bilan bir toifada: infratuzilma kanali,
+  // mijozga sotiladigan bo'lim emas.
+  'internal/analytics',
   'auth',
   'health',
 ]);
