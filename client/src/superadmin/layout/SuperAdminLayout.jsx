@@ -22,7 +22,7 @@ import SuperAdminSidebar from "./SuperAdminSidebar";
  * matnini o'qib emas.
  *
  * ── NIMASI BOSHQA ──
- *   • Sarlavha butun kenglikda va u yerda ASOSIY · MOLIYA · MARKET
+ *   • Sarlavha butun kenglikda va u yerda ASOSIY · MOLIYA
  *   • Chap ustun ikki yozuvli, yig'ilmaydi, filial tanlagichi yo'q
  *   • Yaratish menyusi/qidiruv yo'q — bular operatsion amallar
  *

@@ -49,8 +49,8 @@ client/src/
 | | `/owner/*` — **Admin panel** | `/org/*` — **Super Admin panel** |
 |---|---|---|
 | Layout | `OperationalLayout` (shadcn `SidebarProvider`) | `SuperAdminLayout` — **its own shell** |
-| Header | `AppHeader` (mobile only) | `SuperAdminHeader`, full width, **MOLIYA** lives here |
-| Menu | `owner/navigation/sidebar.config.js`, ~12 groups | `superadmin/navigation/nav.config.js`, **exactly 3**: Asosiy · Filiallar · Tizim tahlili |
+| Header | `AppHeader` (mobile only) | `SuperAdminHeader`, full width, **ASOSIY · MOLIYA** live here |
+| Menu | `owner/navigation/sidebar.config.js`, ~11 groups | `superadmin/navigation/nav.config.js`, **exactly 3**: Filiallar · Tizim tahlili · Audit loglari (Asosiy and Moliya live in the header) |
 | Who | directors, staff, **and the owner when branches are off** | **the owner only**, and only when branches are on |
 | Scope | the user's assigned branch(es) | the whole organization |
 | Guarded by | `AdminPanelGuard` — students, teachers, and the branch-mode owner are redirected | `SuperAdminGuard` — everyone except the branch-mode owner is sent to their own panel |
@@ -92,6 +92,15 @@ Consequences to keep in mind when adding a screen:
   defaults to `false` (closed) precisely so a missing answer keeps everyone in
   `/owner`; deciding before it arrives produces a wrong redirect, and under
   WebKit that can become a real loop.
+- **There is no `/org` → `/owner` link, and there must not be one.** `AdminPanelGuard`
+  bounces the branch-mode owner straight back, so any such link is a false door.
+  The profile menu carried one for a while; it was removed. A multi-branch owner
+  who needs branch-level work goes through `/org/filiallar/:id`, which has the
+  rooms / people / finance tabs inside the branch context.
+- **Market is not in `/org`.** It is a branch operation and this shell has no
+  branch switcher, so "on whose behalf" had no answer. Market management stays in
+  `/owner/market` and on the branch page; market *revenue* still shows in Moliya
+  and the branch P&L. `panelAcceptance.mjs` asserts its absence.
 - The `/owner` → `/org` sidebar link ("Markaz ko'rinishi") is gated on the same
   expression as `SuperAdminGuard`, so in practice it never renders — the only
   person allowed through is bounced out of `/owner` anyway. It is kept so the
@@ -112,6 +121,7 @@ Rooms, finance and system analysis each have **one** implementation used twice:
 
 | Concept | Super Admin | Admin | Shared component |
 |---|---|---|---|
+| Audit logs | `/org/audit` (with a branch filter) | `/owner/activity-logs` | `activityLogs/pages/ActivityLogsPage` |
 | Rooms | `/org/filiallar/:id?tab=rooms` | `/owner/rooms` | `owner/features/rooms/components/RoomsGrid` |
 | Finance | `/org/moliya` | `/owner/finance` | `financeAnalytics/pages/FinanceCommandPage` |
 | System analysis | `/org/tahlil` | `/owner/tahlil` | `systemAnalysis/SystemAnalysisTabs` (6 tabs, identical in both) |

@@ -41,11 +41,21 @@ import { sanitize, extractResource, truncateBody } from './audit-log.helper.js';
  *
  * ── FILIAL KO'LAMI ──
  *
- * `ActivityLog` da `branchId` YO'Q va u REESTRDA `VIA_USER` deb
- * e'lon qilingan (`test/resource-scope.registry.mjs`) — yozuv AKTYORGA
- * tegishli, aktyor esa filialga. O'qish tomoni buni allaqachon
- * `branchUserFilter('userId')` bilan qo'llaydi, ya'ni bu yerda qo'shimcha
- * ustun ham, migratsiya ham KERAK EMAS.
+ * `branchId` SHU YERDA yoziladi — hodisa QAYSI FILIALDA sodir bo'lgani.
+ *
+ * Ilgari bu ustun yo'q edi va ko'lam faqat AKTYOR orqali berilardi
+ * ("shu filial xodimi qilgan ish"). Ikkalasi bir xil emas: markazdan
+ * kelgan ega yoki hisobchi filialda o'zgarish qilsa, filial
+ * administratori uni ko'rmasdi — o'z filialining tarixi to'liq emasdi.
+ *
+ * ⚠ `req.branchId` — `BranchContextMiddleware` hal qilgan JORIY filial
+ * (`x-branch-id` sarlavhasi + ruxsat etilgan ro'yxat kesishmasi), ya'ni
+ * u ALLAQACHON tekshirilgan: aktyor o'zi kira olmaydigan filial nomidan
+ * yozuv qoldira olmaydi.
+ *
+ * ⚠ `null` — XATO EMAS: login/logout va "barcha filiallar" rejimidagi
+ * markaz amallari bitta filialga tegishli emas. O'qish tomoni bu
+ * qatorlarni aktyor filiali bo'yicha hal qiladi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
@@ -96,6 +106,9 @@ export class AuditLogMiddleware implements NestMiddleware {
               // `user` EMAS, `userId` — Prisma'da `user` bu RELATION.
               userId: req.user?.id ? String(req.user.id) : null,
               userRole: req.user?.role || 'system',
+              // Hodisa QAYSI filialda. `undefined` bo'lsa `null` —
+              // ustun ixtiyoriy va "filialsiz" haqiqiy holat.
+              branchId: req.branchId ? String(req.branchId) : null,
               actorLabel,
               method: req.method as never,
               path: req.originalUrl || req.path,

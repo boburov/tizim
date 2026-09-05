@@ -1,7 +1,6 @@
 import { NavLink, Link } from "react-router-dom";
 import {
   ChevronDown,
-  LayoutDashboard,
   LogOut,
   ShieldCheck,
   User,
@@ -30,7 +29,7 @@ import { SUPER_ADMIN_HEADER_NAV } from "../navigation/nav.config";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
- * SUPER ADMIN SARLAVHASI — ASOSIY · MOLIYA · MARKET SHU YERDA
+ * SUPER ADMIN SARLAVHASI — ASOSIY · MOLIYA SHU YERDA
  * ══════════════════════════════════════════════════════════════════════
  *
  * ── NEGA BU UCHTASI SARLAVHADA, SIDEBAR'DA EMAS ──
@@ -44,31 +43,30 @@ import { SUPER_ADMIN_HEADER_NAV } from "../navigation/nav.config";
  *            sababi. Sidebar qatori bo'lsa "yana bitta bo'lim" bo'lib
  *            o'qilardi va hisobot menyusiga ko'milgan har qanday moliya
  *            kabi ko'zdan qochardi.
- *   MARKET — alohida ish, "biznes qanday ketyapti" savoliga javob
- *            bermaydi.
  *
  * Natijada yuqori darajadagi yo'nalishlar BITTA qatorda turadi, ikki
  * ustunga bo'linmaydi.
+ *
+ * ⚠ MARKET SHU QATORDA EDI — OLIB TASHLANDI (`nav.config.js` da sabab).
+ * Qisqasi: u filial operatsiyasi, bu qobiqda esa filial tanlagich yo'q.
  *
  * ── PROFIL MENYUSIDA NIMA BOR VA NEGA ──
  *   Vakolatlar      — "kim nima qila oladi". Bu SOZLASH ishi, kundalik
  *                     emas: sidebar'da bo'lsa qisqa menyuni
  *                     uzaytirardi.
  *
- * ── ADMIN PANELIGA HAVOLA QAYTARILDI ──
- * Bu qator bir muddat olib tashlangan edi, sababi haqli: o'sha paytda
- * `AdminPanelGuard` tashkilot darajasidagi odamni `/owner/*` dan
- * darhol qaytarardi, ya'ni havola "yolg'on eshik" edi.
+ * ── ADMIN PANELIGA HAVOLA YO'Q ──
+ * Bu qator bir muddat turgan edi, izohi esa "endi qaytarish yo'q,
+ * havola haqiqiy eshik" deb da'vo qilardi. Izoh ESKIRGAN: devor ikki
+ * tomonlama bo'lib QOLGAN — `AdminPanelGuard` (`branchesEnabled &&
+ * roleType === owner`) egani `/owner/*` dan `/org` ga darhol
+ * qaytaradi. Ya'ni havola bosilganda odam AYNAN shu yerga qaytardi:
+ * yolg'on eshik, xuddi o'chirilgan bo'lim yozuvi kabi.
  *
- * Endi qaytarish YO'Q — ega aynan `/owner` da yashaydi
- * (`resolveWorkspace` → `ADMIN`) va `/org` unga ikkinchi, ixtiyoriy
- * ko'rinish. Shuning uchun havola endi haqiqiy eshik va IKKI TOMONLAMA
- * yurish uchun kerak: `/owner` tomonidagi jufti — yon menyu
- * pastidagi "Markaz ko'rinishi" (`AppSidebar`).
- *
- * ⚠ Ruxsat tekshirilmaydi: bu yergacha yetib kelgan odam
- * `SuperAdminGuard` dan o'tgan, ya'ni unda tashkilot vakolati bor va
- * admin paneli unga baribir ochiq.
+ * ⚠ QAYTA QO'SHMANG. Ko'p filialli egaga filial ishi kerak bo'lsa,
+ * yo'l `/org/filiallar/:id` — filial sahifasi o'z ichida xonalar,
+ * xodimlar va moliya tab'larini beradi (`superadmin/pages/BranchDetail`).
+ * Ikkinchi panelga sakrash emas, KONTEKST ichida qolish.
  */
 const SuperAdminHeader = () => {
   const { user, roleLabel } = useAuth();
@@ -120,7 +118,7 @@ const SuperAdminHeader = () => {
 
           Ilgari bu yerda "Tashkilot" nishoni ham turardi: u brend
           blokining kengligini o'zgartirib turardi (nishon `md:` dan
-          past ekranda yo'q edi), shuning uchun Moliya/Market har
+          past ekranda yo'q edi), shuning uchun Moliya har
           ekranda boshqa joydan boshlanardi va hech qayerga
           tekislanmasdi. Nishon olib tashlandi — panelni sidebar
           sarlavhasi ("Tashkilot menyusi") va yo'nalishlar o'zi
@@ -135,7 +133,7 @@ const SuperAdminHeader = () => {
         </span>
       </Link>
 
-      {/* ── YUQORI DARAJADAGI YO'NALISHLAR: ASOSIY, MOLIYA, MARKET ── */}
+      {/* ── YUQORI DARAJADAGI YO'NALISHLAR: ASOSIY, MOLIYA ── */}
       {/* `lg:-ml-1` — yozuvning O'Z ichki chekkasi (px-2.5) hisobga
           olinadi: shunda IKONKA aynan asosiy maydon chetiga (244px)
           tushadi, ya'ni "Moliya" sahifa sarlavhasi bilan bir vertikalda
@@ -196,13 +194,6 @@ const SuperAdminHeader = () => {
                 </Link>
               </DropdownMenuItem>
             )}
-
-            <DropdownMenuItem asChild>
-              <Link to="/owner/dashboard">
-                <LayoutDashboard className="size-4" />
-                Admin paneli
-              </Link>
-            </DropdownMenuItem>
 
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => logout()}>

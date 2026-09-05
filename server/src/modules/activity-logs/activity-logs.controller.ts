@@ -5,16 +5,26 @@ import { Permissions, Validated } from '../../common/decorators/index.js';
 import { PERMISSIONS } from '../../common/constants/permissions.js';
 import { parsePagination, buildMeta } from '../../common/utils/pagination.js';
 import {
-  listSchema, idSchema, rangeSchema,
+  listSchema, idSchema, rangeSchema, financialListSchema, payrollListSchema,
   type ListRequest, type IdRequest, type RangeRequest,
+  type FinancialListRequest, type PayrollListRequest,
 } from './activity-logs.validators.js';
 
 /**
  * FAOLIYAT LOGLARI — Express `activityLogs.routes.js` EKVIVALENTI (3/3).
  *
- * ⚠ MARSHRUT TARTIBI O'ZGARTIRILMASIN: `stats` `:id` DAN OLDIN turishi
- * shart, aks holda `/activity-logs/stats` `:id` ga tushib "Log topilmadi"
- * (404) qaytarardi. Express'da ham tartib aynan shunday.
+ * ⚠ MARSHRUT TARTIBI O'ZGARTIRILMASIN: `stats`, `financial` va
+ * `payroll` `:id` DAN OLDIN turishi shart, aks holda
+ * `/activity-logs/stats` `:id` ga tushib "Log topilmadi" (404)
+ * qaytarardi. Express'da ham tartib aynan shunday.
+ *
+ * ── UCHTA RO'YXAT, BITTA RUXSAT ──
+ * `GET /`, `/financial`, `/payroll` — sahifadagi uch tab. Ruxsat
+ * kaliti UCHALASIDA ham `activity_logs.read`: "kim nima qildi" bitta
+ * savol, uni uch bo'lakka bo'lish rol matritsasini kengaytirardi va
+ * hech kim to'liq javob ololmasdi. Ko'lam esa har uchtasida ALOHIDA
+ * hisoblanadi (servisdagi izohlarga qarang) — modellar filialga uch
+ * xil yo'l bilan bog'langan.
  *
  * ⚠ SAHIFALASH `parsePagination` orqali: standart `limit` **20**
  * (servisdagi `limit = 30` standarti Express'da ham O'LIK — handler
@@ -38,6 +48,8 @@ export class ActivityLogsController {
     const { page, limit } = parsePagination(v.query as Record<string, unknown>);
     const { items, total } = await this.logs.list({
       userId: v.query.userId,
+      branchId: v.query.branchId,
+      dangerousOnly: v.query.dangerousOnly,
       method: v.query.method,
       action: v.query.action,
       resourceType: v.query.resourceType,
@@ -46,6 +58,24 @@ export class ActivityLogsController {
       page,
       limit,
     });
+    return { success: true, data: items, meta: buildMeta({ page, limit, total }) };
+  }
+
+  /** MOLIYA TAB'I — ⚠ `:id` DAN OLDIN. */
+  @Get('financial')
+  @Permissions(PERMISSIONS.ACTIVITY_LOGS_READ)
+  async financial(@Validated(financialListSchema) v: FinancialListRequest) {
+    const { page, limit } = parsePagination(v.query as Record<string, unknown>);
+    const { items, total } = await this.logs.listFinancial({ ...v.query, page, limit });
+    return { success: true, data: items, meta: buildMeta({ page, limit, total }) };
+  }
+
+  /** OYLIK TAB'I — ⚠ `:id` DAN OLDIN. */
+  @Get('payroll')
+  @Permissions(PERMISSIONS.ACTIVITY_LOGS_READ)
+  async payroll(@Validated(payrollListSchema) v: PayrollListRequest) {
+    const { page, limit } = parsePagination(v.query as Record<string, unknown>);
+    const { items, total } = await this.logs.listPayroll({ ...v.query, page, limit });
     return { success: true, data: items, meta: buildMeta({ page, limit, total }) };
   }
 

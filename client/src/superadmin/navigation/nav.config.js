@@ -1,4 +1,4 @@
-import { LayoutDashboard, Building2, MonitorCog, Wallet, Store } from "lucide-react";
+import { LayoutDashboard, Building2, MonitorCog, Wallet, ScrollText } from "lucide-react";
 
 import { PERMISSIONS } from "@/shared/constants/permissions";
 
@@ -20,25 +20,40 @@ import { PERMISSIONS } from "@/shared/constants/permissions";
  *   ASOSIY        "biznes umuman qanday ketyapti?"   → SARLAVHADA
  *   FILIALLAR     "qaysi filial qanday ishlayapti?"  → chap ustun
  *   TIZIM TAHLILI "nimaga e'tibor berishim kerak?"   → chap ustun
+ *   AUDIT LOGLARI "kim nima qildi?"                  → chap ustun
+ *
+ * ── NEGA AUDIT LOGLARI SHU YERDA ──
+ * U yuqoridagi qoidani BUZMAYDI: "kim nima qildi" — entitet emas,
+ * TASHKILOT DARAJASIDAGI savol, va boshqa hech qaysi bo'limning ichida
+ * javobi yo'q. Admin panelidagi (`/owner/activity-logs`) egizagi
+ * FILIAL ko'lamida ishlaydi; ega esa aynan filiallararo ko'rinishni
+ * so'raydi ("administrator bugun nima qildi"), ya'ni bu ikkinchi nusxa
+ * emas — AYNI komponent, ko'lami serverda kengaytirilgan.
  *
  * ── NEGA ASOSIY SARLAVHAGA CHIQDI ──
  * U bo'lim emas, BOSH SAHIFA: panel har safar o'sha yerdan ochiladi va
  * qolgan hamma yo'l unga QAYTADI. Chap ustunning birinchi qatori
  * bo'lganida u "Filiallar bilan bir xil darajadagi bo'lim" bo'lib
- * o'qilardi. Sarlavhada esa u Moliya va Market bilan bitta qatorda —
+ * o'qilardi. Sarlavhada esa u Moliya bilan bitta qatorda —
  * ya'ni panelning yuqori darajadagi yo'nalishlari BITTA joyda turadi,
  * ikki ustunga bo'linmaydi.
  *
- * ── MOLIYA VA MARKET BU YERDA YO'Q — ULAR SARLAVHADA ──
- * Moliya sidebar'ning to'rtinchi qatori bo'lsa, u qolgan uchtasi bilan
+ * ── MOLIYA BU YERDA YO'Q — U SARLAVHADA ──
+ * Moliya sidebar'ning to'rtinchi qatori bo'lsa, u qolganlar bilan
  * bir xil og'irlikda ko'rinardi. Amalda esa markaz egasi panelni eng
  * ko'p PUL uchun ochadi. Shuning uchun u yuqori darajadagi alohida
  * yo'nalish (`SuperAdminHeader`), hisobot menyusining ichida emas.
  *
- * Market ham AYNI toifada: u "biznes qanday ketyapti" degan savolga
- * javob bermaydi, u ALOHIDA ish. Sidebarga qo'shilsa chap ustun
- * minimal bo'lish qoidasi buzilardi (`panelAcceptance.mjs` uni
- * tekshiradi).
+ * ── MARKET BU PANELDAN OLIB TASHLANDI ──
+ * U sarlavhada turardi. Lekin Market — FILIAL OPERATSIYASI: buyurtma
+ * yig'ish va berish filial xodimining kunlik ishi, "biznes qanday
+ * ketyapti" degan savolga javob bermaydi. Ko'p filialli ega uni
+ * kunlik ochmaydi, ochsa ham qaysi filial nomidan ish qilayotgani
+ * noaniq edi (bu qobiqda filial tanlagich YO'Q).
+ *
+ * Ega uchun market DAROMADI yo'qolmaydi — u Moliya va filial P&L
+ * ichida qoladi. Market boshqaruvi esa admin panelida
+ * (`/owner/market`) va filial sahifasida.
  *
  * ── RUXSAT ──
  * Bu yerdagi `permission` faqat MENYUNI kesadi. Ma'lumot himoyasi
@@ -63,14 +78,23 @@ export const SUPER_ADMIN_NAV = Object.freeze([
       PERMISSIONS.FINANCE_VIEW_PROFITABILITY,
     ],
   },
+  {
+    key: "audit",
+    title: "Audit loglari",
+    icon: ScrollText,
+    url: "/org/audit",
+    permission: PERMISSIONS.ACTIVITY_LOGS_READ,
+    capability: "activity-logs",
+  },
 ]);
 
 /**
- * SARLAVHADAGI YO'NALISHLAR: ASOSIY · MOLIYA · MARKET.
+ * SARLAVHADAGI YO'NALISHLAR: ASOSIY · MOLIYA.
  *
- * Tartib TASODIFIY EMAS — chapdan o'ngga "qayerdan boshlanadi" dan
- * "alohida ish" ga qarab: Asosiy (bosh manzara) → Moliya (panelni
- * ochishning eng ko'p sababi) → Market (alohida ish).
+ * Tartib TASODIFIY EMAS: Asosiy (bosh manzara) → Moliya (panelni
+ * ochishning eng ko'p sababi).
+ *
+ * ⚠ MARKET BU YERDA EDI, OLIB TASHLANDI — sababi yuqorida.
  */
 export const SUPER_ADMIN_HEADER_NAV = Object.freeze([
   {
@@ -89,25 +113,6 @@ export const SUPER_ADMIN_HEADER_NAV = Object.freeze([
     icon: Wallet,
     url: "/org/moliya",
     permission: PERMISSIONS.FINANCE_READ,
-  },
-  {
-    key: "market",
-    title: "Market",
-    icon: Store,
-    url: "/org/market",
-    permissionAnyOf: [
-      PERMISSIONS.MARKET_READ,
-      PERMISSIONS.MARKET_MANAGE,
-      PERMISSIONS.COIN_SETTINGS,
-    ],
-    // ⚠ RUXSAT YETARLI EMAS — BO'LIM O'CHIRILGAN BO'LISHI MUMKIN.
-    //
-    // `capability: "coin"` `SuperAdminHeader` ga "bu yozuvni
-    // `useCoinConfig().enabled` ham tasdiqlashi kerak" deydi. Faqat
-    // ruxsatga tayanilsa, ega bo'limni o'chirgandan keyin ham
-    // sarlavhada "Market" turaverardi va bosilganda `/org` ga
-    // qaytarardi — o'zi yasagan yolg'on eshik.
-    capability: "coin",
   },
 ]);
 

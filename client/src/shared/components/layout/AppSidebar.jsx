@@ -172,7 +172,7 @@ const Main = () => {
   const isMobile = useIsMobile();
   const { toggleSidebar } = useSidebar();
   const { roleType, multiBranch } = useAuth();
-  const { isAllBranches } = useActiveBranch();
+  const { isAllBranches, hasMultipleBranches } = useActiveBranch();
   const { has, hasAny } = usePermissions();
   const { workspace, nav: navItems, meta } = useWorkspace();
   const { enabled: coinEnabled } = useCoinConfig();
@@ -190,6 +190,14 @@ const Main = () => {
   // `permission` - bitta kalit; `permissionAnyOf` - kamida bittasi
   // yetarli (bitta sahifa ikki xil ruxsat egasiga ochiq bo'lganda).
   // `multiBranchOnly`  - yakka markaz rejimida yozuv umuman ko'rsatilmaydi.
+  // `ownMultiBranchOnly` - AKTYORNING O'ZIDA bir nechta filial bo'lsagina.
+  //                      `multiBranchOnly` dan farqi TASHKILOT vs MEN:
+  //                      birinchisi bazadagi faol filial sonini so'raydi,
+  //                      ikkinchisi mening `branches` ro'yxatimni. Uch
+  //                      filialli markazda bitta filialga biriktirilgan
+  //                      administrator uchun "Filiallar" bo'limi
+  //                      `multiBranchOnly` bilan ochilardi va ichida doim
+  //                      yolg'iz o'z filiali turardi — ishlamaydigan qator.
   // `allBranchesOnly`  - faqat "Barcha filiallar" tanlanganda ko'rinadi
   //                      (filiallararo hisobotlar bitta filial ichida
   //                      ma'nosiz).
@@ -229,6 +237,7 @@ const Main = () => {
 
   const allowed = (entry) => {
     if (entry.multiBranchOnly && !multiBranch) return false;
+    if (entry.ownMultiBranchOnly && !hasMultipleBranches) return false;
     if (entry.allBranchesOnly && !isAllBranches) return false;
     if (!hasCapability(entry)) return false;
     if (entry.permissionAnyOf?.length) return hasAny(entry.permissionAnyOf);

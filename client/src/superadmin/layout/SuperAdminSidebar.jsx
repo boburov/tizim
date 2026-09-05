@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 
 import { cn } from "@/shared/utils/cn";
 import usePermissions from "@/shared/hooks/usePermissions";
+import useFeatures from "@/shared/hooks/useFeatures";
 
 import { SUPER_ADMIN_NAV } from "../navigation/nav.config";
 
@@ -32,8 +33,18 @@ import { SUPER_ADMIN_NAV } from "../navigation/nav.config";
  */
 const SuperAdminSidebar = () => {
   const { has, hasAny } = usePermissions();
+  const { features: featureMap } = useFeatures();
 
+  // ⚠ `capability` RUXSATDAN ALOHIDA — `SuperAdminHeader` dagi bilan
+  // AYNI qoida. Ruxsat "menda huquq bormi" deydi; imkoniyat esa "bu
+  // bo'lim tarifda UMUMAN bormi". Ilgari bu yerda faqat ruxsat
+  // tekshirilardi va bu ish berardi, chunki ikkala yozuv ham
+  // imkoniyatsiz edi. Audit loglari birinchi `capability` li yozuv:
+  // usiz o'chirilgan tarifda menyuda turaverib, bosilganda Nest
+  // darvozasi route'ni yopardi — yolg'on eshik.
   const items = SUPER_ADMIN_NAV.filter((item) => {
+    if (![].concat(item.capability ?? []).every((k) => featureMap[k] !== false))
+      return false;
     if (item.permissionAnyOf?.length) return hasAny(item.permissionAnyOf);
     return !item.permission || has(item.permission);
   });

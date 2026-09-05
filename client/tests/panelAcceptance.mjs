@@ -147,22 +147,23 @@ head("1) SUPER ADMIN — o'z qobig'i");
   check("Admin panelining qobig'i ISHLATILMAYDI", shadcnSidebar === 0,
     shadcnSidebar ? `${shadcnSidebar} ta [data-sidebar] element` : "o'z qobig'i");
 
-  // ── SIDEBAR: IKKI YOZUV (talab 4) ──
+  // ── SIDEBAR: UCH YOZUV (talab 4) ──
   //
-  // ⚠ YO'NALISH O'ZGARDI, TALAB EMAS. Ilgari bu yerda "sidebar: Asosiy ·
-  // Filiallar · Tizim tahlili" va "3 yozuv" tekshirilardi. "Asosiy"
-  // SARLAVHAGA ko'chirildi (u bo'lim emas, bosh sahifa — hamma yo'l unga
-  // qaytadi), ya'ni chap ustunda ikkita bo'lim qoldi.
+  // ⚠ YO'NALISH IKKI MARTA O'ZGARDI, TALAB O'ZGARMADI.
+  //   1) "Asosiy" SARLAVHAGA ko'chdi (u bo'lim emas, bosh sahifa) → 2 ta.
+  //   2) "Audit loglari" QO'SHILDI (owner talabi: "kim nima qildi" —
+  //      tashkilot darajasidagi savol, boshqa bo'lim ichida javobi
+  //      yo'q) → 3 ta.
   //
-  // Tekshiruv YUMSHATILMADI: "minimal menyu" invarianti joyida, faqat
-  // Asosiy endi sarlavha tomonida o'lchanadi (pastda). Ya'ni yozuv
-  // YO'QOLIB ketsa ham test qizil bo'ladi.
+  // Tekshiruv YUMSHATILMADI: "minimal menyu" invarianti joyida —
+  // ro'yxat AYNAN sanaladi, ya'ni to'rtinchi yozuv qo'shilsa test
+  // qizil bo'ladi, yozuv yo'qolsa ham.
   const nav = await orgNavItems(page);
-  const EXPECT = ["Filiallar", "Tizim tahlili"];
+  const EXPECT = ["Filiallar", "Tizim tahlili", "Audit loglari"];
   const missing = EXPECT.filter((t) => !nav.some((n) => n.includes(t)));
-  check("sidebar: Filiallar · Tizim tahlili", missing.length === 0,
+  check("sidebar: Filiallar · Tizim tahlili · Audit loglari", missing.length === 0,
     missing.length ? `yo'q: ${missing}` : nav.join(" · "));
-  check("sidebar minimal (2 yozuv)", nav.length === 2, nav.join(" · "));
+  check("sidebar minimal (3 yozuv)", nav.length === 3, nav.join(" · "));
   check("entitetlar sidebarda YO'Q",
     !nav.some((n) => /O'quvchi|O'qituvchi|Guruh|Xona|Chiqim|To'lov/.test(n)),
     nav.join(" · "));
@@ -176,6 +177,16 @@ head("1) SUPER ADMIN — o'z qobig'i");
   const headerMoliya = page.locator('header a[href="/org/moliya"]');
   check("MOLIYA sarlavhada, sidebarda emas",
     (await headerMoliya.count()) > 0 && !nav.some((n) => n.includes("Moliya")));
+
+  // ── MARKET BU PANELDA UMUMAN YO'Q (owner qarori) ──
+  //
+  // U filial operatsiyasi va bu qobiqda filial tanlagich yo'q — ya'ni
+  // "qaysi filial nomidan" degan savol javobsiz qolardi. Sarlavhada
+  // ham, sidebar'da ham bo'lmasligi kerak.
+  const marketAnywhere =
+    (await page.locator('a[href="/org/market"]').count()) +
+    (nav.some((n) => n.includes("Market")) ? 1 : 0);
+  check("MARKET /org da YO'Q", marketAnywhere === 0, `${marketAnywhere} ta`);
 
   // ── FAOL YOZUV BITTA (⚠ `end` bo'lmasa IKKITA bo'lardi) ──
   //

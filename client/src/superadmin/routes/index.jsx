@@ -12,8 +12,7 @@ import TizimTahliliPage from "../pages/TizimTahliliPage";
 import VakolatlarPage from "../pages/VakolatlarPage";
 import RoomAnalyticsPage from "../pages/RoomAnalyticsPage";
 import { MyInboxPage } from "@/owner/features/notifications";
-import { MarketPage } from "@/owner/features/market";
-import CoinGuard from "@/shared/components/guards/CoinGuard";
+import { ActivityLogsPage } from "@/owner/features/activityLogs";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -27,6 +26,7 @@ import CoinGuard from "@/shared/components/guards/CoinGuard";
  *   /org/filiallar     Filiallar      — ro'yxat + taqqoslash
  *   /org/filiallar/:id Filial ichi    — xonalar, odamlar, moliya, tahlil
  *   /org/tahlil        Tizim tahlili  — tashkilot ko'lamida
+ *   /org/audit         Audit loglari  — kim nima qildi (filtrli)
  *   /org/vakolatlar    Vakolatlar     — sarlavha menyusidan
  *
  * ── QO'RIQCHI XAVFSIZLIK EMAS ──
@@ -94,31 +94,27 @@ const SuperAdminRoutes = () => (
       element={<G required={PERMISSIONS.ROLES_READ}><VakolatlarPage /></G>}
     />
 
-    {/* ══ MARKET — SARLAVHA MENYUSIDAN (Moliya kabi) ══
+    {/* ══ AUDIT LOGLARI — "KIM NIMA QILDI" ══
 
-        SIDEBARGA QO'SHILMADI. Uchta yozuv qoidasi ATAYLAB saqlanadi
-        (`panelAcceptance.mjs` uni tekshiradi): to'rtinchi qator
-        panelni "tugmalari ko'paytirilgan Admin paneli"ga aylantirardi.
-        Market esa Moliya bilan bir toifada — yuqori darajadagi
-        YO'NALISH, hisobot bo'limi emas.
-
-        SAHIFA AYNI O'SHA (`owner/features/market`), nusxa
+        SAHIFA AYNI O'SHA (`owner/features/activityLogs`), nusxa
         yaratilmadi: ko'lam — server qo'yadigan filtr, ikkinchi ekran
-        emas. Xona va moliya ekranlaridagi bilan bir xil qoida. */}
+        emas. Xona, moliya va tizim tahlili bilan bir xil qoida.
+
+        FARQI FILTRDA: bu qobiqda filial tanlagich YO'Q, shuning uchun
+        sahifa `showBranchFilter` bilan o'z filial tanlagichini chizadi
+        (`FinanceCommandPage` dagi `BranchFilter` bilan ayni sabab).
+
+        ⚠ MARKET SHU YERDA EDI — OLIB TASHLANDI. U filial
+        operatsiyasi: buyurtmani qaysi filial nomidan berayotganini bu
+        qobiq ayta olmaydi (tanlagich yo'q). Market boshqaruvi
+        `/owner/market` da va filial sahifasida qoladi; market DAROMADI
+        esa Moliya va P&L ichida ko'rinaveradi. */}
     <Route
-      path="market"
+      path="audit"
       element={
-        <CoinGuard fallback={ORG_HOME}>
-          <G
-            anyOf={[
-              PERMISSIONS.MARKET_READ,
-              PERMISSIONS.MARKET_MANAGE,
-              PERMISSIONS.COIN_SETTINGS,
-            ]}
-          >
-            <MarketPage />
-          </G>
-        </CoinGuard>
+        <G required={PERMISSIONS.ACTIVITY_LOGS_READ}>
+          <ActivityLogsPage showBranchFilter />
+        </G>
       }
     />
 

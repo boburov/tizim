@@ -306,6 +306,12 @@ export const ENDPOINTS = Object.freeze({
     base: "/activity-logs",
     byId: (id) => `/activity-logs/${id}`,
     stats: "/activity-logs/stats",
+    // Audit sahifasidagi ikkinchi va uchinchi tab. Alohida manzil,
+    // chunki uch jadvalning SHAKLI boshqa (server izohiga qarang) —
+    // bitta `/activity-logs` union'i har uchalasining eng qimmatli
+    // ustunlarini tashlab yuborardi.
+    financial: "/activity-logs/financial",
+    payroll: "/activity-logs/payroll",
   },
   adminDashboard: {
     overview: "/admin-dashboard/overview",

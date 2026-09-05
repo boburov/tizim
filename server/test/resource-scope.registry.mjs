@@ -139,6 +139,19 @@ export const RESOURCE_SCOPE = Object.freeze({
   // darajasidagi amal). Iz HECH QACHON o'chirilmaydi, shuning uchun
   // uni filtrlash faqat KO'RSATISH uchun.
   financialAuditLog: SCOPE.BRANCH_OPTIONAL,
+  // PLATFORMA AUDIT IZI - ilgari `VIA_USER` edi (`branchId` ustuni
+  // umuman yo'q edi). Ustun qo'shildi, lekin `null` YO'QOLMADI va
+  // yo'qolmaydi ham: login/logout va markaz amallari filialga
+  // tegishli emas, ustundan oldingi qatorlar esa orqaga
+  // TO'LDIRILMAYDI (qaysi filial bo'lgani ma'lum emas; taxmin
+  // qilish audit izini soxtalashtirardi).
+  //
+  // Shuning uchun `branchFilter()` YOLG'IZ yaramaydi - `NULL = 'X'`
+  // hech qachon rost bo'lmaydi va butun login tarixi jimgina
+  // yo'qolardi. Qoida resolverda: `branchId` ma'lum bo'lsa U hal
+  // qiladi, `null` bo'lsa AKTYOR filiali
+  // (`activity-logs.service.ts` -> `scopeClause`).
+  activityLog: SCOPE.BRANCH_OPTIONAL,
   // MARKET MAHSULOTI - `branchId = null` MARKAZ UMUMIYSI va u BARCHA
   // filiallarda ko'rinishi kerak (faqat owner qo'ya oladi).
   // branchFilter() bilan kesilsa `NULL = 'X'` hech qachon rost
@@ -172,7 +185,6 @@ export const RESOURCE_SCOPE = Object.freeze({
   groupScheduleItem: SCOPE.VIA_GROUP,
 
   // ── FOYDALANUVCHI ORQALI ──
-  activityLog: SCOPE.VIA_USER,
   studentDeposit: SCOPE.VIA_USER,
   studentFreeze: SCOPE.VIA_USER,
   staffKpiAssignment: SCOPE.VIA_USER,

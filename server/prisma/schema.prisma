@@ -1065,6 +1065,7 @@ model Branch {
   assignments          UserBranchAssignment[]
   accounts             Account[]                @relation("AccountBranch")
   counterpartyAccounts Account[]                @relation("AccountCounterparty")
+  activityLogs         ActivityLog[]            @relation("ActivityLogBranch")
   aiConfig             AiConfig?                @relation("AiConfigBranch")
   aiRankings           AiRanking[]              @relation("AiRankingBranch")
   aiReports            AiReport[]               @relation("AiReportBranch")
@@ -3076,6 +3077,23 @@ model ActivityLog {
   userId   String? @db.VarChar(24)
   user     User?   @relation("ActivityLogUser", fields: [userId], references: [id])
   userRole String  @default("system")
+
+  // HODISA QAYSI FILIALDA SODIR BO'LDI.
+  //
+  // Ilgari bu ustun YO'Q edi va filial ko'lami AKTYOR orqali
+  // berilardi ("shu filial xodimi qilgan ish"). Ikkalasi bir xil
+  // emas: boshqa filialdan kelgan ega yoki markaz hisobchisi shu
+  // filialda o'zgarish qilsa, filial administratori uni KO'RMASDI —
+  // ya'ni o'z filialining tarixi to'liq emasdi.
+  //
+  // `null` bo'lishi MUMKIN va bu xato emas: login/logout va filial
+  // konteksti yo'q markaz amallari filialga tegishli emas. Eski
+  // yozuvlarda ham `null` (migratsiya orqaga to'ldirmaydi — qaysi
+  // filialda bo'lgani endi ma'lum emas, taxmin qilish esa audit
+  // jurnalini SOXTALASHTIRISH bo'lardi). O'qish tomoni `null` ni
+  // aktyor filiali bo'yicha hal qiladi (`activity-logs.service.ts`).
+  branchId String? @db.VarChar(24)
+  branch   Branch? @relation("ActivityLogBranch", fields: [branchId], references: [id])
   actorLabel String @default("")
   method   HttpMethod
   path     String
@@ -3094,6 +3112,9 @@ model ActivityLog {
   @@index([userId, createdAt])
   @@index([resourceType, createdAt])
   @@index([method, createdAt])
+  // Super admin panelidagi filial filtri va admin panelidagi ko'lam
+  // AYNI shu indeksdan foydalanadi.
+  @@index([branchId, createdAt])
   @@map("activity_logs")
 }
 

@@ -24952,3 +24952,318 @@ Confirmed real exposure (8–9 char plaintext
 <sub>session `10f1ab6f` · branch `main` · 25 ta qadam</sub>
 
 ---
+
+## 2026-09-05 15:23 — /grill-me /llm-council hzoirda audit loglar amdin penalda umuman korin
+
+**So'rov**
+
+> /grill-me /llm-council  hzoirda audit loglar amdin penalda umuman korinmayapti negadur owne qisimda esa market ortiqcha deb oylayman va keyin audit log ichida malum bit hodimning ish harkaaltini kora olishi kerak misol cuhun adminstartor bugun qanday ish harakat qildi va bu audit loglar super admin panel ichida ham bo'lishi lozim va admin statorda hech qachon barcha fililalllar korinib turmasligi lozim va katol bo'limi ham kerak emas aslida ozingizdan ozigiz qaror qabul qilmasdan menda tushunmagan savollarinigizni sorashinigiz mumkun
+
+**Natija**
+
+I'll start with the grilling skill as instructed.
+
+Ikki tadqiqot agenti kodni xaritalayapti (audit log oqimi + sidebar/rol gate'lari). Ular natijasidan qat'i nazar hal qilinishi kerak bo'lgan qarorlar — 1-raund:
+
+---
+
+❓ **Q1** — **Admin audit logda nimani ko'radi (qamrov)**: "Admin panelda audit log ko'rinmayapti" — buni tuzatganda admin qanchalik ko'rishi kerak? Variantlar:
+**(a)** Faqat o'z biriktirilgan filial(lar)idagi hodisalar, va faqat o'zidan past/teng rollar (o'quvchi, xodim, o'qituvchi) harakati;
+**(b)** O'z filiali bo'yicha hamma narsa, o'z harakatlari ham, owner harakatlari ham;
+**(c)** Admin umuman audit log ko'rmasin — bu faqat owner/super-admin uchun, menyudan butunlay olib tashlanadi.
+
+➡️ **(a)** — filial bo'yicha qat'iy scope + rol ierarxiyasi. Admin o'zidan yuqori (owner/super-admin) harakatini ko'rmasligi kerak, aks holda audit "kuzatuvchini kuzatish" himoyasini yo'qotadi. Admin o'zining harakatlarini esa ko'radi (o'chira olmaydi).
+
+---
+
+❓ **Q2** — **"Xodim harakatini ko'rish" qanday shaklda**: "administrator bugun qanday ish harakat qildi" — bu qayerda ko'rinsin?
+**(a)** Audit log sahifasida "Xodim" (actor) filtri + sana filtri — bitta sahifa, filtrlar bilan;
+**(b)** Har bir xodim profili ichida alohida "Faoliyat" tab — o'sha xodimning timeline'i;
+**(c)** Ikkalasi ham: audit sahifada filtr, xodim profilida esa o'sha filtrga link/embed.
+
+➡️ **(c)**, lekin bosqichma-bosqich: avval **(a)** (backend `actorId` + sana filtri, UI'da select), keyin xodim profilidan shu filtrga link. Bitta manba, ikkita kirish nuqtasi — ma'lumot ikkilanmaydi.
+
+---
+
+❓ **Q3** — **Super-admin audit logining qamrovi**: Super admin panelida audit log qaysi darajada?
+**(a)** Global — barcha tenantlar/filiallar bo'yicha, tenant tanlash filtri bilan;
+**(b)** Faqat tizim darajasidagi 
+
+…(qisqartirildi)
+
+<sub>session `f5c8cf86` · branch `main` · 3 ta qadam · 2 ta subagent</sub>
+
+---
+
+## 2026-09-05 15:25 — <task-notification> <task-id>a250fb40a25511e7b</task-id> <tool-use-id>
+
+**So'rov**
+
+> <task-notification>
+> <task-id>a250fb40a25511e7b</task-id>
+> <tool-use-id>toolu_01MSM4XNRKPf5ob1rADo8h8q</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f5c8cf86-b4aa-4624-96d3-fc55b5a8def5/tasks/a250fb40a25511e7b.output</output-file>
+> <status>completed</status>
+> <summary>Agent "Sidebar navigatsiya va rol scope" finished</summary>
+> <note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+> <result>I have enough. Final findings.
+>
+> ## 1. Sidebar menyu ta'rifi
+>
+> **Admin panel menyusi (skrinshotdagi ro'yxat):** `/Users/shukrullo/Desktop/lc-total/client/src/owner/navigation/sidebar.config.js`
+>
+> | Element | satr | gate |
+> |---|---|---|
+> | Bosh sahifa | :63 | `permission: admin_dashboard.read` + `capability: admin-dashboard` |
+> | Tasdiqlar (sheet) | :80 | `permissionAnyOf: [finance.read, approvals.decide_config]` |
+> | Lidlar | :95 | `leads.read` + `capability: leads` |
+> | O'quv jarayoni (guruh) | :102 | sub: `users.read`, `groups.read`, `attendance.read`+cap, `grades.record`+cap |
+> | Xonalar | :133 | `classes.read` + `c
+> …
+
+**Natija**
+
+Bitta agent qaytdi (ikkinchisi — audit log oqimi — hali ishlayapti). Bir nechta fakt savollarni aniqlashtirdi:
+
+**Sizning shikoyatlaringiz kod bilan tasdiqlandi:**
+
+- **Audit log admin panelda**: menyuda bor — [sidebar.config.js:345](client/src/owner/navigation/sidebar.config.js#L345) — lekin ikki qulf ortida: `activity_logs.read` ruxsati **va** `activity-logs` capability'si. Ikkalasidan biri yopiq bo'lsa element umuman chizilmaydi. Skrinshotda ko'rinib turibdi, demak sizda muammo ro'yxat bo'sh kelishida — ikkinchi agent shuni aniqlayapti.
+- **Super admin panelda audit log yo'q**: [superadmin/navigation/nav.config.js](client/src/superadmin/navigation/nav.config.js) da faqat 2 ta element — Filiallar va Tizim tahlili. Audit log u yerda umuman mavjud emas. Sizning talabingiz haqli.
+- **Market owner'da**: super admin header'ida Market bor ([superadmin/routes/index.jsx:108](client/src/superadmin/routes/index.jsx#L108)) va aynan admin paneldagi `MarketPage` qayta ishlatilgan.
+- **Filiallar — jiddiy topilma**: `GET /branches` kontrollerida `@Permissions` **umuman yo'q** ([branches.controller.ts:54](server/src/modules/branches/branches.controller.ts#L54)) — har qanday autentifikatsiyalangan foydalanuvchi chaqira oladi. Ko'lam faqat `allowedBranchIds` bilan kesiladi, ya'ni admin **`branches.view_all` ruxsatiga ega bo'lsa** hamma filialni ko'radi. Ehtimol sizning adminingizda o'sha ruxsat bor. Bu Q6'ni aniqroq qiladi: gap "UI'dan yashirish" emas, **`branches.view_all` ni admin rolidan olib tashlash**da.
+- **Katalog**: menyudan olib tashlash xavfsiz, lekin **o'chirish sinadi** — `features/catalog` hooks/modal'lari Guruh formasi, Xonalar sahifasi va Yaratish modalidan import qilingan. Bu Q4 uchun **(a)** tavsiyamni mustahkamlaydi.
+
+Yuqoridagi Q1–Q7 javoblaringizni kutyapman.
+
+<sub>session `f5c8cf86` · branch `main` · 0 ta qadam</sub>
+
+---
+
+## 2026-09-05 15:26 — <task-notification> <task-id>ab39528fcb1435cb4</task-id> <tool-use-id>
+
+**So'rov**
+
+> <task-notification>
+> <task-id>ab39528fcb1435cb4</task-id>
+> <tool-use-id>toolu_013ZWFTS2fkxC1fQv45RXSqg</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/f5c8cf86-b4aa-4624-96d3-fc55b5a8def5/tasks/ab39528fcb1435cb4.output</output-file>
+> <status>completed</status>
+> <summary>Agent "Audit log UI/API'ni topish" finished</summary>
+> <note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+> <result>Xarita tayyor. Natijalar:
+>
+> ## 1. Frontend — "Audit loglari" sahifasi
+>
+> Faqat **owner paneli**da mavjud. Alohida "admin panel" sahifasi yo'q.
+>
+> - Sahifa: `/Users/shukrullo/Desktop/lc-total/client/src/owner/features/activityLogs/pages/ActivityLogsPage.jsx` (feature papkasi: `client/src/owner/features/activityLogs/` — `api/activityLogs.api.js`, `hooks/useActivityLogsQuery.js`, `useActivityLogStatsQuery.js`, `useActivityLogDetailQuery.js`, `components/ActivityLogsTable.jsx`, `LogDetailModal.jsx`, `ActionBadge.jsx`)
+> - Marshrut: `client/src/owner/routes/index.jsx:490-496` — `path="activity-logs"`, `&lt;PermissionGuard requir
+> …
+
+**Natija**
+
+Ikkinchi agent ham qaytdi. Sabab aniqlandi — va u men taxmin qilganidan boshqacha:
+
+**Nega audit log bo'sh/ko'rinmaydi:**
+
+1. **Rol seed mavjud rolni yangilamaydi.** [permissions.seed.ts:206](server/src/seeds/permissions.seed.ts#L206) da upsert'ning `update: {}` qismi bo'sh — ataylab. Ya'ni `activity_logs.read` direktor rolining ruxsatlar ro'yxatida **bo'lishi kerak** (u owner-only ro'yxatida emas), lekin rol bazada allaqachon yaratilgan bo'lsa seed unga yangi kalitni **qo'shmaydi**. Sizning admin rolingiz eski — kalit yo'q. Bu aynan xotiramdagi "rol drift" muammosi.
+2. **Bo'sh ro'yxat ehtimoli**: ko'rinsa ham, [activity-logs.service.ts:88](server/src/modules/activity-logs/activity-logs.service.ts#L88) da tizim yozuvlari (`userId: null`) filial direktoriga fail-closed yashiriladi.
+
+**Muhim arxitektura fakti (Q1/Q3 ga ta'sir qiladi):** `ActivityLog` modelida **`branchId` ustuni yo'q** ([schema.prisma:3074](server/prisma/schema.prisma#L3074)). Filial bo'yicha ko'lam **aktyorning filiali** orqali bilvosita beriladi. Ya'ni "shu filialda sodir bo'lgan hodisa" emas, "shu filial xodimi qilgan hodisa". Boshqa filialdan kelgan owner sizning filialingizda nima qilgani admin uchun ko'rinmaydi — va bu `branchId` qo'shilmasa tuzatilmaydi.
+
+Shuningdek **uchta alohida audit modeli** bor: `ActivityLog` (HTTP darajasi), `FinancialAuditLog` (append-only, `oldValue/newValue`, summa o'zgarishi bilan), `PayrollAuditLog`. "Audit loglari" sahifasi faqat birinchisini ko'rsatadi.
+
+Shuning uchun frontirga ikkita savol qo'shiladi:
+
+---
+
+❓ **Q8** — **Bitta audit sahifasi uchta modelni birlashtirsinmi**: "Administrator bugun nima qildi" savoliga to'liq javob `ActivityLog` yolg'iz bera olmaydi — pul o'zgarishi `FinancialAuditLog`da, oylik `PayrollAuditLog`da.
+**(a)** Bitta sahifa, uchta manba birlas
+
+…(qisqartirildi)
+
+<sub>session `f5c8cf86` · branch `main` · 0 ta qadam</sub>
+
+---
+
+## 2026-09-05 15:38 — 1 ) men aytmoqchimanki audit logar super admin paneda bo'lsin deb yani
+
+**So'rov**
+
+> 1 ) men aytmoqchimanki audit logar super admin paneda bo'lsin deb yani bizda 6ta panel bor 1 student panel 2 teahcer panel 3 ishchilar uchun panel 4) admin (adminstrator va filialsiz owener lar uchun panel) 5)super admin pane bu filiali kop bo'lgan panellar uchun 6) dev panel bu ozimiz uchun loyihadni tezda build qilib beradigan hulals men aytayotgan panel bu super admin panel va bu pannel uchun filertli audit log soragan edim bu pannelarni doim eslab qol MD ga yozib qoysang ham boladi shunda qacjhon qaysi panel haqida gap ketayotganiin tushuna oalsan , va super admindan oddiy admin panelga ota olmasligi ekrak rasmda korsatilingan q8 ) bitta audit log uchun. b ni tanladim q9) A
+
+**O'zgargan fayllar (2)**
+
+- `/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/memory/panellar-taksonomiyasi.md` — yaratildi/qayta yozildi
+- `/Users/shukrullo/.claude/projects/-Users-shukrullo-Desktop-lc-total/memory/MEMORY.md` — tahrirlandi
+
+**Natija**
+
+Panel taksonomiyasini xotiraga yozib qo'yaman.
+
+Yozib qo'ydim — bundan keyin "super admin panel" = `/org`, "admin panel" = `/owner` deb tushunaman. Q8=**(b)**, Q9=**(a)** qabul qilindi.
+
+Endi qolgan savollarni to'g'ri terminologiya bilan qayta beraman (avvalgi Q1–Q7 noto'g'ri nom ishlatgan edi), plus rasmingizdagi yangi talab.
+
+---
+
+❓ **Q10** — **Super admin → admin panel o'tishi olib tashlansa, filial ishini kim qiladi**: Rasmda `Bosh Ega` menyusidagi "Admin paneli" tugmasini olib tashlashni so'radingiz. Lekin `/org` panelida faqat Filiallar + Tizim tahlili + Moliya bor — guruh yaratish, xodim qo'shish, davomat kabi filial ishlari yo'q. Ko'p filialli owner bu ishlarni qanday qiladi?
+**(a)** Umuman qilmaydi — bu administratorning ishi, owner faqat kuzatadi va moliyani boshqaradi;
+**(b)** `/org` da filialni ochganda o'sha filialning ichki sahifalari `/org` ichida ochiladi (kontekst almashinuvi, alohida panelga o'tmasdan);
+**(c)** "Admin paneli" tugmasi qoladi, lekin faqat aniq bir filial tanlangandan keyin.
+
+➡️ **(b)** — tugma olib tashlanadi, lekin filial ichiga kirish `/org` ichida qoladi. **(a)** ni tanlasangiz, ko'p filialli owner o'z tizimida hech narsa yarata olmaydi — bu amalda tez tiqiladi.
+
+---
+
+❓ **Q11** — **Admin paneldagi (`/owner`) audit log qamrovi**: Bu panelda **ikki xil odam** o'tiradi: administrator (1 filial) va filialsiz owner (butun tashkilot). Audit log ularga bir xilmi?
+**(a)** Rolga qarab avtomatik: administrator → faqat o'z filiali; filialsiz owner → hammasi. Bitta sahifa, ko'lam backend'da hal qilinadi;
+**(b)** Administratorda audit log umuman bo'lmasin — faqat owner ko'radi;
+**(c)** Administrator ko'radi, lekin faqat o'zidan past rollar (xodim, o'qituvchi, o'quvchi) harakatini — owner/boshqa admin harakati yashiriladi.
+
+➡️ **(a)** + **(c)** bir
+
+…(qisqartirildi)
+
+<sub>session `f5c8cf86` · branch `main` · 3 ta qadam</sub>
+
+---
+
+## 2026-09-05 15:56 — /llm-council /grill-me 1 ) men aytmoqchimanki audit logar super admin 
+
+**So'rov**
+
+> /llm-council /grill-me  1 ) men aytmoqchimanki audit logar super admin paneda bo'lsin deb yani bizda 6ta panel bor 1 student panel 2 teahcer panel 3 ishchilar uchun panel 4) admin (adminstrator va filialsiz owener lar uchun panel) 5)super admin pane bu filiali kop bo'lgan panellar uchun 6) dev panel bu ozimiz uchun loyihadni tezda build qilib beradigan hulals men aytayotgan panel bu super admin panel va bu pannel uchun filertli audit log soragan edim bu pannelarni doim eslab qol MD ga yozib qoysang ham boladi shunda qacjhon qaysi panel haqida gap ketayotganiin tushuna oalsan , va super admindan oddiy admin panelga ota olmasligi ekrak rasmda korsatilingan q8 ) bitta audit log uchun. b ni tanladim q9) A
+
+**Buyruqlar (2)**
+
+```sh
+ls /Users/shukrullo/.claude/skills/llm-council/scripts/ && grep -o '^[A-Z_]*' /Users/shukrullo/Desktop/lc-total/.env 2>/dev/null | grep -E 'OPENAI|GEMINI' ; ech…
+ls -a | grep -i env; echo "---"; find /Users/shukrullo/.claude/skills/llm-council -name ".env" -o -name "*.env" 2>/dev/null; echo "--- keys in shell env ---"; e…
+```
+
+**Natija**
+
+Kengashni chaqira olmadim — API kalitlari yo'q.
+
+**Nima yetishmayapti:** `/Users/shukrullo/Desktop/lc-total/.env` faylida `OPENAI_API_KEY` va `GEMINI_API_KEY` yo'q (fayl umuman mavjud emas, shell muhitida ham kalit yo'q). Skript `scripts/query_llms.py` joyida, faqat kalitlar kerak.
+
+Sozlash uchun loyiha ildizida `.env` yarating:
+
+```
+OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=...
+
+# ixtiyoriy — bu qarorlar jiddiy, kuchliroq modellar tavsiya qilinadi
+OPENAI_MODEL=gpt-5.2
+GEMINI_MODEL=gemini-3-pro-preview
+```
+
+Kalitlarni qo'shganingizdan keyin `/llm-council` ni qayta chaqiring — men kengashga aynan shu ikki og'ir qarorni yuboraman:
+1. `ActivityLog` ga `branchId` qo'shish migratsiyasi (Q9=a) — eski yozuvlar `null` qoladi, ko'lam mantig'i o'zgaradi;
+2. Rol ierarxiyasi bo'yicha yashirish (administrator owner harakatini ko'rmasligi) — audit log'ni qisman ko'r qilish xavfi.
+
+---
+
+Ayni paytda **grill hali tugamagan**. Ochiq turgan savollar: **Q10–Q16**. Ular orasida eng muhimi — javobsiz qolsa qolgan hammasi qulflanadi:
+
+- **Q10**: Super admin panelidan "Admin paneli" tugmasi olib tashlansa, ko'p filialli owner guruh yaratish / xodim qo'shish kabi filial ishlarini qayerda qiladi? (Mening tavsiyam: `/org` ichida filial konteksti ochilsin, alohida panelga o'tmasdan)
+- **Q15**: Kurs narxlarini kimdir hali tahrirlaydimi, yoki Katalog umuman o'lik funksiyami? (Bu javob "yashirish"mi yoki "ko'chirish"mi degan qarorni hal qiladi)
+
+Qolganlari (Q11 audit qamrovi, Q12 filtrlar, Q13 `branches.view_all`, Q14 Market) — tavsiyalarim bilan yuqorida turibdi. Javob bering, keyin yakuniy rejani yig'aman.
+
+<sub>session `f5c8cf86` · branch `main` · 2 ta qadam</sub>
+
+---
+
+## 2026-09-05 15:58 — alright ozingiz davom eting
+
+**So'rov**
+
+> alright ozingiz davom eting
+
+**O'zgargan fayllar (9)**
+
+- `client/src/superadmin/layout/SuperAdminHeader.jsx` — tahrirlandi
+- `client/src/superadmin/navigation/nav.config.js` — tahrirlandi
+- `client/src/superadmin/layout/SuperAdminSidebar.jsx` — tahrirlandi
+- `client/src/superadmin/routes/index.jsx` — tahrirlandi
+- `client/src/owner/navigation/sidebar.config.js` — tahrirlandi
+- `client/src/shared/components/layout/AppSidebar.jsx` — tahrirlandi
+- `server/prisma/schema.prisma` — tahrirlandi
+- `server/prisma/migrations/20260905120000_activity_log_branch/migration.sql` — yaratildi/qayta yozildi
+- `server/src/common/audit/audit-log.middleware.ts` — tahrirlandi
+
+**Buyruqlar (90)**
+
+```sh
+sed -n '1,60p' server/src/modules/activity-logs/activity-logs.service.ts
+sed -n '60,200p' server/src/modules/activity-logs/activity-logs.service.ts
+cat server/src/modules/activity-logs/activity-logs.validators.ts && echo "=== CONTROLLER ===" && cat server/src/modules/activity-logs/activity-logs.controller.t…
+sed -n '170,240p' server/src/common/rbac/branch-access.service.ts; echo "=== branchUserFilter ==="; sed -n '410,440p' server/src/common/rbac/branch-access.servi…
+sed -n '1,95p' server/src/common/constants/permission-scope.ts
+sed -n '40,95p' server/src/modules/branches/branches.controller.ts
+sed -n '160,255p' client/src/shared/components/layout/AppSidebar.jsx
+sed -n '285,360p' client/src/owner/navigation/sidebar.config.js
+cat client/src/superadmin/navigation/nav.config.js
+find . -name "panelAcceptance*" -not -path "*/node_modules/*"; echo "=== admin paneli tugmasi ==="; grep -rn "Admin paneli" client/src --include=*.jsx --include…
+grep -rn "multiBranch" client/src/shared/context/ client/src/shared/hooks/ client/src/app 2>/dev/null | head -20; echo "=== useAuth ==="; grep -rln "multiBranch…
+grep -rn "Admin paneli\|Vakolatlar" client/src | head -20
+sed -n '1,80p' client/tests/panelAcceptance.mjs
+grep -n "LayoutDashboard\|Store" client/src/superadmin/layout/SuperAdminHeader.jsx
+grep -n "Market\|sidebar\|Filiallar\|Tizim tahlili\|nav" client/tests/panelAcceptance.mjs | head -40
+grep -n "permission\|capability\|SUPER_ADMIN_NAV\|filter\|useFeatures\|useCoin" client/src/superadmin/layout/SuperAdminSidebar.jsx
+sed -n '100,130p' client/src/superadmin/routes/index.jsx; echo "=== imports ==="; sed -n '1,30p' client/src/superadmin/routes/index.jsx
+grep -rn "useFeatures" client/src/superadmin/layout/SuperAdminHeader.jsx
+grep -n "MarketPage\|CoinGuard\|ORG_HOME" client/src/superadmin/routes/index.jsx; echo "=== activityLogs index ==="; cat client/src/owner/features/activityLogs/…
+grep -rni "market" client/src/superadmin/ | grep -v "^Binary"
+cd client && python3 - <<'EOF' import re,io edits = [ ("src/superadmin/layout/SuperAdminLayout.jsx", " * • Sarlavha butun kenglikda va u yerda ASOSIY · MOLIYA ·…
+grep -n "BookMarked" client/src/owner/navigation/sidebar.config.js
+cd /Users/shukrullo/Desktop/lc-total && grep -n "BookMarked" client/src/owner/navigation/sidebar.config.js
+sed -n '3060,3100p' server/prisma/schema.prisma
+cat server/src/common/audit/audit-log.middleware.ts
+# … yana 65 ta
+```
+
+**Natija**
+
+Yaxshi. Tavsiyalarim bo'yicha davom etaman. Yakuniy qarorlar:
+
+| | Qaror |
+|---|---|
+| Q8 | Audit sahifasi 3 tab: Faoliyat / Moliya / Oylik |
+| Q9 | `ActivityLog` ga `branchId` qo'shiladi |
+| Q10 | "Admin paneli" tugmasi olib tashlanadi, filial konteksti `/org` ichida |
+| Q11 | Ko'lam rolga qarab; administrator o'zidan yuqori rol harakatini ko'rmaydi |
+| Q12 | Filtrlar: Filial + Xodim + Sana + Amal + Resurs + "xavfli amallar" |
+| Q13 | `branches.view_all` administratordan olinadi + `GET /branches` himoyalanadi |
+| Q14 | Market `/org` dan olib tashlanadi |
+| Q15 | Katalog admin sidebar'dan olib tashlanadi (route qoladi) |
+
+Kodni o'qiyman.
+
+Muhim tuzatish: `BRANCHES_VIEW_ALL` allaqachon `OWNER_ONLY_PERMISSIONS` ichida ([permission-scope.ts:46](server/src/common/constants/permission-scope.ts#L46)) — ya'ni administrator uni seed'dan olmaydi. Skrinshotda ham faqat 1 ta filial ko'rinyapti. Demak muammo boshqa joyda: menyu **tashkilot** ko'p filialli bo'lsa ochiladi, foydalanuvchining o'z filiallari soniga qaramaydi.
+
+Devor allaqachon ikki tomonlama: [AdminPanelGuard.jsx:64](client/src/shared/components/guards/AdminPanelGuard.jsx#L64) filialli tarifdagi egani `/owner` dan `/org` ga qaytaradi. Ya'ni "Admin paneli" tugmasi **allaqachon yolg'on eshik** — bosilganda `/org` ga qaytaradi. Sizning talabingiz shunchaki uni olib tashlashni talab qiladi, boshqa hech narsa buzilmaydi.
+
+Tahrirlarni boshlayman.
+
+Endi super admin sidebar `capability` ni tekshiradimi — shuni ko'raman.
+
+Endi super admin marshrutlari: Market olib tashlanadi, Audit qo'shiladi.
+
+Faqat izohlar qoldi — ularni yangilayman.
+
+Endi admin panel sidebar'i: Katalog va Filiallar.
+
+Endi `AppSidebar` da `ownMultiBranchOnly` darvozasini qo'shaman.
+
+Frontend menyu qismi tugadi. Endi backend — audit log.
+
+Sxema to'g'ri. Endi m
+
+…(qisqartirildi)
+
+<sub>session `f5c8cf86` · branch `main` · 123 ta qadam</sub>
+
+---

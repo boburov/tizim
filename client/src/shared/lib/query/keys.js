@@ -247,6 +247,8 @@ export const qk = Object.freeze({
     list: (params) => ["activityLogs", "list", params],
     one: (id) => ["activityLogs", "detail", id],
     stats: (params) => ["activityLogs", "stats", params],
+    financial: (params) => ["activityLogs", "financial", params],
+    payroll: (params) => ["activityLogs", "payroll", params],
   },
   adminDashboard: {
     overview: (params) => ["adminDashboard", "overview", params],

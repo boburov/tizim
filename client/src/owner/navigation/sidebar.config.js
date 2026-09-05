@@ -10,7 +10,6 @@ import {
   Settings,
   Target,
   Wallet,
-  BookMarked,
   MonitorCog,
 } from "lucide-react";
 
@@ -277,24 +276,45 @@ const ownerSidebar = [
     permissionAnyOf: ["ai.read", "admin_dashboard.read"],
   },
 
-  // KATALOG — kurslar (butun tarmoq uchun umumiy) va narx matritsasi.
-  // Xonalar bu yerdan CHIQARILDI (yuqoridagi izohga qarang).
-  {
-    title: "Katalog",
-    icon: BookMarked,
-    items: [
-      { title: "Kurslar va narxlar", url: "/owner/catalog", permission: "courses.read" },
-    ],
-  },
+  // ══════════════════════════════════════════════════════════════════
+  // KATALOG MENYUDAN OLIB TASHLANDI — ROUTE QOLDI
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // Bo'lim bitta yozuvdan iborat edi ("Kurslar va narxlar") va u
+  // KUNDALIK ish emas: kurs ro'yxati bilan narx matritsasi yiliga bir
+  // necha marta o'zgaradi. Menyuning butun bir qatorini egallab
+  // turishi ish oqimiga mos kelmasdi.
+  //
+  // ⚠ FEATURE PAPKASI O'CHIRILMADI VA `/owner/catalog` ISHLAYVERADI.
+  // Sabab kosmetik emas: `features/catalog` ning hook va modallari
+  // boshqa uchta ekranda TIRIK —
+  //   • `features/groups/components/GroupForm` → `useCatalogQueries`
+  //   • `features/rooms/components/RoomsGrid`  → `useRoomsQuery`
+  //   • `shared/components/create/CreateModals` → `RoomCreateModal`
+  // Papkani o'chirish guruh yaratish va Xonalar sahifasini sindirardi.
+  // Kurs narxini tahrirlash kerak bo'lsa manzil to'g'ridan-to'g'ri
+  // ochiladi; `courses.read` ruxsati va route qo'riqchisi joyida.
 
-  // FILIALLAR — yakka filialli markazda UMUMAN ko'rinmaydi, bitta
-  // filialga biriktirilgan administratorda esa faqat "Ro'yxat"
-  // qoladi: taqqoslash va statistika filiallararo ko'rinish va ular
-  // "Barcha filiallar" rejimini talab qiladi.
+  // ══════════════════════════════════════════════════════════════════
+  // FILIALLAR — FOYDALANUVCHINING O'Z FILIALLARI BO'YICHA, TASHKILOT
+  // BO'YICHA EMAS
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // Ilgari shart `multiBranchOnly` edi — u TASHKILOTDA nechta faol
+  // filial borligini so'raydi. Natijada uch filialli markazda BITTA
+  // filialga biriktirilgan administrator ham bu bo'limni ko'rardi va
+  // ichida doim yolg'iz o'z filialini topardi: "Ro'yxat" bir qatorli,
+  // "Taqqoslash"/"Statistika" esa `allBranchesOnly` tufayli umuman
+  // chiqmasdi. Ya'ni bo'lim unga hech qachon ma'no bermagan.
+  //
+  // Endi shart `ownMultiBranchOnly`: MENDA nechta filial bor.
+  // Ma'lumot himoyasi bundan o'zgarmaydi — u serverda
+  // (`branches.service` `allowedBranchIds` bo'yicha kesadi); bu
+  // shunchaki ishlamaydigan qatorni ko'rsatmaslik.
   {
     title: "Filiallar",
     icon: Building2,
-    multiBranchOnly: true,
+    ownMultiBranchOnly: true,
     items: [
       { title: "Ro'yxat", url: "/owner/branches", permission: "branches.read" },
       {
