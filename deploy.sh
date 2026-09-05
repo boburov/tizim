@@ -25,10 +25,18 @@ echo "==> 🚀 Deploy boshlandi: $(date)"
 cd "$REPO_DIR"
 
 # 1) Oxirgi kodni tortish
+# SKIP_PULL=1 bo'lsa git pull o'tkazib yuboriladi (kod qo'lda tortilgan yoki
+# pull ishlamayotgan holatlar uchun). Bunda OLD/NEW COMMIT bir xil bo'ladi,
+# ya'ni "o'zgarish yo'q" deb hisoblanadi, lekin build baribir davom etadi.
 OLD_COMMIT="$(git rev-parse HEAD)"
-echo "==> git pull..."
-git pull --ff-only
-NEW_COMMIT="$(git rev-parse HEAD)"
+if [ "${SKIP_PULL:-0}" = "1" ]; then
+  echo "==> git pull O'TKAZIB YUBORILDI (SKIP_PULL=1)."
+  NEW_COMMIT="$OLD_COMMIT"
+else
+  echo "==> git pull..."
+  git pull --ff-only
+  NEW_COMMIT="$(git rev-parse HEAD)"
+fi
 
 if [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
   echo "==> Yangi commit yo'q, lekin baribir qayta build qilamiz."
