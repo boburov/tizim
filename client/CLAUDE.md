@@ -51,21 +51,36 @@ client/src/
 | Layout | `OperationalLayout` (shadcn `SidebarProvider`) | `SuperAdminLayout` — **its own shell** |
 | Header | `AppHeader` (mobile only) | `SuperAdminHeader`, full width, **MOLIYA** lives here |
 | Menu | `owner/navigation/sidebar.config.js`, ~12 groups | `superadmin/navigation/nav.config.js`, **exactly 3**: Asosiy · Filiallar · Tizim tahlili |
-| Who | **everyone operational** — owner, directors, staff | owner / org-level authority, as a second view |
+| Who | directors, staff, **and the owner when branches are off** | **the owner only**, and only when branches are on |
 | Scope | the user's assigned branch(es) | the whole organization |
-| Guarded by | `AdminPanelGuard` — only students and teachers are redirected | `SuperAdminGuard` — everyone else is sent to their own panel |
+| Guarded by | `AdminPanelGuard` — students, teachers, and the branch-mode owner are redirected | `SuperAdminGuard` — everyone except the branch-mode owner is sent to their own panel |
 
-**The wall used to be two-way. It is now one-way, on purpose.**
+**The wall is two-way again, and it keys off the tariff — not off permissions.**
 
-`/owner` is where *everyone operational lives, the owner included*
-(`resolveWorkspace` returns `ADMIN` for `roleType === owner` and for
-org-authority). `/org` is a **second, optional view** reached by an explicit
-click, never by an automatic redirect.
+The deciding input is `auth.branchesEnabled` (`branchLimits.branchesEnabled`
+from `/auth/me`, sourced from `BRANCHES_ENABLED` + the heartbeat). **Not
+`multiBranch`** — that one counts active branch rows in the database. Binding
+the split to the fact rather than the tariff would move the owner to a different
+panel on the day a second branch is created.
 
-The old design bounced org-level users out of `/owner` into `/org`. In practice
-that read as a bug: you click into the admin panel, get thrown to superadmin, and
-walk back. It also could not survive the single-branch edition, where `/org` does
-not exist at all and the bounce would loop forever.
+| `branchesEnabled` | Owner lands in | `/org` exists |
+|---|---|---|
+| `false` | `/owner/dashboard`, as an ordinary admin alongside directors and staff | no — `SuperAdminGuard` sends everyone away |
+| `true` | `/org`, and `/owner/*` bounces them back | yes, **owner only** |
+
+**Org-level permission no longer opens `/org`.** `hasOrgAuthority`
+(`branches.view_all` + `system.admin_access`) used to be enough, so an
+accountant or a branch director could open it. They cannot any more: `/org` is
+the *owner's workspace*, not a seniority tier. The cost is real and was accepted
+deliberately — those roles lose the cross-branch roll-up unless it also has a
+home in `/owner`.
+
+**The decision now comes from the server.** `/auth/me` returns `workspace` and
+`home`, computed by `server/src/common/workspaces/workspace-resolve.ts`.
+`useWorkspace` prefers those and falls back to the client-side
+`resolveWorkspace` only for an older backend. Two copies of one rule drift; the
+drift is invisible (the owner reaches `/org` while every request is still
+branch-scoped — an empty screen, no error).
 
 Consequences to keep in mind when adding a screen:
 
@@ -73,17 +88,16 @@ Consequences to keep in mind when adding a screen:
   cross-branch questions (comparison, per-branch P&L, the branch roll-up).
   A screen duplicated into `/org` is almost always a mistake — the same
   component with a server-applied scope is the pattern.
-- **Crossing between shells is by link, not by guard.** `/owner` → `/org` sits in
-  the sidebar user menu ("Markaz ko'rinishi", gated on `hasOrgAuthority` **and**
-  `multiBranch`); `/org` → `/owner` sits in the SuperAdminHeader profile menu
-  ("Admin paneli").
-- `useDrilldown()` (`owner/features/systemAnalysis/navigation/drilldown.js`)
-  now returns the real map for everyone. It used to blank every link for
-  org-level users because `/owner/*` was closed to them; with the door open,
-  blanking would only leave the owner staring at unclickable numbers.
-- **Single-branch edition (`MULTI_BRANCH=false`): `/org` is absent.** Anything
-  reachable only from `/org` is invisible to those customers, so it must have a
-  home in `/owner` too.
+- **Both guards must return `null` while `auth.isLoading`.** `branchesEnabled`
+  defaults to `false` (closed) precisely so a missing answer keeps everyone in
+  `/owner`; deciding before it arrives produces a wrong redirect, and under
+  WebKit that can become a real loop.
+- The `/owner` → `/org` sidebar link ("Markaz ko'rinishi") is gated on the same
+  expression as `SuperAdminGuard`, so in practice it never renders — the only
+  person allowed through is bounced out of `/owner` anyway. It is kept so the
+  rule lives in one shape, not two.
+- **Branchless tenants: `/org` is absent.** Anything reachable only from `/org`
+  is invisible to those customers, so it must have a home in `/owner` too.
 
 **They are different shells on purpose.** `/org/*` is mounted *outside*
 `OperationalLayout` in `app/routes.jsx` — it has to be: `OperationalLayout` wraps

@@ -13,28 +13,34 @@ import { ROLE_TYPES } from "@/shared/constants/roles";
  * (`/me`, `/teacher`) va operatsion panel ularga hech qachon ochiq
  * emas edi.
  *
- * ── EGA ENDI TO'SILMAYDI (O'ZGARISH) ──
+ * ══════════════════════════════════════════════════════════════════════
+ * EGA — FILIALLI TARIFDA TO'SILADI, FILIALSIZDA YO'Q
+ * ══════════════════════════════════════════════════════════════════════
  *
- * Ilgari tashkilot vakolatiga ega odam (`branches.view_all` +
- * `system.admin_access`, yoki `roleType === owner`) `/owner/*` dan
- * `/org` ga QAYTARILARDI. Devor ikki tomonlama edi va bu ATAYLAB
- * shunday qilingan (izohi shu faylda va `client/CLAUDE.md` da).
+ * Shart `branchesEnabled`, `multiBranch` EMAS (izohi
+ * `shared/hooks/useAuth.js` da: biri tarif, ikkinchisi bazadagi fakt).
  *
- * Amalda u boshqacha his qilindi: admin panelga kirmoqchi bo'lgan ega
- * `/org` ga otilib, keyin qo'lda qaytib kelardi. Foydalanuvchi buni
- * "superadminga otib keyin qayta adminga sakrash" deb ta'rifladi.
+ * ── FILIALLI (branchesEnabled = true): EGA KIRA OLMAYDI ──
  *
- * YANGI QOIDA: qo'riqchi MENYUNI belgilaydi, KIRISHNI emas.
- *   • ega `/owner` da yashaydi (`resolveWorkspace` → `ADMIN`);
- *   • `/org` yo'qolmadi — u "Markaz ko'rinishi" havolasi orqali
- *     ochiladi (`AppHeader`) va `SuperAdminGuard` uni qo'riqlaydi;
- *   • yakka filialli nashrda (`MULTI_BRANCH=false`) `/org` umuman
- *     yo'q, ya'ni bu yerda qaytarish CHEKSIZ SAKRASH bo'lardi.
+ * Ega `/org` da ishlaydi, filial ishi filial adminining vazifasi.
+ * Manzilni qo'lda yozsa ham `/org` ga qaytariladi — devor ikki
+ * tomonlama.
  *
- * ⚠ `useDrilldown()` ham shunga qarab tuzatildi: u tashkilot
- * darajasidagi odamga bo'sh xarita qaytarardi (chunki havolalar
- * `/owner/*` ga borardi va o'sha paytda u yopiq edi). Ega endi
- * `/owner` da bo'lgani uchun havolalar TIRIK bo'lishi kerak.
+ * ── FILIALSIZ (branchesEnabled = false): EGA ODDIY ADMIN ──
+ *
+ * `/org` umuman yo'q, ya'ni bu yerda qaytarish CHEKSIZ HALQA bo'lardi
+ * (`/owner` → `/org` → `SuperAdminGuard` → `/owner` → ...). Ega,
+ * administrator va admin panelga ruxsati bor har bir xodim shu yerda.
+ *
+ * ── HALQA TAHLILI ──
+ *
+ *   ega + filialli   : `/owner` → `/org`, `SuperAdminGuard` O'TKAZADI → to'xtaydi
+ *   ega + filialsiz  : `/org` → `/owner/dashboard`, bu qo'riqchi O'TKAZADI → to'xtaydi
+ *
+ * ⚠ IKKALA QO'RIQCHI HAM `isLoading` PAYTIDA `null` QAYTARISHI SHART:
+ * `branchesEnabled` kelmaguncha qaror qabul qilinsa, bir render
+ * davomida noto'g'ri yo'naltirish bo'ladi va WebKit'da bu haqiqiy
+ * halqaga aylanishi mumkin (`app/routes.jsx` oxiridagi izoh).
  *
  * ── XODIM ──
  * Xodim (resepshin) ilgarigidek to'silmaydi: uning menyusi `/work`,
@@ -53,6 +59,11 @@ const AdminPanelGuard = ({ children }) => {
 
   if (type === ROLE_TYPES.STUDENT) return <Navigate to="/me" replace />;
   if (type === ROLE_TYPES.TEACHER) return <Navigate to="/teacher" replace />;
+
+  // Filialli tarifdagi ega — `/org` ning egasi, bu panel emas.
+  if (auth.branchesEnabled && type === ROLE_TYPES.OWNER) {
+    return <Navigate to="/org" replace />;
+  }
 
   return children;
 };

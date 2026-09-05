@@ -11,6 +11,7 @@ import {
   renderTenantMeta,
 } from './tenant-repo.templates.js';
 import { b64, runScript, tailLog } from './script-runner.js';
+import { TenantDbService } from '../tenant-db/tenant-db.service.js';
 
 /** Qo'llash rejimi — reconfigure.sh shu qiymatga qarab ish tutadi. */
 export type ApplyKind = 'restart' | 'rebuild' | 'deploy';
@@ -23,6 +24,7 @@ export class ProvisioningService {
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
     private readonly github: GithubService,
+    private readonly tenantDb: TenantDbService,
   ) {}
 
   // ────────────────────────────────────────────────────── yordamchilar
@@ -168,7 +170,7 @@ export class ProvisioningService {
    * Yangi tenantni to'liq ishga tushiradi (fon rejimida).
    * Holat DB'da yangilanadi — panel uni 3 soniyada bir so'rab turadi.
    */
-  async provision(tenantId: string): Promise<void> {
+  async provision(tenantId: string, owner?: ProvisionOwner): Promise<void> {
     await this.prisma.tenant.update({
       where: { id: tenantId },
       data: {
@@ -209,6 +211,42 @@ export class ProvisioningService {
     const serverIp = process.env.SERVER_PUBLIC_IP || null;
 
     if (code === 0) {
+      // ── EGA HISOBI ──
+      //
+      // ⚠ NEGA AYNAN SHU YERDA: `users` jadvali provisioning'dan OLDIN
+      // MAVJUD EMAS — baza `provision.sh` ichida yaratiladi va migratsiyalar
+      // ham o'sha yerda yuriladi. Ya'ni yozish faqat skript muvaffaqiyatli
+      // tugagandan keyin mumkin.
+      //
+      // ⚠ NEGA `provision.sh` GA ENV ORQALI UZATILMAYDI: parol shell
+      // muhitiga tushsa `ps` da ko'rinardi. `.env` fayllari base64 bilan
+      // uzatilgani ham aynan shu sabab.
+      if (owner) {
+        try {
+          await this.tenantDb.createOwner({ dbName: tenant.dbName, serverIp }, owner);
+          this.logger.log(`Ega hisobi yaratildi: ${owner.username}@${tenant.domain}`);
+        } catch (err) {
+          // Kirib bo'lmaydigan loyiha ACTIVE deb ko'rsatilmasligi kerak:
+          // mijoz ishlaydigan domen oladi-yu, unga kira olmaydi va buni
+          // hech kim sezmaydi.
+          await this.prisma.tenant.update({
+            where: { id: tenantId },
+            data: {
+              status: 'FAILED',
+              provisionLog: this.tail(log),
+              serverIp,
+              failureReason: `Ega hisobi yaratilmadi: ${(err as Error).message}`,
+              applyStatus: 'FAILED',
+              applyError: 'Ega hisobi yaratilmadi',
+            },
+          });
+          this.logger.error(
+            `Provisioning tugadi, lekin ega yaratilmadi: ${tenant.domain} ❌`,
+          );
+          return;
+        }
+      }
+
       await this.prisma.tenant.update({
         where: { id: tenantId },
         data: { status: 'ACTIVE', provisionLog: this.tail(log), serverIp },
@@ -519,4 +557,17 @@ export class ProvisioningService {
       this.logger.error(`Deprovisioning qisman bajarildi: ${input.domain} (kod ${code})`);
     }
   }
+}
+
+/**
+ * Provisioning tugagach yaratiladigan ega hisobi.
+ *
+ * ⚠ Faqat XOTIRADA yuradi: admin bazasiga hech qachon yozilmaydi. Parol
+ * tenant bazasida yashaydi va panel uni o'sha yerdan o'qiydi.
+ */
+export interface ProvisionOwner {
+  username: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
 }

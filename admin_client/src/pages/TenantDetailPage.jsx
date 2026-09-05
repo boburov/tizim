@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
+  KeyRound,
   AlertTriangle,
   ArrowLeft,
   BarChart3,
@@ -25,6 +26,7 @@ import Github from '../components/GithubIcon';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import TenantFeatures from '../components/TenantFeatures';
+import TenantOwner from '../components/TenantOwner';
 import {
   BUSY_STATUSES,
   STATUS_LABEL,
@@ -45,6 +47,9 @@ const TABS = [
   // ALOHIDA: sozlama ".env qiymati", bu esa tijorat qarori.
   { key: 'bolimlar', label: "Bo'limlar", icon: Package },
   { key: 'sozlamalar', label: 'Sozlamalar', icon: Settings2 },
+  // ⚠ FAQAT SUPER_ADMIN — javobda ega paroli OCHIQ MATNDA keladi,
+  // ya'ni bu tab mijoz tizimiga to'liq kirish huquqini beradi.
+  { key: 'ega', label: 'Ega', icon: KeyRound, superAdminOnly: true },
   { key: 'github', label: 'GitHub', icon: Github },
 ];
 
@@ -197,7 +202,8 @@ export default function TenantDetailPage() {
 
       {/* Bo'limlar */}
       <div className="mb-5 flex gap-1 overflow-x-auto border-b border-border">
-        {TABS.map(({ key, label, icon: Icon }) => (
+        {TABS.filter((x) => !x.superAdminOnly || isSuperAdmin).map(
+          ({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -233,6 +239,10 @@ export default function TenantDetailPage() {
              olmaydi. */
           canEdit={isSuperAdmin && t.status !== 'DELETED'}
         />
+      )}
+
+      {tab === 'ega' && isSuperAdmin && (
+        <TenantOwner tenantId={t.id} canEdit={t.status !== 'DELETED'} />
       )}
 
       {tab === 'github' && <TenantRepo tenant={t} canEdit={t.status !== 'DELETED'} />}

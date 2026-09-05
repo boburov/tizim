@@ -96,7 +96,7 @@ export default function TenantBrand({ tenant, canEdit }) {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
         <div className="rounded-xl border border-border bg-card p-6">
           <fieldset disabled={locked} className={locked ? 'opacity-60' : undefined}>
-            <BrandFields value={form} onChange={update} />
+            <BrandFields value={form} onChange={update} tenantId={tenant.id} />
           </fieldset>
 
           {!locked && (

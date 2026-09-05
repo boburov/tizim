@@ -1008,7 +1008,11 @@ export class StudentPaymentService {
     year,
     month,
   }: { groupId?: string; year: number | string; month?: number | string }) {
-    const where: any = { year: Number(year), writtenOff: false };
+    // FILIAL: `StudentPayment` da `branchId` bor (guruhdan meros) —
+    // `list()` dagi bilan AYNI filtr. Bu yerda filtr yo'q edi va A filial
+    // direktori butun markazning qarzdorlarini (ism, guruh, summa)
+    // ko'rardi; o'qituvchi tomonidagi egizagi esa to'g'ri kesilgan.
+    const where: any = { ...branchFilter(), year: Number(year), writtenOff: false };
     if (month) where.month = Number(month);
     if (groupId) where.groupId = String(groupId);
 
@@ -1090,8 +1094,12 @@ export class StudentPaymentService {
   }
 
   async getById(id: string) {
-    const payment = await this.prisma.studentPayment.findUnique({
-      where: { id: String(id) },
+    // FILIAL: `list()` to'g'ri kesilgan, lekin uning `:id` egizagi ochiq
+    // qolgan edi — ID'ni qo'lda berib boshqa filial to'lovi (o'quvchi
+    // ismi, telefoni, tranzaksiyalari) ochilardi.
+    // ⚠ 404, 403 EMAS: yozuv MAVJUDLIGI ham oshkor bo'lmasin.
+    const payment = await this.prisma.studentPayment.findFirst({
+      where: { id: String(id), ...branchFilter() },
       include: {
         student: { select: SAFE_STUDENT_SELECT },
         group: { select: { id: true, name: true } },

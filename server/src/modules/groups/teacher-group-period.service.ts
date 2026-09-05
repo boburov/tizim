@@ -10,7 +10,11 @@ import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 import { assertPeriodInvariants } from '../../common/utils/period.js';
 import { assertGroupActive } from '../../common/helpers/group-state.js';
 import { assertNotSelfSalary } from '../../common/rbac/self-salary.guard.js';
-import { branchFilter } from '../../common/als/branch-context.js';
+import {
+  branchFilter,
+  userBranchCondition,
+  runWithBranchContext,
+} from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
 
@@ -283,15 +287,28 @@ export class TeacherGroupPeriodService {
    * hech kimni topmagandek ko'rinardi.
    */
   async listAvailableTeachers(groupId: string) {
-    const group = await this.prisma.group.findUnique({
-      where: { id: String(groupId) },
+    // FILIAL: guruh `listByGroup` bilan AYNI naqsh bo'yicha ko'lamlanadi —
+    // begona filial guruhining jadvali bu yerdan ochilmasin.
+    // ⚠ 404, 403 EMAS: guruh MAVJUDLIGI ham oshkor qilinmaydi.
+    const group = await this.prisma.group.findFirst({
+      where: { id: String(groupId), ...branchFilter() },
       select: { id: true, schedule: GROUP_SCHEDULE_SELECT },
     });
     if (!group) throw new ApiError(404, 'Guruh topilmadi');
     const slots = scheduleActiveOn(group.schedule || []);
 
+    // FILIAL: o'qituvchilar ro'yxati ko'lamsiz edi — begona filial
+    // o'qituvchilarining ismi ochilar va ular guruhga biriktirish uchun
+    // tanlanadigan bo'lib qolardi. `userBranchCondition()` `AND` ichida:
+    // u OR qaytaradi (homeBranchId / branchAssignments).
+    const branchCond = userBranchCondition();
     const teachers = await this.prisma.user.findMany({
-      where: { role: ROLES.TEACHER, isActive: true, isDeleted: false },
+      where: {
+        role: ROLES.TEACHER,
+        isActive: true,
+        isDeleted: false,
+        ...(branchCond ? { AND: [branchCond] } : {}),
+      },
       select: { id: true, firstName: true, lastName: true, username: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
@@ -531,8 +548,18 @@ export class TeacherGroupPeriodService {
   }
 
   private async assertTeacher(teacherId: string) {
+    // FILIAL: o'qituvchi joriy ko'lamda bo'lsin. Aks holda A filial
+    // direktori B filial o'qituvchisini o'z guruhiga davr bilan
+    // biriktirib, o'sha odamning maoshini harakatga keltirardi.
+    // ⚠ `AND` ichida: `userBranchCondition()` o'zi `OR` ishlatadi.
+    const teacherCond = userBranchCondition();
     const doc = await this.prisma.user.findFirst({
-      where: { id: String(teacherId), role: ROLES.TEACHER, isDeleted: false },
+      where: {
+        id: String(teacherId),
+        role: ROLES.TEACHER,
+        isDeleted: false,
+        ...(teacherCond ? { AND: [teacherCond] } : {}),
+      } as never,
       select: { id: true, firstName: true, lastName: true, hiredAt: true, isActive: true },
     });
     if (!doc) throw new ApiError(400, "O'qituvchi topilmadi");
@@ -551,11 +578,27 @@ export class TeacherGroupPeriodService {
     });
   }
 
+  /**
+   * ⚠ KO'LAMLANGAN: `create` / `update` / `remove` HAMMASI shu yerdan
+   * guruhni oladi, ya'ni bu yozish yo'lining yagona darvozasi.
+   * Filtrsiz begona filial guruhiga dars berish davri (va u orqali
+   * MAOSH SHARTI) yozib qo'yish mumkin edi.
+   */
   private loadGroup(groupId: string) {
-    return this.prisma.group.findUnique({
-      where: { id: String(groupId) },
+    return this.prisma.group.findFirst({
+      where: { id: String(groupId), ...branchFilter() },
       select: GROUP_WITH_SCHEDULE,
     });
+  }
+
+  /**
+   * Davrni GURUH orqali kesish (`teacherGroupPeriod` reyestrda
+   * VIA_GROUP — unda `branchId` ustuni YO'Q).
+   * Owner va kontekstsiz chaqiruvda bo'sh obyekt qaytadi.
+   */
+  private periodScope(): Record<string, unknown> {
+    const bf = branchFilter();
+    return Object.keys(bf).length ? { group: { is: bf } } : {};
   }
 
   // ══════════════════════ YOZISH: CRUD ══════════════════════
@@ -763,8 +806,10 @@ export class TeacherGroupPeriodService {
     },
     currentUser: Actor | null,
   ) {
-    const doc = await this.prisma.teacherGroupPeriod.findUnique({
-      where: { id: String(id) } });
+    const doc = await this.prisma.teacherGroupPeriod.findFirst({
+      // FILIAL: davr GURUHI orqali kesiladi — `list()` (:480) allaqachon
+      // shunday, YOZISH yo'li esa yalang'och `findUnique` edi.
+      where: { id: String(id), ...this.periodScope() } as never });
     if (!doc || doc.isDeleted) throw new ApiError(404, 'Dars berish davri topilmadi');
     const grp = await this.loadGroup(doc.groupId);
     assertGroupActive(grp as never);
@@ -822,8 +867,10 @@ export class TeacherGroupPeriodService {
   }
 
   async remove(id: string) {
-    const doc = await this.prisma.teacherGroupPeriod.findUnique({
-      where: { id: String(id) } });
+    // FILIAL: `update()` bilan ayni kesish — o'chirish ham maosh
+    // hisobini qayta yurgizadi.
+    const doc = await this.prisma.teacherGroupPeriod.findFirst({
+      where: { id: String(id), ...this.periodScope() } as never });
     if (!doc || doc.isDeleted) throw new ApiError(404, 'Dars berish davri topilmadi');
     assertGroupActive((await this.loadGroup(doc.groupId)) as never);
 
@@ -893,8 +940,16 @@ export class TeacherGroupPeriodService {
 
     // ── 1. Topshirish sanasida hali AMALDA bo'lgan davrlar ──
     const cutTs = cutoff.getTime();
+    // FILIAL: ikki filialda dars beradigan o'qituvchi uchun A filial
+    // direktori B FILIALDAGI davrlarni ham yopib, guruhlarini boshqa
+    // odamga topshirib yuborardi (va u orqali B ning maoshini
+    // o'zgartirardi). Davr GURUH orqali kesiladi (VIA_GROUP).
     const allPeriods = await this.prisma.teacherGroupPeriod.findMany({
-      where: { teacherId: outgoing.id, isDeleted: false },
+      where: {
+        teacherId: outgoing.id,
+        isDeleted: false,
+        ...this.periodScope(),
+      } as never,
       select: { id: true, groupId: true, startDate: true, endDate: true },
     });
     const live = allPeriods.filter(
@@ -1077,8 +1132,9 @@ export class TeacherGroupPeriodService {
     let teacher: string;
     let groupId = group as string;
     if (op === 'update') {
-      const period = await this.prisma.teacherGroupPeriod.findUnique({
-        where: { id: String(periodId) },
+      // FILIAL: tasdiq SO'RASH ham begona davrga tegmasin.
+      const period = await this.prisma.teacherGroupPeriod.findFirst({
+        where: { id: String(periodId), ...this.periodScope() } as never,
         select: { teacherId: true, groupId: true, isDeleted: true },
       });
       if (!period || period.isDeleted) {
@@ -1142,6 +1198,7 @@ export class TeacherGroupPeriodService {
     payload?: Record<string, unknown>;
     requestedById?: string | null;
     requestedBy?: string | null;
+    branchId?: string | null;
   }) {
     const p = (approval?.payload || {}) as Record<string, unknown>;
     // Amalni SO'RAGAN odam nomidan bajariladi (createdBy/updatedBy
@@ -1155,28 +1212,52 @@ export class TeacherGroupPeriodService {
       percentRate: p.percentRate,
     };
 
-    if (p.op === 'create') {
-      return this.create(
-        {
-          teacher: String(p.teacher),
-          group: String(p.group),
-          startDate: p.startDate as string,
-          endDate: (p.endDate as string) ?? null,
-          ...rate,
-        },
-        actor,
-      );
-    }
+    // ═════════════════════════════════════════════════════════════════
+    // ⚠ FILIAL KONTEKSTI MAJBURAN O'RNATILADI — `executeApprovedGroupFee`
+    // va `executeApprovedDiscount` dagi bilan AYNI sabab.
+    //
+    // `create()`/`update()` endi guruhni va davrni `branchFilter()` bilan
+    // kesadi, va o'sha filtr TASDIQLOVCHINING joriy ko'rinishidan
+    // hisoblanadi. Owner "Toshkent" ni tanlab turib Buxoro so'rovini
+    // tasdiqlasa, guruh topilmay so'rov bekordan-bekorga FAILED bo'lardi.
+    //
+    // So'rovning O'Z filiali — yagona to'g'ri kontekst. `Approval.branchId`
+    // sxemada MAJBURIY (NOT NULL), ya'ni bu qiymat doim bor.
+    // ═════════════════════════════════════════════════════════════════
+    const branchId = String(approval?.branchId);
 
-    if (p.op === 'update') {
-      if (!p.periodId) throw new ApiError(400, "So'rovda davr identifikatori yo'q");
-      return this.update(
-        String(p.periodId),
-        { startDate: p.startDate as string, endDate: p.endDate as string, ...rate },
-        actor,
-      );
-    }
+    return runWithBranchContext(
+      {
+        branchId,
+        allowedBranchIds: [branchId],
+        canSeeAllBranches: false,
+        userId: requesterId ? String(requesterId) : null,
+      },
+      async () => {
+        if (p.op === 'create') {
+          return this.create(
+            {
+              teacher: String(p.teacher),
+              group: String(p.group),
+              startDate: p.startDate as string,
+              endDate: (p.endDate as string) ?? null,
+              ...rate,
+            },
+            actor,
+          );
+        }
 
-    throw new ApiError(400, `Noma'lum maosh sharti amali: ${p.op}`);
+        if (p.op === 'update') {
+          if (!p.periodId) throw new ApiError(400, "So'rovda davr identifikatori yo'q");
+          return this.update(
+            String(p.periodId),
+            { startDate: p.startDate as string, endDate: p.endDate as string, ...rate },
+            actor,
+          );
+        }
+
+        throw new ApiError(400, `Noma'lum maosh sharti amali: ${p.op}`);
+      },
+    );
   }
 }

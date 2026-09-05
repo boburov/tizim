@@ -16,13 +16,18 @@ export interface TenantFeatureRow {
   name: string;
   isModule: boolean;
   /**
-   * TIZIM O'ZAGI — o'chirgich ko'rsatilmaydi.
+   * TIZIM O'ZAGI — XAVFLI, lekin o'chiriladi.
    *
-   * ⚠ Ro'yxatda BARIBIR qaytariladi: panelda "nega bu bo'limni
-   * o'chirib bo'lmayapti" savoliga javob beradigan to'siq aynan shu
-   * yozuvlar bo'lishi mumkin.
+   * ⚠ MA'NOSI O'ZGARDI: ilgari "o'chirgich ko'rsatilmaydi" edi. Endi
+   * panel bu qatorni qizil ogohlantirish va qo'shimcha tasdiq bilan
+   * ko'rsatadi — o'chirish MUMKIN.
    */
   isCore: boolean;
+  /**
+   * QULFLANGAN — o'chirgich yo'q, `setOverride()` 409 beradi.
+   * Atigi ikki kalit: `auth` va `features`.
+   */
+  isLocked: boolean;
   /**
    * Hozir shu kalitni o'chirishga TO'SQINLIK qilayotgan ochiq bo'limlar.
    *
@@ -32,9 +37,15 @@ export interface TenantFeatureRow {
    */
   blockedBy: string[];
   /**
-   * To'siq O'ZAK modul tufaylimi — ya'ni uni bartaraf etib bo'lmaydi.
-   * Panel bunday o'chirgichni QULFLANGAN holda ko'rsatadi va sababini
-   * yozadi, chunki bosilsa har doim 409 qaytarardi.
+   * To'siq QULFLANGAN modul tufaylimi — ya'ni uni bartaraf etib
+   * bo'lmaydi. Panel bunday o'chirgichni qulflangan holda ko'rsatadi
+   * va sababini yozadi, chunki bosilsa har doim 409 qaytarardi.
+   *
+   * ⚠ Shart `isLocked`, ilgarigidek `isCore` EMAS: core to'siqni endi
+   * bartaraf etish MUMKIN (avval o'sha core modulni o'chirasiz).
+   * Amalda bu `auth` ga tayanadigan bir necha modulni qamraydi —
+   * `attendance`, `finance`, `groups`, `opening-balance`,
+   * `student-freeze` (login javobi ularning ma'lumotini yig'adi).
    */
   permanentlyBlocked: boolean;
   parentKey: string | null;
@@ -128,10 +139,11 @@ export class TenantFeaturesService {
         name: f.name,
         isModule: f.isModule,
         isCore: f.isCore,
+        isLocked: f.isLocked,
         blockedBy: blockers.map((b) => b.key),
-        // ⚠ O'ZAK to'siqni bartaraf etib bo'lmaydi: uni o'chirish
+        // ⚠ QULFLANGAN to'siqni bartaraf etib bo'lmaydi: uni o'chirish
         // imkoni yo'q, ya'ni bu o'chirgich hech qachon ishlamaydi.
-        permanentlyBlocked: blockers.some((b) => b.isCore),
+        permanentlyBlocked: blockers.some((b) => b.isLocked),
         parentKey: f.parentKey,
         requiresKeys: f.requiresKeys,
         enabled: isOn(f.key),
@@ -192,12 +204,17 @@ export class TenantFeaturesService {
     if (!feature || !feature.isModule) {
       throw new NotFoundException(`Modul kaliti topilmadi: ${key}`);
     }
-    // ⚠ O'ZAK MODUL HECH QACHON O'CHIRILMAYDI. Panel uni ko'rsatmaydi,
-    // lekin API to'g'ridan-to'g'ri chaqirilishi mumkin — `auth` yoki
-    // `users` ni o'chirish butun ilovani yiqitardi.
-    if (feature.isCore) {
+    // ⚠ QULFLANGAN MODUL HECH QACHON O'CHIRILMAYDI. Panel uni
+    // ko'rsatmaydi, lekin API to'g'ridan-to'g'ri chaqirilishi mumkin.
+    //
+    // ⚠ Shart `isLocked`, ilgarigidek `isCore` EMAS: `core` modullar
+    // endi sotiladi va o'chiriladi (panel qo'shimcha tasdiq so'raydi).
+    // Qulflangani atigi ikkitasi va ikkalasining sababi ham TEXNIK:
+    // `auth` o'chsa kirish yo'li yo'qoladi, `features` o'chsa tenantni
+    // tashqaridan tuzatib bo'lmaydi.
+    if (feature.isLocked) {
       throw new ConflictException(
-        `"${key}" — tizim o'zagi, uni o'chirib/yoqib bo'lmaydi`,
+        `"${key}" — tizimning qulflangan o'zagi, uni o'chirib bo'lmaydi`,
       );
     }
 

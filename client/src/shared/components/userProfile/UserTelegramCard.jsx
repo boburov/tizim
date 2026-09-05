@@ -5,6 +5,7 @@ import {
   botStatusMeta,
   resolveBotStatus,
 } from "@/shared/constants/botStatus";
+import useFeatures from "@/shared/hooks/useFeatures";
 
 // Har bir holat uchun ikonka foni. Status ranglari MA'NO tashiydi
 // (qizil = yetmaydi), shuning uchun token emas - `dark:` variantli aniq
@@ -30,6 +31,15 @@ const HINT_TONE = {
  * xabar esa aslida yetmasdi.
  */
 const UserTelegramCard = ({ telegram }) => {
+  // ── ⚠ BOT O'CHIQ BO'LSA KARTA UMUMAN CHIZILMAYDI ──
+  //
+  // Karta "botga bog'lanmagan" holatida foydalanuvchini bog'lanishga
+  // undaydi. Bot yoqilmagan tenantda bog'lanadigan bot yo'q, ya'ni bu
+  // bajarilmaydigan ko'rsatma bo'lardi. Bitta joyda yashiramiz — karta
+  // uch sahifada ishlatiladi (ega, o'qituvchi, o'quvchi profillari).
+  const { botEnabled } = useFeatures();
+  if (!botEnabled) return null;
+
   const status = resolveBotStatus({ telegram });
   const meta = botStatusMeta(status);
   const Icon = meta.icon;

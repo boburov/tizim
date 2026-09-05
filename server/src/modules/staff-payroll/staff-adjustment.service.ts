@@ -124,6 +124,11 @@ export class StaffAdjustmentService {
     });
     if (!doc) throw new ApiError(404, 'Yozuv topilmadi');
 
+    // ⚠ FILIAL QO'RIQCHISI — `create()` da bor edi, bu yerda YO'Q edi.
+    // O'chirish ham PUL HARAKATI (bonus/jarima yechiladi), ya'ni begona
+    // filial xodimining yozuvini ID bo'yicha bekor qilish mumkin edi.
+    await this.branchAccess.assertUserInBranchScope(doc.employeeId);
+
     // ⚠ BOSHLANG'ICH QOLDIQ O'CHIRILMAYDI — u bir marta kiritiladi va
     // o'zgartirilmaydi.
     //
@@ -170,6 +175,9 @@ export class StaffAdjustmentService {
   }
 
   async listByEmployeeMonth(employeeId: string, year: number, month: number) {
+    // ⚠ FILIAL QO'RIQCHISI — `employeeId` MIJOZDAN keladi: begona
+    // filial xodimining bonus/jarima tarixi ochiq qolardi.
+    await this.branchAccess.assertUserInBranchScope(employeeId);
     return withLegacyIds(
       await this.prisma.staffPayrollAdjustment.findMany({
         where: {

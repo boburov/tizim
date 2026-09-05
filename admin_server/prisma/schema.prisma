@@ -318,11 +318,20 @@ model Feature {
   /// Bu kalit MODUL o'chirgichimi (yoqilsa `parentKey`/`requiresKeys` ma'noli).
   isModule Boolean @default(false)
 
-  /// TIZIM O'ZAGI — panelda o'chirgich KO'RSATILMAYDI.
+  /// TIZIM O'ZAGI — XAVFLI, LEKIN O'CHIRILADI.
   ///
-  /// ⚠ Lekin katalogda TURADI: `requiresKeys` orqali boshqa bo'limlarni
-  /// o'chirishni to'sadi (masalan `auth` → `attendance`).
+  /// ⚠ MA'NOSI O'ZGARDI. Ilgari "o'chirgich ko'rsatilmaydi" degani edi.
+  /// Endi o'chirgich bor, faqat panel qizil ogohlantirish va qo'shimcha
+  /// tasdiq so'raydi. "O'chirib bo'lmaydi" endi `isLocked`.
   isCore Boolean @default(false)
+
+  /// HECH QACHON O'CHMAYDI — o'chirgich yo'q, `setOverride()` 409 beradi.
+  ///
+  /// Atigi ikki kalit: `auth` (o'chsa tenantga hech kim kira olmaydi) va
+  /// `features` (o'chsa `GET /features` ning o'zi 402 qaytaradi va
+  /// tenantni tashqaridan tuzatib bo'lmaydi). Ikkalasining sababi ham
+  /// TEXNIK — tijorat qarori emas.
+  isLocked Boolean @default(false)
 
   /// Ota modul kaliti — imkoniyat (capability) uchun. Otasi o'chiq bo'lsa bola ham o'chiq.
   parentKey String?
@@ -933,7 +942,6 @@ model TenantCommercialChange {
   @@index([tenantId, createdAt])
   @@index([featureKey])
 }
-
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODUL O'CHIRGICHI — LOYIHA DARAJASIDAGI USTUN QAROR.

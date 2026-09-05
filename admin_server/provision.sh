@@ -124,8 +124,10 @@ mkdir -p "$APP_DIR"
 cp -r "$TENANT_TEMPLATE_DIR/server" "$APP_DIR/server"
 cp -r "$TENANT_TEMPLATE_DIR/client" "$APP_DIR/client"
 
+# server/dist ham tozalanadi: shablonda eski build qolib ketsa, yangi .env
+# bilan ESKI kod ishga tushardi va buni hech narsa ushlamasdi.
 rm -rf "$APP_DIR/server/node_modules" "$APP_DIR/client/node_modules" \
-       "$APP_DIR/client/dist" 2>/dev/null || true
+       "$APP_DIR/client/dist" "$APP_DIR/server/dist" 2>/dev/null || true
 # Shablondan .env kelib qolishi mumkin — bizniki ustidan yozadi, lekin
 # ehtiyot uchun oldindan olib tashlaymiz.
 rm -f "$APP_DIR/server/.env" "$APP_DIR/client/.env" 2>/dev/null || true
@@ -169,12 +171,16 @@ write_b64 "${TENANT_WORKFLOW_B64:-}"    "$APP_DIR/.github/workflows/deploy.yml"
 # ---------------------------------------------------------------------------
 # 4) Server bog'lamalari
 # ---------------------------------------------------------------------------
+# DIQQAT: --omit=dev QO'YMANG. Server NestJS'da yozilgan va `npm run build`
+# (nest build) uchun @nestjs/cli + typescript kerak — ular devDependencies'da.
+# Ular tashlansa dist/main.js hech qachon paydo bo'lmaydi va pm2 yiqiladi.
 echo "==> server: npm ci..."
 cd "$APP_DIR/server"
 # --include=dev SHART: server NestJS ilovasi va uni `nest build` bilan
 # kompilyatsiya qilish kerak. `nest` va `typescript` — devDependencies.
 # NODE_ENV=production meros bo'lgani uchun usiz ular o'rnatilmaydi va
-# `npm run build` -> "nest: not found" beradi.
+# `npm run build` -> "nest: not found" beradi. (Plain `npm ci` ham yetarli
+# emas — NODE_ENV=production o'zi devDependencies'ni tashlab ketadi.)
 npm ci --include=dev 2>/dev/null || npm install --include=dev
 
 # ---------------------------------------------------------------------------
@@ -205,12 +211,26 @@ echo "==> Prisma migratsiyalari..."
 npx prisma migrate deploy
 npx prisma generate
 
-# Server NestJS TypeScript kodini kompilyatsiya qilamiz -> dist/main.js
-# (pm2 ayni shu faylni ishga tushiradi). Bu qadamsiz `dist` faqat
+# ---------------------------------------------------------------------------
+# 4c) Server build (dist/main.js) + boshlang'ich seedlar
+#
+# Build `prisma generate` DAN KEYIN turishi shart: TypeScript kodi Prisma
+# generatsiya qilgan tiplarni import qiladi. Bu qadamsiz `dist` faqat
 # shablondan ko'chirilgan eski nusxa bo'lardi va `deploy` rejimida
 # (git reset --hard, `dist` gitignore'da) umuman bo'lmasdi.
+#
+# Seedlar `dist/seeds/*.js` dan yuriladi, ya'ni build'dan keyin.
+# `seed:owner` ATAYLAB CHAQIRILMAYDI — ega hisobi dev paneldan yaratiladi
+# (admin_server tenant bazasiga to'g'ridan-to'g'ri yozadi), aks holda ikkita
+# haqiqat manbai paydo bo'lardi.
+# ---------------------------------------------------------------------------
 echo "==> server: build (nest build)..."
 npm run build
+
+echo "==> server: seedlar (ruxsatlar katalogi va standart ma'lumotlar)..."
+npm run seed:permissions
+npm run seed:communication
+npm run seed:expense-categories
 
 # ---------------------------------------------------------------------------
 # 5) Client build
@@ -234,7 +254,8 @@ chown -R "$WEB_USER":"$WEB_USER" "$WEB_ROOT"
 # ---------------------------------------------------------------------------
 echo "==> pm2 start ${TENANT_PM2_NAME}..."
 cd "$APP_DIR/server"
-# NestJS kirish nuqtasi dist/main.js (start skripti: `node dist/main.js`).
+# NestJS kirish nuqtasi dist/main.js (eski Express `src/index.js` o'chirilgan —
+# u yerda endi faqat main.ts bor, ya'ni eski yo'l har doim yiqilardi).
 pm2 start dist/main.js --name "$TENANT_PM2_NAME" --update-env
 pm2 save >/dev/null 2>&1 || true
 

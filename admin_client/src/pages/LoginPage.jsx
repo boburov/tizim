@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import NesterLogo from '../components/NesterLogo';
@@ -101,12 +101,10 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-5 text-center text-sm text-muted-foreground">
-          Hisobingiz yo'qmi?{' '}
-          <Link to="/signup" className="font-medium text-brand hover:underline">
-            Ro'yxatdan o'ting
-          </Link>
-        </p>
+        {/* ⚠ Ro'yxatdan o'tish havolasi ATAYLAB olib tashlandi: loyiha
+            endi faqat developer paneldan yaratiladi (ega login/paroli
+            majburiy va uni admin belgilaydi). Havola qolsa 410 qaytaradigan
+            sahifaga olib borardi. */}
       </div>
     </div>
   );

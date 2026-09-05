@@ -2,13 +2,9 @@ import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/c
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { UserProfileService } from './user-profile.service.js';
+import { OptionalWiringCheck } from './optional-wiring.check.js';
 import { AuthMiddleware } from '../../middleware/auth.middleware.js';
 import { authLimiter } from '../../common/middleware/rate-limit.js';
-import { GroupsModule } from '../groups/groups.module.js';
-import { AttendanceModule } from '../attendance/attendance.module.js';
-import { StudentFreezeModule } from '../student-freeze/student-freeze.module.js';
-import { TeacherSalaryModule } from '../teacher-salary/teacher-salary.module.js';
-import { OpeningBalanceModule } from '../opening-balance/opening-balance.module.js';
 
 /**
  * ⚠ MIDDLEWARE FAQAT HIMOYALANGAN MARSHRUTLARGA ULANADI.
@@ -19,28 +15,50 @@ import { OpeningBalanceModule } from '../opening-balance/opening-balance.module.
  * mumkin bo'lishi SHART — aks holda token eskirgan zahoti foydalanuvchi
  * chiqib ketardi.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ⚠ BU MODULDA `imports` YO'Q — VA BU ATAYLAB.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Ilgari bu yerda beshta biznes moduli turardi:
+ *
+ *   GroupsModule         → o'quvchi va o'qituvchi profili
+ *   AttendanceModule     → o'quvchi profilidagi oylik davomat xulosasi
+ *   StudentFreezeModule  → o'quvchi muzlatilganmi
+ *   TeacherSalaryModule  → `registerUser` da maosh stavkasi (ixtiyoriy)
+ *   OpeningBalanceModule → `registerUser` da boshlang'ich qarz (ixtiyoriy)
+ *
+ * Ularning HECH BIRI autentifikatsiya uchun zarur emas — hammasi
+ * boyitish yoki ixtiyoriy yon ta'sir. Lekin `feature-registry`
+ * generatori import grafigini o'qiydi va buni "auth ularga TAYANADI"
+ * deb yozardi. `auth` esa qulflangan (hech qachon o'chmaydi), ya'ni
+ * to'siq mantig'i o'sha beshtasini ham abadiy o'chirilmaydigan qilib
+ * qo'ygan edi:
+ *
+ *   attendance · finance · groups · opening-balance · student-freeze
+ *
+ * Beshtasi ham SOTILADIGAN modul — ya'ni "har bir feature sotiladi va
+ * o'chiriladi" talabi jimgina buzilgan edi.
+ *
+ * ── HOZIR QANDAY ISHLAYDI ──
+ *
+ * `OptionalModuleService` (global, `CommonModule`) servisni ISH VAQTIDA
+ * so'raydi va OLDIN tarifni tekshiradi. Modul o'chiq bo'lsa `null`
+ * qaytadi, profildagi mos maydon bo'sh qoladi, `registerUser` esa yon
+ * ta'sir so'ralgan bo'lsa 402 bilan OLDINDAN to'xtaydi (pul jimgina
+ * yo'qolmasin).
+ *
+ * ⚠ IMPORTNI SHUNCHAKI OLIB TASHLASH YETARLI EMAS EDI. Tarif tekshiruvi
+ * bo'lmasa grafik yolg'on gapirardi: `attendance` o'chirilgan tenantda
+ * `/auth/me` javobida davomat xulosasi BARIBIR chiqardi. Batafsil izoh
+ * `common/features/optional-module.service.ts` da.
+ */
 @Module({
-  // `GroupsModule` — O'QITUVCHI profili uchun (`buildUserProfile`).
-  // ⚠ AYLANMA BOG'LIQLIK YO'Q: `GroupsModule` `AuthModule` ni import
-  // QILMAYDI (u faqat `AuthMiddleware` ni ishlatadi, u esa global
-  // `CommonModule` dan keladi). Guruhlar moduli o'z izohida aynan shu
-  // iste'molchini oldindan e'lon qilgan.
-  imports: [
-    GroupsModule,
-    // ⚠ O'QUVCHI PROFILI uchun: joriy oy davomat xulosasi va muzlatish
-    // holati. AYLANA YO'Q — `AttendanceModule` ham,
-    // `StudentFreezeModule` ham `AuthModule` ni import QILMAYDI
-    // (Express bu joyda dinamik `import()` ishlatadi).
-    AttendanceModule,
-    StudentFreezeModule,
-    // ⚠ `registerUser` ning IXTIYORIY yon ta'sirlari: maosh stavkasi
-    // (`setCompensation`) va boshlang'ich qoldiq (`create`). AYLANA
-    // YO'Q — ularning birortasi `AuthModule` ni import qilmaydi.
-    TeacherSalaryModule,
-    OpeningBalanceModule,
-  ],
   controllers: [AuthController],
-  providers: [AuthService, UserProfileService],
+  // ⚠ `OptionalWiringCheck` — ish vaqtidagi bog'liqliklar ulanganini
+  // ishga tushishda tekshiradi. `imports` olib tashlangani uchun
+  // kompilyator ularni endi qo'riqlamaydi (izohi shu faylda yuqorida).
+  providers: [AuthService, UserProfileService, OptionalWiringCheck],
   // `UserProfileService` — `users` moduliga ham kerak (`GET /:id`,
   // `PATCH /:id/role`, `PATCH /:id/branches` profil qaytaradi). Profil
   // qurish mantig'i BITTA joyda qolishi shart: ikkinchi nusxa bo'lsa,

@@ -16,7 +16,6 @@ import CreateBotPage from './pages/CreateBotPage';
 import BotDetailPage from './pages/BotDetailPage';
 
 // Mijoz kabineti
-import PortalSignupPage from './portal/pages/PortalSignupPage';
 import PortalHomePage from './portal/pages/PortalHomePage';
 
 function Loading() {
@@ -69,14 +68,9 @@ export default function App() {
           </GuestOnly>
         }
       />
-      <Route
-        path="/signup"
-        element={
-          <GuestOnly>
-            <PortalSignupPage />
-          </GuestOnly>
-        }
-      />
+      {/* ⚠ `/signup` OLIB TASHLANDI — self-service yopilgan. Mavjud
+          mijozlar kirishda davom etadi va `/portal` da loyihalarini
+          ko'radi, lekin yangi loyiha faqat developer paneldan ochiladi. */}
 
       {/* Mijoz kabineti */}
       <Route

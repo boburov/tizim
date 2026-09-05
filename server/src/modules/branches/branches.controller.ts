@@ -36,10 +36,14 @@ import {
  * `GET /delegation-options` `GET /:id` DAN OLDIN turadi — aks holda ular
  * filial ID sifatida o'qilardi va 404 berardi.
  *
- * ⚠ O'QISH RUXSATSIZ (`GET /` va `GET /:id`): filial tanlagichi uchun
- * HAR QANDAY auth'langan foydalanuvchi o'z filiallarini ko'radi — ro'yxat
- * `allowedBranchIds` bo'yicha kesiladi. Express'da ham shunday. Shu
+ * ⚠ O'QISH RUXSATSIZ — FAQAT `GET /`: filial tanlagichi uchun HAR QANDAY
+ * auth'langan foydalanuvchi o'z filiallarini ko'radi va ro'yxat
+ * `allowedBranchIds` bo'yicha KESILADI. Express'da ham shunday. Shu
  * sababli xodim LOGINI standart javobda BO'LMAYDI (pastga qarang).
+ *
+ * ⚠ `GET /:id` bunga KIRMAYDI: u to'liq yozuvni (`delegation`,
+ * `expenseApprovalThreshold`) beradi va kesilmagan edi — ruxsat va
+ * ko'lam tekshiruvi `GET /:id/stats` dagidek qo'shildi.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 @Controller('branches')
@@ -120,9 +124,25 @@ export class BranchesController {
     };
   }
 
+  /**
+   * ⚠ BITTA FILIAL — RO'YXATDAN FARQLI, RUXSAT VA KO'LAM BILAN.
+   *
+   * Ro'yxat (`GET /`) filial TANLAGICHI uchun ochiq va u faqat nom/kod
+   * beradi. Bu yerda esa TO'LIQ yozuv qaytadi: `delegation` JSON va
+   * `expenseApprovalThreshold` — ya'ni filialning ichki boshqaruv
+   * qoidalari. Ilgari na ruxsat, na `allowedBranchIds` kesishmasi bor
+   * edi: HAR QANDAY auth'langan foydalanuvchi (hatto o'quvchi) BOSHQA
+   * filialning shu ma'lumotini o'qiy olardi. Endi `stats()` bilan bir
+   * xil qoida.
+   */
   @Get(':id')
-  async getById(@Validated(idSchema) v: IdRequest) {
-    return { success: true, data: await this.branches.getById(v.params.id) };
+  @Permissions(PERMISSIONS.BRANCHES_READ)
+  async getById(@Validated(idSchema) v: IdRequest, @Req() req: AuthenticatedRequest) {
+    const data = await this.branches.getById(v.params.id, {
+      allowedBranchIds: req.allowedBranchIds,
+      canSeeAllBranches: req.canSeeAllBranches,
+    });
+    return { success: true, data };
   }
 
   /**

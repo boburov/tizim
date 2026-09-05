@@ -4,6 +4,7 @@ import { ApiError } from '../../common/errors/api-error.js';
 import { ROLES } from '../../common/constants/permissions.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
+import { branchFilter } from '../../common/als/branch-context.js';
 import { deriveStatus } from '../../common/utils/proration.js';
 import { localTodayMidnight } from '../../common/utils/date.js';
 
@@ -141,6 +142,12 @@ export class SalaryAdjustmentService {
    */
   async settleBalance(teacherId: string, body: Record<string, any>, currentUser: any) {
     const teacher = await this.assertTeacher(teacherId);
+    // ⚠ FILIAL QO'RIQCHISI — `teacherId` params dan keladi. Yuqoridagi
+    // "filial filtri ataylab yo'q" izohi QATORLAR yig'indisiga tegishli,
+    // O'QITUVCHINING O'ZIGA emas: usiz filial direktori begona filial
+    // o'qituvchisining butun qoldig'ini hisoblab, uni O'Z filialiga
+    // chiqim (deduction) qilib yozib yuborardi.
+    await this.branchAccess.assertUserInBranchScope(teacher.id);
 
     if (!body?.reason || !String(body.reason).trim()) {
       throw new ApiError(400, "Sabab ko'rsatilishi shart");
@@ -197,8 +204,11 @@ export class SalaryAdjustmentService {
    * hisoboti buzilardi.
    */
   async remove(id: string, currentUser: any) {
-    const doc = await this.prisma.teacherSalary.findUnique({
-      where: { id: String(id) },
+    // FILIAL: boshqa filial mukofoti/jarimasini o'chirib bo'lmaydi
+    // (`TeacherSalary` da `branchId` NOT NULL → to'g'ridan-to'g'ri filtr,
+    // `salary-transaction.service.ts::remove` bilan bir xil idioma).
+    const doc = await this.prisma.teacherSalary.findFirst({
+      where: { id: String(id), ...branchFilter() },
     });
     if (!doc) throw new ApiError(404, 'Yozuv topilmadi');
     if (doc.kind !== 'bonus' && doc.kind !== 'deduction') {
@@ -217,8 +227,12 @@ export class SalaryAdjustmentService {
   async listByTeacherMonth(teacherId: string, year: number, month: number) {
     return withLegacyIds(
       await this.prisma.teacherSalary.findMany({
+        // FILIAL: o'qituvchi boshqa filialda ham ishlasa, o'sha yerdagi
+        // mukofot/jarimasi shu filial ko'rinishiga chiqmasin
+        // (`teacher-salary.service.ts::list` bilan bir xil idioma).
         where: {
           teacherId: String(teacherId),
+          ...branchFilter(),
           year: Number(year),
           month: Number(month),
           kind: { in: ['bonus', 'deduction'] },

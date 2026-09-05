@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { ChevronDown, Palette, RotateCcw } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { normalizeHex } from '../lib/brand';
+import LogoUploadField from './LogoUploadField';
 
 /** Tayyor palitralar — noldan rang tanlash ko'pchilik uchun qiyin. */
 const PRESETS = [
@@ -76,7 +77,14 @@ function ColorField({ label, value, onChange, help, optional, placeholder }) {
   );
 }
 
-export default function BrandFields({ value, onChange, showName = true, className }) {
+export default function BrandFields({
+  value,
+  onChange,
+  showName = true,
+  className,
+  /** Berilsa — logo yuklanadi; berilmasa (yaratish formasi) faqat eslatma. */
+  tenantId,
+}) {
   const [advanced, setAdvanced] = useState(
     // Qo'shimcha rang allaqachon kiritilgan bo'lsa bo'lim ochiq turadi
     Boolean(value.brandColorDark || value.brandBackgroundDark || value.brandBackground),
@@ -148,18 +156,23 @@ export default function BrandFields({ value, onChange, showName = true, classNam
         help="Tugmalar, havolalar va faol elementlar shu rangda bo'ladi."
       />
 
-      <div>
-        <label className="mb-1 block text-sm font-medium text-foreground">Logo URL</label>
-        <input
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+      {/* ⚠ Logo yuklash uchun tenant `id` KERAK (`POST /tenants/:id/logo`).
+          Yaratish formasida u hali yo'q — o'sha yerda faqat eslatma. */}
+      {tenantId ? (
+        <LogoUploadField
+          tenantId={tenantId}
           value={value.logoUrl || ''}
-          onChange={(e) => onChange({ ...value, logoUrl: e.target.value })}
-          placeholder="https://.../logo.png"
+          onChanged={(url) => onChange({ ...value, logoUrl: url || '' })}
         />
-        <p className="mt-1 text-xs text-muted-foreground">
-          Ixtiyoriy. Bo'lmasa nomning bosh harfi brend rangida ko'rsatiladi.
-        </p>
-      </div>
+      ) : (
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">Logo</label>
+          <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+            Loyiha yaratilgandan so'ng "Brend" bo'limidan yuklaysiz. Hozircha
+            nomning bosh harfi brend rangida ko'rsatiladi.
+          </p>
+        </div>
+      )}
 
       {/* Qo'shimcha ranglar */}
       <div className="rounded-xl border border-border">

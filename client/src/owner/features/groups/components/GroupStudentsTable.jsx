@@ -29,8 +29,10 @@ import { MODAL } from "@/shared/constants/modals";
 // Utils
 import { formatPhone } from "@/shared/utils/formatPhone";
 import { formatDateUzLong } from "@/shared/utils/formatDate";
+import useFeatures from "@/shared/hooks/useFeatures";
 
 const GroupStudentsTable = ({ group }) => {
+  const { botEnabled } = useFeatures();
   const { openModal } = useModal();
 
   const students = group?.students || [];
@@ -51,7 +53,7 @@ const GroupStudentsTable = ({ group }) => {
           <col className="w-[26%]" />
           <col className="w-[18%]" />
           <col className="w-[18%]" />
-          <col className="w-[20%]" />
+          {botEnabled && <col className="w-[20%]" />}
           <col className="w-[16%]" />
         </colgroup>
         <thead>
@@ -59,7 +61,10 @@ const GroupStudentsTable = ({ group }) => {
             <th className="px-4 py-3">#</th>
             <th className="px-4 py-3">Ism familiya</th>
             <th className="px-4 py-3">Telefon</th>
-            <th className="px-4 py-3">Telegram</th>
+            {/* ⚠ Bot o'chiq tenantda butun ustun chizilmaydi: bo'sh
+                "Bog'lanmagan" ustuni mijozni bo'lmagan imkoniyatni
+                sozlashga urinishga undardi. */}
+            {botEnabled && <th className="px-4 py-3">Telegram</th>}
             <th className="px-4 py-3">Qo'shilgan</th>
             <th className="px-4 py-3 text-right">Amallar</th>
           </tr>
@@ -85,6 +90,7 @@ const GroupStudentsTable = ({ group }) => {
                   {formatPhone(s.phone) || "-"}
                 </span>
               </td>
+              {botEnabled && (
               <td className="px-4 py-3">
                 {s.telegram ? (
                   s.telegram.username ? (
@@ -111,6 +117,7 @@ const GroupStudentsTable = ({ group }) => {
                   <span className="text-muted-foreground">Bog'lanmagan</span>
                 )}
               </td>
+              )}
               <td className="px-4 py-3 text-muted-foreground">
                 {s.joinedAt ? formatDateUzLong(s.joinedAt) : "-"}
               </td>

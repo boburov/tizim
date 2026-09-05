@@ -342,6 +342,10 @@ export class DepositsService {
     }: { amount: number; method?: string; paidAt?: Date | string; note?: string },
     currentUser: any,
   ): Promise<any> {
+    // ⚠ FILIAL QO'RIQCHISI — `studentId` MIJOZDAN keladi. Bu PUL
+    // CHIQARADIGAN yo'l: qo'riqchisiz A filial direktori B filial
+    // o'quvchisining depozitidan pul yechib olardi.
+    await this.branchAccess.assertUserInBranchScope(studentId);
     const { student, amt, day } = await this.validateWithdraw(studentId, {
       amount,
       paidAt,
@@ -719,8 +723,12 @@ export class DepositsService {
    * "pul HAQIQATAN qaytdi", storno esa "operatsiya BO'LMAGAN".
    */
   async removeDepositTxn(id: string, currentUser: any) {
+    // FILIAL: boshqa filial depozit amalini bekor qilib bo'lmaydi.
+    // `list()` AYNAN shu filtr bilan ko'rsatadi — o'chirish ham o'sha
+    // ko'lamda bo'lishi shart, aks holda ID ni qo'lda kiritib begona
+    // filialning to'ldirishi storno qilinardi.
     const txn = await this.prisma.depositTransaction.findFirst({
-      where: { id: String(id), isDeleted: false },
+      where: { id: String(id), ...branchFilter(), isDeleted: false },
     });
     if (!txn) throw new ApiError(404, 'Tranzaksiya topilmadi');
     if (txn.type === 'refund') {
@@ -773,6 +781,10 @@ export class DepositsService {
   /** O'quvchining depozit summary'si (balans + jami kirim/chiqim/qoplangan). */
   async summaryFor(studentId: string) {
     const sid = String(studentId);
+    // ⚠ FILIAL QO'RIQCHISI — `studentId` MIJOZDAN keladi: `finance.read`
+    // filial ICHIDAGI ruxsat, begona filial o'quvchisining balansi
+    // ko'rinmasligi kerak.
+    await this.branchAccess.assertUserInBranchScope(sid);
     const student = await this.prisma.user.findUnique({
       where: { id: sid },
       select: SAFE_STUDENT_SELECT,
@@ -812,6 +824,10 @@ export class DepositsService {
    */
   async historyFor(studentId: string) {
     const sid = String(studentId);
+    // ⚠ FILIAL QO'RIQCHISI — tarix summary bilan BIR XIL ko'lamda
+    // bo'lishi shart, aks holda balans yopiq, pul harakatlari esa
+    // ochiq qolardi.
+    await this.branchAccess.assertUserInBranchScope(sid);
     const [ledger, applies] = await Promise.all([
       this.prisma.depositTransaction.findMany({
         where: { studentId: sid, isDeleted: false },

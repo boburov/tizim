@@ -1,10 +1,8 @@
 import { Navigate } from "react-router-dom";
 
 import useAuth from "@/shared/hooks/useAuth";
-import usePermissions from "@/shared/hooks/usePermissions";
 import useWorkspace from "@/shared/hooks/useWorkspace";
 import { ROLE_TYPES } from "@/shared/constants/roles";
-import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -18,16 +16,26 @@ import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
  * tasodifan `/org` ni ochsa, u yarim bo'sh, 403 ga to'lgan ekran
  * o'rniga o'z panelida qoladi.
  *
- * ── KIM KIRADI ──
- * Ega — har doim. Qolganlar uchun IKKALA kalit ham shart:
- *   • `branches.view_all`   — barcha filialni birdan ko'rish
- *   • `system.admin_access` — tashkilot darajasidagi amallar
- *                             (filial ochish aynan shu kalit bilan
- *                             qulflangan — `branches.routes.js`)
+ * ══════════════════════════════════════════════════════════════════════
+ * KIM KIRADI — FAQAT EGA, VA FAQAT FILIALLI TARIFDA
+ * ══════════════════════════════════════════════════════════════════════
  *
- * Faqat `view_all` bo'lgan odam — konsolidatsiya hisobotini o'qiydigan
- * buxgalter. Unga Super Admin panelini ochish "filial qo'shing" degan
- * yolg'on va'da bo'lardi: server baribir 403 qaytaradi.
+ * ── FILIALSIZ TARIF: `/org` UMUMAN YO'Q ──
+ *
+ * `branchesEnabled = false` bo'lsa hech kim kirmaydi — ega ham. Filial
+ * tushunchasi sotilmagan tenantda bu panel bitta filialning ma'lumotini
+ * ikkinchi marta, boshqa menyu bilan ko'rsatardi.
+ *
+ * ── FILIALLI TARIF: FAQAT `roleType === owner` ──
+ *
+ * ⚠ O'ZGARISH: ilgari `hasOrgAuthority(has)` (`branches.view_all` +
+ * `system.admin_access`) bo'lgan HAR KIM kirardi — buxgalter, filial
+ * direktori. Endi kirmaydi.
+ *
+ * Bu ONGLI qaror va uning narxi bor: o'sha xodimlar `/org` dagi
+ * filiallararo ko'rinishni yo'qotadi. Talab shunday: "super admin
+ * faqat super admin panelga, admin esa admin panelga" — ya'ni `/org`
+ * eganing MAKONI, lavozim darajasi emas.
  *
  * ══════════════════════════════════════════════════════════════════════
  * YO'NALTIRISH MANZILI — `useWorkspace().home`, QATTIQ YOZILGAN YO'L EMAS
@@ -49,14 +57,20 @@ import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
  */
 const SuperAdminGuard = ({ children }) => {
   const auth = useAuth();
-  const { has } = usePermissions();
   const { home, isLoading } = useWorkspace();
 
+  // ⚠ YUKLANAYOTGANDA `null` — MAJBURIY. `branchesEnabled` kelmaguncha
+  // qaror qabul qilsak, bir render davomida noto'g'ri yo'naltirish
+  // bo'lardi va WebKit'da bu redirect halqasiga aylanishi mumkin
+  // (`app/routes.jsx` oxiridagi izoh).
   if (auth.isLoading || isLoading) return null;
 
   const type = auth.roleType || auth.role;
-  const allowed = type === ROLE_TYPES.OWNER || hasOrgAuthority(has);
+  const allowed = auth.branchesEnabled && type === ROLE_TYPES.OWNER;
 
+  // HALQA YO'Q: ruxsat berilmagan odamning `home` qiymati `/org` bo'lishi
+  // mumkin emas — `resolveWorkspace` `/org` ni faqat filialli tarifdagi
+  // egaga beradi, ya'ni bu yerdan o'tadigan odamga.
   if (!allowed) return <Navigate to={home || "/"} replace />;
 
   return children;

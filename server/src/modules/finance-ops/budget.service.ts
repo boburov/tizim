@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId } from '../../common/utils/serialize.js';
-import { branchFilter } from '../../common/als/branch-context.js';
+import { branchFilter, assertBranchInScope } from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 
 /**
@@ -72,6 +72,28 @@ const BUDGET_INCLUDE = {
   branch: { select: { id: true, name: true } },
 };
 
+/**
+ * BITTA BYUDJETNI OCHISHDAGI FILIAL KO'LAMI.
+ *
+ * FILIAL: `:id` bo'yicha o'qish/o'zgartirish/o'chirishda ko'lam
+ * UMUMAN yo'q edi — ya'ni A filial direktori B filialning byudjet
+ * raqamlarini ID bilan ochib, tahrirlab va o'chirib yuborardi.
+ *
+ * ⚠ `OR` KERAK: byudjetning `branchId` maydoni NULL bo'lishi mumkin va
+ * NULL "butun tarmoq byudjeti" degani (schema: `Budget.branchId?`).
+ * Oddiy `branchFilter()` bilan kesilsa markaziy byudjet har bir filial
+ * ekranidan yo'qolardi — aynan shu qoida `expense.service.ts`
+ * (`budgetBranchScope`) da ham amal qiladi.
+ *
+ * Owner uchun `branchFilter()` bo'sh obyekt qaytaradi — filtr
+ * qo'yilmaydi, ya'ni xatti-harakat o'zgarmaydi.
+ */
+const budgetBranchScope = (): Record<string, unknown> => {
+  const bf = branchFilter();
+  if (!Object.keys(bf).length) return {};
+  return { OR: [bf, { branchId: null }] };
+};
+
 @Injectable()
 export class BudgetService {
   constructor(
@@ -80,6 +102,11 @@ export class BudgetService {
   ) {}
 
   async listBudgets({ year, branchId }: { year?: number; branchId?: string } = {}) {
+    // FILIAL: aniq `?branchId=` ko'lamni faqat TORAYTIRA oladi. Usiz
+    // parametr ALS ko'lamini ALMASHTIRIB, begona filial byudjetini
+    // ochib berardi (kengaytirish — 403, `assertBranchInScope`).
+    if (branchId) assertBranchInScope(branchId);
+
     const rows = await this.prisma.budget.findMany({
       where: {
         isDeleted: false,
@@ -95,7 +122,8 @@ export class BudgetService {
 
   async getBudget(id: string) {
     const b = await this.prisma.budget.findFirst({
-      where: { id: String(id), isDeleted: false },
+      // FILIAL: begona filial byudjeti ID bilan ham ochilmaydi.
+      where: { id: String(id), isDeleted: false, ...budgetBranchScope() } as never,
       include: BUDGET_INCLUDE,
     });
     if (!b) throw new ApiError(404, 'Byudjet topilmadi');
@@ -171,7 +199,8 @@ export class BudgetService {
     _currentUser?: Actor | null,
   ) {
     const existing = await this.prisma.budget.findFirst({
-      where: { id: String(id), isDeleted: false },
+      // FILIAL: begona filial byudjetini tahrirlab bo'lmaydi.
+      where: { id: String(id), isDeleted: false, ...budgetBranchScope() } as never,
       select: { id: true },
     });
     if (!existing) throw new ApiError(404, 'Byudjet topilmadi');
@@ -211,7 +240,8 @@ export class BudgetService {
    */
   async removeBudget(id: string, currentUser?: Actor | null) {
     const b = await this.prisma.budget.findFirst({
-      where: { id: String(id), isDeleted: false },
+      // FILIAL: begona filial byudjetini o'chirib bo'lmaydi.
+      where: { id: String(id), isDeleted: false, ...budgetBranchScope() } as never,
       select: { id: true },
     });
     if (!b) throw new ApiError(404, 'Byudjet topilmadi');

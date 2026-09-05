@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { CommonModule } from './common/common.module.js';
+import { AuditLogMiddleware } from './common/audit/audit-log.middleware.js';
 import { HealthModule } from './health/health.module.js';
 import { FeaturesModule } from './modules/features/features.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
@@ -240,5 +241,25 @@ import { MarketModule } from './modules/market/market.module.js';
     CoinModule,
     MarketModule,
   ],
+  // ⚠ MIDDLEWARE DI UCHUN PROVAYDER SIFATIDA HAM KERAK: Nest middleware
+  // klassini shu modulning injektoridan oladi.
+  providers: [AuditLogMiddleware],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * ═════════════════════════════════════════════════════════════════════
+   * AUDIT — YAGONA GLOBAL MIDDLEWARE.
+   *
+   * `AuthMiddleware` dan farqli, bu ATAYLAB `forRoutes('*')`: audit izi
+   * "modul unutib qoldirdi" degan teshikka ega bo'lmasligi kerak. Aynan
+   * shu naqsh (`configure()` da modulma-modul ulash) audit yozuvchisini
+   * Express o'chirilganda butunlay yo'qotgan edi.
+   *
+   * O'zi hech narsani TO'SMAYDI — faqat `res.on('finish')` ga obuna
+   * bo'ladi va darhol `next()` chaqiradi.
+   * ═════════════════════════════════════════════════════════════════════
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(AuditLogMiddleware).forRoutes('*');
+  }
+}

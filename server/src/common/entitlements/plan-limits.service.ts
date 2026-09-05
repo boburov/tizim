@@ -157,6 +157,52 @@ export class PlanLimitsService {
   }
 
   /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * FILIALLI REJIM SOTIB OLINGANMI — filiallararo endpointlar uchun.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * ── NEGA KERAK ──
+   *
+   * Filialsiz tarifda markazda BITTA filial bo'ladi, ya'ni "filiallararo
+   * taqqoslash", "har filial P&L" kabi javoblar TEXNIK jihatdan ishlaydi
+   * — faqat bitta qatorli. Ular sotilmagan bo'lsa ham ochiq turardi.
+   *
+   * Klient tomonida `/org` allaqachon yo'q (`SuperAdminGuard`), lekin
+   * qo'riqchi XAVFSIZLIK EMAS: endpointga to'g'ridan-to'g'ri murojaat
+   * qilish mumkin. Bu — o'sha bo'shliqni yopadigan yagona server
+   * to'sig'i.
+   *
+   * ── ⚠ 402, 403 EMAS ──
+   *
+   * "Ruxsatingiz yo'q" emas, "tarifingizda yo'q". Mijoz nima qilishi
+   * kerakligini bilishi kerak — global darvoza ham shu kodni ishlatadi
+   * (`global-feature-gate.ts`).
+   *
+   * ── ⚠ TEKSHIRUV YIQILSA — O'TKAZAMIZ ──
+   *
+   * `branchConfig()` `.env` va keshdan o'qiydi. Ikkalasi ham yo'q bo'lsa
+   * `resolveEffectiveBranchConfig` standartni beradi; bu yerda qo'shimcha
+   * "ochiq yiqilish" yo'q, chunki qaror allaqachon o'sha funksiyada.
+   */
+  assertBranchesEnabled(): void {
+    const cfg = this.branchConfig();
+    if (cfg.branchesEnabled) return;
+
+    this.logger.warn(
+      `Filiallararo so'rov to'sildi — filialli rejim yoqilmagan (manba: ${cfg.source})`,
+    );
+
+    throw new ApiError(
+      402,
+      "Filiallararo hisobotlar tarifingizda mavjud emas",
+      {
+        code: 'FEATURE_NOT_AVAILABLE',
+        details: { featureKey: 'branches', branchesEnabled: false },
+      },
+    );
+  }
+
+  /**
    * ⚠ KALIT ROLGA QARAB TANLANADI: o'quvchi uchun `max_students`,
    * qolganlari (xodim/o'qituvchi) uchun `max_users` — Express bilan
    * aynan bir xil.

@@ -106,6 +106,19 @@ export const RESOURCE_SCOPE = Object.freeze({
   studentPayment: SCOPE.BRANCH,
   teacherCompensation: SCOPE.BRANCH,
   teacherSalary: SCOPE.BRANCH,
+  // ── TANGA VA MARKET ──
+  // LEDGER YOZUVI - `branchId` bor va u ODATIY filtr kaliti:
+  // coin.service.ts dagi stats() uni to'g'ridan-to'g'ri
+  // branchFilter('branchId') bilan kesadi. Ustun NULL bo'la oladi,
+  // lekin NULL "butun tarmoq" degani EMAS - u "filial aniqlanmagan"
+  // (qo'lda berishda filial berilmagan) degani. Shuning uchun
+  // branch-optional EMAS: bunday qatorning kesilib tushishi to'g'ri.
+  coinTransaction: SCOPE.BRANCH,
+  // XARID - `branchId` XARIDORNING filiali. Ro'yxat branchFilter()
+  // bilan, `:id` esa assertOrderInScope() bilan kesiladi va u NULL
+  // filialni ham yopadi (`!order.branchId` -> 404), ya'ni fail-closed.
+  // Mahsulotdagi "null = markaz umumiysi" holati bu yerda TAKRORLANMAYDI.
+  marketOrder: SCOPE.BRANCH,
   // Foydalanuvchi ALOHIDA shaklda: homeBranchId + branchAssignments[].
   // Shuning uchun uning filtri userBranchCondition() (branchFilter emas).
   user: SCOPE.VIA_USER,
@@ -126,6 +139,13 @@ export const RESOURCE_SCOPE = Object.freeze({
   // darajasidagi amal). Iz HECH QACHON o'chirilmaydi, shuning uchun
   // uni filtrlash faqat KO'RSATISH uchun.
   financialAuditLog: SCOPE.BRANCH_OPTIONAL,
+  // MARKET MAHSULOTI - `branchId = null` MARKAZ UMUMIYSI va u BARCHA
+  // filiallarda ko'rinishi kerak (faqat owner qo'ya oladi).
+  // branchFilter() bilan kesilsa `NULL = 'X'` hech qachon rost
+  // bo'lmaydi va umumiy mahsulot ro'yxatdan JIMGINA yo'qolardi -
+  // shuning uchun market.service.ts `OR: [{ branchId: null }, <ko'lam>]`
+  // shaklini ishlatadi. coursePrice bilan AYNI naqsh.
+  marketProduct: SCOPE.BRANCH_OPTIONAL,
 
   // ── IKKI FILIALGA TEGISHLI ──
   // Inkassatsiyada IKKI filial bor: jo'natuvchi va qabul qiluvchi.
@@ -161,6 +181,11 @@ export const RESOURCE_SCOPE = Object.freeze({
   archiveLog: SCOPE.VIA_USER,
   payrollAuditLog: SCOPE.VIA_USER,
   staffPayrollItem: SCOPE.VIA_USER,
+  // HAMYON - foydalanuvchiga BITTA, `branchId` maydoni YO'Q. Reyting
+  // (coin.service.ts leaderboard) uni `user` bog'lanishi orqali
+  // userBranchCondition() bilan kesadi; boshqa odamning hamyoni esa
+  // controller'da assertUserInBranchScope() bilan yopiladi.
+  coinAccount: SCOPE.VIA_USER,
 
   // ── IKKI YO'LDAN BIRI ──
   // Fikr guruhsiz ham, anonim ham bo'lishi mumkin - shuning uchun
@@ -176,6 +201,12 @@ export const RESOURCE_SCOPE = Object.freeze({
   archiveReason: SCOPE.GLOBAL,
   attendanceSettings: SCOPE.GLOBAL,
   branch: SCOPE.GLOBAL,
+  // TANGA SOZLAMASI - yagona qator (`id = "default"`),
+  // attendanceSettings naqshi. `branchId` YO'Q va ATAYLAB yo'q: tanga
+  // narxi bir filialda 1, boshqasida 5 bo'lsa bitta markaz ichida ikki
+  // xil qoida paydo bo'lardi va o'quvchilar buni adolatsizlik deb
+  // o'qirdi. Asosiy o'chirgich ham shu qatorda.
+  coinSettings: SCOPE.GLOBAL,
   course: SCOPE.GLOBAL,
   feedbackType: SCOPE.GLOBAL,
   holiday: SCOPE.GLOBAL,
@@ -199,6 +230,11 @@ export const RESOURCE_SCOPE = Object.freeze({
   botLock: SCOPE.INFRA,
   botUser: SCOPE.INFRA,
   cache: SCOPE.INFRA,
+  // TARIF KESHI - yagona qator ("singleton"), heartbeat javobining
+  // o'zgartirilmagan nusxasi (entitlement-cache.store.ts). Litsenziya
+  // butun O'RNATMAGA tegishli, filialga emas - ya'ni filial o'lchovi
+  // yo'q va bo'lishi ham shart emas.
+  entitlementCache: SCOPE.INFRA,
   refreshToken: SCOPE.INFRA,
   // Fayl kvotasi butun markazga umumiy - shuning uchun uni boshqarish
   // ham owner'da (permissionScope.js: storage.manage).

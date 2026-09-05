@@ -193,7 +193,13 @@ export class LeadsService {
   }
 
   async getById(id: string) {
-    const lead = await this.prisma.lead.findUnique({ where: { id }, include: INCLUDE });
+    // FILIAL: boshqa filial lidini ID orqali ochib bo'lmaydi — `list`
+    // bilan AYNAN bir xil ko'lam (`convert` dagi idiomning o'zi). Usiz
+    // ro'yxatda ko'rinmaydigan lidning ismi va telefoni oshkor bo'lardi.
+    const lead = await this.prisma.lead.findFirst({
+      where: { id, ...branchFilter() },
+      include: INCLUDE,
+    });
     if (!lead) throw new ApiError(404, 'Lid topilmadi');
     return shapeLead(lead);
   }
@@ -300,7 +306,11 @@ export class LeadsService {
   }
 
   async update(id: string, body: Record<string, any>, currentUser: any) {
-    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    // FILIAL: boshqa filial lidini tahrirlab bo'lmaydi (`setReminderBulk`
+    // dagi bilan bir xil qoida).
+    const lead = await this.prisma.lead.findFirst({
+      where: { id, ...branchFilter() },
+    });
     if (!lead) throw new ApiError(404, 'Lid topilmadi');
 
     const actorId = currentUser?.id || currentUser?._id || null;
@@ -385,7 +395,11 @@ export class LeadsService {
 
   /** Qayta bog'lanish eslatmasini o'rnatish/o'zgartirish/o'chirish. */
   async setReminder(id: string, { followUpAt, followUpNote }: Record<string, any>) {
-    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    // ⚠ FILIAL: boshqa filial lidiga eslatma qo'yib bo'lmaydi — ommaviy
+    // egizagi (`setReminderBulk`) allaqachon shunday tekshiradi.
+    const lead = await this.prisma.lead.findFirst({
+      where: { id, ...branchFilter() },
+    });
     if (!lead) throw new ApiError(404, 'Lid topilmadi');
 
     await this.prisma.lead.update({
@@ -492,7 +506,11 @@ export class LeadsService {
 
   /** ⚠ QATTIQ O'CHIRISH — Express'da ham shunday (yumshoq o'chirish YO'Q). */
   async remove(id: string) {
-    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    // FILIAL: boshqa filial lidini o'chirib bo'lmaydi — bu QATTIQ
+    // o'chirish, ya'ni qaytarib bo'lmaydigan sizish.
+    const lead = await this.prisma.lead.findFirst({
+      where: { id, ...branchFilter() },
+    });
     if (!lead) throw new ApiError(404, 'Lid topilmadi');
     await this.prisma.lead.delete({ where: { id } });
     return { _id: id, id };

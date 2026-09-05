@@ -223,8 +223,23 @@ export class ImportsController {
     @Validated(jobIdSchema) v: JobIdRequest,
     @Req() req: AuthenticatedRequest,
   ) {
-    const jobRow = await this.prisma.importJob.findUnique({
-      where: { id: String(v.params.jobId) },
+    // ⚠ FILIAL: `history` bilan bir xil kesishma — boshqa filialning
+    // importi (kim qo'shilgani, xatolar, fayl mazmuni) ko'rinmasin.
+    // Ilgari bu yerda `findUnique` edi, ya'ni jobId bilan HAR QANDAY
+    // filialning ishi o'qilardi.
+    //
+    // ⚠ O'Z ISHI ISTISNO: kross-filial rejimida ish `branchId: null`
+    // bilan yaratiladi (`create` ga qarang) va toza `branchFilter()`
+    // uni EGASIDAN ham yashirardi — client esa aynan shu yo'lni
+    // so'rab turadi. Shuning uchun "o'zimniki YOKI ko'lamda".
+    const jobScope = branchFilter();
+    const jobWhere: any = { id: String(v.params.jobId) };
+    if (Object.keys(jobScope).length) {
+      jobWhere.OR = [{ userId: String(req.user!._id) }, jobScope];
+    }
+
+    const jobRow = await this.prisma.importJob.findFirst({
+      where: jobWhere,
       omit: { rows: true },
     } as never);
     if (!jobRow) throw new ApiError(404, 'Import topilmadi');

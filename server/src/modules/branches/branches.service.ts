@@ -206,9 +206,30 @@ export class BranchesService {
     return { items: shaped, total, page, limit };
   }
 
-  async getById(id: string) {
+  /**
+   * ⚠ KO'LAM IXTIYORIY EMAS, SO'ROVDAN KELADI — `stats()` bilan bir xil.
+   *
+   * FILIAL: bitta filial yozuvida `delegation` va
+   * `expenseApprovalThreshold` bor, ya'ni BOSHQA filialning ichki
+   * boshqaruv qoidalari. HTTP yo'li (`GET /branches/:id`) endi ko'lamni
+   * uzatadi; uzatilmagan ICHKI chaqiruvlar (`update`, `softRemove`,
+   * `stats`) o'z qo'riqchisiga ega va bu yerda ikkinchi marta
+   * tekshirilmaydi.
+   */
+  async getById(
+    id: string,
+    scope?: { allowedBranchIds?: string[]; canSeeAllBranches?: boolean },
+  ) {
     const doc = await this.prisma.branch.findFirst({ where: { id, isDeleted: false } });
     if (!doc) throw new ApiError(404, 'Filial topilmadi');
+
+    if (scope && !scope.canSeeAllBranches) {
+      const allowed = (scope.allowedBranchIds || []).some(
+        (b) => String(b) === String(doc.id),
+      );
+      if (!allowed) throw new ApiError(403, "Bu filialga ruxsatingiz yo'q");
+    }
+
     return withLegacyId(doc);
   }
 

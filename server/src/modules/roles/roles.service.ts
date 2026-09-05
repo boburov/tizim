@@ -1,10 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import {
+  COIN_OWNER_ONLY_PERMISSIONS,
+} from '../../common/constants/coin.js';
+import { OWNER_ONLY_PERMISSIONS } from '../../common/constants/permission-scope.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { PermissionService } from '../../common/rbac/permission.service.js';
 import {
   RolesHelperService,
   assertCanGrantPermissions,
+  assertCanAssignRoleType,
+  assertOwnerOnlyKeysNotGranted,
   assertNotSystemRole,
 } from '../../common/rbac/roles.helper.js';
 import {
@@ -58,6 +64,19 @@ const shapeRole = (doc: any, userCount = 0) => ({
   createdAt: doc.createdAt,
   updatedAt: doc.updatedAt,
 });
+
+/**
+ * Egadan boshqa hech kimga berilmaydigan kalitlar.
+ *
+ * ⚠ IKKI RO'YXAT BIRLASHTIRILADI — `migrate-director-full-access.seed.ts`
+ * ham AYNAN shu ikkalasini olib tashlaydi. Bittasi unutilsa, seed
+ * tozalaydigan kalitni yozish yo'li ochiq qolardi va ular bir-biri bilan
+ * kurashardi.
+ */
+const ALL_OWNER_ONLY_KEYS: readonly string[] = Object.freeze([
+  ...OWNER_ONLY_PERMISSIONS,
+  ...COIN_OWNER_ONLY_PERMISSIONS,
+]);
 
 @Injectable()
 export class RolesService {
@@ -179,6 +198,11 @@ export class RolesService {
     const { ids, keys } = await this.resolvePermissionIds(body.permissionIds);
     // Privilege escalation himoyasi.
     assertCanGrantPermissions(currentPermissions, keys);
+    // ⚠ YANGI ROL HECH QACHON `owner` bo'lmaydi (o'sha nom band), ya'ni
+    // owner-only kalitlar bu yerda har doim rad etiladi.
+    assertOwnerOnlyKeysNotGranted(null, keys, ALL_OWNER_ONLY_KEYS);
+    // Rol TIPI ruxsat emas — yuqoridagi tekshiruv uni ko'rmaydi.
+    assertCanAssignRoleType(currentPermissions, body.roleType);
 
     const value = await this.helper.generateUniqueRoleValue(label);
 
@@ -233,6 +257,7 @@ export class RolesService {
     if (body.permissionIds !== undefined) {
       const { ids, keys } = await this.resolvePermissionIds(body.permissionIds);
       assertCanGrantPermissions(currentPermissions, keys);
+      assertOwnerOnlyKeysNotGranted(role.value, keys, ALL_OWNER_ONLY_KEYS);
       // `set` — BARCHA eski bog'lanishni almashtiradi.
       data.permissions = { set: ids.map((id) => ({ id })) };
       data.permissionsVersion = { increment: 1 };
@@ -240,7 +265,11 @@ export class RolesService {
 
     if (body.description !== undefined) data.description = body.description;
     if (body.defaultPath !== undefined) data.defaultPath = body.defaultPath;
-    if (body.roleType !== undefined && !role.isSystem) data.roleType = body.roleType;
+    if (body.roleType !== undefined && !role.isSystem) {
+      // Rol TIPI ruxsat emas — `assertOwnerOnlyKeysNotGranted` uni ko'rmaydi.
+      assertCanAssignRoleType(currentPermissions, body.roleType);
+      data.roleType = body.roleType;
+    }
 
     await this.prisma.role.update({ where: { value }, data });
     this.permissions.invalidateRoleCache(value);

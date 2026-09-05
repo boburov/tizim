@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Send, Smartphone, Check } from "lucide-react";
 import { cn } from "@/shared/utils/cn";
+import useFeatures from "@/shared/hooks/useFeatures";
 
 const CHANNELS = [
   {
@@ -19,8 +21,32 @@ const CHANNELS = [
 /**
  * ChannelSelector - yetkazish kanallarini tanlash (ikkalasini ham bo'lishi mumkin).
  * value: string[] ("telegram" | "inapp"), onChange: (string[]) => void
+ *
+ * ── ⚠ BOT O'CHIQ BO'LSA TELEGRAM KARTASI UMUMAN CHIZILMAYDI ──
+ *
+ * Ko'rsatib turib bloklash emas, YASHIRISH: bot yoqilmagan tenantda
+ * Telegram tanlovi mavjud bo'lishi kerak emas. Ilgari karta ko'rinib
+ * turardi, bosiladi, xabar "yuborildi" deb ko'rsatiladi — va hech kimga
+ * yetmasdi.
  */
 const ChannelSelector = ({ value = [], onChange, disabled = false }) => {
+  const { botEnabled } = useFeatures();
+  const channels = botEnabled ? CHANNELS : CHANNELS.filter((c) => c.key !== "telegram");
+
+  /**
+   * ⚠ FAQAT YASHIRISH YETARLI EMAS. `value` ichida "telegram" qolib
+   * ketsa u serverga BARIBIR yuboriladi (standart qiymat, saqlangan
+   * shablon, yoki bot yoqiq paytda tanlab keyin o'chirilgan holat).
+   * Server ham uni tozalaydi, lekin klient shu paytgacha noto'g'ri
+   * holatni ko'rsatib turardi.
+   */
+  useEffect(() => {
+    if (botEnabled) return;
+    if (!value.includes("telegram")) return;
+    const next = value.filter((v) => v !== "telegram");
+    onChange(next.length ? next : ["inapp"]);
+  }, [botEnabled, value, onChange]);
+
   const toggle = (key) => {
     const set = new Set(value);
     set.has(key) ? set.delete(key) : set.add(key);
@@ -28,8 +54,8 @@ const ChannelSelector = ({ value = [], onChange, disabled = false }) => {
   };
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {CHANNELS.map((ch) => {
+    <div className={cn("grid gap-3", channels.length > 1 && "sm:grid-cols-2")}>
+      {channels.map((ch) => {
         const active = value.includes(ch.key);
         const Icon = ch.icon;
         return (

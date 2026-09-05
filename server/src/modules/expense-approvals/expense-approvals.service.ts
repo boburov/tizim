@@ -302,7 +302,15 @@ export class ExpenseApprovalsService {
 
   /** So'rovni XOM holda o'qiydi (qaror mantig'i uchun; javob emas). */
   private async loadApproval(id: string) {
-    const doc = await this.prisma.approval.findUnique({ where: { id: String(id) } });
+    // FILIAL: BARCHA qaror yo'llari (`approve` / `reject` / `retry` /
+    // `cancel` va ular orqali `bulkDecide`) SHU yerdan o'tadi. Filtrsiz
+    // A filial direktori begona filialning PUL so'rovini id bo'yicha
+    // tasdiqlab yuborardi — ro'yxatda ko'rmasa ham.
+    // Kesish `buildListFilter()` va `pendingCount()` bilan AYNAN bir xil;
+    // `branchFilter()` owner uchun bo'sh, ya'ni u hech narsa yo'qotmaydi.
+    const doc = await this.prisma.approval.findFirst({
+      where: { id: String(id), ...branchFilter() },
+    });
     if (!doc) throw new ApiError(404, "So'rov topilmadi");
     return doc;
   }
@@ -331,7 +339,10 @@ export class ExpenseApprovalsService {
     }: { from: string; data: Record<string, unknown>; conflict: string },
   ) {
     const { count } = await this.prisma.approval.updateMany({
-      where: { id: String(id), status: from as never },
+      // FILIAL: holat o'zgarishining O'ZI ham kesiladi. `loadApproval()`
+      // dan keyin bu ortiqcha ko'rinadi, lekin begona filial qatoriga
+      // YOZUV qatlamida ham tegib bo'lmasligi kafolatlansin.
+      where: { id: String(id), status: from as never, ...branchFilter() },
       data: data as never,
     });
     if (!count) throw new ApiError(409, conflict);
@@ -597,8 +608,11 @@ export class ExpenseApprovalsService {
     id: string,
     { permissions, currentUser }: { permissions?: string[]; currentUser?: Actor | null } = {},
   ) {
-    const doc = await this.prisma.approval.findUnique({
-      where: { id },
+    const doc = await this.prisma.approval.findFirst({
+      // FILIAL: `list()` allaqachon kesadi — `/:id` kesmasa begona
+      // filialning so'rovi (summasi va payload'i bilan) id orqali
+      // ochilardi. Kategoriya tekshiruvi filialni ALMASHTIRMAYDI.
+      where: { id, ...branchFilter() },
       include: LIST_INCLUDE,
     });
     if (!doc) throw new ApiError(404, "So'rov topilmadi");

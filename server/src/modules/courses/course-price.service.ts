@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId } from '../../common/utils/serialize.js';
-import { isBranchAllowed } from '../../common/als/branch-context.js';
+import { isBranchAllowed, branchFilter } from '../../common/als/branch-context.js';
 import type { AuthenticatedUser } from '../../common/types/authenticated-request.js';
 
 /**
@@ -78,8 +78,16 @@ export class CoursePriceService {
     groupId: string,
     { year, month }: { year?: number; month?: number } = {},
   ) {
-    const group = await this.prisma.group.findUnique({
-      where: { id: String(groupId) },
+    // FILIAL: guruh joriy ko'lamda bo'lsin — aks holda begona filialning
+    // KELISHILGAN NARXI (`GroupFee` / kurs tarifi) `GET /courses/resolve/:groupId`
+    // orqali o'qilardi.
+    //
+    // ⚠ ICHKI CHAQIRUV BUZILMAYDI: `group-fee.service.inheritedCourseAmount()`
+    // guruhni allaqachon `branchFilter()` bilan tekshirgan holda chaqiradi,
+    // tasdiq ijrochisi esa `runWithBranchContext(approval.branchId)` ichida
+    // ishlaydi. Kontekstsiz (job/seed) `branchFilter()` bo'sh qaytadi.
+    const group = await this.prisma.group.findFirst({
+      where: { id: String(groupId), ...branchFilter() },
       select: { courseId: true, branchId: true },
     });
     if (!group) throw new ApiError(404, 'Guruh topilmadi');

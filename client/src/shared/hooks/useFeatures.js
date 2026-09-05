@@ -78,6 +78,22 @@ const useFeatures = () => {
   return {
     features,
     has,
+    /**
+     * TELEGRAM BOT TEXNIK JIHATDAN ISHLAYAPTIMI.
+     *
+     * ⚠ Bu `has("notifications")` DAN BOSHQA narsa:
+     *   • `has(...)` — bo'lim SOTIB OLINGANMI (tarif qarori);
+     *   • `botEnabled` — tenant `.env` da bot yoqilgan va TOKEN bormi.
+     *
+     * Tarifda bor, lekin token qo'yilmagan holat juda ko'p uchraydi
+     * (mijoz hali botini ochmagan). Shunda "Telegram orqali yuborish"
+     * tanlovi ko'rinib turardi va bosilganda JIMGINA hech narsa
+     * qilmasdi — xabar yuborildi deb ko'rsatilib, hech kimga yetmasdi.
+     *
+     * ⚠ Standart `false` (yopiq) — fayl boshidagi "xato holatida yopiq"
+     * qarori bilan bir xil yo'nalish.
+     */
+    botEnabled: data?.bot?.enabled === true,
     /** Server bilan aloqa uzilganmi — qo'llab-quvvatlash uchun. */
     stale: Boolean(data?.stale),
     planKey: data?.planKey ?? null,

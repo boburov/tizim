@@ -20,6 +20,8 @@ import {
 import { AuthMiddleware } from '../middleware/auth.middleware.js';
 import { EntitlementsService } from './entitlements/entitlements.service.js';
 import { PlanLimitsService } from './entitlements/plan-limits.service.js';
+import { OptionalModuleService } from './features/optional-module.service.js';
+import { BranchesEnabledGuard } from './guards/branches-enabled.guard.js';
 import { EntitlementCacheStore } from './entitlements/entitlement-cache.store.js';
 import { ModuleFeaturesService } from './features/module-features.service.js';
 import { CapabilityGuard } from './features/capability.guard.js';
@@ -69,6 +71,8 @@ import { CapabilityGuard } from './features/capability.guard.js';
     // chunki yangi yozuv yaratadigan har bir modulga kerak bo'lishi
     // mumkin.
     PlanLimitsService,
+    OptionalModuleService,
+    BranchesEnabledGuard,
     // ⚠ TARIF KESHI SHU YERDA — GLOBAL, YAGONA NUSXA.
     //
     // Ilgari u `JobsModule` da edi. AI moduli ham unga tayangach IKKINCHI
@@ -108,6 +112,8 @@ import { CapabilityGuard } from './features/capability.guard.js';
     AuthMiddleware,
     EntitlementsService,
     PlanLimitsService,
+    OptionalModuleService,
+    BranchesEnabledGuard,
     EntitlementCacheStore,
     ModuleFeaturesService,
     CapabilityGuard,

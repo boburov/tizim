@@ -22,6 +22,7 @@ import {
   CurrentUser,
   AuthUser,
 } from '../common/decorators/current-user.decorator.js';
+import { AdminCreateTenantDto } from './dto/admin-create-tenant.dto.js';
 
 /**
  * Tenant repositoriysidagi GitHub Action chaqiradigan deploy hook.
@@ -68,10 +69,22 @@ export class TenantsController {
   }
 
   // Yaratish va provisioning — SUPER_ADMIN va ADMIN
+  /**
+   * ⚠ `AdminCreateTenantDto` — ega login/paroli MAJBURIY.
+   *
+   * Ilgari provisioning hech qanday foydalanuvchi yaratmasdi va yangi
+   * loyihaga kirishning yo'li yo'q edi. Maydonlar shu yerda majburiy,
+   * bazaviy `CreateTenantDto` esa tegilmaydi.
+   */
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Post()
-  create(@Body() dto: CreateTenantDto, @CurrentUser() user: AuthUser) {
-    return this.tenants.create(dto, user.email);
+  create(@Body() dto: AdminCreateTenantDto, @CurrentUser() user: AuthUser) {
+    return this.tenants.create(dto, user.email, undefined, {
+      username: dto.ownerUsername,
+      password: dto.ownerPassword,
+      firstName: dto.ownerFirstName,
+      lastName: dto.ownerLastName,
+    });
   }
 
   @Roles('SUPER_ADMIN', 'ADMIN')

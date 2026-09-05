@@ -5,6 +5,8 @@ import { ROLES } from '../../common/constants/permissions.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { MembershipService } from '../../common/helpers/membership.service.js';
 import { CorrelationCacheService } from '../../common/helpers/correlation-cache.service.js';
+import { userBranchCondition } from '../../common/als/branch-context.js';
+import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 
 /**
  * DAVOMATDAN OZOD DAVRLARI.
@@ -45,11 +47,20 @@ export class AttendanceExemptionsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly memberships: MembershipService,
     private readonly cache: CorrelationCacheService,
+    private readonly branchAccess: BranchAccessService,
   ) {}
 
   private async ensureStudent(studentId: string) {
-    const u = await this.prisma.user.findUnique({
-      where: { id: String(studentId) },
+    // FILIAL: begona filial o'quvchisiga ozod davri OCHIB BO'LMAYDI —
+    // usiz direktor boshqa filial o'quvchisini davomatdan chiqarardi.
+    // ⚠ `AND` ichida: `userBranchCondition()` OR qaytaradi.
+    // Xabar O'ZGARMAYDI — o'quvchi bor-yo'qligi oshkor qilinmaydi.
+    const branchCond = userBranchCondition();
+    const u = await this.prisma.user.findFirst({
+      where: {
+        id: String(studentId),
+        ...(branchCond ? { AND: [branchCond] } : {}),
+      },
       select: { id: true, role: true },
     });
     if (!u || u.role !== ROLES.STUDENT) {
@@ -78,6 +89,16 @@ export class AttendanceExemptionsService {
     const where: Record<string, unknown> = { isDeleted: false };
     if (studentId) where.studentId = String(studentId);
     if (isActive !== undefined) where.isActive = !!isActive;
+
+    // FILIAL: `AttendanceExemption` da `branchId` YO'Q — yozuv
+    // O'QUVCHIGA tegishli, o'quvchi esa filialga. Ko'lamsiz `list()`
+    // (`studentId` berilmaganda) BUTUN markazning ozod davrlarini
+    // qaytarardi: o'qituvchi `ensureTeacherOwnsStudent` bilan
+    // cheklangan, xodim va direktor esa HECH NARSA bilan emas.
+    // ⚠ `AND` ichida: yuqorida `studentId` kaliti band bo'lishi mumkin
+    // va spread uni JIMGINA bosib ketardi.
+    const scope = await this.branchAccess.branchUserFilter('studentId');
+    if (Object.keys(scope).length) where.AND = [scope];
 
     const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
@@ -145,8 +166,16 @@ export class AttendanceExemptionsService {
   }
 
   async getById(id: string) {
+    // FILIAL: ro'yxat ko'lamlangani bilan `:id` yo'li ochiq qolgan edi —
+    // begona filial o'quvchisining ozod davri id bo'yicha o'qilar,
+    // `update()`/`remove()` esa uni o'zgartira olardi (IDOR).
+    // ⚠ 404, 403 EMAS: yozuv MAVJUDLIGI ham oshkor qilinmaydi.
+    const scope = await this.branchAccess.branchUserFilter('studentId');
+    const where: Record<string, unknown> = { id: String(id), isDeleted: false };
+    if (Object.keys(scope).length) where.AND = [scope];
+
     const doc = await this.prisma.attendanceExemption.findFirst({
-      where: { id: String(id), isDeleted: false },
+      where: where as never,
     });
     if (!doc) throw new ApiError(404, 'Davomatdan ozod davri topilmadi');
     return doc;

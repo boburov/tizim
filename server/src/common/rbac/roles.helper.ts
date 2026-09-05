@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../errors/api-error.js';
-import { ROLES, ROLE_TYPES } from '../constants/permissions.js';
+import { PERMISSIONS, ROLES, ROLE_TYPES } from '../constants/permissions.js';
 import { hasPermission } from './permission.service.js';
 
 /**
@@ -42,6 +42,115 @@ export const assertCanGrantPermissions = (
       "O'zingizda mavjud bo'lmagan ruxsatni bera olmaysiz: " + missing.join(', '),
     );
   }
+};
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ROL TIPINI `owner` GA KO'TARISH — FAQAT EGA.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ── QANDAY XATODAN SAQLAYDI ──
+ *
+ * `roles.update` FILIAL ICHIDAGI kalit: `BRANCH_LOCAL_PERMISSIONS`
+ * "hamma narsa minus istisnolar" deb hisoblanadi (`permission-scope.ts`),
+ * va `roles.update` istisnolar ichida YO'Q — ya'ni u HAR BIR direktorda
+ * bor. `RolesGuard` esa rol TIPINI owner bilan tenglashtiradi
+ * (`common/guards/roles.guard.ts`: `roles.includes(roleType)`).
+ *
+ * Ikkalasi birga privilege escalation berardi: direktor
+ * `PATCH /api/roles/<o'z-roli> {"roleType":"owner"}` yuborib, barcha
+ * `@Roles(OWNER)` marshrutlarini ocha olardi. `create` da ham xuddi
+ * shunday — u `body.roleType` ni tekshirmasdan yozardi.
+ *
+ * ⚠ NEGA `assertOwnerOnlyKeysNotGranted` BUNI TUTMAYDI: u faqat RUXSAT
+ * KALITLARINI ko'radi. `roleType` ruxsat emas — u Role yozuvining
+ * alohida maydoni va o'sha tekshiruvdan butunlay chetda qolardi.
+ *
+ * ── O'LCHOV: `system.admin_access` ──
+ *
+ * U `OWNER_ONLY_PERMISSIONS` ichida (`permission-scope.ts`), ya'ni
+ * direktorga hech qachon tushmaydi, va `RolesGuard` uni allaqachon
+ * owner ekvivalenti deb biladi. Shuning uchun "owner tipini kim
+ * beradi" savoliga aynan shu kalit javob beradi.
+ *
+ * ⚠ FAQAT `owner` TO'SILADI: `staff`/`teacher`/`student` orasidagi
+ * o'zgarish ilgarigidek ishlaydi — mavjud oqimlar buzilmasin.
+ */
+export const assertCanAssignRoleType = (
+  currentPermissions: string[] | undefined | null,
+  roleType: string | undefined | null,
+): void => {
+  // ⚠ NORMALLASHTIRILADI: `updateSchema` hozir aynan `owner` ni o'tkazadi,
+  // lekin bu tekshiruv zod'ga TAYANMASLIGI kerak — sxema kelajakda
+  // yumshasa, `OWNER` yoki `" owner"` jimgina o'tib ketardi.
+  const requested = String(roleType ?? '').trim().toLowerCase();
+  if (requested !== ROLE_TYPES.OWNER) return;
+  if (hasPermission(currentPermissions, PERMISSIONS.SYSTEM_ADMIN_ACCESS)) return;
+
+  throw new ApiError(
+    403,
+    "Rol tipini `owner` qilib belgilash faqat egaga ruxsat etilgan.",
+  );
+};
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * OWNER-ONLY RUXSATLAR FAQAT `owner` ROLIDA QOLADI.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ── QANDAY XATODAN SAQLAYDI ──
+ *
+ * `OWNER_ONLY_PERMISSIONS` ro'yxati allaqachon bor edi va nima uchun
+ * xavfli ekani u yerda batafsil yozilgan. Lekin u FAQAT ikki joyda
+ * ishlatilardi: seed shablonida (yangi baza) va drift'ni tuzatadigan
+ * `migrate-director-full-access` skriptida.
+ *
+ * YOZISH YO'LIDA tekshiruv YO'Q edi. Yagona himoya —
+ * `assertCanGrantPermissions` ("o'zingda yo'q narsani bera olmaysan"), u
+ * esa owner uchun HAR DOIM o'tadi (`["*"]`). Ya'ni owner panel orqali
+ * direktorga `branches.view_all` berib qo'ya olardi.
+ *
+ * Bu nazariy emas: drift skriptining o'z izohida "jonli bazada direktor
+ * rolida `branches.view_all` va `system.admin_access` paydo bo'lgan edi"
+ * deb yozilgan va oqibati — A filial direktori B filial xodimining
+ * PAROLINI o'qiy olardi.
+ *
+ * ⚠ TALAB: xodim FAQAT o'z filialini ko'radi. `branches.view_all` shu
+ * talabni bitta klik bilan bekor qiladigan yagona kalit, shuning uchun
+ * himoya seed'da emas, YOZISH YO'LIDA turishi kerak.
+ *
+ * ── NEGA `owner` ROLIGA RUXSAT ETILADI ──
+ *
+ * `permissions.seed.ts` owner roliga BARCHA kalitni biriktiradi va uni
+ * har seedda qayta yozadi. Blanket taqiq o'sha seedni va owner rolini
+ * panel orqali saqlashni yiqitardi. Owner uchun bu kalitlar baribir
+ * ortiqcha — kod `["*"]` bypass'ini ishlatadi — lekin ular o'sha yerda
+ * turgani zarar qilmaydi.
+ *
+ * ── DRIFT ALLAQACHON BOR BO'LSA ──
+ *
+ * Mavjud rolni tahrirlaganda ham ushbu tekshiruv ishlaydi, ya'ni eski
+ * drift'li rolni saqlash 403 beradi. Bu ATAYLAB: xato ko'rinib turishi
+ * va tuzatilishi kerak. Tozalash yo'li tayyor:
+ * `npm run migrate:director-full`.
+ */
+export const assertOwnerOnlyKeysNotGranted = (
+  roleValue: string | null | undefined,
+  permissionKeys: string[],
+  ownerOnlyKeys: readonly string[],
+): void => {
+  if (roleValue === ROLES.OWNER) return;
+
+  const ownerOnly = new Set(ownerOnlyKeys);
+  const leaked = permissionKeys.filter((k) => ownerOnly.has(k));
+  if (!leaked.length) return;
+
+  throw new ApiError(
+    403,
+    'Bu ruxsatlar faqat egaga tegishli va boshqa rolga berilmaydi: ' +
+      `${leaked.join(', ')}. Ular berilsa xodim o'z filialidan tashqarini ` +
+      "ham ko'ra boshlaydi.",
+  );
 };
 
 /** Built-in rolni himoya qilish. */

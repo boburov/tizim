@@ -148,6 +148,29 @@ export class CashTransferService {
     );
     await this.assertBranchExists(toBranchId);
 
+    // ═════════════════════════════════════════════════════════════════
+    // FILIALLARARO KO'CHIRISH — IKKALA UCHI HAM VAKOLATDA BO'LSIN.
+    //
+    // `fromBranchId` xavfsiz: u `resolveBranchForWrite()` dan, ya'ni
+    // aktyorning O'Z ko'lamidan keladi. `toBranchId` esa SO'ROV TANASIDAN
+    // kelardi va faqat "mavjudmi" deb tekshirilardi — ya'ni A filial
+    // direktori pulni ko'rmaydigan filialiga surib yubora olardi.
+    //
+    // `receive()` va `cancel()` allaqachon `isBranchAllowed()` ni
+    // chaqiradi; yo'qolgan yagona uchi shu edi.
+    //
+    // ⚠ XULQ O'ZGARADI — ATAYLAB: bitta filialga biriktirilgan direktor
+    // uchun `allowedBranchIds` = [o'z filiali], va o'ziga jo'natish
+    // yuqorida 400 bilan to'siladi. Ya'ni filiallararo inkassatsiya endi
+    // KO'P FILIALNI KO'RADIGAN aktyorning (owner / `branches.view_all`)
+    // amaliga aylanadi. Bu talabning O'ZI: "cash transfer across
+    // branches is an Owner-level operation; both source and destination
+    // must be authorized".
+    // ═════════════════════════════════════════════════════════════════
+    if (!isBranchAllowed(toBranchId)) {
+      throw new ApiError(403, "Bu filialga pul ko'chirishga ruxsatingiz yo'q");
+    }
+
     const value = Math.round(Number(amount));
     if (!Number.isFinite(value) || value <= 0) {
       throw new ApiError(400, "Summa musbat son bo'lishi kerak");

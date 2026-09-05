@@ -131,22 +131,39 @@ export const resolveWorkspace = (auth = {}, has = () => false) => {
   // ROL beriladi (UserBranchAssignment.role) va u boshqa makonga tushadi.
   if (type === ROLE_TYPES.TEACHER) return WORKSPACES.STAFF;
 
-  // ⚠ EGA HAM `ADMIN` MAKONIDA TURADI — `SUPER_ADMIN` DA EMAS.
+  // ══════════════════════════════════════════════════════════════════
+  // EGA QAYSI MAKONDA — FILIALLI TARIFGA BOG'LIQ
+  // ══════════════════════════════════════════════════════════════════
   //
-  // Ilgari ega `/org` ga tushardi va `AdminPanelGuard` uni `/owner/*`
-  // dan qaytarardi. Natijada admin panelga kirmoqchi bo'lgan odam
-  // `/org` ga otilib, keyin qo'lda qaytib kelardi — foydalanuvchi buni
-  // "sakrash" deb ta'rifladi va aynan shu bug tuzatilmoqda.
+  // ⚠ SHART `branchesEnabled`, `multiBranch` EMAS. Ikkinchisi bazadagi
+  // faol filial soni (fakt), birinchisi esa tarif qarori. Faktga
+  // bog'lansa, ikkinchi filial ochilgan kuni ega kutilmaganda boshqa
+  // panelga ko'chib qolardi.
   //
-  // `/org` YO'Q BO'LMADI: u ko'p filialli markazda "Markaz ko'rinishi"
-  // havolasi orqali ochiladi (`AppHeader`) va `SuperAdminGuard` uni
-  // avvalgidek qo'riqlaydi. O'zgargani — BOSH SAHIFA: ega kundalik
-  // ishini admin panelda boshlaydi, tashkilot ko'rinishiga esa O'ZI
-  // kirganda o'tadi.
+  // ── FILIALSIZ (branchesEnabled = false) ──
   //
-  // Yakka filialli nashrda `/org` umuman yo'q, ya'ni bu yagona
-  // to'g'ri javob (qarang: MULTI_BRANCH, `branch-access.service.ts`).
-  if (type === ROLE_TYPES.OWNER) return WORKSPACES.ADMIN;
+  // `/org` UMUMAN YO'Q. Ega, administrator va admin panelga ruxsati
+  // bo'lgan har bir xodim `/owner` da ishlaydi. Filial tushunchasi
+  // sotilmagan tenantda "Tashkilot ko'rinishi" bo'sh qobiq bo'lardi:
+  // bitta filialning ma'lumotini ikkinchi marta, boshqa menyu bilan
+  // ko'rsatardi.
+  //
+  // ── FILIALLI (branchesEnabled = true) ──
+  //
+  // Ega FAQAT `/org` da. Uning birinchi savoli "qaysi filial?", ya'ni
+  // axborot arxitekturasi boshqa (fayl boshidagi "ENG MUHIM QOIDA").
+  // Kundalik filial ishi filial adminining vazifasi — `AdminPanelGuard`
+  // egani `/owner` dan qaytaradi.
+  if (type === ROLE_TYPES.OWNER) {
+    return auth.branchesEnabled ? WORKSPACES.SUPER_ADMIN : WORKSPACES.ADMIN;
+  }
+
+  // ⚠ EGADAN BOSHQA HAMMA `/owner` DA — tashkilot vakolati bo'lsa ham.
+  //
+  // Talab aniq: "super admin faqat super admin panelga, admin esa admin
+  // panelga". Ya'ni `/org` — eganing makoni, lavozim emas. Buxgalter yoki
+  // direktor `branches.view_all` bilan filiallararo hisobotni `/owner`
+  // ichidan ko'radi (`SuperAdminGuard` ularni `/org` ga qo'ymaydi).
   if (hasOrgAuthority(has)) return WORKSPACES.ADMIN;
 
   if (hasBranchAuthority(has)) return WORKSPACES.ADMIN;

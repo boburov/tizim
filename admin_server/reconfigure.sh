@@ -78,7 +78,7 @@ if [ "$APPLY_MODE" = "resume" ]; then
   if ! pm2 start "$TENANT_PM2_NAME" --update-env 2>/dev/null; then
     echo "    (ro'yxatda yo'q — papkadan qayta ishga tushirilmoqda)"
     cd "$APP_DIR/server"
-    # NestJS kirish nuqtasi dist/main.js (kompilyatsiya natijasi).
+    # NestJS kirish nuqtasi dist/main.js (eski Express `src/index.js` mavjud emas).
     pm2 start dist/main.js --name "$TENANT_PM2_NAME" --update-env
   fi
   pm2 save >/dev/null 2>&1 || true
@@ -190,16 +190,19 @@ if [ "$APPLY_MODE" = "deploy" ]; then
   cd "$APP_DIR/server"
   # --include=dev SHART: serverni `nest build` bilan qurish kerak, `nest` va
   # `typescript` esa devDependencies (client'dagi vite bilan bir xil sabab).
+  # NODE_ENV=production meros bo'lgani uchun plain `npm ci` ham ularni tashlaydi.
   npm ci --include=dev 2>/dev/null || npm install --include=dev
 
-  # Yangi kod yangi migratsiyalar bilan kelishi mumkin — repodan tortilgach
-  # bazani ham yangilaymiz (migrate deploy hech qachon ma'lumot o'chirmaydi).
+  # Repodan yangi kod keldi — u yangi migratsiya bilan kelgan bo'lishi mumkin.
+  # Migratsiyasiz eski schema ustida ko'tarilsa, xato faqat ish vaqtida
+  # chiqadi va sababi ko'rinmaydi (migrate deploy hech qachon ma'lumot o'chirmaydi).
   echo "==> server: prisma migrate deploy + generate..."
   npx prisma migrate deploy
   npx prisma generate
 
   # NestJS kodini kompilyatsiya qilamiz -> dist/main.js. `dist` gitignore'da
   # bo'lgani uchun git reset --hard'dan keyin uni shu yerda qayta quramiz.
+  # Busiz pm2 eski dist/main.js ni ishga tushirib, "deploy muvaffaqiyatli" derdi.
   echo "==> server: build (nest build)..."
   npm run build
 fi

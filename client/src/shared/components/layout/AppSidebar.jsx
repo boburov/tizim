@@ -100,7 +100,6 @@ const OwnerApprovalsBell = lazy(() =>
 // ISH MAKONI — menyuning YAGONA manbai.
 import useWorkspace from "@/shared/hooks/useWorkspace";
 import { WORKSPACES } from "@/shared/workspaces";
-import { hasOrgAuthority } from "@/shared/workspaces/workspaces";
 
 /**
  * ══════════════════════════════════════════════════════════════════════
@@ -441,22 +440,24 @@ const THEME_ITEMS = [
 ];
 
 const Footer = () => {
-  const { user, multiBranch } = useAuth();
-  const { has } = usePermissions();
+  const { user, roleType, role, branchesEnabled } = useAuth();
   const { mutate: logout } = useLogout();
   const isMobile = useIsMobile();
   const { theme, setTheme } = useTheme();
 
-  // MARKAZ KO'RINISHIGA O'TISH.
+  // MARKAZ KO'RINISHIGA HAVOLA — AMALDA HECH QACHON CHIQMAYDI.
   //
-  // `AdminPanelGuard` endi egani `/owner` dan qaytarmaydi, ya'ni ega
-  // shu panelda yashaydi. `/org` esa yo'qolmadi — unga faqat SHU
-  // havola orqali, ODAM O'ZI BOSGANDA o'tiladi.
+  // Havola faqat `/org` ga kira oladigan odamga ko'rsatilishi kerak,
+  // ya'ni FILIALLI tarifdagi EGAGA. Lekin o'sha odam bu panelga umuman
+  // tushmaydi: `AdminPanelGuard` uni `/org` ga qaytaradi. Ya'ni shart
+  // to'g'ri, sahnasi bo'sh.
   //
-  // ⚠ IKKI SHART: `multiBranch` ham tekshiriladi, chunki yakka
-  // filialli nashrda `/org` umuman yo'q — havola bo'lsa u "yolg'on
-  // eshik" bo'lardi va `SuperAdminGuard` odamni darhol qaytarardi.
-  const canSeeOrgView = multiBranch && hasOrgAuthority(has);
+  // ⚠ SHART SHUNDAY YOZILDI, HAVOLA O'CHIRILMADI: qoida bitta joyda
+  // (`SuperAdminGuard` bilan bir xil ifoda) turgani uchun kelajakda
+  // ruxsat kengaytirilsa havola O'ZI paydo bo'ladi. `hasOrgAuthority`
+  // ga bog'lansa esa buxgalter "yolg'on eshik" ko'rardi — bosadi va
+  // darhol qaytariladi.
+  const canSeeOrgView = branchesEnabled && (roleType || role) === ROLE_TYPES.OWNER;
 
   if (!user) return null;
 

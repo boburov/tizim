@@ -23,9 +23,11 @@ import { PERMISSIONS, ROLES } from '../../common/constants/permissions.js';
 import { UserProfileService } from './user-profile.service.js';
 import { TeacherCompensationService } from '../teacher-salary/teacher-compensation.service.js';
 import { OpeningBalanceService } from '../opening-balance/opening-balance.service.js';
+import { OptionalModuleService } from '../../common/features/optional-module.service.js';
 import { PlanLimitsService } from '../../common/entitlements/plan-limits.service.js';
 import type { AppConfig } from '../../config/env.validation.js';
 import type { ResolvedRole } from '../../common/rbac/permission.service.js';
+import { resolveWorkspace } from '../../common/workspaces/workspace-resolve.js';
 
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -42,8 +44,15 @@ export class AuthService {
     // ⚠ IXTIYORIY YON TA'SIRLAR (`registerUser`): maosh stavkasi va
     // boshlang'ich qoldiq. Ikkalasi ham O'Z modulida qoladi — bu yerda
     // MANTIQ NUSXALANMAYDI.
-    private readonly compensations: TeacherCompensationService,
-    private readonly openingBalances: OpeningBalanceService,
+    /**
+     * ⚠ `finance` (maosh) va `opening-balance` — IXTIYORIY.
+     *
+     * Ular `registerUser` ning YON TA'SIRLARI: xodim/o'quvchi ularsiz
+     * ham to'liq yaratiladi. Ilgari `AuthModule` ularni `imports` bilan
+     * olardi va grafik "auth ularga tayanadi" deb o'qirdi — natijada
+     * ikkala modul ham hech qachon o'chirilmasdi.
+     */
+    private readonly optional: OptionalModuleService,
     // FILIAL CHEGARASI — `/auth/me` da FAQAT O'QISH uchun.
     private readonly planLimits: PlanLimitsService,
     config: ConfigService<AppConfig, true>,
@@ -291,6 +300,10 @@ export class AuthService {
       ({ list: branches, total: branchCount } = await readBranchState());
     }
 
+    // Ish makoni hisobi uchun ham kerak, javobda ham qaytadi — bir marta
+    // o'qiladi (`branchUsage()` baza va keshga murojaat qiladi).
+    const branchLimits = await this.planLimits.branchUsage();
+
     return {
       user: this.sanitizeUser(user),
       role: role.value || user.role,
@@ -319,8 +332,26 @@ export class AuthService {
       // javobda qaytadi. Yozish yo'li tenant serverida UMUMAN YO'Q:
       // qiymat admin paneldan `.env` va heartbeat orqali keladi.
       // ═══════════════════════════════════════════════════════════════
-      branchLimits: await this.planLimits.branchUsage(),
+      branchLimits,
       homeBranchId: user.homeBranchId ? String(user.homeBranchId) : null,
+
+      // ═══════════════════════════════════════════════════════════════
+      // ISH MAKONI — QAROR MANBAI SERVER.
+      //
+      // Klient ham xuddi shu hisobni qiladi
+      // (`shared/workspaces/workspaces.js`), lekin ikki nusxa vaqt
+      // o'tib ajralib ketadi. Server javobi — hakam: klient
+      // kelishmovchilikda SHU qiymatga tayanishi kerak.
+      //
+      // ⚠ BU XAVFSIZLIK EMAS — `/owner` va `/org` klient marshrutlari,
+      // serverda ular uchun alohida API yuzasi yo'q. Izohi
+      // `common/workspaces/workspace-resolve.ts` da.
+      // ═══════════════════════════════════════════════════════════════
+      ...resolveWorkspace({
+        roleType: role.roleType,
+        permissions: role.permissions,
+        branchesEnabled: branchLimits.branchesEnabled === true,
+      }),
       roleMeta: {
         value: role.value,
         label: role.label,
@@ -413,6 +444,32 @@ export class AuthService {
     // KEYIN bajariladi — Express'dagi bilan AYNAN bir joyda.
     // ═══════════════════════════════════════════════════════════════════
 
+    // ═══════════════════════════════════════════════════════════════════
+    // ⚠ YON TA'SIR MODULLARI OLDINDAN TEKSHIRILADI — ODAM YARATILISHIDAN
+    // OLDIN.
+    //
+    // Ikkalasi ham tarifda bo'lmasligi mumkin (`finance`,
+    // `opening-balance` — o'chiriladigan modullar). Tekshiruvni pastga,
+    // yaratishdan keyingi `try/catch` ga qoldirsak: odam yaratilardi,
+    // maosh yoki boshlang'ich qarz esa JIMGINA yo'qolardi. Pul bilan
+    // bog'liq narsada bu qabul qilinmaydi.
+    //
+    // 402 — "ruxsat yo'q" emas, "tarifingizda yo'q": chaqiruvchi nima
+    // qilishi kerakligini biladi.
+    // ═══════════════════════════════════════════════════════════════════
+    if (body.compensation && !this.optional.enabled('finance')) {
+      throw new ApiError(402, "Maosh moduli tarifingizda mavjud emas", {
+        code: 'FEATURE_NOT_AVAILABLE',
+        details: { featureKey: 'finance' },
+      });
+    }
+    if (body.openingBalance && !this.optional.enabled('opening-balance')) {
+      throw new ApiError(402, "Boshlang'ich qoldiq moduli tarifingizda mavjud emas", {
+        code: 'FEATURE_NOT_AVAILABLE',
+        details: { featureKey: 'opening-balance' },
+      });
+    }
+
     const phone = body.phone ? normalizePhone(body.phone) : null;
     if (body.phone && !phone) throw new ApiError(400, "Telefon raqam noto'g'ri");
 
@@ -479,9 +536,10 @@ export class AuthService {
     // o'qituvchi "maoshi belgilanmagan" holatda qoladi va profil
     // sahifasida ogohlantirish ko'rinadi (= "keyinroq belgilayman").
     // ═══════════════════════════════════════════════════════════════════
-    if (body.role === ROLES.TEACHER && body.compensation) {
+    const compensations = this.optional.get('finance', TeacherCompensationService);
+    if (body.role === ROLES.TEACHER && body.compensation && compensations) {
       try {
-        await this.compensations.setCompensation(
+        await compensations.setCompensation(
           {
             ...body.compensation,
             teacher: (user as { id: string }).id,
@@ -509,9 +567,10 @@ export class AuthService {
     // `/api/opening-balance` orqali qayta kiritadi.
     // ═══════════════════════════════════════════════════════════════════
     const result: any = this.sanitizeUser(user as never);
-    if (body.openingBalance) {
+    const openingBalances = this.optional.get('opening-balance', OpeningBalanceService);
+    if (body.openingBalance && openingBalances) {
       try {
-        await this.openingBalances.create(
+        await openingBalances.create(
           {
             user: (user as { id: string }).id,
             role: body.role,

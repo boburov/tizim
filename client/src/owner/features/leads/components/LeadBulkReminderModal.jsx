@@ -10,6 +10,7 @@ import SelectField from "@/shared/components/ui/select/SelectField";
 
 // Utils
 import { formatPhone } from "@/shared/utils/formatPhone";
+import useFeatures from "@/shared/hooks/useFeatures";
 
 // "YYYY-MM-DDTHH:mm" (datetime-local, mahalliy vaqt)
 const toLocalInput = (d) => {
@@ -34,6 +35,7 @@ const LeadBulkReminderModal = ({
   setIsLoading,
   onDone,
 }) => {
+  const { botEnabled } = useFeatures();
   const obj = useObjectState({
     followUpAt: tomorrowAt10(),
     followUpNote: "",
@@ -88,8 +90,13 @@ const LeadBulkReminderModal = ({
     <form onSubmit={handleSubmit} noValidate className="space-y-3">
       <p className="text-sm text-muted-foreground">
         <b>{leads.length} ta lid</b> uchun bitta eslatma o&apos;rnatiladi. Vaqti
-        kelganda mas&apos;ul xodimga platformada va Telegram bog&apos;langan
-        bo&apos;lsa botda xabar boradi.
+        kelganda mas&apos;ul xodimga platformada
+        {/* ⚠ Bot o'chiq tenantda Telegram haqida gapirmaslik kerak:
+            mijoz bo'lmagan imkoniyatni kutib qolardi. */}
+        {botEnabled
+          ? " va Telegram bog'langan bo'lsa botda"
+          : ""}{" "}
+        xabar boradi.
       </p>
 
       {/* Kimga tegishli ekani ko'rinib tursin: 200 tagacha lid tanlansa

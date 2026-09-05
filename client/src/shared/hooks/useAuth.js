@@ -67,6 +67,39 @@ const useAuth = () => {
     // tushunchasi UI'da umuman ko'rinmaydi. Server yubormasa - true
     // (eski backend bilan ishlayotgan client o'zgarishsiz qoladi).
     multiBranch: data?.multiBranch !== false,
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * FILIALLI TARIF YOQILGANMI (`BRANCHES_ENABLED` / heartbeat)
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * ⚠ `multiBranch` DAN BOSHQA NARSA. Ularni aralashtirish oson va
+     * natijasi jimgina buzuq bo'ladi:
+     *   • `multiBranch` — bazada FAOL FILIAL SONI > 1 (fakt);
+     *   • `branchesEnabled` — filialli rejim SOTIB OLINGANMI (tarif).
+     *
+     * Panel ajratish AYNAN tarifga bog'lanadi. Agar `multiBranch` ga
+     * bog'lansa: "ko'p filialli tarif olingan, lekin hali bitta filial"
+     * holatida ega admin panelda qolardi, ikkinchi filial ochilgan
+     * kuni esa KUTILMAGANDA `/org` ga ko'chib qolardi.
+     *
+     * ⚠ STANDART `false` — YOPIQ. `multiBranch` da ochiq standart
+     * to'g'ri edi (u faqat menyuni boyitardi), bu yerda esa ochiq
+     * standart `/org` ni mavjud qilib, egani `/owner` dan QUVIB
+     * CHIQARARDI. Ya'ni ma'lumot kelmaguncha eng buzuq xulq.
+     * Yopiq standartda hamma `/owner` da qoladi — hech kim hech
+     * qayerdan quvilmaydi.
+     */
+    branchesEnabled: data?.branchLimits?.branchesEnabled === true,
+    /**
+     * Serverning ISH MAKONI qarori (`workspace-resolve.ts`).
+     *
+     * `useWorkspace` klientdagi hisobdan OLDIN shuni oladi: qoida
+     * ikki joyda takrorlangan va ular vaqt o'tib ajralib ketishi
+     * mumkin. Eski backend bu maydonni yubormaydi — o'shanda klient
+     * o'z hisobiga qaytadi (`undefined` → fallback).
+     */
+    workspace: data?.workspace || null,
+    workspaceHome: data?.home || null,
     // Markazdagi jami filial. Yakka rejim yoqilgan-u, bu 1 dan katta bo'lsa -
     // hisobotlar faqat asosiy filialni qamraydi (ogohlantirish chizig'i).
     branchCount: data?.branchCount ?? 0,

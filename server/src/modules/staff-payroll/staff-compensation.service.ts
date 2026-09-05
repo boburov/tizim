@@ -7,6 +7,8 @@ import { RolesHelperService } from '../../common/rbac/roles.helper.js';
 import { toUtcMidnight, parseLocalDay } from '../../common/utils/date.js';
 import { StaffPayrollService } from './staff-payroll.service.js';
 import { PayrollAuditService, PAYROLL_AUDIT_ACTIONS } from './payroll-audit.service.js';
+import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
+import { userBranchCondition, isBranchAllowed } from '../../common/als/branch-context.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -39,9 +41,16 @@ export class StaffCompensationService {
     private readonly payroll: StaffPayrollService,
     private readonly audit: PayrollAuditService,
     private readonly roles: RolesHelperService,
+    private readonly branchAccess: BranchAccessService,
   ) {}
 
   private async assertEmployee(employeeId: string) {
+    // ⚠ FILIAL QO'RIQCHISI — `employeeId` MIJOZDAN keladi
+    // (`payroll-history.service.ts` dagi bilan AYNI idioma). Filtrsiz
+    // A filial direktori B filial xodimiga maosh shartnomasi ocha,
+    // stavkasini o'zgartira olardi.
+    // Owner va kontekstsiz chaqiruv (import/job) uchun jim o'tadi.
+    await this.branchAccess.assertUserInBranchScope(employeeId);
     const user = await this.prisma.user.findUnique({
       where: { id: String(employeeId) },
       select: { id: true, role: true, homeBranchId: true },
@@ -63,6 +72,9 @@ export class StaffCompensationService {
   }
 
   async listByEmployee(employeeId: string) {
+    // ⚠ FILIAL: bu metod `assertEmployee()` dan O'TMAYDI — begona
+    // xodimning maosh tarixi (stavka summalari) ochiq qolardi.
+    await this.branchAccess.assertUserInBranchScope(employeeId);
     const items = await this.prisma.staffCompensation.findMany({
       where: { employeeId: String(employeeId), isDeleted: false },
       orderBy: { effectiveFrom: 'desc' },
@@ -196,7 +208,16 @@ export class StaffCompensationService {
     if (patch.baseAmount !== undefined) data.baseAmount = patch.baseAmount;
     if (patch.salaryType !== undefined) data.salaryType = patch.salaryType;
     if (patch.note !== undefined) data.note = patch.note;
-    if (patch.branchId !== undefined) data.branchId = patch.branchId || null;
+    if (patch.branchId !== undefined) {
+      // FILIAL: tana bilan kelgan filialni TEKSHIRAMIZ — aks holda
+      // shartnomani begona filialga ko'chirib yuborish mumkin edi.
+      // `null` ATAYLAB ruxsat: u "filial biriktirilmagan" degani va
+      // mavjud xatti-harakat shu (`setCompensation` ham shunday yozadi).
+      if (patch.branchId && !isBranchAllowed(patch.branchId)) {
+        throw new ApiError(403, "Bu filialga shartnoma biriktirib bo'lmaydi");
+      }
+      data.branchId = patch.branchId || null;
+    }
 
     // ⚠ KPI-ONLY → FIKSA SUMMA 0. `{ salaryType: "kpi_only" }` ni
     // YOLG'IZ yuborish yetarli edi: eski `baseAmount` (masalan
@@ -233,6 +254,11 @@ export class StaffCompensationService {
       where: { id: String(id), isDeleted: false },
     });
     if (!doc) throw new ApiError(404, 'Shartnoma topilmadi');
+
+    // ⚠ FILIAL: `amendCompensation()` dan FARQLI, bu yerda
+    // `assertEmployee()` chaqirilmasdi — ya'ni begona filial xodimining
+    // shartnomasini ID bo'yicha o'chirib yuborish mumkin edi.
+    await this.branchAccess.assertUserInBranchScope(doc.employeeId);
 
     // ⚠ O'chirish va oldingi davrni qayta ochish BIRGA: ikkinchisi
     // yiqilsa xodimda shartnomasiz teshik qolardi.
@@ -290,6 +316,11 @@ export class StaffCompensationService {
           isActive: true,
           isDeleted: false,
           id: { notIn: withComp },
+          // ⚠ FILIAL: `AND` ichida — `userBranchCondition()` o'zi `OR`
+          // ishlatadi va uni yuqori darajaga qo'ysak boshqa shartlarni
+          // JIMGINA bosib ketardi (`branch-context.ts` dagi ogohlantirish).
+          // Filtrsiz bu ro'yxat BUTUN markazning xodimlarini berardi.
+          AND: [userBranchCondition() ?? {}],
         },
         select: {
           id: true,

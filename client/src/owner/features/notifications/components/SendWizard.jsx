@@ -11,6 +11,7 @@ import { formatDateTimeUz } from "@/shared/utils/formatDate";
 import Button from "@/shared/components/ui/button/Button";
 import useObjectState from "@/shared/hooks/useObjectState";
 import useAuth from "@/shared/hooks/useAuth";
+import useFeatures from "@/shared/hooks/useFeatures";
 import { ROLES } from "@/shared/constants/roles";
 import {
   AUDIENCE_TYPE_LABEL,
@@ -49,11 +50,16 @@ const SummaryRow = ({ label, children }) => (
  */
 const SendWizard = ({ close, isLoading, setIsLoading }) => {
   const { role } = useAuth();
+  const { botEnabled } = useFeatures();
   const isTeacher = role === ROLES.TEACHER;
   const [step, setStep] = useState(0);
 
   const form = useObjectState({
-    channels: ["telegram", "inapp"],
+    // ⚠ Bot o'chiq bo'lsa "telegram" STANDART bo'lib turmasin: aks holda
+    // foydalanuvchi hech narsa tanlamasa ham yuborilmaydigan kanal
+    // tanlangan holatda qolardi. `ChannelSelector` uni keyin tozalaydi,
+    // lekin bir render davomida noto'g'ri holat ko'rinardi.
+    channels: botEnabled ? ["telegram", "inapp"] : ["inapp"],
     audienceType: isTeacher ? "groups" : "all_students",
     groupIds: [],
     userIds: [],

@@ -135,6 +135,14 @@ export class TeacherCompensationService {
 
   /** O'qituvchining barcha stavka tarixi (yangisidan eskisiga). */
   async listByTeacher(teacherId: string) {
+    // ⚠ FILIAL QO'RIQCHISI — `teacherId` params dan keladi va hech qanday
+    // filtr qo'llanmasdi: filial direktori begona filial o'qituvchisining
+    // maosh stavkasini ID ni qo'lda kiritib o'qib olardi.
+    //
+    // ⚠ QATOR darajasida `branchFilter()` ATAYLAB YO'Q: bu jadvalda
+    // `branchId` NULLABLE va filtr filialsiz stavkani YASHIRARDI — stavka
+    // "yo'q" bo'lib ko'rinib, maosh jimgina 0 ga tushardi.
+    await this.branchAccess.assertUserInBranchScope(teacherId);
     return withLegacyIds(
       await this.prisma.teacherCompensation.findMany({
         where: { teacherId: String(teacherId), isDeleted: false },
@@ -145,6 +153,9 @@ export class TeacherCompensationService {
 
   /** Berilgan sanada (default — bugun) amal qilgan stavka. */
   async getActive(teacherId: string, onDate: Date | null = null) {
+    // ⚠ FILIAL QO'RIQCHISI — `listByTeacher` bilan bir xil sabab:
+    // begona filial o'qituvchisining amaldagi stavkasi ochilmasin.
+    await this.branchAccess.assertUserInBranchScope(teacherId);
     const t = (onDate ? toUtcMidnight(onDate) : localTodayMidnight()).getTime();
     const rows = await this.prisma.teacherCompensation.findMany({
       where: { teacherId: String(teacherId), isDeleted: false },
@@ -253,6 +264,10 @@ export class TeacherCompensationService {
     });
     if (!doc || doc.isDeleted) throw new ApiError(404, 'Maosh stavkasi topilmadi');
     assertNotSelfSalary(currentUser, doc.teacherId);
+    // ⚠ FILIAL QO'RIQCHISI — `id` params dan keladi. Usiz filial direktori
+    // begona filial o'qituvchisining stavkasini (va u orqali maoshini)
+    // ID ni qo'lda kiritib tuzatib yuborardi.
+    await this.branchAccess.assertUserInBranchScope(doc.teacherId);
 
     const before = toUtcMidnight(doc.effectiveFrom);
 
@@ -322,6 +337,14 @@ export class TeacherCompensationService {
       where: { id: String(id) },
     });
     if (!doc || doc.isDeleted) throw new ApiError(404, 'Maosh stavkasi topilmadi');
+    // ⚠ O'ZIGA O'ZI STAVKA QO'YISH TAQIQI SHU YERDA HAM: `amendCompensation`
+    // da bor edi, bu yerda YO'Q edi. O'chirish ZARARSIZ amal EMAS — pastda
+    // OLDINGI davr QAYTA OCHILADI, ya'ni odam o'zining pasaytirilgan
+    // stavkasini o'chirib, eskisini (yuqorisini) tiklab olardi.
+    assertNotSelfSalary(currentUser, doc.teacherId);
+    // ⚠ FILIAL QO'RIQCHISI — `id` params dan keladi: begona filial
+    // o'qituvchisining stavkasi o'chirilib, maoshi qayta hisoblanardi.
+    await this.branchAccess.assertUserInBranchScope(doc.teacherId);
 
     const from = toUtcMidnight(doc.effectiveFrom);
 

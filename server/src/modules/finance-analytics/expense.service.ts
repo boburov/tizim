@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { branchFilter } from '../../common/als/branch-context.js';
+import { branchFilter, assertBranchInScope } from '../../common/als/branch-context.js';
 import { NON_OPERATING_ENTRY_KINDS } from '../../common/constants/ledger.js';
 import {
   parseRange,
@@ -455,6 +455,19 @@ export class ExpenseService {
   async getBudgetPerformance(filters: AnalyticsFilter = {}) {
     const range = parseRange(filters);
     const branchId = filters.branchId || null;
+
+    // FILIAL: aniq `?branchId=` KO'LAMDA ekani DARHOL tekshiriladi.
+    //
+    // Ilgari tekshiruv faqat `journalWhere()` → `branchClause()` ichida,
+    // ya'ni byudjet TOPILGANDAN KEYIN ishlardi. Ma'lumot chiqmasdi, lekin
+    // ikki javob kuzatiladigan darajada FARQ qilardi:
+    //   byudjet bor  → 403
+    //   byudjet yo'q → 200 { hasBudget: false }
+    // ya'ni begona filialda byudjet BORLIGINI aniqlash mumkin edi.
+    //
+    // Ko'lamdagi chaqiruvchi va owner uchun xatti-harakat AYNAN o'sha —
+    // `assertBranchInScope` ular uchun jim o'tadi.
+    if (branchId) assertBranchInScope(branchId);
     const year = range.from.getUTCFullYear();
     const month = range.from.getUTCMonth() + 1;
 

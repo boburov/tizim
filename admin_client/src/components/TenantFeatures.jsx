@@ -131,21 +131,26 @@ export default function TenantFeatures({ tenantId, canEdit }) {
     return parents.flatMap((p) => [p, ...rows.filter((c) => c.parentKey === p.key)]);
   }, [rows]);
 
+  // ⚠ Hisoblar `isLocked` bo'yicha ajratiladi, ilgarigidek `isCore`
+  // bo'yicha emas: core modullar endi SOTILADI, ya'ni ular "hammasi"
+  // sonига kirishi kerak.
   const counts = useMemo(() => {
-    const sw = ordered.filter((r) => !r.isCore);
+    const sw = ordered.filter((r) => !r.isLocked);
     return {
       all: sw.length,
       on: sw.filter((r) => r.enabled).length,
       off: sw.filter((r) => !r.enabled).length,
       locked: sw.filter((r) => r.enabled && r.blockedBy?.length).length,
-      core: ordered.filter((r) => r.isCore).length,
+      core: ordered.filter((r) => r.isCore && !r.isLocked).length,
     };
   }, [ordered]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return ordered.filter((r) => {
-      if (r.isCore && !showCore) return false;
+      // "Xavflilarni ko'rsatish" — qulflanganlar ham shu bayroq ostida
+      // (ular ham kundalik ish emas).
+      if ((r.isCore || r.isLocked) && !showCore) return false;
       if (q && !`${r.name} ${r.key}`.toLowerCase().includes(q)) return false;
       if (filter === 'on') return r.enabled;
       if (filter === 'off') return !r.enabled;
@@ -157,7 +162,11 @@ export default function TenantFeatures({ tenantId, canEdit }) {
   /** Sarlavha katakchasi qaysi bo'limlarga ta'sir qiladi. */
   const bulkTargets = (enabled) =>
     visible
-      .filter((r) => !r.isCore && r.enabled !== enabled)
+      // ⚠ OMMAVIY o'zgartirishda XAVFLILAR QATNASHMAYDI. `core` endi
+      // o'chiriladi, lekin bitta katakcha bosishi bilan 10 ta tayanch
+      // modulni birdan o'chirish — tasodifiy halokatning eng oson yo'li.
+      // Ular faqat qator-qator, alohida tasdiq bilan o'zgartiriladi.
+      .filter((r) => !r.isCore && !r.isLocked && r.enabled !== enabled)
       // O'chirishda to'silganlar tushmaydi — ular baribir rad etilardi.
       .filter((r) => (enabled ? true : !r.blockedBy?.length))
       .map((r) => r.key);
@@ -181,7 +190,7 @@ export default function TenantFeatures({ tenantId, canEdit }) {
     { key: 'locked', label: 'Qulflangan', n: counts.locked },
   ];
 
-  const switchable = visible.filter((r) => !r.isCore);
+  const switchable = visible.filter((r) => !r.isCore && !r.isLocked);
   const allOn = switchable.length > 0 && switchable.every((r) => r.enabled);
   const someOn = switchable.some((r) => r.enabled);
   const headerState = allOn ? 'on' : someOn ? 'partial' : 'off';
@@ -194,7 +203,11 @@ export default function TenantFeatures({ tenantId, canEdit }) {
           shundan keyin saqlanadi. <b className="text-foreground">Qo'lda</b> qo'yilgan
           qaror tarifdan ustun turadi.{' '}
           <b className="text-foreground">Qulflangan</b> bo'limni o'chirib bo'lmaydi —
-          unga boshqa bo'lim tayanadi.
+          unga boshqa bo'lim tayanadi.{' '}
+          <b className="text-foreground">auth</b> va{' '}
+          <b className="text-foreground">features</b> esa hech qachon o'chmaydi:
+          birinchisiz hech kim kira olmaydi, ikkinchisiz tizimni tashqaridan
+          tuzatib bo'lmaydi.
         </p>
       </div>
 
@@ -318,8 +331,9 @@ export default function TenantFeatures({ tenantId, canEdit }) {
           onChange={(e) => setShowCore(e.target.checked)}
           className="size-3.5 accent-current"
         />
-        Tizim o'zagini ham ko'rsatish ({counts.core} ta) — ular sotilmaydi va
-        o'chirilmaydi, lekin yuqoridagi qulflarning sababi aynan shular
+        Tayanch modullarni ham ko'rsatish ({counts.core} ta) — ular ham
+        sotiladi va o'chiriladi, lekin o'chirilsa tizimning katta qismi
+        ishlamay qoladi (qo'shimcha tasdiq so'raladi)
       </label>
     </div>
   );
@@ -357,7 +371,7 @@ function Box({ state, disabled, onClick, title }) {
   );
 }
 
-function ReasonBar({ reason, setReason, busy, onConfirm, onCancel }) {
+function ReasonBar({ reason, setReason, busy, onConfirm, onCancel, blocked = false }) {
   return (
     <div className="flex flex-wrap gap-2">
       <input
@@ -365,7 +379,7 @@ function ReasonBar({ reason, setReason, busy, onConfirm, onCancel }) {
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && reason.trim()) onConfirm();
+          if (e.key === 'Enter' && reason.trim() && !blocked) onConfirm();
           if (e.key === 'Escape') onCancel();
         }}
         placeholder="Sabab (majburiy) — masalan: shartnoma bo'yicha qo'shildi"
@@ -373,7 +387,7 @@ function ReasonBar({ reason, setReason, busy, onConfirm, onCancel }) {
       />
       <button
         onClick={onConfirm}
-        disabled={busy || !reason.trim()}
+        disabled={busy || !reason.trim() || blocked}
         className="rounded-lg bg-brand px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
       >
         Tasdiqlash
@@ -428,15 +442,22 @@ function FeatureRow({
   row, canEdit, editing, setEditing, reason, setReason, onSet, onClear, busy,
 }) {
   const isEditing = editing?.key === row.key;
+  // Xavfli o'chirish uchun tasdiq katakchasi. Qator yopilganda
+  // tozalanadi (`onCancel`), ya'ni keyingi qatorga "meros" bo'lmaydi.
+  const [danger, setDanger] = useState(false);
   const src = SOURCE[row.source];
   const child = Boolean(row.parentKey);
   // ⚠ To'siq faqat O'CHIRISHGA taalluqli. O'chiq bo'limni yoqish har
   // doim mumkin — u hech kimga xalaqit bermaydi.
   const blocked = row.enabled && row.blockedBy?.length > 0;
-  const locked = row.isCore || blocked || !canEdit;
 
-  const lockNote = row.isCore
-    ? "Tizim o'zagi — o'chirilmaydi"
+  // ⚠ `isCore` ENDI QULFLAMAYDI. Ilgari o'zak modul o'chirgichi umuman
+  // bosilmasdi; endi bosiladi, faqat tasdiq boshqacha (`ReasonBar` da
+  // qo'shimcha katakcha). Qulflaydigan yagona bayroq — `isLocked`.
+  const locked = row.isLocked || blocked || !canEdit;
+
+  const lockNote = row.isLocked
+    ? "Tizimning qulflangan o'zagi — o'chirilmaydi"
     : blocked
       ? `Avval o'chirilishi kerak: ${row.blockedBy.join(', ')}`
       : !canEdit
@@ -474,9 +495,12 @@ function FeatureRow({
 
         {/* MANBA */}
         <td className="px-4 py-3 align-top whitespace-nowrap">
-          {row.isCore ? (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-              Tizim o'zagi
+          {row.isLocked ? (
+            <span
+              title="Bu kalit hech qachon o'chmaydi — o'chsa tizimni tashqaridan tuzatib bo'lmaydi"
+              className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+            >
+              <Lock size={9} /> Qulflangan
             </span>
           ) : (
             <span
@@ -501,7 +525,9 @@ function FeatureRow({
             >
               <Lock size={12} className="mt-0.5 shrink-0" />
               <span>
-                {row.permanentlyBlocked ? "O'zak tayanadi: " : "Avval o'chiring: "}
+                {row.permanentlyBlocked
+                  ? 'Qulflangan bo\'lim tayanadi: '
+                  : "Avval o'chiring: "}
                 <KeyList keys={row.blockedBy} />
               </span>
             </div>
@@ -516,7 +542,7 @@ function FeatureRow({
 
         {/* QAROR — ustun qarorni bekor qilish */}
         <td className="px-4 py-3 align-top text-right whitespace-nowrap">
-          {row.override && canEdit && !row.isCore ? (
+          {row.override && canEdit && !row.isLocked ? (
             <button
               onClick={() => onClear(row.key)}
               disabled={busy}
@@ -538,12 +564,39 @@ function FeatureRow({
               <AlertTriangle size={13} />
               {editing.enabled ? `"${row.name}" yoqiladi` : `"${row.name}" o'chiriladi`}
             </div>
+
+            {/* ⚠ O'ZAK MODULNI O'CHIRISH — IKKINCHI BOSQICHLI TASDIQ.
+                Sabab qatori har qanday o'zgarish uchun majburiy, lekin
+                tayanch modulni o'chirish tenantning katta qismini
+                ishdan chiqaradi. Bitta ortiqcha klik — tasodifiy
+                bosishdan yagona himoya. */}
+            {row.isCore && !editing.enabled && (
+              <div className="mb-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-500/30 dark:bg-red-500/10">
+                <p className="text-xs leading-relaxed text-red-700 dark:text-red-300">
+                  <b>{row.name}</b> — tizimning tayanch moduli. O'chirilsa unga
+                  bog'liq bo'limlar ishlamay qoladi va mijoz buni darhol sezadi.
+                </p>
+                <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-medium text-red-700 dark:text-red-300">
+                  <input
+                    type="checkbox"
+                    checked={danger}
+                    onChange={(e) => setDanger(e.target.checked)}
+                    className="size-3.5 accent-red-600"
+                  />
+                  Oqibatini tushunaman
+                </label>
+              </div>
+            )}
+
             <ReasonBar
               reason={reason}
               setReason={setReason}
               busy={busy}
+              // ⚠ Xavfli o'chirishda katakcha belgilanmaguncha tasdiq
+              // tugmasi ishlamaydi.
+              blocked={row.isCore && !editing.enabled && !danger}
               onConfirm={() => onSet({ key: row.key, enabled: editing.enabled })}
-              onCancel={() => { setEditing(null); setReason(''); }}
+              onCancel={() => { setEditing(null); setReason(''); setDanger(false); }}
             />
           </td>
         </tr>

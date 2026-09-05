@@ -202,7 +202,14 @@ export class MarketService {
 
   async getProduct(id: string) {
     const product = await this.prisma.marketProduct.findFirst({
-      where: { id: String(id), isDeleted: false },
+      // FILIAL: `list()` va `catalog` allaqachon `visibilityFilter()` bilan
+      // kesilgan, `:id` esa YALANG'OCH edi — begona filialning mahsuloti
+      // (narxi, zaxirasi) ID bo'yicha ochilardi. Yozish yo'li
+      // (`assertProductWritable`) himoyalangan edi, o'qish yo'li YO'Q.
+      //
+      // ⚠ `visibilityFilter()`: markaz umumiysi (`branchId = null`)
+      // HAMMAGA ko'rinadi — sof `branchFilter()` uni yashirib qo'yardi.
+      where: { id: String(id), isDeleted: false, ...this.visibilityFilter() },
       include: { branch: { select: { id: true, name: true } } },
     });
     if (!product) throw new ApiError(404, 'Mahsulot topilmadi');

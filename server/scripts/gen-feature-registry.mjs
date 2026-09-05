@@ -29,7 +29,27 @@ const MERGED_INTO = Object.fromEntries(
   Object.entries(MERGE).flatMap(([main, list]) => list.map((m) => [m, main])),
 );
 
-/** Label + tabiat. `core: true` — panelda O'CHIRGICH KO'RSATILMAYDI. */
+/**
+ * Label + tabiat.
+ *
+ * ── ⚠ `core` VA `locked` — IKKI XIL NARSA ──
+ *
+ *   `core: true`   — modul tizimning tayanchi. Panelda o'chirgich BOR,
+ *                    lekin qizil ogohlantirish va qo'shimcha tasdiq
+ *                    bilan. Ilgari bu "o'chirib bo'lmaydi" degani edi.
+ *
+ *   `locked: true` — o'chirgich UMUMAN yo'q, API 409 qaytaradi.
+ *                    ATIGI IKKI KALIT:
+ *                      • `auth`     — mahsulot qarori: o'chsa tenantga
+ *                                     hech kim, hatto ega ham kira
+ *                                     olmaydi va faqat biz qaytara olamiz;
+ *                      • `features` — TEXNIK zaruriyat: bu endpoint
+ *                                     o'chsa `GET /features` ning O'ZI
+ *                                     402 qaytaradi va admin server
+ *                                     `/internal/entitlements/refresh`
+ *                                     bilan ham tuzata olmaydi. Tenant
+ *                                     TIKLANMAS holatga tushardi.
+ */
 const META = {
   'activity-history':      ["Faoliyat tarixi"],
   'activity-logs':         ["Audit loglari"],
@@ -40,7 +60,7 @@ const META = {
   'attendance':            ["Davomat"],
   'attendance-exemptions': ["Davomat imtiyozlari"],
   'attendance-settings':   ["Davomat sozlamalari"],
-  'auth':                  ["Autentifikatsiya", { core: true }],
+  'auth':                  ["Autentifikatsiya", { core: true, locked: true }],
   'bot-auth':              ["Telegram orqali kirish", { core: true }],
   'branch-analytics':      ["Filial tahlili"],
   'branches':              ["Filiallar", { core: true }],
@@ -50,7 +70,7 @@ const META = {
   'expense-approvals':     ["Chiqim tasdiqlari", { core: true }],
   'expenses':              ["Chiqimlar"],
   'exports':               ["Excel eksport"],
-  'features':              ["Tarif imkoniyatlari", { core: true }],
+  'features':              ["Tarif imkoniyatlari", { core: true, locked: true }],
   'feedback':              ["Fikr-mulohaza"],
   'feedback-types':        ["Fikr turlari"],
   'finance':               ["Moliya"],
@@ -117,6 +137,7 @@ const keyOf = (dir) => {
   return META[dir]?.[1]?.key ?? dir;
 };
 const isCore = (dir) => Boolean(META[dir]?.[1]?.core);
+const isLocked = (dir) => Boolean(META[dir]?.[1]?.locked);
 const indeg = Object.fromEntries(Object.keys(mods).map((d) => [d, 0]));
 for (const v of Object.values(mods))
   for (const i of v.imports) { const t = byCls[i]; if (t) indeg[t] += 1; }
@@ -139,15 +160,27 @@ for (const key of Object.keys(groups).sort()) {
   const head = MERGE[key] ? key : dirs[0];
   const opt = META[head][1] || {};
 
-  // ⚠ `requires` — FAQAT o'chirilishi MUMKIN bo'lgan (core bo'lmagan)
-  // nishonlar. Core modulni o'chirib bo'lmaydi, ya'ni unga bog'liqlikni
-  // e'lon qilish grafikni shovqin bilan to'ldirardi.
-  // ⚠ GURUH ICHIDAGI bog'liqlik ham tushmaydi — u endi o'z-o'ziga
-  // bog'liqlik, ya'ni aylana yasardi.
+  // ══════════════════════════════════════════════════════════════════
+  // `requires` — O'CHIRILISHI MUMKIN BO'LGAN HAR BIR NISHON
+  // ══════════════════════════════════════════════════════════════════
+  //
+  // ⚠ FILTR `!isLocked`, ILGARIGIDEK `!isCore` EMAS.
+  //
+  // Ilgari core nishonlar grafikka UMUMAN tushmasdi — mantiq shu edi:
+  // core'ni o'chirib bo'lmaydi, demak unga bog'liqlikni yozish shovqin.
+  // Endi core O'CHIRILADI, ya'ni o'sha "shovqin" yagona to'siq bo'lib
+  // qoldi: `groups` o'chirilganda `attendance` JIMGINA buziladi, panel
+  // esa hech qanday bog'liqlik ko'rsatmaydi.
+  //
+  // `locked` nishonlar ('auth', 'features') tushmaydi — ular hech qachon
+  // o'chmaydi, ya'ni to'siq sifatida ham ma'nosiz.
+  //
+  // ⚠ GURUH ICHIDAGI bog'liqlik ham tushmaydi — u o'z-o'ziga bog'liqlik,
+  // ya'ni aylana yasardi.
   const requires = [...new Set(
     dirs.flatMap((d) => mods[d].imports)
       .map((i) => byCls[i])
-      .filter((t) => t && !isCore(t) && keyOf(t) !== key)
+      .filter((t) => t && !isLocked(t) && keyOf(t) !== key)
       .map(keyOf),
   )].sort();
 
@@ -169,6 +202,7 @@ for (const key of Object.keys(groups).sort()) {
     `    label: '${esc(label)}',\n` +
     `    tier: '${worst}',\n` +
     (opt.core ? `    core: true,\n` : '') +
+    (opt.locked ? `    locked: true,\n` : '') +
     (opt.gatedElsewhere ? `    gatedElsewhere: true,\n` : '') +
     `    nestModules: [${dirs.map((d) => `'${esc(mods[d].cls)}'`).join(', ')}],\n` +
     `    routes: [${routes.map((r) => `'${esc(r)}'`).join(', ')}],\n` +
