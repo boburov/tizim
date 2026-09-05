@@ -5,7 +5,7 @@ import { PERMISSIONS } from '../../common/constants/permissions.js';
 import { hasPermission } from '../../common/rbac/permission.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
-import { branchFilter, isBranchAllowed } from '../../common/als/branch-context.js';
+import { branchFilter, isBranchAllowed, getBranchContext } from '../../common/als/branch-context.js';
 import { parseLocalDay, localTodayMidnight } from '../../common/utils/date.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
@@ -457,6 +457,38 @@ export class ExpenseService {
     if (!doc) throw new ApiError(404, 'Chiqim topilmadi');
     if (doc.branchId && !isBranchAllowed(doc.branchId)) {
       throw new ApiError(404, 'Chiqim topilmadi');
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    // MARKAZ UMUMIY CHIQIMI (branchId = null) — YOZISH FAQAT
+    // FILIALLARARO VAKOLAT BILAN.
+    //
+    // O'QISH ilgarigidek OCHIQ qoladi (`getById`/`scopeClause`): ijara,
+    // reklama kabi umumiy xarajat har bir filial hisobotida ko'rinishi
+    // KERAK, aks holda foyda soxta yuqori chiqadi.
+    //
+    // Lekin YOZISH boshqa gap: `remove()` `reverseByRef()` ni ham
+    // chaqiradi, ya'ni jurnalni storno qiladi va BUTUN TARMOQNING naqd
+    // qoldig'ini siljitadi. Filtrsiz A filial direktori bosh ofis
+    // ijarasini o'chirib yubora olardi.
+    //
+    // ⚠ IKKI ISTISNO — ATAYLAB:
+    //   1. KONTEKSTSIZ (job / seed / tasdiq ijrochisi): `getBranchContext()`
+    //      `undefined` qaytaradi. Bu tizim yo'li va u ilgari ham
+    //      cheklanmagan edi (`isBranchAllowed` kontekstsiz `true`).
+    //   2. YAKKA MARKAZ: bitta filialli tenantda "filiallararo" tushuncha
+    //      YO'Q va o'sha rejimda `canSeeAllBranches` EGA uchun ham `false`
+    //      (`resolveBranchScope` yakka markaz shoxi) — tekshirmasak ega
+    //      o'z markazining umumiy chiqimini tahrirlay olmay qolardi.
+    // ═════════════════════════════════════════════════════════════════
+    if (!doc.branchId) {
+      const ctx = getBranchContext();
+      if (ctx && !ctx.canSeeAllBranches && (await this.branchAccess.isMultiBranch())) {
+        throw new ApiError(
+          403,
+          "Markaz umumiy chiqimini faqat filiallararo vakolatga ega foydalanuvchi o'zgartiradi",
+        );
+      }
     }
     return doc;
   }

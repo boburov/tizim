@@ -729,6 +729,26 @@ export class NotificationsService {
       where: { id: String(notificationId) },
     });
     if (!notif) throw new ApiError(404, 'Xabar topilmadi');
+
+    // ⚠ FILIAL KO'LAMI — `getById()` BILAN AYNI QOIDA.
+    //
+    // `list()` va `getById()` kesilgan edi, BEKOR QILISH esa YO'Q: begona
+    // filialning rejalashtirilgan xabarini ID bo'yicha bekor qilib
+    // yuborish mumkin edi — ya'ni o'qish emas, YOZISH teshigi.
+    //
+    // Tizim xabarlari (`senderId: null`) o'tkaziladi; kontekstsiz
+    // (job/scheduler) va owner uchun `cond` `null` bo'ladi.
+    const cancelCond = userBranchCondition();
+    if (cancelCond && notif.senderId) {
+      const inScope = await this.prisma.user.findFirst({
+        where: { AND: [{ id: String(notif.senderId) }, cancelCond] } as never,
+        select: { id: true },
+      });
+      if (!inScope) {
+        throw new ApiError(403, "Bu filial bo'yicha amal bajarib bo'lmaydi");
+      }
+    }
+
     if (notif.status !== 'scheduled') {
       throw new ApiError(400, 'Faqat rejalashtirilgan xabarni bekor qilish mumkin');
     }

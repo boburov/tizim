@@ -24612,3 +24612,155 @@ Registry test now **passes** (8/8) —
 <sub>session `10f1ab6f` · branch `main` · 28 ta qadam · 1 ta subagent</sub>
 
 ---
+
+## 2026-09-05 11:59 — alright finish all the task right now
+
+**So'rov**
+
+> alright finish all the task right now
+
+**Buyruqlar (26)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total; for f in server/src/modules/feedback/feedback.service.ts server/src/modules/notifications/notifications.service.ts server/…
+cd /Users/shukrullo/Desktop/lc-total; echo "════ groups.service.ts (undelete) ════"; git diff server/src/modules/groups/groups.service.ts | grep -E "^[+]" | gre…
+cd /Users/shukrullo/Desktop/lc-total; grep -n -A18 "ensureOwnerOrAuthor" server/src/modules/feedback/feedback.service.ts | head -26
+cd /Users/shukrullo/Desktop/lc-total/server; sed -n '136,170p' src/modules/journal/cash-transfer.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server; python3 - <<'PY' p='src/modules/journal/cash-transfer.service.ts' s=open(p).read() old=""" await this.assertBranchE…
+cd /Users/shukrullo/Desktop/lc-total/server; grep -n "constructor" -A8 src/modules/expenses/expense.service.ts | head -12; echo "── loadForWrite ──"; sed -n '44…
+cd /Users/shukrullo/Desktop/lc-total/server; sed -n '46,60p' src/common/als/branch-context.ts
+cd /Users/shukrullo/Desktop/lc-total/server; python3 - <<'PY' p='src/modules/expenses/expense.service.ts' s=open(p).read() old=""" /** Yozish uchun XOM yozuv (k…
+cd /Users/shukrullo/Desktop/lc-total/server; git diff src/modules/teacher-attendance/teacher-attendance.service.ts | grep -E "^[+]" | grep -vE "^[+][+]" | head …
+cd /Users/shukrullo/Desktop/lc-total; git diff --stat server/src/modules/teacher-attendance/teacher-attendance.service.ts; echo "--- added lines ---"; git diff …
+cd /Users/shukrullo/Desktop/lc-total; git status --porcelain | sort; echo "=== count: $(git status --porcelain | wc -l) ==="
+cd /Users/shukrullo/Desktop/lc-total; echo "=== do the new files still exist on disk? ==="; ls -la server/src/common/audit/ 2>&1 | head -3; ls -la server/test/r…
+cd /Users/shukrullo/Desktop/lc-total; echo "=== commit 17770a0 contents ==="; git show --stat 17770a0 | head -45; echo; echo "=== key fixes present in HEAD? ===…
+cd /Users/shukrullo/Desktop/lc-total/server; grep -n "branch-context\|BranchAccessService\|branchFilter\|userBranchCondition" src/modules/teacher-attendance/tea…
+cd /Users/shukrullo/Desktop/lc-total/server; python3 - <<'PY' p='src/modules/teacher-attendance/teacher-attendance.service.ts' s=open(p).read() old=""" const gr…
+cd /Users/shukrullo/Desktop/lc-total/server; rm -rf dist && npm run build > /tmp/b2.out 2>&1; echo "build exit=$?"; tail -4 /tmp/b2.out; echo; fail=0; for t in …
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== is 5000/5099 free? ==="; lsof -ti:5000 >/dev/null 2>&1 && echo "5000 IN USE (leaving alone)" || echo "500…
+cd /Users/shukrullo/Desktop/lc-total/server; NEST_PORT=5099 PORT=5099 NEST_BOT_POLLING=false NEST_WORKERS_ENABLED=false NEST_WORKER_JOBS= NEST_IMPORT_WORKER=fal…
+cd /Users/shukrullo/Desktop/lc-total/server; for i in $(seq 1 40); do if curl -s -o /dev/null -m 2 http://127.0.0.1:5099/api/health 2>/dev/null; then echo "UP a…
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== POST /api/auth/login (bad creds, contains password) ==="; curl -s -o /dev/null -w "status=%{http_code}\n"…
+cd /Users/shukrullo/Desktop/lc-total/server; DB_URL=$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2- | tr -d '"' | sed 's/?.*//'); before=$(psql "$DB_UR…
+ps aux | grep -E "node|nest" | grep -v grep | head -10; echo "--- pm2? ---"; pm2 list 2>/dev/null | head -8 || echo "(no pm2)"
+cd /Users/shukrullo/Desktop/lc-total/server; for i in $(seq 1 20); do if lsof -ti:5000 >/dev/null 2>&1; then echo "port 5000 back UP after ${i}s"; break; fi; sl…
+cd /Users/shukrullo/Desktop/lc-total/server; touch src/main.ts; for i in $(seq 1 45); do if lsof -ti:5000 >/dev/null 2>&1; then echo "✅ port 5000 restored after…
+cd /Users/shukrullo/Desktop/lc-total; git status --porcelain; echo "--- last commit ---"; git log --oneline -1; echo "--- uncommitted work is the 3 policy fixes…
+# … yana 1 ta
+```
+
+**Natija**
+
+Understood — proceeding on all remaining items. For the three policy questions, your master task actually already specifies the answer for CashTransfer (§16: *"Cash transfer across branches is a Super Admin/Owner-level operation... Both source and destination branches must be authorized"*), so I'll implement that rather than ask again.
+
+Let me start the route-matrix inventory in the background while I review the unreviewed edits.
+
+Now reviewing the unreviewed edits from the stalled agents.
+
+All three are correct — `AND`-wrapped (respecting the OR-collision warning), `Holiday` correctly kept GLOBAL with only the teacher lookup scoped, and Express response shapes preserved. Let me check groups/imports and the missing `@Permissions` on feedback.
+
+`imports` handled a subtle case well (cross-branch jobs get `branchId: null`, so a bare filter would hide them from their own creator → "mine OR in-scope"). 
+
+`GET /feedback/:id` still has no `@Permissions` — let me check whether its ownership gate is actually tight before forcing a decorator that might break students.
+
+Ownership gate is tight (owner OR non-anonymous author → else 403), and it's now branch-scoped too. Adding `@Permissions` would break students viewing their own feedback — I'll leave it and document as intentional.
+
+Now implementing the three policy items. **§16 explicitly specifies** the CashTransfer rule, so that one is decided:
+
+Now the null-branch org-wide expense writes. This needs care — the naive guard would break owner in single-branch mode (where `canSeeAllBranches` is `false` even for owner).
+
+`BranchAccessService` is injected (has `isMultiBranch()`). Let me verify `canSeeAllBranches()` behavior with no ALS context — jobs and approval executors must not break.
+
+`canSeeAllBranches()` returns `false` outsid
+
+…(qisqartirildi)
+
+<sub>session `10f1ab6f` · branch `main` · 28 ta qadam · 1 ta subagent</sub>
+
+---
+
+## 2026-09-05 12:11 — <task-notification> <task-id>a7279aebaaea386b8</task-id> <tool-use-id>
+
+**So'rov**
+
+> <task-notification>
+> <task-id>a7279aebaaea386b8</task-id>
+> <tool-use-id>toolu_01VbsGjqzUs1bpv4eR7WUnTe</tool-use-id>
+> <output-file>/private/tmp/claude-501/-Users-shukrullo-Desktop-lc-total/10f1ab6f-6707-4c93-b590-05ed936c7a2d/tasks/a7279aebaaea386b8.output</output-file>
+> <status>completed</status>
+> <summary>Agent "Build route security matrix" finished</summary>
+> <note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+> <result># ROUTE SECURITY MATRIX — tenant API (`/Users/shukrullo/Desktop/lc-total/server`)
+>
+> Global prefix `api` (`src/main.ts:72`). No `APP_GUARD` (`src/common/common.module.ts:34`). `AuditLogMiddleware` is the only `forRoutes('*')` middleware (`src/app.module.ts`).
+>
+> **AuthMiddleware coverage (module-by-module verdict):** every module applies it to its controller(s) via `configure()` **except four**:
+>
+> | Module | File | Gap |
+> |---|---|---|
+> | `HealthModule` | `/Users/shukrullo/Desktop/lc-total/server/src/health/health.module.ts` | no `configure()` at all |
+> | `BotAuthModule` | `/Users/shukrullo/Desktop/lc-total/server/src/modul
+> …
+
+**Buyruqlar (16)**
+
+```sh
+cd /Users/shukrullo/Desktop/lc-total/server; echo "════ market.getProduct + assertProductWritable (template) ════"; sed -n '95,110p;198,212p' src/modules/market…
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== market catalog shared-scope idiom ==="; grep -n -B2 -A6 "branchId: null" src/modules/market/market.servic…
+cd /Users/shukrullo/Desktop/lc-total/server; sed -n '70,82p' src/modules/market/market.service.ts; echo "=== group-fee call site ==="; sed -n '86,98p' src/modul…
+cd /Users/shukrullo/Desktop/lc-total/server; python3 - <<'PY' # ── 1) market.getProduct ── p='src/modules/market/market.service.ts' s=open(p).read() old=""" asy…
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== getById (template) ==="; sed -n '826,848p' src/modules/notifications/notifications.service.ts; echo "=== …
+cd /Users/shukrullo/Desktop/lc-total/server; python3 - <<'PY' p='src/modules/notifications/notifications.service.ts' s=open(p).read() old=""" if (!notif) throw …
+cd /Users/shukrullo/Desktop/lc-total/server; grep -n "getActiveBranchId\|assertBranchInScope\|branch-context" src/modules/ai/ai.controller.ts | head -3; python3…
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== imports ==="; sed -n '1,14p' src/modules/groups/teacher-group-period.service.ts | grep -n "import"; echo …
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== update ==="; sed -n '775,790p' src/modules/groups/teacher-group-period.service.ts; echo "=== remove ===";…
+cd /Users/shukrullo/Desktop/lc-total/server; python3 - <<'PY' p='src/modules/groups/teacher-group-period.service.ts' s=open(p).read() # import runWithBranchCont…
+cd /Users/shukrullo/Desktop/lc-total/server; sed -n '1170,1230p' src/modules/groups/teacher-group-period.service.ts
+cd /Users/shukrullo/Desktop/lc-total/server; python3 - <<'PY' p='src/modules/groups/teacher-group-period.service.ts' s=open(p).read() old=""" async executeAppro…
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== group-fee executor context shape (reference) ==="; grep -n -B3 -A12 "runWithBranchContext" src/modules/fi…
+cd /Users/shukrullo/Desktop/lc-total/server; python3 - <<'PY' p='src/modules/groups/teacher-group-period.service.ts' s=open(p).read() old=""" userId: requesterI…
+cd /Users/shukrullo/Desktop/lc-total/server; python3 - <<'PY' p='src/modules/groups/teacher-group-period.service.ts' s=open(p).read() old=""" const allPeriods =…
+cd /Users/shukrullo/Desktop/lc-total/server; echo "=== BUILD ==="; rm -rf dist && npm run build >/tmp/bz.out 2>&1; echo "exit=$?"; tail -3 /tmp/bz.out; echo "==…
+```
+
+**Natija**
+
+The route matrix landed and found **6 real holes still open**. Let me fix them all.
+
+Now `notifications.cancelScheduled` — mirroring the `getById` block that already exists.
+
+The AI routes require `AI_CONFIG`, which is an **owner-only** permission — so exploitability is lower than the matrix rated. But `assertBranchInScope` is a no-op for owner, so adding it is pure defense-in-depth if that key is ever granted to a custom role.
+
+Now the highest-value one: the `teacher-group-period` write path. Let me map it carefully — it couples to an approval executor, which is where a naive fix would regress.
+
+`branchFilter`, `userBranchCondition`, and `BranchAccessService` are already imported (the earlier agent added them for reads). Let me see the write paths and the approval executor body.
+
+Now implementing the `teacher-group-period` write path — including wrapping the approval executor, which is where a naive fix would break approvals.
+
+Critical: the approval executor must now re-enter the approval's own branch context, or my scoping will break approval execution. Let me wrap it as `executeApprovedGroupFee` does.
+
+Typecheck clean, but I used `as never` on the context object — let me verify the runtime shape against how `executeApprovedGroupFee` does it, since a wrong shape would silently break approvals.
+
+Shape matches the reference exactly. Let me drop the unnecessary `as never` and check `handover`, which the matrix also flagged.
+
+`handover` loads **all** the teacher's periods with no scope — so for a teacher working in two branches, one director could hand over the other branch's periods. Fixing:
+
+All six holes closed. Final verification.
+
+All green. **All tasks complete.**
+
+---
+
+# FINAL REPORT
+
+```
+Typecheck        exit 0
+Build            exit 0
+Security suite   6/6 PASS (97
+
+…(qisqartirildi)
+
+<sub>session `10f1ab6f` · branch `main` · 16 ta qadam</sub>
+
+---

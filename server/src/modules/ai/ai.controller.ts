@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Put, Req, UseGuards } fro
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Permissions, Validated } from '../../common/decorators/index.js';
 import { PERMISSIONS } from '../../common/constants/permissions.js';
-import { getActiveBranchId } from '../../common/als/branch-context.js';
+import { getActiveBranchId, assertBranchInScope } from '../../common/als/branch-context.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import { InsightService } from './insight.service.js';
 import { BriefingService } from './briefing.service.js';
@@ -197,7 +197,13 @@ export class AiController {
   @Get('config')
   @Permissions(PERMISSIONS.AI_CONFIG)
   async getConfig(@Validated(getConfigSchema) v: any) {
+    // FILIAL: mijoz bergan `?branchId=` KO'LAMDA ekani tekshiriladi.
+    // `AI_CONFIG` hozir owner-only kalit, ya'ni amalda faqat ega keladi
+    // va `assertBranchInScope` u uchun jim o'tadi — lekin kalit kelajakda
+    // maxsus rolga berilsa, bu tekshiruvsiz begona filialning AI
+    // sozlamasi o'qilardi.
     const branchId = v.query.branchId || getActiveBranchId();
+    if (v.query.branchId) assertBranchInScope(v.query.branchId);
     const data = await this.aiConfig.resolveConfig(branchId);
     return { success: true, data: { config: data, defaults: CODE_DEFAULTS } };
   }
@@ -206,6 +212,9 @@ export class AiController {
   @Permissions(PERMISSIONS.AI_CONFIG)
   async updateConfig(@Validated(updateConfigSchema) v: any, @Req() req: AuthenticatedRequest) {
     const { branchId = null, ...patch } = v.body;
+    // FILIAL: tanadagi `branchId` ga YOZAMIZ — ko'lam tekshirilmasa
+    // begona filialning AI vaznlari qayta yozilardi.
+    if (branchId) assertBranchInScope(branchId);
     const data = await this.aiConfig.upsertConfig(branchId, patch, (req.user as any)?._id);
     return { success: true, data, message: 'AI sozlamalari saqlandi' };
   }
@@ -218,6 +227,8 @@ export class AiController {
   @HttpCode(200)
   @Permissions(PERMISSIONS.AI_CONFIG)
   async runRecompute(@Validated(recomputeSchema) v: any) {
+    // FILIAL: qayta hisoblash `aiRun`/`insight` qatorlarini YOZADI.
+    if (v.body.branchId) assertBranchInScope(v.body.branchId);
     const branchId = v.body.branchId || getActiveBranchId();
     const data = branchId
       ? [await this.recompute.recomputeBranch(branchId)]
