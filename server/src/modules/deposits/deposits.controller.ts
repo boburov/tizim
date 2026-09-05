@@ -13,6 +13,7 @@ import { DepositsService } from './deposits.service.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Permissions, Validated } from '../../common/decorators/index.js';
 import { PERMISSIONS } from '../../common/constants/permissions.js';
+import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { buildMeta } from '../../common/utils/pagination.js';
 import type { AuthenticatedRequest } from '../../common/types/authenticated-request.js';
 import {
@@ -49,7 +50,10 @@ import {
 @Controller('deposits')
 @UseGuards(PermissionsGuard)
 export class DepositsController {
-  constructor(private readonly deposits: DepositsService) {}
+  constructor(
+    private readonly deposits: DepositsService,
+    private readonly branchAccess: BranchAccessService,
+  ) {}
 
   // ───────────────────────────── O'QISH ─────────────────────────────
 
@@ -92,6 +96,13 @@ export class DepositsController {
     @Req() req: AuthenticatedRequest,
   ) {
     const { studentId, ...body } = v.body;
+    // ⚠ FILIAL QO'RIQCHISI MARSHRUTDA, SERVISDA EMAS: `deposits.topup` ni
+    // ichkaridan `finance/transaction` (ortiqcha to'lovni garovga) va
+    // `opening-balance` ham chaqiradi — u yerda `studentId` mijozdan
+    // emas, allaqachon ko'lamlangan plandan keladi. Marshrutda esa u
+    // MIJOZ bergan ID: qo'riqchisiz A filial direktori B filial
+    // o'quvchisining depozitiga pul yozib qo'yardi.
+    await this.branchAccess.assertUserInBranchScope(studentId);
     const data = await this.deposits.topup(studentId, body, req.user);
     return { success: true, data, message: "To'lov qo'shildi" };
   }
@@ -141,6 +152,12 @@ export class DepositsController {
     @Validated(applySchema) v: ApplyRequest,
     @Req() req: AuthenticatedRequest,
   ) {
+    // ⚠ FILIAL QO'RIQCHISI — `studentId` MIJOZDAN keladi. `autoApply` ni
+    // oylik job va `opening-balance` ham chaqiradi (kontekstsiz, ya'ni
+    // qo'riqchi o'z-o'zidan o'tkazib yuboradi), shuning uchun tekshiruv
+    // aynan shu marshrutda: begona filial o'quvchisining depoziti uning
+    // to'lovlariga qoplanib ketmasin.
+    await this.branchAccess.assertUserInBranchScope(v.body.studentId);
     const data = await this.deposits.autoApply(v.body.studentId, req.user);
     return { success: true, data, message: "To'lovdan qoplandi" };
   }

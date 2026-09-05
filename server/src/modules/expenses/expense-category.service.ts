@@ -78,8 +78,18 @@ export class ExpenseCategoryService {
   }
 
   private async loadCategory(id: string) {
+    // FILIAL: `list()` bilan AYNI kesish (`scopeWithShared()`).
+    //
+    // Filtrsiz `update()`/`remove()` begona filialning kategoriyasini
+    // ID bo'yicha qayta nomlash, o'chirib qo'yish yoki butunlay
+    // o'chirishga yo'l qo'yardi — ro'yxatda ko'rinmasa ham.
+    //
+    // ⚠ UMUMIY (branchId = null) KATEGORIYALAR ILGARIGIDEK OCHIQ:
+    // `scopeWithShared()` ularni ataylab qo'shadi (yuqoridagi izoh) va
+    // bu tuzatish o'sha kelishuvni O'ZGARTIRMAYDI — u faqat FILIALGA
+    // TEGISHLI kategoriyaning begonaga ochiqligini yopadi.
     const doc = await this.prisma.expenseCategory.findFirst({
-      where: { id: String(id), isDeleted: false },
+      where: { id: String(id), isDeleted: false, AND: scopeWithShared() } as never,
     });
     if (!doc) throw new ApiError(404, 'Kategoriya topilmadi');
     return doc;

@@ -10,7 +10,7 @@ import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
 import { assertPeriodInvariants } from '../../common/utils/period.js';
 import { assertGroupActive } from '../../common/helpers/group-state.js';
 import { assertNotSelfSalary } from '../../common/rbac/self-salary.guard.js';
-import { branchFilter } from '../../common/als/branch-context.js';
+import { branchFilter, userBranchCondition } from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { ExpenseApprovalsService } from '../expense-approvals/expense-approvals.service.js';
 
@@ -283,15 +283,28 @@ export class TeacherGroupPeriodService {
    * hech kimni topmagandek ko'rinardi.
    */
   async listAvailableTeachers(groupId: string) {
-    const group = await this.prisma.group.findUnique({
-      where: { id: String(groupId) },
+    // FILIAL: guruh `listByGroup` bilan AYNI naqsh bo'yicha ko'lamlanadi —
+    // begona filial guruhining jadvali bu yerdan ochilmasin.
+    // ⚠ 404, 403 EMAS: guruh MAVJUDLIGI ham oshkor qilinmaydi.
+    const group = await this.prisma.group.findFirst({
+      where: { id: String(groupId), ...branchFilter() },
       select: { id: true, schedule: GROUP_SCHEDULE_SELECT },
     });
     if (!group) throw new ApiError(404, 'Guruh topilmadi');
     const slots = scheduleActiveOn(group.schedule || []);
 
+    // FILIAL: o'qituvchilar ro'yxati ko'lamsiz edi — begona filial
+    // o'qituvchilarining ismi ochilar va ular guruhga biriktirish uchun
+    // tanlanadigan bo'lib qolardi. `userBranchCondition()` `AND` ichida:
+    // u OR qaytaradi (homeBranchId / branchAssignments).
+    const branchCond = userBranchCondition();
     const teachers = await this.prisma.user.findMany({
-      where: { role: ROLES.TEACHER, isActive: true, isDeleted: false },
+      where: {
+        role: ROLES.TEACHER,
+        isActive: true,
+        isDeleted: false,
+        ...(branchCond ? { AND: [branchCond] } : {}),
+      },
       select: { id: true, firstName: true, lastName: true, username: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });

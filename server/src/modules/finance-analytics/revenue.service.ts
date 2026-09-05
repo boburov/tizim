@@ -6,6 +6,7 @@ import {
   parseRange,
   previousRange,
   journalWhere,
+  branchClause,
   autoGranularity,
   truncExpr,
   SQL_REVENUE_NET,
@@ -149,9 +150,16 @@ export class RevenueService {
    */
   async getPaymentMethodBreakdown(filters: AnalyticsFilter = {}) {
     const range = parseRange(filters);
-    const branchScope = filters.branchId
-      ? Prisma.sql`AND pt."branchId" = ${String(filters.branchId)}`
-      : Prisma.empty;
+    // FILIAL: bu yagona xom so'rov `branchClause` dan CHETLAB O'TARDI —
+    // parametrsiz butun tarmoq to'lovlarini ko'rsatardi, `?branchId=`
+    // bilan esa qiymat tekshirilmay qo'yilib, ko'lamni KENGAYTIRARDI.
+    // Endi ko'lam qo'shni so'rovlar bilan bir xil yo'ldan quriladi
+    // (`analytics-filter.ts` → `branchClause` ichida
+    // `assertBranchInScope` va fail-closed `AND FALSE`).
+    const branchScope = branchClause(
+      'pt."branchId"',
+      filters.branchId ? String(filters.branchId) : null,
+    );
 
     const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
       SELECT pt.method::text AS "method",

@@ -2,6 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
+import { branchFilter } from '../../common/als/branch-context.js';
+import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
+import { hasPermission } from '../../common/rbac/permission.service.js';
+import { PERMISSIONS } from '../../common/constants/permissions.js';
 import { KpiTriggersService } from './kpi-triggers.service.js';
 
 /**
@@ -19,7 +23,7 @@ import { KpiTriggersService } from './kpi-triggers.service.js';
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-interface Actor { id?: string | null; _id?: string | null }
+interface Actor { id?: string | null; _id?: string | null; homeBranchId?: string | null }
 const actorId = (u?: Actor | null): string | null => u?.id || u?._id || null;
 
 @Injectable()
@@ -27,7 +31,45 @@ export class KpiRuleService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly triggersService: KpiTriggersService,
+    private readonly branchAccess: BranchAccessService,
   ) {}
+
+  /**
+   * QOIDA KO'RINISHI — "mening filialim YOKI butun tarmoq".
+   *
+   * ⚠ Yalang'och `branchFilter()` YARAMAYDI: qoidaning `branchId` si
+   * NULL bo'lishi mumkin va bu "butun tarmoq qoidasi" degani (KPI
+   * dvigateli aynan shunday o'qiydi). Kesib tashlansa tarmoq qoidalari
+   * ro'yxatdan JIMGINA yo'qolardi — `expense-category.service` dagi
+   * `scopeWithShared` bilan bir xil shakl.
+   */
+  private scopeWithShared(): Record<string, unknown>[] {
+    const bf = branchFilter();
+    if (!Object.keys(bf).length) return [];
+    return [{ OR: [bf, { branchId: null }] }];
+  }
+
+  /**
+   * QOIDA FILIALI — TANADAN emas, KO'LAMDAN.
+   *
+   * `branchId: null` = qoida BARCHA filiallar maoshiga qo'llanadi.
+   * Shuning uchun uni faqat TASHKILOT DARAJASIDAGI odam qo'ya oladi;
+   * filial darajasidagi odamning qoidasi DOIM o'z filialiga bog'lanadi.
+   *
+   * ⚠ `canSeeAllBranches()` bu yerda YARAMAYDI — u ko'rinish rejimi,
+   * vakolat emas: yakka filialli markazda u EGA uchun ham `false`
+   * (`market.service` dagi `isOrgLevel` bilan bir xil sabab).
+   */
+  private async resolveRuleBranchId(
+    requested: unknown,
+    currentUser: Actor | null,
+    permissions?: string[],
+  ): Promise<string | null> {
+    if (hasPermission(permissions, PERMISSIONS.BRANCHES_VIEW_ALL)) {
+      return requested ? String(requested) : null;
+    }
+    return this.branchAccess.resolveBranchForWrite(currentUser, requested ?? null);
+  }
 
   triggers() {
     return this.triggersService.listTriggers();
@@ -37,6 +79,11 @@ export class KpiRuleService {
     const where: Record<string, unknown> = { isDeleted: false };
     if (enabled !== undefined) where.enabled = enabled;
     if (trigger) where.trigger = trigger;
+
+    // FILIAL: begona filial qoidasi ro'yxatga tushmasin (tarmoq
+    // qoidalari — `branchId: null` — hammaga ko'rinaveradi).
+    const scope = this.scopeWithShared();
+    if (scope.length) where.AND = scope;
 
     const rules = await this.prisma.kpiRule.findMany({
       where: where as never,
@@ -61,8 +108,11 @@ export class KpiRuleService {
 
   /** Ichki o'qish — XOM Prisma yozuvi (`update`/`remove` shundan foydalanadi). */
   private async loadRule(id: string) {
+    // FILIAL: `id` MIJOZDAN keladi — begona filial qoidasini ID bilan
+    // ochib, `update`/`remove` orqali o'sha filial maoshini
+    // o'zgartirib bo'lmasin.
     const rule = await this.prisma.kpiRule.findFirst({
-      where: { id: String(id), isDeleted: false },
+      where: { id: String(id), isDeleted: false, AND: this.scopeWithShared() },
     });
     if (!rule) throw new ApiError(404, 'KPI qoidasi topilmadi');
     return rule;
@@ -113,19 +163,29 @@ export class KpiRuleService {
     if (body.applicableRoles !== undefined) {
       out.applicableRoles = body.applicableRoles || [];
     }
-    if (body.branchId !== undefined) out.branchId = body.branchId || null;
+    // ⚠ `branchId` ATAYLAB YO'Q: tanadagi qiymat XOM yozilsa (ayniqsa
+    // `null`) qoida butun tarmoqniki bo'lib, HAR filial maoshiga
+    // qo'llanardi. Filial `resolveRuleBranchId()` da hisoblanadi.
     if (body.monthlyCap !== undefined) out.monthlyCap = Number(body.monthlyCap) || 0;
     if (body.enabled !== undefined) out.enabled = body.enabled;
     return out;
   }
 
-  async create(body: Record<string, unknown>, currentUser: Actor | null) {
+  async create(
+    body: Record<string, unknown>,
+    currentUser: Actor | null,
+    permissions?: string[],
+  ) {
     this.assertTrigger(body.trigger as string);
     this.assertRewardShape({
       rewardType: body.rewardType as string, rewardValue: body.rewardValue });
+    // FILIAL: qoida qaysi filialga tegishli ekani KO'LAMDAN chiqadi.
+    const branchId = await this.resolveRuleBranchId(
+      body.branchId, currentUser, permissions);
     const rule = await this.prisma.kpiRule.create({
       data: {
         ...this.ruleColumns(body),
+        branchId,
         // `rewardValue` sxemada MAJBURIY (default yo'q) — berilmasa
         // Prisma yiqiladi, bu to'g'ri: mukofot qiymatsiz qoida ma'nosiz.
         rewardValue: Number(body.rewardValue) || 0,
@@ -135,7 +195,12 @@ export class KpiRuleService {
     return withLegacyId(rule);
   }
 
-  async update(id: string, body: Record<string, unknown>, currentUser: Actor | null) {
+  async update(
+    id: string,
+    body: Record<string, unknown>,
+    currentUser: Actor | null,
+    permissions?: string[],
+  ) {
     if (body.trigger) this.assertTrigger(body.trigger as string);
 
     const rule = await this.loadRule(id);
@@ -144,9 +209,23 @@ export class KpiRuleService {
       rewardType: (body.rewardType as string) ?? rule.rewardType,
       rewardValue: body.rewardValue ?? rule.rewardValue,
     });
+    // FILIAL: tana bilan qoidani begona filialga — yoki `null` orqali
+    // BUTUN TARMOQQA — ko'chirib bo'lmaydi, ko'lam qayta hisoblanadi.
+    const branchPatch =
+      body.branchId === undefined
+        ? {}
+        : {
+            branchId: await this.resolveRuleBranchId(
+              body.branchId, currentUser, permissions),
+          };
+
     const saved = await this.prisma.kpiRule.update({
       where: { id: rule.id },
-      data: { ...this.ruleColumns(body), updatedById: actorId(currentUser) } as never,
+      data: {
+        ...this.ruleColumns(body),
+        ...branchPatch,
+        updatedById: actorId(currentUser),
+      } as never,
     });
     return withLegacyId(saved);
   }
@@ -185,6 +264,8 @@ export class KpiRuleService {
   // ─── BIRIKTIRUVLAR (xodim × qoida) ───
 
   async listAssignments(employeeId: string) {
+    // ⚠ FILIAL QO'RIQCHISI — `employeeId` MIJOZDAN keladi.
+    await this.branchAccess.assertUserInBranchScope(employeeId);
     return withLegacyIds(
       await this.prisma.staffKpiAssignment.findMany({
         where: { employeeId: String(employeeId), isDeleted: false },
@@ -206,13 +287,19 @@ export class KpiRuleService {
     },
     currentUser: Actor | null,
   ) {
+    // FILIAL: begona filial qoidasini biriktirib bo'lmaydi.
     const rule = await this.prisma.kpiRule.findFirst({
-      where: { id: String(body.rule), isDeleted: false },
+      where: {
+        id: String(body.rule), isDeleted: false, AND: this.scopeWithShared(),
+      },
       select: { id: true },
     });
     if (!rule) throw new ApiError(404, 'KPI qoidasi topilmadi');
 
     const employeeId = String(body.employee);
+    // ⚠ FILIAL QO'RIQCHISI — `body.employee` MIJOZDAN keladi. Bu PUL
+    // YOZADIGAN yo'l: biriktiruv xodimning oyligiga mukofot qo'shadi.
+    await this.branchAccess.assertUserInBranchScope(employeeId);
     const data = {
       enabled: body.enabled !== false,
       rewardValueOverride:
@@ -261,9 +348,12 @@ export class KpiRuleService {
   async removeAssignment(id: string, currentUser: Actor | null) {
     const doc = await this.prisma.staffKpiAssignment.findFirst({
       where: { id: String(id), isDeleted: false },
-      select: { id: true },
+      select: { id: true, employeeId: true },
     });
     if (!doc) throw new ApiError(404, 'Biriktiruv topilmadi');
+    // ⚠ FILIAL QO'RIQCHISI — `id` params dan keladi: begona filial
+    // xodimining mukofot biriktiruvi o'chirib yuborilmasin.
+    await this.branchAccess.assertUserInBranchScope(doc.employeeId);
     await this.prisma.staffKpiAssignment.update({
       where: { id: doc.id },
       data: { isDeleted: true, deletedAt: new Date(), deletedBy: actorId(currentUser) },

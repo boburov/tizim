@@ -109,6 +109,31 @@ export class FeedbackService {
     return { OR: or };
   }
 
+  /**
+   * `:id` AMALLARI UCHUN KO'LAMLANGAN O'QISH.
+   *
+   * FILIAL: `list()` va `getStats()` `scopeFilter()` bilan kesilgan edi,
+   * `:id` amallari (review/reply/resolve/reject) esa YALANG'OCH
+   * `findUnique` bo'lib qolgandi — begona filial fikri ID bo'yicha
+   * o'zgartirilar, javobida esa MATNI bilan qaytarilardi (IDOR).
+   *
+   * ⚠ `AND` ICHIDA: `scopeFilter()` `OR` qaytaradi va uni yuqori
+   * darajaga qo'ysak `id` sharti bilan to'qnashardi.
+   *
+   * ⚠ 404, 403 EMAS: ro'yxat bu yozuvni allaqachon yashirgan — uning
+   * MAVJUDLIGINI ham oshkor qilmaymiz (`activity-logs.service.ts` bilan
+   * bir xil qoida).
+   */
+  private async findInScopeOrFail(id: string) {
+    const scope = await this.scopeFilter();
+    const where: Record<string, any> = { id: String(id) };
+    if (Object.keys(scope).length) where.AND = [scope];
+
+    const doc = await this.prisma.feedback.findFirst({ where: where as never });
+    if (!doc) throw new ApiError(404, 'Feedback topilmadi');
+    return doc;
+  }
+
   async list({ type, status, search, fromDate, toDate, page = 1, limit = 20 }: {
     type?: string; status?: string; search?: string;
     fromDate?: Date | string; toDate?: Date | string;
@@ -227,8 +252,8 @@ export class FeedbackService {
   }
 
   async markReviewed(id: string, currentUser: any) {
-    const doc = await this.prisma.feedback.findUnique({ where: { id: String(id) } });
-    if (!doc) throw new ApiError(404, 'Feedback topilmadi');
+    // FILIAL: begona filial fikrini ko'rib chiqishga belgilab bo'lmaydi.
+    const doc = await this.findInScopeOrFail(id);
     if (doc.status !== 'new') {
       throw new ApiError(
         409,
@@ -248,8 +273,9 @@ export class FeedbackService {
   }
 
   async reply(id: string, body: Record<string, any>, currentUser: any) {
-    const doc = await this.prisma.feedback.findUnique({ where: { id: String(id) } });
-    if (!doc) throw new ApiError(404, 'Feedback topilmadi');
+    // FILIAL: begona filial fikriga javob yozib bo'lmaydi (javob
+    // qaytishida fikr MATNI ham oshkor bo'lardi).
+    const doc = await this.findInScopeOrFail(id);
     const message = String(body.message || '').trim();
     if (!message) throw new ApiError(400, "Javob matni bo'sh bo'lmasligi kerak");
 
@@ -267,8 +293,8 @@ export class FeedbackService {
   }
 
   async resolve(id: string, body: Record<string, any> | undefined, currentUser: any) {
-    const doc = await this.prisma.feedback.findUnique({ where: { id: String(id) } });
-    if (!doc) throw new ApiError(404, 'Feedback topilmadi');
+    // FILIAL: begona filial fikrini hal qilingan deb belgilab bo'lmaydi.
+    const doc = await this.findInScopeOrFail(id);
     this.assertCanTransition(doc.status, 'resolved');
 
     const data: Record<string, any> = {
@@ -291,8 +317,8 @@ export class FeedbackService {
   }
 
   async reject(id: string, body: Record<string, any> | undefined, currentUser: any) {
-    const doc = await this.prisma.feedback.findUnique({ where: { id: String(id) } });
-    if (!doc) throw new ApiError(404, 'Feedback topilmadi');
+    // FILIAL: begona filial fikrini rad etib bo'lmaydi.
+    const doc = await this.findInScopeOrFail(id);
     this.assertCanTransition(doc.status, 'rejected');
 
     const reason = String(body?.rejectionReason || '').trim();

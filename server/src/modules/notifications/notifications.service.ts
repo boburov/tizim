@@ -859,11 +859,29 @@ export class NotificationsService {
   }
 
   async getRecipientList(notifId: string, { page = 1, limit = 50 }) {
-    const where = { notificationId: String(notifId) };
+    const where: Record<string, any> = { notificationId: String(notifId) };
+
+    // ⚠ FILIAL KO'LAMI — bu ro'yxatda ISM va TELEFON RAQAMI (PII) bor.
+    //
+    // Kontrollerdagi egalik tekshiruvi FAQAT o'qituvchi uchun ishlaydi,
+    // ya'ni filial rahbari begona xabarning ID'si bilan butun markaz
+    // oluvchilarining telefon raqamini o'qib olardi (`list()` va
+    // `getById()` esa CHEKLANGAN).
+    //
+    // `notificationRecipient` filialga FOYDALANUVCHI orqali bog'lanadi,
+    // shuning uchun shart `user` relatsiyasiga qo'yiladi —
+    // `withSenderBranchScope` dagi `sender: { is: condition }` bilan
+    // AYNI uslub. Kontekstsiz (job) va «barcha filiallar» ko'rinishidagi
+    // owner uchun `null` qaytadi — ular uchun hech narsa o'zgarmaydi;
+    // mavjud bo'lmagan ID hamon BO'SH ro'yxat beradi (404 EMAS) — Express
+    // xulqi saqlanadi.
+    const recipientCond = userBranchCondition();
+    if (recipientCond) where.user = { is: recipientCond };
+
     const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
       this.prisma.notificationRecipient.findMany({
-        where,
+        where: where as never,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         skip,
         take: limit,
@@ -875,7 +893,7 @@ export class NotificationsService {
           },
         },
       }),
-      this.prisma.notificationRecipient.count({ where }),
+      this.prisma.notificationRecipient.count({ where: where as never }),
     ]);
     return { items: items.map((i) => withLegacyId(i)), total, page, limit };
   }

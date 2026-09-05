@@ -1,0 +1,78 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# XAVFSIZLIK DARVOZASI — deploy'dan OLDIN ishlaydi.
+#
+# ── NEGA KERAK ──
+# `deploy.yml` faqat SSH qilib `deploy.sh` ni chaqiradi, ya'ni HECH QANDAY
+# test ishlamasdi. Filial ko'lami, owner-only kalitlar va rol tipi bo'yicha
+# tekshiruvlar mavjud edi, lekin ularni hech kim yurgizmasdi — "bor, lekin
+# ishlamaydigan" xavfsizlik nazorati.
+#
+# ── FAQAT MUSTAQIL TESTLAR ──
+# Bu yerda TIRIK SERVER yoki BAZA talab qilmaydigan testlargina bor. HTTP
+# talab qiladigan ~50 ta `*-parity.test.mjs` ATAYLAB chaqirilmaydi: ular
+# o'chirilgan Express (`127.0.0.1:5001`) ga qaraydi va hech narsani
+# tekshirmaydi.
+#
+# ⚠ `constants-parity` va `feature-graph` HAM mustaqil, lekin ular
+# yiqilganda `process.exit(1)` QILMAYDI — ya'ni CI ularni qo'shsa ham
+# yashil qolardi. Avval o'sha ikkalasiga chiqish kodi qo'shilishi kerak.
+# ═══════════════════════════════════════════════════════════════════════════
+name: Security gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: server — typecheck, build, security tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # `postinstall` `prisma generate` ni o'zi chaqiradi — tirik baza
+      # kerak emas, faqat sxema fayli yetarli.
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+
+      # ⚠ TESTLAR `dist/` DAN IMPORT QILADI — shuning uchun qurish SHART.
+      # Aks holda eskirgan `dist` bilan yashil natija chiqib, u hech
+      # narsani isbotlamasdi.
+      - name: Build
+        run: npm run build
+
+      - name: Owner-only permission keys
+        run: npm run test:owner-only-keys
+
+      - name: Role-type privilege escalation
+        run: npm run test:role-type-escalation
+
+      - name: Resource scope registry (schema drift)
+        run: npm run test:resource-scope
+
+      - name: Workspace resolution
+        run: npm run test:workspace-resolve
+
+      - name: Branch limit entitlement
+        run: npm run test:branch-limit
+
+      - name: Branch write-intent guard
+        run: npm run test:branch-intent

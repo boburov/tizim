@@ -5,6 +5,7 @@ import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { ROLES } from '../../common/constants/permissions.js';
 import { HOLIDAY_AUDIENCES } from '../../common/constants/calendar.js';
+import { userBranchCondition } from '../../common/als/branch-context.js';
 import { dateKeyOf, toUtcMidnight, localTodayMidnight } from '../../common/utils/date.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 
@@ -262,13 +263,25 @@ export class HolidaysService {
    * o'zgaradi (bugunga nisbatan qolgan kunlar hisoblanadi).
    */
   async listTeacherBirthdays(now: Date = new Date()) {
+    // FILIAL: ro'yxat TELEFON RAQAMI bilan qaytadi, ya'ni PII — ko'lamsiz
+    // holda filial rahbari BUTUN markazning o'qituvchilarini raqami bilan
+    // o'qib olardi. `Holiday` global bo'lib qoladi; kesiladigan narsa —
+    // shu yerdagi O'QITUVCHI qidiruvi.
+    //
+    // ⚠ `AND` ICHIDA, `OR` da EMAS: `userBranchCondition()` ning o'zi
+    // `OR` qaytaradi (uy filiali YOKI biriktirma) va uni yuqori darajaga
+    // qo'ysak keyingi `OR` uni JIMGINA bosib ketardi.
+    const branchCond = userBranchCondition();
+    const where: Record<string, any> = {
+      role: ROLES.TEACHER,
+      isActive: true,
+      isDeleted: false,
+      birthDate: { not: null },
+    };
+    if (branchCond) where.AND = [branchCond];
+
     const teachers = await this.prisma.user.findMany({
-      where: {
-        role: ROLES.TEACHER,
-        isActive: true,
-        isDeleted: false,
-        birthDate: { not: null },
-      },
+      where: where as never,
       select: {
         id: true, firstName: true, lastName: true,
         phone: true, username: true, birthDate: true,
@@ -333,13 +346,24 @@ export class HolidaysService {
     { channels, message, title }: { channels?: string[]; message?: string; title?: string },
     currentUser: any,
   ) {
+    // FILIAL: begona filial o'qituvchisini tabriklab bo'lmaydi. Xabarning
+    // O'ZI `resolveAudience` da baribir kesilardi, lekin standart matnga
+    // o'qituvchining ISMI qo'yiladi va u javobda qaytib, boshqa filial
+    // xodimini oshkor qilardi (ustiga bo'sh, 0 oluvchili xabar yozilardi).
+    //
+    // ⚠ `AND` ICHIDA — `userBranchCondition()` ning o'zi `OR` qaytaradi.
+    // ⚠ 404, 403 EMAS: mavjud bo'lmagan ID bilan AYNI javob.
+    const branchCond = userBranchCondition();
+    const teacherWhere: Record<string, any> = {
+      id: String(teacherId),
+      role: ROLES.TEACHER,
+      isActive: true,
+      isDeleted: false,
+    };
+    if (branchCond) teacherWhere.AND = [branchCond];
+
     const teacher = await this.prisma.user.findFirst({
-      where: {
-        id: String(teacherId),
-        role: ROLES.TEACHER,
-        isActive: true,
-        isDeleted: false,
-      },
+      where: teacherWhere as never,
       select: { id: true, firstName: true, lastName: true },
     });
     if (!teacher) throw new ApiError(404, "O'qituvchi topilmadi");

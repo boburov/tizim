@@ -489,12 +489,25 @@ export class StaffPayrollService {
   async generateMonth(year: number, month: number) {
     const { start, endExcl } = monthRange(year, month);
 
+    // ⚠ FILIAL: XODIM bo'yicha kesiladi, shartnomaning `branchId` si
+    // bo'yicha EMAS — u NULLABLE va null qator butun ro'yxatdan tushib
+    // ketardi, ya'ni o'sha xodim maoshsiz qolardi.
+    //
+    // Filtrsiz `payroll.manage` bo'lgan HAR QANDAY direktor BUTUN
+    // markazning maoshini qayta hisoblab yuborardi.
+    //
+    // ⚠ FON VAZIFASI BUZILMAYDI: `monthly-generate.job.ts` ALS
+    // kontekstisiz ishlaydi va `userBranchCondition()` o'shanda `null`
+    // qaytaradi — ya'ni oylik avtomatik hisoblash ilgarigidek BARCHA
+    // xodimni qamrab oladi. Owner uchun ham `null`.
+    const employeeScope = userBranchCondition();
     const compRows = await this.prisma.staffCompensation.findMany({
       where: {
         isDeleted: false,
         effectiveFrom: { lt: endExcl },
         OR: [{ effectiveTo: null }, { effectiveTo: { gt: start } }],
-      },
+        ...(employeeScope ? { employee: { is: employeeScope } } : {}),
+      } as never,
       select: { employeeId: true },
       distinct: ['employeeId'],
     });

@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../errors/api-error.js';
-import { ROLES, ROLE_TYPES } from '../constants/permissions.js';
+import { PERMISSIONS, ROLES, ROLE_TYPES } from '../constants/permissions.js';
 import { hasPermission } from './permission.service.js';
 
 /**
@@ -42,6 +42,55 @@ export const assertCanGrantPermissions = (
       "O'zingizda mavjud bo'lmagan ruxsatni bera olmaysiz: " + missing.join(', '),
     );
   }
+};
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ROL TIPINI `owner` GA KO'TARISH — FAQAT EGA.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ── QANDAY XATODAN SAQLAYDI ──
+ *
+ * `roles.update` FILIAL ICHIDAGI kalit: `BRANCH_LOCAL_PERMISSIONS`
+ * "hamma narsa minus istisnolar" deb hisoblanadi (`permission-scope.ts`),
+ * va `roles.update` istisnolar ichida YO'Q — ya'ni u HAR BIR direktorda
+ * bor. `RolesGuard` esa rol TIPINI owner bilan tenglashtiradi
+ * (`common/guards/roles.guard.ts`: `roles.includes(roleType)`).
+ *
+ * Ikkalasi birga privilege escalation berardi: direktor
+ * `PATCH /api/roles/<o'z-roli> {"roleType":"owner"}` yuborib, barcha
+ * `@Roles(OWNER)` marshrutlarini ocha olardi. `create` da ham xuddi
+ * shunday — u `body.roleType` ni tekshirmasdan yozardi.
+ *
+ * ⚠ NEGA `assertOwnerOnlyKeysNotGranted` BUNI TUTMAYDI: u faqat RUXSAT
+ * KALITLARINI ko'radi. `roleType` ruxsat emas — u Role yozuvining
+ * alohida maydoni va o'sha tekshiruvdan butunlay chetda qolardi.
+ *
+ * ── O'LCHOV: `system.admin_access` ──
+ *
+ * U `OWNER_ONLY_PERMISSIONS` ichida (`permission-scope.ts`), ya'ni
+ * direktorga hech qachon tushmaydi, va `RolesGuard` uni allaqachon
+ * owner ekvivalenti deb biladi. Shuning uchun "owner tipini kim
+ * beradi" savoliga aynan shu kalit javob beradi.
+ *
+ * ⚠ FAQAT `owner` TO'SILADI: `staff`/`teacher`/`student` orasidagi
+ * o'zgarish ilgarigidek ishlaydi — mavjud oqimlar buzilmasin.
+ */
+export const assertCanAssignRoleType = (
+  currentPermissions: string[] | undefined | null,
+  roleType: string | undefined | null,
+): void => {
+  // ⚠ NORMALLASHTIRILADI: `updateSchema` hozir aynan `owner` ni o'tkazadi,
+  // lekin bu tekshiruv zod'ga TAYANMASLIGI kerak — sxema kelajakda
+  // yumshasa, `OWNER` yoki `" owner"` jimgina o'tib ketardi.
+  const requested = String(roleType ?? '').trim().toLowerCase();
+  if (requested !== ROLE_TYPES.OWNER) return;
+  if (hasPermission(currentPermissions, PERMISSIONS.SYSTEM_ADMIN_ACCESS)) return;
+
+  throw new ApiError(
+    403,
+    "Rol tipini `owner` qilib belgilash faqat egaga ruxsat etilgan.",
+  );
 };
 
 /**

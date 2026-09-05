@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyId, withLegacyIds } from '../../common/utils/serialize.js';
 import { assertGroupActive } from '../../common/helpers/group-state.js';
+import { branchFilter, runWithBranchContext } from '../../common/als/branch-context.js';
 import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { ROLES } from '../../common/constants/permissions.js';
 import { APPROVAL_KINDS } from '../../common/constants/approvals.js';
@@ -143,8 +144,13 @@ export class DiscountService {
         where: { id: String(studentId), role: ROLES.STUDENT, isDeleted: false },
         select: { id: true },
       }),
+      // FILIAL: bu YOZUV yo'lining darvozasi — guruh joriy ko'lamda
+      // bo'lishi shart. Filtrsiz A filial direktori B filial guruhiga
+      // chegirma yozib, o'sha filialning o'quvchi qarzini va o'qituvchi
+      // foiz maoshini qayta hisoblab yuborardi (`group-fee.upsert()`
+      // dagi bilan ayni idioma).
       this.prisma.group.findFirst({
-        where: { id: String(groupId), isDeleted: false },
+        where: { id: String(groupId), isDeleted: false, ...branchFilter() },
         select: { id: true, isActive: true, isDeleted: true, endDate: true },
       }),
     ]);
@@ -234,8 +240,14 @@ export class DiscountService {
   }
 
   async update(id: string, body: any) {
+    // FILIAL: `Discount` da `branchId` YO'Q — ko'lam GURUH orqali
+    // (`list()` dagi bilan ayni filtr). Filtrsiz begona chegirmani ID
+    // bo'yicha tahrirlash mumkin edi, bu esa pastdagi
+    // `recalcForStudentScope` + `recalcTeacherForDiscount` kaskadi bilan
+    // BOSHQA filialning hisob-kitobini qayta yozardi.
+    const groupScope: any = await this.branchAccess.branchGroupFilter('groupId');
     const doc = await this.prisma.discount.findFirst({
-      where: { id: String(id), isDeleted: false },
+      where: { id: String(id), isDeleted: false, ...groupScope },
     });
     if (!doc) throw new ApiError(404, 'Chegirma topilmadi');
 
@@ -300,8 +312,12 @@ export class DiscountService {
   }
 
   async remove(id: string, currentUser?: any) {
+    // FILIAL: `update()` bilan ayni sabab — o'chirish ham chegirmani
+    // olib tashlab, o'sha filialning qarz va maosh raqamlarini qayta
+    // hisoblaydi.
+    const groupScope: any = await this.branchAccess.branchGroupFilter('groupId');
     const doc = await this.prisma.discount.findFirst({
-      where: { id: String(id), isDeleted: false },
+      where: { id: String(id), isDeleted: false, ...groupScope },
     });
     if (!doc) throw new ApiError(404, 'Chegirma topilmadi');
     await this.prisma.discount.update({
@@ -362,8 +378,12 @@ export class DiscountService {
     let group: string;
     let base: any = {};
     if (op === 'update') {
+      // FILIAL: tasdiq yo'li ham `update()` bilan bir xil kesiladi —
+      // aks holda begona chegirmani "so'rov" ko'rinishida ushlab,
+      // uning summasi/oyi tasdiqlanganda o'zgarardi.
+      const groupScope: any = await this.branchAccess.branchGroupFilter('groupId');
       const existing = await this.prisma.discount.findFirst({
-        where: { id: String(discountId), isDeleted: false },
+        where: { id: String(discountId), isDeleted: false, ...groupScope },
       });
       if (!existing) throw new ApiError(404, 'Chegirma topilmadi');
       student = existing.studentId;
@@ -426,43 +446,61 @@ export class DiscountService {
    * chegarasi va qayta hisoblash (studentPayment + o'qituvchi foiz
    * maoshi) shu yerda QAYTA ishlaydi. Yiqilsa `approve()` so'rovni
    * FAILED qiladi.
+   *
+   * ⚠ FILIAL KONTEKSTI MAJBURAN o'rnatiladi — `executeApprovedGroupFee`
+   * dagi bilan AYNI sabab: `create()`/`update()` ichidagi filial filtri
+   * TASDIQLOVCHINING joriy ko'rinishiga bog'liq. Owner "Toshkent" ni
+   * tanlab turib Buxoro so'rovini tasdiqlasa, guruh/chegirma topilmay
+   * so'rov bekorga FAILED bo'lardi. So'rovning O'Z filiali — yagona
+   * to'g'ri kontekst.
    */
   async executeApprovedDiscount(approval: any) {
     const p = approval?.payload || {};
+    const branchId = String(approval?.branchId);
     const requesterId = approval?.requestedById || approval?.requestedBy || null;
     const actor = { id: requesterId, _id: requesterId };
 
-    if (p.op === 'create') {
-      return this.create(
-        {
-          student: p.student,
-          group: p.group,
-          type: p.type,
-          value: p.value,
-          scope: p.scope,
-          year: p.year,
-          month: p.month,
-          reason: p.reason,
-        },
-        actor,
-      );
-    }
+    return runWithBranchContext(
+      {
+        branchId,
+        allowedBranchIds: [branchId],
+        canSeeAllBranches: false,
+        userId: String(requesterId || ''),
+      },
+      () => {
+        if (p.op === 'create') {
+          return this.create(
+            {
+              student: p.student,
+              group: p.group,
+              type: p.type,
+              value: p.value,
+              scope: p.scope,
+              year: p.year,
+              month: p.month,
+              reason: p.reason,
+            },
+            actor,
+          );
+        }
 
-    if (p.op === 'update') {
-      if (!p.discountId) {
-        throw new ApiError(400, "So'rovda chegirma identifikatori yo'q");
-      }
-      return this.update(p.discountId, {
-        type: p.type,
-        value: p.value,
-        scope: p.scope,
-        year: p.year,
-        month: p.month,
-        reason: p.reason,
-        isActive: p.isActive,
-      });
-    }
+        if (p.op === 'update') {
+          if (!p.discountId) {
+            throw new ApiError(400, "So'rovda chegirma identifikatori yo'q");
+          }
+          return this.update(p.discountId, {
+            type: p.type,
+            value: p.value,
+            scope: p.scope,
+            year: p.year,
+            month: p.month,
+            reason: p.reason,
+            isActive: p.isActive,
+          });
+        }
 
-    throw new ApiError(400, `Noma'lum chegirma amali: ${p.op}`);
+        throw new ApiError(400, `Noma'lum chegirma amali: ${p.op}`);
+      },
+    );
   }
 }

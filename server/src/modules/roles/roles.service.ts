@@ -9,6 +9,7 @@ import { PermissionService } from '../../common/rbac/permission.service.js';
 import {
   RolesHelperService,
   assertCanGrantPermissions,
+  assertCanAssignRoleType,
   assertOwnerOnlyKeysNotGranted,
   assertNotSystemRole,
 } from '../../common/rbac/roles.helper.js';
@@ -200,6 +201,8 @@ export class RolesService {
     // ⚠ YANGI ROL HECH QACHON `owner` bo'lmaydi (o'sha nom band), ya'ni
     // owner-only kalitlar bu yerda har doim rad etiladi.
     assertOwnerOnlyKeysNotGranted(null, keys, ALL_OWNER_ONLY_KEYS);
+    // Rol TIPI ruxsat emas — yuqoridagi tekshiruv uni ko'rmaydi.
+    assertCanAssignRoleType(currentPermissions, body.roleType);
 
     const value = await this.helper.generateUniqueRoleValue(label);
 
@@ -262,7 +265,11 @@ export class RolesService {
 
     if (body.description !== undefined) data.description = body.description;
     if (body.defaultPath !== undefined) data.defaultPath = body.defaultPath;
-    if (body.roleType !== undefined && !role.isSystem) data.roleType = body.roleType;
+    if (body.roleType !== undefined && !role.isSystem) {
+      // Rol TIPI ruxsat emas — `assertOwnerOnlyKeysNotGranted` uni ko'rmaydi.
+      assertCanAssignRoleType(currentPermissions, body.roleType);
+      data.roleType = body.roleType;
+    }
 
     await this.prisma.role.update({ where: { value }, data });
     this.permissions.invalidateRoleCache(value);

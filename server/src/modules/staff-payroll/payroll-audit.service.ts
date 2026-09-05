@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { BranchAccessService } from '../../common/rbac/branch-access.service.js';
 import { ApiError } from '../../common/errors/api-error.js';
 import { withLegacyIds } from '../../common/utils/serialize.js';
 import {
@@ -56,7 +57,10 @@ export interface PayrollAuditInput {
 export class PayrollAuditService {
   private readonly logger = new Logger('PayrollAudit');
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    private readonly branchAccess: BranchAccessService,
+  ) {}
 
   /**
    * ⚠ BU METOD HECH QACHON `throw` QILMAYDI (tranzaksiyadan tashqarida).
@@ -185,6 +189,17 @@ export class PayrollAuditService {
       limit?: unknown; year?: unknown; month?: unknown;
     } = {},
   ) {
+    // ⚠ FILIAL QO'RIQCHISI — `employeeId` MIJOZDAN keladi va marshrut
+    // `payroll.read` bilan himoyalangan, u esa FILIAL ICHIDAGI kalit
+    // (ya'ni har bir direktorda bor). Qo'riqchisiz begona filial
+    // xodimining butun moliyaviy taymlayni — stavka o'zgarishlari,
+    // summalar, sabablar — ochiq edi.
+    //
+    // ⚠ FAQAT O'QISH yo'lida: `writeAudit()` ATAYLAB tekshirilmaydi —
+    // u tranzaksiya ichida chaqiriladi va hech qachon `throw`
+    // qilmasligi kerak (yuqoridagi izoh).
+    await this.branchAccess.assertUserInBranchScope(employeeId);
+
     const where: Record<string, unknown> = { employeeId: String(employeeId) };
     if (year) where.year = Number(year);
     if (month) where.month = Number(month);

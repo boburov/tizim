@@ -1413,7 +1413,13 @@ export class GroupsService {
    * Summalar a'zolik/davrlardan QAYTA HISOBLANADI.
    */
   async restoreDeleted(id: string) {
-    const group = await this.prisma.group.findUnique({ where: { id: String(id) } });
+    // FILIAL: qaytarish YOZUV amali — boshqa filialning o'chirilgan
+    // guruhini (u bilan birga a'zolik, davomat, to'lov va maosh
+    // tranzaksiyalarini) tiklab bo'lmasin. `findUnique` filialni UMUMAN
+    // tekshirmasdi; kesishma `permanentRemove` dagi bilan AYNI.
+    const group = await this.prisma.group.findFirst({
+      where: { id: String(id), ...branchFilter() },
+    });
     if (!group) throw new ApiError(404, 'Guruh topilmadi');
 
     const data = { isDeleted: false, deletedAt: null, deletedBy: null };

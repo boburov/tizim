@@ -112,7 +112,8 @@
     "test:feature-gate": "node test/feature-gate.test.mjs",
     "test:feature-graph": "node test/feature-graph.test.mjs",
     "test:workspace-resolve": "node test/workspace-resolve.test.mjs",
-    "test:owner-only-keys": "node test/owner-only-keys.test.mjs"
+    "test:owner-only-keys": "node test/owner-only-keys.test.mjs",
+    "test:role-type-escalation": "node test/role-type-escalation.test.mjs"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

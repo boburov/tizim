@@ -841,8 +841,12 @@ export class TeacherSalaryService {
   }
 
   async getById(id: string) {
-    const salary = await this.prisma.teacherSalary.findUnique({
-      where: { id: String(id) },
+    // FILIAL: `list()` `branchFilter()` bilan cheklangan, `:id` sherigi esa
+    // cheklanmagan edi — begona filial maosh qatori (o'qituvchi ismi,
+    // summasi va to'lov tarixi bilan) ID orqali ochilardi.
+    // ⚠ 404 (403 EMAS) — yozuv borligini oshkor qilmaymiz.
+    const salary = await this.prisma.teacherSalary.findFirst({
+      where: { id: String(id), ...branchFilter() },
       include: {
         teacher: { select: SAFE_TEACHER_SELECT },
         group: { select: { id: true, name: true } },

@@ -27,6 +27,7 @@ import {
   parseLocalDay,
 } from '../../common/utils/date.js';
 import { scheduleActiveOn } from '../../common/utils/attendance.js';
+import { userBranchCondition } from '../../common/als/branch-context.js';
 import { TeacherAbsenceService } from '../attendance/teacher-absence.service.js';
 import type { AuthenticatedUser } from '../../common/types/authenticated-request.js';
 
@@ -119,13 +120,27 @@ export class TeacherAttendanceService {
     // ham bu holatni ko'rmaydi, qo'shilsa xatti-harakat ajralib ketardi.
     const dateKey = dateKeyOf(date) as string;
 
+    // FILIAL: o'qituvchi ro'yxati ko'lamsiz edi — filial direktori BUTUN
+    // markazning o'qituvchilarini ko'rardi. `userBranchCondition()` `AND`
+    // ichida: foydalanuvchi filialga IKKI yo'l bilan bog'lanadi
+    // (homeBranchId / branchAssignments) va shart OR shaklida qaytadi.
+    const branchCond = userBranchCondition();
     const teachers = await this.prisma.user.findMany({
-      where: { role: ROLES.TEACHER, isActive: true, isDeleted: false },
+      where: {
+        role: ROLES.TEACHER,
+        isActive: true,
+        isDeleted: false,
+        ...(branchCond ? { AND: [branchCond] } : {}),
+      },
       select: TEACHER_SELECT,
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
+    // FILIAL: `TeacherAttendance` da `branchId` YO'Q — yozuv O'QITUVCHIGA
+    // tegishli. Shuning uchun yozuvlar ham SHU ro'yxat bilan cheklanadi:
+    // begona filial qatori umuman o'qilmasin.
+    const scopedTeacherIds = teachers.map((t) => String(t.id));
     const records = await this.prisma.teacherAttendance.findMany({
-      where: { dateKey, isDeleted: false },
+      where: { dateKey, isDeleted: false, teacherId: { in: scopedTeacherIds } },
       select: { teacherId: true, status: true, reason: true },
     });
     const map = new Map(records.map((r) => [String(r.teacherId), r]));
@@ -174,9 +189,18 @@ export class TeacherAttendanceService {
     // Har bir teacherId haqiqiy o'qituvchi ekanini tekshiramiz -
     // ixtiyoriy ID (o'quvchi, yo'q user) uchun davomat yozuvi
     // yaratilmasin.
+    //
+    // FILIAL: ko'lamdan TASHQARIDAGI o'qituvchi ham "noto'g'ri" sanaladi.
+    // Usiz filial direktori BEGONA filial o'qituvchisini "kelmadi" deb
+    // belgilab, `TeacherAbsence` orqali uning MAOSHIGA ta'sir qilardi.
     const teacherIds = [...new Set(items.map((i) => String(i.teacherId)))];
+    const branchCond = userBranchCondition();
     const validCount = await this.prisma.user.count({
-      where: { id: { in: teacherIds }, role: ROLES.TEACHER },
+      where: {
+        id: { in: teacherIds },
+        role: ROLES.TEACHER,
+        ...(branchCond ? { AND: [branchCond] } : {}),
+      },
     });
     if (validCount !== teacherIds.length) {
       throw new ApiError(400, "Bir yoki bir nechta o'qituvchi noto'g'ri");

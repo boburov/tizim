@@ -485,11 +485,26 @@ export class UsersService {
   }
 
   async getProfile(id: string) {
-    return this.profiles.build(await this.getById(id));
+    const user = await this.getById(id);
+    // FILIAL: boshqa filial xodimi/o'quvchisining profili (telefon, login,
+    // moliya) ID orqali ochilib ketmasin. Ko'lam qoidasi RO'YXAT bilan
+    // AYNAN bir xil (`userBranchCondition`) — aks holda ro'yxatda
+    // ko'rinmaydigan odam profil orqali baribir o'qilardi.
+    await this.branchAccess.assertUserInBranchScope(
+      user.id,
+      "Bu foydalanuvchiga kirish huquqingiz yo'q",
+    );
+    return this.profiles.build(user);
   }
 
   async studentHistory(studentId: string, { page = 1, limit = 20 } = {}) {
     const user = await this.getById(studentId);
+    // FILIAL: boshqa filial o'quvchisining guruh tarixi ochilib ketmasin —
+    // profil bilan BIR XIL ko'lam.
+    await this.branchAccess.assertUserInBranchScope(
+      user.id,
+      "Bu foydalanuvchiga kirish huquqingiz yo'q",
+    );
     if (user.role !== ROLES.STUDENT) {
       throw new ApiError(400, "Bu foydalanuvchi o'quvchi emas");
     }
@@ -791,6 +806,16 @@ export class UsersService {
       canSeeAllBranches?: boolean;
     },
   ) {
+    // ⚠ O'Z ROLINI CHETLAB O'TISH YO'LI: amaldagi ruxsatlar
+    // `branchAssignments[].role` dan olinadi (auth middleware, 4-bosqich).
+    // Ya'ni o'z biriktiruvini qayta yozish — `setRole` ni chetlab o'z
+    // rolini kuchaytirish bilan barobar (kuchsizroq filial rolini
+    // o'chirib, asosiy rolga qaytish ham shu yo'l). Shuning uchun
+    // `setRole` dagi AYNAN o'sha to'siq.
+    if (body.branchAssignments !== undefined) {
+      assertNotSelfRoleChange(currentUser as never, id);
+    }
+
     const user = await this.getById(id);
 
     // Nishon joriy ko'lamda bo'lishi SHART (boshqa filial xodimiga tegib bo'lmaydi).
