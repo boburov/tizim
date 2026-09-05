@@ -13,9 +13,10 @@
 # o'chirilgan Express (`127.0.0.1:5001`) ga qaraydi va hech narsani
 # tekshirmaydi.
 #
-# ⚠ `constants-parity` va `feature-graph` HAM mustaqil, lekin ular
-# yiqilganda `process.exit(1)` QILMAYDI — ya'ni CI ularni qo'shsa ham
-# yashil qolardi. Avval o'sha ikkalasiga chiqish kodi qo'shilishi kerak.
+# `constants-parity` chiqish kodini O'ZI qaytaradi
+# (`process.exit(R.fail ? 1 : 0)`), `feature-graph` esa yalang'och
+# `assert` ishlatadi — ushlanmagan AssertionError Node'ni 1 bilan
+# tugatadi. Ikkalasi ham CI'da HAQIQATAN yiqila oladi.
 # ═══════════════════════════════════════════════════════════════════════════
 name: Security gate
 
@@ -76,3 +77,9 @@ jobs:
 
       - name: Branch write-intent guard
         run: npm run test:branch-intent
+
+      - name: Constants parity (permission registries)
+        run: npm run test:constants
+
+      - name: Feature graph integrity
+        run: npm run test:feature-graph

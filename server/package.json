@@ -113,7 +113,9 @@
     "test:feature-graph": "node test/feature-graph.test.mjs",
     "test:workspace-resolve": "node test/workspace-resolve.test.mjs",
     "test:owner-only-keys": "node test/owner-only-keys.test.mjs",
-    "test:role-type-escalation": "node test/role-type-escalation.test.mjs"
+    "test:role-type-escalation": "node test/role-type-escalation.test.mjs",
+    "redact:audit-secrets": "node scripts/redact-activity-log-secrets.mjs",
+    "test:provisioned-env": "node test/provisioned-env.test.mjs"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

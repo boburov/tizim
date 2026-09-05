@@ -140,18 +140,46 @@ if [ "$BOT_SOURCE" = "REPO" ]; then
   req BOT_REPO_URL
   BRANCH="${BOT_REPO_BRANCH:-main}"
 
-  # Token URL ichiga FAQAT shu yerda qo'shiladi va `set -x` yoqilmagan,
-  # shuning uchun u logga tushmaydi.
-  AUTH_URL="$BOT_REPO_URL"
+  # ═════════════════════════════════════════════════════════════════════
+  # TOKEN URL'GA EMAS, `GIT_ASKPASS` ORQALI — `reconfigure.sh` dagi naqsh.
+  #
+  # Ilgari token URL ichiga qo'shilardi. U `.git/config` da QOLMASDI
+  # (pastda remote qayta yoziladi), lekin `git clone` CHAQIRUV
+  # ARGUMENTLARIDA turardi — ya'ni o'sha soniyalarda mashinadagi har
+  # qanday foydalanuvchi uni `ps` bilan ko'ra olardi.
+  #
+  # `GIT_ASKPASS` da token argumentlarga UMUMAN tushmaydi: git uni faqat
+  # kerak bo'lganda alohida skriptdan so'raydi. Skript 0700 huquq bilan
+  # yaratiladi va `trap` orqali chiqishda o'chiriladi.
+  # ═════════════════════════════════════════════════════════════════════
+  ASKPASS=""
   if [ -n "${GIT_TOKEN:-}" ]; then
-    AUTH_URL=$(echo "$BOT_REPO_URL" | sed -E "s#https://#https://${GIT_TOKEN}@#")
+    ASKPASS="$(mktemp)"
+    trap 'rm -f "$ASKPASS"' EXIT
+    cat > "$ASKPASS" <<'ASKPASS_EOF'
+#!/usr/bin/env bash
+case "$1" in
+  Username*) echo "x-access-token" ;;
+  Password*) echo "${GIT_TOKEN}" ;;
+esac
+ASKPASS_EOF
+    chmod 700 "$ASKPASS"
   fi
+
+  # Yordamchi: token bo'lsa askpass bilan, bo'lmasa oddiy git.
+  git_auth() {
+    if [ -n "$ASKPASS" ]; then
+      GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0 git "$@"
+    else
+      GIT_TERMINAL_PROMPT=0 git "$@"
+    fi
+  }
 
   if [ -d "$APP_DIR/.git" ]; then
     echo "    mavjud repo — yangilanmoqda (${BRANCH})"
     cd "$APP_DIR"
-    git remote set-url origin "$AUTH_URL"
-    git fetch origin "$BRANCH"
+    git remote set-url origin "$BOT_REPO_URL"
+    git_auth fetch origin "$BRANCH"
     # reset --hard: VPS'da qo'lda o'zgartirilgan fayl deploy'ni to'xtatib
     # qo'ymasligi kerak — manba haqiqati repoda.
     git reset --hard "origin/${BRANCH}"
@@ -159,7 +187,7 @@ if [ "$BOT_SOURCE" = "REPO" ]; then
   else
     echo "    clone (${BRANCH})"
     rm -rf "$APP_DIR"
-    git clone --depth 1 --branch "$BRANCH" "$AUTH_URL" "$APP_DIR"
+    git_auth clone --depth 1 --branch "$BRANCH" "$BOT_REPO_URL" "$APP_DIR"
   fi
 
   # Remote'da token qolib ketmasin — keyingi `git remote -v` uni ochib qo'yardi.
